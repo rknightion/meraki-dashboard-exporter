@@ -10,77 +10,29 @@ This is a prometheus exporter that connects to the Cisco Meraki Dashhboard API a
 
 We use the Meraki Dashboard Python API from https://github.com/meraki/dashboard-api-python
 Meraki Dashboard API Docs are available at https://developer.cisco.com/meraki/api-v1/api-index/
-We use UV for all python project management
+We use uv for all python project management. New dependencies can be added with `uv add requests`
 We use ruff for all python linting
 We use ty for all python type checking
+We do all builds via docker and ensure first class docker support for running
 
-### Testing with Builders
-```python
-# Use builders for test data
-device = MerakiDeviceBuilder().with_type("MT").with_name("Test Sensor").build()
-sensor_data = SensorDataBuilder().with_temperature(22.5).build()
-hub = await HubBuilder().with_device(device).build()
-```
-
-### Performance Monitoring
-- Use `@performance_monitor` decorator on API methods
-- Metrics tracked: `meraki_http_latency_seconds`, `meraki_http_errors_total`
-- Circuit breaker pattern for repeated failures
 
 ## Code Style
 
 - **Formatting**: Black formatter with 88-char line length
-- **Type hints**: Required for all functions
-- **Docstrings**: Google style
-- **Constants**: Use StrEnum
+- **Type hints**: from __future__ import annotations, TypeAlias, ParamSpec, Self, typing.NamedTuple(slots=True), typing.Annotated for units / constraints
+- **Docstrings**: NumPy-docstrings + type hints 
+- **Constants**: Literal & Enum / StrEnum (Keep StrEnum for metric / label names; use Literal for tiny closed sets.)
 - **Imports**: Group logically (stdlib, third-party, local)
-- **Early returns**: Reduce nesting
+- **Early returns**: Reduce nesting where possible
 
 ## API Guidelines
 
 - Use Meraki Python SDK (never direct HTTP)
-- Configure with `suppress_logging=True`
 - Use `total_pages='all'` for pagination
-- Implement tiered refresh intervals:
-  - Static data: 4 hours
-  - Semi-static: 1 hour
-  - Dynamic: 5-10 minutes
+- You are responsible for timekeeping and keeping data about the Meraki API up to date in our internal state (we do not wait for users to hit the exporter to update data)
 
-## Home Assistant Conventions
-
-- Use update coordinators for data fetching
-- Proper error handling (ConfigEntryAuthFailed, ConfigEntryNotReady)
-- Physical devices = HA devices, metrics = entities
-- Implement proper unique IDs and device identifiers
-- Follow HA entity naming conventions
-
-## Common Tasks
-
-### Debug API Calls
-```python
-# Add logging to debug API responses
-_LOGGER.debug("API response: %s", response)
-```
-
-### Add New Sensor Type
-0. Validate API calls against the Meraki Dashboard API docs available from https://developer.cisco.com/meraki/api-v1
-1. Add to device sensor descriptions
-2. Update data transformer
-3. Add icon mapping in factory
-4. Write unit tests
-
-### Handle Missing Data
-```python
-# Use get() with defaults
-value = data.get("temperature", {}).get("value")
-if value is not None:
-    # Process value
-```
-
-## Important Files
-
-- `coordinator.py`: Main update coordinator
-- `entities/factory.py`: Entity creation logic
-- `config/schemas.py`: Configuration data classes
-- `data/transformers.py`: API response processing
-- `utils/error_handling.py`: Error handling utilities
+## Metrics Guidelines
+- Use asyncio + anyio; expose /metrics via a Starlette or FastAPI app; Prometheus client supports async.
+- Early returns: Keep; combines neatly with match (PEP 636) for dispatching OTel signals.
+- Logging: structlog configured with an OTLP JSON processor so logs and traces share context.
+- Constants: class MetricName(StrEnum): HTTP_REQUESTS_TOTAL = "http_requests_total", avoiding scattered strings.
