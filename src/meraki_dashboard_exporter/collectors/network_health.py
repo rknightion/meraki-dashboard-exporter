@@ -10,7 +10,6 @@ from ..core.constants import UpdateTier
 from ..core.logging import get_logger
 
 if TYPE_CHECKING:
-
     pass
 
 logger = get_logger(__name__)
@@ -24,7 +23,7 @@ class NetworkHealthCollector(MetricCollector):
 
     def _set_metric_value(self, metric_name: str, labels: dict[str, str], value: float) -> None:
         """Safely set a metric value with validation.
-        
+
         Parameters
         ----------
         metric_name : str
@@ -33,7 +32,7 @@ class NetworkHealthCollector(MetricCollector):
             Labels to apply to the metric.
         value : float
             Value to set.
-            
+
         """
         metric = getattr(self, metric_name, None)
         if metric is None:
@@ -88,9 +87,7 @@ class NetworkHealthCollector(MetricCollector):
             if self.settings.org_id:
                 org_ids = [self.settings.org_id]
             else:
-                orgs = await asyncio.to_thread(
-                    self.api.organizations.getOrganizations
-                )
+                orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
                 org_ids = [org["id"] for org in orgs]
 
             # Collect network health for each organization
@@ -121,7 +118,7 @@ class NetworkHealthCollector(MetricCollector):
             # to avoid overwhelming the API connection pool
             batch_size = 10
             for i in range(0, len(networks), batch_size):
-                batch = networks[i:i + batch_size]
+                batch = networks[i : i + batch_size]
                 tasks = []
 
                 # Use list comprehension for better performance
@@ -177,7 +174,7 @@ class NetworkHealthCollector(MetricCollector):
                     network_id,
                     total_pages="all",
                 ),
-                timeout=30.0
+                timeout=30.0,
             )
 
             if channel_util:

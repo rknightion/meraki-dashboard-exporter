@@ -98,8 +98,7 @@ class ExporterApp:
             if self._background_tasks:
                 try:
                     await asyncio.wait_for(
-                        asyncio.gather(*self._background_tasks, return_exceptions=True),
-                        timeout=3.0
+                        asyncio.gather(*self._background_tasks, return_exceptions=True), timeout=3.0
                     )
                 except TimeoutError:
                     logger.warning("Some tasks did not complete within timeout")
@@ -138,12 +137,12 @@ class ExporterApp:
 
     async def _tiered_collection_loop(self, tier: UpdateTier) -> None:
         """Background task for periodic metric collection for a specific tier.
-        
+
         Parameters
         ----------
         tier : UpdateTier
             The update tier to run collection for.
-            
+
         """
         consecutive_failures = 0
         max_consecutive_failures = 10
@@ -202,7 +201,7 @@ class ExporterApp:
                 )
 
                 # Wait in small increments for responsiveness
-                remaining_time = interval
+                remaining_time = float(interval)
                 while remaining_time > 0 and not self._shutdown_event.is_set():
                     wait_time = min(1.0, remaining_time)
                     await asyncio.sleep(wait_time)

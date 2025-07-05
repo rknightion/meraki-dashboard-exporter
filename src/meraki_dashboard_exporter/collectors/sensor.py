@@ -154,9 +154,7 @@ class SensorCollector(MetricCollector):
             if self.settings.org_id:
                 org_ids = [self.settings.org_id]
             else:
-                orgs = await asyncio.to_thread(
-                    self.api.organizations.getOrganizations
-                )
+                orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
                 org_ids = [org["id"] for org in orgs]
 
             # Collect sensors for each organization

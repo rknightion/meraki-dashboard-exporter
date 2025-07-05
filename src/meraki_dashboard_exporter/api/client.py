@@ -85,9 +85,7 @@ class AsyncMerakiClient:
 
         """
         async with self._semaphore:
-            return await asyncio.to_thread(
-                self.api.organizations.getOrganization, org_id
-            )
+            return await asyncio.to_thread(self.api.organizations.getOrganization, org_id)
 
     async def get_networks(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch all networks in an organization.
@@ -194,9 +192,7 @@ class AsyncMerakiClient:
                 total_pages="all",
             )
 
-    async def get_switch_port_statuses(
-        self, serial: str
-    ) -> list[dict[str, Any]]:
+    async def get_switch_port_statuses(self, serial: str) -> list[dict[str, Any]]:
         """Fetch switch port statuses.
 
         Parameters
@@ -211,9 +207,7 @@ class AsyncMerakiClient:
 
         """
         async with self._semaphore:
-            return await asyncio.to_thread(
-                self.api.switch.getDeviceSwitchPortsStatuses, serial
-            )
+            return await asyncio.to_thread(self.api.switch.getDeviceSwitchPortsStatuses, serial)
 
     async def get_wireless_status(self, serial: str) -> dict[str, Any]:
         """Fetch wireless device status.
@@ -230,9 +224,7 @@ class AsyncMerakiClient:
 
         """
         async with self._semaphore:
-            return await asyncio.to_thread(
-                self.api.wireless.getDeviceWirelessStatus, serial
-            )
+            return await asyncio.to_thread(self.api.wireless.getDeviceWirelessStatus, serial)
 
     async def get_sensor_readings_latest(
         self, org_id: str, serials: list[str] | None = None
@@ -253,7 +245,7 @@ class AsyncMerakiClient:
 
         """
         async with self._semaphore:
-            kwargs = {"total_pages": "all"}
+            kwargs: dict[str, Any] = {"total_pages": "all"}
             if serials:
                 kwargs["serials"] = serials
             return await asyncio.to_thread(

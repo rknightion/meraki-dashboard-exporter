@@ -20,7 +20,7 @@ We do all builds via docker and ensure first class docker support for running
 
 - **Formatting**: Black formatter with 88-char line length
 - **Type hints**: from __future__ import annotations, TypeAlias, ParamSpec, Self, typing.NamedTuple(slots=True), typing.Annotated for units / constraints
-- **Docstrings**: NumPy-docstrings + type hints 
+- **Docstrings**: NumPy-docstrings + type hints
 - **Constants**: Literal & Enum / StrEnum (Keep StrEnum for metric / label names; use Literal for tiny closed sets.)
 - **Imports**: Group logically (stdlib, third-party, local)
 - **Early returns**: Reduce nesting where possible

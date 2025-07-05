@@ -42,7 +42,7 @@ class MetricCollector(ABC):
     _collector_errors: Counter | None = None
     _collector_last_success: Gauge | None = None
     _collector_api_calls: Counter | None = None
-    
+
     # Flag to ensure we initialize only once
     _metrics_initialized: bool = False
 
@@ -72,8 +72,8 @@ class MetricCollector(ABC):
 
     @abstractmethod
     async def _collect_impl(self) -> None:
-        """Implementation of metric collection from the Meraki API.
-        
+        """Implement metric collection from the Meraki API.
+
         Subclasses should implement this method instead of collect().
         """
         ...
@@ -88,7 +88,7 @@ class MetricCollector(ABC):
 
             # Record success
             duration = time.time() - start_time
-            
+
             # Always try to record metrics (they should be initialized)
             if MetricCollector._collector_duration is not None:
                 MetricCollector._collector_duration.labels(
@@ -116,7 +116,7 @@ class MetricCollector(ABC):
         except Exception as e:
             # Record error
             duration = time.time() - start_time
-            
+
             # Always try to record metrics (they should be initialized)
             if MetricCollector._collector_errors is not None:
                 MetricCollector._collector_errors.labels(
@@ -271,12 +271,12 @@ class MetricCollector(ABC):
 
     def _track_api_call(self, endpoint: str) -> None:
         """Track an API call for performance metrics.
-        
+
         Parameters
         ----------
         endpoint : str
             The API endpoint being called.
-            
+
         """
         # Always try to track (metrics should be initialized)
         if MetricCollector._collector_api_calls is not None:
@@ -294,7 +294,7 @@ class MetricCollector(ABC):
         if cls._metrics_initialized:
             logger.debug("Performance metrics already initialized")
             return
-            
+
         try:
             # Create metrics and assign to class attributes
             duration_metric = Histogram(
@@ -329,11 +329,16 @@ class MetricCollector(ABC):
                 registry=REGISTRY,
             )
             cls._collector_api_calls = api_calls_metric
-            
+
             logger.info("Successfully initialized collector performance metrics")
-            
+
             # Initialize with zero values for common collectors to ensure metrics appear
-            for collector_name in ["OrganizationCollector", "DeviceCollector", "NetworkHealthCollector", "SensorCollector"]:
+            for collector_name in [
+                "OrganizationCollector",
+                "DeviceCollector",
+                "NetworkHealthCollector",
+                "SensorCollector",
+            ]:
                 for tier in ["fast", "medium"]:
                     # Initialize counters with 0
                     cls._collector_api_calls.labels(
@@ -341,21 +346,21 @@ class MetricCollector(ABC):
                         tier=tier,
                         endpoint="init",
                     ).inc(0)
-                    
+
                     cls._collector_errors.labels(
                         collector=collector_name,
                         tier=tier,
                         error_type="init",
                     ).inc(0)
-                    
+
                     # Initialize gauge with 0
                     cls._collector_last_success.labels(
                         collector=collector_name,
                         tier=tier,
                     ).set(0)
-            
+
             cls._metrics_initialized = True
-            
+
         except ValueError as e:
             # Metrics already registered, retrieve them from registry
             if "Duplicated timeseries" in str(e) or "already registered" in str(e):

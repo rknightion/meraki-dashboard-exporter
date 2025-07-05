@@ -1,18 +1,153 @@
 repos:
-  -   repo: https://gitlab.com/vojko.pribudic.foss/pre-commit-update
-      rev: v0.8.0
-      hooks:
-      -   id: pre-commit-update
-  - repo: https://github.com/astral-sh/ruff-pre-commit
+  # Auto-update pre-commit hooks
+-   repo: https://gitlab.com/vojko.pribudic.foss/pre-commit-update
+    rev: v0.8.0
+    hooks:
+    -   id: pre-commit-update
+
+  # Python code formatting and linting
+-   repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.12.2
     hooks:
-      - id: ruff                 # format + lint + import-sort
-  - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
-    hooks: [id: codespell]
-  - repo: https://github.com/Yelp/detect-secrets
+    -   id: ruff-check
+        args: [--fix]
+    -   id: ruff-format
+
+  # Type checking
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.16.1
+    hooks:
+    -   id: mypy
+        additional_dependencies:
+        -   pydantic>=2.10.0
+        -   pydantic-settings>=2.6.0
+        -   types-requests
+        -   types-PyYAML
+        -   pytest>=8.3.0
+        -   structlog>=24.4.0
+        -   fastapi>=0.115.0
+        -   uvicorn>=0.32.0
+        -   meraki>=2.0.3
+        -   prometheus-client>=0.22.1
+        -   httpx>=0.27.0
+        -   anyio>=4.6.0
+        -   opentelemetry-api>=1.29.0
+        -   opentelemetry-sdk>=1.29.0
+        -   opentelemetry-exporter-otlp>=1.29.0
+        -   opentelemetry-instrumentation-fastapi>=0.50b0
+        args: [--config-file=pyproject.toml, .]
+        pass_filenames: false
+
+  # Security checks
+-   repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
-    hooks: [id: detect-secrets]
-  - repo: https://github.com/koalaman/shellcheck-precommit
+    hooks:
+    -   id: detect-secrets
+        exclude: '^(poetry\.lock|uv\.lock|\.secrets\.baseline)$'
+
+-   repo: https://github.com/PyCQA/bandit
+    rev: 1.8.5
+    hooks:
+    -   id: bandit
+        args: ["-c", "pyproject.toml"]
+        additional_dependencies: ["bandit[toml]"]
+
+  # Spell checking
+-   repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+    -   id: codespell
+        args: ["--skip=*.lock,*.css,*.js,*.svg"]
+
+  # YAML/JSON/TOML validation
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+    -   id: check-yaml
+        args: [--unsafe]
+    -   id: check-json
+    -   id: check-toml
+    -   id: check-merge-conflict
+    -   id: check-case-conflict
+    -   id: check-added-large-files
+        args: ["--maxkb=1000"]
+    -   id: check-ast
+    -   id: debug-statements
+    -   id: fix-byte-order-marker
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
+    -   id: mixed-line-ending
+
+  # Shell script linting
+-   repo: https://github.com/koalaman/shellcheck-precommit
     rev: v0.10.0
-    hooks: [id: shellcheck]
+    hooks:
+    -   id: shellcheck
+
+  # Dockerfile linting
+-   repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+    -   id: hadolint-docker
+        args: ["--ignore", "DL3008", "--ignore", "DL3009"]
+
+  # Python tests
+-   repo: local
+    hooks:
+    -   id: pytest
+        name: pytest
+        entry: uv run pytest
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+  # Python docstring checking
+-   repo: https://github.com/PyCQA/pydocstyle
+    rev: 6.3.0
+    hooks:
+    -   id: pydocstyle
+        args: [--convention=numpy, --add-ignore=D104, D202, D203, D212, D213,
+              D401]
+        additional_dependencies: [tomli]
+
+  # Check for common security issues (removed - requires Poetry)
+  # - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
+  #   rev: v1.4.2
+  #   hooks:
+  #   -   id: python-safety-dependencies-check
+  #       files: pyproject.toml
+
+  # License header checking (optional - uncomment if needed)
+  # - repo: https://github.com/Lucas-C/pre-commit-hooks
+  #   rev: v1.5.5
+  #   hooks:
+  #     - id: insert-license
+  #       files: \.py$
+  #       args:
+  #         - --license-filepath
+  #         - LICENSE
+  #         - --comment-style
+  #         - "#"
+
+# Configuration
+default_language_version:
+  python: python3.13
+
+# Run specific hooks only on certain stages
+default_stages: [pre-commit, pre-push]
+
+# Exclude certain paths globally
+exclude: |-
+  (?x)^(
+    .*\.egg-info/|
+    \.git/|
+    \.mypy_cache/|
+    \.pytest_cache/|
+    \.ruff_cache/|
+    \.venv/|
+    build/|
+    dist/|
+    __pycache__/
+  )
