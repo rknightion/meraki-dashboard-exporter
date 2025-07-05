@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
-import signal
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
@@ -15,6 +13,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 from .api.client import AsyncMerakiClient
 from .collectors.manager import CollectorManager
 from .core.config import Settings
+from .core.constants import UpdateTier
 from .core.logging import get_logger, setup_logging
 
 if TYPE_CHECKING:
@@ -34,6 +33,7 @@ class ExporterApp:
     """
 
     def __init__(self, settings: Settings | None = None) -> None:
+        """Initialize the exporter application with settings."""
         self.settings = settings or Settings()
         setup_logging(self.settings)
 
@@ -45,40 +45,12 @@ class ExporterApp:
 
         self._background_tasks: set[asyncio.Task[Any]] = set()
         self._shutdown_event = asyncio.Event()
-        self._force_shutdown = False
-        self._shutdown_count = 0
+        self._tier_tasks: dict[str, asyncio.Task[Any]] = {}
 
-    def _handle_signal(self, signum: int, frame: Any) -> None:
-        """Handle shutdown signals.
-
-        Parameters
-        ----------
-        signum : int
-            Signal number.
-        frame : Any
-            Current stack frame.
-
-        """
-        self._shutdown_count += 1
-
-        if self._shutdown_count == 1:
-            logger.info("Received shutdown signal, starting graceful shutdown...")
-            self._shutdown_event.set()
-        elif self._shutdown_count == 2:
-            logger.warning("Received second shutdown signal, forcing shutdown...")
-            self._force_shutdown = True
-            # Force exit after a short delay if tasks don't complete
-            asyncio.create_task(self._force_exit())
-        else:
-            logger.error("Multiple shutdown signals received, terminating immediately!")
-            os._exit(1)
-
-    async def _force_exit(self) -> None:
-        """Force exit after a delay if graceful shutdown fails."""
-        await asyncio.sleep(2)
-        if self._force_shutdown:
-            logger.error("Forced shutdown after timeout")
-            os._exit(1)
+    def _handle_shutdown(self) -> None:
+        """Handle shutdown request."""
+        logger.info("Shutdown requested, stopping collection...")
+        self._shutdown_event.set()
 
     @asynccontextmanager
     async def lifespan(self, app: FastAPI) -> AsyncIterator[None]:
@@ -95,10 +67,6 @@ class ExporterApp:
             Yields control during application runtime.
 
         """
-        # Set up signal handlers
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            signal.signal(sig, self._handle_signal)
-
         logger.info(
             "Starting Meraki Dashboard Exporter",
             host=self.settings.host,
@@ -106,16 +74,20 @@ class ExporterApp:
             org_id=self.settings.org_id,
         )
 
-        # Start background collection task
-        collection_task = asyncio.create_task(self._collection_loop())
-        self._background_tasks.add(collection_task)
-        collection_task.add_done_callback(self._background_tasks.discard)
+        # Start background task for initial collection and tiered loops
+        startup_task = asyncio.create_task(self._startup_collections())
+        self._background_tasks.add(startup_task)
+        startup_task.add_done_callback(self._background_tasks.discard)
 
         try:
             yield
         finally:
             logger.info("Shutting down Meraki Dashboard Exporter")
+            # Signal shutdown to stop collection loop
             self._shutdown_event.set()
+
+            # Give tasks a moment to finish their current work
+            await asyncio.sleep(0.5)
 
             # Cancel all background tasks
             for task in self._background_tasks:
@@ -123,60 +95,122 @@ class ExporterApp:
                     task.cancel()
 
             # Wait for tasks to complete with a timeout
-            try:
-                await asyncio.wait_for(
-                    asyncio.gather(*self._background_tasks, return_exceptions=True),
-                    timeout=5.0
-                )
-            except asyncio.TimeoutError:
-                logger.warning("Some tasks did not complete within timeout")
+            if self._background_tasks:
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(*self._background_tasks, return_exceptions=True),
+                        timeout=3.0
+                    )
+                except TimeoutError:
+                    logger.warning("Some tasks did not complete within timeout")
 
             # Cleanup
             await self.client.close()
+            logger.info("Shutdown complete")
 
-    async def _collection_loop(self) -> None:
-        """Background task for periodic metric collection."""
+    async def _startup_collections(self) -> None:
+        """Start tiered collection loops immediately."""
+        try:
+            # Start tiered collection tasks immediately
+            # Each will do its first collection right away
+            for tier in UpdateTier:
+                interval = self.collector_manager.get_tier_interval(tier)
+                logger.info(
+                    "Creating tiered collection task",
+                    tier=tier,
+                    interval=interval,
+                )
+                # Start with immediate collection (no initial wait)
+                task = asyncio.create_task(self._tiered_collection_loop(tier))
+                self._tier_tasks[tier] = task
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
+
+            logger.info(
+                "Started all tiered collection loops",
+                task_count=len(self._tier_tasks),
+                tiers=list(self._tier_tasks.keys()),
+            )
+
+        except Exception:
+            logger.exception("Failed during startup collections")
+            # Don't crash the server if initial collection fails
+
+    async def _tiered_collection_loop(self, tier: UpdateTier) -> None:
+        """Background task for periodic metric collection for a specific tier.
+        
+        Parameters
+        ----------
+        tier : UpdateTier
+            The update tier to run collection for.
+            
+        """
         consecutive_failures = 0
         max_consecutive_failures = 10
+        interval = self.collector_manager.get_tier_interval(tier)
 
-        while not self._shutdown_event.is_set():
-            try:
-                logger.info("Starting metric collection")
-                await self.collector_manager.collect_all()
-                logger.info("Metric collection completed")
-                # Reset failure counter on success
-                consecutive_failures = 0
-            except Exception:
-                consecutive_failures += 1
-                logger.exception(
-                    "Error during metric collection",
-                    consecutive_failures=consecutive_failures,
-                    max_consecutive_failures=max_consecutive_failures,
+        logger.info(
+            "Starting tiered collection loop",
+            tier=tier,
+            interval=interval,
+        )
+
+        try:
+            while not self._shutdown_event.is_set():
+                # Run collection
+                try:
+                    logger.info(
+                        "Starting metric collection",
+                        tier=tier,
+                        interval=interval,
+                    )
+                    await self.collector_manager.collect_tier(tier)
+                    logger.info(
+                        "Metric collection completed",
+                        tier=tier,
+                        next_run_in=interval,
+                    )
+                    # Reset failure counter on success
+                    consecutive_failures = 0
+                except asyncio.CancelledError:
+                    logger.info("Collection loop cancelled", tier=tier)
+                    raise
+                except Exception:
+                    consecutive_failures += 1
+                    logger.exception(
+                        "Error during metric collection",
+                        tier=tier,
+                        consecutive_failures=consecutive_failures,
+                        max_consecutive_failures=max_consecutive_failures,
+                    )
+
+                    # Only exit if we have too many consecutive failures
+                    if consecutive_failures >= max_consecutive_failures:
+                        logger.critical(
+                            "Too many consecutive collection failures, exiting",
+                            tier=tier,
+                            consecutive_failures=consecutive_failures,
+                        )
+                        self._shutdown_event.set()
+                        raise
+
+                # Wait for next collection
+                logger.info(
+                    "Waiting for next collection",
+                    tier=tier,
+                    wait_seconds=interval,
                 )
 
-                # Only exit if we have too many consecutive failures (indicating a systemic issue)
-                if consecutive_failures >= max_consecutive_failures:
-                    logger.critical(
-                        "Too many consecutive collection failures, exiting",
-                        consecutive_failures=consecutive_failures,
-                    )
-                    self._shutdown_event.set()
-                    raise
-
-            # Wait for next collection or shutdown
-            # Check for shutdown every second for responsiveness
-            remaining_time = self.settings.scrape_interval
-            while remaining_time > 0 and not self._shutdown_event.is_set():
-                wait_time = min(1.0, remaining_time)
-                try:
-                    await asyncio.wait_for(
-                        self._shutdown_event.wait(),
-                        timeout=wait_time,
-                    )
-                    break  # Shutdown event was set
-                except asyncio.TimeoutError:
+                # Wait in small increments for responsiveness
+                remaining_time = interval
+                while remaining_time > 0 and not self._shutdown_event.is_set():
+                    wait_time = min(1.0, remaining_time)
+                    await asyncio.sleep(wait_time)
                     remaining_time -= wait_time
-                    continue
+
+        except asyncio.CancelledError:
+            logger.info("Collection task cancelled, exiting cleanly", tier=tier)
+            raise
 
     def create_app(self) -> FastAPI:
         """Create the FastAPI application.
@@ -220,6 +254,10 @@ class ExporterApp:
         return app
 
 
+# Global app instance to prevent multiple initializations
+_app_instance: FastAPI | None = None
+
+
 def create_app() -> FastAPI:
     """Create the FastAPI application with default settings.
 
@@ -229,5 +267,9 @@ def create_app() -> FastAPI:
         The configured FastAPI application.
 
     """
-    exporter = ExporterApp()
-    return exporter.create_app()
+    global _app_instance
+    if _app_instance is None:
+        exporter = ExporterApp()
+        _app_instance = exporter.create_app()
+    assert _app_instance is not None  # Type checker hint
+    return _app_instance

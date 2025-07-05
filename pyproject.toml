@@ -8,7 +8,7 @@ dependencies = [
     "meraki>=2.0.3",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
-    "prometheus-client>=0.21.0",
+    "prometheus-client>=0.22.1",
     "structlog>=24.4.0",
     "httpx>=0.27.0",
     "anyio>=4.6.0",
@@ -50,6 +50,20 @@ ignore = [
     "D203",  # one blank line before class
     "D212",  # multi-line-summary-first-line
     "D213",  # multi-line docstring summary should start at the second line
+    "D401",  # first line of docstring should be in imperative mood
+    "PLR2004",  # magic value used in comparison
+    "PLR6301",  # method could be function/class method/static method
+    "PLW0603",  # using global statement
+    "PLC0415",  # import should be at top-level of file
+    "C901",  # function is too complex
+    "W293",  # blank line contains whitespace
+    "PLR0912",  # too many branches
+    "PLR0913",  # too many arguments in function definition
+    "PLR0914",  # too many local variables
+    "PLR0915",  # too many statements
+    "PLR0917",  # too many positional arguments
+    "PERF401",  # use list comprehension
+    "E501",  # line too long (handled by formatter)
 ]
 
 [dependency-groups]

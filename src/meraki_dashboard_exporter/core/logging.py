@@ -29,6 +29,16 @@ def setup_logging(settings: Settings) -> None:
         level=getattr(logging, settings.log_level),
     )
 
+    # Control third-party library logging
+    # These libraries are used by the Meraki SDK and can be noisy
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("requests").setLevel(logging.WARNING)
+    logging.getLogger("meraki").setLevel(logging.WARNING)  # Just in case
+
+    # Only show httpx warnings and above (used by our code)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
     # Processors for structlog with logfmt output
     processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,

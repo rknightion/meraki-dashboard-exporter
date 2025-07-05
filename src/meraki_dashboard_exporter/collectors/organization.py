@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from ..core.collector import MetricCollector
-from ..core.constants import MetricName
+from ..core.constants import MetricName, UpdateTier
 from ..core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -19,6 +19,9 @@ logger = get_logger(__name__)
 
 class OrganizationCollector(MetricCollector):
     """Collector for organization-level metrics."""
+
+    # Organization data updates at medium frequency
+    update_tier: UpdateTier = UpdateTier.MEDIUM
 
     def _initialize_metrics(self) -> None:
         """Initialize organization metrics."""
@@ -69,7 +72,7 @@ class OrganizationCollector(MetricCollector):
             labelnames=["org_id", "org_name", "license_type"],
         )
 
-    async def collect(self) -> None:
+    async def _collect_impl(self) -> None:
         """Collect organization metrics."""
         try:
             # Get organizations
@@ -110,22 +113,30 @@ class OrganizationCollector(MetricCollector):
 
         try:
             # Set organization info
-            self._org_info.labels(
-                org_id=org_id,
-                org_name=org_name,
-            ).info({
-                "url": org.get("url", ""),
-                "api_enabled": str(org.get("api", {}).get("enabled", False)),
-            })
+            if self._org_info:
+                self._org_info.labels(
+                    org_id=org_id,
+                    org_name=org_name,
+                ).info({
+                    "url": org.get("url", ""),
+                    "api_enabled": str(org.get("api", {}).get("enabled", False)),
+                })
+            else:
+                logger.error("_org_info metric not initialized")
 
-            # Collect various metrics concurrently
-            await asyncio.gather(
-                self._collect_api_metrics(org_id, org_name),
-                self._collect_network_metrics(org_id, org_name),
-                self._collect_device_metrics(org_id, org_name),
-                self._collect_license_metrics(org_id, org_name),
-                return_exceptions=True,
-            )
+            # Collect various metrics sequentially with logging
+            # Skip API metrics for now - it's often problematic
+            # logger.info("Collecting API metrics", org_id=org_id)
+            # await self._collect_api_metrics(org_id, org_name)
+
+            logger.info("Collecting network metrics", org_id=org_id)
+            await self._collect_network_metrics(org_id, org_name)
+
+            logger.info("Collecting device metrics", org_id=org_id)
+            await self._collect_device_metrics(org_id, org_name)
+
+            logger.info("Collecting license metrics", org_id=org_id)
+            await self._collect_license_metrics(org_id, org_name)
 
         except Exception:
             logger.exception(
@@ -146,33 +157,50 @@ class OrganizationCollector(MetricCollector):
 
         """
         try:
-            # Get API request stats
-            api_requests = await asyncio.to_thread(
-                self.api.organizations.getOrganizationApiRequests,
-                org_id,
-                total_pages="all",
+            # Get API request stats with timeout
+            logger.debug("Fetching API request stats", org_id=org_id)
+            api_requests = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.api.organizations.getOrganizationApiRequests,
+                    org_id,
+                    total_pages="all",
+                ),
+                timeout=30.0
             )
 
             if api_requests:
                 # Sum up total requests
                 total_requests = sum(req.get("total", 0) for req in api_requests)
-                self._api_requests_total.labels(
-                    org_id=org_id,
-                    org_name=org_name,
-                ).set(total_requests)
+                if self._api_requests_total:
+                    self._api_requests_total.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                    ).set(total_requests)
+                else:
+                    logger.error("_api_requests_total metric not initialized")
+            else:
+                # No API request data available
+                logger.debug("No API request data available", org_id=org_id)
 
             # Note: Rate limit info would need to be extracted from response headers
             # For now, we'll set a placeholder
-            self._api_rate_limit.labels(
+            if self._api_rate_limit:
+                self._api_rate_limit.labels(
+                    org_id=org_id,
+                    org_name=org_name,
+                ).set(5)  # Default Meraki rate limit
+
+        except TimeoutError:
+            logger.error(
+                "Timeout collecting API metrics",
                 org_id=org_id,
                 org_name=org_name,
-            ).set(5)  # Default Meraki rate limit
-
+            )
         except Exception:
-            logger.error(
+            logger.exception(
                 "Failed to collect API metrics",
                 org_id=org_id,
-                exc_info=True,
+                org_name=org_name,
             )
 
     async def _collect_network_metrics(self, org_id: str, org_name: str) -> None:
@@ -193,16 +221,19 @@ class OrganizationCollector(MetricCollector):
                 total_pages="all",
             )
 
-            self._networks_total.labels(
-                org_id=org_id,
-                org_name=org_name,
-            ).set(len(networks))
+            if self._networks_total:
+                self._networks_total.labels(
+                    org_id=org_id,
+                    org_name=org_name,
+                ).set(len(networks))
+            else:
+                logger.error("_networks_total metric not initialized")
 
         except Exception:
-            logger.error(
+            logger.exception(
                 "Failed to collect network metrics",
                 org_id=org_id,
-                exc_info=True,
+                org_name=org_name,
             )
 
     async def _collect_device_metrics(self, org_id: str, org_name: str) -> None:
@@ -232,17 +263,20 @@ class OrganizationCollector(MetricCollector):
 
             # Set metrics for each device type
             for device_type, count in device_counts.items():
-                self._devices_total.labels(
-                    org_id=org_id,
-                    org_name=org_name,
-                    device_type=device_type,
-                ).set(count)
+                if self._devices_total:
+                    self._devices_total.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                        device_type=device_type,
+                    ).set(count)
+                else:
+                    logger.error("_devices_total metric not initialized")
 
         except Exception:
-            logger.error(
+            logger.exception(
                 "Failed to collect device metrics",
                 org_id=org_id,
-                exc_info=True,
+                org_name=org_name,
             )
 
     async def _collect_license_metrics(self, org_id: str, org_name: str) -> None:
@@ -257,11 +291,47 @@ class OrganizationCollector(MetricCollector):
 
         """
         try:
-            licenses = await asyncio.to_thread(
-                self.api.organizations.getOrganizationLicenses,
-                org_id,
-                total_pages="all",
-            )
+            # First check if organization uses per-device licensing
+            # If not, try to get licensing overview instead
+            licenses = []
+            try:
+                licenses = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationLicenses,
+                    org_id,
+                    total_pages="all",
+                )
+            except Exception as e:
+                # Check if it's a licensing model issue
+                if "does not support per-device licensing" in str(e):
+                    logger.info(
+                        "Organization uses co-termination licensing model",
+                        org_id=org_id,
+                        org_name=org_name,
+                    )
+                    # Try to get licensing overview for co-termination model
+                    try:
+                        overview = await asyncio.wait_for(
+                            asyncio.to_thread(
+                                self.api.organizations.getOrganizationLicensesOverview,
+                                org_id,
+                            ),
+                            timeout=30.0
+                        )
+                        # Convert overview to a format we can process
+                        if overview:
+                            # Set metrics based on overview data
+                            self._process_licensing_overview(org_id, org_name, overview)
+                            return
+                    except Exception:
+                        logger.warning(
+                            "Could not get licensing overview",
+                            org_id=org_id,
+                            org_name=org_name,
+                        )
+                    return
+                else:
+                    # Re-raise if it's a different error
+                    raise
 
             # Count licenses by type and status
             license_counts: dict[tuple[str, str], int] = {}
@@ -280,38 +350,145 @@ class OrganizationCollector(MetricCollector):
                 # Check if expiring soon (within 30 days)
                 expiration_date = license.get("expirationDate")
                 if expiration_date and status == "active":
-                    try:
-                        exp_dt = datetime.fromisoformat(
-                            expiration_date.replace("Z", "+00:00")
-                        )
+                    exp_dt = self._parse_meraki_date(expiration_date)
+                    if exp_dt:
                         days_until_expiry = (exp_dt - now).days
                         if days_until_expiry <= 30:
                             expiring_counts[license_type] = (
                                 expiring_counts.get(license_type, 0) + 1
                             )
-                    except Exception:
-                        pass
 
             # Set license count metrics
             for (license_type, status), count in license_counts.items():
-                self._licenses_total.labels(
-                    org_id=org_id,
-                    org_name=org_name,
-                    license_type=license_type,
-                    status=status,
-                ).set(count)
+                if self._licenses_total:
+                    self._licenses_total.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                        license_type=license_type,
+                        status=status,
+                    ).set(count)
+                else:
+                    logger.error("_licenses_total metric not initialized")
 
             # Set expiring license metrics
             for license_type, count in expiring_counts.items():
+                if self._licenses_expiring:
+                    self._licenses_expiring.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                        license_type=license_type,
+                    ).set(count)
+                else:
+                    logger.error("_licenses_expiring metric not initialized")
+
+        except Exception:
+            logger.exception(
+                "Failed to collect license metrics",
+                org_id=org_id,
+                org_name=org_name,
+            )
+
+    def _parse_meraki_date(self, date_str: str) -> datetime | None:
+        """Parse Meraki date formats.
+        
+        Parameters
+        ----------
+        date_str : str
+            Date string from Meraki API (e.g., "Mar 13, 2027 UTC" or ISO format).
+            
+        Returns
+        -------
+        datetime | None
+            Parsed datetime or None if parsing failed.
+            
+        """
+        if not date_str:
+            return None
+
+        try:
+            # First try ISO format (e.g., "2027-03-13T00:00:00Z")
+            if "T" in date_str or date_str.endswith("Z"):
+                try:
+                    return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                except ValueError:
+                    # Not a valid ISO format, continue to other formats
+                    pass
+
+            # Try Meraki's human-readable format (e.g., "Mar 13, 2027 UTC")
+            # Remove timezone suffix and parse
+            date_str_clean = date_str.replace(" UTC", "").replace(" GMT", "").strip()
+            # Handle both "Mar 13, 2027" and "March 13, 2027" formats
+            for fmt in ["%b %d, %Y", "%B %d, %Y"]:
+                try:
+                    return datetime.strptime(date_str_clean, fmt).replace(tzinfo=UTC)
+                except ValueError:
+                    continue
+
+            # If we get here, we couldn't parse the date
+            raise ValueError(f"Unknown date format: {date_str}")
+
+        except Exception as e:
+            logger.warning(
+                "Could not parse date",
+                date_str=date_str,
+                error=str(e),
+            )
+            return None
+
+    def _process_licensing_overview(
+        self, org_id: str, org_name: str, overview: dict[str, Any]
+    ) -> None:
+        """Process licensing overview for co-termination licensing model.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        overview : dict[str, Any]
+            Licensing overview data.
+
+        """
+        # Extract data from overview
+        status = overview.get("status", "Unknown")
+        expiration_date = overview.get("expirationDate")
+
+        # Set total licenses metric for co-termination model
+        if self._licenses_total:
+            self._licenses_total.labels(
+                org_id=org_id,
+                org_name=org_name,
+                license_type="co-termination",
+                status=status,
+            ).set(1)  # Co-term is a single license
+        else:
+            logger.error("_licenses_total metric not initialized")
+
+        # Check if expiring soon
+        if expiration_date and status == "OK" and self._licenses_expiring:
+            now = datetime.now(UTC)
+            exp_dt = self._parse_meraki_date(expiration_date)
+            if exp_dt:
+                days_until_expiry = (exp_dt - now).days
+                if days_until_expiry <= 30:
+                    self._licenses_expiring.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                        license_type="co-termination",
+                    ).set(1)
+                else:
+                    self._licenses_expiring.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                        license_type="co-termination",
+                    ).set(0)
+            else:
+                # Set to 0 if we couldn't parse the date
                 self._licenses_expiring.labels(
                     org_id=org_id,
                     org_name=org_name,
-                    license_type=license_type,
-                ).set(count)
-
-        except Exception:
-            logger.error(
-                "Failed to collect license metrics",
-                org_id=org_id,
-                exc_info=True,
-            )
+                    license_type="co-termination",
+                ).set(0)
+        elif not self._licenses_expiring:
+            logger.error("_licenses_expiring metric not initialized")

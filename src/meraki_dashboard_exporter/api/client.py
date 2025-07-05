@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 import meraki
 from meraki.exceptions import APIError
 
-from ..core.constants import DEFAULT_MAX_RETRIES, DEFAULT_RATE_LIMIT_RETRY_WAIT
 from ..core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -30,9 +29,12 @@ class AsyncMerakiClient:
     """
 
     def __init__(self, settings: Settings) -> None:
+        """Initialize the async Meraki client with settings."""
         self.settings = settings
         self._api: meraki.DashboardAPI | None = None
-        self._semaphore = asyncio.Semaphore(5)  # Rate limiting to avoid connection pool issues
+        self._semaphore = asyncio.Semaphore(5)  # Reduce concurrent API calls
+        self._api_lock = asyncio.Lock()  # Add lock for API client creation
+        self._api_call_count = 0
 
     @property
     def api(self) -> meraki.DashboardAPI:
@@ -50,10 +52,9 @@ class AsyncMerakiClient:
                 output_log=False,
                 suppress_logging=True,
                 single_request_timeout=self.settings.api_timeout,
-                maximum_retries=DEFAULT_MAX_RETRIES,
+                maximum_retries=2,  # Reduce retries
                 wait_on_rate_limit=True,
-                retry_4xx_error=True,
-                retry_4xx_error_wait_time=DEFAULT_RATE_LIMIT_RETRY_WAIT,
+                retry_4xx_error=False,  # Don't retry 4xx errors
             )
         return self._api
 
@@ -279,12 +280,39 @@ class AsyncMerakiClient:
         try:
             yield
         except APIError as e:
-            logger.error(
-                "Meraki API error",
-                status=e.status,
-                reason=e.reason,
-                message=str(e),
-            )
+            # Log at appropriate level based on status code
+            if e.status == 429:
+                # Rate limit - this is handled by the SDK but log it
+                logger.warning(
+                    "Meraki API rate limit hit",
+                    status=e.status,
+                    reason=e.reason,
+                    message=str(e),
+                )
+            elif e.status and 400 <= e.status < 500:
+                # Client errors - these are usually our fault
+                logger.error(
+                    "Meraki API client error",
+                    status=e.status,
+                    reason=e.reason,
+                    message=str(e),
+                )
+            elif e.status and e.status >= 500:
+                # Server errors - these are Meraki's fault
+                logger.error(
+                    "Meraki API server error",
+                    status=e.status,
+                    reason=e.reason,
+                    message=str(e),
+                )
+            else:
+                # Other errors
+                logger.error(
+                    "Meraki API error",
+                    status=e.status,
+                    reason=e.reason,
+                    message=str(e),
+                )
             raise
         except Exception as e:
             logger.error("Unexpected error during API call", error=str(e))

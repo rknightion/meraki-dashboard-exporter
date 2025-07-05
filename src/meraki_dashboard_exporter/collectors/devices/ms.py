@@ -28,12 +28,37 @@ class MSCollector(BaseDeviceCollector):
         """
         serial = device["serial"]
         name = device.get("name", serial)
+        model = device.get("model", "")
+        network_id = device.get("networkId", "")
 
         try:
-            # Get port statuses
-            port_statuses = await asyncio.to_thread(
-                self.api.switch.getDeviceSwitchPortsStatuses,
-                serial,
+            # Get port statuses with timeout
+            logger.debug(
+                "Fetching switch port statuses",
+                serial=serial,
+                name=name,
+            )
+
+            try:
+                port_statuses = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self.api.switch.getDeviceSwitchPortsStatuses,
+                        serial,
+                    ),
+                    timeout=10.0  # 10 second timeout
+                )
+            except TimeoutError:
+                logger.error(
+                    "Timeout fetching switch port statuses",
+                    serial=serial,
+                    name=name,
+                )
+                return
+
+            logger.debug(
+                "Successfully fetched port statuses",
+                serial=serial,
+                port_count=len(port_statuses) if port_statuses else 0,
             )
 
             for port in port_statuses:
@@ -81,6 +106,54 @@ class MSCollector(BaseDeviceCollector):
                             port_name=port_name,
                             error_type=error_type,
                         ).set(count)
+
+            # Extract POE data from port statuses (POE data is included in port status)
+            total_poe_consumption = 0
+
+            for port in port_statuses:
+                port_id = str(port.get("portId", ""))
+                port_name = port.get("name", f"Port {port_id}")
+
+                # Check if port has POE data
+                poe_info = port.get("poe", {})
+                if poe_info.get("isAllocated", False):
+                    # Port is drawing POE power
+                    power_used = port.get("powerUsageInWh", 0)
+
+                    self.parent._switch_poe_port_power.labels(
+                        serial=serial,
+                        name=name,
+                        port_id=port_id,
+                        port_name=port_name,
+                    ).set(power_used)
+
+                    total_poe_consumption += power_used
+                else:
+                    # Port is not drawing POE power
+                    self.parent._switch_poe_port_power.labels(
+                        serial=serial,
+                        name=name,
+                        port_id=port_id,
+                        port_name=port_name,
+                    ).set(0)
+
+            # Set switch-level POE total
+            self.parent._switch_poe_total_power.labels(
+                serial=serial,
+                name=name,
+                model=model,
+                network_id=network_id,
+            ).set(total_poe_consumption)
+
+            # Set total switch power usage (POE consumption is the main power draw)
+            # This is an approximation - actual switch base power consumption varies by model
+            self.parent._switch_power.labels(
+                serial=serial,
+                name=name,
+                model=model,
+            ).set(total_poe_consumption)
+
+            # Note: POE budget is not available via API, would need a lookup table by model
 
         except Exception:
             logger.exception(
