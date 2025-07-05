@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -63,7 +63,7 @@ class Settings(BaseSettings):
         return self.fast_update_interval
 
     # Server settings
-    host: str = Field("0.0.0.0", description="Host to bind the exporter to")
+    host: str = Field("0.0.0.0", description="Host to bind the exporter to")  # nosec B104
     port: int = Field(9090, ge=1, le=65535, description="Port to bind the exporter to")
 
     # Device types to collect metrics for
@@ -100,7 +100,7 @@ class Settings(BaseSettings):
 
     @field_validator("otel_endpoint")
     @classmethod
-    def validate_otel_endpoint(cls, v: str | None, info) -> str | None:
+    def validate_otel_endpoint(cls, v: str | None, info: Any) -> str | None:
         """Validate OTEL endpoint when OTEL is enabled."""
         if info.data.get("otel_enabled") and not v:
             raise ValueError("OTEL endpoint must be provided when OTEL is enabled")

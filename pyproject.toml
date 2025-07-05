@@ -3,6 +3,9 @@ name = "meraki-dashboard-exporter"
 version = "0.1.0"
 description = "Prometheus exporter for Cisco Meraki Dashboard API metrics"
 readme = "README.md"
+authors = [
+    { name = "Rob Knight", email = "12484127+rknightion@users.noreply.github.com" }
+]
 requires-python = ">=3.13"
 dependencies = [
     "meraki>=2.0.3",
@@ -21,7 +24,7 @@ dependencies = [
 ]
 
 [tool.ruff]
-target-version = "py313"   
+target-version = "py313"
 line-length    = 100
 preview = true
 indent-width   = 4
@@ -87,10 +90,20 @@ namespace_packages = true
 show_error_codes = true
 show_column_numbers = true
 pretty = true
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
 
 [[tool.mypy.overrides]]
-module = ["meraki.*", "prometheus_client.*"]
+module = ["meraki.*", "prometheus_client.*", "opentelemetry.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disable_error_code = ["no-untyped-def", "var-annotated"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -99,3 +112,11 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+
+[tool.bandit]
+exclude_dirs = ["tests", "scripts"]
+skips = ["B101", "B601", "B602", "B603", "B604", "B605", "B606", "B607", "B608", "B609"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

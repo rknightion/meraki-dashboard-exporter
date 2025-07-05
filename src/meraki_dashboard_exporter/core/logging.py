@@ -52,9 +52,7 @@ def setup_logging(settings: Settings) -> None:
 
     structlog.configure(
         processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(logging, settings.log_level)
-        ),
+        wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, settings.log_level)),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(),
         cache_logger_on_first_use=True,
@@ -92,7 +90,7 @@ def add_otel_context(logger: Any, method_name: str, event_dict: EventDict) -> Ev
     return event_dict
 
 
-def get_logger(name: str | None = None) -> structlog.BoundLogger:
+def get_logger(name: str | None = None) -> Any:
     """Get a configured logger instance.
 
     Parameters
@@ -102,7 +100,7 @@ def get_logger(name: str | None = None) -> structlog.BoundLogger:
 
     Returns
     -------
-    structlog.BoundLogger
+    Any
         Configured logger instance.
 
     """

@@ -11,7 +11,6 @@ from ..core.constants import MetricName, UpdateTier
 from ..core.logging import get_logger
 
 if TYPE_CHECKING:
-
     pass
 
 logger = get_logger(__name__)
@@ -85,15 +84,10 @@ class OrganizationCollector(MetricCollector):
                 organizations = [org]
             else:
                 # All accessible organizations
-                organizations = await asyncio.to_thread(
-                    self.api.organizations.getOrganizations
-                )
+                organizations = await asyncio.to_thread(self.api.organizations.getOrganizations)
 
             # Collect metrics for each organization
-            tasks = [
-                self._collect_org_metrics(org)
-                for org in organizations
-            ]
+            tasks = [self._collect_org_metrics(org) for org in organizations]
             await asyncio.gather(*tasks, return_exceptions=True)
 
         except Exception:
@@ -165,7 +159,7 @@ class OrganizationCollector(MetricCollector):
                     org_id,
                     total_pages="all",
                 ),
-                timeout=30.0
+                timeout=30.0,
             )
 
             if api_requests:
@@ -315,7 +309,7 @@ class OrganizationCollector(MetricCollector):
                                 self.api.organizations.getOrganizationLicensesOverview,
                                 org_id,
                             ),
-                            timeout=30.0
+                            timeout=30.0,
                         )
                         # Convert overview to a format we can process
                         if overview:
@@ -354,9 +348,7 @@ class OrganizationCollector(MetricCollector):
                     if exp_dt:
                         days_until_expiry = (exp_dt - now).days
                         if days_until_expiry <= 30:
-                            expiring_counts[license_type] = (
-                                expiring_counts.get(license_type, 0) + 1
-                            )
+                            expiring_counts[license_type] = expiring_counts.get(license_type, 0) + 1
 
             # Set license count metrics
             for (license_type, status), count in license_counts.items():
@@ -390,17 +382,17 @@ class OrganizationCollector(MetricCollector):
 
     def _parse_meraki_date(self, date_str: str) -> datetime | None:
         """Parse Meraki date formats.
-        
+
         Parameters
         ----------
         date_str : str
             Date string from Meraki API (e.g., "Mar 13, 2027 UTC" or ISO format).
-            
+
         Returns
         -------
         datetime | None
             Parsed datetime or None if parsing failed.
-            
+
         """
         if not date_str:
             return None

@@ -140,10 +140,7 @@ class CollectorManager:
             )
 
             try:
-                await asyncio.wait_for(
-                    collector.collect(),
-                    timeout=timeout
-                )
+                await asyncio.wait_for(collector.collect(), timeout=timeout)
                 logger.debug(
                     "Collector completed successfully",
                     collector=collector_name,

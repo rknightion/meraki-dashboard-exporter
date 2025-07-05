@@ -27,7 +27,7 @@ class DeviceCollector(MetricCollector):
 
     def _set_metric_value(self, metric_name: str, labels: dict[str, str], value: float) -> None:
         """Safely set a metric value with validation.
-        
+
         Parameters
         ----------
         metric_name : str
@@ -36,7 +36,7 @@ class DeviceCollector(MetricCollector):
             Labels to apply to the metric.
         value : float
             Value to set.
-            
+
         """
         metric = getattr(self, metric_name, None)
         if metric is None:
@@ -77,7 +77,6 @@ class DeviceCollector(MetricCollector):
             "Device online status (1 = online, 0 = offline)",
             labelnames=["serial", "name", "model", "network_id", "device_type"],
         )
-
 
         # Memory metrics - available via system memory usage history API
         self._device_memory_used_bytes = self._create_gauge(
@@ -161,7 +160,6 @@ class DeviceCollector(MetricCollector):
             labelnames=["serial", "name", "model", "network_id"],
         )
 
-
         self._ap_traffic = self._create_gauge(
             MetricName.MR_TRAFFIC_BYTES,
             "Access point traffic in bytes",
@@ -175,9 +173,7 @@ class DeviceCollector(MetricCollector):
             if self.settings.org_id:
                 org_ids = [self.settings.org_id]
             else:
-                orgs = await asyncio.to_thread(
-                    self.api.organizations.getOrganizations
-                )
+                orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
                 org_ids = [org["id"] for org in orgs]
 
             # Collect devices for each organization
@@ -290,7 +286,7 @@ class DeviceCollector(MetricCollector):
             # Track network POE usage (removed for now - not implemented)
 
             # Collect metrics for each device type
-            tasks = []
+            tasks: list[Any] = []
             ms_devices = []
             mr_devices = []
 
@@ -320,7 +316,7 @@ class DeviceCollector(MetricCollector):
                 # Process devices in smaller batches to avoid overwhelming the API
                 batch_size = 5
                 for i in range(0, len(ms_devices), batch_size):
-                    batch = ms_devices[i:i + batch_size]
+                    batch = ms_devices[i : i + batch_size]
                     logger.debug(
                         "Processing MS device batch",
                         batch_start=i,
@@ -358,7 +354,7 @@ class DeviceCollector(MetricCollector):
                 # Process devices in smaller batches to avoid overwhelming the API
                 batch_size = 5
                 for i in range(0, len(mr_devices), batch_size):
-                    batch = mr_devices[i:i + batch_size]
+                    batch = mr_devices[i : i + batch_size]
                     logger.debug(
                         "Processing MR device batch",
                         batch_start=i,
@@ -390,20 +386,14 @@ class DeviceCollector(MetricCollector):
             # Aggregate network-wide POE metrics after all switches are collected
             logger.info("Aggregating network POE metrics")
             try:
-                await asyncio.wait_for(
-                    self._aggregate_network_poe(org_id, devices),
-                    timeout=60.0
-                )
+                await asyncio.wait_for(self._aggregate_network_poe(org_id, devices), timeout=60.0)
             except TimeoutError:
                 logger.error("Timeout aggregating POE metrics")
 
             # Collect memory metrics for all devices
             logger.info("Collecting device memory metrics")
             try:
-                await asyncio.wait_for(
-                    self._collect_memory_metrics(org_id),
-                    timeout=60.0
-                )
+                await asyncio.wait_for(self._collect_memory_metrics(org_id), timeout=60.0)
             except TimeoutError:
                 logger.error("Timeout collecting memory metrics")
 
@@ -411,10 +401,7 @@ class DeviceCollector(MetricCollector):
             if any(d for d in devices if d.get("model", "").startswith("MR")):
                 logger.info("Collecting wireless client counts")
                 try:
-                    await asyncio.wait_for(
-                        self._collect_wireless_clients(org_id),
-                        timeout=30.0
-                    )
+                    await asyncio.wait_for(self._collect_wireless_clients(org_id), timeout=30.0)
                 except TimeoutError:
                     logger.error("Timeout collecting wireless client counts")
 
@@ -428,41 +415,37 @@ class DeviceCollector(MetricCollector):
 
     async def _collect_ms_device_with_timeout(self, device: dict[str, Any]) -> None:
         """Collect MS device metrics with timeout.
-        
+
         Parameters
         ----------
         device : dict[str, Any]
             Device data.
-            
+
         """
         try:
             await asyncio.wait_for(
                 self.ms_collector.collect(device),
-                timeout=15.0  # 15 second timeout per device
+                timeout=15.0,  # 15 second timeout per device
             )
         except TimeoutError as e:
-            raise TimeoutError(
-                f"Timeout collecting MS device {device['serial']}"
-            ) from e
+            raise TimeoutError(f"Timeout collecting MS device {device['serial']}") from e
 
     async def _collect_mr_device_with_timeout(self, device: dict[str, Any]) -> None:
         """Collect MR device metrics with timeout.
-        
+
         Parameters
         ----------
         device : dict[str, Any]
             Device data.
-            
+
         """
         try:
             await asyncio.wait_for(
                 self.mr_collector.collect(device),
-                timeout=15.0  # 15 second timeout per device
+                timeout=15.0,  # 15 second timeout per device
             )
         except TimeoutError as e:
-            raise TimeoutError(
-                f"Timeout collecting MR device {device['serial']}"
-            ) from e
+            raise TimeoutError(f"Timeout collecting MR device {device['serial']}") from e
 
     def _get_device_type(self, device: dict[str, Any]) -> str:
         """Get device type from device model.
@@ -528,14 +511,14 @@ class DeviceCollector(MetricCollector):
 
     async def _aggregate_network_poe(self, org_id: str, devices: list[dict[str, Any]]) -> None:
         """Aggregate POE metrics at the network level.
-        
+
         Parameters
         ----------
         org_id : str
             Organization ID.
         devices : list[dict[str, Any]]
             All devices in the organization.
-            
+
         """
         try:
             # Get network names
@@ -596,12 +579,12 @@ class DeviceCollector(MetricCollector):
 
     async def _collect_memory_metrics(self, org_id: str) -> None:
         """Collect memory metrics for all devices in an organization.
-        
+
         Parameters
         ----------
         org_id : str
             Organization ID.
-            
+
         """
         try:
             # Use a short timespan (600 seconds = 10 minutes) with 300 second interval
@@ -784,12 +767,12 @@ class DeviceCollector(MetricCollector):
 
     async def _collect_wireless_clients(self, org_id: str) -> None:
         """Collect wireless client counts for MR devices.
-        
+
         Parameters
         ----------
         org_id : str
             Organization ID.
-            
+
         """
         try:
             logger.info("Fetching wireless client counts", org_id=org_id)
@@ -824,12 +807,12 @@ class DeviceCollector(MetricCollector):
             for device_data in client_data:
                 serial = device_data.get("serial", "")
                 network_id = device_data.get("network", {}).get("id", "")
-                
+
                 # Get online client count
                 counts = device_data.get("counts", {})
                 by_status = counts.get("byStatus", {})
                 online_clients = by_status.get("online", 0)
-                
+
                 # We need to look up the device name and model from our devices cache
                 # For now, just use the serial as the name
                 self._ap_clients.labels(

@@ -1,13 +1,13 @@
+# Development docker-compose file
+# Use this for local development with: docker-compose -f docker-compose.dev.yml up --build
+
 services:
   exporter:
-    # Use pre-built image from GitHub Container Registry or build locally
-    image: ghcr.io/rknightion/meraki-dashboard-exporter:latest
-    # Uncomment the following lines to build locally instead:
-    # build:
-    #   context: .
-    #   args:
-    #     PY_VERSION: 3.13
-    container_name: meraki-dashboard-exporter
+    build:
+      context: .
+      args:
+        PY_VERSION: 3.13
+    container_name: meraki-dashboard-exporter-dev
     restart: unless-stopped
     ports:
       - "9090:9090"
@@ -22,7 +22,7 @@ services:
       - MERAKI_EXPORTER_SCRAPE_INTERVAL=${MERAKI_EXPORTER_SCRAPE_INTERVAL:-300}
 
       # Optional: Log level (default INFO)
-      - MERAKI_EXPORTER_LOG_LEVEL=${MERAKI_EXPORTER_LOG_LEVEL:-INFO}
+      - MERAKI_EXPORTER_LOG_LEVEL=${MERAKI_EXPORTER_LOG_LEVEL:-DEBUG}
 
       # Optional: Device types to collect (comma-separated)
       # - MERAKI_EXPORTER_DEVICE_TYPES=${MERAKI_EXPORTER_DEVICE_TYPES:-MS,MR,MV,MT}
@@ -40,15 +40,9 @@ services:
       retries: 3
       start_period: 40s
 
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
+    # Mount source code for development (if needed)
+    # volumes:
+    #   - ./src:/app
 
     # Security options
     security_opt:
@@ -61,7 +55,7 @@ services:
   # Optional: Prometheus for testing
   prometheus:
     image: prom/prometheus:latest
-    container_name: prometheus
+    container_name: prometheus-dev
     restart: unless-stopped
     ports:
       - "9091:9090"

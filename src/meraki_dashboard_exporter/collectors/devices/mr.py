@@ -45,7 +45,7 @@ class MRCollector(BaseDeviceCollector):
                         self.api.wireless.getDeviceWirelessStatus,
                         serial,
                     ),
-                    timeout=10.0  # 10 second timeout
+                    timeout=10.0,  # 10 second timeout
                 )
             except TimeoutError:
                 logger.error(
@@ -68,7 +68,6 @@ class MRCollector(BaseDeviceCollector):
                     model=model,
                     network_id=network_id,
                 ).set(status["clientCount"])
-
 
         except Exception:
             logger.exception(

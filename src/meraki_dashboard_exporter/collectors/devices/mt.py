@@ -18,7 +18,7 @@ class MTCollector(BaseDeviceCollector):
 
     def _set_metric_value(self, metric_name: str, labels: dict[str, str], value: float) -> None:
         """Safely set a metric value with validation.
-        
+
         Parameters
         ----------
         metric_name : str
@@ -27,7 +27,7 @@ class MTCollector(BaseDeviceCollector):
             Labels to apply to the metric.
         value : float
             Value to set.
-            
+
         """
         if not self.parent:
             return
