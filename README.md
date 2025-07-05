@@ -76,7 +76,7 @@ Key settings:
 
 ### Access Point (MR) Metrics
 - `meraki_mr_clients_connected`: Connected client count
-- `meraki_mr_channel_utilization_percent`: Channel utilization
+- `meraki_ap_channel_utilization_*`: Channel utilization metrics
 
 ### Sensor (MT) Metrics
 - `meraki_mt_temperature_celsius`: Temperature readings

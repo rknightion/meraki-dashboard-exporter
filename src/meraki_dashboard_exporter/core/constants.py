@@ -24,8 +24,6 @@ class MetricName(StrEnum):
 
     # Device common metrics
     DEVICE_UP = "meraki_device_up"
-    DEVICE_UPTIME_SECONDS = "meraki_device_uptime_seconds"
-    DEVICE_CPU_USAGE_PERCENT = "meraki_device_cpu_usage_percent"
     DEVICE_MEMORY_USAGE_PERCENT = "meraki_device_memory_usage_percent"
 
     # MS (Switch) specific metrics
@@ -33,10 +31,13 @@ class MetricName(StrEnum):
     MS_PORT_TRAFFIC_BYTES = "meraki_ms_port_traffic_bytes"
     MS_PORT_ERRORS_TOTAL = "meraki_ms_port_errors_total"
     MS_POWER_USAGE_WATTS = "meraki_ms_power_usage_watts"
+    MS_POE_PORT_POWER_WATTS = "meraki_ms_poe_port_power_watthours"  # Actually Wh not W
+    MS_POE_TOTAL_POWER_WATTS = "meraki_ms_poe_total_power_watthours"  # Actually Wh not W
+    MS_POE_BUDGET_WATTS = "meraki_ms_poe_budget_watts"
+    MS_POE_NETWORK_TOTAL_WATTS = "meraki_ms_poe_network_total_watthours"  # Actually Wh not W
 
     # MR (Access Point) specific metrics
     MR_CLIENTS_CONNECTED = "meraki_mr_clients_connected"
-    MR_CHANNEL_UTILIZATION_PERCENT = "meraki_mr_channel_utilization_percent"
     MR_SIGNAL_QUALITY = "meraki_mr_signal_quality"
     MR_TRAFFIC_BYTES = "meraki_mr_traffic_bytes"
 
@@ -55,6 +56,15 @@ class MetricName(StrEnum):
     MT_PM25_UG_M3 = "meraki_mt_pm25_ug_m3"
     MT_NOISE_DB = "meraki_mt_noise_db"
     MT_BATTERY_PERCENTAGE = "meraki_mt_battery_percentage"
+    MT_INDOOR_AIR_QUALITY_SCORE = "meraki_mt_indoor_air_quality_score"
+    MT_VOLTAGE_VOLTS = "meraki_mt_voltage_volts"
+    MT_CURRENT_AMPS = "meraki_mt_current_amps"
+    MT_REAL_POWER_WATTS = "meraki_mt_real_power_watts"
+    MT_APPARENT_POWER_VA = "meraki_mt_apparent_power_va"
+    MT_POWER_FACTOR_PERCENT = "meraki_mt_power_factor_percent"
+    MT_FREQUENCY_HZ = "meraki_mt_frequency_hz"
+    MT_DOWNSTREAM_POWER_ENABLED = "meraki_mt_downstream_power_enabled"
+    MT_REMOTE_LOCKOUT_STATUS = "meraki_mt_remote_lockout_status"
 
 
 class DeviceType(StrEnum):
@@ -75,6 +85,13 @@ class DeviceStatus(StrEnum):
     OFFLINE = "offline"
     ALERTING = "alerting"
     DORMANT = "dormant"
+
+
+class UpdateTier(StrEnum):
+    """Update tier for metrics collection."""
+
+    FAST = "fast"  # Sensor data, real-time metrics
+    MEDIUM = "medium"  # Device metrics, org metrics, network health
 
 
 # Default values

@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .constants import DEFAULT_API_TIMEOUT, DEFAULT_SCRAPE_INTERVAL
+from .constants import DEFAULT_API_TIMEOUT
 
 
 class Settings(BaseSettings):
@@ -36,12 +36,18 @@ class Settings(BaseSettings):
         description="Meraki organization ID (optional, will fetch all orgs if not set)",
     )
 
-    # Scraping settings
-    scrape_interval: int = Field(
-        DEFAULT_SCRAPE_INTERVAL,
-        ge=60,
-        le=3600,
-        description="Interval between metric scrapes in seconds",
+    # Scraping settings - Tiered update intervals
+    fast_update_interval: int = Field(
+        60,  # 1 minute
+        ge=30,
+        le=300,
+        description="Interval for fast-moving data (sensors) in seconds",
+    )
+    medium_update_interval: int = Field(
+        600,  # 10 minutes
+        ge=300,
+        le=1800,
+        description="Interval for medium-moving data (device metrics, org metrics) in seconds",
     )
     api_timeout: int = Field(
         DEFAULT_API_TIMEOUT,
@@ -49,6 +55,12 @@ class Settings(BaseSettings):
         le=300,
         description="API request timeout in seconds",
     )
+
+    # Legacy field for backwards compatibility
+    @property
+    def scrape_interval(self) -> int:
+        """Legacy scrape interval property, returns fast update interval."""
+        return self.fast_update_interval
 
     # Server settings
     host: str = Field("0.0.0.0", description="Host to bind the exporter to")

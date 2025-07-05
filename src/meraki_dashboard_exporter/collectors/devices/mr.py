@@ -32,10 +32,32 @@ class MRCollector(BaseDeviceCollector):
         network_id = device.get("networkId", "")
 
         try:
-            # Get wireless status
-            status = await asyncio.to_thread(
-                self.api.wireless.getDeviceWirelessStatus,
-                serial,
+            # Get wireless status with timeout
+            logger.debug(
+                "Fetching wireless status",
+                serial=serial,
+                name=name,
+            )
+
+            try:
+                status = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self.api.wireless.getDeviceWirelessStatus,
+                        serial,
+                    ),
+                    timeout=10.0  # 10 second timeout
+                )
+            except TimeoutError:
+                logger.error(
+                    "Timeout fetching wireless status",
+                    serial=serial,
+                    name=name,
+                )
+                return
+
+            logger.debug(
+                "Successfully fetched wireless status",
+                serial=serial,
             )
 
             # Client count
@@ -47,19 +69,6 @@ class MRCollector(BaseDeviceCollector):
                     network_id=network_id,
                 ).set(status["clientCount"])
 
-            # Channel utilization
-            if "basicServiceSets" in status:
-                for bss in status["basicServiceSets"]:
-                    band = bss.get("band", "")
-                    channel = str(bss.get("channel", ""))
-                    utilization = bss.get("utilization", 0)
-
-                    self.parent._ap_channel_utilization.labels(
-                        serial=serial,
-                        name=name,
-                        band=band,
-                        channel=channel,
-                    ).set(utilization)
 
         except Exception:
             logger.exception(
