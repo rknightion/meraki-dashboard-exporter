@@ -110,12 +110,14 @@ jobs:
             PY_VERSION=3.13
 
       - name: Test Docker image startup
+        env:
+          MERAKI_API_KEY: "00000000000000000000000000000000deadbeef"
         run: |
           # Test that the image can start and show help
-          docker run --rm meraki-dashboard-exporter:test --help || true
+          docker run --rm -e MERAKI_API_KEY meraki-dashboard-exporter:test --help || true
 
           # Test image metadata
           docker inspect meraki-dashboard-exporter:test | jq '.[0].Config.Labels'
 
           # Verify non-root user
-          docker run --rm meraki-dashboard-exporter:test whoami | grep -q exporter
+          docker run --rm -e MERAKI_API_KEY meraki-dashboard-exporter:test whoami | grep -q exporter
