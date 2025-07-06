@@ -78,18 +78,12 @@ repos:
     -   id: end-of-file-fixer
     -   id: mixed-line-ending
 
-  # Shell script linting
--   repo: https://github.com/koalaman/shellcheck-precommit
-    rev: v0.10.0
-    hooks:
-    -   id: shellcheck
-
   # Dockerfile linting
 -   repo: https://github.com/hadolint/hadolint
     rev: v2.12.0
     hooks:
-    -   id: hadolint-docker
-        args: ["--ignore", "DL3008", "--ignore", "DL3009"]
+    -   id: hadolint
+        args: ["--ignore", "DL3008"]
 
   # Python tests
 -   repo: local

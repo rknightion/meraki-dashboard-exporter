@@ -444,7 +444,7 @@ class NetworkHealthCollector(MetricCollector):
                     timespan="30m",
                 )
                 # Set all stats to 0 when no data
-                for stat_type in ["assoc", "auth", "dhcp", "dns", "success"]:
+                for stat_type in ("assoc", "auth", "dhcp", "dns", "success"):
                     self._set_metric_value(
                         "_network_connection_stats",
                         {
@@ -457,7 +457,7 @@ class NetworkHealthCollector(MetricCollector):
                 return
 
             # Set metrics for each connection stat type
-            for stat_type in ["assoc", "auth", "dhcp", "dns", "success"]:
+            for stat_type in ("assoc", "auth", "dhcp", "dns", "success"):
                 value = connection_stats.get(stat_type, 0)
                 self._set_metric_value(
                     "_network_connection_stats",
