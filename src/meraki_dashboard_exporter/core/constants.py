@@ -21,6 +21,7 @@ class MetricName(StrEnum):
     NETWORK_CLIENTS_TOTAL = "meraki_network_clients_total"
     NETWORK_TRAFFIC_BYTES = "meraki_network_traffic_bytes"
     NETWORK_DEVICE_STATUS = "meraki_network_device_status"
+    NETWORK_WIRELESS_CONNECTION_STATS = "meraki_network_wireless_connection_stats_total"
 
     # Device common metrics
     DEVICE_UP = "meraki_device_up"
@@ -40,6 +41,7 @@ class MetricName(StrEnum):
     MR_CLIENTS_CONNECTED = "meraki_mr_clients_connected"
     MR_SIGNAL_QUALITY = "meraki_mr_signal_quality"
     MR_TRAFFIC_BYTES = "meraki_mr_traffic_bytes"
+    MR_CONNECTION_STATS = "meraki_mr_connection_stats_total"
 
     # MV (Camera) specific metrics
     MV_RECORDING_STATUS = "meraki_mv_recording_status"

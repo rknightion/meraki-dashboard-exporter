@@ -6,7 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ..core.collector import MetricCollector
-from ..core.constants import UpdateTier
+from ..core.constants import MetricName, UpdateTier
 from ..core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -80,6 +80,13 @@ class NetworkHealthCollector(MetricCollector):
             labelnames=["network_id", "network_name", "type"],
         )
 
+        # Network-wide wireless connection statistics
+        self._network_connection_stats = self._create_gauge(
+            MetricName.NETWORK_WIRELESS_CONNECTION_STATS,
+            "Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)",
+            labelnames=["network_id", "network_name", "stat_type"],
+        )
+
     async def _collect_impl(self) -> None:
         """Collect network health metrics."""
         try:
@@ -128,8 +135,15 @@ class NetworkHealthCollector(MetricCollector):
                     if "wireless" in network.get("productTypes", [])
                 ]
 
-                if tasks:
-                    await asyncio.gather(*tasks, return_exceptions=True)
+                # Also collect connection stats for wireless networks
+                connection_tasks = [
+                    self._collect_network_connection_stats(network)
+                    for network in batch
+                    if "wireless" in network.get("productTypes", [])
+                ]
+
+                if tasks or connection_tasks:
+                    await asyncio.gather(*(tasks + connection_tasks), return_exceptions=True)
 
         except Exception:
             logger.exception(
@@ -386,6 +400,100 @@ class NetworkHealthCollector(MetricCollector):
             else:
                 logger.exception(
                     "Failed to collect RF health metrics",
+                    network_id=network_id,
+                    network_name=network_name,
+                )
+
+    async def _collect_network_connection_stats(self, network: dict[str, Any]) -> None:
+        """Collect network-wide wireless connection statistics.
+
+        Parameters
+        ----------
+        network : dict[str, Any]
+            Network data.
+
+        """
+        network_id = network["id"]
+        network_name = network.get("name", network_id)
+
+        try:
+            logger.debug(
+                "Fetching network connection stats",
+                network_id=network_id,
+                network_name=network_name,
+            )
+
+            # Track API call
+            self._track_api_call("getNetworkWirelessConnectionStats")
+
+            # Use 30 minute (1800 second) timespan as minimum
+            connection_stats = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.api.wireless.getNetworkWirelessConnectionStats,
+                    network_id,
+                    timespan=1800,  # 30 minutes
+                ),
+                timeout=10.0,  # 10 second timeout
+            )
+
+            # Handle empty response (no data in timespan)
+            if not connection_stats:
+                logger.debug(
+                    "No connection stats data available",
+                    network_id=network_id,
+                    timespan="30m",
+                )
+                # Set all stats to 0 when no data
+                for stat_type in ["assoc", "auth", "dhcp", "dns", "success"]:
+                    self._set_metric_value(
+                        "_network_connection_stats",
+                        {
+                            "network_id": network_id,
+                            "network_name": network_name,
+                            "stat_type": stat_type,
+                        },
+                        0,
+                    )
+                return
+
+            # Set metrics for each connection stat type
+            for stat_type in ["assoc", "auth", "dhcp", "dns", "success"]:
+                value = connection_stats.get(stat_type, 0)
+                self._set_metric_value(
+                    "_network_connection_stats",
+                    {
+                        "network_id": network_id,
+                        "network_name": network_name,
+                        "stat_type": stat_type,
+                    },
+                    value,
+                )
+
+            logger.debug(
+                "Successfully collected network connection stats",
+                network_id=network_id,
+                stats=connection_stats,
+            )
+
+        except TimeoutError:
+            logger.error(
+                "Timeout fetching network connection stats",
+                network_id=network_id,
+                network_name=network_name,
+            )
+        except Exception as e:
+            # Log at debug level if it's just not available (400/404 errors)
+            error_str = str(e)
+            if "400" in error_str or "404" in error_str or "Bad Request" in error_str:
+                logger.debug(
+                    "Network connection stats not available",
+                    network_id=network_id,
+                    network_name=network_name,
+                    error=error_str,
+                )
+            else:
+                logger.exception(
+                    "Failed to collect network connection stats",
                     network_id=network_id,
                     network_name=network_name,
                 )

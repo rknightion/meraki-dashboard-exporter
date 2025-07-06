@@ -166,6 +166,12 @@ class DeviceCollector(MetricCollector):
             labelnames=["serial", "name", "direction"],
         )
 
+        self._ap_connection_stats = self._create_gauge(
+            MetricName.MR_CONNECTION_STATS,
+            "Wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)",
+            labelnames=["serial", "name", "model", "network_id", "stat_type"],
+        )
+
     async def _collect_impl(self) -> None:
         """Collect device metrics."""
         try:
