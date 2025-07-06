@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 def main() -> None:
     """Run the Meraki Dashboard Exporter."""
     # Check for help flag before loading settings
-    if len(sys.argv) > 1 and sys.argv[1] in ["--help", "-h"]:
+    if len(sys.argv) > 1 and sys.argv[1] in {"--help", "-h"}:
         print(
             "Meraki Dashboard Exporter\n"
             "\n"
@@ -39,7 +39,7 @@ def main() -> None:
             "For more information, visit: https://github.com/rknightion/meraki-dashboard-exporter\n"
         )
         sys.exit(0)
-    
+
     try:
         settings = Settings()
     except ValidationError as e:
@@ -59,7 +59,7 @@ def main() -> None:
                     file=sys.stderr,
                 )
                 sys.exit(1)
-        
+
         # For other validation errors, show a more readable format
         print("\n❌ Configuration Error:\n", file=sys.stderr)
         for error in e.errors():
