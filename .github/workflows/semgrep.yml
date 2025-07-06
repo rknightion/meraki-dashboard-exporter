@@ -11,6 +11,9 @@ on:
   # random HH:MM to avoid a load spike on GitHub Actions at 00:00
   - cron: 33 21 * * *
 name: Semgrep
+permissions:
+  contents: read
+
 jobs:
   semgrep:
     name: semgrep/ci
