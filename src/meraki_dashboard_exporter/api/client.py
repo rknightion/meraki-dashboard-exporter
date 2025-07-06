@@ -55,6 +55,7 @@ class AsyncMerakiClient:
                 maximum_retries=2,  # Reduce retries
                 wait_on_rate_limit=True,
                 retry_4xx_error=False,  # Don't retry 4xx errors
+                caller="merakidashboardexporter rknightion",
             )
         return self._api
 
