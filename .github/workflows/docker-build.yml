@@ -25,6 +25,8 @@ jobs:
       # These are used for signing and attestation
       id-token: write
       attestations: write
+      # Required for uploading scan results to Security tab
+      security-events: write
 
     steps:
       - name: Checkout repository
