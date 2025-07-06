@@ -123,7 +123,7 @@ class MRCollector(BaseDeviceCollector):
                     timespan="30m",
                 )
                 # Set all stats to 0 when no data
-                for stat_type in ["assoc", "auth", "dhcp", "dns", "success"]:
+                for stat_type in ("assoc", "auth", "dhcp", "dns", "success"):
                     self.parent._ap_connection_stats.labels(
                         serial=serial,
                         name=name,
@@ -137,7 +137,7 @@ class MRCollector(BaseDeviceCollector):
 
             # Set metrics for each connection stat type
             for stat_type, value in stats.items():
-                if stat_type in ["assoc", "auth", "dhcp", "dns", "success"]:
+                if stat_type in {"assoc", "auth", "dhcp", "dns", "success"}:
                     self.parent._ap_connection_stats.labels(
                         serial=serial,
                         name=name,
