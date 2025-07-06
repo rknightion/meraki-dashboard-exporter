@@ -109,9 +109,10 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           for tag in $(echo "${{ steps.meta.outputs.tags }}" | tr ',' '\n'); do
+            # Extract just the tag part after the last slash and replace colons with dashes
+            tag_name=$(echo "${tag##*/}" | tr ':' '-')
             syft "${tag}@${{ steps.build.outputs.digest }}" \
-              --output spdx-json \
-              --file "${tag##*/}-sbom.spdx.json"
+              --output "spdx-json=${tag_name}-sbom.spdx.json"
           done
 
       # Upload SBOM artifacts
