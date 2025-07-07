@@ -64,7 +64,7 @@ class Settings(BaseSettings):
 
     # Server settings
     host: str = Field("0.0.0.0", description="Host to bind the exporter to")  # nosec B104
-    port: int = Field(9090, ge=1, le=65535, description="Port to bind the exporter to")
+    port: int = Field(9099, ge=1, le=65535, description="Port to bind the exporter to")
 
     # Device types to collect metrics for
     device_types: list[Literal["MS", "MR", "MV", "MT", "MX", "MG"]] = Field(

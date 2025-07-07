@@ -135,7 +135,7 @@ docker-build-push: ## Build and push multi-arch image to registry (requires logi
 docker-run: docker-build ## Run Docker container locally
 	@echo "$(BLUE)Running Docker container...$(NC)"
 	docker run --rm -it \
-		-p 9090:9090 \
+		-p 9099:9099 \
 		-e MERAKI_API_KEY=$${MERAKI_API_KEY} \
 		-e MERAKI_EXPORTER_LOG_LEVEL=DEBUG \
 		$(DOCKER_IMAGE_NAME):latest
@@ -215,7 +215,7 @@ run: ## Run the exporter locally
 .PHONY: run-dev
 run-dev: ## Run with auto-reload for development
 	@echo "$(BLUE)Starting exporter in development mode...$(NC)"
-	uv run uvicorn meraki_dashboard_exporter.app:create_app --factory --reload --host 0.0.0.0 --port 9090
+	uv run uvicorn meraki_dashboard_exporter.app:create_app --factory --reload --host 0.0.0.0 --port 9099
 
 # Cleaning
 .PHONY: clean
@@ -257,7 +257,7 @@ todo: ## Show TODO items in code
 metrics: docker-run ## Run exporter and open metrics endpoint
 	@echo "$(BLUE)Opening metrics endpoint...$(NC)"
 	@sleep 3
-	$(OPEN_CMD) http://localhost:9090/metrics
+	$(OPEN_CMD) http://localhost:9099/metrics
 
 # Dependencies
 .PHONY: deps-update

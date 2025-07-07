@@ -64,7 +64,7 @@ Many Meraki API responses can return data in different formats:
 - Run linting: `uv run ruff check .`
 - Run type checking: `uv run mypy .`
 - After making changes, restart the exporter process to load new code
-- Check metrics at http://localhost:9090/metrics
+- Check metrics at http://localhost:9099/metrics
 
 ## Deprecated/Removed Metrics
 
