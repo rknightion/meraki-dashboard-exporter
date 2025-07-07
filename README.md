@@ -30,7 +30,7 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
    docker-compose up -d
    ```
 
-3. Access metrics at http://localhost:9090/metrics
+3. Access metrics at http://localhost:9099/metrics
 
 ### Using Python
 
@@ -56,7 +56,6 @@ All configuration is done via environment variables. See `.env.example` for all 
 Key settings:
 - `MERAKI_API_KEY`: Your Meraki Dashboard API key (required)
 - `MERAKI_EXPORTER_ORG_ID`: Specific org ID to monitor (optional)
-- `MERAKI_EXPORTER_SCRAPE_INTERVAL`: Collection interval in seconds (default: 300)
 - `MERAKI_EXPORTER_LOG_LEVEL`: Logging level (default: INFO)
 
 ## Metrics

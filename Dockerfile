@@ -72,11 +72,11 @@ COPY --from=builder --chown=exporter:exporter /app/src/meraki_dashboard_exporter
 USER exporter
 
 # Expose metrics port
-EXPOSE 9090
+EXPOSE 9099
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD ["python", "-c", "import httpx; httpx.get('http://localhost:9090/health').raise_for_status()"]
+    CMD ["python", "-c", "import httpx; httpx.get('http://localhost:9099/health').raise_for_status()"]
 
 # Use ENTRYPOINT for the main command
 ENTRYPOINT ["python", "-m", "meraki_dashboard_exporter"]

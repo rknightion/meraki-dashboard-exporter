@@ -16,7 +16,7 @@ def test_settings_with_valid_api_key(monkeypatch):
     assert settings.api_key.get_secret_value() == "a" * 40
     assert settings.scrape_interval == 60  # fast_update_interval is the default
     assert settings.host == "0.0.0.0"
-    assert settings.port == 9090
+    assert settings.port == 9099
 
 
 def test_settings_with_invalid_api_key(monkeypatch):
