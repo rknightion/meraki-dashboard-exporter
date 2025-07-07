@@ -26,7 +26,7 @@ jobs:
 
       - name: Run AI inference
         id: inference
-        uses: actions/ai-inference@c7105a4c1e9d7e35f7677b5e6f830f5d631ce76e # v1.0.0
+        uses: actions/ai-inference@d645f067d89ee1d5d736a5990e327e504d1c5a4a # v1.1.0
         with:
           prompt: |
             Summarize the following GitHub issue in one paragraph:
