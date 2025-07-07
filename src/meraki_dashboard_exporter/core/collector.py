@@ -332,7 +332,8 @@ class MetricCollector(ABC):
 
             logger.info("Successfully initialized collector performance metrics")
 
-            # Initialize with zero values for common collectors to ensure metrics appear
+            # Initialize gauge values for common collectors
+            # Note: We don't initialize counters as that creates _created timestamps
             for collector_name in [
                 "OrganizationCollector",
                 "DeviceCollector",
@@ -340,19 +341,6 @@ class MetricCollector(ABC):
                 "SensorCollector",
             ]:
                 for tier in ["fast", "medium"]:
-                    # Initialize counters with 0
-                    cls._collector_api_calls.labels(
-                        collector=collector_name,
-                        tier=tier,
-                        endpoint="init",
-                    ).inc(0)
-
-                    cls._collector_errors.labels(
-                        collector=collector_name,
-                        tier=tier,
-                        error_type="init",
-                    ).inc(0)
-
                     # Initialize gauge with 0
                     cls._collector_last_success.labels(
                         collector=collector_name,
