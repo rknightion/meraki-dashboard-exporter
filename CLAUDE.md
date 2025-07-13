@@ -53,6 +53,12 @@ The system uses two update tiers (removed SLOW tier):
 - POE budget information is not available via API (would require model lookup tables)
 - Switch power usage is approximated by summing POE port consumption
 
+## API Quirks
+
+- The sensor readings API may return both `temperature` and `rawTemperature` metric types for the same sensor
+- We only process the documented `temperature` metric type and skip `rawTemperature` to avoid duplicate data
+- All temperature values are collected in Celsius only (users can convert in Grafana if needed)
+
 ## Response Format Handling
 
 Many Meraki API responses can return data in different formats:
@@ -62,7 +68,7 @@ Many Meraki API responses can return data in different formats:
 
 ## Testing and Validation
 
-- Run linting: `uv run ruff check .`
+- Run linting: `uv run ruff check --fix .`
 - Run type checking: `uv run mypy .`
 - After making changes, restart the exporter process to load new code
 - Check metrics at http://localhost:9099/metrics
@@ -77,9 +83,40 @@ The following metrics have been removed or replaced:
 ## Collector Internal Metrics
 
 The base collector automatically tracks performance metrics:
-- `meraki_collector_duration_seconds` - Time spent collecting metrics
-- `meraki_collector_errors_total` - Total number of collector errors
-- `meraki_collector_last_success_timestamp_seconds` - Unix timestamp of last successful collection
-- `meraki_collector_api_calls_total` - Total number of API calls made
+- `meraki_collector_duration_seconds` - Histogram of time spent collecting metrics (includes _bucket, _count, _sum)
+- `meraki_collector_errors_total` - Counter of collector errors
+- `meraki_collector_last_success_timestamp_seconds` - Gauge with Unix timestamp of last successful collection
+- `meraki_collector_api_calls_total` - Counter of API calls made
 
 These metrics are populated automatically when collectors run and should be used for monitoring the health of the exporter itself.
+
+**Note on Prometheus Counter/Histogram Metrics:**
+- Counters and Histograms automatically generate a `_created` metric with Unix timestamp of when the metric was first observed
+- This is standard Prometheus behavior and the `_created` metrics can be ignored
+- The actual count is in the base metric name (e.g., `meraki_collector_api_calls_total` contains the count, not `meraki_collector_api_calls_created`)
+
+## Logging Strategy
+
+The exporter follows a structured logging approach to balance operational visibility with log volume:
+
+### INFO Level Logging
+- **Startup**: Application startup/shutdown messages
+- **Discovery**: One-time environment discovery at startup that logs:
+  - Organizations being monitored
+  - Licensing model (per-device vs co-termination)
+  - Network and device counts by type
+  - Collector configuration
+- **Initialization**: Collector initialization messages
+- **Errors**: Major errors that affect operation
+
+### DEBUG Level Logging
+- **API Calls**: Every API call with context (org_id, network_id, etc.)
+- **Metric Updates**: Every metric value being set
+- **Collection Details**: Detailed progress during metric collection
+- **Repetitive Info**: Information that would be repetitive at INFO level (e.g., licensing model on each collection)
+
+### Implementation
+- All API calls must use `self._track_api_call("method_name")` and include DEBUG logging
+- All metric updates log at DEBUG level when successfully setting values
+- Discovery information is logged once at startup via `DiscoveryService`
+- Subsequent collections use DEBUG level for details to avoid log spam

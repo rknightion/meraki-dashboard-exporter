@@ -133,6 +133,15 @@ class MTCollector(BaseDeviceCollector):
             return
 
         try:
+            # Skip undocumented rawTemperature to avoid duplicate processing
+            if metric_type == "rawTemperature":
+                logger.debug(
+                    "Skipping undocumented rawTemperature metric",
+                    serial=serial,
+                    metric_data=metric_data,
+                )
+                return
+
             if metric_type == "temperature":
                 celsius = metric_data.get("celsius")
                 if celsius is not None:

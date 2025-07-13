@@ -14,6 +14,7 @@ from .api.client import AsyncMerakiClient
 from .collectors.manager import CollectorManager
 from .core.config import Settings
 from .core.constants import UpdateTier
+from .core.discovery import DiscoveryService
 from .core.logging import get_logger, setup_logging
 
 if TYPE_CHECKING:
@@ -73,6 +74,13 @@ class ExporterApp:
             port=self.settings.port,
             org_id=self.settings.org_id,
         )
+
+        # Run discovery to log environment information once at startup
+        discovery = DiscoveryService(self.client.api, self.settings)
+        try:
+            await discovery.run_discovery()
+        except Exception:
+            logger.exception("Discovery failed, continuing with normal operation")
 
         # Start background task for initial collection and tiered loops
         startup_task = asyncio.create_task(self._startup_collections())
