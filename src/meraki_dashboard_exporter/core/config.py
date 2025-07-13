@@ -44,7 +44,7 @@ class Settings(BaseSettings):
         description="Interval for fast-moving data (sensors) in seconds",
     )
     medium_update_interval: int = Field(
-        600,  # 10 minutes
+        300,  # 5 minutes - aligns with Meraki API 5-minute data blocks
         ge=300,
         le=1800,
         description="Interval for medium-moving data (device metrics, org metrics) in seconds",

@@ -118,7 +118,7 @@ class CollectorManager:
             )
             return
 
-        logger.info(
+        logger.debug(
             "Starting collection for tier",
             tier=tier,
             collector_count=len(tier_collectors),

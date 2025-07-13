@@ -123,13 +123,13 @@ class OrganizationCollector(MetricCollector):
             # logger.info("Collecting API metrics", org_id=org_id)
             # await self._collect_api_metrics(org_id, org_name)
 
-            logger.info("Collecting network metrics", org_id=org_id)
+            logger.debug("Collecting network metrics", org_id=org_id)
             await self._collect_network_metrics(org_id, org_name)
 
-            logger.info("Collecting device metrics", org_id=org_id)
+            logger.debug("Collecting device metrics", org_id=org_id)
             await self._collect_device_metrics(org_id, org_name)
 
-            logger.info("Collecting license metrics", org_id=org_id)
+            logger.debug("Collecting license metrics", org_id=org_id)
             await self._collect_license_metrics(org_id, org_name)
 
         except Exception:

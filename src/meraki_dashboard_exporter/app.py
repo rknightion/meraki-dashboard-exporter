@@ -114,7 +114,7 @@ class ExporterApp:
             # Each will do its first collection right away
             for tier in UpdateTier:
                 interval = self.collector_manager.get_tier_interval(tier)
-                logger.info(
+                logger.debug(
                     "Creating tiered collection task",
                     tier=tier,
                     interval=interval,
@@ -148,7 +148,7 @@ class ExporterApp:
         max_consecutive_failures = 10
         interval = self.collector_manager.get_tier_interval(tier)
 
-        logger.info(
+        logger.debug(
             "Starting tiered collection loop",
             tier=tier,
             interval=interval,
@@ -158,13 +158,13 @@ class ExporterApp:
             while not self._shutdown_event.is_set():
                 # Run collection
                 try:
-                    logger.info(
+                    logger.debug(
                         "Starting metric collection",
                         tier=tier,
                         interval=interval,
                     )
                     await self.collector_manager.collect_tier(tier)
-                    logger.info(
+                    logger.debug(
                         "Metric collection completed",
                         tier=tier,
                         next_run_in=interval,
@@ -194,7 +194,7 @@ class ExporterApp:
                         raise
 
                 # Wait for next collection
-                logger.info(
+                logger.debug(
                     "Waiting for next collection",
                     tier=tier,
                     wait_seconds=interval,

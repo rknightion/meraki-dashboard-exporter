@@ -21,7 +21,9 @@ class NetworkHealthCollector(MetricCollector):
     # Network health data updates at medium frequency
     update_tier: UpdateTier = UpdateTier.MEDIUM
 
-    def _set_metric_value(self, metric_name: str, labels: dict[str, str], value: float) -> None:
+    def _set_metric_value(
+        self, metric_name: str, labels: dict[str, str], value: float | None
+    ) -> None:
         """Safely set a metric value with validation.
 
         Parameters
@@ -30,10 +32,19 @@ class NetworkHealthCollector(MetricCollector):
             Name of the metric attribute.
         labels : dict[str, str]
             Labels to apply to the metric.
-        value : float
-            Value to set.
+        value : float | None
+            Value to set. If None, the metric will not be updated.
 
         """
+        # Skip if value is None - this happens when API returns null values
+        if value is None:
+            logger.debug(
+                "Skipping metric update due to None value",
+                metric_name=metric_name,
+                labels=labels,
+            )
+            return
+
         metric = getattr(self, metric_name, None)
         if metric is None:
             logger.debug(
@@ -85,6 +96,19 @@ class NetworkHealthCollector(MetricCollector):
             MetricName.NETWORK_WIRELESS_CONNECTION_STATS,
             "Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)",
             labelnames=["network_id", "network_name", "stat_type"],
+        )
+
+        # Network-wide wireless data rate metrics
+        self._network_wireless_download_kbps = self._create_gauge(
+            "meraki_network_wireless_download_kbps",
+            "Network-wide wireless download bandwidth in kilobits per second",
+            labelnames=["network_id", "network_name"],
+        )
+
+        self._network_wireless_upload_kbps = self._create_gauge(
+            "meraki_network_wireless_upload_kbps",
+            "Network-wide wireless upload bandwidth in kilobits per second",
+            labelnames=["network_id", "network_name"],
         )
 
     async def _collect_impl(self) -> None:
@@ -142,8 +166,16 @@ class NetworkHealthCollector(MetricCollector):
                     if "wireless" in network.get("productTypes", [])
                 ]
 
-                if tasks or connection_tasks:
-                    await asyncio.gather(*(tasks + connection_tasks), return_exceptions=True)
+                # Also collect data rate metrics for wireless networks
+                data_rate_tasks = [
+                    self._collect_network_data_rates(network)
+                    for network in batch
+                    if "wireless" in network.get("productTypes", [])
+                ]
+
+                all_tasks = tasks + connection_tasks + data_rate_tasks
+                if all_tasks:
+                    await asyncio.gather(*all_tasks, return_exceptions=True)
 
         except Exception:
             logger.exception(
@@ -494,6 +526,109 @@ class NetworkHealthCollector(MetricCollector):
             else:
                 logger.exception(
                     "Failed to collect network connection stats",
+                    network_id=network_id,
+                    network_name=network_name,
+                )
+
+    async def _collect_network_data_rates(self, network: dict[str, Any]) -> None:
+        """Collect network-wide wireless data rate metrics.
+
+        Parameters
+        ----------
+        network : dict[str, Any]
+            Network data.
+
+        """
+        network_id = network["id"]
+        network_name = network.get("name", network_id)
+
+        try:
+            logger.debug(
+                "Fetching network data rates",
+                network_id=network_id,
+                network_name=network_name,
+            )
+
+            # Track API call
+            self._track_api_call("getNetworkWirelessDataRateHistory")
+
+            # Use 300 second (5 minute) resolution with recent timespan
+            # Using timespan of 300 seconds to get the most recent 5-minute data block
+            data_rate_history = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.api.wireless.getNetworkWirelessDataRateHistory,
+                    network_id,
+                    timespan=300,
+                    resolution=300,
+                ),
+                timeout=10.0,  # 10 second timeout
+            )
+
+            # Handle empty response
+            if not data_rate_history:
+                logger.debug(
+                    "No data rate history available",
+                    network_id=network_id,
+                )
+                return
+
+            # Get the most recent data point
+            if isinstance(data_rate_history, list) and len(data_rate_history) > 0:
+                # Sort by endTs to ensure we get the most recent
+                sorted_data = sorted(
+                    data_rate_history, key=lambda x: x.get("endTs", ""), reverse=True
+                )
+                latest_data = sorted_data[0]
+
+                # Extract download and upload rates
+                download_kbps = latest_data.get("downloadKbps", 0)
+                upload_kbps = latest_data.get("uploadKbps", 0)
+
+                # Set the metrics
+                self._set_metric_value(
+                    "_network_wireless_download_kbps",
+                    {
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    download_kbps,
+                )
+
+                self._set_metric_value(
+                    "_network_wireless_upload_kbps",
+                    {
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    upload_kbps,
+                )
+
+                logger.debug(
+                    "Successfully collected network data rates",
+                    network_id=network_id,
+                    download_kbps=download_kbps,
+                    upload_kbps=upload_kbps,
+                )
+
+        except TimeoutError:
+            logger.error(
+                "Timeout fetching network data rates",
+                network_id=network_id,
+                network_name=network_name,
+            )
+        except Exception as e:
+            # Log at debug level if it's just not available (400/404 errors)
+            error_str = str(e)
+            if "400" in error_str or "404" in error_str or "Bad Request" in error_str:
+                logger.debug(
+                    "Network data rates not available",
+                    network_id=network_id,
+                    network_name=network_name,
+                    error=error_str,
+                )
+            else:
+                logger.exception(
+                    "Failed to collect network data rates",
                     network_id=network_id,
                     network_name=network_name,
                 )

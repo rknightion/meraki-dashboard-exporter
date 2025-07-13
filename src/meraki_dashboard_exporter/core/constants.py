@@ -40,7 +40,6 @@ class MetricName(StrEnum):
     # MR (Access Point) specific metrics
     MR_CLIENTS_CONNECTED = "meraki_mr_clients_connected"
     MR_SIGNAL_QUALITY = "meraki_mr_signal_quality"
-    MR_TRAFFIC_BYTES = "meraki_mr_traffic_bytes"
     MR_CONNECTION_STATS = "meraki_mr_connection_stats_total"
 
     # MV (Camera) specific metrics
