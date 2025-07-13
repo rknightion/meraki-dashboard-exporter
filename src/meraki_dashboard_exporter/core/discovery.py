@@ -123,6 +123,35 @@ class DiscoveryService:
                 except Exception:
                     logger.exception("Failed to fetch devices", org_name=org_name)
 
+                # Check alerts API availability
+                try:
+                    alerts = await asyncio.to_thread(
+                        self.api.organizations.getOrganizationAssuranceAlerts,
+                        org_id,
+                        total_pages="all",
+                    )
+                    active_alerts = [
+                        a for a in alerts if not a.get("dismissedAt") and not a.get("resolvedAt")
+                    ]
+                    logger.info(
+                        "Assurance alerts API available",
+                        org_name=org_name,
+                        total_alerts=len(alerts),
+                        active_alerts=len(active_alerts),
+                    )
+                except Exception as e:
+                    if "404" in str(e):
+                        logger.info(
+                            "Assurance alerts API not available",
+                            org_name=org_name,
+                        )
+                    else:
+                        logger.debug(
+                            "Failed to check alerts API",
+                            org_name=org_name,
+                            error=str(e),
+                        )
+
             # Log collector configuration
             logger.info(
                 "Collector configuration",

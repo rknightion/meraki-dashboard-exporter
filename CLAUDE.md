@@ -43,7 +43,7 @@ We do all builds via docker and ensure first class docker support for running
 
 The system uses two update tiers (removed SLOW tier):
 - **FAST** (60s): Sensor metrics (MT devices) - real-time environmental data
-- **MEDIUM** (300s): Organization metrics, Device metrics (including port traffic), Network health - aligned with Meraki API 5-minute data blocks
+- **MEDIUM** (300s): Organization metrics, Device metrics (including port traffic), Network health, Assurance alerts - aligned with Meraki API 5-minute data blocks
 
 ## Known API Limitations
 
@@ -58,6 +58,15 @@ The system uses two update tiers (removed SLOW tier):
 - The sensor readings API may return both `temperature` and `rawTemperature` metric types for the same sensor
 - We only process the documented `temperature` metric type and skip `rawTemperature` to avoid duplicate data
 - All temperature values are collected in Celsius only (users can convert in Grafana if needed)
+
+## Assurance Alerts
+
+The alerts collector uses the `getOrganizationAssuranceAlerts` API to fetch active alerts:
+- Only collects active alerts (not dismissed or resolved)
+- Groups alerts by type, category, severity, device type, and network
+- Provides summary metrics by severity and network for easier dashboarding
+- Runs in MEDIUM tier (5 minutes) as alerts don't change frequently
+- The API may not be available for all organizations (will log at DEBUG level if 404)
 
 ## Response Format Handling
 

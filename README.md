@@ -86,6 +86,11 @@ Key settings:
 - `meraki_mt_water_detected`: Water detection status
 - And more...
 
+### Alert Metrics
+- `meraki_alerts_active`: Number of active alerts by type, category, severity, and device type
+- `meraki_alerts_total_by_severity`: Total alerts grouped by severity level
+- `meraki_alerts_total_by_network`: Total alerts per network
+
 ## Development
 
 ### Running Tests
