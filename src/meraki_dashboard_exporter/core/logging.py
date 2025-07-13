@@ -39,6 +39,12 @@ def setup_logging(settings: Settings) -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
+    # Control uvicorn logging - only show warnings and above unless in DEBUG mode
+    if settings.log_level != "DEBUG":
+        logging.getLogger("uvicorn").setLevel(logging.WARNING)
+        logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+        logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+
     # Processors for structlog with logfmt output
     processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,

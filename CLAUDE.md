@@ -43,11 +43,12 @@ We do all builds via docker and ensure first class docker support for running
 
 The system uses two update tiers (removed SLOW tier):
 - **FAST** (60s): Sensor metrics (MT devices) - real-time environmental data
-- **MEDIUM** (600s): Organization metrics, Device metrics (including port traffic), Network health
+- **MEDIUM** (300s): Organization metrics, Device metrics (including port traffic), Network health - aligned with Meraki API 5-minute data blocks
 
 ## Known API Limitations
 
-- CPU usage and uptime metrics are not available via API for any device types
+- CPU usage metrics are available for MR devices only (via getOrganizationWirelessDevicesSystemCpuLoadHistory)
+- Uptime metrics are not available via API for any device types
 - Channel utilization metrics are collected via network health collector, not per-device
 - POE budget information is not available via API (would require model lookup tables)
 - Switch power usage is approximated by summing POE port consumption

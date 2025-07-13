@@ -68,12 +68,6 @@ def main() -> None:
         print("\nPlease check your configuration and try again.\n", file=sys.stderr)
         sys.exit(1)
 
-    logger.info(
-        "Starting Meraki Dashboard Exporter",
-        host=settings.host,
-        port=settings.port,
-    )
-
     # Run uvicorn directly with proper signal handling
     uvicorn.run(
         "meraki_dashboard_exporter.app:create_app",

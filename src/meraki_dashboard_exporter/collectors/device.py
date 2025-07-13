@@ -25,7 +25,9 @@ class DeviceCollector(MetricCollector):
     # Device metrics update at medium frequency
     update_tier: UpdateTier = UpdateTier.MEDIUM
 
-    def _set_metric_value(self, metric_name: str, labels: dict[str, str], value: float) -> None:
+    def _set_metric_value(
+        self, metric_name: str, labels: dict[str, str], value: float | None
+    ) -> None:
         """Safely set a metric value with validation.
 
         Parameters
@@ -34,10 +36,19 @@ class DeviceCollector(MetricCollector):
             Name of the metric attribute.
         labels : dict[str, str]
             Labels to apply to the metric.
-        value : float
-            Value to set.
+        value : float | None
+            Value to set. If None, the metric will not be updated.
 
         """
+        # Skip if value is None - this happens when API returns null values
+        if value is None:
+            logger.debug(
+                "Skipping metric update due to None value",
+                metric_name=metric_name,
+                labels=labels,
+            )
+            return
+
         metric = getattr(self, metric_name, None)
         if metric is None:
             logger.debug(
@@ -160,16 +171,178 @@ class DeviceCollector(MetricCollector):
             labelnames=["serial", "name", "model", "network_id"],
         )
 
-        self._ap_traffic = self._create_gauge(
-            MetricName.MR_TRAFFIC_BYTES,
-            "Access point traffic in bytes",
-            labelnames=["serial", "name", "direction"],
-        )
-
         self._ap_connection_stats = self._create_gauge(
             MetricName.MR_CONNECTION_STATS,
             "Wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)",
             labelnames=["serial", "name", "model", "network_id", "stat_type"],
+        )
+
+        # MR ethernet status metrics
+        self._mr_power_mode = self._create_gauge(
+            "meraki_mr_power_mode",
+            "Access point power mode (1 = full, 0 = other)",
+            labelnames=["serial", "name", "network_id", "mode"],
+        )
+
+        self._mr_power_ac_connected = self._create_gauge(
+            "meraki_mr_power_ac_connected",
+            "Access point AC power connection status (1 = connected, 0 = not connected)",
+            labelnames=["serial", "name", "network_id"],
+        )
+
+        self._mr_power_poe_connected = self._create_gauge(
+            "meraki_mr_power_poe_connected",
+            "Access point PoE power connection status (1 = connected, 0 = not connected)",
+            labelnames=["serial", "name", "network_id"],
+        )
+
+        self._mr_port_poe_standard = self._create_gauge(
+            "meraki_mr_port_poe_standard",
+            "Access point port PoE standard (1 = 802.3at, 2 = 802.3af, 3 = 802.3bt, 0 = other/none)",
+            labelnames=["serial", "name", "network_id", "port_name", "standard"],
+        )
+
+        self._mr_port_link_negotiation_duplex = self._create_gauge(
+            "meraki_mr_port_link_negotiation_duplex",
+            "Access point port link negotiation duplex (1 = full, 0 = half)",
+            labelnames=["serial", "name", "network_id", "port_name"],
+        )
+
+        self._mr_port_link_negotiation_speed = self._create_gauge(
+            "meraki_mr_port_link_negotiation_speed_mbps",
+            "Access point port link negotiation speed in Mbps",
+            labelnames=["serial", "name", "network_id", "port_name"],
+        )
+
+        self._mr_aggregation_enabled = self._create_gauge(
+            "meraki_mr_aggregation_enabled",
+            "Access point port aggregation enabled status (1 = enabled, 0 = disabled)",
+            labelnames=["serial", "name", "network_id"],
+        )
+
+        self._mr_aggregation_speed = self._create_gauge(
+            "meraki_mr_aggregation_speed_mbps",
+            "Access point total aggregated port speed in Mbps",
+            labelnames=["serial", "name", "network_id"],
+        )
+
+        # MR packet loss metrics (per device, 5-minute window)
+        self._mr_packets_downstream_total = self._create_gauge(
+            "meraki_mr_packets_downstream_total",
+            "Total downstream packets transmitted by access point (5-minute window)",
+            labelnames=["serial", "name", "network_id", "network_name"],
+        )
+
+        self._mr_packets_downstream_lost = self._create_gauge(
+            "meraki_mr_packets_downstream_lost",
+            "Downstream packets lost by access point (5-minute window)",
+            labelnames=["serial", "name", "network_id", "network_name"],
+        )
+
+        self._mr_packet_loss_downstream_percent = self._create_gauge(
+            "meraki_mr_packet_loss_downstream_percent",
+            "Downstream packet loss percentage for access point (5-minute window)",
+            labelnames=["serial", "name", "network_id", "network_name"],
+        )
+
+        self._mr_packets_upstream_total = self._create_gauge(
+            "meraki_mr_packets_upstream_total",
+            "Total upstream packets received by access point (5-minute window)",
+            labelnames=["serial", "name", "network_id", "network_name"],
+        )
+
+        self._mr_packets_upstream_lost = self._create_gauge(
+            "meraki_mr_packets_upstream_lost",
+            "Upstream packets lost by access point (5-minute window)",
+            labelnames=["serial", "name", "network_id", "network_name"],
+        )
+
+        self._mr_packet_loss_upstream_percent = self._create_gauge(
+            "meraki_mr_packet_loss_upstream_percent",
+            "Upstream packet loss percentage for access point (5-minute window)",
+            labelnames=["serial", "name", "network_id", "network_name"],
+        )
+
+        # Combined packet metrics (calculated)
+        self._mr_packets_total = self._create_gauge(
+            "meraki_mr_packets_total",
+            "Total packets (upstream + downstream) for access point (5-minute window)",
+            labelnames=["serial", "name", "network_id", "network_name"],
+        )
+
+        self._mr_packets_lost_total = self._create_gauge(
+            "meraki_mr_packets_lost_total",
+            "Total packets lost (upstream + downstream) for access point (5-minute window)",
+            labelnames=["serial", "name", "network_id", "network_name"],
+        )
+
+        self._mr_packet_loss_total_percent = self._create_gauge(
+            "meraki_mr_packet_loss_total_percent",
+            "Total packet loss percentage (upstream + downstream) for access point (5-minute window)",
+            labelnames=["serial", "name", "network_id", "network_name"],
+        )
+
+        # Network-wide MR packet loss metrics (5-minute window)
+        self._mr_network_packets_downstream_total = self._create_gauge(
+            "meraki_mr_network_packets_downstream_total",
+            "Total downstream packets for all access points in network (5-minute window)",
+            labelnames=["network_id", "network_name"],
+        )
+
+        self._mr_network_packets_downstream_lost = self._create_gauge(
+            "meraki_mr_network_packets_downstream_lost",
+            "Downstream packets lost for all access points in network (5-minute window)",
+            labelnames=["network_id", "network_name"],
+        )
+
+        self._mr_network_packet_loss_downstream_percent = self._create_gauge(
+            "meraki_mr_network_packet_loss_downstream_percent",
+            "Downstream packet loss percentage for all access points in network (5-minute window)",
+            labelnames=["network_id", "network_name"],
+        )
+
+        self._mr_network_packets_upstream_total = self._create_gauge(
+            "meraki_mr_network_packets_upstream_total",
+            "Total upstream packets for all access points in network (5-minute window)",
+            labelnames=["network_id", "network_name"],
+        )
+
+        self._mr_network_packets_upstream_lost = self._create_gauge(
+            "meraki_mr_network_packets_upstream_lost",
+            "Upstream packets lost for all access points in network (5-minute window)",
+            labelnames=["network_id", "network_name"],
+        )
+
+        self._mr_network_packet_loss_upstream_percent = self._create_gauge(
+            "meraki_mr_network_packet_loss_upstream_percent",
+            "Upstream packet loss percentage for all access points in network (5-minute window)",
+            labelnames=["network_id", "network_name"],
+        )
+
+        # Combined network-wide packet metrics (calculated)
+        self._mr_network_packets_total = self._create_gauge(
+            "meraki_mr_network_packets_total",
+            "Total packets (upstream + downstream) for all access points in network (5-minute window)",
+            labelnames=["network_id", "network_name"],
+        )
+
+        self._mr_network_packets_lost_total = self._create_gauge(
+            "meraki_mr_network_packets_lost_total",
+            "Total packets lost (upstream + downstream) for all access points in network (5-minute window)",
+            labelnames=["network_id", "network_name"],
+        )
+
+        self._mr_network_packet_loss_total_percent = self._create_gauge(
+            "meraki_mr_network_packet_loss_total_percent",
+            "Total packet loss percentage (upstream + downstream) for all access points in network (5-minute window)",
+            labelnames=["network_id", "network_name"],
+        )
+
+        # MR CPU metrics
+        self._mr_cpu_load_5min = self._create_gauge(
+            "meraki_mr_cpu_load_5min",
+            "Access point CPU load average over 5 minutes (normalized to 0-100 per core)",
+            labelnames=["serial", "name", "model", "network_id", "network_name"],
         )
 
     async def _collect_impl(self) -> None:
@@ -200,7 +373,7 @@ class DeviceCollector(MetricCollector):
         """
         try:
             # Get all devices and their statuses with timeout
-            logger.info(
+            logger.debug(
                 "Starting device collection",
                 org_id=org_id,
             )
@@ -213,7 +386,7 @@ class DeviceCollector(MetricCollector):
             statuses = None
 
             try:
-                logger.info("Fetching devices list", org_id=org_id)
+                logger.debug("Fetching devices list", org_id=org_id)
                 self._track_api_call("getOrganizationDevices")
 
                 devices = await asyncio.to_thread(
@@ -221,7 +394,7 @@ class DeviceCollector(MetricCollector):
                     org_id,
                     total_pages="all",
                 )
-                logger.info(
+                logger.debug(
                     "Successfully fetched devices",
                     org_id=org_id,
                     count=len(devices) if devices else 0,
@@ -242,7 +415,7 @@ class DeviceCollector(MetricCollector):
                 return
 
             try:
-                logger.info("Fetching device statuses", org_id=org_id)
+                logger.debug("Fetching device statuses", org_id=org_id)
                 self._track_api_call("getOrganizationDevicesStatuses")
 
                 statuses = await asyncio.to_thread(
@@ -250,7 +423,7 @@ class DeviceCollector(MetricCollector):
                     org_id,
                     total_pages="all",
                 )
-                logger.info(
+                logger.debug(
                     "Successfully fetched statuses",
                     org_id=org_id,
                     count=len(statuses) if statuses else 0,
@@ -279,7 +452,7 @@ class DeviceCollector(MetricCollector):
                 )
                 return
 
-            logger.info(
+            logger.debug(
                 "Processing devices",
                 org_id=org_id,
                 device_count=len(devices),
@@ -315,7 +488,7 @@ class DeviceCollector(MetricCollector):
 
             # Process MS devices
             if ms_devices:
-                logger.info(
+                logger.debug(
                     "Processing MS devices",
                     count=len(ms_devices),
                 )
@@ -353,9 +526,10 @@ class DeviceCollector(MetricCollector):
 
             # Process MR devices
             if mr_devices:
-                logger.info(
+                logger.debug(
                     "Processing MR devices",
                     count=len(mr_devices),
+                    mr_serials=[d["serial"] for d in mr_devices],
                 )
                 # Process devices in smaller batches to avoid overwhelming the API
                 batch_size = 5
@@ -390,14 +564,14 @@ class DeviceCollector(MetricCollector):
                     await asyncio.sleep(0.5)
 
             # Aggregate network-wide POE metrics after all switches are collected
-            logger.info("Aggregating network POE metrics")
+            logger.debug("Aggregating network POE metrics")
             try:
                 await asyncio.wait_for(self._aggregate_network_poe(org_id, devices), timeout=60.0)
             except TimeoutError:
                 logger.error("Timeout aggregating POE metrics")
 
             # Collect memory metrics for all devices
-            logger.info("Collecting device memory metrics")
+            logger.debug("Collecting device memory metrics")
             try:
                 await asyncio.wait_for(self._collect_memory_metrics(org_id), timeout=60.0)
             except TimeoutError:
@@ -405,11 +579,32 @@ class DeviceCollector(MetricCollector):
 
             # Collect wireless client counts
             if any(d for d in devices if d.get("model", "").startswith("MR")):
-                logger.info("Collecting wireless client counts")
+                logger.debug("Collecting wireless client counts")
                 try:
                     await asyncio.wait_for(self._collect_wireless_clients(org_id), timeout=30.0)
                 except TimeoutError:
                     logger.error("Timeout collecting wireless client counts")
+
+                # Collect MR ethernet status
+                logger.debug("Collecting MR ethernet status")
+                try:
+                    await asyncio.wait_for(self._collect_mr_ethernet_status(org_id), timeout=30.0)
+                except TimeoutError:
+                    logger.error("Timeout collecting MR ethernet status")
+
+                # Collect MR packet loss metrics
+                logger.debug("Collecting MR packet loss metrics")
+                try:
+                    await asyncio.wait_for(self._collect_mr_packet_loss(org_id), timeout=30.0)
+                except TimeoutError:
+                    logger.error("Timeout collecting MR packet loss metrics")
+
+                # Collect MR CPU load metrics
+                logger.debug("Collecting MR CPU load metrics")
+                try:
+                    await asyncio.wait_for(self._collect_mr_cpu_load(org_id, devices), timeout=30.0)
+                except TimeoutError:
+                    logger.error("Timeout collecting MR CPU load metrics")
 
         except Exception as e:
             logger.exception(
@@ -593,15 +788,15 @@ class DeviceCollector(MetricCollector):
 
         """
         try:
-            # Use a short timespan (600 seconds = 10 minutes) with 300 second interval
-            # This gives us the most recent memory data
-            logger.info("Fetching device memory usage history", org_id=org_id)
+            # Use a short timespan (300 seconds = 5 minutes) with 300 second interval
+            # This gives us the most recent memory data block
+            logger.debug("Fetching device memory usage history", org_id=org_id)
             self._track_api_call("getOrganizationDevicesSystemMemoryUsageHistoryByInterval")
 
             memory_response = await asyncio.to_thread(
                 self.api.organizations.getOrganizationDevicesSystemMemoryUsageHistoryByInterval,
                 org_id,
-                timespan=600,
+                timespan=300,
                 interval=300,
             )
 
@@ -618,7 +813,7 @@ class DeviceCollector(MetricCollector):
                 )
                 memory_data = []
 
-            logger.info(
+            logger.debug(
                 "Successfully fetched memory data",
                 org_id=org_id,
                 device_count=len(memory_data) if memory_data else 0,
@@ -781,7 +976,7 @@ class DeviceCollector(MetricCollector):
 
         """
         try:
-            logger.info("Fetching wireless client counts", org_id=org_id)
+            logger.debug("Fetching wireless client counts", org_id=org_id)
             self._track_api_call("getOrganizationWirelessClientsOverviewByDevice")
 
             client_overview = await asyncio.to_thread(
@@ -803,7 +998,7 @@ class DeviceCollector(MetricCollector):
                 )
                 client_data = []
 
-            logger.info(
+            logger.debug(
                 "Successfully fetched wireless client counts",
                 org_id=org_id,
                 device_count=len(client_data) if client_data else 0,
@@ -831,5 +1026,631 @@ class DeviceCollector(MetricCollector):
         except Exception:
             logger.exception(
                 "Failed to collect wireless client counts",
+                org_id=org_id,
+            )
+
+    async def _collect_mr_ethernet_status(self, org_id: str) -> None:
+        """Collect ethernet status for MR devices.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        """
+        try:
+            logger.debug("Fetching MR ethernet status", org_id=org_id)
+            self._track_api_call("getOrganizationWirelessDevicesEthernetStatuses")
+
+            ethernet_statuses = await asyncio.to_thread(
+                self.api.wireless.getOrganizationWirelessDevicesEthernetStatuses,
+                org_id,
+            )
+
+            # Handle different API response formats
+            if isinstance(ethernet_statuses, dict) and "items" in ethernet_statuses:
+                ethernet_data = ethernet_statuses["items"]
+            elif isinstance(ethernet_statuses, list):
+                ethernet_data = ethernet_statuses
+            else:
+                logger.warning(
+                    "Unexpected ethernet status format",
+                    org_id=org_id,
+                    response_type=type(ethernet_statuses).__name__,
+                )
+                ethernet_data = []
+
+            logger.debug(
+                "Successfully fetched MR ethernet status",
+                org_id=org_id,
+                device_count=len(ethernet_data) if ethernet_data else 0,
+            )
+
+            # Process each device's ethernet status
+            for device_data in ethernet_data:
+                serial = device_data.get("serial", "")
+                name = device_data.get("name", serial)
+                network_id = device_data.get("network", {}).get("id", "")
+
+                # Power status
+                power_info = device_data.get("power", {})
+                power_mode = power_info.get("mode", "")
+
+                # Set power mode metric (1 for full, 0 for other)
+                self._set_metric_value(
+                    "_mr_power_mode",
+                    {
+                        "serial": serial,
+                        "name": name,
+                        "network_id": network_id,
+                        "mode": power_mode,
+                    },
+                    1 if power_mode == "full" else 0,
+                )
+
+                # AC power connection
+                ac_info = power_info.get("ac", {})
+                ac_connected = ac_info.get("isConnected", False)
+                self._set_metric_value(
+                    "_mr_power_ac_connected",
+                    {
+                        "serial": serial,
+                        "name": name,
+                        "network_id": network_id,
+                    },
+                    1 if ac_connected else 0,
+                )
+
+                # PoE power connection
+                poe_info = power_info.get("poe", {})
+                poe_connected = poe_info.get("isConnected", False)
+                self._set_metric_value(
+                    "_mr_power_poe_connected",
+                    {
+                        "serial": serial,
+                        "name": name,
+                        "network_id": network_id,
+                    },
+                    1 if poe_connected else 0,
+                )
+
+                # Port information
+                ports = device_data.get("ports", [])
+                for port in ports:
+                    port_name = port.get("name", "Unknown")
+
+                    # PoE standard
+                    port_poe = port.get("poe", {})
+                    poe_standard = port_poe.get("standard", "")
+
+                    # Map PoE standard to numeric value
+                    poe_standard_value = 0
+                    if poe_standard == "802.3at":
+                        poe_standard_value = 1
+                    elif poe_standard == "802.3af":
+                        poe_standard_value = 2
+                    elif poe_standard == "802.3bt":
+                        poe_standard_value = 3
+
+                    self._set_metric_value(
+                        "_mr_port_poe_standard",
+                        {
+                            "serial": serial,
+                            "name": name,
+                            "network_id": network_id,
+                            "port_name": port_name,
+                            "standard": poe_standard,
+                        },
+                        poe_standard_value,
+                    )
+
+                    # Link negotiation
+                    link_neg = port.get("linkNegotiation", {})
+                    duplex = link_neg.get("duplex", "")
+                    speed = link_neg.get("speed", 0)
+
+                    # Set duplex metric (1 for full, 0 for half)
+                    self._set_metric_value(
+                        "_mr_port_link_negotiation_duplex",
+                        {
+                            "serial": serial,
+                            "name": name,
+                            "network_id": network_id,
+                            "port_name": port_name,
+                        },
+                        1 if duplex == "full" else 0,
+                    )
+
+                    # Set speed metric
+                    self._set_metric_value(
+                        "_mr_port_link_negotiation_speed",
+                        {
+                            "serial": serial,
+                            "name": name,
+                            "network_id": network_id,
+                            "port_name": port_name,
+                        },
+                        speed,
+                    )
+
+                # Aggregation information
+                aggregation = device_data.get("aggregation", {})
+                aggregation_enabled = aggregation.get("enabled", False)
+                aggregation_speed = aggregation.get("speed", 0)
+
+                self._set_metric_value(
+                    "_mr_aggregation_enabled",
+                    {
+                        "serial": serial,
+                        "name": name,
+                        "network_id": network_id,
+                    },
+                    1 if aggregation_enabled else 0,
+                )
+
+                self._set_metric_value(
+                    "_mr_aggregation_speed",
+                    {
+                        "serial": serial,
+                        "name": name,
+                        "network_id": network_id,
+                    },
+                    aggregation_speed,
+                )
+
+        except Exception:
+            logger.exception(
+                "Failed to collect MR ethernet status",
+                org_id=org_id,
+            )
+
+    async def _collect_mr_packet_loss(self, org_id: str) -> None:
+        """Collect packet loss metrics for MR devices and networks.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        """
+        try:
+            # Collect per-device packet loss metrics
+            logger.debug("Fetching MR device packet loss", org_id=org_id)
+            self._track_api_call("getOrganizationWirelessDevicesPacketLossByDevice")
+
+            device_packet_loss = await asyncio.to_thread(
+                self.api.wireless.getOrganizationWirelessDevicesPacketLossByDevice,
+                org_id,
+                timespan=300,  # 5-minute window
+            )
+
+            # Handle different API response formats
+            if isinstance(device_packet_loss, dict) and "items" in device_packet_loss:
+                device_data = device_packet_loss["items"]
+            elif isinstance(device_packet_loss, list):
+                device_data = device_packet_loss
+            else:
+                logger.warning(
+                    "Unexpected device packet loss format",
+                    org_id=org_id,
+                    response_type=type(device_packet_loss).__name__,
+                )
+                device_data = []
+
+            logger.debug(
+                "Successfully fetched MR device packet loss",
+                org_id=org_id,
+                device_count=len(device_data) if device_data else 0,
+            )
+
+            # Process each device's packet loss data
+            for device_info in device_data:
+                device = device_info.get("device", {})
+                serial = device.get("serial", "")
+                name = device.get("name", serial)
+                network = device_info.get("network", {})
+                network_id = network.get("id", "")
+                network_name = network.get("name", "")
+
+                # Downstream metrics
+                downstream = device_info.get("downstream", {})
+                downstream_total = downstream.get("total", 0)
+                downstream_lost = downstream.get("lost", 0)
+                downstream_loss_pct = downstream.get("lossPercentage", 0.0)
+
+                self._set_metric_value(
+                    "_mr_packets_downstream_total",
+                    {
+                        "serial": serial,
+                        "name": name,
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    downstream_total,
+                )
+
+                self._set_metric_value(
+                    "_mr_packets_downstream_lost",
+                    {
+                        "serial": serial,
+                        "name": name,
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    downstream_lost,
+                )
+
+                self._set_metric_value(
+                    "_mr_packet_loss_downstream_percent",
+                    {
+                        "serial": serial,
+                        "name": name,
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    downstream_loss_pct,
+                )
+
+                # Upstream metrics
+                upstream = device_info.get("upstream", {})
+                upstream_total = upstream.get("total", 0)
+                upstream_lost = upstream.get("lost", 0)
+                upstream_loss_pct = upstream.get("lossPercentage", 0.0)
+
+                self._set_metric_value(
+                    "_mr_packets_upstream_total",
+                    {
+                        "serial": serial,
+                        "name": name,
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    upstream_total,
+                )
+
+                self._set_metric_value(
+                    "_mr_packets_upstream_lost",
+                    {
+                        "serial": serial,
+                        "name": name,
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    upstream_lost,
+                )
+
+                self._set_metric_value(
+                    "_mr_packet_loss_upstream_percent",
+                    {
+                        "serial": serial,
+                        "name": name,
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    upstream_loss_pct,
+                )
+
+                # Calculate combined metrics
+                total_packets = downstream_total + upstream_total
+                total_lost = downstream_lost + upstream_lost
+                total_loss_pct = (total_lost / total_packets * 100) if total_packets > 0 else 0.0
+
+                self._set_metric_value(
+                    "_mr_packets_total",
+                    {
+                        "serial": serial,
+                        "name": name,
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    total_packets,
+                )
+
+                self._set_metric_value(
+                    "_mr_packets_lost_total",
+                    {
+                        "serial": serial,
+                        "name": name,
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    total_lost,
+                )
+
+                self._set_metric_value(
+                    "_mr_packet_loss_total_percent",
+                    {
+                        "serial": serial,
+                        "name": name,
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    total_loss_pct,
+                )
+
+            # Collect network-wide packet loss metrics
+            logger.debug("Fetching MR network packet loss", org_id=org_id)
+            self._track_api_call("getOrganizationWirelessDevicesPacketLossByNetwork")
+
+            network_packet_loss = await asyncio.to_thread(
+                self.api.wireless.getOrganizationWirelessDevicesPacketLossByNetwork,
+                org_id,
+                timespan=300,  # 5-minute window
+            )
+
+            # Handle different API response formats
+            if isinstance(network_packet_loss, dict) and "items" in network_packet_loss:
+                network_data = network_packet_loss["items"]
+            elif isinstance(network_packet_loss, list):
+                network_data = network_packet_loss
+            else:
+                logger.warning(
+                    "Unexpected network packet loss format",
+                    org_id=org_id,
+                    response_type=type(network_packet_loss).__name__,
+                )
+                network_data = []
+
+            logger.debug(
+                "Successfully fetched MR network packet loss",
+                org_id=org_id,
+                network_count=len(network_data) if network_data else 0,
+            )
+
+            # Process each network's packet loss data
+            for network_info in network_data:
+                network = network_info.get("network", {})
+                network_id = network.get("id", "")
+                network_name = network.get("name", "")
+
+                # Downstream metrics
+                downstream = network_info.get("downstream", {})
+                downstream_total = downstream.get("total", 0)
+                downstream_lost = downstream.get("lost", 0)
+                downstream_loss_pct = downstream.get("lossPercentage", 0.0)
+
+                self._set_metric_value(
+                    "_mr_network_packets_downstream_total",
+                    {
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    downstream_total,
+                )
+
+                self._set_metric_value(
+                    "_mr_network_packets_downstream_lost",
+                    {
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    downstream_lost,
+                )
+
+                self._set_metric_value(
+                    "_mr_network_packet_loss_downstream_percent",
+                    {
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    downstream_loss_pct,
+                )
+
+                # Upstream metrics
+                upstream = network_info.get("upstream", {})
+                upstream_total = upstream.get("total", 0)
+                upstream_lost = upstream.get("lost", 0)
+                upstream_loss_pct = upstream.get("lossPercentage", 0.0)
+
+                self._set_metric_value(
+                    "_mr_network_packets_upstream_total",
+                    {
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    upstream_total,
+                )
+
+                self._set_metric_value(
+                    "_mr_network_packets_upstream_lost",
+                    {
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    upstream_lost,
+                )
+
+                self._set_metric_value(
+                    "_mr_network_packet_loss_upstream_percent",
+                    {
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    upstream_loss_pct,
+                )
+
+                # Calculate combined network metrics
+                total_packets = downstream_total + upstream_total
+                total_lost = downstream_lost + upstream_lost
+                total_loss_pct = (total_lost / total_packets * 100) if total_packets > 0 else 0.0
+
+                self._set_metric_value(
+                    "_mr_network_packets_total",
+                    {
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    total_packets,
+                )
+
+                self._set_metric_value(
+                    "_mr_network_packets_lost_total",
+                    {
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    total_lost,
+                )
+
+                self._set_metric_value(
+                    "_mr_network_packet_loss_total_percent",
+                    {
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    total_loss_pct,
+                )
+
+        except Exception:
+            logger.exception(
+                "Failed to collect MR packet loss metrics",
+                org_id=org_id,
+            )
+
+    async def _collect_mr_cpu_load(self, org_id: str, devices: list[dict[str, Any]]) -> None:
+        """Collect CPU load metrics for MR devices.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        devices : list[dict[str, Any]]
+            List of all devices in the organization.
+
+        """
+        try:
+            # Extract MR device serials
+            mr_serials = [
+                device["serial"] for device in devices if device.get("model", "").startswith("MR")
+            ]
+
+            if not mr_serials:
+                logger.debug("No MR devices found for CPU load collection", org_id=org_id)
+                return
+
+            # Create a lookup map for device info
+            device_map = {
+                device["serial"]: {
+                    "name": device.get("name", device["serial"]),
+                    "model": device.get("model", "Unknown"),
+                    "network_id": device.get("networkId", ""),
+                }
+                for device in devices
+                if device["serial"] in mr_serials
+            }
+
+            logger.debug(
+                "Fetching MR CPU load history",
+                org_id=org_id,
+                device_count=len(mr_serials),
+                serials=mr_serials,
+            )
+            self._track_api_call("getOrganizationWirelessDevicesSystemCpuLoadHistory")
+
+            # Note: The API might not return all requested devices in a single response
+            # This could be due to timing (device just came online) or API limitations
+            cpu_response = await asyncio.to_thread(
+                self.api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory,
+                org_id,
+                serials=mr_serials,  # Only request MR devices
+                timespan=300,  # 5-minute window
+            )
+
+            # Handle different API response formats
+            if isinstance(cpu_response, dict) and "items" in cpu_response:
+                cpu_data = cpu_response["items"]
+            elif isinstance(cpu_response, list):
+                cpu_data = cpu_response
+            else:
+                logger.warning(
+                    "Unexpected CPU load response format",
+                    org_id=org_id,
+                    response_type=type(cpu_response).__name__,
+                )
+                cpu_data = []
+
+            # Log which serials we got responses for
+            returned_serials = [d.get("serial", "") for d in cpu_data] if cpu_data else []
+            missing_serials = set(mr_serials) - set(returned_serials)
+
+            logger.debug(
+                "Successfully fetched MR CPU load data",
+                org_id=org_id,
+                device_count=len(cpu_data) if cpu_data else 0,
+                returned_serials=returned_serials,
+                missing_serials=list(missing_serials) if missing_serials else None,
+            )
+
+            # Process each device's CPU data
+            for device_info in cpu_data:
+                serial = device_info.get("serial", "")
+
+                # Skip if not in our device map (shouldn't happen with serial filter)
+                if serial not in device_map:
+                    logger.warning(
+                        "CPU data for unknown device",
+                        serial=serial,
+                        expected_serials=mr_serials,
+                    )
+                    continue
+
+                device_details = device_map[serial]
+                network = device_info.get("network", {})
+                network_name = network.get("name", "")
+                cpu_count = device_info.get("cpuCount")
+
+                # Process CPU load data from series
+                series = device_info.get("series", [])
+                if series:
+                    # Get the most recent entry
+                    latest = series[-1]  # Series appears to be chronological
+                    cpu_load_5 = latest.get("cpuLoad5")
+
+                    logger.debug(
+                        "Processing CPU load data",
+                        serial=serial,
+                        name=device_details["name"],
+                        cpu_count=cpu_count,
+                        cpu_load_5=cpu_load_5,
+                        series_count=len(series),
+                    )
+
+                    if cpu_load_5 is not None and cpu_count:
+                        # The cpuLoad5 value needs to be normalized
+                        # Based on the values in the example (20000-24000 range for 4-core systems),
+                        # it appears to be in basis points (1/10000) per core
+                        # So we convert to percentage: (value / 10000) / cpu_count * 100
+                        normalized_load = (cpu_load_5 / 10000) / cpu_count * 100
+
+                        self._set_metric_value(
+                            "_mr_cpu_load_5min",
+                            {
+                                "serial": serial,
+                                "name": device_details["name"],
+                                "model": device_details["model"],
+                                "network_id": device_details["network_id"],
+                                "network_name": network_name,
+                            },
+                            normalized_load,
+                        )
+                    else:
+                        logger.warning(
+                            "Missing CPU data for calculation",
+                            serial=serial,
+                            name=device_details["name"],
+                            cpu_load_5=cpu_load_5,
+                            cpu_count=cpu_count,
+                        )
+                else:
+                    logger.debug(
+                        "No CPU load series data available",
+                        serial=serial,
+                        name=device_details["name"],
+                        has_cpu_count=cpu_count is not None,
+                    )
+
+        except Exception:
+            logger.exception(
+                "Failed to collect MR CPU load metrics",
                 org_id=org_id,
             )
