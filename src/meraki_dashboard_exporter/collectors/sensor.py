@@ -154,8 +154,11 @@ class SensorCollector(MetricCollector):
             if self.settings.org_id:
                 org_ids = [self.settings.org_id]
             else:
+                logger.debug("Fetching all organizations for sensor collection")
+                self._track_api_call("getOrganizations")
                 orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
                 org_ids = [org["id"] for org in orgs]
+                logger.debug("Successfully fetched organizations", count=len(org_ids))
 
             # Collect sensors for each organization
             for org_id in org_ids:
@@ -182,12 +185,15 @@ class SensorCollector(MetricCollector):
         """
         try:
             # Get all MT devices
+            logger.debug("Fetching sensor devices", org_id=org_id)
+            self._track_api_call("getOrganizationDevices")
             devices = await asyncio.to_thread(
                 self.api.organizations.getOrganizationDevices,
                 org_id,
                 total_pages="all",
                 productTypes=["sensor"],
             )
+            logger.debug("Successfully fetched sensor devices", org_id=org_id, count=len(devices))
 
             if not devices:
                 return

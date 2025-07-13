@@ -38,6 +38,7 @@ class MSCollector(BaseDeviceCollector):
                 serial=serial,
                 name=name,
             )
+            self.parent._track_api_call("getDeviceSwitchPortsStatuses")
 
             try:
                 port_statuses = await asyncio.wait_for(

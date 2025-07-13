@@ -55,6 +55,12 @@ class NetworkHealthCollector(MetricCollector):
 
         try:
             metric.labels(**labels).set(value)
+            logger.debug(
+                "Successfully set metric value",
+                metric_name=metric_name,
+                labels=labels,
+                value=value,
+            )
         except Exception:
             logger.exception(
                 "Failed to set metric value",
@@ -118,8 +124,11 @@ class NetworkHealthCollector(MetricCollector):
             if self.settings.org_id:
                 org_ids = [self.settings.org_id]
             else:
+                logger.debug("Fetching all organizations for network health")
+                self._track_api_call("getOrganizations")
                 orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
                 org_ids = [org["id"] for org in orgs]
+                logger.debug("Successfully fetched organizations", count=len(org_ids))
 
             # Collect network health for each organization
             for org_id in org_ids:
@@ -139,11 +148,14 @@ class NetworkHealthCollector(MetricCollector):
         """
         try:
             # Get all networks
+            logger.debug("Fetching networks for health collection", org_id=org_id)
+            self._track_api_call("getOrganizationNetworks")
             networks = await asyncio.to_thread(
                 self.api.organizations.getOrganizationNetworks,
                 org_id,
                 total_pages="all",
             )
+            logger.debug("Successfully fetched networks", org_id=org_id, count=len(networks))
 
             # Collect health metrics for each network in batches
             # to avoid overwhelming the API connection pool
@@ -204,16 +216,21 @@ class NetworkHealthCollector(MetricCollector):
             )
 
             # Get AP names for lookup
+            logger.debug("Fetching network devices for RF health", network_id=network_id)
+            self._track_api_call("getNetworkDevices")
             devices = await asyncio.to_thread(
                 self.api.networks.getNetworkDevices,
                 network_id,
             )
+            logger.debug("Successfully fetched devices", network_id=network_id, count=len(devices))
             device_names = {
                 d["serial"]: d.get("name", d["serial"])
                 for d in devices
                 if d.get("model", "").startswith("MR")
             }
 
+            logger.debug("Fetching channel utilization data", network_id=network_id)
+            self._track_api_call("getNetworkNetworkHealthChannelUtilization")
             channel_util = await asyncio.wait_for(
                 asyncio.to_thread(
                     self.api.networks.getNetworkNetworkHealthChannelUtilization,
@@ -221,6 +238,11 @@ class NetworkHealthCollector(MetricCollector):
                     total_pages="all",
                 ),
                 timeout=30.0,
+            )
+            logger.debug(
+                "Successfully fetched channel utilization",
+                network_id=network_id,
+                ap_count=len(channel_util) if channel_util else 0,
             )
 
             if channel_util:

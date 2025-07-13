@@ -77,14 +77,22 @@ class OrganizationCollector(MetricCollector):
             # Get organizations
             if self.settings.org_id:
                 # Single organization
+                logger.debug("Fetching single organization", org_id=self.settings.org_id)
+                self._track_api_call("getOrganization")
                 org = await asyncio.to_thread(
                     self.api.organizations.getOrganization,
                     self.settings.org_id,
                 )
                 organizations = [org]
+                logger.debug(
+                    "Successfully fetched organization", org_name=org.get("name", "unknown")
+                )
             else:
                 # All accessible organizations
+                logger.debug("Fetching all organizations")
+                self._track_api_call("getOrganizations")
                 organizations = await asyncio.to_thread(self.api.organizations.getOrganizations)
+                logger.debug("Successfully fetched organizations", count=len(organizations))
 
             # Collect metrics for each organization
             tasks = [self._collect_org_metrics(org) for org in organizations]
@@ -153,6 +161,7 @@ class OrganizationCollector(MetricCollector):
         try:
             # Get API request stats with timeout
             logger.debug("Fetching API request stats", org_id=org_id)
+            self._track_api_call("getOrganizationApiRequests")
             api_requests = await asyncio.wait_for(
                 asyncio.to_thread(
                     self.api.organizations.getOrganizationApiRequests,
@@ -160,6 +169,11 @@ class OrganizationCollector(MetricCollector):
                     total_pages="all",
                 ),
                 timeout=30.0,
+            )
+            logger.debug(
+                "Successfully fetched API request stats",
+                org_id=org_id,
+                count=len(api_requests) if api_requests else 0,
             )
 
             if api_requests:
@@ -209,11 +223,14 @@ class OrganizationCollector(MetricCollector):
 
         """
         try:
+            logger.debug("Fetching organization networks", org_id=org_id)
+            self._track_api_call("getOrganizationNetworks")
             networks = await asyncio.to_thread(
                 self.api.organizations.getOrganizationNetworks,
                 org_id,
                 total_pages="all",
             )
+            logger.debug("Successfully fetched networks", org_id=org_id, count=len(networks))
 
             if self._networks_total:
                 self._networks_total.labels(
@@ -242,11 +259,14 @@ class OrganizationCollector(MetricCollector):
 
         """
         try:
+            logger.debug("Fetching organization devices", org_id=org_id)
+            self._track_api_call("getOrganizationDevices")
             devices = await asyncio.to_thread(
                 self.api.organizations.getOrganizationDevices,
                 org_id,
                 total_pages="all",
             )
+            logger.debug("Successfully fetched devices", org_id=org_id, count=len(devices))
 
             # Count devices by type
             device_counts: dict[str, int] = {}
@@ -289,21 +309,26 @@ class OrganizationCollector(MetricCollector):
             # If not, try to get licensing overview instead
             licenses = []
             try:
+                logger.debug("Fetching organization licenses", org_id=org_id)
+                self._track_api_call("getOrganizationLicenses")
                 licenses = await asyncio.to_thread(
                     self.api.organizations.getOrganizationLicenses,
                     org_id,
                     total_pages="all",
                 )
+                logger.debug("Successfully fetched licenses", org_id=org_id, count=len(licenses))
             except Exception as e:
                 # Check if it's a licensing model issue
                 if "does not support per-device licensing" in str(e):
-                    logger.info(
+                    logger.debug(
                         "Organization uses co-termination licensing model",
                         org_id=org_id,
                         org_name=org_name,
                     )
                     # Try to get licensing overview for co-termination model
                     try:
+                        logger.debug("Fetching license overview", org_id=org_id)
+                        self._track_api_call("getOrganizationLicensesOverview")
                         overview = await asyncio.wait_for(
                             asyncio.to_thread(
                                 self.api.organizations.getOrganizationLicensesOverview,
@@ -311,6 +336,7 @@ class OrganizationCollector(MetricCollector):
                             ),
                             timeout=30.0,
                         )
+                        logger.debug("Successfully fetched license overview", org_id=org_id)
                         # Convert overview to a format we can process
                         if overview:
                             # Set metrics based on overview data

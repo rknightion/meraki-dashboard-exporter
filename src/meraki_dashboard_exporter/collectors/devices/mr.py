@@ -38,6 +38,7 @@ class MRCollector(BaseDeviceCollector):
                 serial=serial,
                 name=name,
             )
+            self.parent._track_api_call("getDeviceWirelessStatus")
 
             try:
                 status = await asyncio.wait_for(

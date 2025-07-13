@@ -59,6 +59,12 @@ class DeviceCollector(MetricCollector):
 
         try:
             metric.labels(**labels).set(value)
+            logger.debug(
+                "Successfully set metric value",
+                metric_name=metric_name,
+                labels=labels,
+                value=value,
+            )
         except Exception:
             logger.exception(
                 "Failed to set metric value",
@@ -352,8 +358,11 @@ class DeviceCollector(MetricCollector):
             if self.settings.org_id:
                 org_ids = [self.settings.org_id]
             else:
+                logger.debug("Fetching all organizations for device collection")
+                self._track_api_call("getOrganizations")
                 orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
                 org_ids = [org["id"] for org in orgs]
+                logger.debug("Successfully fetched organizations", count=len(org_ids))
 
             # Collect devices for each organization
             for org_id in org_ids:
@@ -723,11 +732,14 @@ class DeviceCollector(MetricCollector):
         """
         try:
             # Get network names
+            logger.debug("Fetching networks for POE aggregation", org_id=org_id)
+            self._track_api_call("getOrganizationNetworks")
             networks = await asyncio.to_thread(
                 self.api.organizations.getOrganizationNetworks,
                 org_id,
                 total_pages="all",
             )
+            logger.debug("Successfully fetched networks", org_id=org_id, count=len(networks))
             network_map = {n["id"]: n["name"] for n in networks}
 
             # Group switches by network
