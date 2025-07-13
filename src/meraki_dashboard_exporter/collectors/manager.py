@@ -41,6 +41,7 @@ class CollectorManager:
     def _initialize_collectors(self) -> None:
         """Initialize all enabled collectors."""
         # Import here to avoid circular imports
+        from .alerts import AlertsCollector
         from .device import DeviceCollector
         from .network_health import NetworkHealthCollector
         from .organization import OrganizationCollector
@@ -75,6 +76,14 @@ class CollectorManager:
         )
         self.collectors[UpdateTier.MEDIUM].append(network_health_collector)
         logger.info("Initialized network health collector (MEDIUM tier)")
+
+        # Alerts collector
+        alerts_collector = AlertsCollector(
+            api=self.client.api,
+            settings=self.settings,
+        )
+        self.collectors[UpdateTier.MEDIUM].append(alerts_collector)
+        logger.info("Initialized alerts collector (MEDIUM tier)")
 
         # FAST tier collectors
         # Sensor collector if MT devices are enabled
