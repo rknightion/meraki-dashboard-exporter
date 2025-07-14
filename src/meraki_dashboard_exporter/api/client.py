@@ -50,9 +50,12 @@ class AsyncMerakiClient:
             self._api = meraki.DashboardAPI(
                 api_key=self.settings.api_key.get_secret_value(),
                 output_log=False,
-                suppress_logging=True,
+                suppress_logging=False,
+                inherit_logging_config=True,
                 single_request_timeout=self.settings.api_timeout,
-                maximum_retries=2,  # Reduce retries
+                maximum_retries=4,
+                action_batch_retry_wait_time=10,
+                nginx_429_retry_wait_time=5,
                 wait_on_rate_limit=True,
                 retry_4xx_error=False,  # Don't retry 4xx errors
                 caller="merakidashboardexporter rknightion",

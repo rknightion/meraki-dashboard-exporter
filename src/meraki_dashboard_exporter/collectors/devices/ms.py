@@ -46,7 +46,7 @@ class MSCollector(BaseDeviceCollector):
                         self.api.switch.getDeviceSwitchPortsStatuses,
                         serial,
                     ),
-                    timeout=10.0,  # 10 second timeout
+                    timeout=30.0,  # 10 second timeout
                 )
             except TimeoutError:
                 logger.error(

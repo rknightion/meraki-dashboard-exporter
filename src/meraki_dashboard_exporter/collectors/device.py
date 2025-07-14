@@ -736,7 +736,7 @@ class DeviceCollector(MetricCollector):
         try:
             await asyncio.wait_for(
                 self.ms_collector.collect(device),
-                timeout=15.0,  # 15 second timeout per device
+                timeout=30.0,  # 15 second timeout per device
             )
         except TimeoutError as e:
             raise TimeoutError(f"Timeout collecting MS device {device['serial']}") from e
@@ -753,7 +753,7 @@ class DeviceCollector(MetricCollector):
         try:
             await asyncio.wait_for(
                 self.mr_collector.collect(device),
-                timeout=15.0,  # 15 second timeout per device
+                timeout=30.0,  # 15 second timeout per device
             )
         except TimeoutError as e:
             raise TimeoutError(f"Timeout collecting MR device {device['serial']}") from e
