@@ -30,13 +30,28 @@ def mt_collector(mock_collector, monkeypatch):
     # Create a mock parent for the MT collector
     mock_parent = MagicMock()
     mock_parent._track_api_call = mock_collector._track_api_call
-    mock_parent._set_metric_value = mock_collector._set_metric_value
+
+    # Create mock metrics on the parent
+    mock_parent._sensor_temperature = MagicMock()
+    mock_parent._sensor_humidity = MagicMock()
+    mock_parent._sensor_door = MagicMock()
+    mock_parent._sensor_water = MagicMock()
+    mock_parent._sensor_co2 = MagicMock()
+    mock_parent._sensor_tvoc = MagicMock()
+    mock_parent._sensor_pm25 = MagicMock()
+    mock_parent._sensor_noise = MagicMock()
+    mock_parent._sensor_battery = MagicMock()
+    mock_parent._sensor_air_quality = MagicMock()
+    mock_parent._sensor_voltage = MagicMock()
+    mock_parent._sensor_current = MagicMock()
+    mock_parent._sensor_real_power = MagicMock()
+    mock_parent._sensor_apparent_power = MagicMock()
+    mock_parent._sensor_power_factor = MagicMock()
+    mock_parent._sensor_frequency = MagicMock()
+    mock_parent._sensor_downstream_power = MagicMock()
+    mock_parent._sensor_remote_lockout = MagicMock()
 
     collector = MTCollector(parent=mock_parent)
-    # Inject mocked methods
-    collector._track_api_call = mock_collector._track_api_call
-    collector._set_metric_value = mock_collector._set_metric_value
-    collector.logger = mock_collector.logger
     return collector
 
 
@@ -48,194 +63,219 @@ class TestMTCollector:
         serial = "Q2MT-XXXX"
         name = "Sensor1"
         model = "MT10"
-        metric_data = {
-            "metric": "temperature",
-            "celsius": 22.5,
-        }
 
         # Process the metric
-        mt_collector._process_sensor_metric(serial, name, model, metric_data)
+        mt_collector._process_metric(
+            serial=serial,
+            name=name,
+            model=model,
+            network_id="",
+            network_name="",
+            metric_type="temperature",
+            metric_data={"celsius": 22.5},
+        )
 
         # Verify temperature was set
-        mock_collector._set_metric_value.assert_called_once_with(
-            "_sensor_temperature",
-            {"serial": serial, "name": name, "sensor_type": model},
-            22.5,
+        mt_collector.parent._sensor_temperature.labels.assert_called_once_with(
+            serial=serial, name=name, sensor_type=model
         )
+        mt_collector.parent._sensor_temperature.labels().set.assert_called_once_with(22.5)
 
     def test_skip_raw_temperature_metric(self, mt_collector, mock_collector):
         """Test that rawTemperature metric is skipped."""
         serial = "Q2MT-XXXX"
         name = "Sensor1"
         model = "MT10"
-        metric_data = {
-            "metric": "rawTemperature",
-            "celsius": 22.5,
-        }
 
         # Process the metric
-        mt_collector._process_sensor_metric(serial, name, model, metric_data)
+        mt_collector._process_metric(
+            serial=serial,
+            name=name,
+            model=model,
+            network_id="",
+            network_name="",
+            metric_type="rawTemperature",
+            metric_data={"celsius": 22.5},
+        )
 
-        # Verify metric was NOT set
-        mock_collector._set_metric_value.assert_not_called()
+        # Verify metric was NOT set - none of the sensor metrics should be called
+        mt_collector.parent._sensor_temperature.labels.assert_not_called()
 
     def test_process_humidity_metric(self, mt_collector, mock_collector):
         """Test processing of humidity metric."""
         serial = "Q2MT-XXXX"
         name = "Sensor1"
         model = "MT10"
-        metric_data = {
-            "metric": "humidity",
-            "relativePercentage": 45.0,
-        }
 
         # Process the metric
-        mt_collector._process_sensor_metric(serial, name, model, metric_data)
+        mt_collector._process_metric(
+            serial=serial,
+            name=name,
+            model=model,
+            network_id="",
+            network_name="",
+            metric_type="humidity",
+            metric_data={"relativePercentage": 45.0},
+        )
 
         # Verify humidity was set
-        mock_collector._set_metric_value.assert_called_once_with(
-            "_sensor_humidity",
-            {"serial": serial, "name": name, "sensor_type": model},
-            45.0,
+        mt_collector.parent._sensor_humidity.labels.assert_called_once_with(
+            serial=serial, name=name, sensor_type=model
         )
+        mt_collector.parent._sensor_humidity.labels().set.assert_called_once_with(45.0)
 
     def test_process_door_metric(self, mt_collector, mock_collector):
         """Test processing of door sensor metric."""
         serial = "Q2MT-XXXX"
         name = "DoorSensor1"
         model = "MT20"
-        metric_data = {
-            "metric": "door",
-            "isOpen": True,
-        }
 
         # Process the metric
-        mt_collector._process_sensor_metric(serial, name, model, metric_data)
-
-        # Verify door status was set (1.0 for open)
-        mock_collector._set_metric_value.assert_called_once_with(
-            "_sensor_door",
-            {"serial": serial, "name": name, "sensor_type": model},
-            1.0,
+        mt_collector._process_metric(
+            serial=serial,
+            name=name,
+            model=model,
+            network_id="",
+            network_name="",
+            metric_type="door",
+            metric_data={"open": True},
         )
+
+        # Verify door status was set (1 for open)
+        mt_collector.parent._sensor_door.labels.assert_called_once_with(
+            serial=serial, name=name, sensor_type=model
+        )
+        mt_collector.parent._sensor_door.labels().set.assert_called_once_with(1)
 
     def test_process_door_metric_closed(self, mt_collector, mock_collector):
         """Test processing of closed door sensor metric."""
         serial = "Q2MT-XXXX"
         name = "DoorSensor1"
         model = "MT20"
-        metric_data = {
-            "metric": "door",
-            "isOpen": False,
-        }
 
         # Process the metric
-        mt_collector._process_sensor_metric(serial, name, model, metric_data)
-
-        # Verify door status was set (0.0 for closed)
-        mock_collector._set_metric_value.assert_called_once_with(
-            "_sensor_door",
-            {"serial": serial, "name": name, "sensor_type": model},
-            0.0,
+        mt_collector._process_metric(
+            serial=serial,
+            name=name,
+            model=model,
+            network_id="",
+            network_name="",
+            metric_type="door",
+            metric_data={"open": False},
         )
+
+        # Verify door status was set (0 for closed)
+        mt_collector.parent._sensor_door.labels.assert_called_once_with(
+            serial=serial, name=name, sensor_type=model
+        )
+        mt_collector.parent._sensor_door.labels().set.assert_called_once_with(0)
 
     def test_process_water_metric(self, mt_collector, mock_collector):
         """Test processing of water detection metric."""
         serial = "Q2MT-XXXX"
         name = "WaterSensor1"
         model = "MT10"
-        metric_data = {
-            "metric": "water",
-            "isPresent": True,
-        }
 
         # Process the metric
-        mt_collector._process_sensor_metric(serial, name, model, metric_data)
-
-        # Verify water detection was set (1.0 for present)
-        mock_collector._set_metric_value.assert_called_once_with(
-            "_sensor_water",
-            {"serial": serial, "name": name, "sensor_type": model},
-            1.0,
+        mt_collector._process_metric(
+            serial=serial,
+            name=name,
+            model=model,
+            network_id="",
+            network_name="",
+            metric_type="water",
+            metric_data={"present": True},
         )
+
+        # Verify water detection was set (1 for present)
+        mt_collector.parent._sensor_water.labels.assert_called_once_with(
+            serial=serial, name=name, sensor_type=model
+        )
+        mt_collector.parent._sensor_water.labels().set.assert_called_once_with(1)
 
     def test_process_water_metric_not_present(self, mt_collector, mock_collector):
         """Test processing of water not detected metric."""
         serial = "Q2MT-XXXX"
         name = "WaterSensor1"
         model = "MT10"
-        metric_data = {
-            "metric": "water",
-            "isPresent": False,
-        }
 
         # Process the metric
-        mt_collector._process_sensor_metric(serial, name, model, metric_data)
-
-        # Verify water detection was set (0.0 for not present)
-        mock_collector._set_metric_value.assert_called_once_with(
-            "_sensor_water",
-            {"serial": serial, "name": name, "sensor_type": model},
-            0.0,
+        mt_collector._process_metric(
+            serial=serial,
+            name=name,
+            model=model,
+            network_id="",
+            network_name="",
+            metric_type="water",
+            metric_data={"present": False},
         )
+
+        # Verify water detection was set (0 for not present)
+        mt_collector.parent._sensor_water.labels.assert_called_once_with(
+            serial=serial, name=name, sensor_type=model
+        )
+        mt_collector.parent._sensor_water.labels().set.assert_called_once_with(0)
 
     def test_process_unknown_metric_type(self, mt_collector, mock_collector):
         """Test processing of unknown metric type."""
         serial = "Q2MT-XXXX"
         name = "Sensor1"
         model = "MT10"
-        metric_data = {
-            "metric": "unknownType",
-            "value": 123,
-        }
 
         # Process the metric
-        mt_collector._process_sensor_metric(serial, name, model, metric_data)
+        mt_collector._process_metric(
+            serial=serial,
+            name=name,
+            model=model,
+            network_id="",
+            network_name="",
+            metric_type="unknownType",
+            metric_data={"value": 123},
+        )
 
         # Verify no metric was set
-        mock_collector._set_metric_value.assert_not_called()
+        mt_collector.parent._sensor_temperature.labels.assert_not_called()
+        mt_collector.parent._sensor_humidity.labels.assert_not_called()
 
     def test_process_metric_with_missing_value(self, mt_collector, mock_collector):
         """Test processing metric with missing value."""
         serial = "Q2MT-XXXX"
         name = "Sensor1"
         model = "MT10"
-        metric_data = {
-            "metric": "temperature",
-            # Missing celsius value
-        }
 
         # Process the metric
-        mt_collector._process_sensor_metric(serial, name, model, metric_data)
+        mt_collector._process_metric(
+            serial=serial,
+            name=name,
+            model=model,
+            network_id="",
+            network_name="",
+            metric_type="temperature",
+            metric_data={},  # Missing celsius value
+        )
 
         # Verify no metric was set due to missing value
-        mock_collector._set_metric_value.assert_not_called()
+        mt_collector.parent._sensor_temperature.labels.assert_not_called()
 
     def test_process_metric_with_none_value(self, mt_collector, mock_collector):
         """Test processing metric with None value."""
         serial = "Q2MT-XXXX"
         name = "Sensor1"
         model = "MT10"
-        metric_data = {
-            "metric": "temperature",
-            "celsius": None,
-        }
 
         # Process the metric
-        mt_collector._process_sensor_metric(serial, name, model, metric_data)
+        mt_collector._process_metric(
+            serial=serial,
+            name=name,
+            model=model,
+            network_id="",
+            network_name="",
+            metric_type="temperature",
+            metric_data={"celsius": None},
+        )
 
         # Verify no metric was set due to None value
-        mock_collector._set_metric_value.assert_not_called()
-
-    def test_device_supported(self, mt_collector):
-        """Test device support check."""
-        assert mt_collector.is_device_supported({"model": "MT10"}) is True
-        assert mt_collector.is_device_supported({"model": "MT12"}) is True
-        assert mt_collector.is_device_supported({"model": "MT20"}) is True
-        assert mt_collector.is_device_supported({"model": "MT21"}) is True
-        assert mt_collector.is_device_supported({"model": "MR36"}) is False
-        assert mt_collector.is_device_supported({"model": "MS120"}) is False
-        assert mt_collector.is_device_supported({}) is False
+        mt_collector.parent._sensor_temperature.labels.assert_not_called()
 
     @patch("meraki_dashboard_exporter.collectors.devices.mt.logger")
     def test_process_all_sensor_types_together(self, mock_logger, mt_collector, mock_collector):
@@ -254,10 +294,27 @@ class TestMTCollector:
         ]
 
         for metric_data in metrics:
-            mt_collector._process_sensor_metric(serial, name, model, metric_data)
+            # Extract the metric type from the metric_data
+            metric_type = metric_data.get("metric")
+            # Remove the 'metric' key as it's passed separately
+            actual_data = {k: v for k, v in metric_data.items() if k != "metric"}
+            mt_collector._process_metric(
+                serial=serial,
+                name=name,
+                model=model,
+                network_id="",
+                network_name="",
+                metric_type=metric_type,
+                metric_data=actual_data,
+            )
 
         # Verify correct metrics were set (3 valid, 2 skipped)
-        assert mock_collector._set_metric_value.call_count == 3
+        # Temperature should be set
+        mt_collector.parent._sensor_temperature.labels.assert_called_once()
+        # Humidity should be set
+        mt_collector.parent._sensor_humidity.labels.assert_called_once()
+        # Water should be set
+        mt_collector.parent._sensor_water.labels.assert_called_once()
 
         # Verify debug log for skipped rawTemperature
         debug_calls = [

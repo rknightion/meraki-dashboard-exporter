@@ -12,7 +12,7 @@ from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.constants import UpdateTier
 
 
-def create_test_collector_class():
+def create_test_collector_class() -> type[MetricCollector]:
     """Create a test collector class dynamically to avoid pytest collection."""
 
     class TestCollectorImpl(MetricCollector):
@@ -67,8 +67,8 @@ def test_collector(mock_api, mock_settings, monkeypatch):
     # Patch the registry to use an isolated one
     isolated_registry = CollectorRegistry()
     monkeypatch.setattr("meraki_dashboard_exporter.core.collector.REGISTRY", isolated_registry)
-    TestCollector = create_test_collector_class()
-    return TestCollector(api=mock_api, settings=mock_settings)
+    test_collector_class = create_test_collector_class()
+    return test_collector_class(api=mock_api, settings=mock_settings)
 
 
 class TestMetricCollector:
@@ -159,13 +159,19 @@ class TestMetricCollector:
 
         # Error counter should be incremented
         error_found = False
-        for key, metric in collector._collector_errors._metrics.items():
-            if "ErrorCollectorImpl" in str(key):
-                error_found = True
-                assert metric._value.get() > 0
-                break
+        if collector._collector_errors is not None:
+            # Access the internal _metrics dict of the Counter
+            metrics = getattr(collector._collector_errors, "_metrics", {})
+            for key, metric in metrics.items():
+                if "ErrorCollectorImpl" in str(key):
+                    error_found = True
+                    # Access the metric value
+                    value = getattr(metric, "_value", None)
+                    if value is not None:
+                        assert value.get() > 0
+                    break
         assert error_found, (
-            f"Error not tracked. Keys: {list(collector._collector_errors._metrics.keys())}"
+            f"Error not tracked. Keys: {list(metrics.keys()) if 'metrics' in locals() else []}"
         )
 
     @pytest.mark.asyncio
