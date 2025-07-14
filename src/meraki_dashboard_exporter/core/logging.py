@@ -33,7 +33,70 @@ def setup_logging(settings: Settings) -> None:
     # These libraries are used by the Meraki SDK and can be noisy
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)
-    logging.getLogger("meraki").setLevel(logging.WARNING)  # Just in case
+
+    # For Meraki SDK, respect DEBUG level but default to WARNING for other levels
+    meraki_logger = logging.getLogger("meraki")
+    if settings.log_level == "DEBUG":
+        meraki_logger.setLevel(logging.DEBUG)
+    else:
+        meraki_logger.setLevel(logging.WARNING)
+
+    # Configure Meraki logger to use structlog formatting
+    # Remove any existing handlers first
+    meraki_logger.handlers.clear()
+    meraki_logger.propagate = False
+
+    # Create a custom handler that uses structlog
+    class StructlogHandler(logging.Handler):
+        """Handler that formats logs using structlog."""
+
+        def emit(self, record: logging.LogRecord) -> None:
+            """Emit a log record using structlog."""
+            logger = structlog.get_logger(record.name)
+            # Map Python log levels to structlog methods
+            level_map = {
+                logging.DEBUG: logger.debug,
+                logging.INFO: logger.info,
+                logging.WARNING: logger.warning,
+                logging.ERROR: logger.error,
+                logging.CRITICAL: logger.critical,
+            }
+            log_method = level_map.get(record.levelno, logger.info)
+
+            # Extract any extra fields from the record
+            extra = {
+                key: value
+                for key, value in record.__dict__.items()
+                if key
+                not in {
+                    "name",
+                    "msg",
+                    "args",
+                    "created",
+                    "filename",
+                    "funcName",
+                    "levelname",
+                    "levelno",
+                    "lineno",
+                    "module",
+                    "msecs",
+                    "pathname",
+                    "process",
+                    "processName",
+                    "relativeCreated",
+                    "thread",
+                    "threadName",
+                    "exc_info",
+                    "exc_text",
+                    "stack_info",
+                }
+            }
+
+            # Log the message with any extra context
+            log_method(record.getMessage(), **extra)
+
+    # Add our custom handler to the Meraki logger
+    meraki_logger.addHandler(StructlogHandler())
 
     # Only show httpx warnings and above (used by our code)
     logging.getLogger("httpx").setLevel(logging.WARNING)
