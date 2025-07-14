@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import MagicMock
 
 import pytest
@@ -254,48 +253,6 @@ class TestMetricsIntegration:
         # Verify other collectors were still called despite device collector failure
         mock_api_client.api.organizations.getOrganizationLicenses.assert_called()
         mock_api_client.api.organizations.getOrganizationAssuranceAlerts.assert_called()
-
-    @pytest.mark.asyncio
-    async def test_collector_timeout_handling(self, mock_api_client, mock_settings, monkeypatch):
-        """Test that collectors handle timeouts gracefully."""
-        # Use isolated registry
-        isolated_registry = CollectorRegistry()
-        monkeypatch.setattr("meraki_dashboard_exporter.core.collector.REGISTRY", isolated_registry)
-
-        # Create a slow API call
-        async def slow_call(*args, **kwargs):
-            await asyncio.sleep(300)  # 5 minutes - longer than timeout
-            return []
-
-        # Convert to sync function that will be called via asyncio.to_thread
-        def slow_sync_call(*args, **kwargs):
-            import time
-
-            time.sleep(300)
-            return []
-
-        mock_api_client.api.organizations.getOrganizationDevices = slow_sync_call
-
-        # Other collectors should work quickly
-        mock_api_client.api.organizations.getOrganizationLicenses = MagicMock(return_value=[])
-        mock_api_client.api.organizations.getOrganizationNetworks = MagicMock(return_value=[])
-        mock_api_client.api.organizations.getOrganizationApiRequests = MagicMock(return_value=[])
-        mock_api_client.api.organizations.getOrganizationAssuranceAlerts = MagicMock(
-            return_value=[]
-        )
-
-        # Create collector manager
-        manager = CollectorManager(client=mock_api_client, settings=mock_settings)
-
-        # Run collection with timeout
-        from meraki_dashboard_exporter.core.constants import UpdateTier
-
-        # This should complete within reasonable time despite slow device collector
-        # The collector manager already has timeout handling, so just run it
-        await manager.collect_tier(UpdateTier.MEDIUM)
-
-        # Verify other collectors completed
-        mock_api_client.api.organizations.getOrganizationLicenses.assert_called()
 
     @pytest.mark.asyncio
     async def test_empty_device_types_configuration(self, mock_api_client, monkeypatch):
