@@ -73,6 +73,59 @@ class DeviceCollector(MetricCollector):
                 value=value,
             )
 
+    def _set_packet_metric_value(
+        self, metric_name: str, labels: dict[str, str], value: float | None
+    ) -> None:
+        """Set packet metric value with retention logic for total packet counters.
+
+        For packet loss metrics, 0 is a valid value. For total packet counters,
+        we retain the last known value if the API returns None or 0.
+
+        Parameters
+        ----------
+        metric_name : str
+            Name of the metric attribute.
+        labels : dict[str, str]
+            Labels to apply to the metric.
+        value : float | None
+            Value to set. May be None if API returned null.
+
+        """
+        # Create a cache key from metric name and sorted labels
+        cache_key = f"{metric_name}:{':'.join(f'{k}={v}' for k, v in sorted(labels.items()))}"
+
+        # Determine if this is a "total" metric that should retain values
+        is_total_metric = "total" in metric_name and "percent" not in metric_name
+
+        # For total metrics, use cached value if current value is None or 0
+        if is_total_metric and (value is None or value == 0):
+            cached_value = self._packet_metrics_cache.get(cache_key)
+            if cached_value is not None:
+                logger.debug(
+                    "Using cached value for packet metric",
+                    metric_name=metric_name,
+                    labels=labels,
+                    cached_value=cached_value,
+                    original_value=value,
+                )
+                value = cached_value
+            else:
+                # No cached value, skip update to avoid showing 0
+                logger.debug(
+                    "No cached value available for packet metric",
+                    metric_name=metric_name,
+                    labels=labels,
+                    original_value=value,
+                )
+                return
+
+        # Update cache if we have a valid value
+        if value is not None and (not is_total_metric or value > 0):
+            self._packet_metrics_cache[cache_key] = value
+
+        # Use regular metric setting
+        self._set_metric_value(metric_name, labels, value)
+
     def __init__(
         self,
         api: DashboardAPI,
@@ -85,6 +138,9 @@ class DeviceCollector(MetricCollector):
         # Initialize device-specific collectors
         self.ms_collector = MSCollector(self)
         self.mr_collector = MRCollector(self)
+
+        # Cache for retaining last known packet metric values
+        self._packet_metrics_cache: dict[str, float] = {}
 
     def _initialize_metrics(self) -> None:
         """Initialize device metrics."""
@@ -351,6 +407,31 @@ class DeviceCollector(MetricCollector):
             labelnames=["serial", "name", "model", "network_id", "network_name"],
         )
 
+        # MR SSID/Radio status metrics
+        self._mr_radio_broadcasting = self._create_gauge(
+            "meraki_mr_radio_broadcasting",
+            "Access point radio broadcasting status (1 = broadcasting, 0 = not broadcasting)",
+            labelnames=["serial", "name", "network_id", "network_name", "band", "radio_index"],
+        )
+
+        self._mr_radio_channel = self._create_gauge(
+            "meraki_mr_radio_channel",
+            "Access point radio channel number",
+            labelnames=["serial", "name", "network_id", "network_name", "band", "radio_index"],
+        )
+
+        self._mr_radio_channel_width = self._create_gauge(
+            "meraki_mr_radio_channel_width_mhz",
+            "Access point radio channel width in MHz",
+            labelnames=["serial", "name", "network_id", "network_name", "band", "radio_index"],
+        )
+
+        self._mr_radio_power = self._create_gauge(
+            "meraki_mr_radio_power_dbm",
+            "Access point radio transmit power in dBm",
+            labelnames=["serial", "name", "network_id", "network_name", "band", "radio_index"],
+        )
+
     async def _collect_impl(self) -> None:
         """Collect device metrics."""
         try:
@@ -393,6 +474,9 @@ class DeviceCollector(MetricCollector):
             # Fetch devices and statuses separately to better handle timeouts
             devices = None
             statuses = None
+
+            # Store device lookup map for use in other collectors
+            self._device_lookup: dict[str, dict[str, Any]] = {}
 
             try:
                 logger.debug("Fetching devices list", org_id=org_id)
@@ -480,6 +564,16 @@ class DeviceCollector(MetricCollector):
 
             for device in devices:
                 device_type = self._get_device_type(device)
+
+                # Add to device lookup map
+                serial = device["serial"]
+                self._device_lookup[serial] = {
+                    "name": device.get("name", serial),
+                    "model": device.get("model", "Unknown"),
+                    "network_id": device.get("networkId", ""),
+                    "device_type": device_type,
+                }
+
                 if device_type not in self.settings.device_types:
                     continue
 
@@ -614,6 +708,13 @@ class DeviceCollector(MetricCollector):
                     await asyncio.wait_for(self._collect_mr_cpu_load(org_id, devices), timeout=30.0)
                 except TimeoutError:
                     logger.error("Timeout collecting MR CPU load metrics")
+
+                # Collect MR SSID status metrics
+                logger.debug("Collecting MR SSID status metrics")
+                try:
+                    await asyncio.wait_for(self._collect_mr_ssid_status(org_id), timeout=30.0)
+                except TimeoutError:
+                    logger.error("Timeout collecting MR SSID status metrics")
 
         except Exception as e:
             logger.exception(
@@ -1026,12 +1127,15 @@ class DeviceCollector(MetricCollector):
                 by_status = counts.get("byStatus", {})
                 online_clients = by_status.get("online", 0)
 
-                # We need to look up the device name and model from our devices cache
-                # For now, just use the serial as the name
+                # Look up device info from our cache
+                device_info = self._device_lookup.get(serial, {})
+                device_name = device_info.get("name", serial)
+                device_model = device_info.get("model", "MR")
+
                 self._ap_clients.labels(
                     serial=serial,
-                    name=serial,  # Will be updated in future with device lookup
-                    model="MR",  # Will be updated in future with device lookup
+                    name=device_name,
+                    model=device_model,
                     network_id=network_id,
                 ).set(online_clients)
 
@@ -1233,7 +1337,7 @@ class DeviceCollector(MetricCollector):
             device_packet_loss = await asyncio.to_thread(
                 self.api.wireless.getOrganizationWirelessDevicesPacketLossByDevice,
                 org_id,
-                timespan=300,  # 5-minute window
+                timespan=3600,  # 1-hour window for better data availability
             )
 
             # Handle different API response formats
@@ -1270,7 +1374,7 @@ class DeviceCollector(MetricCollector):
                 downstream_lost = downstream.get("lost", 0)
                 downstream_loss_pct = downstream.get("lossPercentage", 0.0)
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_packets_downstream_total",
                     {
                         "serial": serial,
@@ -1281,7 +1385,7 @@ class DeviceCollector(MetricCollector):
                     downstream_total,
                 )
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_packets_downstream_lost",
                     {
                         "serial": serial,
@@ -1292,7 +1396,7 @@ class DeviceCollector(MetricCollector):
                     downstream_lost,
                 )
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_packet_loss_downstream_percent",
                     {
                         "serial": serial,
@@ -1309,7 +1413,7 @@ class DeviceCollector(MetricCollector):
                 upstream_lost = upstream.get("lost", 0)
                 upstream_loss_pct = upstream.get("lossPercentage", 0.0)
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_packets_upstream_total",
                     {
                         "serial": serial,
@@ -1320,7 +1424,7 @@ class DeviceCollector(MetricCollector):
                     upstream_total,
                 )
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_packets_upstream_lost",
                     {
                         "serial": serial,
@@ -1331,7 +1435,7 @@ class DeviceCollector(MetricCollector):
                     upstream_lost,
                 )
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_packet_loss_upstream_percent",
                     {
                         "serial": serial,
@@ -1347,7 +1451,7 @@ class DeviceCollector(MetricCollector):
                 total_lost = downstream_lost + upstream_lost
                 total_loss_pct = (total_lost / total_packets * 100) if total_packets > 0 else 0.0
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_packets_total",
                     {
                         "serial": serial,
@@ -1358,7 +1462,7 @@ class DeviceCollector(MetricCollector):
                     total_packets,
                 )
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_packets_lost_total",
                     {
                         "serial": serial,
@@ -1369,7 +1473,7 @@ class DeviceCollector(MetricCollector):
                     total_lost,
                 )
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_packet_loss_total_percent",
                     {
                         "serial": serial,
@@ -1387,7 +1491,7 @@ class DeviceCollector(MetricCollector):
             network_packet_loss = await asyncio.to_thread(
                 self.api.wireless.getOrganizationWirelessDevicesPacketLossByNetwork,
                 org_id,
-                timespan=300,  # 5-minute window
+                timespan=3600,  # 1-hour window for better data availability
             )
 
             # Handle different API response formats
@@ -1421,7 +1525,7 @@ class DeviceCollector(MetricCollector):
                 downstream_lost = downstream.get("lost", 0)
                 downstream_loss_pct = downstream.get("lossPercentage", 0.0)
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_network_packets_downstream_total",
                     {
                         "network_id": network_id,
@@ -1430,7 +1534,7 @@ class DeviceCollector(MetricCollector):
                     downstream_total,
                 )
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_network_packets_downstream_lost",
                     {
                         "network_id": network_id,
@@ -1439,7 +1543,7 @@ class DeviceCollector(MetricCollector):
                     downstream_lost,
                 )
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_network_packet_loss_downstream_percent",
                     {
                         "network_id": network_id,
@@ -1454,7 +1558,7 @@ class DeviceCollector(MetricCollector):
                 upstream_lost = upstream.get("lost", 0)
                 upstream_loss_pct = upstream.get("lossPercentage", 0.0)
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_network_packets_upstream_total",
                     {
                         "network_id": network_id,
@@ -1463,7 +1567,7 @@ class DeviceCollector(MetricCollector):
                     upstream_total,
                 )
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_network_packets_upstream_lost",
                     {
                         "network_id": network_id,
@@ -1472,7 +1576,7 @@ class DeviceCollector(MetricCollector):
                     upstream_lost,
                 )
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_network_packet_loss_upstream_percent",
                     {
                         "network_id": network_id,
@@ -1486,7 +1590,7 @@ class DeviceCollector(MetricCollector):
                 total_lost = downstream_lost + upstream_lost
                 total_loss_pct = (total_lost / total_packets * 100) if total_packets > 0 else 0.0
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_network_packets_total",
                     {
                         "network_id": network_id,
@@ -1495,7 +1599,7 @@ class DeviceCollector(MetricCollector):
                     total_packets,
                 )
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_network_packets_lost_total",
                     {
                         "network_id": network_id,
@@ -1504,7 +1608,7 @@ class DeviceCollector(MetricCollector):
                     total_lost,
                 )
 
-                self._set_metric_value(
+                self._set_packet_metric_value(
                     "_mr_network_packet_loss_total_percent",
                     {
                         "network_id": network_id,
@@ -1565,7 +1669,7 @@ class DeviceCollector(MetricCollector):
                 self.api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory,
                 org_id,
                 serials=mr_serials,  # Only request MR devices
-                timespan=300,  # 5-minute window
+                timespan=3600,  # 1-hour window for better data availability
             )
 
             # Handle different API response formats
@@ -1664,5 +1768,139 @@ class DeviceCollector(MetricCollector):
         except Exception:
             logger.exception(
                 "Failed to collect MR CPU load metrics",
+                org_id=org_id,
+            )
+
+    async def _collect_mr_ssid_status(self, org_id: str) -> None:
+        """Collect SSID and radio status for MR devices.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        """
+        try:
+            logger.debug("Fetching MR SSID statuses", org_id=org_id)
+            self._track_api_call("getOrganizationWirelessSsidsStatusesByDevice")
+
+            ssid_statuses = await asyncio.to_thread(
+                self.api.wireless.getOrganizationWirelessSsidsStatusesByDevice,
+                org_id,
+                hideDisabled=True,  # Only get active radios
+                total_pages="all",
+            )
+
+            # Handle different API response formats
+            if isinstance(ssid_statuses, dict) and "items" in ssid_statuses:
+                ssid_data = ssid_statuses["items"]
+            elif isinstance(ssid_statuses, list):
+                ssid_data = ssid_statuses
+            else:
+                logger.warning(
+                    "Unexpected SSID status format",
+                    org_id=org_id,
+                    response_type=type(ssid_statuses).__name__,
+                )
+                ssid_data = []
+
+            logger.debug(
+                "Successfully fetched MR SSID statuses",
+                org_id=org_id,
+                device_count=len(ssid_data) if ssid_data else 0,
+            )
+
+            # Process each device's SSID/radio data
+            for device_data in ssid_data:
+                serial = device_data.get("serial", "")
+                name = device_data.get("name", serial)
+                network = device_data.get("network", {})
+                network_id = network.get("id", "")
+                network_name = network.get("name", "")
+
+                # Track unique radios to avoid duplicates
+                processed_radios = set()
+
+                # Process basic service sets
+                basic_service_sets = device_data.get("basicServiceSets", [])
+                for bss in basic_service_sets:
+                    radio = bss.get("radio", {})
+                    radio_index = radio.get("index", "")
+                    band = radio.get("band", "")
+
+                    # Create unique key for this radio
+                    radio_key = f"{serial}:{band}:{radio_index}"
+
+                    # Skip if we've already processed this radio
+                    if radio_key in processed_radios:
+                        continue
+                    processed_radios.add(radio_key)
+
+                    # Radio broadcasting status
+                    is_broadcasting = radio.get("isBroadcasting", False)
+                    self._set_metric_value(
+                        "_mr_radio_broadcasting",
+                        {
+                            "serial": serial,
+                            "name": name,
+                            "network_id": network_id,
+                            "network_name": network_name,
+                            "band": band,
+                            "radio_index": radio_index,
+                        },
+                        1 if is_broadcasting else 0,
+                    )
+
+                    # Channel number
+                    channel = radio.get("channel")
+                    if channel is not None:
+                        self._set_metric_value(
+                            "_mr_radio_channel",
+                            {
+                                "serial": serial,
+                                "name": name,
+                                "network_id": network_id,
+                                "network_name": network_name,
+                                "band": band,
+                                "radio_index": radio_index,
+                            },
+                            channel,
+                        )
+
+                    # Channel width
+                    channel_width = radio.get("channelWidth")
+                    if channel_width is not None:
+                        self._set_metric_value(
+                            "_mr_radio_channel_width",
+                            {
+                                "serial": serial,
+                                "name": name,
+                                "network_id": network_id,
+                                "network_name": network_name,
+                                "band": band,
+                                "radio_index": radio_index,
+                            },
+                            channel_width,
+                        )
+
+                    # Transmit power
+                    power = radio.get("power")
+                    if power is not None:
+                        self._set_metric_value(
+                            "_mr_radio_power",
+                            {
+                                "serial": serial,
+                                "name": name,
+                                "network_id": network_id,
+                                "network_name": network_name,
+                                "band": band,
+                                "radio_index": radio_index,
+                            },
+                            power,
+                        )
+
+        except Exception:
+            logger.exception(
+                "Failed to collect MR SSID status metrics",
                 org_id=org_id,
             )
