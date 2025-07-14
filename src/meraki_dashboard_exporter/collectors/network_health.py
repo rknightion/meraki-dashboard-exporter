@@ -487,7 +487,7 @@ class NetworkHealthCollector(MetricCollector):
                     network_id,
                     timespan=1800,  # 30 minutes
                 ),
-                timeout=10.0,  # 10 second timeout
+                timeout=30.0,  # 10 second timeout
             )
 
             # Handle empty response (no data in timespan)
@@ -583,7 +583,7 @@ class NetworkHealthCollector(MetricCollector):
                     timespan=300,
                     resolution=300,
                 ),
-                timeout=10.0,  # 10 second timeout
+                timeout=30.0,  # 10 second timeout
             )
 
             # Handle empty response

@@ -46,7 +46,7 @@ class MRCollector(BaseDeviceCollector):
                         self.api.wireless.getDeviceWirelessStatus,
                         serial,
                     ),
-                    timeout=10.0,  # 10 second timeout
+                    timeout=30.0,  # 10 second timeout
                 )
             except TimeoutError:
                 logger.error(
@@ -113,7 +113,7 @@ class MRCollector(BaseDeviceCollector):
                     serial,
                     timespan=1800,  # 30 minutes
                 ),
-                timeout=10.0,  # 10 second timeout
+                timeout=30.0,  # 10 second timeout
             )
 
             # Handle empty response (no data in timespan)
