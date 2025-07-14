@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import FastAPI, Response
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 
+from .__version__ import __version__
 from .api.client import AsyncMerakiClient
 from .collectors.manager import CollectorManager
 from .core.config import Settings
@@ -231,7 +232,7 @@ class ExporterApp:
         app = FastAPI(
             title="Meraki Dashboard Exporter",
             description="Prometheus exporter for Cisco Meraki Dashboard metrics",
-            version="0.1.0",
+            version=__version__,
             lifespan=self.lifespan,
         )
 
@@ -240,7 +241,7 @@ class ExporterApp:
             """Root endpoint."""
             return {
                 "name": "Meraki Dashboard Exporter",
-                "version": "0.1.0",
+                "version": __version__,
                 "metrics_path": "/metrics",
             }
 
