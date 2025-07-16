@@ -94,7 +94,7 @@ Before releasing:
 ### Version Already Exists on PyPI
 If PyPI rejects the upload due to version conflict:
 1. Bump the version again
-2. Ensure you're not re-using a previously published version
+2. Ensure you're not reusing a previously published version
 
 ### GitHub CLI Not Found
 Install GitHub CLI:
