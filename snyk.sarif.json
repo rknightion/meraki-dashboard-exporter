@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Snyk",
+          "version": "latest",
+          "informationUri": "https://snyk.io",
+          "rules": [],
+          "properties": {
+            "project": {
+              "name": "meraki-dashboard-exporter",
+              "type": "python",
+              "targetRuntime": "python3.13"
+            },
+            "scanning": {
+              "vulnerabilities": true,
+              "licenses": true,
+              "code": true,
+              "container": true,
+              "iac": true
+            }
+          }
+        }
+      },
+      "results": [],
+      "properties": {
+        "coverage": [
+          {
+            "files": [
+              "src/**/*.py",
+              "pyproject.toml",
+              "Dockerfile",
+              "docker-compose*.yml",
+              ".github/workflows/*.yml"
+            ],
+            "isSupported": true
+          }
+        ]
+      }
+    }
+  ]
+}

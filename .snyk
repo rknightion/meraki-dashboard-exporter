@@ -1,0 +1,194 @@
+# Snyk (https://snyk.io) policy file
+version: v1.25.0
+
+# Language and package manager settings
+language-settings:
+  python:
+    enableLicensesScan: true
+    enableVulnerabilitiesScan: true
+    enableCodeQualityScan: true
+
+# Project metadata for better context
+project:
+  name: meraki-dashboard-exporter
+  type: python-application
+  description: Prometheus exporter for Cisco Meraki Dashboard API metrics
+
+# Scanning configuration
+scanning:
+  # Enable all scan types
+  vulnerabilities: true
+  licenses: true
+  code: true
+  container: true
+  iac: true
+
+  # Python-specific settings
+  python:
+    # Look for dependencies in these files
+    manifestFiles:
+      - pyproject.toml
+      - requirements.txt
+      - requirements-dev.txt
+    # Include development dependencies in scans
+    includeDev: true
+    # Scan for Python 3.13 compatibility
+    pythonVersion: "3.13"
+
+  # Docker scanning settings
+  docker:
+    # Scan our Docker images
+    dockerfile: Dockerfile
+    # Also scan multi-stage builds
+    scanMultiStage: true
+    # Include base image vulnerabilities
+    includeBaseImageVulns: true
+
+  # Infrastructure as Code scanning
+  iac:
+    # Scan Kubernetes/Docker Compose files
+    includeFiles:
+      - docker-compose*.yml
+      - k8s/*.yaml
+      - .github/workflows/*.yml
+    # Security and best practices checks
+    severityThreshold: low
+
+# Patches section for vulnerability remediation
+patches: {}
+
+# Ignore specific vulnerabilities (with justification)
+ignore: {}
+
+# License policies
+licenses:
+  # Allow these licenses
+  allow:
+    - MIT
+    - Apache-2.0
+    - BSD-3-Clause
+    - BSD-2-Clause
+    - ISC
+    - Python-2.0
+    - PSF-2.0
+    - CC0-1.0
+    - Unlicense
+  # Flag these licenses for review
+  review:
+    - GPL-2.0
+    - GPL-3.0
+    - LGPL-2.1
+    - LGPL-3.0
+    - AGPL-3.0
+  # Block these licenses
+  block:
+    - SSPL-1.0
+    - BUSL-1.1
+    - Commons-Clause
+
+# Severity thresholds
+severity:
+  # Fail builds on high or critical vulnerabilities
+  vulnerabilities:
+    failOn: high
+  # Warn on medium severity
+  code:
+    failOn: high
+  # Be strict about container security
+  container:
+    failOn: medium
+  # Infrastructure as code issues
+  iac:
+    failOn: medium
+
+# Custom rules for this project
+custom-rules:
+  # Ensure we're not exposing sensitive Meraki API data
+  - id: meraki-api-key-exposure
+    pattern: "MERAKI_API_KEY|meraki.*api.*key"
+    message: "Potential Meraki API key exposure"
+    severity: high
+
+  # Check for hardcoded endpoints
+  - id: hardcoded-endpoints
+    pattern: "https://api.meraki.com"
+    message: "Use environment variables for API endpoints"
+    severity: medium
+
+# Monitoring settings
+monitoring:
+  # Monitor production dependencies
+  runtimeMonitoring: true
+  # Alert on new vulnerabilities
+  alertOnNewVulns: true
+  # Frequency of monitoring
+  frequency: daily
+
+# Integration settings
+integrations:
+  # GitHub integration
+  github:
+    # Automatically create PRs for fixes
+    autofix: true
+    # Add security labels to PRs
+    prLabels:
+      - security
+      - dependencies
+    # Fail PR checks on policy violations
+    failPROnPolicyBreach: true
+
+# Notifications
+notifications:
+  # Send notifications for new vulnerabilities
+  newVulnerabilities: true
+  # Weekly summary reports
+  weeklyReport: true
+  # Alert on license policy violations
+  licensePolicyViolations: true
+
+# File patterns to exclude from scanning
+exclude:
+  # Test files
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests/**"
+  # Build artifacts
+  - "**/build/**"
+  - "**/dist/**"
+  - "**/*.egg-info/**"
+  # Cache directories
+  - "**/__pycache__/**"
+  - "**/.pytest_cache/**"
+  - "**/.mypy_cache/**"
+  - "**/.ruff_cache/**"
+  # Documentation
+  - "**/docs/**"
+  - "**/htmlcov/**"
+  # Virtual environments
+  - "**/.venv/**"
+  - "**/venv/**"
+  - "**/env/**"
+
+# Trust policies for dependencies
+trust:
+  # Trust official Python packages
+  - org: python
+  - org: pypa
+  # Trust well-known security packages
+  - name: cryptography
+  - name: certifi
+  # Trust Meraki SDK
+  - name: meraki
+
+# Additional security checks
+security:
+  # Check for secrets in code
+  enableSecretsScanning: true
+  # Check for outdated dependencies
+  enableOutdatedCheck: true
+  # Security headers in web responses
+  checkSecurityHeaders: true
+  # Check for SQL injection vulnerabilities
+  checkSQLInjection: true
+  # Check for XSS vulnerabilities
+  checkXSS: true

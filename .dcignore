@@ -1,0 +1,60 @@
+# .dcignore - Snyk Docker scan ignore file
+# This tells Snyk which files to exclude when scanning Docker images
+
+# Development and test files
+**/*_test.py
+**/test_*.py
+**/tests/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Documentation
+docs/
+*.md
+LICENSE
+CHANGELOG*
+
+# Development tools
+.git/
+.github/
+.gitignore
+.dockerignore
+Makefile
+.editorconfig
+.pre-commit-config.yaml
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build artifacts that shouldn't be in the image
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Cache directories
+.mypy_cache/
+.ruff_cache/
+pip-wheel-metadata/
+
+# Virtual environments (shouldn't be in Docker image)
+venv/
+.venv/
+env/
+.env/
+
+# Temporary files
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
