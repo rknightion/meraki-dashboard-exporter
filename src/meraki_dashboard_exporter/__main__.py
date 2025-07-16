@@ -34,7 +34,6 @@ def main() -> None:
             "  MERAKI_EXPORTER_HOST              Host to bind to (default: 0.0.0.0)\n"
             "  MERAKI_EXPORTER_PORT              Port to bind to (default: 9099)\n"
             "  MERAKI_EXPORTER_LOG_LEVEL         Log level (default: INFO)\n"
-            "  MERAKI_EXPORTER_DEVICE_TYPES      Comma-separated device types (default: MS,MR,MV,MT)\n"
             "\n"
             "For more information, visit: https://github.com/rknightion/meraki-dashboard-exporter\n"
         )

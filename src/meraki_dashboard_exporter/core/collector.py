@@ -339,8 +339,10 @@ class MetricCollector(ABC):
                 "DeviceCollector",
                 "NetworkHealthCollector",
                 "SensorCollector",
+                "AlertsCollector",
+                "ConfigCollector",
             ]:
-                for tier in ["fast", "medium"]:
+                for tier in ["fast", "medium", "slow"]:
                     # Initialize gauge with 0
                     cls._collector_last_success.labels(
                         collector=collector_name,

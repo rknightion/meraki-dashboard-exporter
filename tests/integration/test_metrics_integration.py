@@ -27,7 +27,6 @@ def mock_settings(monkeypatch):
     """Create mock settings for integration tests."""
     monkeypatch.setenv("MERAKI_API_KEY", "a" * 40)
     monkeypatch.setenv("MERAKI_EXPORTER_ORG_ID", "123456")
-    monkeypatch.setenv("MERAKI_EXPORTER_DEVICE_TYPES", '["MT", "MR", "MS"]')
     settings = Settings()
     return settings
 
@@ -54,7 +53,6 @@ class TestMetricsIntegration:
         """Test a complete collection cycle with multiple collectors."""
         # Create settings without org_id for full testing
         monkeypatch.setenv("MERAKI_API_KEY", "a" * 40)
-        monkeypatch.setenv("MERAKI_EXPORTER_DEVICE_TYPES", '["MT", "MR", "MS"]')
         # No org_id set
         mock_settings = Settings()
 
@@ -253,37 +251,3 @@ class TestMetricsIntegration:
         # Verify other collectors were still called despite device collector failure
         mock_api_client.api.organizations.getOrganizationLicenses.assert_called()
         mock_api_client.api.organizations.getOrganizationAssuranceAlerts.assert_called()
-
-    @pytest.mark.asyncio
-    async def test_empty_device_types_configuration(self, mock_api_client, monkeypatch):
-        """Test behavior when no device types are configured."""
-        # Configure with empty device types
-        monkeypatch.setenv("MERAKI_API_KEY", "a" * 40)
-        monkeypatch.setenv("MERAKI_EXPORTER_DEVICE_TYPES", "[]")
-        settings = Settings()
-
-        # Use isolated registry
-        isolated_registry = CollectorRegistry()
-        monkeypatch.setattr("meraki_dashboard_exporter.core.collector.REGISTRY", isolated_registry)
-
-        # Set up mock responses
-        mock_api_client.api.organizations.getOrganizationLicenses = MagicMock(return_value=[])
-        mock_api_client.api.organizations.getOrganizationNetworks = MagicMock(return_value=[])
-        mock_api_client.api.organizations.getOrganizationApiRequests = MagicMock(return_value=[])
-        mock_api_client.api.organizations.getOrganizationAssuranceAlerts = MagicMock(
-            return_value=[]
-        )
-
-        # Mock getOrganizations to return an org
-        mock_api_client.api.organizations.getOrganizations = MagicMock(
-            return_value=[{"id": "123", "name": "Test Org"}]
-        )
-
-        # Create collector manager
-        manager = CollectorManager(client=mock_api_client, settings=settings)
-
-        # Run collection
-        await manager.collect_initial()
-
-        # Organization collector should still run even with no device types
-        mock_api_client.api.organizations.getOrganizationLicenses.assert_called()

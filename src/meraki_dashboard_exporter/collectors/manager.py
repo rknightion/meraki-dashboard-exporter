@@ -35,6 +35,7 @@ class CollectorManager:
         self.collectors: dict[UpdateTier, list[MetricCollector]] = {
             UpdateTier.FAST: [],
             UpdateTier.MEDIUM: [],
+            UpdateTier.SLOW: [],
         }
         self._initialize_collectors()
 
@@ -42,6 +43,7 @@ class CollectorManager:
         """Initialize all enabled collectors."""
         # Import here to avoid circular imports
         from .alerts import AlertsCollector
+        from .config import ConfigCollector
         from .device import DeviceCollector
         from .network_health import NetworkHealthCollector
         from .organization import OrganizationCollector
@@ -56,17 +58,13 @@ class CollectorManager:
         self.collectors[UpdateTier.MEDIUM].append(org_collector)
         logger.info("Initialized organization collector (MEDIUM tier)")
 
-        # Initialize device collector if any device types are specified
-        if self.settings.device_types:
-            device_collector = DeviceCollector(
-                api=self.client.api,
-                settings=self.settings,
-            )
-            self.collectors[UpdateTier.MEDIUM].append(device_collector)
-            logger.info(
-                "Initialized device collector (MEDIUM tier)",
-                device_types=self.settings.device_types,
-            )
+        # Initialize device collector
+        device_collector = DeviceCollector(
+            api=self.client.api,
+            settings=self.settings,
+        )
+        self.collectors[UpdateTier.MEDIUM].append(device_collector)
+        logger.info("Initialized device collector (MEDIUM tier)")
 
         # MEDIUM tier collectors
         # Network health collector
@@ -86,19 +84,27 @@ class CollectorManager:
         logger.info("Initialized alerts collector (MEDIUM tier)")
 
         # FAST tier collectors
-        # Sensor collector if MT devices are enabled
-        if "MT" in self.settings.device_types:
-            sensor_collector = SensorCollector(
-                api=self.client.api,
-                settings=self.settings,
-            )
-            self.collectors[UpdateTier.FAST].append(sensor_collector)
-            logger.info("Initialized sensor collector (FAST tier)")
+        # Sensor collector
+        sensor_collector = SensorCollector(
+            api=self.client.api,
+            settings=self.settings,
+        )
+        self.collectors[UpdateTier.FAST].append(sensor_collector)
+        logger.info("Initialized sensor collector (FAST tier)")
+
+        # SLOW tier collectors
+        # Configuration collector for security settings
+        config_collector = ConfigCollector(
+            api=self.client.api,
+            settings=self.settings,
+        )
+        self.collectors[UpdateTier.SLOW].append(config_collector)
+        logger.info("Initialized configuration collector (SLOW tier)")
 
     async def collect_initial(self) -> None:
         """Run initial collection from all tiers sequentially to avoid API overload."""
         # Collect tier by tier to reduce API load during startup
-        for tier in [UpdateTier.MEDIUM, UpdateTier.FAST]:
+        for tier in [UpdateTier.SLOW, UpdateTier.MEDIUM, UpdateTier.FAST]:
             try:
                 await self.collect_tier(tier)
                 # Small delay between tiers to avoid connection pool exhaustion
@@ -137,8 +143,10 @@ class CollectorManager:
         # Set timeout based on tier
         if tier == UpdateTier.FAST:
             timeout = 60  # 1 minute for fast tier
-        else:  # MEDIUM
+        elif tier == UpdateTier.MEDIUM:
             timeout = 120  # 2 minutes for medium tier
+        else:  # SLOW
+            timeout = 180  # 3 minutes for slow tier
 
         for collector in tier_collectors:
             collector_name = collector.__class__.__name__
@@ -189,8 +197,10 @@ class CollectorManager:
         """
         if tier == UpdateTier.FAST:
             return self.settings.fast_update_interval
-        else:  # MEDIUM
+        elif tier == UpdateTier.MEDIUM:
             return self.settings.medium_update_interval
+        else:  # SLOW
+            return self.settings.slow_update_interval
 
     def register_collector(self, collector: MetricCollector) -> None:
         """Register an additional collector.

@@ -49,11 +49,12 @@ class AsyncMerakiClient:
         if self._api is None:
             self._api = meraki.DashboardAPI(
                 api_key=self.settings.api_key.get_secret_value(),
+                base_url=self.settings.api_base_url,
                 output_log=False,
                 suppress_logging=False,
                 inherit_logging_config=True,
                 single_request_timeout=self.settings.api_timeout,
-                maximum_retries=4,
+                maximum_retries=self.settings.api_max_retries,
                 action_batch_retry_wait_time=10,
                 nginx_429_retry_wait_time=5,
                 wait_on_rate_limit=True,

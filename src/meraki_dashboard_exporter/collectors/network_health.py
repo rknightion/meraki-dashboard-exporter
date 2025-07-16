@@ -48,7 +48,7 @@ class NetworkHealthCollector(MetricCollector):
         metric = getattr(self, metric_name, None)
         if metric is None:
             logger.debug(
-                "Metric not available",
+                "Metric not found",
                 metric_name=metric_name,
             )
             return
@@ -56,7 +56,7 @@ class NetworkHealthCollector(MetricCollector):
         try:
             metric.labels(**labels).set(value)
             logger.debug(
-                "Successfully set metric value",
+                "Set metric value",
                 metric_name=metric_name,
                 labels=labels,
                 value=value,
@@ -114,6 +114,13 @@ class NetworkHealthCollector(MetricCollector):
         self._network_wireless_upload_kbps = self._create_gauge(
             "meraki_network_wireless_upload_kbps",
             "Network-wide wireless upload bandwidth in kilobits per second",
+            labelnames=["network_id", "network_name"],
+        )
+
+        # Bluetooth clients detected by MR devices
+        self._network_bluetooth_clients_total = self._create_gauge(
+            "meraki_network_bluetooth_clients_total",
+            "Total number of Bluetooth clients detected by MR devices in the last 5 minutes",
             labelnames=["network_id", "network_name"],
         )
 
@@ -185,7 +192,14 @@ class NetworkHealthCollector(MetricCollector):
                     if "wireless" in network.get("productTypes", [])
                 ]
 
-                all_tasks = tasks + connection_tasks + data_rate_tasks
+                # Also collect Bluetooth clients for wireless networks
+                bluetooth_tasks = [
+                    self._collect_network_bluetooth_clients(network)
+                    for network in batch
+                    if "wireless" in network.get("productTypes", [])
+                ]
+
+                all_tasks = tasks + connection_tasks + data_rate_tasks + bluetooth_tasks
                 if all_tasks:
                     await asyncio.gather(*all_tasks, return_exceptions=True)
 
@@ -231,13 +245,10 @@ class NetworkHealthCollector(MetricCollector):
 
             logger.debug("Fetching channel utilization data", network_id=network_id)
             self._track_api_call("getNetworkNetworkHealthChannelUtilization")
-            channel_util = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self.api.networks.getNetworkNetworkHealthChannelUtilization,
-                    network_id,
-                    total_pages="all",
-                ),
-                timeout=30.0,
+            channel_util = await asyncio.to_thread(
+                self.api.networks.getNetworkNetworkHealthChannelUtilization,
+                network_id,
+                total_pages="all",
             )
             logger.debug(
                 "Successfully fetched channel utilization",
@@ -260,9 +271,9 @@ class NetworkHealthCollector(MetricCollector):
                         latest_2_4 = ap_data["wifi0"][0]  # Get most recent data
                         total_util = latest_2_4.get("utilization", 0)
                         wifi_util = latest_2_4.get("wifi", 0)
-                        non_wifi_util = latest_2_4.get("non_wifi", 0)
+                        non_wifi_util = latest_2_4.get("nonWifi", 0)
 
-                        # Per-AP metrics
+                        # Set per-AP metrics for total utilization
                         self._set_metric_value(
                             "_ap_utilization_2_4ghz",
                             {
@@ -276,6 +287,7 @@ class NetworkHealthCollector(MetricCollector):
                             total_util,
                         )
 
+                        # Set per-AP metrics for WiFi utilization
                         self._set_metric_value(
                             "_ap_utilization_2_4ghz",
                             {
@@ -289,6 +301,7 @@ class NetworkHealthCollector(MetricCollector):
                             wifi_util,
                         )
 
+                        # Set per-AP metrics for non-WiFi utilization
                         self._set_metric_value(
                             "_ap_utilization_2_4ghz",
                             {
@@ -302,7 +315,7 @@ class NetworkHealthCollector(MetricCollector):
                             non_wifi_util,
                         )
 
-                        # Add to network totals
+                        # Update network totals
                         network_2_4ghz_total["total"] += total_util
                         network_2_4ghz_total["wifi"] += wifi_util
                         network_2_4ghz_total["non_wifi"] += non_wifi_util
@@ -313,9 +326,9 @@ class NetworkHealthCollector(MetricCollector):
                         latest_5 = ap_data["wifi1"][0]  # Get most recent data
                         total_util = latest_5.get("utilization", 0)
                         wifi_util = latest_5.get("wifi", 0)
-                        non_wifi_util = latest_5.get("non_wifi", 0)
+                        non_wifi_util = latest_5.get("nonWifi", 0)
 
-                        # Per-AP metrics
+                        # Set per-AP metrics for total utilization
                         self._set_metric_value(
                             "_ap_utilization_5ghz",
                             {
@@ -329,6 +342,7 @@ class NetworkHealthCollector(MetricCollector):
                             total_util,
                         )
 
+                        # Set per-AP metrics for WiFi utilization
                         self._set_metric_value(
                             "_ap_utilization_5ghz",
                             {
@@ -342,6 +356,7 @@ class NetworkHealthCollector(MetricCollector):
                             wifi_util,
                         )
 
+                        # Set per-AP metrics for non-WiFi utilization
                         self._set_metric_value(
                             "_ap_utilization_5ghz",
                             {
@@ -355,14 +370,20 @@ class NetworkHealthCollector(MetricCollector):
                             non_wifi_util,
                         )
 
-                        # Add to network totals
+                        # Update network totals
                         network_5ghz_total["total"] += total_util
                         network_5ghz_total["wifi"] += wifi_util
                         network_5ghz_total["non_wifi"] += non_wifi_util
                         network_5ghz_total["count"] += 1
 
-                # Set network-wide averages
+                # Calculate and set network-wide averages
                 if network_2_4ghz_total["count"] > 0:
+                    avg_total_2_4 = network_2_4ghz_total["total"] / network_2_4ghz_total["count"]
+                    avg_wifi_2_4 = network_2_4ghz_total["wifi"] / network_2_4ghz_total["count"]
+                    avg_non_wifi_2_4 = (
+                        network_2_4ghz_total["non_wifi"] / network_2_4ghz_total["count"]
+                    )
+
                     self._set_metric_value(
                         "_network_utilization_2_4ghz",
                         {
@@ -370,7 +391,7 @@ class NetworkHealthCollector(MetricCollector):
                             "network_name": network_name,
                             "type": "total",
                         },
-                        network_2_4ghz_total["total"] / network_2_4ghz_total["count"],
+                        avg_total_2_4,
                     )
 
                     self._set_metric_value(
@@ -380,7 +401,7 @@ class NetworkHealthCollector(MetricCollector):
                             "network_name": network_name,
                             "type": "wifi",
                         },
-                        network_2_4ghz_total["wifi"] / network_2_4ghz_total["count"],
+                        avg_wifi_2_4,
                     )
 
                     self._set_metric_value(
@@ -390,10 +411,14 @@ class NetworkHealthCollector(MetricCollector):
                             "network_name": network_name,
                             "type": "non_wifi",
                         },
-                        network_2_4ghz_total["non_wifi"] / network_2_4ghz_total["count"],
+                        avg_non_wifi_2_4,
                     )
 
                 if network_5ghz_total["count"] > 0:
+                    avg_total_5 = network_5ghz_total["total"] / network_5ghz_total["count"]
+                    avg_wifi_5 = network_5ghz_total["wifi"] / network_5ghz_total["count"]
+                    avg_non_wifi_5 = network_5ghz_total["non_wifi"] / network_5ghz_total["count"]
+
                     self._set_metric_value(
                         "_network_utilization_5ghz",
                         {
@@ -401,7 +426,7 @@ class NetworkHealthCollector(MetricCollector):
                             "network_name": network_name,
                             "type": "total",
                         },
-                        network_5ghz_total["total"] / network_5ghz_total["count"],
+                        avg_total_5,
                     )
 
                     self._set_metric_value(
@@ -411,7 +436,7 @@ class NetworkHealthCollector(MetricCollector):
                             "network_name": network_name,
                             "type": "wifi",
                         },
-                        network_5ghz_total["wifi"] / network_5ghz_total["count"],
+                        avg_wifi_5,
                     )
 
                     self._set_metric_value(
@@ -421,32 +446,23 @@ class NetworkHealthCollector(MetricCollector):
                             "network_name": network_name,
                             "type": "non_wifi",
                         },
-                        network_5ghz_total["non_wifi"] / network_5ghz_total["count"],
+                        avg_non_wifi_5,
                     )
 
                 logger.debug(
-                    "Collected channel utilization",
+                    "Successfully collected RF health metrics",
                     network_id=network_id,
-                    ap_count=len(channel_util),
-                )
-            else:
-                logger.debug(
-                    "No channel utilization data available",
-                    network_id=network_id,
+                    network_name=network_name,
+                    ap_2_4ghz_count=network_2_4ghz_total["count"],
+                    ap_5ghz_count=network_5ghz_total["count"],
                 )
 
-        except TimeoutError:
-            logger.error(
-                "Timeout collecting RF health metrics",
-                network_id=network_id,
-                network_name=network_name,
-            )
         except Exception as e:
             # Log at debug level if it's just not available (400/404 errors)
             error_str = str(e)
             if "400" in error_str or "404" in error_str or "Bad Request" in error_str:
                 logger.debug(
-                    "RF health metrics not available for network",
+                    "Channel utilization not available",
                     network_id=network_id,
                     network_name=network_name,
                     error=error_str,
@@ -481,13 +497,10 @@ class NetworkHealthCollector(MetricCollector):
             self._track_api_call("getNetworkWirelessConnectionStats")
 
             # Use 30 minute (1800 second) timespan as minimum
-            connection_stats = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self.api.wireless.getNetworkWirelessConnectionStats,
-                    network_id,
-                    timespan=1800,  # 30 minutes
-                ),
-                timeout=30.0,  # 10 second timeout
+            connection_stats = await asyncio.to_thread(
+                self.api.wireless.getNetworkWirelessConnectionStats,
+                network_id,
+                timespan=1800,  # 30 minutes
             )
 
             # Handle empty response (no data in timespan)
@@ -529,12 +542,6 @@ class NetworkHealthCollector(MetricCollector):
                 stats=connection_stats,
             )
 
-        except TimeoutError:
-            logger.error(
-                "Timeout fetching network connection stats",
-                network_id=network_id,
-                network_name=network_name,
-            )
         except Exception as e:
             # Log at debug level if it's just not available (400/404 errors)
             error_str = str(e)
@@ -576,14 +583,11 @@ class NetworkHealthCollector(MetricCollector):
 
             # Use 300 second (5 minute) resolution with recent timespan
             # Using timespan of 300 seconds to get the most recent 5-minute data block
-            data_rate_history = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self.api.wireless.getNetworkWirelessDataRateHistory,
-                    network_id,
-                    timespan=300,
-                    resolution=300,
-                ),
-                timeout=30.0,  # 10 second timeout
+            data_rate_history = await asyncio.to_thread(
+                self.api.wireless.getNetworkWirelessDataRateHistory,
+                network_id,
+                timespan=300,
+                resolution=300,
             )
 
             # Handle empty response
@@ -632,12 +636,6 @@ class NetworkHealthCollector(MetricCollector):
                     upload_kbps=upload_kbps,
                 )
 
-        except TimeoutError:
-            logger.error(
-                "Timeout fetching network data rates",
-                network_id=network_id,
-                network_name=network_name,
-            )
         except Exception as e:
             # Log at debug level if it's just not available (400/404 errors)
             error_str = str(e)
@@ -651,6 +649,83 @@ class NetworkHealthCollector(MetricCollector):
             else:
                 logger.exception(
                     "Failed to collect network data rates",
+                    network_id=network_id,
+                    network_name=network_name,
+                )
+
+    async def _collect_network_bluetooth_clients(self, network: dict[str, Any]) -> None:
+        """Collect Bluetooth clients detected by MR devices in a network.
+
+        Parameters
+        ----------
+        network : dict[str, Any]
+            Network data.
+
+        """
+        network_id = network["id"]
+        network_name = network.get("name", network_id)
+
+        try:
+            logger.debug(
+                "Fetching Bluetooth clients",
+                network_id=network_id,
+                network_name=network_name,
+            )
+
+            # Track API call
+            self._track_api_call("getNetworkBluetoothClients")
+
+            # Get Bluetooth clients for the last 5 minutes with page size 1000
+            bluetooth_clients = await asyncio.to_thread(
+                self.api.networks.getNetworkBluetoothClients,
+                network_id,
+                timespan=300,  # 5 minutes
+                perPage=1000,
+                total_pages="all",
+            )
+
+            # Count the total number of Bluetooth clients
+            client_count = len(bluetooth_clients) if bluetooth_clients else 0
+
+            # Set the metric
+            self._set_metric_value(
+                "_network_bluetooth_clients_total",
+                {
+                    "network_id": network_id,
+                    "network_name": network_name,
+                },
+                client_count,
+            )
+
+            logger.debug(
+                "Successfully collected Bluetooth clients",
+                network_id=network_id,
+                network_name=network_name,
+                client_count=client_count,
+            )
+
+        except Exception as e:
+            # Log at debug level if it's just not available (400/404 errors)
+            error_str = str(e)
+            if "400" in error_str or "404" in error_str or "Bad Request" in error_str:
+                logger.debug(
+                    "Bluetooth clients API not available",
+                    network_id=network_id,
+                    network_name=network_name,
+                    error=error_str,
+                )
+                # Set metric to 0 when API is not available
+                self._set_metric_value(
+                    "_network_bluetooth_clients_total",
+                    {
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    0,
+                )
+            else:
+                logger.exception(
+                    "Failed to collect Bluetooth clients",
                     network_id=network_id,
                     network_name=network_name,
                 )

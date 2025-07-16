@@ -1,0 +1,75 @@
+# Refactoring Analysis and Recommendations for meraki-dashboard-exporter
+
+This document provides a prioritized list of refactoring recommendations for the `meraki-dashboard-exporter` project. The goal of these recommendations is to improve the project's structure, maintainability, and extensibility, making it easier for both human developers and AI agents to contribute to the project effectively.
+
+Each recommendation includes:
+- **Priority**: The recommended order of implementation (High, Medium, Low).
+- **What**: A concise description of the proposed change.
+- **Why**: The justification for the change, explaining the benefits.
+- **How**: A high-level plan for implementing the change.
+
+---
+
+### 1. Dynamic Collector Loading and Registration
+
+- **Priority**: High
+- **What**: Refactor the `CollectorManager` to dynamically discover and register collectors instead of hardcoding their initialization.
+- **Why**: The current implementation in `collectors/manager.py` hardcodes the list of collectors. This makes adding new collectors cumbersome and error-prone, as it requires modifying the manager's code. A dynamic loading mechanism will make the system more extensible and modular, allowing new collectors to be added just by creating a new file. This aligns with the "Open/Closed Principle" and simplifies future development for an LLM.
+- **How**:
+    1.  Modify the `_initialize_collectors` method in `CollectorManager` to scan the `meraki_dashboard_exporter.collectors` and `meraki_dashboard_exporter.collectors.devices` packages for classes that inherit from `MetricCollector`.
+    2.  Use Python's `importlib` and `pkgutil` to iterate through modules in the collectors package.
+    3.  Use `inspect.getmembers` to find classes that are subclasses of `MetricCollector` but are not `MetricCollector` itself.
+    4.  Instantiate each discovered collector and register it using the existing `register_collector` method.
+    5.  Ensure that collectors are only initialized if their corresponding `device_types` are enabled in the settings.
+
+---
+
+### 2. Centralized Metric Definition and Management
+
+- **Priority**: High
+- **What**: Centralize all Prometheus metric definitions into a single location (e.g., `core/metrics.py`) instead of defining them within each collector.
+- **Why**: Currently, each collector defines its own Prometheus metrics. This decentralization makes it difficult to get a holistic view of all exported metrics, leads to code duplication (e.g., label names), and increases the risk of inconsistent metric naming and labeling. Centralizing metric definitions will create a single source of truth, improve consistency, and make it easier for an LLM to understand and add new metrics.
+- **How**:
+    1.  Create a new file `src/meraki_dashboard_exporter/core/metrics.py`.
+    2.  Define all `Gauge`, `Counter`, and `Histogram` objects in this file, using the names from `core/constants.py`.
+    3.  In the `MetricCollector` base class, instead of methods like `_create_gauge`, provide a way to access the centrally defined metrics.
+    4.  Refactor all collector subclasses to use the centralized metrics instead of creating their own. The `_initialize_metrics` method in each collector will become much simpler or even be removed.
+
+---
+
+### 3. Refactor Device-Specific Collectors
+
+- **Priority**: Medium
+- **What**: Create a unified `DeviceCollector` that handles all device types, with device-specific logic delegated to smaller, dedicated classes.
+- **Why**: The current structure has a `DeviceCollector` and separate collectors for device types like `SensorCollector`. This can be confusing. A better approach is to have a single `DeviceCollector` that iterates through all devices and then dispatches to specialized handlers for each device type (`MS`, `MR`, `MT`, etc.). This improves organization and makes it clearer how to add support for new device types or new device-specific metrics.
+- **How**:
+    1.  Create a `collectors/devices/` subpackage if it doesn't exist.
+    2.  Create base classes/protocols for device-specific metric collection (e.g., `DeviceMetricProvider`).
+    3.  Implement specific metric providers for each device type (e.g., `MS_Metrics`, `MR_Metrics`, `MT_Metrics`) in the `collectors/devices/` directory.
+    4.  The main `DeviceCollector` will fetch all devices from the organization.
+    5.  For each device, it will identify its type and call the appropriate metric provider to collect the specific metrics for that device.
+    6.  The `SensorCollector` logic should be merged into this new structure as the handler for `MT` devices.
+
+---
+
+### 4. Simplify Configuration with Pydantic-Settings
+
+- **Priority**: Medium
+- **What**: Refactor the `Settings` class in `core/config.py` to better leverage `pydantic-settings` features and improve clarity.
+- **Why**: The current configuration is good but can be made more robust and clearer. For example, the handling of `MERAKI_API_KEY` without a prefix can be made more explicit. Using more of Pydantic's features can simplify validation and make the configuration easier to manage.
+- **How**:
+    1.  In the `Settings` class, explicitly define the `MERAKI_API_KEY` field without the `MERAKI_EXPORTER_` prefix by using `Field(validation_alias=...)` and making it clear in the documentation.
+    2.  Review the validators. For example, the `api_key` validator can be more specific about the expected format if one exists.
+    3.  Group related settings within the class using comments or nested classes if it improves readability.
+
+---
+
+### 5. Improve Application and Collector Lifecycle Management
+
+- **Priority**: Low
+- **What**: Refine the application startup and shutdown logic, and the collector performance metric initialization.
+- **Why**: The current lifecycle management in `app.py` and `core/collector.py` is functional but has minor areas for improvement. The global `_app_instance` can be problematic for testing, and the class-level initialization of performance metrics in `MetricCollector` can be fragile.
+- **How**:
+    1.  **Application Factory**: Instead of a global `_app_instance`, consistently use the `create_app()` factory pattern. This improves testability by allowing the creation of multiple app instances with different configurations.
+    2.  **Collector Metrics**: Refactor the performance metric initialization in `MetricCollector`. Instead of a class-level flag, initialize these metrics once in the `CollectorManager` or `ExporterApp` and pass the registry or the metrics themselves to the collectors. This avoids potential race conditions and makes the dependency explicit.
+    3.  **Initial Collection**: The `collect_initial` method in `CollectorManager` runs all tiers sequentially. This is good, but it could be made more robust by allowing configuration of this behavior, or by running them in parallel with a rate limiter on the API client to prevent initial burst issues.

@@ -40,21 +40,10 @@ class MRCollector(BaseDeviceCollector):
             )
             self.parent._track_api_call("getDeviceWirelessStatus")
 
-            try:
-                status = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        self.api.wireless.getDeviceWirelessStatus,
-                        serial,
-                    ),
-                    timeout=30.0,  # 10 second timeout
-                )
-            except TimeoutError:
-                logger.error(
-                    "Timeout fetching wireless status",
-                    serial=serial,
-                    name=name,
-                )
-                return
+            status = await asyncio.to_thread(
+                self.api.wireless.getDeviceWirelessStatus,
+                serial,
+            )
 
             logger.debug(
                 "Successfully fetched wireless status",
@@ -107,13 +96,10 @@ class MRCollector(BaseDeviceCollector):
             self.parent._track_api_call("getDeviceWirelessConnectionStats")
 
             # Use 30 minute (1800 second) timespan as minimum
-            connection_stats = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self.api.wireless.getDeviceWirelessConnectionStats,
-                    serial,
-                    timespan=1800,  # 30 minutes
-                ),
-                timeout=30.0,  # 10 second timeout
+            connection_stats = await asyncio.to_thread(
+                self.api.wireless.getDeviceWirelessConnectionStats,
+                serial,
+                timespan=1800,  # 30 minutes
             )
 
             # Handle empty response (no data in timespan)
@@ -153,12 +139,6 @@ class MRCollector(BaseDeviceCollector):
                 stats=stats,
             )
 
-        except TimeoutError:
-            logger.error(
-                "Timeout fetching connection stats",
-                serial=serial,
-                name=name,
-            )
         except Exception:
             logger.exception(
                 "Failed to collect connection stats",
