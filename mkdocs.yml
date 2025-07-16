@@ -1,0 +1,85 @@
+site_name: Meraki Dashboard Exporter
+site_description: A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry support
+site_url: https://rknightion.github.io/meraki-dashboard-exporter/
+repo_name: rknightion/meraki-dashboard-exporter
+repo_url: https://github.com/rknightion/meraki-dashboard-exporter
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Configuration: getting-started/configuration.md
+    - Quick Start: getting-started/quickstart.md
+  - Metrics Reference:
+    - Overview: metrics/overview.md
+    - Organization Metrics: metrics/organization.md
+    - Device Metrics: metrics/devices.md
+    - Alert Metrics: metrics/alerts.md
+  - Operations:
+    - Deployment: operations/deployment.md
+    - Monitoring: operations/monitoring.md
+    - Troubleshooting: operations/troubleshooting.md
+    - Performance Tuning: operations/performance.md
+  - Integration:
+    - Prometheus: integration/prometheus.md
+    - Grafana: integration/grafana.md
+    - OpenTelemetry: integration/opentelemetry.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/rknightion/meraki-dashboard-exporter
+
+copyright: Copyright &copy; 2024 Rob Knighton
