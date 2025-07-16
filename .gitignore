@@ -3,6 +3,13 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Snyk files
+.snyk.d/
+.dccache
+snyk-*.json
+snyk-*.log
+!snyk.sarif.json
+
 # C extensions
 *.so
 
