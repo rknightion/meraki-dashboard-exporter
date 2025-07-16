@@ -58,6 +58,12 @@ class OrganizationCollector(MetricCollector):
             labelnames=["org_id", "org_name", "device_type"],
         )
 
+        self._devices_by_model_total = self._create_gauge(
+            "meraki_org_devices_by_model_total",
+            "Total number of devices by specific model",
+            labelnames=["org_id", "org_name", "model"],
+        )
+
         # License metrics
         self._licenses_total = self._create_gauge(
             MetricName.ORG_LICENSES_TOTAL,
@@ -136,6 +142,9 @@ class OrganizationCollector(MetricCollector):
 
             logger.debug("Collecting device metrics", org_id=org_id)
             await self._collect_device_metrics(org_id, org_name)
+
+            logger.debug("Collecting device counts by model", org_id=org_id)
+            await self._collect_device_counts_by_model(org_id, org_name)
 
             logger.debug("Collecting license metrics", org_id=org_id)
             await self._collect_license_metrics(org_id, org_name)
@@ -289,6 +298,60 @@ class OrganizationCollector(MetricCollector):
         except Exception:
             logger.exception(
                 "Failed to collect device metrics",
+                org_id=org_id,
+                org_name=org_name,
+            )
+
+    async def _collect_device_counts_by_model(self, org_id: str, org_name: str) -> None:
+        """Collect device counts by specific model.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        try:
+            logger.debug("Fetching device counts by model", org_id=org_id)
+            self._track_api_call("getOrganizationDevicesOverviewByModel")
+            overview = await asyncio.to_thread(
+                self.api.organizations.getOrganizationDevicesOverviewByModel,
+                org_id,
+            )
+
+            # The response should have a 'counts' field with array of model counts
+            counts = overview.get("counts", [])
+            logger.debug(
+                "Successfully fetched device model counts",
+                org_id=org_id,
+                model_count=len(counts),
+            )
+
+            # Set metrics for each model
+            for model_data in counts:
+                model = model_data.get("model", "Unknown")
+                count = model_data.get("total", 0)
+
+                if self._devices_by_model_total:
+                    self._devices_by_model_total.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                        model=model,
+                    ).set(count)
+                    logger.debug(
+                        "Set device count by model",
+                        org_id=org_id,
+                        model=model,
+                        count=count,
+                    )
+                else:
+                    logger.error("_devices_by_model_total metric not initialized")
+
+        except Exception:
+            logger.exception(
+                "Failed to collect device counts by model",
                 org_id=org_id,
                 org_name=org_name,
             )
@@ -471,42 +534,67 @@ class OrganizationCollector(MetricCollector):
         # Extract data from overview
         status = overview.get("status", "Unknown")
         expiration_date = overview.get("expirationDate")
+        licensed_device_counts = overview.get("licensedDeviceCounts", {})
 
-        # Set total licenses metric for co-termination model
-        if self._licenses_total:
-            self._licenses_total.labels(
+        # Set total licenses metric for each device type in co-termination model
+        if self._licenses_total and licensed_device_counts:
+            # Process each device type in the licensed device counts
+            for device_type, count in licensed_device_counts.items():
+                self._licenses_total.labels(
+                    org_id=org_id,
+                    org_name=org_name,
+                    license_type=device_type,
+                    status=status,
+                ).set(count)
+                logger.debug(
+                    "Set license count",
+                    org_id=org_id,
+                    device_type=device_type,
+                    count=count,
+                    status=status,
+                )
+        elif not self._licenses_total:
+            logger.error("_licenses_total metric not initialized")
+        else:
+            logger.warning(
+                "No licensed device counts in overview",
                 org_id=org_id,
                 org_name=org_name,
-                license_type="co-termination",
-                status=status,
-            ).set(1)  # Co-term is a single license
-        else:
-            logger.error("_licenses_total metric not initialized")
+            )
 
         # Check if expiring soon
-        if expiration_date and status == "OK" and self._licenses_expiring:
+        if expiration_date and status == "OK":
             now = datetime.now(UTC)
             exp_dt = self._parse_meraki_date(expiration_date)
             if exp_dt:
                 days_until_expiry = (exp_dt - now).days
-                if days_until_expiry <= 30:
-                    self._licenses_expiring.labels(
-                        org_id=org_id,
-                        org_name=org_name,
-                        license_type="co-termination",
-                    ).set(1)
-                else:
-                    self._licenses_expiring.labels(
-                        org_id=org_id,
-                        org_name=org_name,
-                        license_type="co-termination",
-                    ).set(0)
+
+                # For co-termination, all licenses expire together
+                # Set expiring metric for each device type if within 30 days
+                if self._licenses_expiring and licensed_device_counts:
+                    for device_type, count in licensed_device_counts.items():
+                        if days_until_expiry <= 30:
+                            self._licenses_expiring.labels(
+                                org_id=org_id,
+                                org_name=org_name,
+                                license_type=device_type,
+                            ).set(count)
+                        else:
+                            self._licenses_expiring.labels(
+                                org_id=org_id,
+                                org_name=org_name,
+                                license_type=device_type,
+                            ).set(0)
+                        logger.debug(
+                            "Set expiring license count",
+                            org_id=org_id,
+                            device_type=device_type,
+                            count=count if days_until_expiry <= 30 else 0,
+                            days_until_expiry=days_until_expiry,
+                        )
             else:
-                # Set to 0 if we couldn't parse the date
-                self._licenses_expiring.labels(
+                logger.warning(
+                    "Could not parse expiration date",
                     org_id=org_id,
-                    org_name=org_name,
-                    license_type="co-termination",
-                ).set(0)
-        elif not self._licenses_expiring:
-            logger.error("_licenses_expiring metric not initialized")
+                    expiration_date=expiration_date,
+                )

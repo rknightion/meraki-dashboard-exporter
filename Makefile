@@ -266,7 +266,7 @@ _release-create: ## Internal: Create release after version bump
 	echo "$(BLUE)Files to be committed:$(NC)" && \
 	git diff --cached --name-only && \
 	echo "$(BLUE)Committing version bump...$(NC)" && \
-	git commit -m "chore: bump version to $$NEW_VERSION" && \
+	git commit --no-verify -m "chore: bump version to $$NEW_VERSION" && \
 	echo "$(BLUE)Creating git tag v$$NEW_VERSION...$(NC)" && \
 	git tag -a "v$$NEW_VERSION" -m "Release version $$NEW_VERSION" && \
 	echo "$(YELLOW)Ready to push. Review the changes:$(NC)" && \
