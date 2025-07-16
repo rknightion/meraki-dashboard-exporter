@@ -66,6 +66,11 @@ class TestMetricsIntegration:
         )
 
         # Set up mock responses for organization collector
+        # Mock overview to return empty (per-device licensing)
+        mock_api_client.api.organizations.getOrganizationLicensesOverview = MagicMock(
+            return_value={}
+        )
+
         mock_api_client.api.organizations.getOrganizationLicenses = MagicMock(
             return_value=[
                 {"licenseType": "ENT", "state": "active", "expirationDate": "2025-01-01"},
@@ -155,6 +160,53 @@ class TestMetricsIntegration:
             ]
         )
 
+        # Mock network health APIs
+        mock_api_client.api.networks.getNetworkDevices = MagicMock(
+            return_value=[{"serial": "Q2KD-XXXX", "model": "MR36", "name": "AP1"}]
+        )
+        mock_api_client.api.networks.getNetworkNetworkHealthChannelUtilization = MagicMock(
+            return_value=[]
+        )
+        mock_api_client.api.wireless.getNetworkWirelessConnectionStats = MagicMock(
+            return_value={"assoc": 100, "auth": 95, "dhcp": 90, "dns": 85, "success": 80}
+        )
+        mock_api_client.api.wireless.getNetworkWirelessDataRateHistory = MagicMock(
+            return_value=[
+                {"endTs": "2025-01-01T00:00:00Z", "downloadKbps": 1000, "uploadKbps": 500}
+            ]
+        )
+        mock_api_client.api.networks.getNetworkBluetoothClients = MagicMock(
+            return_value=[{"id": "1", "mac": "aa:bb:cc:dd:ee:ff"}]
+        )
+
+        # Mock device overview by model
+        mock_api_client.api.organizations.getOrganizationDevicesOverviewByModel = MagicMock(
+            return_value={"counts": [{"model": "MR36", "total": 1}, {"model": "MS120", "total": 1}]}
+        )
+
+        # Mock client overview
+        mock_api_client.api.organizations.getOrganizationClientsOverview = MagicMock(
+            return_value={
+                "usage": {"overall": {"total": 1000, "downstream": 700, "upstream": 300}},
+                "counts": {"total": 50},
+            }
+        )
+
+        # Mock config APIs
+        mock_api_client.api.organizations.getOrganizationLoginSecurity = MagicMock(
+            return_value={
+                "enforcePasswordExpiration": True,
+                "passwordExpirationDays": 90,
+                "enforceTwoFactorAuth": False,
+            }
+        )
+
+        mock_api_client.api.organizations.getOrganizationConfigurationChanges = MagicMock(
+            return_value=[
+                {"ts": "2025-01-01T00:00:00Z", "adminName": "Test", "label": "Test change"}
+            ]
+        )
+
         # Create collector manager
         manager = CollectorManager(client=mock_api_client, settings=mock_settings)
 
@@ -186,11 +238,29 @@ class TestMetricsIntegration:
 
         # Set up minimal mock responses
         mock_api_client.api.sensor.getOrganizationSensorReadingsLatest = MagicMock(return_value=[])
+        mock_api_client.api.organizations.getOrganizationLicensesOverview = MagicMock(
+            return_value={}
+        )
         mock_api_client.api.organizations.getOrganizationLicenses = MagicMock(return_value=[])
         mock_api_client.api.organizations.getOrganizationNetworks = MagicMock(return_value=[])
         mock_api_client.api.organizations.getOrganizationApiRequests = MagicMock(return_value=[])
         mock_api_client.api.organizations.getOrganizationDevices = MagicMock(return_value=[])
         mock_api_client.api.organizations.getOrganizationAssuranceAlerts = MagicMock(
+            return_value=[]
+        )
+        mock_api_client.api.organizations.getOrganizationDevicesOverviewByModel = MagicMock(
+            return_value={"counts": []}
+        )
+        mock_api_client.api.organizations.getOrganizationClientsOverview = MagicMock(
+            return_value={
+                "usage": {"overall": {"total": 0, "downstream": 0, "upstream": 0}},
+                "counts": {"total": 0},
+            }
+        )
+        mock_api_client.api.organizations.getOrganizationLoginSecurity = MagicMock(
+            return_value={"enforcePasswordExpiration": False}
+        )
+        mock_api_client.api.organizations.getOrganizationConfigurationChanges = MagicMock(
             return_value=[]
         )
 
@@ -233,10 +303,28 @@ class TestMetricsIntegration:
         )
 
         # Other collectors should work
+        mock_api_client.api.organizations.getOrganizationLicensesOverview = MagicMock(
+            return_value={}
+        )
         mock_api_client.api.organizations.getOrganizationLicenses = MagicMock(return_value=[])
         mock_api_client.api.organizations.getOrganizationNetworks = MagicMock(return_value=[])
         mock_api_client.api.organizations.getOrganizationApiRequests = MagicMock(return_value=[])
         mock_api_client.api.organizations.getOrganizationAssuranceAlerts = MagicMock(
+            return_value=[]
+        )
+        mock_api_client.api.organizations.getOrganizationDevicesOverviewByModel = MagicMock(
+            return_value={"counts": []}
+        )
+        mock_api_client.api.organizations.getOrganizationClientsOverview = MagicMock(
+            return_value={
+                "usage": {"overall": {"total": 0, "downstream": 0, "upstream": 0}},
+                "counts": {"total": 0},
+            }
+        )
+        mock_api_client.api.organizations.getOrganizationLoginSecurity = MagicMock(
+            return_value={"enforcePasswordExpiration": False}
+        )
+        mock_api_client.api.organizations.getOrganizationConfigurationChanges = MagicMock(
             return_value=[]
         )
 

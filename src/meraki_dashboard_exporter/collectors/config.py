@@ -102,6 +102,13 @@ class ConfigCollector(MetricCollector):
             labelnames=["org_id", "org_name"],
         )
 
+        # Configuration change metrics
+        self._configuration_changes_total = self._create_gauge(
+            "meraki_org_configuration_changes_total",
+            "Total number of configuration changes in the last 24 hours",
+            labelnames=["org_id", "org_name"],
+        )
+
     async def _collect_impl(self) -> None:
         """Collect configuration metrics."""
         try:
@@ -147,6 +154,9 @@ class ConfigCollector(MetricCollector):
         try:
             logger.debug("Collecting login security configuration", org_id=org_id)
             await self._collect_login_security(org_id, org_name)
+
+            logger.debug("Collecting configuration changes", org_id=org_id)
+            await self._collect_configuration_changes(org_id, org_name)
 
         except Exception:
             logger.exception(
@@ -253,3 +263,66 @@ class ConfigCollector(MetricCollector):
                 org_id=org_id,
                 org_name=org_name,
             )
+
+    async def _collect_configuration_changes(self, org_id: str, org_name: str) -> None:
+        """Collect configuration changes count for the last 24 hours.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        try:
+            logger.debug("Fetching configuration changes", org_id=org_id)
+            self._track_api_call("getOrganizationConfigurationChanges")
+
+            # Get configuration changes for the last 24 hours
+            config_changes = await asyncio.to_thread(
+                self.api.organizations.getOrganizationConfigurationChanges,
+                org_id,
+                timespan=86400,  # 24 hours in seconds
+                total_pages="all",
+            )
+
+            # Count the total number of changes
+            change_count = len(config_changes) if config_changes else 0
+
+            # Set the metric
+            if self._configuration_changes_total:
+                self._configuration_changes_total.labels(
+                    org_id=org_id,
+                    org_name=org_name,
+                ).set(change_count)
+                logger.debug(
+                    "Successfully collected configuration changes",
+                    org_id=org_id,
+                    change_count=change_count,
+                )
+            else:
+                logger.error("_configuration_changes_total metric not initialized")
+
+        except Exception as e:
+            # Log at debug level if it's just not available (400/404 errors)
+            error_str = str(e)
+            if "400" in error_str or "404" in error_str or "Bad Request" in error_str:
+                logger.debug(
+                    "Configuration changes API not available",
+                    org_id=org_id,
+                    org_name=org_name,
+                    error=error_str,
+                )
+                # Set metric to 0 when API is not available
+                if self._configuration_changes_total:
+                    self._configuration_changes_total.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                    ).set(0)
+            else:
+                logger.exception(
+                    "Failed to collect configuration changes",
+                    org_id=org_id,
+                    org_name=org_name,
+                )
