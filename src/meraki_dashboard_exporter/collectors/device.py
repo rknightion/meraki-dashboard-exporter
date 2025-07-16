@@ -498,12 +498,6 @@ class DeviceCollector(MetricCollector):
                     org_id=org_id,
                     count=len(devices) if devices else 0,
                 )
-            except TimeoutError:
-                logger.error(
-                    "Timeout fetching devices",
-                    org_id=org_id,
-                )
-                return
             except Exception as e:
                 logger.error(
                     "Failed to fetch devices",
@@ -527,13 +521,6 @@ class DeviceCollector(MetricCollector):
                     org_id=org_id,
                     count=len(statuses) if statuses else 0,
                 )
-            except TimeoutError:
-                logger.error(
-                    "Timeout fetching statuses",
-                    org_id=org_id,
-                )
-                # Continue with devices but no status info
-                statuses = []
             except Exception as e:
                 logger.error(
                     "Failed to fetch statuses",
@@ -579,9 +566,6 @@ class DeviceCollector(MetricCollector):
                     "network_id": device.get("networkId", ""),
                     "device_type": device_type,
                 }
-
-                if device_type not in self.settings.device_types:
-                    continue
 
                 # Add status info to device
                 device["status_info"] = status_map.get(device["serial"], {})
@@ -675,52 +659,52 @@ class DeviceCollector(MetricCollector):
             # Aggregate network-wide POE metrics after all switches are collected
             logger.debug("Aggregating network POE metrics")
             try:
-                await asyncio.wait_for(self._aggregate_network_poe(org_id, devices), timeout=60.0)
-            except TimeoutError:
-                logger.error("Timeout aggregating POE metrics")
+                await self._aggregate_network_poe(org_id, devices)
+            except Exception:
+                logger.exception("Failed to aggregate POE metrics")
 
             # Collect memory metrics for all devices
             logger.debug("Collecting device memory metrics")
             try:
-                await asyncio.wait_for(self._collect_memory_metrics(org_id), timeout=60.0)
-            except TimeoutError:
-                logger.error("Timeout collecting memory metrics")
+                await self._collect_memory_metrics(org_id)
+            except Exception:
+                logger.exception("Failed to collect memory metrics")
 
             # Collect wireless client counts
             if any(d for d in devices if d.get("model", "").startswith("MR")):
                 logger.debug("Collecting wireless client counts")
                 try:
-                    await asyncio.wait_for(self._collect_wireless_clients(org_id), timeout=30.0)
-                except TimeoutError:
-                    logger.error("Timeout collecting wireless client counts")
+                    await self._collect_wireless_clients(org_id)
+                except Exception:
+                    logger.exception("Failed to collect wireless client counts")
 
                 # Collect MR ethernet status
                 logger.debug("Collecting MR ethernet status")
                 try:
-                    await asyncio.wait_for(self._collect_mr_ethernet_status(org_id), timeout=30.0)
-                except TimeoutError:
-                    logger.error("Timeout collecting MR ethernet status")
+                    await self._collect_mr_ethernet_status(org_id)
+                except Exception:
+                    logger.exception("Failed to collect MR ethernet status")
 
                 # Collect MR packet loss metrics
                 logger.debug("Collecting MR packet loss metrics")
                 try:
-                    await asyncio.wait_for(self._collect_mr_packet_loss(org_id), timeout=30.0)
-                except TimeoutError:
-                    logger.error("Timeout collecting MR packet loss metrics")
+                    await self._collect_mr_packet_loss(org_id)
+                except Exception:
+                    logger.exception("Failed to collect MR packet loss metrics")
 
                 # Collect MR CPU load metrics
                 logger.debug("Collecting MR CPU load metrics")
                 try:
-                    await asyncio.wait_for(self._collect_mr_cpu_load(org_id, devices), timeout=30.0)
-                except TimeoutError:
-                    logger.error("Timeout collecting MR CPU load metrics")
+                    await self._collect_mr_cpu_load(org_id, devices)
+                except Exception:
+                    logger.exception("Failed to collect MR CPU load metrics")
 
                 # Collect MR SSID status metrics
                 logger.debug("Collecting MR SSID status metrics")
                 try:
-                    await asyncio.wait_for(self._collect_mr_ssid_status(org_id), timeout=30.0)
-                except TimeoutError:
-                    logger.error("Timeout collecting MR SSID status metrics")
+                    await self._collect_mr_ssid_status(org_id)
+                except Exception:
+                    logger.exception("Failed to collect MR SSID status metrics")
 
         except Exception as e:
             logger.exception(
@@ -739,13 +723,7 @@ class DeviceCollector(MetricCollector):
             Device data.
 
         """
-        try:
-            await asyncio.wait_for(
-                self.ms_collector.collect(device),
-                timeout=30.0,  # 15 second timeout per device
-            )
-        except TimeoutError as e:
-            raise TimeoutError(f"Timeout collecting MS device {device['serial']}") from e
+        await self.ms_collector.collect(device)
 
     async def _collect_mr_device_with_timeout(self, device: dict[str, Any]) -> None:
         """Collect MR device metrics with timeout.
@@ -756,13 +734,7 @@ class DeviceCollector(MetricCollector):
             Device data.
 
         """
-        try:
-            await asyncio.wait_for(
-                self.mr_collector.collect(device),
-                timeout=30.0,  # 15 second timeout per device
-            )
-        except TimeoutError as e:
-            raise TimeoutError(f"Timeout collecting MR device {device['serial']}") from e
+        await self.mr_collector.collect(device)
 
     def _get_device_type(self, device: dict[str, Any]) -> str:
         """Get device type from device model.

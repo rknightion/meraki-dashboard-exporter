@@ -93,14 +93,16 @@ class UpdateTier(StrEnum):
 
     FAST = "fast"  # Sensor data, real-time metrics
     MEDIUM = "medium"  # Device metrics, org metrics, network health
+    SLOW = "slow"  # Configuration data, security settings
 
 
 # Default values
-DEFAULT_SCRAPE_INTERVAL: Final[int] = 300  # 5 minutes
 DEFAULT_API_TIMEOUT: Final[int] = 30  # seconds
-DEFAULT_MAX_RETRIES: Final[int] = 3
-DEFAULT_RATE_LIMIT_RETRY_WAIT: Final[int] = 60  # seconds
+DEFAULT_MAX_RETRIES: Final[int] = 4  # default for Meraki SDK
 
-# Meraki API constants
-MERAKI_API_BASE_URL: Final[str] = "https://api.meraki.com/api/v1"
-MERAKI_API_MAX_REQUESTS_PER_SECOND: Final[int] = 10
+# Meraki API regional base URLs
+MERAKI_API_BASE_URL: Final[str] = "https://api.meraki.com/api/v1"  # Default/Global
+MERAKI_API_BASE_URL_CANADA: Final[str] = "https://api.meraki.ca/api/v1"
+MERAKI_API_BASE_URL_CHINA: Final[str] = "https://api.meraki.cn/api/v1"
+MERAKI_API_BASE_URL_INDIA: Final[str] = "https://api.meraki.in/api/v1"
+MERAKI_API_BASE_URL_US_FED: Final[str] = "https://api.gov-meraki.com/api/v1"

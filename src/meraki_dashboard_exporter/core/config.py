@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .constants import DEFAULT_API_TIMEOUT
+from .constants import DEFAULT_API_TIMEOUT, DEFAULT_MAX_RETRIES, MERAKI_API_BASE_URL
 
 
 class Settings(BaseSettings):
@@ -35,6 +35,16 @@ class Settings(BaseSettings):
         None,
         description="Meraki organization ID (optional, will fetch all orgs if not set)",
     )
+    api_base_url: str = Field(
+        MERAKI_API_BASE_URL,
+        description="Meraki API base URL (use regional endpoints if needed)",
+    )
+    api_max_retries: int = Field(
+        DEFAULT_MAX_RETRIES,
+        ge=0,
+        le=10,
+        description="Maximum number of retries for API requests",
+    )
 
     # Scraping settings - Tiered update intervals
     fast_update_interval: int = Field(
@@ -42,12 +52,21 @@ class Settings(BaseSettings):
         ge=30,
         le=300,
         description="Interval for fast-moving data (sensors) in seconds",
+        validation_alias="MERAKI_EXPORTER_FAST_UPDATE_INTERVAL",
     )
     medium_update_interval: int = Field(
         300,  # 5 minutes - aligns with Meraki API 5-minute data blocks
         ge=300,
         le=1800,
         description="Interval for medium-moving data (device metrics, org metrics) in seconds",
+        validation_alias="MERAKI_EXPORTER_MEDIUM_UPDATE_INTERVAL",
+    )
+    slow_update_interval: int = Field(
+        900,  # 15 minutes
+        ge=600,
+        le=3600,
+        description="Interval for slow-moving data (configuration, security settings) in seconds",
+        validation_alias="MERAKI_EXPORTER_SLOW_UPDATE_INTERVAL",
     )
     api_timeout: int = Field(
         DEFAULT_API_TIMEOUT,
@@ -65,12 +84,6 @@ class Settings(BaseSettings):
     # Server settings
     host: str = Field("0.0.0.0", description="Host to bind the exporter to")  # nosec B104
     port: int = Field(9099, ge=1, le=65535, description="Port to bind the exporter to")
-
-    # Device types to collect metrics for
-    device_types: list[Literal["MS", "MR", "MV", "MT", "MX", "MG"]] = Field(
-        ["MS", "MR", "MV", "MT"],
-        description="Device types to collect metrics for",
-    )
 
     # OpenTelemetry settings
     otel_enabled: bool = Field(False, description="Enable OpenTelemetry export")

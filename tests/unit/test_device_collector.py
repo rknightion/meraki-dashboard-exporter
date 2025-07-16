@@ -25,7 +25,6 @@ def mock_settings(monkeypatch):
     """Create mock settings."""
     monkeypatch.setenv("MERAKI_API_KEY", "a" * 40)
     monkeypatch.setenv("MERAKI_EXPORTER_ORG_ID", "123456")
-    monkeypatch.setenv("MERAKI_EXPORTER_DEVICE_TYPES", '["MR", "MS", "MT"]')
     return Settings()
 
 

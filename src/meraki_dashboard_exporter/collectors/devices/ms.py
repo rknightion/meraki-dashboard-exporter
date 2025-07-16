@@ -40,21 +40,10 @@ class MSCollector(BaseDeviceCollector):
             )
             self.parent._track_api_call("getDeviceSwitchPortsStatuses")
 
-            try:
-                port_statuses = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        self.api.switch.getDeviceSwitchPortsStatuses,
-                        serial,
-                    ),
-                    timeout=30.0,  # 10 second timeout
-                )
-            except TimeoutError:
-                logger.error(
-                    "Timeout fetching switch port statuses",
-                    serial=serial,
-                    name=name,
-                )
-                return
+            port_statuses = await asyncio.to_thread(
+                self.api.switch.getDeviceSwitchPortsStatuses,
+                serial,
+            )
 
             logger.debug(
                 "Successfully fetched port statuses",

@@ -171,13 +171,10 @@ class OrganizationCollector(MetricCollector):
             # Get API request stats with timeout
             logger.debug("Fetching API request stats", org_id=org_id)
             self._track_api_call("getOrganizationApiRequests")
-            api_requests = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self.api.organizations.getOrganizationApiRequests,
-                    org_id,
-                    total_pages="all",
-                ),
-                timeout=30.0,
+            api_requests = await asyncio.to_thread(
+                self.api.organizations.getOrganizationApiRequests,
+                org_id,
+                total_pages="all",
             )
             logger.debug(
                 "Successfully fetched API request stats",
@@ -207,12 +204,6 @@ class OrganizationCollector(MetricCollector):
                     org_name=org_name,
                 ).set(5)  # Default Meraki rate limit
 
-        except TimeoutError:
-            logger.error(
-                "Timeout collecting API metrics",
-                org_id=org_id,
-                org_name=org_name,
-            )
         except Exception:
             logger.exception(
                 "Failed to collect API metrics",
@@ -392,12 +383,9 @@ class OrganizationCollector(MetricCollector):
                     try:
                         logger.debug("Fetching license overview", org_id=org_id)
                         self._track_api_call("getOrganizationLicensesOverview")
-                        overview = await asyncio.wait_for(
-                            asyncio.to_thread(
-                                self.api.organizations.getOrganizationLicensesOverview,
-                                org_id,
-                            ),
-                            timeout=30.0,
+                        overview = await asyncio.to_thread(
+                            self.api.organizations.getOrganizationLicensesOverview,
+                            org_id,
                         )
                         logger.debug("Successfully fetched license overview", org_id=org_id)
                         # Convert overview to a format we can process

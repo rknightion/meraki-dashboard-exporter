@@ -41,9 +41,10 @@ We do all builds via docker and ensure first class docker support for running
 
 ## Update Rings
 
-The system uses two update tiers (removed SLOW tier):
+The system uses three update tiers:
 - **FAST** (60s): Sensor metrics (MT devices) - real-time environmental data
-- **MEDIUM** (300s): Organization metrics, Device metrics (including port traffic), Network health, Assurance alerts - aligned with Meraki API 5-minute data blocks
+- **MEDIUM** (300s): Organization metrics, Device metrics (including port traffic), Network health, Assurance alerts, Bluetooth clients - aligned with Meraki API 5-minute data blocks
+- **SLOW** (900s/15 minutes): Configuration data, Login security settings - infrequently changing configuration data
 
 ## Known API Limitations
 

@@ -53,10 +53,37 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 
 All configuration is done via environment variables. See `.env.example` for all available options.
 
-Key settings:
-- `MERAKI_API_KEY`: Your Meraki Dashboard API key (required)
-- `MERAKI_EXPORTER_ORG_ID`: Specific org ID to monitor (optional)
+### Key Settings
+
+#### Required
+- `MERAKI_API_KEY`: Your Meraki Dashboard API key
+
+#### Optional
+- `MERAKI_EXPORTER_ORG_ID`: Specific org ID to monitor (monitors all orgs if not set)
 - `MERAKI_EXPORTER_LOG_LEVEL`: Logging level (default: INFO)
+- `MERAKI_EXPORTER_API_BASE_URL`: API base URL for regional endpoints (default: https://api.meraki.com/api/v1)
+- `MERAKI_EXPORTER_API_TIMEOUT`: API request timeout in seconds (default: 30)
+- `MERAKI_EXPORTER_API_MAX_RETRIES`: Maximum API request retries (default: 4)
+
+### Update Intervals
+- `MERAKI_EXPORTER_FAST_UPDATE_INTERVAL`: Fast tier interval in seconds (default: 60, range: 30-300)
+- `MERAKI_EXPORTER_MEDIUM_UPDATE_INTERVAL`: Medium tier interval in seconds (default: 300, range: 300-1800)
+- `MERAKI_EXPORTER_SLOW_UPDATE_INTERVAL`: Slow tier interval in seconds (default: 900, range: 600-3600)
+
+### Regional API Endpoints
+
+For users in specific regions, use the appropriate API base URL:
+
+- **Global/Default**: `https://api.meraki.com/api/v1`
+- **Canada**: `https://api.meraki.ca/api/v1`
+- **China**: `https://api.meraki.cn/api/v1`
+- **India**: `https://api.meraki.in/api/v1`
+- **US Federal**: `https://api.gov-meraki.com/api/v1`
+
+Example:
+```bash
+export MERAKI_EXPORTER_API_BASE_URL="https://api.meraki.ca/api/v1"  # For Canada region
+```
 
 ## Metrics
 
@@ -78,6 +105,7 @@ Key settings:
 ### Access Point (MR) Metrics
 - `meraki_mr_clients_connected`: Connected client count
 - `meraki_ap_channel_utilization_*`: Channel utilization metrics
+- `meraki_network_bluetooth_clients_total`: Bluetooth clients detected by MR devices
 
 ### Sensor (MT) Metrics
 - `meraki_mt_temperature_celsius`: Temperature readings

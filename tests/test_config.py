@@ -46,10 +46,8 @@ def test_settings_with_custom_values(monkeypatch):
     monkeypatch.setenv("MERAKI_EXPORTER_ORG_ID", "123456")
     monkeypatch.setenv("MERAKI_EXPORTER_FAST_UPDATE_INTERVAL", "120")
     monkeypatch.setenv("MERAKI_EXPORTER_LOG_LEVEL", "DEBUG")
-    monkeypatch.setenv("MERAKI_EXPORTER_DEVICE_TYPES", '["MS", "MR"]')
 
     settings = Settings()
     assert settings.org_id == "123456"
     assert settings.fast_update_interval == 120
     assert settings.log_level == "DEBUG"
-    assert settings.device_types == ["MS", "MR"]
