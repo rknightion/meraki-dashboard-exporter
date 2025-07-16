@@ -92,6 +92,10 @@ export MERAKI_EXPORTER_API_BASE_URL="https://api.meraki.ca/api/v1"  # For Canada
 - `meraki_org_networks_total`: Number of networks
 - `meraki_org_devices_total`: Number of devices by type
 - `meraki_org_licenses_total`: License counts by type and status
+- `meraki_org_clients_total`: Total active clients (5-minute window)
+- `meraki_org_usage_total_kb`: Total data usage in KB (5-minute window)
+- `meraki_org_usage_downstream_kb`: Downstream data usage in KB (5-minute window)
+- `meraki_org_usage_upstream_kb`: Upstream data usage in KB (5-minute window)
 
 ### Device Metrics
 - `meraki_device_up`: Device online status
@@ -118,6 +122,10 @@ export MERAKI_EXPORTER_API_BASE_URL="https://api.meraki.ca/api/v1"  # For Canada
 - `meraki_alerts_active`: Number of active alerts by type, category, severity, and device type
 - `meraki_alerts_total_by_severity`: Total alerts grouped by severity level
 - `meraki_alerts_total_by_network`: Total alerts per network
+
+### Configuration Metrics
+- `meraki_org_login_security_*`: Various login security settings (see config collector for full list)
+- `meraki_org_configuration_changes_total`: Total configuration changes in the last 24 hours
 
 ## Development
 

@@ -43,7 +43,7 @@ We do all builds via docker and ensure first class docker support for running
 
 The system uses three update tiers:
 - **FAST** (60s): Sensor metrics (MT devices) - real-time environmental data
-- **MEDIUM** (300s): Organization metrics, Device metrics (including port traffic), Network health, Assurance alerts, Bluetooth clients - aligned with Meraki API 5-minute data blocks
+- **MEDIUM** (300s): Organization metrics (including client overview), Device metrics (including port traffic), Network health, Assurance alerts, Bluetooth clients - aligned with Meraki API 5-minute data blocks
 - **SLOW** (900s/15 minutes): Configuration data, Login security settings - infrequently changing configuration data
 
 ## Known API Limitations
@@ -75,6 +75,21 @@ Many Meraki API responses can return data in different formats:
 - Some endpoints wrap data in `{"items": [...]}` format
 - Others return arrays directly
 - Always check response type and handle both cases
+
+## Client Overview Metrics
+
+The `getOrganizationClientsOverview` API returns usage data for the last complete 5-minute window:
+- When called at 11:04, it returns data from 10:55-11:00 (not 10:59-11:04)
+- Usage data is provided in KB (kilobytes), not Kbps or MB
+- The metrics are suitable for Prometheus rate/increase functions to calculate data transfer rates
+
+## Configuration Changes Metric
+
+The `getOrganizationConfigurationChanges` API is used to track configuration changes:
+- Uses `timespan=86400` to get changes from the last 24 hours
+- Returns a count of all configuration changes made by administrators
+- Runs in the SLOW tier (15 minutes) as configuration changes are infrequent
+- Useful for compliance monitoring and change management
 
 ## Testing and Validation
 
