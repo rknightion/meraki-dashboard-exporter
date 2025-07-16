@@ -151,6 +151,12 @@ class DeviceCollector(MetricCollector):
             labelnames=["serial", "name", "model", "network_id", "device_type"],
         )
 
+        self._device_status_info = self._create_gauge(
+            "meraki_device_status_info",
+            "Device status information",
+            labelnames=["serial", "name", "model", "network_id", "device_type", "status"],
+        )
+
         # Memory metrics - available via system memory usage history API
         self._device_memory_used_bytes = self._create_gauge(
             "meraki_device_memory_used_bytes",
@@ -240,9 +246,9 @@ class DeviceCollector(MetricCollector):
         )
 
         # MR ethernet status metrics
-        self._mr_power_mode = self._create_gauge(
-            "meraki_mr_power_mode",
-            "Access point power mode (1 = full, 0 = other)",
+        self._mr_power_info = self._create_gauge(
+            "meraki_mr_power_info",
+            "Access point power information",
             labelnames=["serial", "name", "network_id", "mode"],
         )
 
@@ -258,16 +264,16 @@ class DeviceCollector(MetricCollector):
             labelnames=["serial", "name", "network_id"],
         )
 
-        self._mr_port_poe_standard = self._create_gauge(
-            "meraki_mr_port_poe_standard",
-            "Access point port PoE standard (1 = 802.3at, 2 = 802.3af, 3 = 802.3bt, 0 = other/none)",
+        self._mr_port_poe_info = self._create_gauge(
+            "meraki_mr_port_poe_info",
+            "Access point port PoE information",
             labelnames=["serial", "name", "network_id", "port_name", "standard"],
         )
 
-        self._mr_port_link_negotiation_duplex = self._create_gauge(
-            "meraki_mr_port_link_negotiation_duplex",
-            "Access point port link negotiation duplex (1 = full, 0 = half)",
-            labelnames=["serial", "name", "network_id", "port_name"],
+        self._mr_port_link_negotiation_info = self._create_gauge(
+            "meraki_mr_port_link_negotiation_info",
+            "Access point port link negotiation information",
+            labelnames=["serial", "name", "network_id", "port_name", "duplex"],
         )
 
         self._mr_port_link_negotiation_speed = self._create_gauge(
@@ -806,6 +812,20 @@ class DeviceCollector(MetricCollector):
             is_online,
         )
 
+        # Device status info metric
+        self._set_metric_value(
+            "_device_status_info",
+            {
+                "serial": serial,
+                "name": name,
+                "model": model,
+                "network_id": network_id,
+                "device_type": device_type,
+                "status": status,
+            },
+            1,
+        )
+
         # Uptime
         if "uptimeInSeconds" in device:
             self._set_metric_value(
@@ -1192,17 +1212,18 @@ class DeviceCollector(MetricCollector):
                 power_info = device_data.get("power", {})
                 power_mode = power_info.get("mode", "")
 
-                # Set power mode metric (1 for full, 0 for other)
-                self._set_metric_value(
-                    "_mr_power_mode",
-                    {
-                        "serial": serial,
-                        "name": name,
-                        "network_id": network_id,
-                        "mode": power_mode,
-                    },
-                    1 if power_mode == "full" else 0,
-                )
+                # Set power info metric if mode exists
+                if power_mode:
+                    self._set_metric_value(
+                        "_mr_power_info",
+                        {
+                            "serial": serial,
+                            "name": name,
+                            "network_id": network_id,
+                            "mode": power_mode,
+                        },
+                        1,
+                    )
 
                 # AC power connection
                 ac_info = power_info.get("ac", {})
@@ -1239,43 +1260,38 @@ class DeviceCollector(MetricCollector):
                     port_poe = port.get("poe", {})
                     poe_standard = port_poe.get("standard", "")
 
-                    # Map PoE standard to numeric value
-                    poe_standard_value = 0
-                    if poe_standard == "802.3at":
-                        poe_standard_value = 1
-                    elif poe_standard == "802.3af":
-                        poe_standard_value = 2
-                    elif poe_standard == "802.3bt":
-                        poe_standard_value = 3
-
-                    self._set_metric_value(
-                        "_mr_port_poe_standard",
-                        {
-                            "serial": serial,
-                            "name": name,
-                            "network_id": network_id,
-                            "port_name": port_name,
-                            "standard": poe_standard,
-                        },
-                        poe_standard_value,
-                    )
+                    # Set info metric with value 1 if standard exists
+                    if poe_standard:
+                        self._set_metric_value(
+                            "_mr_port_poe_info",
+                            {
+                                "serial": serial,
+                                "name": name,
+                                "network_id": network_id,
+                                "port_name": port_name,
+                                "standard": poe_standard,
+                            },
+                            1,
+                        )
 
                     # Link negotiation
                     link_neg = port.get("linkNegotiation", {})
                     duplex = link_neg.get("duplex", "")
                     speed = link_neg.get("speed", 0)
 
-                    # Set duplex metric (1 for full, 0 for half)
-                    self._set_metric_value(
-                        "_mr_port_link_negotiation_duplex",
-                        {
-                            "serial": serial,
-                            "name": name,
-                            "network_id": network_id,
-                            "port_name": port_name,
-                        },
-                        1 if duplex == "full" else 0,
-                    )
+                    # Set link negotiation info metric if duplex exists
+                    if duplex:
+                        self._set_metric_value(
+                            "_mr_port_link_negotiation_info",
+                            {
+                                "serial": serial,
+                                "name": name,
+                                "network_id": network_id,
+                                "port_name": port_name,
+                                "duplex": duplex,
+                            },
+                            1,
+                        )
 
                     # Set speed metric
                     self._set_metric_value(
