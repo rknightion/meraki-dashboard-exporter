@@ -6,7 +6,9 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants import MetricName
+from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.logging import get_logger
+from ...core.metrics import LabelName
 from .base import BaseDeviceCollector
 
 if TYPE_CHECKING:
@@ -24,53 +26,57 @@ class MSCollector(BaseDeviceCollector):
         self._switch_port_status = self.parent._create_gauge(
             MetricName.MS_PORT_STATUS,
             "Switch port status (1 = connected, 0 = disconnected)",
-            labelnames=["serial", "name", "port_id", "port_name"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.PORT_ID, LabelName.PORT_NAME],
         )
 
         self._switch_port_traffic = self.parent._create_gauge(
             MetricName.MS_PORT_TRAFFIC_BYTES,
             "Switch port traffic in bytes",
-            labelnames=["serial", "name", "port_id", "port_name", "direction"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.PORT_ID, LabelName.PORT_NAME, LabelName.DIRECTION],
         )
 
         self._switch_port_errors = self.parent._create_gauge(
             MetricName.MS_PORT_ERRORS_TOTAL,
             "Switch port error count",
-            labelnames=["serial", "name", "port_id", "port_name", "error_type"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.PORT_ID, LabelName.PORT_NAME, LabelName.ERROR_TYPE],
         )
 
         # Switch power metrics
         self._switch_power = self.parent._create_gauge(
             MetricName.MS_POWER_USAGE_WATTS,
             "Switch power usage in watts",
-            labelnames=["serial", "name", "model"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL],
         )
 
         # POE metrics
         self._switch_poe_port_power = self.parent._create_gauge(
             MetricName.MS_POE_PORT_POWER_WATTS,
             "Per-port POE power consumption in watt-hours (Wh)",
-            labelnames=["serial", "name", "port_id", "port_name"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.PORT_ID, LabelName.PORT_NAME],
         )
 
         self._switch_poe_total_power = self.parent._create_gauge(
             MetricName.MS_POE_TOTAL_POWER_WATTS,
             "Total POE power consumption for switch in watt-hours (Wh)",
-            labelnames=["serial", "name", "model", "network_id"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID],
         )
 
         self._switch_poe_budget = self.parent._create_gauge(
             MetricName.MS_POE_BUDGET_WATTS,
             "Total POE power budget for switch in watts",
-            labelnames=["serial", "name", "model", "network_id"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID],
         )
 
         self._switch_poe_network_total = self.parent._create_gauge(
             MetricName.MS_POE_NETWORK_TOTAL_WATTS,
             "Total POE power consumption for all switches in network in watt-hours (Wh)",
-            labelnames=["network_id", "network_name"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
+    @with_error_handling(
+        operation="Collect MS device metrics",
+        continue_on_error=True,
+    )
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect switch-specific metrics.
 
@@ -97,6 +103,11 @@ class MSCollector(BaseDeviceCollector):
             port_statuses = await asyncio.to_thread(
                 self.api.switch.getDeviceSwitchPortsStatuses,
                 serial,
+            )
+            port_statuses = validate_response_format(
+                port_statuses,
+                expected_type=list,
+                operation="getDeviceSwitchPortsStatuses"
             )
 
             logger.debug(

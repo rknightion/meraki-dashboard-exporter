@@ -1,12 +1,67 @@
-# Meraki Dashboard Exporter Metrics
+# Metrics Reference
 
-This document lists all Prometheus metrics exposed by the Meraki Dashboard Exporter.
+This page provides a comprehensive reference of all Prometheus metrics exposed by the Meraki Dashboard Exporter.
+
+## Overview
+
+The exporter provides metrics across several categories:
+
+| Collector | Metrics | Description |
+|-----------|---------|-------------|
+| AlertsCollector | 3 | Active alerts by severity, type, and category |
+| AlertsCollectorRefactored | 3 | Various metrics |
+| ConfigCollector | 14 | Organization security settings and configuration tracking |
+| DeviceCollector | 6 | Device status, performance, and uptime metrics |
+| MTSensorCollector | 18 | Environmental monitoring from MT sensors |
+| NetworkHealthCollector | 8 | Network-wide wireless health and performance |
+| OrganizationCollector | 12 | Organization-level metrics including API usage and licenses |
+| OrganizationCollectorRefactored | 12 | Various metrics |
 
 ## Metrics by Collector
 
 ### AlertsCollector
 
-**File:** `src/meraki_dashboard_exporter/collectors/alerts.py`
+**Source:** `src/meraki_dashboard_exporter/collectors/alerts.py`
+
+#### `meraki_alerts_active`
+
+**Description:** Number of active Meraki assurance alerts
+
+**Type:** gauge
+
+**Labels:** 
+
+**Constant:** `MetricName.ALERTS_ACTIVE`
+
+**Variable:** `self._alerts_active` (line 28)
+
+#### `meraki_alerts_total_by_network`
+
+**Description:** Total number of active alerts per network
+
+**Type:** gauge
+
+**Labels:** 
+
+**Constant:** `MetricName.ALERTS_TOTAL_BY_NETWORK`
+
+**Variable:** `self._alerts_by_network` (line 51)
+
+#### `meraki_alerts_total_by_severity`
+
+**Description:** Total number of active alerts by severity
+
+**Type:** gauge
+
+**Labels:** 
+
+**Constant:** `MetricName.ALERTS_TOTAL_BY_SEVERITY`
+
+**Variable:** `self._alerts_by_severity` (line 44)
+
+### AlertsCollectorRefactored
+
+**Source:** `src/meraki_dashboard_exporter/collectors/alerts_refactored.py`
 
 #### `meraki_alerts_active`
 
@@ -16,7 +71,9 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Labels:** `org_id`, `org_name`, `network_id`, `network_name`, `alert_type`, `category_type`, `severity`, `device_type`
 
-**Variable:** `self._alerts_active` (line 27)
+**Constant:** `MetricName.ALERTS_ACTIVE`
+
+**Variable:** `self._alerts_active` (line 36)
 
 #### `meraki_alerts_total_by_network`
 
@@ -26,7 +83,9 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Labels:** `org_id`, `org_name`, `network_id`, `network_name`
 
-**Variable:** `self._alerts_by_network` (line 50)
+**Constant:** `MetricName.ALERTS_TOTAL_BY_NETWORK`
+
+**Variable:** `self._alerts_by_network` (line 59)
 
 #### `meraki_alerts_total_by_severity`
 
@@ -36,11 +95,13 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Labels:** `org_id`, `org_name`, `severity`
 
-**Variable:** `self._alerts_by_severity` (line 43)
+**Constant:** `MetricName.ALERTS_TOTAL_BY_SEVERITY`
+
+**Variable:** `self._alerts_by_severity` (line 52)
 
 ### ConfigCollector
 
-**File:** `src/meraki_dashboard_exporter/collectors/config.py`
+**Source:** `src/meraki_dashboard_exporter/collectors/config.py`
 
 #### `meraki_org_configuration_changes_total`
 
@@ -48,9 +109,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._configuration_changes_total` (line 106)
+**Constant:** `MetricName.ORG_CONFIGURATION_CHANGES_TOTAL`
+
+**Variable:** `self._configuration_changes_total` (line 107)
 
 #### `meraki_org_login_security_account_lockout_attempts`
 
@@ -58,9 +121,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._login_security_account_lockout_attempts` (line 69)
+**Constant:** `MetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ATTEMPTS`
+
+**Variable:** `self._login_security_account_lockout_attempts` (line 70)
 
 #### `meraki_org_login_security_account_lockout_enabled`
 
@@ -68,9 +133,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._login_security_account_lockout_enabled` (line 63)
+**Constant:** `MetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ENABLED`
+
+**Variable:** `self._login_security_account_lockout_enabled` (line 64)
 
 #### `meraki_org_login_security_api_ip_restrictions_enabled`
 
@@ -78,9 +145,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._login_security_api_ip_restrictions_enabled` (line 99)
+**Constant:** `MetricName.ORG_LOGIN_SECURITY_API_IP_RESTRICTIONS_ENABLED`
+
+**Variable:** `self._login_security_api_ip_restrictions_enabled` (line 100)
 
 #### `meraki_org_login_security_different_passwords_count`
 
@@ -88,9 +157,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._login_security_different_passwords_count` (line 45)
+**Constant:** `MetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_COUNT`
+
+**Variable:** `self._login_security_different_passwords_count` (line 46)
 
 #### `meraki_org_login_security_different_passwords_enabled`
 
@@ -98,9 +169,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._login_security_different_passwords_enabled` (line 39)
+**Constant:** `MetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_ENABLED`
+
+**Variable:** `self._login_security_different_passwords_enabled` (line 40)
 
 #### `meraki_org_login_security_idle_timeout_enabled`
 
@@ -108,9 +181,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._login_security_idle_timeout_enabled` (line 75)
+**Constant:** `MetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_ENABLED`
+
+**Variable:** `self._login_security_idle_timeout_enabled` (line 76)
 
 #### `meraki_org_login_security_idle_timeout_minutes`
 
@@ -118,9 +193,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._login_security_idle_timeout_minutes` (line 81)
+**Constant:** `MetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_MINUTES`
+
+**Variable:** `self._login_security_idle_timeout_minutes` (line 82)
 
 #### `meraki_org_login_security_ip_ranges_enabled`
 
@@ -128,9 +205,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._login_security_ip_ranges_enabled` (line 93)
+**Constant:** `MetricName.ORG_LOGIN_SECURITY_IP_RANGES_ENABLED`
+
+**Variable:** `self._login_security_ip_ranges_enabled` (line 94)
 
 #### `meraki_org_login_security_minimum_password_length`
 
@@ -138,9 +217,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._login_security_minimum_password_length` (line 57)
+**Constant:** `MetricName.ORG_LOGIN_SECURITY_MINIMUM_PASSWORD_LENGTH`
+
+**Variable:** `self._login_security_minimum_password_length` (line 58)
 
 #### `meraki_org_login_security_password_expiration_days`
 
@@ -148,9 +229,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._login_security_password_expiration_days` (line 33)
+**Constant:** `MetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_DAYS`
+
+**Variable:** `self._login_security_password_expiration_days` (line 34)
 
 #### `meraki_org_login_security_password_expiration_enabled`
 
@@ -158,9 +241,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._login_security_password_expiration_enabled` (line 27)
+**Constant:** `MetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_ENABLED`
+
+**Variable:** `self._login_security_password_expiration_enabled` (line 28)
 
 #### `meraki_org_login_security_strong_passwords_enabled`
 
@@ -168,9 +253,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._login_security_strong_passwords_enabled` (line 51)
+**Constant:** `MetricName.ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED`
+
+**Variable:** `self._login_security_strong_passwords_enabled` (line 52)
 
 #### `meraki_org_login_security_two_factor_enabled`
 
@@ -178,13 +265,15 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._login_security_two_factor_enabled` (line 87)
+**Constant:** `MetricName.ORG_LOGIN_SECURITY_TWO_FACTOR_ENABLED`
+
+**Variable:** `self._login_security_two_factor_enabled` (line 88)
 
 ### DeviceCollector
 
-**File:** `src/meraki_dashboard_exporter/collectors/device.py`
+**Source:** `src/meraki_dashboard_exporter/collectors/device.py`
 
 #### `meraki_device_memory_free_bytes`
 
@@ -192,9 +281,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `model`, `network_id`, `device_type`, `stat`
+**Labels:** 
 
-**Variable:** `self._device_memory_free_bytes` (line 185)
+**Constant:** `MetricName.DEVICE_MEMORY_FREE_BYTES`
+
+**Variable:** `self._device_memory_free_bytes` (line 186)
 
 #### `meraki_device_memory_total_bytes`
 
@@ -202,9 +293,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `model`, `network_id`, `device_type`
+**Labels:** 
 
-**Variable:** `self._device_memory_total_bytes` (line 191)
+**Constant:** `MetricName.DEVICE_MEMORY_TOTAL_BYTES`
+
+**Variable:** `self._device_memory_total_bytes` (line 192)
 
 #### `meraki_device_memory_usage_percent`
 
@@ -212,11 +305,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `model`, `network_id`, `device_type`
+**Labels:** 
 
 **Constant:** `MetricName.DEVICE_MEMORY_USAGE_PERCENT`
 
-**Variable:** `self._device_memory_usage_percent` (line 197)
+**Variable:** `self._device_memory_usage_percent` (line 198)
 
 #### `meraki_device_memory_used_bytes`
 
@@ -224,9 +317,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `model`, `network_id`, `device_type`, `stat`
+**Labels:** 
 
-**Variable:** `self._device_memory_used_bytes` (line 179)
+**Constant:** `MetricName.DEVICE_MEMORY_USED_BYTES`
+
+**Variable:** `self._device_memory_used_bytes` (line 180)
 
 #### `meraki_device_status_info`
 
@@ -234,9 +329,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `model`, `network_id`, `device_type`, `status`
+**Labels:** 
 
-**Variable:** `self._device_status_info` (line 172)
+**Constant:** `MetricName.DEVICE_STATUS_INFO`
+
+**Variable:** `self._device_status_info` (line 173)
 
 #### `meraki_device_up`
 
@@ -244,15 +341,15 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `model`, `network_id`, `device_type`
+**Labels:** 
 
 **Constant:** `MetricName.DEVICE_UP`
 
-**Variable:** `self._device_up` (line 166)
+**Variable:** `self._device_up` (line 167)
 
 ### MTSensorCollector
 
-**File:** `src/meraki_dashboard_exporter/collectors/mt_sensor.py`
+**Source:** `src/meraki_dashboard_exporter/collectors/mt_sensor.py`
 
 #### `meraki_mt_apparent_power_va`
 
@@ -260,11 +357,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_APPARENT_POWER_VA`
 
-**Variable:** `self._sensor_apparent_power` (line 125)
+**Variable:** `self._sensor_apparent_power` (line 126)
 
 #### `meraki_mt_battery_percentage`
 
@@ -272,11 +369,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_BATTERY_PERCENTAGE`
 
-**Variable:** `self._sensor_battery` (line 95)
+**Variable:** `self._sensor_battery` (line 96)
 
 #### `meraki_mt_co2_ppm`
 
@@ -284,11 +381,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_CO2_PPM`
 
-**Variable:** `self._sensor_co2` (line 71)
+**Variable:** `self._sensor_co2` (line 72)
 
 #### `meraki_mt_current_amps`
 
@@ -296,11 +393,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_CURRENT_AMPS`
 
-**Variable:** `self._sensor_current` (line 113)
+**Variable:** `self._sensor_current` (line 114)
 
 #### `meraki_mt_door_status`
 
@@ -308,11 +405,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_DOOR_STATUS`
 
-**Variable:** `self._sensor_door` (line 59)
+**Variable:** `self._sensor_door` (line 60)
 
 #### `meraki_mt_downstream_power_enabled`
 
@@ -320,11 +417,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_DOWNSTREAM_POWER_ENABLED`
 
-**Variable:** `self._sensor_downstream_power` (line 143)
+**Variable:** `self._sensor_downstream_power` (line 144)
 
 #### `meraki_mt_frequency_hz`
 
@@ -332,11 +429,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_FREQUENCY_HZ`
 
-**Variable:** `self._sensor_frequency` (line 137)
+**Variable:** `self._sensor_frequency` (line 138)
 
 #### `meraki_mt_humidity_percent`
 
@@ -344,11 +441,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_HUMIDITY_PERCENT`
 
-**Variable:** `self._sensor_humidity` (line 53)
+**Variable:** `self._sensor_humidity` (line 54)
 
 #### `meraki_mt_indoor_air_quality_score`
 
@@ -356,11 +453,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_INDOOR_AIR_QUALITY_SCORE`
 
-**Variable:** `self._sensor_air_quality` (line 101)
+**Variable:** `self._sensor_air_quality` (line 102)
 
 #### `meraki_mt_noise_db`
 
@@ -368,11 +465,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_NOISE_DB`
 
-**Variable:** `self._sensor_noise` (line 89)
+**Variable:** `self._sensor_noise` (line 90)
 
 #### `meraki_mt_pm25_ug_m3`
 
@@ -380,11 +477,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_PM25_UG_M3`
 
-**Variable:** `self._sensor_pm25` (line 83)
+**Variable:** `self._sensor_pm25` (line 84)
 
 #### `meraki_mt_power_factor_percent`
 
@@ -392,11 +489,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_POWER_FACTOR_PERCENT`
 
-**Variable:** `self._sensor_power_factor` (line 131)
+**Variable:** `self._sensor_power_factor` (line 132)
 
 #### `meraki_mt_real_power_watts`
 
@@ -404,11 +501,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_REAL_POWER_WATTS`
 
-**Variable:** `self._sensor_real_power` (line 119)
+**Variable:** `self._sensor_real_power` (line 120)
 
 #### `meraki_mt_remote_lockout_status`
 
@@ -416,11 +513,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_REMOTE_LOCKOUT_STATUS`
 
-**Variable:** `self._sensor_remote_lockout` (line 149)
+**Variable:** `self._sensor_remote_lockout` (line 150)
 
 #### `meraki_mt_temperature_celsius`
 
@@ -428,11 +525,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_TEMPERATURE_CELSIUS`
 
-**Variable:** `self._sensor_temperature` (line 47)
+**Variable:** `self._sensor_temperature` (line 48)
 
 #### `meraki_mt_tvoc_ppb`
 
@@ -440,11 +537,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_TVOC_PPB`
 
-**Variable:** `self._sensor_tvoc` (line 77)
+**Variable:** `self._sensor_tvoc` (line 78)
 
 #### `meraki_mt_voltage_volts`
 
@@ -452,11 +549,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_VOLTAGE_VOLTS`
 
-**Variable:** `self._sensor_voltage` (line 107)
+**Variable:** `self._sensor_voltage` (line 108)
 
 #### `meraki_mt_water_detected`
 
@@ -464,15 +561,15 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `serial`, `name`, `sensor_type`
+**Labels:** 
 
 **Constant:** `MetricName.MT_WATER_DETECTED`
 
-**Variable:** `self._sensor_water` (line 65)
+**Variable:** `self._sensor_water` (line 66)
 
 ### NetworkHealthCollector
 
-**File:** `src/meraki_dashboard_exporter/collectors/network_health.py`
+**Source:** `src/meraki_dashboard_exporter/collectors/network_health.py`
 
 #### `meraki_ap_channel_utilization_2_4ghz_percent`
 
@@ -480,9 +577,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `network_id`, `network_name`, `serial`, `name`, `model`, `type`
+**Labels:** 
 
-**Variable:** `self._ap_utilization_2_4ghz` (line 97)
+**Constant:** `MetricName.AP_CHANNEL_UTILIZATION_2_4GHZ_PERCENT`
+
+**Variable:** `self._ap_utilization_2_4ghz` (line 98)
 
 #### `meraki_ap_channel_utilization_5ghz_percent`
 
@@ -490,9 +589,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `network_id`, `network_name`, `serial`, `name`, `model`, `type`
+**Labels:** 
 
-**Variable:** `self._ap_utilization_5ghz` (line 103)
+**Constant:** `MetricName.AP_CHANNEL_UTILIZATION_5GHZ_PERCENT`
+
+**Variable:** `self._ap_utilization_5ghz` (line 104)
 
 #### `meraki_network_bluetooth_clients_total`
 
@@ -500,9 +601,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `network_id`, `network_name`
+**Labels:** 
 
-**Variable:** `self._network_bluetooth_clients_total` (line 143)
+**Constant:** `MetricName.NETWORK_BLUETOOTH_CLIENTS_TOTAL`
+
+**Variable:** `self._network_bluetooth_clients_total` (line 144)
 
 #### `meraki_network_channel_utilization_2_4ghz_percent`
 
@@ -510,9 +613,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `network_id`, `network_name`, `type`
+**Labels:** 
 
-**Variable:** `self._network_utilization_2_4ghz` (line 110)
+**Constant:** `MetricName.NETWORK_CHANNEL_UTILIZATION_2_4GHZ_PERCENT`
+
+**Variable:** `self._network_utilization_2_4ghz` (line 111)
 
 #### `meraki_network_channel_utilization_5ghz_percent`
 
@@ -520,9 +625,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `network_id`, `network_name`, `type`
+**Labels:** 
 
-**Variable:** `self._network_utilization_5ghz` (line 116)
+**Constant:** `MetricName.NETWORK_CHANNEL_UTILIZATION_5GHZ_PERCENT`
+
+**Variable:** `self._network_utilization_5ghz` (line 117)
 
 #### `meraki_network_wireless_connection_stats_total`
 
@@ -530,11 +637,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `network_id`, `network_name`, `stat_type`
+**Labels:** 
 
 **Constant:** `MetricName.NETWORK_WIRELESS_CONNECTION_STATS`
 
-**Variable:** `self._network_connection_stats` (line 123)
+**Variable:** `self._network_connection_stats` (line 124)
 
 #### `meraki_network_wireless_download_kbps`
 
@@ -542,9 +649,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `network_id`, `network_name`
+**Labels:** 
 
-**Variable:** `self._network_wireless_download_kbps` (line 130)
+**Constant:** `MetricName.NETWORK_WIRELESS_DOWNLOAD_KBPS`
+
+**Variable:** `self._network_wireless_download_kbps` (line 131)
 
 #### `meraki_network_wireless_upload_kbps`
 
@@ -552,13 +661,15 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `network_id`, `network_name`
+**Labels:** 
 
-**Variable:** `self._network_wireless_upload_kbps` (line 136)
+**Constant:** `MetricName.NETWORK_WIRELESS_UPLOAD_KBPS`
+
+**Variable:** `self._network_wireless_upload_kbps` (line 137)
 
 ### OrganizationCollector
 
-**File:** `src/meraki_dashboard_exporter/collectors/organization.py`
+**Source:** `src/meraki_dashboard_exporter/collectors/organization.py`
 
 #### `meraki_org_api_requests_rate_limit`
 
@@ -566,11 +677,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
 **Constant:** `MetricName.ORG_API_REQUESTS_RATE_LIMIT`
 
-**Variable:** `self._api_rate_limit` (line 58)
+**Variable:** `self._api_rate_limit` (line 59)
 
 #### `meraki_org_api_requests_total`
 
@@ -578,11 +689,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
 **Constant:** `MetricName.ORG_API_REQUESTS_TOTAL`
 
-**Variable:** `self._api_requests_total` (line 52)
+**Variable:** `self._api_requests_total` (line 53)
 
 #### `meraki_org_clients_total`
 
@@ -590,9 +701,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._clients_total` (line 98)
+**Constant:** `MetricName.ORG_CLIENTS_TOTAL`
+
+**Variable:** `self._clients_total` (line 99)
 
 #### `meraki_org_devices_by_model_total`
 
@@ -600,9 +713,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`, `model`
+**Labels:** 
 
-**Variable:** `self._devices_by_model_total` (line 78)
+**Constant:** `MetricName.ORG_DEVICES_BY_MODEL_TOTAL`
+
+**Variable:** `self._devices_by_model_total` (line 79)
 
 #### `meraki_org_devices_total`
 
@@ -610,11 +725,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`, `device_type`
+**Labels:** 
 
 **Constant:** `MetricName.ORG_DEVICES_TOTAL`
 
-**Variable:** `self._devices_total` (line 72)
+**Variable:** `self._devices_total` (line 73)
 
 #### `meraki_org_info`
 
@@ -622,9 +737,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** info
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._org_info` (line 45)
+**Constant:** `MetricName.ORG_INFO`
+
+**Variable:** `self._org_info` (line 46)
 
 #### `meraki_org_licenses_expiring`
 
@@ -632,11 +749,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`, `license_type`
+**Labels:** 
 
 **Constant:** `MetricName.ORG_LICENSES_EXPIRING`
 
-**Variable:** `self._licenses_expiring` (line 91)
+**Variable:** `self._licenses_expiring` (line 92)
 
 #### `meraki_org_licenses_total`
 
@@ -644,11 +761,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`, `license_type`, `status`
+**Labels:** 
 
 **Constant:** `MetricName.ORG_LICENSES_TOTAL`
 
-**Variable:** `self._licenses_total` (line 85)
+**Variable:** `self._licenses_total` (line 86)
 
 #### `meraki_org_networks_total`
 
@@ -656,11 +773,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
 **Constant:** `MetricName.ORG_NETWORKS_TOTAL`
 
-**Variable:** `self._networks_total` (line 65)
+**Variable:** `self._networks_total` (line 66)
 
 #### `meraki_org_usage_downstream_kb`
 
@@ -668,9 +785,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._usage_downstream_kb` (line 111)
+**Constant:** `MetricName.ORG_USAGE_DOWNSTREAM_KB`
+
+**Variable:** `self._usage_downstream_kb` (line 112)
 
 #### `meraki_org_usage_total_kb`
 
@@ -678,9 +797,11 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._usage_total_kb` (line 105)
+**Constant:** `MetricName.ORG_USAGE_TOTAL_KB`
+
+**Variable:** `self._usage_total_kb` (line 106)
 
 #### `meraki_org_usage_upstream_kb`
 
@@ -688,17 +809,115 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 
 **Type:** gauge
 
-**Labels:** `org_id`, `org_name`
+**Labels:** 
 
-**Variable:** `self._usage_upstream_kb` (line 117)
+**Constant:** `MetricName.ORG_USAGE_UPSTREAM_KB`
 
-## All Metrics (Alphabetical)
+**Variable:** `self._usage_upstream_kb` (line 118)
+
+### OrganizationCollectorRefactored
+
+**Source:** `src/meraki_dashboard_exporter/collectors/organization_refactored.py`
+
+#### ``
+
+**Type:** gauge
+
+**Variable:** `self._api_requests_total` (line 61)
+
+#### ``
+
+**Type:** gauge
+
+**Variable:** `self._api_rate_limit` (line 72)
+
+#### ``
+
+**Type:** gauge
+
+**Variable:** `self._networks_total` (line 85)
+
+#### ``
+
+**Type:** gauge
+
+**Variable:** `self._devices_total` (line 99)
+
+#### ``
+
+**Type:** gauge
+
+**Variable:** `self._devices_by_model_total` (line 112)
+
+#### ``
+
+**Type:** gauge
+
+**Variable:** `self._licenses_total` (line 126)
+
+#### ``
+
+**Type:** gauge
+
+**Variable:** `self._licenses_expiring` (line 138)
+
+#### ``
+
+**Type:** gauge
+
+**Variable:** `self._clients_total` (line 151)
+
+#### ``
+
+**Type:** gauge
+
+**Variable:** `self._usage_total_kb` (line 164)
+
+#### ``
+
+**Type:** gauge
+
+**Variable:** `self._usage_downstream_kb` (line 176)
+
+#### ``
+
+**Type:** gauge
+
+**Variable:** `self._usage_upstream_kb` (line 188)
+
+#### `meraki_org_info`
+
+**Description:** Organization information
+
+**Type:** info
+
+**Labels:** 
+
+**Variable:** `self._org_info` (line 48)
+
+## Complete Metrics Index
+
+All metrics in alphabetical order:
 
 | Metric Name | Type | Collector | Description |
 |-------------|------|-----------|-------------|
+| `` | gauge | OrganizationCollectorRefactored |  |
+| `` | gauge | OrganizationCollectorRefactored |  |
+| `` | gauge | OrganizationCollectorRefactored |  |
+| `` | gauge | OrganizationCollectorRefactored |  |
+| `` | gauge | OrganizationCollectorRefactored |  |
+| `` | gauge | OrganizationCollectorRefactored |  |
+| `` | gauge | OrganizationCollectorRefactored |  |
+| `` | gauge | OrganizationCollectorRefactored |  |
+| `` | gauge | OrganizationCollectorRefactored |  |
+| `` | gauge | OrganizationCollectorRefactored |  |
+| `` | gauge | OrganizationCollectorRefactored |  |
 | `meraki_alerts_active` | gauge | AlertsCollector | Number of active Meraki assurance alerts |
+| `meraki_alerts_active` | gauge | AlertsCollectorRefactored | Number of active Meraki assurance alerts |
 | `meraki_alerts_total_by_network` | gauge | AlertsCollector | Total number of active alerts per network |
+| `meraki_alerts_total_by_network` | gauge | AlertsCollectorRefactored | Total number of active alerts per network |
 | `meraki_alerts_total_by_severity` | gauge | AlertsCollector | Total number of active alerts by severity |
+| `meraki_alerts_total_by_severity` | gauge | AlertsCollectorRefactored | Total number of active alerts by severity |
 | `meraki_ap_channel_utilization_2_4ghz_percent` | gauge | NetworkHealthCollector | 2.4GHz channel utilization percentage per AP |
 | `meraki_ap_channel_utilization_5ghz_percent` | gauge | NetworkHealthCollector | 5GHz channel utilization percentage per AP |
 | `meraki_device_memory_free_bytes` | gauge | DeviceCollector | Device memory free in bytes |
@@ -737,6 +956,7 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 | `meraki_org_configuration_changes_total` | gauge | ConfigCollector | Total number of configuration changes in the last 24 hours |
 | `meraki_org_devices_by_model_total` | gauge | OrganizationCollector | Total number of devices by specific model |
 | `meraki_org_devices_total` | gauge | OrganizationCollector | Total number of devices in the organization |
+| `meraki_org_info` | info | OrganizationCollectorRefactored | Organization information |
 | `meraki_org_info` | info | OrganizationCollector | Organization information |
 | `meraki_org_licenses_expiring` | gauge | OrganizationCollector | Number of licenses expiring within 30 days |
 | `meraki_org_licenses_total` | gauge | OrganizationCollector | Total number of licenses |
@@ -757,3 +977,22 @@ This document lists all Prometheus metrics exposed by the Meraki Dashboard Expor
 | `meraki_org_usage_downstream_kb` | gauge | OrganizationCollector | Downstream data usage in KB for the 5-minute window (last complete 5-min interval) |
 | `meraki_org_usage_total_kb` | gauge | OrganizationCollector | Total data usage in KB for the 5-minute window (last complete 5-min interval, e.g., 11:04 call returns 10:55-11:00) |
 | `meraki_org_usage_upstream_kb` | gauge | OrganizationCollector | Upstream data usage in KB for the 5-minute window (last complete 5-min interval) |
+
+## Notes
+
+!!! info "Metric Types"
+    - **Gauge**: Current value that can go up or down
+    - **Counter**: Cumulative value that only increases
+    - **Info**: Metadata with labels but value always 1
+
+!!! tip "Label Usage"
+    All metrics include relevant labels for filtering and aggregation. Use label selectors in your queries:
+    ```promql
+    # Filter by organization
+    meraki_device_up{org_name="Production"}
+    
+    # Filter by device type
+    meraki_device_up{device_model=~"MS.*"}
+    ```
+
+For more information on using these metrics, see the [Overview](overview.md) page.

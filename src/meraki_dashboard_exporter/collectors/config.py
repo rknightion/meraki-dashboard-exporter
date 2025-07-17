@@ -6,8 +6,11 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ..core.collector import MetricCollector
-from ..core.constants import UpdateTier
+from ..core.constants import MetricName, UpdateTier
+from ..core.domain_models import ConfigurationChange
+from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
+from ..core.metrics import LabelName
 
 if TYPE_CHECKING:
     pass
@@ -25,112 +28,98 @@ class ConfigCollector(MetricCollector):
         """Initialize configuration metrics."""
         # Login security metrics
         self._login_security_password_expiration_enabled = self._create_gauge(
-            "meraki_org_login_security_password_expiration_enabled",
+            MetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_ENABLED,
             "Whether password expiration is enforced (1=enabled, 0=disabled)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_password_expiration_days = self._create_gauge(
-            "meraki_org_login_security_password_expiration_days",
+            MetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_DAYS,
             "Number of days before password expires (0 if not set)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_different_passwords_enabled = self._create_gauge(
-            "meraki_org_login_security_different_passwords_enabled",
+            MetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_ENABLED,
             "Whether different passwords are enforced (1=enabled, 0=disabled)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_different_passwords_count = self._create_gauge(
-            "meraki_org_login_security_different_passwords_count",
+            MetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_COUNT,
             "Number of different passwords required (0 if not set)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_strong_passwords_enabled = self._create_gauge(
-            "meraki_org_login_security_strong_passwords_enabled",
+            MetricName.ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED,
             "Whether strong passwords are enforced (1=enabled, 0=disabled)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_minimum_password_length = self._create_gauge(
-            "meraki_org_login_security_minimum_password_length",
+            MetricName.ORG_LOGIN_SECURITY_MINIMUM_PASSWORD_LENGTH,
             "Minimum password length required",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_account_lockout_enabled = self._create_gauge(
-            "meraki_org_login_security_account_lockout_enabled",
+            MetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ENABLED,
             "Whether account lockout is enforced (1=enabled, 0=disabled)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_account_lockout_attempts = self._create_gauge(
-            "meraki_org_login_security_account_lockout_attempts",
+            MetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ATTEMPTS,
             "Number of failed login attempts before lockout (0 if not set)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_idle_timeout_enabled = self._create_gauge(
-            "meraki_org_login_security_idle_timeout_enabled",
+            MetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_ENABLED,
             "Whether idle timeout is enforced (1=enabled, 0=disabled)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_idle_timeout_minutes = self._create_gauge(
-            "meraki_org_login_security_idle_timeout_minutes",
+            MetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_MINUTES,
             "Minutes before idle timeout (0 if not set)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_two_factor_enabled = self._create_gauge(
-            "meraki_org_login_security_two_factor_enabled",
+            MetricName.ORG_LOGIN_SECURITY_TWO_FACTOR_ENABLED,
             "Whether two-factor authentication is enforced (1=enabled, 0=disabled)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_ip_ranges_enabled = self._create_gauge(
-            "meraki_org_login_security_ip_ranges_enabled",
+            MetricName.ORG_LOGIN_SECURITY_IP_RANGES_ENABLED,
             "Whether login IP ranges are enforced (1=enabled, 0=disabled)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_api_ip_restrictions_enabled = self._create_gauge(
-            "meraki_org_login_security_api_ip_restrictions_enabled",
+            MetricName.ORG_LOGIN_SECURITY_API_IP_RESTRICTIONS_ENABLED,
             "Whether API key IP restrictions are enabled (1=enabled, 0=disabled)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         # Configuration change metrics
         self._configuration_changes_total = self._create_gauge(
-            "meraki_org_configuration_changes_total",
+            MetricName.ORG_CONFIGURATION_CHANGES_TOTAL,
             "Total number of configuration changes in the last 24 hours",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
     async def _collect_impl(self) -> None:
         """Collect configuration metrics."""
         try:
-            # Get organizations
-            if self.settings.org_id:
-                # Single organization
-                logger.debug("Fetching single organization", org_id=self.settings.org_id)
-                self._track_api_call("getOrganization")
-                org = await asyncio.to_thread(
-                    self.api.organizations.getOrganization,
-                    self.settings.org_id,
-                )
-                organizations = [org]
-                logger.debug(
-                    "Successfully fetched organization", org_name=org.get("name", "unknown")
-                )
-            else:
-                # All accessible organizations
-                logger.debug("Fetching all organizations for config collection")
-                self._track_api_call("getOrganizations")
-                organizations = await asyncio.to_thread(self.api.organizations.getOrganizations)
-                logger.debug("Successfully fetched organizations", count=len(organizations))
+            # Get organizations with error handling
+            organizations = await self._fetch_organizations()
+            if not organizations:
+                logger.warning("No organizations found for config collection")
+                return
 
             # Collect metrics for each organization
             tasks = [self._collect_org_config(org) for org in organizations]
@@ -139,6 +128,46 @@ class ConfigCollector(MetricCollector):
         except Exception:
             logger.exception("Failed to collect configuration metrics")
 
+    @with_error_handling(
+        operation="Fetch organizations",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _fetch_organizations(self) -> list[dict[str, Any]] | None:
+        """Fetch organizations for config collection.
+
+        Returns
+        -------
+        list[dict[str, Any]] | None
+            List of organizations or None on error.
+
+        """
+        if self.settings.org_id:
+            # Single organization
+            logger.debug("Fetching single organization", org_id=self.settings.org_id)
+            self._track_api_call("getOrganization")
+            org = await asyncio.to_thread(
+                self.api.organizations.getOrganization,
+                self.settings.org_id,
+            )
+            return [org]
+        else:
+            # All accessible organizations
+            logger.debug("Fetching all organizations for config collection")
+            self._track_api_call("getOrganizations")
+            organizations = await asyncio.to_thread(self.api.organizations.getOrganizations)
+            organizations = validate_response_format(
+                organizations,
+                expected_type=list,
+                operation="getOrganizations"
+            )
+            logger.debug("Successfully fetched organizations", count=len(organizations))
+            return organizations
+
+    @with_error_handling(
+        operation="Collect organization config",
+        continue_on_error=True,
+    )
     async def _collect_org_config(self, org: dict[str, Any]) -> None:
         """Collect configuration for a specific organization.
 
@@ -187,56 +216,56 @@ class ConfigCollector(MetricCollector):
 
             # Password expiration
             self._login_security_password_expiration_enabled.labels(
-                org_id=org_id, org_name=org_name
+                org_id, org_name
             ).set(1 if security.get("enforcePasswordExpiration", False) else 0)
 
             self._login_security_password_expiration_days.labels(
-                org_id=org_id, org_name=org_name
+                org_id, org_name
             ).set(security.get("passwordExpirationDays") or 0)
 
             # Different passwords
             self._login_security_different_passwords_enabled.labels(
-                org_id=org_id, org_name=org_name
+                org_id, org_name
             ).set(1 if security.get("enforceDifferentPasswords", False) else 0)
 
             self._login_security_different_passwords_count.labels(
-                org_id=org_id, org_name=org_name
+                org_id, org_name
             ).set(security.get("numDifferentPasswords") or 0)
 
             # Strong passwords
             self._login_security_strong_passwords_enabled.labels(
-                org_id=org_id, org_name=org_name
+                org_id, org_name
             ).set(1 if security.get("enforceStrongPasswords", False) else 0)
 
             self._login_security_minimum_password_length.labels(
-                org_id=org_id, org_name=org_name
+                org_id, org_name
             ).set(security.get("minimumPasswordLength") or 0)
 
             # Account lockout
             self._login_security_account_lockout_enabled.labels(
-                org_id=org_id, org_name=org_name
+                org_id, org_name
             ).set(1 if security.get("enforceAccountLockout", False) else 0)
 
             self._login_security_account_lockout_attempts.labels(
-                org_id=org_id, org_name=org_name
+                org_id, org_name
             ).set(security.get("accountLockoutAttempts") or 0)
 
             # Idle timeout
-            self._login_security_idle_timeout_enabled.labels(org_id=org_id, org_name=org_name).set(
+            self._login_security_idle_timeout_enabled.labels(org_id, org_name).set(
                 1 if security.get("enforceIdleTimeout", False) else 0
             )
 
-            self._login_security_idle_timeout_minutes.labels(org_id=org_id, org_name=org_name).set(
+            self._login_security_idle_timeout_minutes.labels(org_id, org_name).set(
                 security.get("idleTimeoutMinutes") or 0
             )
 
             # Two-factor auth
-            self._login_security_two_factor_enabled.labels(org_id=org_id, org_name=org_name).set(
+            self._login_security_two_factor_enabled.labels(org_id, org_name).set(
                 1 if security.get("enforceTwoFactorAuth", False) else 0
             )
 
             # IP ranges
-            self._login_security_ip_ranges_enabled.labels(org_id=org_id, org_name=org_name).set(
+            self._login_security_ip_ranges_enabled.labels(org_id, org_name).set(
                 1 if security.get("enforceLoginIpRanges", False) else 0
             )
 
@@ -246,7 +275,7 @@ class ConfigCollector(MetricCollector):
             api_ip_enabled = ip_restrictions.get("enabled", False)
 
             self._login_security_api_ip_restrictions_enabled.labels(
-                org_id=org_id, org_name=org_name
+                org_id, org_name
             ).set(1 if api_ip_enabled else 0)
 
             logger.debug(
@@ -287,14 +316,24 @@ class ConfigCollector(MetricCollector):
                 total_pages="all",
             )
 
-            # Count the total number of changes
-            change_count = len(config_changes) if config_changes else 0
+            # Parse changes using domain model for validation
+            parsed_changes = []
+            if config_changes:
+                for change in config_changes:
+                    try:
+                        parsed_change = ConfigurationChange(**change)
+                        parsed_changes.append(parsed_change)
+                    except Exception:
+                        logger.debug("Failed to parse configuration change", change=change)
+                        continue
+
+            # Count the total number of valid changes
+            change_count = len(parsed_changes)
 
             # Set the metric
             if self._configuration_changes_total:
                 self._configuration_changes_total.labels(
-                    org_id=org_id,
-                    org_name=org_name,
+                    org_id, org_name
                 ).set(change_count)
                 logger.debug(
                     "Successfully collected configuration changes",
@@ -317,8 +356,7 @@ class ConfigCollector(MetricCollector):
                 # Set metric to 0 when API is not available
                 if self._configuration_changes_total:
                     self._configuration_changes_total.labels(
-                        org_id=org_id,
-                        org_name=org_name,
+                        org_id, org_name
                     ).set(0)
             else:
                 logger.exception(

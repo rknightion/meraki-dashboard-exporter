@@ -45,9 +45,9 @@ class CollectorManager:
         from .alerts import AlertsCollector
         from .config import ConfigCollector
         from .device import DeviceCollector
+        from .mt_sensor import MTSensorCollector
         from .network_health import NetworkHealthCollector
         from .organization import OrganizationCollector
-        from .mt_sensor import MTSensorCollector
 
         # MEDIUM tier collectors
         # Always collect organization metrics

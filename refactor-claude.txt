@@ -20,38 +20,11 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
 
 # In Progress Tasks
 
-
 # Pending tasks
 
 ## Priority 1: Break Down Monolithic Files (High Impact)
 
-
-
 ## Priority 2: Reduce Code Duplication (High Impact)
-
-### 2.1 Extract Common Metric Creation Patterns
-**Issue**: Repetitive metric creation code across collectors with similar patterns.
-**Refactor**:
-- Create metric factory classes/functions for common patterns
-- Create typed metric builders: `build_device_metric()`, `build_port_metric()`, etc.
-- Use dataclasses or TypedDict for metric definitions
-**Benefit**: DRY principle, consistent metric creation, easier for LLMs to understand and replicate patterns.
-
-### 2.2 Standardize Error Handling Patterns
-**Issue**: Inconsistent error handling across collectors.
-**Refactor**:
-- Create decorators for common error handling patterns
-- Standardize API call error handling with retry logic
-- Create typed exceptions for different error scenarios
-**Benefit**: Consistent behavior, easier debugging, clearer error context for LLMs.
-
-### 2.3 Extract Common API Call Patterns
-**Issue**: Similar API call patterns repeated across collectors with slight variations.
-**Refactor**:
-- Create higher-level API client methods for common patterns
-- Add method decorators for API rate limiting, retries, and logging
-- Create typed response models for common API responses
-**Benefit**: Consistent API handling, easier to modify API behavior globally.
 
 ## Priority 3: Improve Type Safety and LLM Understanding (Medium-High Impact)
 
@@ -63,13 +36,6 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
 - Add generic types for collector base classes
 **Benefit**: Better IDE support, clearer data contracts, easier for LLMs to understand expected data structures.
 
-### 3.2 Create Domain Models
-**Issue**: Using raw dictionaries for domain objects throughout the codebase.
-**Refactor**:
-- Create Pydantic models for Device, Network, Organization, etc.
-- Add validation and computed properties
-- Use dataclasses for simpler value objects
-**Benefit**: Self-documenting code, validation at boundaries, clearer domain understanding for LLMs.
 
 ### 3.3 Improve Constants Organization
 **Issue**: All constants in a single file, some magic strings still scattered.
@@ -151,6 +117,136 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
 
 
 # Completed tasks
+
+### 3.2 Create Domain Models - COMPLETED
+**Issue**: Using raw dictionaries for domain objects throughout the codebase.
+**Refactor Completed**:
+- Created `core/domain_models.py` with additional domain models:
+  - RFHealthData, ConnectionStats, NetworkConnectionStats for network health
+  - SwitchPort, SwitchPortPOE for switch metrics
+  - MRDeviceStats, MRRadioStatus for access point metrics
+  - ConfigurationChange for configuration tracking
+  - SensorMeasurement, MTSensorReading for sensor data
+  - OrganizationSummary for organization overviews
+- Updated collectors to use domain models:
+  - rf_health.py: Uses RFHealthData for validation
+  - connection_stats.py: Uses ConnectionStats and NetworkConnectionStats
+  - config.py: Uses ConfigurationChange for parsing responses
+  - mt.py: Uses MTSensorReading and SensorMeasurement for sensor data
+- Added computed fields and validation in models (e.g., POE utilization percentage)
+- Created helper functions for parsing API responses to domain models
+**Benefit**: Type-safe data handling, automatic validation, self-documenting code, clearer domain understanding for LLMs.
+
+### 1.4 Further refactor device.py - COMPLETED
+**Issue**: device.py still contained several concerns that could be extracted (797 lines).
+**Refactor Completed**:
+- Moved _set_metric_value helper to MetricCollector base class (available to all collectors)
+- Removed duplicate _set_metric_value from network_health.py
+- Created `core/batch_processing.py` with utilities:
+  - `process_in_batches_with_errors()` - Process items in batches with error handling
+  - `process_grouped_items()` - Process grouped items (e.g., devices by type)
+  - `extract_successful_results()` - Extract successful results from batch processing
+- Refactored device.py to use batch processing utilities instead of repetitive batch code
+- Reduced device.py from 797 to 689 lines (108 lines reduction)
+- Kept _set_packet_metric_value in device.py due to its specialized caching logic
+**Benefit**: Cleaner code, reusable batch processing pattern, metric value setter available to all collectors.
+
+### 3.1 Add Comprehensive Type Annotations - COMPLETED
+**Issue**: Some areas lack complete type annotations, making it harder for LLMs to understand data flow.
+**Refactor Completed**:
+- Created `core/type_definitions.py` with TypedDict definitions for common data structures:
+  - DeviceStatusInfo, MemoryUsageData, PortStatusData, WirelessStatusData
+  - SensorReadingData, AlertData, LicenseData, ClientOverviewData
+  - NetworkHealthData, ConnectionStatsData, APIRequestData, ConfigurationChangeData
+  - Type aliases for common patterns (OrganizationId, NetworkId, DeviceSerial, etc.)
+- Created `core/api_models.py` with Pydantic models for API responses (already existed)
+- Created example typed organization collector demonstrating proper usage
+- Updated CLAUDE.md to guide LLMs to use TypedDict and Pydantic models
+- All existing code already has comprehensive return type annotations
+**Benefit**: Better type safety, clearer data contracts, easier for LLMs to understand expected data structures, automatic validation with Pydantic models.
+
+### 2.2 Standardize Error Handling Patterns - COMPLETED
+**Issue**: Inconsistent error handling across collectors.
+**Refactor Completed**:
+- Applied standardized error handling to all main collectors:
+  - Organization collector: Added @with_error_handling decorators, _fetch_organizations helper method
+  - Alerts collector: Added error handling for organization and alert fetching
+  - Config collector: Added error handling for configuration data collection
+  - Device collector: Added _fetch_devices and _fetch_device_statuses helper methods
+  - Network health collector: Added error handling for network health data
+  - MT sensor collector: Added error handling decorator
+- Applied error handling to device sub-collectors:
+  - MR collector: Added decorators to collect(), _collect_connection_stats(), collect_wireless_clients(), collect_ethernet_status()
+  - MS collector: Added decorators to collect() method
+  - Base device collector: Added error handling to collect_memory_metrics()
+- All API responses now validated with validate_response_format()
+- Error categories properly assigned (API_CLIENT_ERROR, API_NOT_AVAILABLE, etc.)
+- Consistent return of None on errors with continue_on_error=True
+**Benefit**: Consistent error handling across entire codebase, better error tracking, clearer error context for debugging.
+
+### 2.3 Extract Common API Call Patterns - COMPLETED
+**Issue**: Similar API call patterns repeated across collectors with slight variations.
+**Refactor Completed**:
+- Created `core/api_helpers.py` with APIHelper class providing:
+  - `get_organizations()` - Handles both single org and multi-org configurations
+  - `get_organization_networks()` - Fetches networks with optional product type filtering
+  - `get_organization_devices()` - Fetches devices with optional filtering by product type and model
+  - `process_in_batches()` - Generic batch processing to avoid overwhelming API
+  - `get_time_based_data()` - Standardized handling of time-based API calls
+- Created `core/api_models.py` with Pydantic models for type safety:
+  - Organization, Network, Device, DeviceStatus models
+  - PortStatus, WirelessClient, SensorReading, SensorData models
+  - APIUsage, License, ClientOverview, Alert models
+  - MemoryUsage and PaginatedResponse wrapper models
+  - All models include validation and proper type conversion
+- Created example refactored organization collector demonstrating usage patterns
+- Benefits achieved:
+  - Consistent API error handling with decorators
+  - Automatic API call tracking and logging
+  - Type-safe API responses with validation
+  - Reduced code duplication across collectors
+  - Easier to modify API behavior globally
+**Benefit**: Consistent API handling across all collectors, type-safe responses, reduced duplication, easier for LLMs to understand API patterns.
+
+### 2.2 Standardize Error Handling Patterns - COMPLETED
+**Issue**: Inconsistent error handling across collectors, no standardized retry logic or error categorization.
+**Refactor Completed**:
+- Created `core/error_handling.py` with comprehensive error handling utilities:
+  - `ErrorCategory` enum for classifying errors (rate limit, client error, server error, timeout, etc.)
+  - `CollectorError` base exception with category and context
+  - `@with_error_handling` decorator for standardized error handling on methods
+  - `validate_response_format()` for API response validation
+  - `batch_with_concurrency_limit()` for managing concurrent API calls
+- Enhanced base `MetricCollector` with `_track_error()` method for error tracking
+- Created example refactored alerts collector demonstrating new patterns
+- Error handling now includes:
+  - Automatic error categorization
+  - Contextual logging with operation details
+  - Integration with Prometheus error metrics
+  - Option to continue or fail on errors
+  - Special handling for 404 (API not available) errors
+**Benefit**: Consistent error handling across all collectors, better error tracking and monitoring, clearer error context for debugging, standardized patterns for LLMs to follow when adding new collectors.
+
+### 2.1 Extract Common Metric Creation Patterns - COMPLETED
+**Issue**: Repetitive metric creation code across collectors with similar patterns and hardcoded metric names.
+**Refactor Completed**:
+- Created `core/metrics.py` with standardized metric creation utilities:
+  - `LabelName` enum for consistent label names across all metrics
+  - `MetricDefinition` dataclass for structured metric definitions with validation
+  - `MetricFactory` with helper methods for creating standardized metrics (organization_metric, network_metric, device_metric, port_metric)
+  - Validation functions for metric naming conventions
+- Added 75+ missing metric names to `MetricName` enum in constants.py
+- Migrated ALL collectors to use MetricName enum instead of hardcoded strings:
+  - alerts.py, config.py, organization.py, device.py, network_health.py, mt_sensor.py
+  - Sub-collectors: mr.py (19 metrics), ms.py (8 metrics)
+  - All metrics now use enum values for type safety
+- Migrated ALL collectors to use LabelName enum instead of hardcoded label strings:
+  - Added missing labels to enum: sensor_type, mode, duplex, standard, radio_index
+  - Updated all labelnames arrays in all collectors
+  - Example: ["serial", "name"] → [LabelName.SERIAL, LabelName.NAME]
+- Created example refactored collectors demonstrating new patterns
+- Metrics documentation generator updated and verified (76 metrics documented)
+**Benefit**: Complete type safety for metric names and labels, zero hardcoded strings, reduced chance of typos, consistent patterns across entire codebase, easier for LLMs to understand and extend.
 
 ### Additional Refactoring: Metric Organization and Ownership - COMPLETED
 **Issue**: Metric initialization was scattered across files, with device-specific metrics defined in device.py rather than their respective sub-collectors.

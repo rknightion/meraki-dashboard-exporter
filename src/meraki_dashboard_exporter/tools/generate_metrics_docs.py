@@ -104,7 +104,7 @@ def scan_for_metrics(root_path: Path) -> list[dict[str, Any]]:
             continue
         
         try:
-            with open(py_file, "r") as f:
+            with open(py_file) as f:
                 tree = ast.parse(f.read(), filename=str(py_file))
             
             visitor = MetricVisitor(py_file)
@@ -122,11 +122,11 @@ def resolve_metric_names(metrics: list[dict[str, Any]], constants_file: Path) ->
     metric_name_map = {}
     
     try:
-        with open(constants_file, "r") as f:
+        with open(constants_file) as f:
             content = f.read()
         
         # Find MetricName class definition
-        class_match = re.search(r'class MetricName\(StrEnum\):(.*?)(?=class|\Z)', content, re.DOTALL)
+        class_match = re.search(r"class MetricName\(StrEnum\):(.*?)(?=class|\Z)", content, re.DOTALL)
         if class_match:
             class_body = class_match.group(1)
             # Find all constant definitions
@@ -149,10 +149,43 @@ def resolve_metric_names(metrics: list[dict[str, Any]], constants_file: Path) ->
 
 
 def generate_markdown(metrics: list[dict[str, Any]]) -> str:
-    """Generate markdown documentation for metrics."""
-    lines = ["# Meraki Dashboard Exporter Metrics", ""]
-    lines.append("This document lists all Prometheus metrics exposed by the Meraki Dashboard Exporter.")
+    """Generate markdown documentation for metrics in mkdocs style."""
+    lines = ["# Metrics Reference", ""]
+    lines.append("This page provides a comprehensive reference of all Prometheus metrics exposed by the Meraki Dashboard Exporter.")
     lines.append("")
+    
+    # Add table of contents
+    lines.append("## Overview")
+    lines.append("")
+    lines.append("The exporter provides metrics across several categories:")
+    lines.append("")
+    
+    # Count metrics by collector
+    collector_counts = {}
+    for metric in metrics:
+        collector = metric["class"] or "Unknown"
+        collector_counts[collector] = collector_counts.get(collector, 0) + 1
+    
+    lines.append("| Collector | Metrics | Description |")
+    lines.append("|-----------|---------|-------------|")
+    
+    collector_descriptions = {
+        "AlertsCollector": "Active alerts by severity, type, and category",
+        "ConfigCollector": "Organization security settings and configuration tracking",
+        "DeviceCollector": "Device status, performance, and uptime metrics",
+        "MTSensorCollector": "Environmental monitoring from MT sensors",
+        "NetworkHealthCollector": "Network-wide wireless health and performance",
+        "OrganizationCollector": "Organization-level metrics including API usage and licenses"
+    }
+    
+    for collector in sorted(collector_counts.keys()):
+        count = collector_counts[collector]
+        description = collector_descriptions.get(collector, "Various metrics")
+        lines.append(f"| {collector} | {count} | {description} |")
+    
+    lines.append("")
+    
+    # Add metrics by collector
     lines.append("## Metrics by Collector")
     lines.append("")
     
@@ -173,7 +206,7 @@ def generate_markdown(metrics: list[dict[str, Any]]) -> str:
         # Find the file for this collector
         if collector_metrics:
             file_path = collector_metrics[0]["file"]
-            lines.append(f"**File:** `{file_path}`")
+            lines.append(f"**Source:** `{file_path}`")
             lines.append("")
         
         # Sort metrics by name
@@ -192,7 +225,8 @@ def generate_markdown(metrics: list[dict[str, Any]]) -> str:
             lines.append("")
             
             if "labels" in metric:
-                lines.append(f"**Labels:** {', '.join(f'`{label}`' for label in metric['labels'])}")
+                labels_list = ", ".join(f"`{label}`" for label in metric["labels"])
+                lines.append(f"**Labels:** {labels_list}")
                 lines.append("")
             
             if "constant_name" in metric:
@@ -202,7 +236,9 @@ def generate_markdown(metrics: list[dict[str, Any]]) -> str:
             lines.append(f"**Variable:** `self.{metric['variable']}` (line {metric['line']})")
             lines.append("")
     
-    lines.append("## All Metrics (Alphabetical)")
+    lines.append("## Complete Metrics Index")
+    lines.append("")
+    lines.append("All metrics in alphabetical order:")
     lines.append("")
     
     # Sort all metrics by name
@@ -218,6 +254,28 @@ def generate_markdown(metrics: list[dict[str, Any]]) -> str:
         description = metric.get("description", "").replace("|", "\\|")
         
         lines.append(f"| `{name}` | {metric_type} | {collector} | {description} |")
+    
+    lines.append("")
+    
+    # Add notes section
+    lines.append("## Notes")
+    lines.append("")
+    lines.append('!!! info "Metric Types"')
+    lines.append("    - **Gauge**: Current value that can go up or down")
+    lines.append("    - **Counter**: Cumulative value that only increases")
+    lines.append("    - **Info**: Metadata with labels but value always 1")
+    lines.append("")
+    lines.append('!!! tip "Label Usage"')
+    lines.append("    All metrics include relevant labels for filtering and aggregation. Use label selectors in your queries:")
+    lines.append("    ```promql")
+    lines.append("    # Filter by organization")
+    lines.append('    meraki_device_up{org_name="Production"}')
+    lines.append("    ")
+    lines.append("    # Filter by device type")
+    lines.append('    meraki_device_up{device_model=~"MS.*"}')
+    lines.append("    ```")
+    lines.append("")
+    lines.append("For more information on using these metrics, see the [Overview](overview.md) page.")
     
     return "\n".join(lines)
 
@@ -248,8 +306,9 @@ def main() -> None:
     print("Generating documentation...")
     markdown = generate_markdown(metrics)
     
-    # Write to file
-    output_file = Path("METRICS.md")
+    # Write to docs/metrics/metrics.md
+    output_file = Path("docs/metrics/metrics.md")
+    output_file.parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, "w") as f:
         f.write(markdown)
     

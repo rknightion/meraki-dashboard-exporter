@@ -134,8 +134,8 @@ class AsyncMerakiClient:
                 total_pages="all",
             )
 
-    async def get_device_statuses(self, org_id: str) -> list[dict[str, Any]]:
-        """Fetch device statuses for an organization.
+    async def get_device_availabilities(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch device availabilities for an organization.
 
         Parameters
         ----------
@@ -145,12 +145,12 @@ class AsyncMerakiClient:
         Returns
         -------
         list[dict[str, Any]]
-            List of device status data.
+            List of device availability data.
 
         """
         async with self._semaphore:
             return await asyncio.to_thread(
-                self.api.organizations.getOrganizationDevicesStatuses,
+                self.api.organizations.getOrganizationDevicesAvailabilities,
                 org_id,
                 total_pages="all",
             )

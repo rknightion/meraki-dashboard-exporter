@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
-from ..core.constants import DeviceStatus, DeviceType, MetricName, UpdateTier
+from ..core.constants import DeviceType, MetricName, UpdateTier
+from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
+from ..core.metrics import LabelName
 from .devices import MGCollector, MRCollector, MSCollector, MTCollector, MVCollector, MXCollector
 
 if TYPE_CHECKING:
@@ -24,54 +27,6 @@ class DeviceCollector(MetricCollector):
 
     # Device metrics update at medium frequency
     update_tier: UpdateTier = UpdateTier.MEDIUM
-
-    def _set_metric_value(
-        self, metric_name: str, labels: dict[str, str], value: float | None
-    ) -> None:
-        """Safely set a metric value with validation.
-
-        Parameters
-        ----------
-        metric_name : str
-            Name of the metric attribute.
-        labels : dict[str, str]
-            Labels to apply to the metric.
-        value : float | None
-            Value to set. If None, the metric will not be updated.
-
-        """
-        # Skip if value is None - this happens when API returns null values
-        if value is None:
-            logger.debug(
-                "Skipping metric update due to None value",
-                metric_name=metric_name,
-                labels=labels,
-            )
-            return
-
-        metric = getattr(self, metric_name, None)
-        if metric is None:
-            logger.debug(
-                "Metric not available",
-                metric_name=metric_name,
-            )
-            return
-
-        try:
-            metric.labels(**labels).set(value)
-            logger.debug(
-                "Successfully set metric value",
-                metric_name=metric_name,
-                labels=labels,
-                value=value,
-            )
-        except Exception:
-            logger.exception(
-                "Failed to set metric value",
-                metric_name=metric_name,
-                labels=labels,
-                value=value,
-            )
 
     def _set_packet_metric_value(
         self, metric_name: str, labels: dict[str, str], value: float | None
@@ -166,60 +121,89 @@ class DeviceCollector(MetricCollector):
         self._device_up = self._create_gauge(
             MetricName.DEVICE_UP,
             "Device online status (1 = online, 0 = offline)",
-            labelnames=["serial", "name", "model", "network_id", "device_type"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE],
         )
 
         self._device_status_info = self._create_gauge(
-            "meraki_device_status_info",
+            MetricName.DEVICE_STATUS_INFO,
             "Device status information",
-            labelnames=["serial", "name", "model", "network_id", "device_type", "status"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE, LabelName.STATUS],
         )
 
         # Memory metrics - available via system memory usage history API
         self._device_memory_used_bytes = self._create_gauge(
-            "meraki_device_memory_used_bytes",
+            MetricName.DEVICE_MEMORY_USED_BYTES,
             "Device memory used in bytes",
-            labelnames=["serial", "name", "model", "network_id", "device_type", "stat"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE, LabelName.STAT],
         )
 
         self._device_memory_free_bytes = self._create_gauge(
-            "meraki_device_memory_free_bytes",
+            MetricName.DEVICE_MEMORY_FREE_BYTES,
             "Device memory free in bytes",
-            labelnames=["serial", "name", "model", "network_id", "device_type", "stat"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE, LabelName.STAT],
         )
 
         self._device_memory_total_bytes = self._create_gauge(
-            "meraki_device_memory_total_bytes",
+            MetricName.DEVICE_MEMORY_TOTAL_BYTES,
             "Device memory total provisioned in bytes",
-            labelnames=["serial", "name", "model", "network_id", "device_type"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE],
         )
 
         self._device_memory_usage_percent = self._create_gauge(
             MetricName.DEVICE_MEMORY_USAGE_PERCENT,
             "Device memory usage percentage (maximum from most recent interval)",
-            labelnames=["serial", "name", "model", "network_id", "device_type"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE],
         )
 
     async def _collect_impl(self) -> None:
         """Collect device metrics."""
         try:
-            # Get organizations
-            if self.settings.org_id:
-                org_ids = [self.settings.org_id]
-            else:
-                logger.debug("Fetching all organizations for device collection")
-                self._track_api_call("getOrganizations")
-                orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
-                org_ids = [org["id"] for org in orgs]
-                logger.debug("Successfully fetched organizations", count=len(org_ids))
+            # Get organizations with error handling
+            organizations = await self._fetch_organizations()
+            if not organizations:
+                logger.warning("No organizations found for device collection")
+                return
 
             # Collect devices for each organization
+            org_ids = [org["id"] for org in organizations]
             for org_id in org_ids:
                 await self._collect_org_devices(org_id)
 
         except Exception:
             logger.exception("Failed to collect device metrics")
 
+    @with_error_handling(
+        operation="Fetch organizations",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _fetch_organizations(self) -> list[dict[str, Any]] | None:
+        """Fetch organizations for device collection.
+
+        Returns
+        -------
+        list[dict[str, Any]] | None
+            List of organizations or None on error.
+
+        """
+        if self.settings.org_id:
+            return [{"id": self.settings.org_id}]
+        else:
+            logger.debug("Fetching all organizations for device collection")
+            self._track_api_call("getOrganizations")
+            orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
+            orgs = validate_response_format(
+                orgs,
+                expected_type=list,
+                operation="getOrganizations"
+            )
+            logger.debug("Successfully fetched organizations", count=len(orgs))
+            return orgs
+
+    @with_error_handling(
+        operation="Collect organization devices",
+        continue_on_error=True,
+    )
     async def _collect_org_devices(self, org_id: str) -> None:
         """Collect device metrics for an organization.
 
@@ -239,59 +223,20 @@ class DeviceCollector(MetricCollector):
             # Check if API is accessible
             logger.debug("Checking API access", org_id=org_id)
 
-            # Fetch devices and statuses separately to better handle timeouts
+            # Fetch devices and availabilities separately to better handle timeouts
             devices = None
-            statuses = None
 
             # Store device lookup map for use in other collectors
             self._device_lookup: dict[str, dict[str, Any]] = {}
 
-            try:
-                logger.debug("Fetching devices list", org_id=org_id)
-                self._track_api_call("getOrganizationDevices")
-
-                devices = await asyncio.to_thread(
-                    self.api.organizations.getOrganizationDevices,
-                    org_id,
-                    total_pages="all",
-                )
-                logger.debug(
-                    "Successfully fetched devices",
-                    org_id=org_id,
-                    count=len(devices) if devices else 0,
-                )
-            except Exception as e:
-                logger.error(
-                    "Failed to fetch devices",
-                    org_id=org_id,
-                    error=str(e),
-                    error_type=type(e).__name__,
-                )
+            # Fetch devices with error handling
+            devices = await self._fetch_devices(org_id)
+            if not devices:
+                logger.warning("No devices found", org_id=org_id)
                 return
 
-            try:
-                logger.debug("Fetching device statuses", org_id=org_id)
-                self._track_api_call("getOrganizationDevicesStatuses")
-
-                statuses = await asyncio.to_thread(
-                    self.api.organizations.getOrganizationDevicesStatuses,
-                    org_id,
-                    total_pages="all",
-                )
-                logger.debug(
-                    "Successfully fetched statuses",
-                    org_id=org_id,
-                    count=len(statuses) if statuses else 0,
-                )
-            except Exception as e:
-                logger.error(
-                    "Failed to fetch statuses",
-                    org_id=org_id,
-                    error=str(e),
-                    error_type=type(e).__name__,
-                )
-                # Continue with devices but no status info
-                statuses = []
+            # Fetch availabilities with error handling
+            availabilities = await self._fetch_device_availabilities(org_id) or []
 
             if not devices:
                 logger.warning(
@@ -304,11 +249,11 @@ class DeviceCollector(MetricCollector):
                 "Processing devices",
                 org_id=org_id,
                 device_count=len(devices),
-                status_count=len(statuses),
+                availability_count=len(availabilities),
             )
 
-            # Create status lookup
-            status_map = {s["serial"]: s for s in statuses}
+            # Create availability lookup by serial
+            availability_map = {a["serial"]: a.get("status", "offline") for a in availabilities}
 
             # Track network POE usage (removed for now - not implemented)
 
@@ -327,8 +272,8 @@ class DeviceCollector(MetricCollector):
                     "device_type": device_type,
                 }
 
-                # Add status info to device
-                device["status_info"] = status_map.get(device["serial"], {})
+                # Add availability status to device
+                device["availability_status"] = availability_map.get(device["serial"], "offline")
 
                 # Collect common metrics
                 self._collect_common_metrics(device)
@@ -349,36 +294,14 @@ class DeviceCollector(MetricCollector):
                     count=len(ms_devices),
                 )
                 # Process devices in smaller batches to avoid overwhelming the API
-                batch_size = 5
-                for i in range(0, len(ms_devices), batch_size):
-                    batch = ms_devices[i : i + batch_size]
-                    logger.debug(
-                        "Processing MS device batch",
-                        batch_start=i,
-                        batch_size=len(batch),
-                    )
-
-                    # Process devices in batch concurrently but with individual timeouts
-                    tasks = []
-                    for device in batch:
-                        task = self._collect_ms_device_with_timeout(device)
-                        tasks.append(task)
-
-                    # Wait for batch to complete
-                    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                    # Log any failures
-                    for device, result in zip(batch, results, strict=False):
-                        if isinstance(result, Exception):
-                            logger.error(
-                                "Failed to collect MS device",
-                                serial=device["serial"],
-                                error=str(result),
-                                error_type=type(result).__name__,
-                            )
-
-                    # Small delay between batches
-                    await asyncio.sleep(0.5)
+                await process_in_batches_with_errors(
+                    ms_devices,
+                    self._collect_ms_device_with_timeout,
+                    batch_size=5,
+                    delay_between_batches=0.5,
+                    item_description="MS device",
+                    error_context_func=lambda device: {"serial": device["serial"]},
+                )
 
             # Process MR devices
             if mr_devices:
@@ -388,36 +311,14 @@ class DeviceCollector(MetricCollector):
                     mr_serials=[d["serial"] for d in mr_devices],
                 )
                 # Process devices in smaller batches to avoid overwhelming the API
-                batch_size = 5
-                for i in range(0, len(mr_devices), batch_size):
-                    batch = mr_devices[i : i + batch_size]
-                    logger.debug(
-                        "Processing MR device batch",
-                        batch_start=i,
-                        batch_size=len(batch),
-                    )
-
-                    # Process devices in batch concurrently but with individual timeouts
-                    tasks = []
-                    for device in batch:
-                        task = self._collect_mr_device_with_timeout(device)
-                        tasks.append(task)
-
-                    # Wait for batch to complete
-                    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                    # Log any failures
-                    for device, result in zip(batch, results, strict=False):
-                        if isinstance(result, Exception):
-                            logger.error(
-                                "Failed to collect MR device",
-                                serial=device["serial"],
-                                error=str(result),
-                                error_type=type(result).__name__,
-                            )
-
-                    # Small delay between batches
-                    await asyncio.sleep(0.5)
+                await process_in_batches_with_errors(
+                    mr_devices,
+                    self._collect_mr_device_with_timeout,
+                    batch_size=5,
+                    delay_between_batches=0.5,
+                    item_description="MR device",
+                    error_context_func=lambda device: {"serial": device["serial"]},
+                )
 
             # Process other device types (MX, MG, MV)
             for device_type, type_devices in devices_by_type.items():
@@ -431,31 +332,14 @@ class DeviceCollector(MetricCollector):
                         count=len(type_devices),
                     )
                     # Process devices in smaller batches
-                    batch_size = 5
-                    for i in range(0, len(type_devices), batch_size):
-                        batch = type_devices[i : i + batch_size]
-                        
-                        # Process devices in batch concurrently
-                        tasks = []
-                        for device in batch:
-                            task = self._collect_device_with_timeout(device, device_type)
-                            tasks.append(task)
-                        
-                        # Wait for batch to complete
-                        results = await asyncio.gather(*tasks, return_exceptions=True)
-                        
-                        # Log any failures
-                        for device, result in zip(batch, results, strict=False):
-                            if isinstance(result, Exception):
-                                logger.error(
-                                    f"Failed to collect {device_type} device",
-                                    serial=device["serial"],
-                                    error=str(result),
-                                    error_type=type(result).__name__,
-                                )
-                        
-                        # Small delay between batches
-                        await asyncio.sleep(0.5)
+                    await process_in_batches_with_errors(
+                        type_devices,
+                        lambda d, dt=device_type: self._collect_device_with_timeout(d, dt),
+                        batch_size=5,
+                        delay_between_batches=0.5,
+                        item_description=f"{device_type} device",
+                        error_context_func=lambda device: {"serial": device["serial"]},
+                    )
 
             # Aggregate network-wide POE metrics after all switches are collected
             logger.debug("Aggregating network POE metrics")
@@ -613,11 +497,10 @@ class DeviceCollector(MetricCollector):
         model = device.get("model", "Unknown")
         network_id = device.get("networkId", "")
         device_type = self._get_device_type(device)
-        status_info = device.get("status_info", {})
+        availability_status = device.get("availability_status", "offline")
 
         # Device up/down status
-        status = status_info.get("status", DeviceStatus.OFFLINE)
-        is_online = 1 if status == DeviceStatus.ONLINE else 0
+        is_online = 1 if availability_status == "online" else 0
         self._set_metric_value(
             "_device_up",
             {
@@ -639,7 +522,7 @@ class DeviceCollector(MetricCollector):
                 "model": model,
                 "network_id": network_id,
                 "device_type": device_type,
-                "status": status,
+                "status": availability_status,
             },
             1,
         )
@@ -724,3 +607,82 @@ class DeviceCollector(MetricCollector):
                 "Failed to aggregate network POE metrics",
                 org_id=org_id,
             )
+
+    @with_error_handling(
+        operation="Fetch devices",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _fetch_devices(self, org_id: str) -> list[dict[str, Any]] | None:
+        """Fetch devices for an organization.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]] | None
+            List of devices or None on error.
+
+        """
+        logger.debug("Fetching devices list", org_id=org_id)
+        self._track_api_call("getOrganizationDevices")
+
+        devices = await asyncio.to_thread(
+            self.api.organizations.getOrganizationDevices,
+            org_id,
+            total_pages="all",
+        )
+        devices = validate_response_format(
+            devices,
+            expected_type=list,
+            operation="getOrganizationDevices"
+        )
+        logger.debug(
+            "Successfully fetched devices",
+            org_id=org_id,
+            count=len(devices),
+        )
+        return devices
+
+    @with_error_handling(
+        operation="Fetch device availabilities",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _fetch_device_availabilities(self, org_id: str) -> list[dict[str, Any]] | None:
+        """Fetch device availabilities for an organization.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]] | None
+            List of device availabilities or None on error.
+
+        """
+        logger.debug("Fetching device availabilities", org_id=org_id)
+        self._track_api_call("getOrganizationDevicesAvailabilities")
+
+        availabilities = await asyncio.to_thread(
+            self.api.organizations.getOrganizationDevicesAvailabilities,
+            org_id,
+            total_pages="all",
+        )
+        availabilities = validate_response_format(
+            availabilities,
+            expected_type=list,
+            operation="getOrganizationDevicesAvailabilities"
+        )
+        
+        logger.debug(
+            "Successfully fetched availabilities",
+            org_id=org_id,
+            count=len(availabilities) if availabilities else 0,
+        )
+        return availabilities

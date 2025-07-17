@@ -100,6 +100,7 @@ class TestMetricsIntegration:
                     "model": "MR36",
                     "status": "online",
                     "networkId": "N_123",
+                    "productType": "wireless",
                 },
                 {
                     "serial": "Q2SW-XXXX",
@@ -107,6 +108,7 @@ class TestMetricsIntegration:
                     "model": "MS120",
                     "status": "offline",
                     "networkId": "N_123",
+                    "productType": "switch",
                 },
                 {
                     "serial": "Q2MT-XXXX",
@@ -114,6 +116,37 @@ class TestMetricsIntegration:
                     "model": "MT10",
                     "status": "online",
                     "networkId": "N_123",
+                    "productType": "sensor",
+                },
+            ]
+        )
+
+        # Mock device availabilities (new API replacing getOrganizationDevicesStatuses)
+        mock_api_client.api.organizations.getOrganizationDevicesAvailabilities = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2KD-XXXX",
+                    "name": "AP1",
+                    "model": "MR36",
+                    "status": "online",
+                    "networkId": "N_123",
+                    "productType": "wireless",
+                },
+                {
+                    "serial": "Q2SW-XXXX",
+                    "name": "Switch1",
+                    "model": "MS120",
+                    "status": "offline",
+                    "networkId": "N_123",
+                    "productType": "switch",
+                },
+                {
+                    "serial": "Q2MT-XXXX",
+                    "name": "Sensor1",
+                    "model": "MT10",
+                    "status": "online",
+                    "networkId": "N_123",
+                    "productType": "sensor",
                 },
             ]
         )
@@ -161,9 +194,8 @@ class TestMetricsIntegration:
         )
 
         # Mock network health APIs
-        mock_api_client.api.networks.getNetworkDevices = MagicMock(
-            return_value=[{"serial": "Q2KD-XXXX", "model": "MR36", "name": "AP1"}]
-        )
+        # Note: Network health collector will use organization devices API with filtering
+        # Already mocked above in getOrganizationDevices
         mock_api_client.api.networks.getNetworkNetworkHealthChannelUtilization = MagicMock(
             return_value=[]
         )
