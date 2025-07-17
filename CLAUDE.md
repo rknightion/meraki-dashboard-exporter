@@ -15,15 +15,28 @@ We use ruff for all python linting
 We use mypy for all python type checking
 We do all builds via docker and ensure first class docker support for running
 
+## Domain Models
+
+We use Pydantic models for API responses and internal data structures:
+- **API Models** (`core/api_models.py`): Core models like Organization, Network, Device, DeviceStatus, etc.
+- **Domain Models** (`core/domain_models.py`): Specific models for network health, device stats, sensor data, etc.
+- **Always use domain models** instead of raw dictionaries when processing API responses
+- Models include validation, computed fields, and type conversion
+- Example: Use `ConnectionStats` instead of `dict[str, int]` for connection statistics
+
 
 ## Code Style
 
 - **Formatting**: Black formatter with 88-char line length
 - **Type hints**: from __future__ import annotations, TypeAlias, ParamSpec, Self, typing.NamedTuple(slots=True), typing.Annotated for units / constraints
+- **Type definitions**: Use TypedDict from `core/type_definitions.py` for complex dictionary structures instead of dict[str, Any]
+- **Pydantic models**: Use models from `core/api_models.py` and `core/domain_models.py` for API responses to ensure validation
 - **Docstrings**: NumPy-docstrings + type hints
 - **Constants**: Literal & Enum / StrEnum (Keep StrEnum for metric / label names; use Literal for tiny closed sets.)
 - **Imports**: Group logically (stdlib, third-party, local)
 - **Early returns**: Reduce nesting where possible
+- **Metric Names**: ALWAYS use `MetricName` enum from constants.py instead of hardcoded strings
+- **Label Names**: ALWAYS use `LabelName` enum from core/metrics.py for consistent label naming
 
 ## API Guidelines
 
@@ -38,6 +51,9 @@ We do all builds via docker and ensure first class docker support for running
 - Early returns: Keep; combines neatly with match (PEP 636) for dispatching OTel signals.
 - Logging: structlog configured with an OTLP JSON processor so logs and traces share context.
 - Constants: class MetricName(StrEnum): HTTP_REQUESTS_TOTAL = "http_requests_total", avoiding scattered strings.
+- **ALWAYS use MetricName enum**: All metric names must use the MetricName enum from constants.py
+- **ALWAYS use LabelName enum**: All label names must use the LabelName enum from core/metrics.py
+- Use MetricFactory from core/metrics.py for creating standardized metrics when appropriate
 
 ## Update Rings
 
@@ -208,3 +224,137 @@ The exporter follows a structured logging approach to balance operational visibi
 - All metric updates log at DEBUG level when successfully setting values
 - Discovery information is logged once at startup via `DiscoveryService`
 - Subsequent collections use DEBUG level for details to avoid log spam
+
+## Error Handling Patterns
+
+The exporter uses standardized error handling patterns defined in `core/error_handling.py`:
+
+### Error Categories
+Errors are classified into categories for better monitoring:
+- `API_RATE_LIMIT`: 429 errors or rate limit messages
+- `API_CLIENT_ERROR`: 4xx errors (bad requests)
+- `API_SERVER_ERROR`: 5xx errors (server issues)
+- `API_NOT_AVAILABLE`: 404 errors (endpoint not available)
+- `TIMEOUT`: Operation timeouts
+- `PARSING`: JSON parsing or data format errors
+- `VALIDATION`: Data validation failures
+
+### Error Handling Decorator
+Use the `@with_error_handling` decorator for standardized error handling:
+
+```python
+from ..core.error_handling import with_error_handling
+
+@with_error_handling(
+    operation="Fetch devices",
+    continue_on_error=True,  # Return None on error
+    error_category=ErrorCategory.API_SERVER_ERROR,  # Optional
+)
+async def _fetch_devices(self, org_id: str) -> list[dict[str, Any]] | None:
+    # Implementation
+```
+
+### Response Validation
+Always validate API response formats:
+
+```python
+from ..core.error_handling import validate_response_format
+
+devices = await asyncio.to_thread(self.api.organizations.getOrganizationDevices, org_id)
+devices = validate_response_format(
+    devices,
+    expected_type=list,
+    operation="getOrganizationDevices"
+)
+```
+
+### Concurrency Management
+Use helpers for managing concurrent API calls:
+
+```python
+from ..core.error_handling import batch_with_concurrency_limit
+
+tasks = [self._process_device(d) for d in devices]
+limited_tasks = batch_with_concurrency_limit(tasks, max_concurrent=5)
+await asyncio.gather(*limited_tasks, return_exceptions=True)
+```
+
+### Error Tracking
+Errors are automatically tracked via `_track_error()` when using the decorator, creating Prometheus metrics for monitoring error rates by category.
+
+## API Helper Patterns
+
+The exporter provides standardized API helpers in `core/api_helpers.py` to reduce code duplication:
+
+### APIHelper Class
+Use the APIHelper class for common API patterns:
+
+```python
+from ..core.api_helpers import create_api_helper
+
+# In collector __init__
+self.api_helper = create_api_helper(self)
+
+# Get organizations (handles single/multi-org configs)
+organizations = await self.api_helper.get_organizations()
+
+# Get networks with optional filtering
+networks = await self.api_helper.get_organization_networks(
+    org_id,
+    product_types=["wireless", "switch"]
+)
+
+# Get devices with filtering
+devices = await self.api_helper.get_organization_devices(
+    org_id,
+    product_types=["sensor"],
+    models=["MR", "MS"]
+)
+
+# Process items in batches
+await self.api_helper.process_in_batches(
+    items,
+    process_func,
+    batch_size=10,
+    description="devices"
+)
+
+# Get time-based data
+data = await self.api_helper.get_time_based_data(
+    self.api.wireless.getNetworkWirelessDataRateHistory,
+    "getNetworkWirelessDataRateHistory",
+    timespan=300,
+    interval=300,
+    network_id=network_id
+)
+```
+
+### API Models
+Use Pydantic models from `core/api_models.py` for type-safe API responses:
+
+```python
+from ..core.api_models import Organization, Network, Device, License
+
+# Validate API responses
+org = Organization.model_validate(org_data)
+devices = [Device.model_validate(d) for d in device_list]
+
+# Models provide automatic validation and type conversion
+# All models support extra fields and have proper defaults
+```
+
+Available models include:
+- **API Models** (`core/api_models.py`):
+  - Organization, Network, Device, DeviceStatus
+  - PortStatus, WirelessClient  
+  - SensorReading, SensorData
+  - APIUsage, License, ClientOverview
+  - Alert, MemoryUsage
+  - PaginatedResponse wrapper
+- **Domain Models** (`core/domain_models.py`):
+  - RFHealthData, ConnectionStats, NetworkConnectionStats
+  - DataRate, SwitchPort, SwitchPortPOE
+  - MRDeviceStats, MRRadioStatus
+  - ConfigurationChange
+  - SensorMeasurement, MTSensorReading
+  - OrganizationSummary

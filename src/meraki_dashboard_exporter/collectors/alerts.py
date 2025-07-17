@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ..core.collector import MetricCollector
-from ..core.constants import UpdateTier
+from ..core.constants import MetricName, UpdateTier
+from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
+from ..core.metrics import LabelName
 
 if TYPE_CHECKING:
     pass
@@ -25,64 +27,100 @@ class AlertsCollector(MetricCollector):
         """Initialize alert metrics."""
         # Active alerts count by various dimensions
         self._alerts_active = self._create_gauge(
-            "meraki_alerts_active",
+            MetricName.ALERTS_ACTIVE,
             "Number of active Meraki assurance alerts",
             labelnames=[
-                "org_id",
-                "org_name",
-                "network_id",
-                "network_name",
-                "alert_type",
-                "category_type",
-                "severity",
-                "device_type",
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.ALERT_TYPE,
+                LabelName.CATEGORY_TYPE,
+                LabelName.SEVERITY,
+                LabelName.DEVICE_TYPE,
             ],
         )
 
         # Total alerts by severity (simpler metric for quick dashboards)
         self._alerts_by_severity = self._create_gauge(
-            "meraki_alerts_total_by_severity",
+            MetricName.ALERTS_TOTAL_BY_SEVERITY,
             "Total number of active alerts by severity",
-            labelnames=["org_id", "org_name", "severity"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.SEVERITY],
         )
 
         # Alerts by network (for network-level overview)
         self._alerts_by_network = self._create_gauge(
-            "meraki_alerts_total_by_network",
+            MetricName.ALERTS_TOTAL_BY_NETWORK,
             "Total number of active alerts per network",
-            labelnames=["org_id", "org_name", "network_id", "network_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
     async def _collect_impl(self) -> None:
         """Collect alert metrics."""
         try:
-            # Get organizations
+            # Get organizations with error handling
+            orgs_data = await self._fetch_organizations()
+            if not orgs_data:
+                logger.warning("No organizations found for alerts collection")
+                return
+
+            # Build org mapping
             if self.settings.org_id:
                 org_ids = [self.settings.org_id]
-                org_names = {self.settings.org_id: "configured_org"}
+                org_names = {self.settings.org_id: orgs_data[0].get("name", "configured_org")}
             else:
-                logger.debug("Fetching all organizations for alerts collection")
-                self._track_api_call("getOrganizations")
-                orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
-                org_ids = [org["id"] for org in orgs]
-                org_names = {org["id"]: org.get("name", "unknown") for org in orgs}
-                logger.debug("Successfully fetched organizations", count=len(org_ids))
+                org_ids = [org["id"] for org in orgs_data]
+                org_names = {org["id"]: org.get("name", "unknown") for org in orgs_data}
 
             # Collect alerts for each organization
-            for org_id in org_ids:
-                org_name = org_names.get(org_id, "unknown")
-                try:
-                    await self._collect_org_alerts(org_id, org_name)
-                except Exception:
-                    logger.exception(
-                        "Failed to collect alerts for organization",
-                        org_id=org_id,
-                        org_name=org_name,
-                    )
+            tasks = [
+                self._collect_org_alerts(org_id, org_names.get(org_id, "unknown"))
+                for org_id in org_ids
+            ]
+            await asyncio.gather(*tasks, return_exceptions=True)
 
         except Exception:
             logger.exception("Failed to collect alert metrics")
 
+    @with_error_handling(
+        operation="Fetch organizations",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _fetch_organizations(self) -> list[dict[str, Any]] | None:
+        """Fetch organizations for alerts collection.
+
+        Returns
+        -------
+        list[dict[str, Any]] | None
+            List of organizations or None on error.
+
+        """
+        if self.settings.org_id:
+            logger.debug("Fetching single organization", org_id=self.settings.org_id)
+            self._track_api_call("getOrganization")
+            org = await asyncio.to_thread(
+                self.api.organizations.getOrganization,
+                self.settings.org_id,
+            )
+            return [org]
+        else:
+            logger.debug("Fetching all organizations for alerts collection")
+            self._track_api_call("getOrganizations")
+            orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
+            orgs = validate_response_format(
+                orgs,
+                expected_type=list,
+                operation="getOrganizations"
+            )
+            logger.debug("Successfully fetched organizations", count=len(orgs))
+            return orgs
+
+    @with_error_handling(
+        operation="Collect organization alerts",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_NOT_AVAILABLE,
+    )
     async def _collect_org_alerts(self, org_id: str, org_name: str) -> None:
         """Collect alerts for a specific organization.
 
@@ -103,6 +141,11 @@ class AlertsCollector(MetricCollector):
                 self.api.organizations.getOrganizationAssuranceAlerts,
                 org_id,
                 total_pages="all",
+            )
+            alerts = validate_response_format(
+                alerts,
+                expected_type=list,
+                operation="getOrganizationAssuranceAlerts"
             )
 
             logger.debug("Successfully fetched alerts", org_id=org_id, count=len(alerts))

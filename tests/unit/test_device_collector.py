@@ -194,8 +194,8 @@ class TestDeviceCollector:
             ]
         )
 
-        # Mock statuses response
-        mock_api.organizations.getOrganizationDevicesStatuses = MagicMock(return_value=[])
+        # Mock availabilities response
+        mock_api.organizations.getOrganizationDevicesAvailabilities = MagicMock(return_value=[])
 
         # Mock client overview response
         mock_api.wireless.getOrganizationWirelessClientsOverviewByDevice = MagicMock(

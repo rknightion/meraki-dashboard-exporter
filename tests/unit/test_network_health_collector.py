@@ -73,13 +73,14 @@ class TestNetworkHealthCollector:
                     "id": "N_123",
                     "name": "Test Network",
                     "productTypes": ["wireless"],
+                    "organizationId": "123",
                 }
             ]
         )
-        mock_api.networks.getNetworkDevices = MagicMock(
+        mock_api.organizations.getOrganizationDevices = MagicMock(
             return_value=[
-                {"serial": "Q2KD-XXXX", "name": "AP1", "model": "MR36"},
-                {"serial": "Q2KD-YYYY", "name": "AP2", "model": "MR46"},
+                {"serial": "Q2KD-XXXX", "name": "AP1", "model": "MR36", "networkId": "N_123", "productType": "wireless"},
+                {"serial": "Q2KD-YYYY", "name": "AP2", "model": "MR46", "networkId": "N_123", "productType": "wireless"},
             ]
         )
 
@@ -110,7 +111,9 @@ class TestNetworkHealthCollector:
         await health_collector.collect()
 
         # Verify API calls
-        mock_api.networks.getNetworkDevices.assert_called_once_with("N_123")
+        mock_api.organizations.getOrganizationDevices.assert_called_once_with(
+            "123", networkIds=["N_123"], productTypes=["wireless"], total_pages="all"
+        )
         mock_api.networks.getNetworkNetworkHealthChannelUtilization.assert_called_once_with(
             "N_123", total_pages="all"
         )
@@ -128,10 +131,11 @@ class TestNetworkHealthCollector:
                     "id": "N_123",
                     "name": "Test Network",
                     "productTypes": ["wireless"],
+                    "organizationId": "123",
                 }
             ]
         )
-        mock_api.networks.getNetworkDevices = MagicMock(return_value=[])
+        mock_api.organizations.getOrganizationDevices = MagicMock(return_value=[])
         mock_api.networks.getNetworkNetworkHealthChannelUtilization = MagicMock(return_value=[])
 
         connection_stats_data = {
@@ -167,10 +171,11 @@ class TestNetworkHealthCollector:
                     "id": "N_123",
                     "name": "Test Network",
                     "productTypes": ["wireless"],
+                    "organizationId": "123",
                 }
             ]
         )
-        mock_api.networks.getNetworkDevices = MagicMock(return_value=[])
+        mock_api.organizations.getOrganizationDevices = MagicMock(return_value=[])
         mock_api.networks.getNetworkNetworkHealthChannelUtilization = MagicMock(return_value=[])
         mock_api.wireless.getNetworkWirelessConnectionStats = MagicMock(return_value={})
 
@@ -212,10 +217,11 @@ class TestNetworkHealthCollector:
                     "id": "N_123",
                     "name": "Test Network",
                     "productTypes": ["wireless"],
+                    "organizationId": "123",
                 }
             ]
         )
-        mock_api.networks.getNetworkDevices = MagicMock(return_value=[])
+        mock_api.organizations.getOrganizationDevices = MagicMock(return_value=[])
 
         # Return empty channel utilization
         mock_api.networks.getNetworkNetworkHealthChannelUtilization = MagicMock(return_value=[])
@@ -238,10 +244,11 @@ class TestNetworkHealthCollector:
                     "id": "N_123",
                     "name": "Test Network",
                     "productTypes": ["wireless"],
+                    "organizationId": "123",
                 }
             ]
         )
-        mock_api.networks.getNetworkDevices = MagicMock(return_value=[])
+        mock_api.organizations.getOrganizationDevices = MagicMock(return_value=[])
 
         # Mock API errors
         mock_api.networks.getNetworkNetworkHealthChannelUtilization = MagicMock(
@@ -272,10 +279,11 @@ class TestNetworkHealthCollector:
                     "id": "N_123",
                     "name": "Test Network",
                     "productTypes": ["wireless"],
+                    "organizationId": "123",
                 }
             ]
         )
-        mock_api.networks.getNetworkDevices = MagicMock(return_value=[])
+        mock_api.organizations.getOrganizationDevices = MagicMock(return_value=[])
 
         # Mock timeout
         async def slow_call(*args, **kwargs):

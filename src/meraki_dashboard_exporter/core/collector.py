@@ -10,6 +10,7 @@ from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, Info
 from prometheus_client.core import REGISTRY
 
 from ..core.constants import UpdateTier
+from ..core.error_handling import ErrorCategory
 from ..core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -287,6 +288,70 @@ class MetricCollector(ABC):
             ).inc()
         else:
             logger.warning("Collector API calls metric not initialized", endpoint=endpoint)
+    
+    def _track_error(self, category: ErrorCategory) -> None:
+        """Track an error for monitoring.
+        
+        Parameters
+        ----------
+        category : ErrorCategory
+            The category of error that occurred.
+            
+        """
+        if MetricCollector._collector_errors is not None:
+            MetricCollector._collector_errors.labels(
+                collector=self.__class__.__name__,
+                tier=self.update_tier.value,
+                error_type=category.value,
+            ).inc()
+
+    def _set_metric_value(
+        self, metric_name: str, labels: dict[str, str], value: float | None
+    ) -> None:
+        """Safely set a metric value with validation.
+
+        Parameters
+        ----------
+        metric_name : str
+            Name of the metric attribute.
+        labels : dict[str, str]
+            Labels to apply to the metric.
+        value : float | None
+            Value to set. If None, the metric will not be updated.
+
+        """
+        # Skip if value is None - this happens when API returns null values
+        if value is None:
+            logger.debug(
+                "Skipping metric update due to None value",
+                metric_name=metric_name,
+                labels=labels,
+            )
+            return
+
+        metric = getattr(self, metric_name, None)
+        if metric is None:
+            logger.debug(
+                "Metric not available",
+                metric_name=metric_name,
+            )
+            return
+
+        try:
+            metric.labels(**labels).set(value)
+            logger.debug(
+                "Successfully set metric value",
+                metric_name=metric_name,
+                labels=labels,
+                value=value,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to set metric value",
+                metric_name=metric_name,
+                labels=labels,
+                value=value,
+            )
 
     @classmethod
     def _initialize_performance_metrics(cls) -> None:

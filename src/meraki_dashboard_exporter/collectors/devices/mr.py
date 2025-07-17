@@ -6,7 +6,9 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants import MetricName
+from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.logging import get_logger
+from ...core.metrics import LabelName
 from .base import BaseDeviceCollector
 
 if TYPE_CHECKING:
@@ -39,208 +41,212 @@ class MRCollector(BaseDeviceCollector):
         self._ap_clients = self.parent._create_gauge(
             MetricName.MR_CLIENTS_CONNECTED,
             "Number of clients connected to access point",
-            labelnames=["serial", "name", "model", "network_id"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID],
         )
 
         self._ap_connection_stats = self.parent._create_gauge(
             MetricName.MR_CONNECTION_STATS,
             "Wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)",
-            labelnames=["serial", "name", "model", "network_id", "stat_type"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.STAT_TYPE],
         )
 
         # MR ethernet status metrics
         self._mr_power_info = self.parent._create_gauge(
-            "meraki_mr_power_info",
+            MetricName.MR_POWER_INFO,
             "Access point power information",
-            labelnames=["serial", "name", "network_id", "mode"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.MODE],
         )
 
         self._mr_power_ac_connected = self.parent._create_gauge(
-            "meraki_mr_power_ac_connected",
+            MetricName.MR_POWER_AC_CONNECTED,
             "Access point AC power connection status (1 = connected, 0 = not connected)",
-            labelnames=["serial", "name", "network_id"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID],
         )
 
         self._mr_power_poe_connected = self.parent._create_gauge(
-            "meraki_mr_power_poe_connected",
+            MetricName.MR_POWER_POE_CONNECTED,
             "Access point PoE power connection status (1 = connected, 0 = not connected)",
-            labelnames=["serial", "name", "network_id"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID],
         )
 
         self._mr_port_poe_info = self.parent._create_gauge(
-            "meraki_mr_port_poe_info",
+            MetricName.MR_PORT_POE_INFO,
             "Access point port PoE information",
-            labelnames=["serial", "name", "network_id", "port_name", "standard"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.PORT_NAME, LabelName.STANDARD],
         )
 
         self._mr_port_link_negotiation_info = self.parent._create_gauge(
-            "meraki_mr_port_link_negotiation_info",
+            MetricName.MR_PORT_LINK_NEGOTIATION_INFO,
             "Access point port link negotiation information",
-            labelnames=["serial", "name", "network_id", "port_name", "duplex"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.PORT_NAME, LabelName.DUPLEX],
         )
 
         self._mr_port_link_negotiation_speed = self.parent._create_gauge(
-            "meraki_mr_port_link_negotiation_speed_mbps",
+            MetricName.MR_PORT_LINK_NEGOTIATION_SPEED_MBPS,
             "Access point port link negotiation speed in Mbps",
-            labelnames=["serial", "name", "network_id", "port_name"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.PORT_NAME],
         )
 
         self._mr_aggregation_enabled = self.parent._create_gauge(
-            "meraki_mr_aggregation_enabled",
+            MetricName.MR_AGGREGATION_ENABLED,
             "Access point port aggregation enabled status (1 = enabled, 0 = disabled)",
-            labelnames=["serial", "name", "network_id"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID],
         )
 
         self._mr_aggregation_speed = self.parent._create_gauge(
-            "meraki_mr_aggregation_speed_mbps",
+            MetricName.MR_AGGREGATION_SPEED_MBPS,
             "Access point total aggregated port speed in Mbps",
-            labelnames=["serial", "name", "network_id"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID],
         )
 
         # MR packet loss metrics (per device, 5-minute window)
         self._mr_packets_downstream_total = self.parent._create_gauge(
-            "meraki_mr_packets_downstream_total",
+            MetricName.MR_PACKETS_DOWNSTREAM_TOTAL,
             "Total downstream packets transmitted by access point (5-minute window)",
-            labelnames=["serial", "name", "network_id", "network_name"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._mr_packets_downstream_lost = self.parent._create_gauge(
-            "meraki_mr_packets_downstream_lost",
+            MetricName.MR_PACKETS_DOWNSTREAM_LOST,
             "Downstream packets lost by access point (5-minute window)",
-            labelnames=["serial", "name", "network_id", "network_name"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._mr_packet_loss_downstream_percent = self.parent._create_gauge(
-            "meraki_mr_packet_loss_downstream_percent",
+            MetricName.MR_PACKET_LOSS_DOWNSTREAM_PERCENT,
             "Downstream packet loss percentage for access point (5-minute window)",
-            labelnames=["serial", "name", "network_id", "network_name"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._mr_packets_upstream_total = self.parent._create_gauge(
-            "meraki_mr_packets_upstream_total",
+            MetricName.MR_PACKETS_UPSTREAM_TOTAL,
             "Total upstream packets received by access point (5-minute window)",
-            labelnames=["serial", "name", "network_id", "network_name"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._mr_packets_upstream_lost = self.parent._create_gauge(
-            "meraki_mr_packets_upstream_lost",
+            MetricName.MR_PACKETS_UPSTREAM_LOST,
             "Upstream packets lost by access point (5-minute window)",
-            labelnames=["serial", "name", "network_id", "network_name"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._mr_packet_loss_upstream_percent = self.parent._create_gauge(
-            "meraki_mr_packet_loss_upstream_percent",
+            MetricName.MR_PACKET_LOSS_UPSTREAM_PERCENT,
             "Upstream packet loss percentage for access point (5-minute window)",
-            labelnames=["serial", "name", "network_id", "network_name"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         # Combined packet metrics (calculated)
         self._mr_packets_total = self.parent._create_gauge(
-            "meraki_mr_packets_total",
+            MetricName.MR_PACKETS_TOTAL,
             "Total packets (upstream + downstream) for access point (5-minute window)",
-            labelnames=["serial", "name", "network_id", "network_name"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._mr_packets_lost_total = self.parent._create_gauge(
-            "meraki_mr_packets_lost_total",
+            MetricName.MR_PACKETS_LOST_TOTAL,
             "Total packets lost (upstream + downstream) for access point (5-minute window)",
-            labelnames=["serial", "name", "network_id", "network_name"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._mr_packet_loss_total_percent = self.parent._create_gauge(
-            "meraki_mr_packet_loss_total_percent",
+            MetricName.MR_PACKET_LOSS_TOTAL_PERCENT,
             "Total packet loss percentage (upstream + downstream) for access point (5-minute window)",
-            labelnames=["serial", "name", "network_id", "network_name"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         # Network-wide MR packet loss metrics (5-minute window)
         self._mr_network_packets_downstream_total = self.parent._create_gauge(
-            "meraki_mr_network_packets_downstream_total",
+            MetricName.MR_NETWORK_PACKETS_DOWNSTREAM_TOTAL,
             "Total downstream packets for all access points in network (5-minute window)",
-            labelnames=["network_id", "network_name"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._mr_network_packets_downstream_lost = self.parent._create_gauge(
-            "meraki_mr_network_packets_downstream_lost",
+            MetricName.MR_NETWORK_PACKETS_DOWNSTREAM_LOST,
             "Downstream packets lost for all access points in network (5-minute window)",
-            labelnames=["network_id", "network_name"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._mr_network_packet_loss_downstream_percent = self.parent._create_gauge(
-            "meraki_mr_network_packet_loss_downstream_percent",
+            MetricName.MR_NETWORK_PACKET_LOSS_DOWNSTREAM_PERCENT,
             "Downstream packet loss percentage for all access points in network (5-minute window)",
-            labelnames=["network_id", "network_name"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._mr_network_packets_upstream_total = self.parent._create_gauge(
-            "meraki_mr_network_packets_upstream_total",
+            MetricName.MR_NETWORK_PACKETS_UPSTREAM_TOTAL,
             "Total upstream packets for all access points in network (5-minute window)",
-            labelnames=["network_id", "network_name"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._mr_network_packets_upstream_lost = self.parent._create_gauge(
-            "meraki_mr_network_packets_upstream_lost",
+            MetricName.MR_NETWORK_PACKETS_UPSTREAM_LOST,
             "Upstream packets lost for all access points in network (5-minute window)",
-            labelnames=["network_id", "network_name"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._mr_network_packet_loss_upstream_percent = self.parent._create_gauge(
-            "meraki_mr_network_packet_loss_upstream_percent",
+            MetricName.MR_NETWORK_PACKET_LOSS_UPSTREAM_PERCENT,
             "Upstream packet loss percentage for all access points in network (5-minute window)",
-            labelnames=["network_id", "network_name"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         # Combined network-wide packet metrics (calculated)
         self._mr_network_packets_total = self.parent._create_gauge(
-            "meraki_mr_network_packets_total",
+            MetricName.MR_NETWORK_PACKETS_TOTAL,
             "Total packets (upstream + downstream) for all access points in network (5-minute window)",
-            labelnames=["network_id", "network_name"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._mr_network_packets_lost_total = self.parent._create_gauge(
-            "meraki_mr_network_packets_lost_total",
+            MetricName.MR_NETWORK_PACKETS_LOST_TOTAL,
             "Total packets lost (upstream + downstream) for all access points in network (5-minute window)",
-            labelnames=["network_id", "network_name"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._mr_network_packet_loss_total_percent = self.parent._create_gauge(
-            "meraki_mr_network_packet_loss_total_percent",
+            MetricName.MR_NETWORK_PACKET_LOSS_TOTAL_PERCENT,
             "Total packet loss percentage (upstream + downstream) for all access points in network (5-minute window)",
-            labelnames=["network_id", "network_name"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         # MR CPU metrics
         self._mr_cpu_load_5min = self.parent._create_gauge(
-            "meraki_mr_cpu_load_5min",
+            MetricName.MR_CPU_LOAD_5MIN,
             "Access point CPU load average over 5 minutes (normalized to 0-100 per core)",
-            labelnames=["serial", "name", "model", "network_id", "network_name"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         # MR SSID/Radio status metrics
         self._mr_radio_broadcasting = self.parent._create_gauge(
-            "meraki_mr_radio_broadcasting",
+            MetricName.MR_RADIO_BROADCASTING,
             "Access point radio broadcasting status (1 = broadcasting, 0 = not broadcasting)",
-            labelnames=["serial", "name", "network_id", "network_name", "band", "radio_index"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.BAND, LabelName.RADIO_INDEX],
         )
 
         self._mr_radio_channel = self.parent._create_gauge(
-            "meraki_mr_radio_channel",
+            MetricName.MR_RADIO_CHANNEL,
             "Access point radio channel number",
-            labelnames=["serial", "name", "network_id", "network_name", "band", "radio_index"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.BAND, LabelName.RADIO_INDEX],
         )
 
         self._mr_radio_channel_width = self.parent._create_gauge(
-            "meraki_mr_radio_channel_width_mhz",
+            MetricName.MR_RADIO_CHANNEL_WIDTH_MHZ,
             "Access point radio channel width in MHz",
-            labelnames=["serial", "name", "network_id", "network_name", "band", "radio_index"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.BAND, LabelName.RADIO_INDEX],
         )
 
         self._mr_radio_power = self.parent._create_gauge(
-            "meraki_mr_radio_power_dbm",
+            MetricName.MR_RADIO_POWER_DBM,
             "Access point radio transmit power in dBm",
-            labelnames=["serial", "name", "network_id", "network_name", "band", "radio_index"],
+            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.BAND, LabelName.RADIO_INDEX],
         )
 
+    @with_error_handling(
+        operation="Collect MR device metrics",
+        continue_on_error=True,
+    )
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect wireless AP metrics.
 
@@ -268,6 +274,11 @@ class MRCollector(BaseDeviceCollector):
                 self.api.wireless.getDeviceWirelessStatus,
                 serial,
             )
+            status = validate_response_format(
+                status,
+                expected_type=dict,
+                operation="getDeviceWirelessStatus"
+            )
 
             logger.debug(
                 "Successfully fetched wireless status",
@@ -292,6 +303,11 @@ class MRCollector(BaseDeviceCollector):
                 serial=serial,
             )
 
+    @with_error_handling(
+        operation="Collect MR connection stats",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
     async def _collect_connection_stats(
         self, serial: str, name: str, model: str, network_id: str
     ) -> None:
@@ -369,6 +385,11 @@ class MRCollector(BaseDeviceCollector):
                 serial=serial,
             )
 
+    @with_error_handling(
+        operation="Collect MR wireless clients",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
     async def collect_wireless_clients(self, org_id: str, device_lookup: dict[str, dict[str, Any]]) -> None:
         """Collect wireless client counts for MR devices.
 
@@ -388,6 +409,11 @@ class MRCollector(BaseDeviceCollector):
                 self.api.wireless.getOrganizationWirelessClientsOverviewByDevice,
                 org_id,
                 total_pages="all",
+            )
+            client_overview = validate_response_format(
+                client_overview,
+                expected_type=list,
+                operation="getOrganizationWirelessClientsOverviewByDevice"
             )
 
             # Handle different API response formats
@@ -437,6 +463,11 @@ class MRCollector(BaseDeviceCollector):
                 org_id=org_id,
             )
 
+    @with_error_handling(
+        operation="Collect MR ethernet status",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
     async def collect_ethernet_status(self, org_id: str, device_lookup: dict[str, dict[str, Any]]) -> None:
         """Collect ethernet status for MR devices.
 

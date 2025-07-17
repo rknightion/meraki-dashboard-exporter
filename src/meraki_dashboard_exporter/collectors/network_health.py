@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 from ..core.collector import MetricCollector
 from ..core.constants import MetricName, UpdateTier
+from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
+from ..core.metrics import LabelName
 from .network_health_collectors.bluetooth import BluetoothCollector
 from .network_health_collectors.connection_stats import ConnectionStatsCollector
 from .network_health_collectors.data_rates import DataRatesCollector
@@ -43,129 +45,110 @@ class NetworkHealthCollector(MetricCollector):
         self.data_rates_collector = DataRatesCollector(self)
         self.bluetooth_collector = BluetoothCollector(self)
 
-    def _set_metric_value(
-        self, metric_name: str, labels: dict[str, str], value: float | None
-    ) -> None:
-        """Safely set a metric value with validation.
-
-        Parameters
-        ----------
-        metric_name : str
-            Name of the metric attribute.
-        labels : dict[str, str]
-            Labels to apply to the metric.
-        value : float | None
-            Value to set. If None, the metric will not be updated.
-
-        """
-        # Skip if value is None - this happens when API returns null values
-        if value is None:
-            logger.debug(
-                "Skipping metric update due to None value",
-                metric_name=metric_name,
-                labels=labels,
-            )
-            return
-
-        metric = getattr(self, metric_name, None)
-        if metric is None:
-            logger.debug(
-                "Metric not found",
-                metric_name=metric_name,
-            )
-            return
-
-        try:
-            metric.labels(**labels).set(value)
-            logger.debug(
-                "Set metric value",
-                metric_name=metric_name,
-                labels=labels,
-                value=value,
-            )
-        except Exception:
-            logger.exception(
-                "Failed to set metric value",
-                metric_name=metric_name,
-                labels=labels,
-                value=value,
-            )
-
     def _initialize_metrics(self) -> None:
         """Initialize network health metrics."""
         # RF channel utilization metrics per AP
         self._ap_utilization_2_4ghz = self._create_gauge(
-            "meraki_ap_channel_utilization_2_4ghz_percent",
+            MetricName.AP_CHANNEL_UTILIZATION_2_4GHZ_PERCENT,
             "2.4GHz channel utilization percentage per AP",
-            labelnames=["network_id", "network_name", "serial", "name", "model", "type"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.TYPE],
         )
 
         self._ap_utilization_5ghz = self._create_gauge(
-            "meraki_ap_channel_utilization_5ghz_percent",
+            MetricName.AP_CHANNEL_UTILIZATION_5GHZ_PERCENT,
             "5GHz channel utilization percentage per AP",
-            labelnames=["network_id", "network_name", "serial", "name", "model", "type"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.TYPE],
         )
 
         # Network-wide average utilization
         self._network_utilization_2_4ghz = self._create_gauge(
-            "meraki_network_channel_utilization_2_4ghz_percent",
+            MetricName.NETWORK_CHANNEL_UTILIZATION_2_4GHZ_PERCENT,
             "Network-wide average 2.4GHz channel utilization percentage",
-            labelnames=["network_id", "network_name", "type"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.TYPE],
         )
 
         self._network_utilization_5ghz = self._create_gauge(
-            "meraki_network_channel_utilization_5ghz_percent",
+            MetricName.NETWORK_CHANNEL_UTILIZATION_5GHZ_PERCENT,
             "Network-wide average 5GHz channel utilization percentage",
-            labelnames=["network_id", "network_name", "type"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.TYPE],
         )
 
         # Network-wide wireless connection statistics
         self._network_connection_stats = self._create_gauge(
             MetricName.NETWORK_WIRELESS_CONNECTION_STATS,
             "Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)",
-            labelnames=["network_id", "network_name", "stat_type"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.STAT_TYPE],
         )
 
         # Network-wide wireless data rate metrics
         self._network_wireless_download_kbps = self._create_gauge(
-            "meraki_network_wireless_download_kbps",
+            MetricName.NETWORK_WIRELESS_DOWNLOAD_KBPS,
             "Network-wide wireless download bandwidth in kilobits per second",
-            labelnames=["network_id", "network_name"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._network_wireless_upload_kbps = self._create_gauge(
-            "meraki_network_wireless_upload_kbps",
+            MetricName.NETWORK_WIRELESS_UPLOAD_KBPS,
             "Network-wide wireless upload bandwidth in kilobits per second",
-            labelnames=["network_id", "network_name"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         # Bluetooth clients detected by MR devices
         self._network_bluetooth_clients_total = self._create_gauge(
-            "meraki_network_bluetooth_clients_total",
+            MetricName.NETWORK_BLUETOOTH_CLIENTS_TOTAL,
             "Total number of Bluetooth clients detected by MR devices in the last 5 minutes",
-            labelnames=["network_id", "network_name"],
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
     async def _collect_impl(self) -> None:
         """Collect network health metrics."""
         try:
-            # Get organizations
-            if self.settings.org_id:
-                org_ids = [self.settings.org_id]
-            else:
-                logger.debug("Fetching all organizations for network health")
-                self._track_api_call("getOrganizations")
-                orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
-                org_ids = [org["id"] for org in orgs]
-                logger.debug("Successfully fetched organizations", count=len(org_ids))
+            # Get organizations with error handling
+            organizations = await self._fetch_organizations()
+            if not organizations:
+                logger.warning("No organizations found for network health collection")
+                return
 
             # Collect network health for each organization
+            org_ids = [org["id"] for org in organizations]
             for org_id in org_ids:
                 await self._collect_org_network_health(org_id)
 
         except Exception:
             logger.exception("Failed to collect network health metrics")
 
+    @with_error_handling(
+        operation="Fetch organizations",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _fetch_organizations(self) -> list[dict[str, Any]] | None:
+        """Fetch organizations for network health collection.
+
+        Returns
+        -------
+        list[dict[str, Any]] | None
+            List of organizations or None on error.
+
+        """
+        if self.settings.org_id:
+            return [{"id": self.settings.org_id}]
+        else:
+            logger.debug("Fetching all organizations for network health")
+            self._track_api_call("getOrganizations")
+            orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
+            orgs = validate_response_format(
+                orgs,
+                expected_type=list,
+                operation="getOrganizations"
+            )
+            logger.debug("Successfully fetched organizations", count=len(orgs))
+            return orgs
+
+    @with_error_handling(
+        operation="Collect organization network health",
+        continue_on_error=True,
+    )
     async def _collect_org_network_health(self, org_id: str) -> None:
         """Collect network health metrics for an organization.
 
@@ -183,6 +166,11 @@ class NetworkHealthCollector(MetricCollector):
                 self.api.organizations.getOrganizationNetworks,
                 org_id,
                 total_pages="all",
+            )
+            networks = validate_response_format(
+                networks,
+                expected_type=list,
+                operation="getOrganizationNetworks"
             )
             logger.debug("Successfully fetched networks", org_id=org_id, count=len(networks))
 

@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants import DeviceStatus
+from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -114,6 +115,11 @@ class BaseDeviceCollector(ABC):
         if hasattr(self.parent, "_track_api_call"):
             self.parent._track_api_call(method_name)
 
+    @with_error_handling(
+        operation="Collect device memory metrics",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
     async def collect_memory_metrics(self, org_id: str, device_lookup: dict[str, dict[str, Any]] | None = None) -> None:
         """Collect memory metrics for all devices in an organization.
 

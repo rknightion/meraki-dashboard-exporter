@@ -64,9 +64,7 @@ nav:
     - Quick Start: getting-started/quickstart.md
   - Metrics Reference:
     - Overview: metrics/overview.md
-    - Organization Metrics: metrics/organization.md
-    - Device Metrics: metrics/devices.md
-    - Alert Metrics: metrics/alerts.md
+    - Complete Reference: metrics/metrics.md
   - Operations:
     - Deployment: operations/deployment.md
     - Monitoring: operations/monitoring.md

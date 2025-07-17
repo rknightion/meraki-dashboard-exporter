@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.domain_models import ConnectionStats, NetworkConnectionStats
 from ...core.logging import get_logger
 from .base import BaseNetworkHealthCollector
 
@@ -46,29 +47,23 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
                 timespan=1800,  # 30 minutes
             )
 
-            # Handle empty response (no data in timespan)
+            # Parse response using domain model
             if not connection_stats:
-                logger.debug(
-                    "No connection stats data available",
-                    network_id=network_id,
-                    timespan="30m",
-                )
-                # Set all stats to 0 when no data
-                for stat_type in ("assoc", "auth", "dhcp", "dns", "success"):
-                    self._set_metric_value(
-                        "_network_connection_stats",
-                        {
-                            "network_id": network_id,
-                            "network_name": network_name,
-                            "stat_type": stat_type,
-                        },
-                        0,
-                    )
-                return
+                # Create empty stats when no data
+                stats = ConnectionStats()
+            else:
+                # Parse API response to domain model
+                stats = ConnectionStats(**connection_stats)
+            
+            # Create full network stats model
+            network_stats = NetworkConnectionStats(
+                networkId=network_id,
+                connectionStats=stats
+            )
 
             # Set metrics for each connection stat type
             for stat_type in ("assoc", "auth", "dhcp", "dns", "success"):
-                value = connection_stats.get(stat_type, 0)
+                value = getattr(network_stats.connectionStats, stat_type, 0)
                 self._set_metric_value(
                     "_network_connection_stats",
                     {
@@ -82,7 +77,7 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
             logger.debug(
                 "Successfully collected network connection stats",
                 network_id=network_id,
-                stats=connection_stats,
+                stats=network_stats.connectionStats.model_dump(),
             )
 
         except Exception as e:

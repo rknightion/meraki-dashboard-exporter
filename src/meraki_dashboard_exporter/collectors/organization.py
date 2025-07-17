@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ..core.api_helpers import create_api_helper
 from ..core.collector import MetricCollector
 from ..core.constants import MetricName, UpdateTier
+from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
+from ..core.metrics import LabelName
 from .organization_collectors import APIUsageCollector, ClientOverviewCollector, LicenseCollector
 
 if TYPE_CHECKING:
@@ -34,6 +37,9 @@ class OrganizationCollector(MetricCollector):
         """Initialize organization collector with sub-collectors."""
         super().__init__(api, settings, registry)
 
+        # Create API helper
+        self.api_helper = create_api_helper(self)
+
         # Initialize sub-collectors
         self.api_usage_collector = APIUsageCollector(self)
         self.license_collector = LicenseCollector(self)
@@ -43,105 +49,98 @@ class OrganizationCollector(MetricCollector):
         """Initialize organization metrics."""
         # Organization info
         self._org_info = self._create_info(
-            "meraki_org_info",
+            MetricName.ORG_INFO,
             "Organization information",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         # API metrics
         self._api_requests_total = self._create_gauge(
             MetricName.ORG_API_REQUESTS_TOTAL,
             "Total API requests made by the organization",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._api_rate_limit = self._create_gauge(
             MetricName.ORG_API_REQUESTS_RATE_LIMIT,
             "API rate limit for the organization",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         # Network metrics
         self._networks_total = self._create_gauge(
             MetricName.ORG_NETWORKS_TOTAL,
             "Total number of networks in the organization",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         # Device metrics
         self._devices_total = self._create_gauge(
             MetricName.ORG_DEVICES_TOTAL,
             "Total number of devices in the organization",
-            labelnames=["org_id", "org_name", "device_type"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.DEVICE_TYPE],
         )
 
         self._devices_by_model_total = self._create_gauge(
-            "meraki_org_devices_by_model_total",
+            MetricName.ORG_DEVICES_BY_MODEL_TOTAL,
             "Total number of devices by specific model",
-            labelnames=["org_id", "org_name", "model"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.MODEL],
+        )
+
+        # Device availability metrics (from new API)
+        self._devices_availability_total = self._create_gauge(
+            MetricName.ORG_DEVICES_AVAILABILITY_TOTAL,
+            "Total number of devices by availability status and product type",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.STATUS, LabelName.PRODUCT_TYPE],
         )
 
         # License metrics
         self._licenses_total = self._create_gauge(
             MetricName.ORG_LICENSES_TOTAL,
             "Total number of licenses",
-            labelnames=["org_id", "org_name", "license_type", "status"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.LICENSE_TYPE, LabelName.STATUS],
         )
 
         self._licenses_expiring = self._create_gauge(
             MetricName.ORG_LICENSES_EXPIRING,
             "Number of licenses expiring within 30 days",
-            labelnames=["org_id", "org_name", "license_type"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.LICENSE_TYPE],
         )
 
         # Client metrics
         self._clients_total = self._create_gauge(
-            "meraki_org_clients_total",
+            MetricName.ORG_CLIENTS_TOTAL,
             "Total number of active clients in the organization (5-minute window from last complete interval)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         # Usage metrics (in KB for the 5-minute window)
         self._usage_total_kb = self._create_gauge(
-            "meraki_org_usage_total_kb",
+            MetricName.ORG_USAGE_TOTAL_KB,
             "Total data usage in KB for the 5-minute window (last complete 5-min interval, e.g., 11:04 call returns 10:55-11:00)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._usage_downstream_kb = self._create_gauge(
-            "meraki_org_usage_downstream_kb",
+            MetricName.ORG_USAGE_DOWNSTREAM_KB,
             "Downstream data usage in KB for the 5-minute window (last complete 5-min interval)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._usage_upstream_kb = self._create_gauge(
-            "meraki_org_usage_upstream_kb",
+            MetricName.ORG_USAGE_UPSTREAM_KB,
             "Upstream data usage in KB for the 5-minute window (last complete 5-min interval)",
-            labelnames=["org_id", "org_name"],
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
     async def _collect_impl(self) -> None:
         """Collect organization metrics."""
         try:
             # Get organizations
-            if self.settings.org_id:
-                # Single organization
-                logger.debug("Fetching single organization", org_id=self.settings.org_id)
-                self._track_api_call("getOrganization")
-                org = await asyncio.to_thread(
-                    self.api.organizations.getOrganization,
-                    self.settings.org_id,
-                )
-                organizations = [org]
-                logger.debug(
-                    "Successfully fetched organization", org_name=org.get("name", "unknown")
-                )
-            else:
-                # All accessible organizations
-                logger.debug("Fetching all organizations")
-                self._track_api_call("getOrganizations")
-                organizations = await asyncio.to_thread(self.api.organizations.getOrganizations)
-                logger.debug("Successfully fetched organizations", count=len(organizations))
+            organizations = await self._fetch_organizations()
+            if not organizations:
+                logger.warning("No organizations found to collect metrics from")
+                return
 
             # Collect metrics for each organization
             tasks = [self._collect_org_metrics(org) for org in organizations]
@@ -150,6 +149,21 @@ class OrganizationCollector(MetricCollector):
         except Exception:
             logger.exception("Failed to collect organization metrics")
 
+    async def _fetch_organizations(self) -> list[dict[str, Any]] | None:
+        """Fetch organizations using API helper.
+
+        Returns
+        -------
+        list[dict[str, Any]] | None
+            List of organizations or None on error.
+
+        """
+        return await self.api_helper.get_organizations()
+
+    @with_error_handling(
+        operation="Collect organization metrics",
+        continue_on_error=True,
+    )
     async def _collect_org_metrics(self, org: dict[str, Any]) -> None:
         """Collect metrics for a specific organization.
 
@@ -215,6 +229,11 @@ class OrganizationCollector(MetricCollector):
         """
         await self.api_usage_collector.collect(org_id, org_name)
 
+    @with_error_handling(
+        operation="Collect network metrics",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
     async def _collect_network_metrics(self, org_id: str, org_name: str) -> None:
         """Collect network metrics.
 
@@ -228,12 +247,7 @@ class OrganizationCollector(MetricCollector):
         """
         try:
             logger.debug("Fetching networks", org_id=org_id)
-            self._track_api_call("getOrganizationNetworks")
-            networks = await asyncio.to_thread(
-                self.api.organizations.getOrganizationNetworks,
-                org_id,
-                total_pages="all",
-            )
+            networks = await self.api_helper.get_organization_networks(org_id)
 
             # Count total networks
             total_networks = len(networks)
@@ -257,6 +271,11 @@ class OrganizationCollector(MetricCollector):
                 org_name=org_name,
             )
 
+    @with_error_handling(
+        operation="Collect device metrics",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
     async def _collect_device_metrics(self, org_id: str, org_name: str) -> None:
         """Collect device metrics.
 
@@ -270,12 +289,7 @@ class OrganizationCollector(MetricCollector):
         """
         try:
             logger.debug("Fetching devices", org_id=org_id)
-            self._track_api_call("getOrganizationDevices")
-            devices = await asyncio.to_thread(
-                self.api.organizations.getOrganizationDevices,
-                org_id,
-                total_pages="all",
-            )
+            devices = await self.api_helper.get_organization_devices(org_id)
 
             # Count devices by type
             device_counts: dict[str, int] = {}
