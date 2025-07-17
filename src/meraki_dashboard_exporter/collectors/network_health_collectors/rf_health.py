@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 from ...core.constants import DeviceType, ProductType
 from ...core.domain_models import RFHealthData
 from ...core.logging import get_logger
+from ...core.logging_decorators import log_api_call
+from ...core.logging_helpers import LogContext
 from .base import BaseNetworkHealthCollector
 
 if TYPE_CHECKING:
@@ -18,6 +20,56 @@ logger = get_logger(__name__)
 
 class RFHealthCollector(BaseNetworkHealthCollector):
     """Collector for wireless RF health metrics including channel utilization."""
+
+    @log_api_call("getOrganizationDevices")
+    async def _fetch_organization_devices(
+        self, org_id: str, network_id: str
+    ) -> list[dict[str, Any]]:
+        """Fetch organization devices for RF health.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        network_id : str
+            Network ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of devices.
+
+        """
+        self._track_api_call("getOrganizationDevices")
+        return await asyncio.to_thread(
+            self.api.organizations.getOrganizationDevices,
+            org_id,
+            networkIds=[network_id],
+            productTypes=[ProductType.WIRELESS],
+            total_pages="all",
+        )
+
+    @log_api_call("getNetworkNetworkHealthChannelUtilization")
+    async def _fetch_channel_utilization(self, network_id: str) -> list[dict[str, Any]]:
+        """Fetch channel utilization data.
+
+        Parameters
+        ----------
+        network_id : str
+            Network ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            Channel utilization data.
+
+        """
+        self._track_api_call("getNetworkNetworkHealthChannelUtilization")
+        return await asyncio.to_thread(
+            self.api.networks.getNetworkNetworkHealthChannelUtilization,
+            network_id,
+            total_pages="all",
+        )
 
     async def collect(self, network: dict[str, Any]) -> None:
         """Collect RF health metrics for a network.
@@ -33,57 +85,22 @@ class RFHealthCollector(BaseNetworkHealthCollector):
         org_id = network.get("organizationId")
 
         try:
-            # Get channel utilization
-            logger.debug(
-                "Fetching channel utilization",
-                network_id=network_id,
-                network_name=network_name,
-            )
+            with LogContext(network_id=network_id, network_name=network_name):
+                # Get AP names for lookup using organization devices API
+                if not org_id:
+                    logger.warning("No organization ID in network data, cannot fetch devices")
+                    device_names = {}
+                else:
+                    all_devices = await self._fetch_organization_devices(org_id, network_id)
+                    # Filter for MR devices in this network
+                    device_names = {
+                        d["serial"]: d.get("name", d["serial"])
+                        for d in all_devices
+                        if d.get("model", "").startswith(DeviceType.MR)
+                        and d.get("networkId") == network_id
+                    }
 
-            # Get AP names for lookup using organization devices API
-            if not org_id:
-                logger.warning(
-                    "No organization ID in network data, cannot fetch devices",
-                    network_id=network_id,
-                )
-                device_names = {}
-            else:
-                logger.debug(
-                    "Fetching organization devices for RF health",
-                    network_id=network_id,
-                    org_id=org_id,
-                )
-                self._track_api_call("getOrganizationDevices")
-                all_devices = await asyncio.to_thread(
-                    self.api.organizations.getOrganizationDevices,
-                    org_id,
-                    networkIds=[network_id],
-                    productTypes=[ProductType.WIRELESS],
-                    total_pages="all",
-                )
-                logger.debug(
-                    "Successfully fetched devices", network_id=network_id, count=len(all_devices)
-                )
-                # Filter for MR devices in this network
-                device_names = {
-                    d["serial"]: d.get("name", d["serial"])
-                    for d in all_devices
-                    if d.get("model", "").startswith(DeviceType.MR)
-                    and d.get("networkId") == network_id
-                }
-
-            logger.debug("Fetching channel utilization data", network_id=network_id)
-            self._track_api_call("getNetworkNetworkHealthChannelUtilization")
-            channel_util = await asyncio.to_thread(
-                self.api.networks.getNetworkNetworkHealthChannelUtilization,
-                network_id,
-                total_pages="all",
-            )
-            logger.debug(
-                "Successfully fetched channel utilization",
-                network_id=network_id,
-                ap_count=len(channel_util) if channel_util else 0,
-            )
+                channel_util = await self._fetch_channel_utilization(network_id)
 
             if channel_util:
                 # Track network-wide averages
@@ -294,13 +311,6 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                         avg_non_wifi_5,
                     )
 
-                logger.debug(
-                    "Successfully collected RF health metrics",
-                    network_id=network_id,
-                    network_name=network_name,
-                    ap_2_4ghz_count=network_2_4ghz_total["count"],
-                    ap_5ghz_count=network_5ghz_total["count"],
-                )
 
         except Exception as e:
             # Log at debug level if it's just not available (400/404 errors)

@@ -6,6 +6,8 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...core.logging import get_logger
+from ...core.logging_decorators import log_api_call
+from ...core.logging_helpers import LogContext
 from .base import BaseNetworkHealthCollector
 
 if TYPE_CHECKING:
@@ -16,6 +18,29 @@ logger = get_logger(__name__)
 
 class DataRatesCollector(BaseNetworkHealthCollector):
     """Collector for network-wide wireless data rate metrics."""
+
+    @log_api_call("getNetworkWirelessDataRateHistory")
+    async def _fetch_data_rate_history(self, network_id: str) -> list[dict[str, Any]]:
+        """Fetch network wireless data rate history.
+
+        Parameters
+        ----------
+        network_id : str
+            Network ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            Data rate history.
+
+        """
+        self._track_api_call("getNetworkWirelessDataRateHistory")
+        return await asyncio.to_thread(
+            self.api.wireless.getNetworkWirelessDataRateHistory,
+            network_id,
+            timespan=300,
+            resolution=300,
+        )
 
     async def collect(self, network: dict[str, Any]) -> None:
         """Collect network-wide wireless data rate metrics.
@@ -30,23 +55,10 @@ class DataRatesCollector(BaseNetworkHealthCollector):
         network_name = network.get("name", network_id)
 
         try:
-            logger.debug(
-                "Fetching network data rates",
-                network_id=network_id,
-                network_name=network_name,
-            )
-
-            # Track API call
-            self._track_api_call("getNetworkWirelessDataRateHistory")
-
-            # Use 300 second (5 minute) resolution with recent timespan
-            # Using timespan of 300 seconds to get the most recent 5-minute data block
-            data_rate_history = await asyncio.to_thread(
-                self.api.wireless.getNetworkWirelessDataRateHistory,
-                network_id,
-                timespan=300,
-                resolution=300,
-            )
+            with LogContext(network_id=network_id, network_name=network_name):
+                # Use 300 second (5 minute) resolution with recent timespan
+                # Using timespan of 300 seconds to get the most recent 5-minute data block
+                data_rate_history = await self._fetch_data_rate_history(network_id)
 
             # Handle empty response
             if not data_rate_history:
@@ -87,12 +99,6 @@ class DataRatesCollector(BaseNetworkHealthCollector):
                     upload_kbps,
                 )
 
-                logger.debug(
-                    "Successfully collected network data rates",
-                    network_id=network_id,
-                    download_kbps=download_kbps,
-                    upload_kbps=upload_kbps,
-                )
 
         except Exception as e:
             # Log at debug level if it's just not available (400/404 errors)

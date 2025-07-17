@@ -30,8 +30,3 @@ class MVCollector(BaseDeviceCollector):
 
         # MV currently doesn't have specific metrics beyond common ones
         # Future MV-specific metrics (video quality, storage usage, etc.) can be added here
-        logger.debug(
-            "Collected MV device metrics",
-            serial=device["serial"],
-            name=device.get("name", device["serial"]),
-        )
