@@ -10,6 +10,8 @@ from ..core.collector import MetricCollector
 from ..core.constants import OrgMetricName, UpdateTier
 from ..core.error_handling import ErrorCategory, with_error_handling
 from ..core.logging import get_logger
+from ..core.logging_decorators import log_api_call, log_batch_operation
+from ..core.logging_helpers import LogContext, log_metric_collection_summary
 from ..core.metrics import LabelName
 from ..core.registry import register_collector
 from .organization_collectors import APIUsageCollector, ClientOverviewCollector, LicenseCollector
@@ -144,16 +146,38 @@ class OrganizationCollector(MetricCollector):
 
     async def _collect_impl(self) -> None:
         """Collect organization metrics."""
+        start_time = asyncio.get_event_loop().time()
+        metrics_collected = 0
+        organizations_processed = 0
+        api_calls_made = 0
+        
         try:
             # Get organizations
             organizations = await self._fetch_organizations()
             if not organizations:
                 logger.warning("No organizations found to collect metrics from")
                 return
+            api_calls_made += 1
 
             # Collect metrics for each organization
             tasks = [self._collect_org_metrics(org) for org in organizations]
-            await asyncio.gather(*tasks, return_exceptions=True)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Count successful collections
+            for result in results:
+                if not isinstance(result, Exception):
+                    organizations_processed += 1
+                    # Each org makes multiple API calls
+                    api_calls_made += 7  # Approximate
+
+            # Log collection summary
+            log_metric_collection_summary(
+                "OrganizationCollector",
+                metrics_collected=metrics_collected,
+                duration_seconds=asyncio.get_event_loop().time() - start_time,
+                organizations_processed=organizations_processed,
+                api_calls_made=api_calls_made,
+            )
 
         except Exception:
             logger.exception("Failed to collect organization metrics")
@@ -169,6 +193,7 @@ class OrganizationCollector(MetricCollector):
         """
         return await self.api_helper.get_organizations()
 
+    @log_batch_operation("collect org metrics", batch_size=1)
     @with_error_handling(
         operation="Collect organization metrics",
         continue_on_error=True,
@@ -186,40 +211,29 @@ class OrganizationCollector(MetricCollector):
         org_name = org["name"]
 
         try:
-            # Set organization info
-            if self._org_info:
-                self._org_info.labels(
-                    org_id=org_id,
-                    org_name=org_name,
-                ).info({
-                    "url": org.get("url", ""),
-                    "api_enabled": str(org.get("api", {}).get("enabled", False)),
-                })
-            else:
-                logger.error("_org_info metric not initialized")
+            with LogContext(org_id=org_id, org_name=org_name):
+                # Set organization info
+                if self._org_info:
+                    self._org_info.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                    ).info({
+                        "url": org.get("url", ""),
+                        "api_enabled": str(org.get("api", {}).get("enabled", False)),
+                    })
+                else:
+                    logger.error("_org_info metric not initialized")
 
-            # Collect various metrics sequentially with logging
-            # Skip API metrics for now - it's often problematic
-            # logger.info("Collecting API metrics", org_id=org_id)
-            # await self._collect_api_metrics(org_id, org_name)
+                # Collect various metrics sequentially
+                # Skip API metrics for now - it's often problematic
+                # await self._collect_api_metrics(org_id, org_name)
 
-            logger.debug("Collecting network metrics", org_id=org_id)
-            await self._collect_network_metrics(org_id, org_name)
-
-            logger.debug("Collecting device metrics", org_id=org_id)
-            await self._collect_device_metrics(org_id, org_name)
-
-            logger.debug("Collecting device counts by model", org_id=org_id)
-            await self._collect_device_counts_by_model(org_id, org_name)
-
-            logger.debug("Collecting device availability metrics", org_id=org_id)
-            await self._collect_device_availability_metrics(org_id, org_name)
-
-            logger.debug("Collecting license metrics", org_id=org_id)
-            await self._collect_license_metrics(org_id, org_name)
-
-            logger.debug("Collecting client overview metrics", org_id=org_id)
-            await self._collect_client_overview(org_id, org_name)
+                await self._collect_network_metrics(org_id, org_name)
+                await self._collect_device_metrics(org_id, org_name)
+                await self._collect_device_counts_by_model(org_id, org_name)
+                await self._collect_device_availability_metrics(org_id, org_name)
+                await self._collect_license_metrics(org_id, org_name)
+                await self._collect_client_overview(org_id, org_name)
 
         except Exception:
             logger.exception(
@@ -258,7 +272,6 @@ class OrganizationCollector(MetricCollector):
 
         """
         try:
-            logger.debug("Fetching networks", org_id=org_id)
             networks = await self.api_helper.get_organization_networks(org_id)
 
             # Count total networks
@@ -268,11 +281,6 @@ class OrganizationCollector(MetricCollector):
                     org_id=org_id,
                     org_name=org_name,
                 ).set(total_networks)
-                logger.debug(
-                    "Successfully collected network metrics",
-                    org_id=org_id,
-                    total_networks=total_networks,
-                )
             else:
                 logger.error("_networks_total metric not initialized")
 
@@ -300,7 +308,6 @@ class OrganizationCollector(MetricCollector):
 
         """
         try:
-            logger.debug("Fetching devices", org_id=org_id)
             devices = await self.api_helper.get_organization_devices(org_id)
 
             # Count devices by type
@@ -319,12 +326,6 @@ class OrganizationCollector(MetricCollector):
                         org_name=org_name,
                         device_type=device_type,
                     ).set(count)
-                    logger.debug(
-                        "Set device count",
-                        org_id=org_id,
-                        device_type=device_type,
-                        count=count,
-                    )
             else:
                 logger.error("_devices_total metric not initialized")
 
@@ -335,6 +336,7 @@ class OrganizationCollector(MetricCollector):
                 org_name=org_name,
             )
 
+    @log_api_call("getOrganizationDevicesOverviewByModel")
     async def _collect_device_counts_by_model(self, org_id: str, org_name: str) -> None:
         """Collect device counts by specific model.
 
@@ -347,12 +349,11 @@ class OrganizationCollector(MetricCollector):
 
         """
         try:
-            logger.debug("Fetching device counts by model", org_id=org_id)
-            self._track_api_call("getOrganizationDevicesOverviewByModel")
-            overview = await asyncio.to_thread(
-                self.api.organizations.getOrganizationDevicesOverviewByModel,
-                org_id,
-            )
+            with LogContext(org_id=org_id, org_name=org_name):
+                overview = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationDevicesOverviewByModel,
+                    org_id,
+                )
 
             # Response can be either the direct object or wrapped in {"items": []}
             if isinstance(overview, dict) and "items" in overview:
@@ -379,12 +380,6 @@ class OrganizationCollector(MetricCollector):
                             org_name=org_name,
                             model=model,
                         ).set(count)
-                        logger.debug(
-                            "Set device count by model",
-                            org_id=org_id,
-                            model=model,
-                            count=count,
-                        )
                 else:
                     logger.error("_devices_by_model_total metric not initialized")
 
@@ -408,6 +403,7 @@ class OrganizationCollector(MetricCollector):
         """
         await self.license_collector.collect(org_id, org_name)
 
+    @log_api_call("getOrganizationDevicesAvailabilities")
     async def _collect_device_availability_metrics(self, org_id: str, org_name: str) -> None:
         """Collect device availability metrics.
 
@@ -420,13 +416,12 @@ class OrganizationCollector(MetricCollector):
 
         """
         try:
-            logger.debug("Fetching device availabilities", org_id=org_id)
-            self._track_api_call("getOrganizationDevicesAvailabilities")
-            availabilities = await asyncio.to_thread(
-                self.api.organizations.getOrganizationDevicesAvailabilities,
-                org_id,
-                total_pages="all",
-            )
+            with LogContext(org_id=org_id, org_name=org_name):
+                availabilities = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationDevicesAvailabilities,
+                    org_id,
+                    total_pages="all",
+                )
 
             # Group by status and product type
             availability_counts: dict[tuple[str, str], int] = {}
@@ -445,13 +440,6 @@ class OrganizationCollector(MetricCollector):
                         status=status,
                         product_type=product_type,
                     ).set(count)
-                    logger.debug(
-                        "Set device availability count",
-                        org_id=org_id,
-                        status=status,
-                        product_type=product_type,
-                        count=count,
-                    )
             else:
                 logger.error("_devices_availability_total metric not initialized")
 

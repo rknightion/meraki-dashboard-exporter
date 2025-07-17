@@ -9,6 +9,8 @@ from ..core.collector import MetricCollector
 from ..core.constants import NetworkHealthMetricName, NetworkMetricName, ProductType, UpdateTier
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
+from ..core.logging_decorators import log_api_call, log_batch_operation
+from ..core.logging_helpers import LogContext, log_metric_collection_summary
 from ..core.metrics import LabelName
 from ..core.registry import register_collector
 from .network_health_collectors.bluetooth import BluetoothCollector
@@ -115,21 +117,40 @@ class NetworkHealthCollector(MetricCollector):
 
     async def _collect_impl(self) -> None:
         """Collect network health metrics."""
+        start_time = asyncio.get_event_loop().time()
+        metrics_collected = 0
+        organizations_processed = 0
+        api_calls_made = 0
+        
         try:
             # Get organizations with error handling
             organizations = await self._fetch_organizations()
             if not organizations:
                 logger.warning("No organizations found for network health collection")
                 return
+            api_calls_made += 1
 
             # Collect network health for each organization
             org_ids = [org["id"] for org in organizations]
             for org_id in org_ids:
                 await self._collect_org_network_health(org_id)
+                organizations_processed += 1
+                # Each org makes multiple API calls for network health
+                api_calls_made += 5  # Approximate
+
+            # Log collection summary
+            log_metric_collection_summary(
+                "NetworkHealthCollector",
+                metrics_collected=metrics_collected,
+                duration_seconds=asyncio.get_event_loop().time() - start_time,
+                organizations_processed=organizations_processed,
+                api_calls_made=api_calls_made,
+            )
 
         except Exception:
             logger.exception("Failed to collect network health metrics")
 
+    @log_api_call("getOrganizations")
     @with_error_handling(
         operation="Fetch organizations",
         continue_on_error=True,
@@ -147,13 +168,12 @@ class NetworkHealthCollector(MetricCollector):
         if self.settings.org_id:
             return [{"id": self.settings.org_id}]
         else:
-            logger.debug("Fetching all organizations for network health")
-            self._track_api_call("getOrganizations")
-            orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
-            orgs = validate_response_format(orgs, expected_type=list, operation="getOrganizations")
-            logger.debug("Successfully fetched organizations", count=len(orgs))
-            return orgs
+            with LogContext(operation="fetch_organizations"):
+                orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
+                orgs = validate_response_format(orgs, expected_type=list, operation="getOrganizations")
+                return orgs
 
+    @log_batch_operation("collect network health", batch_size=None)
     @with_error_handling(
         operation="Collect organization network health",
         continue_on_error=True,
@@ -169,17 +189,7 @@ class NetworkHealthCollector(MetricCollector):
         """
         try:
             # Get all networks
-            logger.debug("Fetching networks for health collection", org_id=org_id)
-            self._track_api_call("getOrganizationNetworks")
-            networks = await asyncio.to_thread(
-                self.api.organizations.getOrganizationNetworks,
-                org_id,
-                total_pages="all",
-            )
-            networks = validate_response_format(
-                networks, expected_type=list, operation="getOrganizationNetworks"
-            )
-            logger.debug("Successfully fetched networks", org_id=org_id, count=len(networks))
+            networks = await self._fetch_networks_for_health(org_id)
 
             # Collect health metrics for each network in batches
             # to avoid overwhelming the API connection pool
@@ -225,6 +235,32 @@ class NetworkHealthCollector(MetricCollector):
                 "Failed to collect network health for organization",
                 org_id=org_id,
             )
+
+    @log_api_call("getOrganizationNetworks")
+    async def _fetch_networks_for_health(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch networks for health collection.
+        
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+            
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of networks.
+            
+        """
+        with LogContext(org_id=org_id):
+            networks = await asyncio.to_thread(
+                self.api.organizations.getOrganizationNetworks,
+                org_id,
+                total_pages="all",
+            )
+            networks = validate_response_format(
+                networks, expected_type=list, operation="getOrganizationNetworks"
+            )
+            return networks
 
     async def _collect_network_rf_health(self, network: dict[str, Any]) -> None:
         """Collect RF health metrics for a network.

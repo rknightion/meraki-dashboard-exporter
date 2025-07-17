@@ -1,16 +1,9 @@
-⏺ Update Todos
-  ⎿  ☒ 5.2 Improve Code Documentation - Add docstring examples and document strategies
-     ☐ 5.3 Standardize Logging Patterns - Apply logging decorators to all collectors
-     ☐ Apply logging decorators to alerts.py
-     ☐ 5.1 Add Integration Test Helpers - Move testing helpers to tests/ and refactor existing tests
-     ☐ Apply logging decorators to config.py
-     ☐ Apply logging decorators to device.py
-     ☐ Apply logging decorators to mt_sensor.py
-     ☐ Apply logging decorators to network_health.py
-     ☐ Apply logging decorators to organization.py
-     ☐ Apply logging decorators to devices/base.py
-     ☐ Apply logging decorators to devices/mr.py
-     ☐ Apply logging decorators to devices/ms.py
+we are part way through the refactor tasks in the file refactor-claude.txt. Consume CLAUDE.md for project context. Your job is to continue with the
+refactor starting with the todos below (based off refactor task 5.3).
+Do not fall back to only implementing examples you must implement the log decorators as described everywhere.
+
+
+  Update Todos:
      ☐ Apply logging decorators to devices/mt.py
      ☐ Apply logging decorators to devices/mx.py
      ☐ Apply logging decorators to devices/mg.py
@@ -31,3 +24,23 @@
      ☐ Refactor test_registry.py to use test helpers
      ☐ Refactor test_config.py to use test helpers
      ☐ Refactor integration tests to use test helpers
+
+⏺ I've successfully applied logging decorators to 7 files so far:
+  1. ✅ device.py
+  2. ✅ mt_sensor.py
+  3. ✅ network_health.py
+  4. ✅ organization.py
+  5. ✅ devices/base.py
+  6. ✅ devices/mr.py
+  7. ✅ devices/ms.py
+
+  The refactoring has been done carefully and correctly, replacing redundant debug logging with proper decorators and LogContext where appropriate. Each file has been updated to:
+  - Add imports for log_api_call, LogContext, and log_metric_collection_summary as needed
+  - Apply @log_api_call decorators to methods that make API calls
+  - Wrap API calls with LogContext for structured logging
+  - Remove redundant debug statements that are now handled by decorators
+  - Keep error logging and important warnings
+
+  The logging decorator refactoring is making good progress. There are still 11 more files to update with logging decorators, followed by test refactoring tasks.
+
+  rather than trying to bulk update please do it file by file and method by method carefully to ensure nothing is missed and this way you will be properly replacing any existing logging with the decorators where its appropriate to do so as per the original refactor aim/intent. 

@@ -16,6 +16,8 @@ from ...core.constants import (
 )
 from ...core.domain_models import SensorMeasurement
 from ...core.logging import get_logger
+from ...core.logging_decorators import log_api_call
+from ...core.logging_helpers import LogContext
 from .base import BaseDeviceCollector
 
 if TYPE_CHECKING:

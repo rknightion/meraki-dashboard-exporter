@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 from ...core.constants import DeviceStatus
 from ...core.error_handling import ErrorCategory, with_error_handling
 from ...core.logging import get_logger
+from ...core.logging_decorators import log_api_call
+from ...core.logging_helpers import LogContext
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -115,6 +117,7 @@ class BaseDeviceCollector(ABC):
         if hasattr(self.parent, "_track_api_call"):
             self.parent._track_api_call(method_name)
 
+    @log_api_call("getOrganizationDevicesSystemMemoryUsageHistoryByInterval")
     @with_error_handling(
         operation="Collect device memory metrics",
         continue_on_error=True,
@@ -136,15 +139,13 @@ class BaseDeviceCollector(ABC):
         try:
             # Use a short timespan (300 seconds = 5 minutes) with 300 second interval
             # This gives us the most recent memory data block
-            logger.debug("Fetching device memory usage history", org_id=org_id)
-            self._track_api_call("getOrganizationDevicesSystemMemoryUsageHistoryByInterval")
-
-            memory_response = await asyncio.to_thread(
-                self.api.organizations.getOrganizationDevicesSystemMemoryUsageHistoryByInterval,
-                org_id,
-                timespan=300,
-                interval=300,
-            )
+            with LogContext(org_id=org_id):
+                memory_response = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationDevicesSystemMemoryUsageHistoryByInterval,
+                    org_id,
+                    timespan=300,
+                    interval=300,
+                )
 
             # Handle different API response formats
             if isinstance(memory_response, dict) and "items" in memory_response:
@@ -159,11 +160,6 @@ class BaseDeviceCollector(ABC):
                 )
                 memory_data = []
 
-            logger.debug(
-                "Successfully fetched memory data",
-                org_id=org_id,
-                device_count=len(memory_data) if memory_data else 0,
-            )
 
             # Process each device's memory data
             for device_data in memory_data:

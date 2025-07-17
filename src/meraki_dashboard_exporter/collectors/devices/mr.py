@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 from ...core.constants import MRMetricName
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.logging import get_logger
+from ...core.logging_decorators import log_api_call
+from ...core.logging_helpers import LogContext
 from ...core.metrics import LabelName
 from .base import BaseDeviceCollector
 
@@ -345,6 +347,7 @@ class MRCollector(BaseDeviceCollector):
             ],
         )
 
+    @log_api_call("getDeviceWirelessStatus")
     @with_error_handling(
         operation="Collect MR device metrics",
         continue_on_error=True,
@@ -365,25 +368,14 @@ class MRCollector(BaseDeviceCollector):
 
         try:
             # Get wireless status with timeout
-            logger.debug(
-                "Fetching wireless status",
-                serial=serial,
-                name=name,
-            )
-            self._track_api_call("getDeviceWirelessStatus")
-
-            status = await asyncio.to_thread(
-                self.api.wireless.getDeviceWirelessStatus,
-                serial,
-            )
-            status = validate_response_format(
-                status, expected_type=dict, operation="getDeviceWirelessStatus"
-            )
-
-            logger.debug(
-                "Successfully fetched wireless status",
-                serial=serial,
-            )
+            with LogContext(serial=serial, name=name):
+                status = await asyncio.to_thread(
+                    self.api.wireless.getDeviceWirelessStatus,
+                    serial,
+                )
+                status = validate_response_format(
+                    status, expected_type=dict, operation="getDeviceWirelessStatus"
+                )
 
             # Client count
             if "clientCount" in status:
@@ -403,6 +395,7 @@ class MRCollector(BaseDeviceCollector):
                 serial=serial,
             )
 
+    @log_api_call("getDeviceWirelessConnectionStats")
     @with_error_handling(
         operation="Collect MR connection stats",
         continue_on_error=True,
@@ -426,21 +419,13 @@ class MRCollector(BaseDeviceCollector):
 
         """
         try:
-            logger.debug(
-                "Fetching connection stats",
-                serial=serial,
-                name=name,
-            )
-
-            # Track API call
-            self._track_api_call("getDeviceWirelessConnectionStats")
-
             # Use 30 minute (1800 second) timespan as minimum
-            connection_stats = await asyncio.to_thread(
-                self.api.wireless.getDeviceWirelessConnectionStats,
-                serial,
-                timespan=1800,  # 30 minutes
-            )
+            with LogContext(serial=serial, name=name):
+                connection_stats = await asyncio.to_thread(
+                    self.api.wireless.getDeviceWirelessConnectionStats,
+                    serial,
+                    timespan=1800,  # 30 minutes
+                )
 
             # Handle empty response (no data in timespan)
             if not connection_stats or "connectionStats" not in connection_stats:
@@ -473,11 +458,6 @@ class MRCollector(BaseDeviceCollector):
                         stat_type=stat_type,
                     ).set(value)
 
-            logger.debug(
-                "Successfully collected connection stats",
-                serial=serial,
-                stats=stats,
-            )
 
         except Exception:
             logger.exception(
@@ -485,6 +465,7 @@ class MRCollector(BaseDeviceCollector):
                 serial=serial,
             )
 
+    @log_api_call("getOrganizationWirelessClientsOverviewByDevice")
     @with_error_handling(
         operation="Collect MR wireless clients",
         continue_on_error=True,
@@ -504,19 +485,17 @@ class MRCollector(BaseDeviceCollector):
 
         """
         try:
-            logger.debug("Fetching wireless client counts", org_id=org_id)
-            self._track_api_call("getOrganizationWirelessClientsOverviewByDevice")
-
-            client_overview = await asyncio.to_thread(
-                self.api.wireless.getOrganizationWirelessClientsOverviewByDevice,
-                org_id,
-                total_pages="all",
-            )
-            client_overview = validate_response_format(
-                client_overview,
-                expected_type=list,
-                operation="getOrganizationWirelessClientsOverviewByDevice",
-            )
+            with LogContext(org_id=org_id):
+                client_overview = await asyncio.to_thread(
+                    self.api.wireless.getOrganizationWirelessClientsOverviewByDevice,
+                    org_id,
+                    total_pages="all",
+                )
+                client_overview = validate_response_format(
+                    client_overview,
+                    expected_type=list,
+                    operation="getOrganizationWirelessClientsOverviewByDevice",
+                )
 
             # Handle different API response formats
             if isinstance(client_overview, dict) and "items" in client_overview:
@@ -531,11 +510,6 @@ class MRCollector(BaseDeviceCollector):
                 )
                 client_data = []
 
-            logger.debug(
-                "Successfully fetched wireless client counts",
-                org_id=org_id,
-                device_count=len(client_data) if client_data else 0,
-            )
 
             # Process each device's client data
             for device_data in client_data:
@@ -565,6 +539,7 @@ class MRCollector(BaseDeviceCollector):
                 org_id=org_id,
             )
 
+    @log_api_call("getOrganizationWirelessDevicesEthernetStatuses")
     @with_error_handling(
         operation="Collect MR ethernet status",
         continue_on_error=True,
@@ -584,13 +559,11 @@ class MRCollector(BaseDeviceCollector):
 
         """
         try:
-            logger.debug("Fetching MR ethernet status", org_id=org_id)
-            self._track_api_call("getOrganizationWirelessDevicesEthernetStatuses")
-
-            ethernet_statuses = await asyncio.to_thread(
-                self.api.wireless.getOrganizationWirelessDevicesEthernetStatuses,
-                org_id,
-            )
+            with LogContext(org_id=org_id):
+                ethernet_statuses = await asyncio.to_thread(
+                    self.api.wireless.getOrganizationWirelessDevicesEthernetStatuses,
+                    org_id,
+                )
 
             # Handle different API response formats
             if isinstance(ethernet_statuses, dict) and "items" in ethernet_statuses:
@@ -719,6 +692,27 @@ class MRCollector(BaseDeviceCollector):
                 org_id=org_id,
             )
 
+    @log_api_call("getOrganizationWirelessDevicesEthernetStatuses")
+    async def _fetch_ethernet_statuses(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch ethernet statuses for MR devices.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            Ethernet status data.
+
+        """
+        return await asyncio.to_thread(
+            self.api.wireless.getOrganizationWirelessDevicesEthernetStatuses,
+            org_id,
+        )
+
+    @log_api_call("getOrganizationWirelessDevicesPacketLossByDevice")
     async def collect_packet_loss(
         self, org_id: str, device_lookup: dict[str, dict[str, Any]]
     ) -> None:
@@ -733,17 +727,15 @@ class MRCollector(BaseDeviceCollector):
 
         """
         try:
-            logger.debug("Fetching MR packet loss metrics", org_id=org_id)
-            self._track_api_call("getOrganizationWirelessDevicesPacketLossByDevice")
-
             # Use 10-minute timespan (600 seconds)
-            packet_loss_data = await asyncio.to_thread(
-                self.api.wireless.getOrganizationWirelessDevicesPacketLossByDevice,
-                org_id,
-                timespan=600,  # 10 minutes
-                perPage=1000,
-                total_pages="all",
-            )
+            with LogContext(org_id=org_id):
+                packet_loss_data = await asyncio.to_thread(
+                    self.api.wireless.getOrganizationWirelessDevicesPacketLossByDevice,
+                    org_id,
+                    timespan=600,  # 10 minutes
+                    perPage=1000,
+                    total_pages="all",
+                )
 
             # Handle different API response formats
             if isinstance(packet_loss_data, dict) and "items" in packet_loss_data:
@@ -758,11 +750,6 @@ class MRCollector(BaseDeviceCollector):
                 )
                 devices_data = []
 
-            logger.debug(
-                "Successfully fetched MR packet loss metrics",
-                org_id=org_id,
-                device_count=len(devices_data) if devices_data else 0,
-            )
 
             # Process each device's packet loss data
             for device_data in devices_data:
@@ -892,16 +879,7 @@ class MRCollector(BaseDeviceCollector):
                 )
 
             # Now collect network-wide packet loss metrics
-            logger.debug("Fetching network-wide packet loss metrics", org_id=org_id)
-            self._track_api_call("getOrganizationWirelessDevicesPacketLossByNetwork")
-
-            network_packet_loss = await asyncio.to_thread(
-                self.api.wireless.getOrganizationWirelessDevicesPacketLossByNetwork,
-                org_id,
-                timespan=300,  # 5 minutes
-                perPage=1000,
-                total_pages="all",
-            )
+            network_packet_loss = await self._fetch_network_packet_loss(org_id)
 
             # Handle different API response formats
             if isinstance(network_packet_loss, dict) and "items" in network_packet_loss:
@@ -1200,13 +1178,8 @@ class MRCollector(BaseDeviceCollector):
             network_id=network_id,
             network_name=network_name,
         ).set(avg_5min)
-        logger.debug(
-            "Set CPU load metric",
-            serial=serial,
-            name=device_name,
-            cpu_5min=avg_5min,
-        )
 
+    @log_api_call("getOrganizationWirelessSsidsStatusesByDevice")
     async def collect_ssid_status(self, org_id: str) -> None:
         """Collect SSID and radio status for MR devices.
 
@@ -1217,15 +1190,13 @@ class MRCollector(BaseDeviceCollector):
 
         """
         try:
-            logger.debug("Fetching MR SSID status", org_id=org_id)
-            self._track_api_call("getOrganizationWirelessSsidsStatusesByDevice")
-
-            ssid_statuses = await asyncio.to_thread(
-                self.api.wireless.getOrganizationWirelessSsidsStatusesByDevice,
-                org_id,
-                perPage=500,  # API limit is 3-500
-                total_pages="all",
-            )
+            with LogContext(org_id=org_id):
+                ssid_statuses = await asyncio.to_thread(
+                    self.api.wireless.getOrganizationWirelessSsidsStatusesByDevice,
+                    org_id,
+                    perPage=500,  # API limit is 3-500
+                    total_pages="all",
+                )
 
             # Handle different API response formats
             if isinstance(ssid_statuses, dict) and "items" in ssid_statuses:
@@ -1240,11 +1211,6 @@ class MRCollector(BaseDeviceCollector):
                 )
                 devices_data = []
 
-            logger.debug(
-                "Successfully fetched MR SSID status",
-                org_id=org_id,
-                device_count=len(devices_data) if devices_data else 0,
-            )
 
             # Process each device's SSID and radio status
             for device_data in devices_data:
@@ -1338,6 +1304,30 @@ class MRCollector(BaseDeviceCollector):
             logger.exception(
                 "Failed to collect MR SSID status",
                 org_id=org_id,
+            )
+
+    @log_api_call("getOrganizationWirelessDevicesPacketLossByNetwork")
+    async def _fetch_network_packet_loss(self, org_id: str) -> Any:
+        """Fetch network-wide packet loss metrics.
+        
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+            
+        Returns
+        -------
+        Any
+            Network packet loss data.
+            
+        """
+        with LogContext(org_id=org_id):
+            return await asyncio.to_thread(
+                self.api.wireless.getOrganizationWirelessDevicesPacketLossByNetwork,
+                org_id,
+                timespan=300,  # 5 minutes
+                perPage=1000,
+                total_pages="all",
             )
 
     def _set_packet_metric_value(
