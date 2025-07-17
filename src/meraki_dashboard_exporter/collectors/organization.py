@@ -11,6 +11,7 @@ from ..core.constants import OrgMetricName, UpdateTier
 from ..core.error_handling import ErrorCategory, with_error_handling
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
+from ..core.registry import register_collector
 from .organization_collectors import APIUsageCollector, ClientOverviewCollector, LicenseCollector
 
 if TYPE_CHECKING:
@@ -22,11 +23,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+@register_collector(UpdateTier.MEDIUM)
 class OrganizationCollector(MetricCollector):
     """Collector for organization-level metrics."""
-
-    # Organization data updates at medium frequency
-    update_tier: UpdateTier = UpdateTier.MEDIUM
 
     def __init__(
         self,

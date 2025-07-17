@@ -11,6 +11,7 @@ from ..core.domain_models import ConfigurationChange
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
+from ..core.registry import register_collector
 
 if TYPE_CHECKING:
     pass
@@ -18,11 +19,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+@register_collector(UpdateTier.SLOW)
 class ConfigCollector(MetricCollector):
     """Collector for configuration and security settings."""
-
-    # Configuration data updates infrequently
-    update_tier: UpdateTier = UpdateTier.SLOW
 
     def _initialize_metrics(self) -> None:
         """Initialize configuration metrics."""

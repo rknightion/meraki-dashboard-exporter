@@ -7,10 +7,17 @@ from typing import TYPE_CHECKING, Any
 
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
-from ..core.constants import DEFAULT_DEVICE_STATUS, DeviceMetricName, DeviceStatus, DeviceType, UpdateTier
+from ..core.constants import (
+    DEFAULT_DEVICE_STATUS,
+    DeviceMetricName,
+    DeviceStatus,
+    DeviceType,
+    UpdateTier,
+)
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
+from ..core.registry import register_collector
 from .devices import MGCollector, MRCollector, MSCollector, MTCollector, MVCollector, MXCollector
 
 if TYPE_CHECKING:
@@ -22,11 +29,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+@register_collector(UpdateTier.MEDIUM)
 class DeviceCollector(MetricCollector):
     """Collector for device-level metrics."""
-
-    # Device metrics update at medium frequency
-    update_tier: UpdateTier = UpdateTier.MEDIUM
 
     def _set_packet_metric_value(
         self, metric_name: str, labels: dict[str, str], value: float | None
@@ -297,7 +302,7 @@ class DeviceCollector(MetricCollector):
                     ms_devices,
                     self._collect_ms_device_with_timeout,
                     batch_size=5,
-                    delay_between_batches=0.5,
+                    delay_between_batches=self.settings.api.batch_delay,
                     item_description="MS device",
                     error_context_func=lambda device: {"serial": device["serial"]},
                 )
@@ -314,7 +319,7 @@ class DeviceCollector(MetricCollector):
                     mr_devices,
                     self._collect_mr_device_with_timeout,
                     batch_size=5,
-                    delay_between_batches=0.5,
+                    delay_between_batches=self.settings.api.batch_delay,
                     item_description="MR device",
                     error_context_func=lambda device: {"serial": device["serial"]},
                 )
@@ -335,7 +340,7 @@ class DeviceCollector(MetricCollector):
                         type_devices,
                         lambda d, dt=device_type: self._collect_device_with_timeout(d, dt),
                         batch_size=5,
-                        delay_between_batches=0.5,
+                        delay_between_batches=self.settings.api.batch_delay,
                         item_description=f"{device_type} device",
                         error_context_func=lambda device: {"serial": device["serial"]},
                     )

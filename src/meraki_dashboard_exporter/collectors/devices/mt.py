@@ -433,7 +433,7 @@ class MTCollector(BaseDeviceCollector):
 
         """
         # Validate parent exists (skip check in standalone mode)
-        if not self.parent and not getattr(self, '_standalone_mode', False):
+        if not self.parent and not getattr(self, "_standalone_mode", False):
             logger.error("Parent collector not set for MTCollector")
             return
 

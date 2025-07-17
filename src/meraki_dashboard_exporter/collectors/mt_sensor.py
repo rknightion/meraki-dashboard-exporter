@@ -12,6 +12,7 @@ from ..core.constants import MTMetricName, UpdateTier
 from ..core.error_handling import with_error_handling
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
+from ..core.registry import register_collector
 from .devices import MTCollector
 
 if TYPE_CHECKING:
@@ -23,11 +24,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+@register_collector(UpdateTier.FAST)
 class MTSensorCollector(MetricCollector):
     """Collector for fast-moving sensor metrics (MT devices)."""
-
-    # Sensor data updates frequently
-    update_tier: UpdateTier = UpdateTier.FAST
 
     def __init__(
         self,

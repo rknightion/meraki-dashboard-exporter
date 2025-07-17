@@ -53,4 +53,3 @@ MERAKI_API_BASE_URL_CANADA: Final[str] = DEFAULT_API_CONFIG.regional_urls.canada
 MERAKI_API_BASE_URL_CHINA: Final[str] = DEFAULT_API_CONFIG.regional_urls.china
 MERAKI_API_BASE_URL_INDIA: Final[str] = DEFAULT_API_CONFIG.regional_urls.india
 MERAKI_API_BASE_URL_US_FED: Final[str] = DEFAULT_API_CONFIG.regional_urls.us_fed
-

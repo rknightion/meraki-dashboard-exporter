@@ -32,7 +32,7 @@ class AsyncMerakiClient:
         """Initialize the async Meraki client with settings."""
         self.settings = settings
         self._api: meraki.DashboardAPI | None = None
-        self._semaphore = asyncio.Semaphore(5)  # Reduce concurrent API calls
+        self._semaphore = asyncio.Semaphore(settings.api.concurrency_limit)
         self._api_lock = asyncio.Lock()  # Add lock for API client creation
         self._api_call_count = 0
 

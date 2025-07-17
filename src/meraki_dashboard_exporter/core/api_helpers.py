@@ -37,6 +37,7 @@ class APIHelper:
         """
         self.collector = collector
         self.api: DashboardAPI = collector.api
+        self.settings = collector.settings
 
     @with_error_handling(
         operation="Fetch organizations",
@@ -185,7 +186,7 @@ class APIHelper:
         self,
         items: list[T],
         process_func: Callable[[T], Any],
-        batch_size: int = 10,
+        batch_size: int | None = None,
         description: str = "items",
     ) -> list[Any]:
         """Process items in batches to avoid overwhelming the API.
@@ -209,6 +210,10 @@ class APIHelper:
         """
         results = []
         total_items = len(items)
+        
+        # Use configured batch size if not specified
+        if batch_size is None:
+            batch_size = self.settings.api.batch_size
 
         for i in range(0, total_items, batch_size):
             batch = items[i : i + batch_size]

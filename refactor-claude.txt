@@ -32,21 +32,6 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
 
 ## Priority 4: Simplify Configuration and Dependencies (Medium Impact)
 
-### 4.1 Simplify Collector Registration
-**Issue**: Manual collector registration in manager requires updating multiple places for new collectors.
-**Refactor**:
-- Use decorator-based auto-registration: `@collector(tier=UpdateTier.MEDIUM)`
-- Create collector discovery mechanism
-- Add configuration-driven collector enabling/disabling
-**Benefit**: Easier to add new collectors, less boilerplate, clearer for LLMs to understand collector lifecycle.
-
-### 4.2 Improve Configuration Validation
-**Issue**: Some configuration validation is scattered, environment variable handling could be cleaner.
-**Refactor**:
-- Group related settings into nested Pydantic models
-- Add computed properties for derived settings
-- Create configuration profiles for different deployment scenarios
-**Benefit**: Clearer configuration structure, better validation, easier for LLMs to understand configuration dependencies.
 
 ### 4.3 Standardize Async Patterns
 **Issue**: Inconsistent async/await patterns and error handling in async contexts.
@@ -348,3 +333,45 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
   - Removed the old constants.py re-export file
   - Each collector uses the appropriate domain enum (e.g., OrgMetricName for organization metrics)
 **Benefit**: Better organization, type safety, easier to find relevant constants, reduced typos, clearer domain separation for LLMs, no extra backward compatibility code to maintain.
+
+### 4.1 Simplify Collector Registration - COMPLETED
+**Issue**: Manual collector registration in manager required updating multiple places for new collectors.
+**Refactor Completed**:
+- Created `core/registry.py` with global collector registry:
+  - `@register_collector(tier)` decorator for auto-registration
+  - Registry tracks collectors by update tier
+  - Helper functions: `get_registered_collectors()`, `clear_registry()`
+- Updated CollectorManager to use registry instead of hardcoding:
+  - `_initialize_collectors()` now imports all collector modules (triggers registration)
+  - Iterates through registry to create collector instances
+  - Added error handling for failed collector initialization
+- Applied decorator to all main collectors:
+  - AlertsCollector, ConfigCollector, DeviceCollector
+  - MTSensorCollector, NetworkHealthCollector, OrganizationCollector
+- Added comprehensive tests:
+  - Unit tests for registry functionality
+  - Integration tests for CollectorManager with registry
+- Updated CLAUDE.md with decorator usage guidance
+**Benefit**: No manual registration needed, self-documenting code, impossible to forget registering a collector, cleaner separation of concerns, easier for LLMs to add new collectors.
+
+### 4.2 Improve Configuration Validation - COMPLETED
+**Issue**: Configuration validation was scattered, environment variable handling could be cleaner.
+**Refactor Completed**:
+- Created `core/config_models.py` with nested Pydantic models:
+  - `APISettings`: API timeouts, retries, concurrency, batch settings
+  - `UpdateIntervals`: Fast/medium/slow intervals with cross-field validation
+  - `ServerSettings`: HTTP server configuration
+  - `OTelSettings`: OpenTelemetry configuration with validation
+  - `MonitoringSettings`: Monitoring thresholds and histogram buckets
+  - `CollectorSettings`: Enabled/disabled collectors with computed active set
+- Created configuration profiles (development, production, high_volume, minimal)
+- Updated Settings to use nested models with `env_nested_delimiter="__"`
+- Added computed properties for backward compatibility
+- Added profile-based configuration with environment override support
+- Updated hardcoded values to use configuration:
+  - API concurrency limit in AsyncMerakiClient
+  - Batch size defaults in APIHelper
+  - Batch delay in device collector
+- Created configuration documentation generator tool
+- Updated CLAUDE.md with configuration management section
+**Benefit**: Clearer configuration structure with validation, profile-based deployment scenarios, backward compatibility maintained, easier for LLMs to understand nested configuration with proper typing.

@@ -10,6 +10,7 @@ from ..core.constants import AlertMetricName, UpdateTier
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
+from ..core.registry import register_collector
 
 if TYPE_CHECKING:
     pass
@@ -17,11 +18,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+@register_collector(UpdateTier.MEDIUM)
 class AlertsCollector(MetricCollector):
     """Collector for Meraki assurance alerts."""
-
-    # Alerts update at medium frequency
-    update_tier: UpdateTier = UpdateTier.MEDIUM
 
     def _initialize_metrics(self) -> None:
         """Initialize alert metrics."""

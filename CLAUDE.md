@@ -157,6 +157,32 @@ The exporter uses a modular collector architecture where large collectors are sp
 - `manager.py` - Manages all collectors and their update schedules
 
 ### Adding New Collectors
+
+#### Main Collectors (Auto-Registered)
+Main collectors that inherit directly from `MetricCollector` are automatically registered using the `@register_collector` decorator:
+
+```python
+from ..core.collector import MetricCollector
+from ..core.constants import UpdateTier
+from ..core.registry import register_collector
+
+@register_collector(UpdateTier.MEDIUM)  # Specify the update tier
+class MyNewCollector(MetricCollector):
+    """My new collector implementation."""
+    
+    def _initialize_metrics(self) -> None:
+        # Initialize your metrics here
+        pass
+    
+    async def _collect_impl(self) -> None:
+        # Implement collection logic here
+        pass
+```
+
+The decorator automatically registers the collector with the `CollectorManager`, eliminating the need for manual registration.
+
+#### Sub-Collectors (Manual Registration)
+Sub-collectors still require manual registration:
 1. For device-specific metrics: Create a new file in `devices/` inheriting from BaseDeviceCollector
 2. For network health metrics: Create a new file in `network_health_collectors/` inheriting from BaseNetworkHealthCollector
 3. For organization metrics: Create a new file in `organization_collectors/` inheriting from BaseOrganizationCollector
@@ -362,3 +388,43 @@ Available models include:
   - ConfigurationChange
   - SensorMeasurement, MTSensorReading
   - OrganizationSummary
+
+## Configuration Management
+
+The exporter uses a sophisticated configuration system with nested Pydantic models:
+
+### Configuration Structure
+- **Settings** (`core/config.py`): Main configuration class with nested models
+- **Nested Models** (`core/config_models.py`):
+  - `APISettings`: API timeouts, retries, concurrency limits, batch sizes
+  - `UpdateIntervals`: Fast/medium/slow update intervals with validation
+  - `ServerSettings`: HTTP server configuration
+  - `OTelSettings`: OpenTelemetry configuration
+  - `MonitoringSettings`: Monitoring thresholds and histogram buckets
+  - `CollectorSettings`: Enabled/disabled collectors
+
+### Configuration Profiles
+Pre-defined profiles for different scenarios:
+- **development**: Relaxed limits for development
+- **production**: Standard production settings
+- **high_volume**: Aggressive settings for large deployments
+- **minimal**: Minimal configuration for testing
+
+Set profile via: `MERAKI_EXPORTER_PROFILE=production`
+
+### Environment Variables
+- Nested settings use double underscore: `MERAKI_EXPORTER_API__TIMEOUT=60`
+- Profile settings can be overridden by environment variables
+- Special handling for `MERAKI_API_KEY` (no prefix required)
+
+### Using Configuration in Code
+```python
+# Access nested configuration
+timeout = self.settings.api.timeout
+batch_size = self.settings.api.batch_size
+```
+
+### Backward Compatibility
+Computed properties maintain compatibility:
+- `settings.api_timeout` → `settings.api.timeout`
+- `settings.fast_update_interval` → `settings.update_intervals.fast`

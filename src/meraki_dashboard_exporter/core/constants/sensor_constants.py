@@ -57,4 +57,3 @@ class SensorDataField(StrEnum):
     OPEN = "open"
     PRESENT = "present"
     ENABLED = "enabled"
-

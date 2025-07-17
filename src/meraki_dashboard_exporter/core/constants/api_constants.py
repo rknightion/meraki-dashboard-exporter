@@ -122,4 +122,3 @@ class RFBand(StrEnum):
 DEFAULT_DEVICE_STATUS: Final[str] = DeviceStatus.OFFLINE
 DEFAULT_DEVICE_MODEL_MT: Final[str] = "MT"
 DEFAULT_DEVICE_MODEL_MR: Final[str] = "MR"
-
