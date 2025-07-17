@@ -338,7 +338,7 @@ class MetricCollector(ABC):
                 "OrganizationCollector",
                 "DeviceCollector",
                 "NetworkHealthCollector",
-                "SensorCollector",
+                "MTSensorCollector",
                 "AlertsCollector",
                 "ConfigCollector",
             ]:

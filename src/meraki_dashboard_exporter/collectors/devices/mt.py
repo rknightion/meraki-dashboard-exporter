@@ -2,19 +2,174 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...api.client import AsyncMerakiClient
+from ...core.constants import MetricName, UpdateTier
 from ...core.logging import get_logger
 from .base import BaseDeviceCollector
 
 if TYPE_CHECKING:
-    pass
+    from meraki import DashboardAPI
+    from prometheus_client import CollectorRegistry
+
+    from ...core.config import Settings
+    from ..device import DeviceCollector
 
 logger = get_logger(__name__)
 
 
 class MTCollector(BaseDeviceCollector):
-    """Collector for Meraki MT (Sensor) devices."""
+    """Collector for Meraki MT (Sensor) devices.
+    
+    This collector handles both device-level metrics (through DeviceCollector)
+    and sensor-specific environmental metrics with FAST tier updates.
+    """
+    
+    # Sensor data updates frequently
+    update_tier: UpdateTier = UpdateTier.FAST
+
+    def __init__(self, parent: DeviceCollector | None = None) -> None:
+        """Initialize MT collector.
+        
+        Parameters
+        ----------
+        parent : DeviceCollector | None
+            Parent DeviceCollector instance. If None, this collector
+            operates in standalone sensor mode.
+            
+        """
+        if parent:
+            super().__init__(parent)
+        else:
+            # Standalone mode - initialize without parent
+            self.parent = None
+            self.api = None  # Will be set later
+            self.settings = None  # Will be set later
+    
+    def _track_api_call(self, method_name: str) -> None:
+        """Track API call, handling standalone mode.
+        
+        Parameters
+        ----------
+        method_name : str
+            Name of the API method being called.
+            
+        """
+        if self.parent and hasattr(self.parent, "_track_api_call"):
+            self.parent._track_api_call(method_name)
+        else:
+            # In standalone mode, just log
+            logger.debug("API call tracked", method=method_name)
+    
+    async def collect(self, device: dict[str, Any]) -> None:
+        """Collect device-level MT metrics.
+        
+        This is called by DeviceCollector for each MT device.
+        
+        Parameters
+        ----------
+        device : dict[str, Any]
+            Device data from Meraki API.
+            
+        """
+        # MT devices don't have device-specific metrics beyond common ones
+        # Their main metrics come from sensor readings
+        logger.debug(
+            "MT device metrics collection (device-level)",
+            serial=device.get("serial"),
+            name=device.get("name"),
+        )
+    
+    async def collect_sensor_metrics(self, org_id: str | None = None) -> None:
+        """Collect sensor metrics for all MT devices.
+        
+        This method handles the full sensor collection process including
+        fetching devices and their readings.
+        
+        Parameters
+        ----------
+        org_id : str | None
+            Organization ID. If None, collects for all orgs.
+            
+        """
+        try:
+            # Get organizations
+            if org_id:
+                org_ids = [org_id]
+            elif self.settings and self.settings.org_id:
+                org_ids = [self.settings.org_id]
+            else:
+                logger.debug("Fetching all organizations for sensor collection")
+                self._track_api_call("getOrganizations")
+                orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
+                org_ids = [org["id"] for org in orgs]
+                logger.debug("Successfully fetched organizations", count=len(org_ids))
+
+            # Collect sensors for each organization
+            for org_id in org_ids:
+                try:
+                    await self._collect_org_sensors(org_id)
+                except Exception:
+                    logger.exception(
+                        "Failed to collect sensors for organization",
+                        org_id=org_id,
+                    )
+                    # Continue with next organization
+
+        except Exception:
+            logger.exception("Failed to collect sensor metrics")
+    
+    async def _collect_org_sensors(self, org_id: str) -> None:
+        """Collect sensor metrics for an organization.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        """
+        try:
+            # Get all MT devices
+            logger.debug("Fetching sensor devices", org_id=org_id)
+            self._track_api_call("getOrganizationDevices")
+            devices = await asyncio.to_thread(
+                self.api.organizations.getOrganizationDevices,
+                org_id,
+                total_pages="all",
+                productTypes=["sensor"],
+            )
+            logger.debug("Successfully fetched sensor devices", org_id=org_id, count=len(devices))
+
+            if not devices:
+                return
+
+            # Extract sensor serials
+            sensor_serials = [d["serial"] for d in devices if d.get("model", "").startswith("MT")]
+
+            if sensor_serials:
+                # Create device lookup map
+                device_map = {d["serial"]: d for d in devices}
+
+                # Use async client for batch sensor reading
+                client = AsyncMerakiClient(self.settings)
+                readings = await client.get_sensor_readings_latest(org_id, sensor_serials)
+
+                # Process readings
+                logger.debug(
+                    "Processing sensor readings",
+                    org_id=org_id,
+                    sensor_count=len(sensor_serials),
+                    readings_count=len(readings),
+                )
+                self.collect_batch(readings, device_map)
+
+        except Exception:
+            logger.exception(
+                "Failed to collect sensors for organization",
+                org_id=org_id,
+            )
 
     def _set_metric_value(self, metric_name: str, labels: dict[str, str], value: float) -> None:
         """Safely set a metric value with validation.
