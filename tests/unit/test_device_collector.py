@@ -160,12 +160,12 @@ class TestDeviceCollector:
         )
 
         # Collect SSID status
-        await device_collector._collect_mr_ssid_status("123456")
+        await device_collector.mr_collector.collect_ssid_status("123456")
 
         # Verify API was called correctly
         mock_api.wireless.getOrganizationWirelessSsidsStatusesByDevice.assert_called_once_with(
             "123456",
-            hideDisabled=True,
+            perPage=500,
             total_pages="all",
         )
 
@@ -217,7 +217,9 @@ class TestDeviceCollector:
         assert device_collector._device_lookup["Q2KD-XXXX"]["model"] == "MR36"
 
         # Collect wireless clients
-        await device_collector._collect_wireless_clients("123456")
+        await device_collector.mr_collector.collect_wireless_clients(
+            "123456", device_collector._device_lookup
+        )
 
         # The metric would be set with the correct device name (not serial)
         # In a real test, we'd verify the prometheus metric labels
@@ -273,7 +275,7 @@ class TestDeviceCollector:
         )
 
         # Collect SSID status
-        await device_collector._collect_mr_ssid_status("123456")
+        await device_collector.mr_collector.collect_ssid_status("123456")
 
         # The collector should only process each radio once
         # This test verifies the method completes without duplicate processing

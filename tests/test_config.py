@@ -32,7 +32,7 @@ def test_settings_with_invalid_api_key(monkeypatch):
 def test_settings_with_otel_enabled_without_endpoint(monkeypatch):
     """Test OTEL validation when enabled without endpoint."""
     monkeypatch.setenv("MERAKI_API_KEY", "a" * 40)
-    monkeypatch.setenv("MERAKI_EXPORTER_OTEL_ENABLED", "true")
+    monkeypatch.setenv("MERAKI_EXPORTER_OTEL__ENABLED", "true")
 
     with pytest.raises(ValidationError) as exc_info:
         Settings()
@@ -44,10 +44,15 @@ def test_settings_with_custom_values(monkeypatch):
     """Test settings with custom values."""
     monkeypatch.setenv("MERAKI_API_KEY", "a" * 40)
     monkeypatch.setenv("MERAKI_EXPORTER_ORG_ID", "123456")
-    monkeypatch.setenv("MERAKI_EXPORTER_FAST_UPDATE_INTERVAL", "120")
+    monkeypatch.setenv("MERAKI_EXPORTER_UPDATE_INTERVALS__FAST", "60")
+    monkeypatch.setenv("MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM", "300")
+    monkeypatch.setenv("MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW", "900")
     monkeypatch.setenv("MERAKI_EXPORTER_LOG_LEVEL", "DEBUG")
 
     settings = Settings()
     assert settings.org_id == "123456"
-    assert settings.fast_update_interval == 120
+    assert settings.fast_update_interval == 60
+    assert settings.update_intervals.fast == 60
+    assert settings.update_intervals.medium == 300
+    assert settings.update_intervals.slow == 900
     assert settings.log_level == "DEBUG"
