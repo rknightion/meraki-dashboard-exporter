@@ -68,7 +68,7 @@ class BaseDeviceCollector(ABC):
         # Device up/down status
         status = status_info.get("status", DeviceStatus.OFFLINE)
         is_online = 1 if status == DeviceStatus.ONLINE else 0
-        
+
         logger.debug(
             "Setting device status metric",
             serial=serial,
@@ -78,7 +78,7 @@ class BaseDeviceCollector(ABC):
             status=status,
             is_online=is_online,
         )
-        
+
         self.parent._device_up.labels(
             serial=serial,
             name=name,
@@ -120,14 +120,14 @@ class BaseDeviceCollector(ABC):
         """
         model = device.get("model", "")
         device_type = model[:2] if len(model) >= 2 else "Unknown"
-        
+
         if device_type == "Unknown":
             logger.warning(
                 "Unable to determine device type from model",
                 model=model,
                 serial=device.get("serial", "unknown"),
             )
-        
+
         return device_type
 
     def _track_api_call(self, method_name: str) -> None:

@@ -55,7 +55,7 @@ def register_collector(tier: UpdateTier | None = None) -> Callable[[type[T]], ty
     >>> @register_collector()  # Uses update_tier attribute
     ... class MyCollector(MetricCollector):
     ...     update_tier = UpdateTier.MEDIUM
-    ...     
+    ...
     ...     def _collect_impl(self) -> None:
     ...         # Collect metrics every 5 minutes
     ...         pass
@@ -64,13 +64,13 @@ def register_collector(tier: UpdateTier | None = None) -> Callable[[type[T]], ty
     >>> @register_collector(UpdateTier.SLOW)
     ... class ConfigCollector(MetricCollector):
     ...     '''Collects configuration metrics every 15 minutes.'''
-    ...     
+    ...
     ...     def _initialize_metrics(self) -> None:
     ...         self._config_changes = self._create_counter(
     ...             "config_changes_total",
     ...             "Total configuration changes"
     ...         )
-    ...     
+    ...
     ...     async def _collect_impl(self) -> None:
     ...         changes = await self._fetch_config_changes()
     ...         self._config_changes.inc(len(changes))

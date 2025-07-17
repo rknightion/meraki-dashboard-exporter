@@ -20,7 +20,7 @@ class MTSensorCollector(MetricCollector):
     """Collects frequently-changing sensor data."""
 ```
 
-**Rationale**: 
+**Rationale**:
 - Sensor data can trigger alerts (e.g., temperature threshold)
 - 60s aligns with typical monitoring dashboards
 - API can handle this frequency for sensor endpoints
@@ -77,18 +77,18 @@ Used when collecting metrics for multiple items of the same type.
 async def _collect_impl(self) -> None:
     """Batch collection example."""
     organizations = await self._fetch_organizations()
-    
+
     # Process in batches to avoid overwhelming API
     for i in range(0, len(devices), self.settings.api.batch_size):
         batch = devices[i:i + self.settings.api.batch_size]
-        
+
         # Process batch concurrently
         async with ManagedTaskGroup("device_batch") as group:
             for device in batch:
                 await group.create_task(
                     self._collect_device_metrics(device)
                 )
-        
+
         # Delay between batches
         if i + self.settings.api.batch_size < len(devices):
             await asyncio.sleep(self.settings.api.batch_delay)
@@ -104,11 +104,11 @@ async def _collect_impl(self) -> None:
     for org in organizations:
         # Level 2: Networks
         networks = await self._fetch_networks(org["id"])
-        
+
         for network in networks:
             # Level 3: Devices
             devices = await self._fetch_devices(network["id"])
-            
+
             # Collect metrics at appropriate level
             self._set_network_metrics(network, len(devices))
 ```
@@ -124,7 +124,7 @@ async def collect_client_overview(self, org_id: str) -> None:
         org_id,
         timespan=300  # Last 5 minutes
     )
-    
+
     # Direct mapping to metrics
     self._clients_count.labels(
         org_id=org_id,
@@ -143,7 +143,7 @@ async def collect_usage_history(self, serial: str) -> None:
         serial,
         timespan=300
     )
-    
+
     # Process latest data point
     if usage:
         latest = usage[-1]  # Most recent
@@ -158,12 +158,12 @@ class DeviceCollector:
     def __init__(self):
         self._device_cache: dict[str, Device] = {}
         self._cache_timestamp = 0
-        
+
     async def _get_devices(self, org_id: str) -> list[Device]:
         # Cache for 5 minutes
         if time.time() - self._cache_timestamp < 300:
             return list(self._device_cache.values())
-            
+
         devices = await self._fetch_devices(org_id)
         self._update_cache(devices)
         return devices
@@ -176,12 +176,12 @@ Skip collection when data won't have changed:
 async def collect_licenses(self, org_id: str) -> None:
     """Only collect if sufficient time has passed."""
     last_check = self._last_license_check.get(org_id, 0)
-    
+
     # Skip if checked recently (within 1 hour)
     if time.time() - last_check < 3600:
         logger.debug("Skipping license check", org_id=org_id)
         return
-        
+
     # Proceed with collection
     licenses = await self._fetch_licenses(org_id)
     self._last_license_check[org_id] = time.time()
@@ -195,7 +195,7 @@ async def collect_all_devices(self) -> None:
     """Collect with partial failure tolerance."""
     success_count = 0
     error_count = 0
-    
+
     for device in devices:
         try:
             await self._collect_device_metrics(device)
@@ -207,7 +207,7 @@ async def collect_all_devices(self) -> None:
                 serial=device["serial"],
                 error=str(e)
             )
-    
+
     logger.info(
         "Device collection complete",
         success=success_count,

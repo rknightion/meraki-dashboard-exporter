@@ -53,23 +53,23 @@ else:
 ```python
 def extract_items(response: Any) -> list[dict[str, Any]]:
     """Extract items from API response regardless of format.
-    
+
     Parameters
     ----------
     response : Any
         API response (list or dict with 'items')
-        
+
     Returns
     -------
     list[dict[str, Any]]
         Extracted items
-        
+
     Examples
     --------
     >>> # Direct array
     >>> extract_items([{"id": "1"}, {"id": "2"}])
     [{"id": "1"}, {"id": "2"}]
-    
+
     >>> # Wrapped response
     >>> extract_items({"items": [{"id": "1"}]})
     [{"id": "1"}]

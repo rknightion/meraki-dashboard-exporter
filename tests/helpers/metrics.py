@@ -4,52 +4,55 @@ from __future__ import annotations
 
 from typing import Any
 
-from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, Info
+from prometheus_client import CollectorRegistry
 
 
 class MetricAssertions:
     """Helper class for asserting metric values in tests.
-    
+
     Examples
     --------
     metrics = MetricAssertions(registry)
     metrics.assert_gauge_value("meraki_device_up", 1, serial="Q2KD-XXXX")
     metrics.assert_counter_incremented("meraki_api_calls_total", endpoint="getDevices")
     metrics.assert_metric_not_set("meraki_device_cpu_percent")
+
     """
-    
+
     def __init__(self, registry: CollectorRegistry) -> None:
         """Initialize with a collector registry.
-        
+
         Parameters
         ----------
         registry : CollectorRegistry
             The registry containing metrics
+
         """
         self.registry = registry
         self._metrics_cache: dict[str, Any] = {}
-        
+
     def get_metric(self, metric_name: str) -> Any:
         """Get a metric by name from the registry.
-        
+
         Parameters
         ----------
         metric_name : str
             The metric name
-            
+
         Returns
         -------
         Any
             The metric object
-            
+
         Raises
         ------
         AssertionError
             If metric not found
+
         """
         if metric_name in self._metrics_cache:
             return self._metrics_cache[metric_name]
-            
+
         # Search through all collectors in registry
         for collector in self.registry._collector_to_names:
             metrics = collector.collect()
@@ -57,17 +60,12 @@ class MetricAssertions:
                 if metric.name == metric_name:
                     self._metrics_cache[metric_name] = metric
                     return metric
-                    
+
         raise AssertionError(f"Metric '{metric_name}' not found in registry")
-        
-    def assert_gauge_value(
-        self,
-        metric_name: str,
-        expected_value: float,
-        **labels: str
-    ) -> None:
+
+    def assert_gauge_value(self, metric_name: str, expected_value: float, **labels: str) -> None:
         """Assert a gauge has the expected value.
-        
+
         Parameters
         ----------
         metric_name : str
@@ -76,14 +74,15 @@ class MetricAssertions:
             Expected value
         **labels : str
             Label key-value pairs
-            
+
         Raises
         ------
         AssertionError
             If assertion fails
+
         """
         metric = self.get_metric(metric_name)
-        
+
         # Find the sample with matching labels
         for sample in metric.samples:
             if sample.name == metric_name and self._labels_match(sample.labels, labels):
@@ -93,21 +92,16 @@ class MetricAssertions:
                         f"{sample.value}, expected {expected_value}"
                     )
                 return
-                
+
         # If we get here, no matching sample was found
         raise AssertionError(
             f"Metric '{metric_name}' with labels {labels} not found. "
             f"Available labels: {self._get_available_labels(metric, metric_name)}"
         )
-        
-    def assert_counter_value(
-        self,
-        metric_name: str,
-        expected_value: float,
-        **labels: str
-    ) -> None:
+
+    def assert_counter_value(self, metric_name: str, expected_value: float, **labels: str) -> None:
         """Assert a counter has the expected value.
-        
+
         Parameters
         ----------
         metric_name : str
@@ -116,24 +110,22 @@ class MetricAssertions:
             Expected value
         **labels : str
             Label key-value pairs
-            
+
         Raises
         ------
         AssertionError
             If assertion fails
+
         """
         # Counters typically have _total suffix
         full_name = metric_name if metric_name.endswith("_total") else f"{metric_name}_total"
         self.assert_gauge_value(full_name, expected_value, **labels)
-        
+
     def assert_counter_incremented(
-        self,
-        metric_name: str,
-        min_increment: int = 1,
-        **labels: str
+        self, metric_name: str, min_increment: int = 1, **labels: str
     ) -> None:
         """Assert a counter was incremented.
-        
+
         Parameters
         ----------
         metric_name : str
@@ -142,15 +134,16 @@ class MetricAssertions:
             Minimum increment expected
         **labels : str
             Label key-value pairs
-            
+
         Raises
         ------
         AssertionError
             If assertion fails
+
         """
         full_name = metric_name if metric_name.endswith("_total") else f"{metric_name}_total"
         metric = self.get_metric(full_name)
-        
+
         for sample in metric.samples:
             if sample.name == full_name and self._labels_match(sample.labels, labels):
                 if sample.value < min_increment:
@@ -159,17 +152,12 @@ class MetricAssertions:
                         f"{sample.value}, expected at least {min_increment}"
                     )
                 return
-                
+
         raise AssertionError(f"Counter '{metric_name}' with labels {labels} not found")
-        
-    def assert_histogram_count(
-        self,
-        metric_name: str,
-        expected_count: int,
-        **labels: str
-    ) -> None:
+
+    def assert_histogram_count(self, metric_name: str, expected_count: int, **labels: str) -> None:
         """Assert a histogram has the expected count.
-        
+
         Parameters
         ----------
         metric_name : str
@@ -178,24 +166,21 @@ class MetricAssertions:
             Expected observation count
         **labels : str
             Label key-value pairs
-            
+
         Raises
         ------
         AssertionError
             If assertion fails
+
         """
         count_name = f"{metric_name}_count"
         self.assert_gauge_value(count_name, expected_count, **labels)
-        
+
     def assert_histogram_sum_range(
-        self,
-        metric_name: str,
-        min_sum: float,
-        max_sum: float,
-        **labels: str
+        self, metric_name: str, min_sum: float, max_sum: float, **labels: str
     ) -> None:
         """Assert a histogram sum is within range.
-        
+
         Parameters
         ----------
         metric_name : str
@@ -206,15 +191,16 @@ class MetricAssertions:
             Maximum expected sum
         **labels : str
             Label key-value pairs
-            
+
         Raises
         ------
         AssertionError
             If assertion fails
+
         """
         sum_name = f"{metric_name}_sum"
         metric = self.get_metric(sum_name)
-        
+
         for sample in metric.samples:
             if sample.name == sum_name and self._labels_match(sample.labels, labels):
                 if not (min_sum <= sample.value <= max_sum):
@@ -223,17 +209,14 @@ class MetricAssertions:
                         f"{sample.value}, expected between {min_sum} and {max_sum}"
                     )
                 return
-                
+
         raise AssertionError(f"Histogram '{metric_name}' with labels {labels} not found")
-        
+
     def assert_info_value(
-        self,
-        metric_name: str,
-        expected_info: dict[str, str],
-        **labels: str
+        self, metric_name: str, expected_info: dict[str, str], **labels: str
     ) -> None:
         """Assert an info metric has the expected value.
-        
+
         Parameters
         ----------
         metric_name : str
@@ -242,15 +225,16 @@ class MetricAssertions:
             Expected info labels
         **labels : str
             Additional label filters
-            
+
         Raises
         ------
         AssertionError
             If assertion fails
+
         """
         info_name = f"{metric_name}_info"
         metric = self.get_metric(info_name)
-        
+
         for sample in metric.samples:
             if sample.name == info_name and self._labels_match(sample.labels, labels):
                 # Check if all expected info labels are present
@@ -261,161 +245,160 @@ class MetricAssertions:
                             f"got {key}='{sample.labels.get(key)}'"
                         )
                 return
-                
+
         raise AssertionError(f"Info metric '{metric_name}' with labels {labels} not found")
-        
+
     def assert_metric_exists(self, metric_name: str) -> None:
         """Assert a metric exists in the registry.
-        
+
         Parameters
         ----------
         metric_name : str
             The metric name
-            
+
         Raises
         ------
         AssertionError
             If metric doesn't exist
+
         """
         self.get_metric(metric_name)  # Will raise if not found
-        
+
     def assert_metric_not_set(self, metric_name: str, **labels: str) -> None:
         """Assert a metric was not set (has no samples with given labels).
-        
+
         Parameters
         ----------
         metric_name : str
             The metric name
         **labels : str
             Label key-value pairs
-            
+
         Raises
         ------
         AssertionError
             If metric has samples with given labels
+
         """
         try:
             metric = self.get_metric(metric_name)
         except AssertionError:
             # Metric doesn't exist at all, that's fine
             return
-            
+
         # Check if any samples match the labels
         for sample in metric.samples:
             # Skip _created, _bucket, etc. samples
             if not sample.name.startswith(metric_name):
                 continue
-                
+
             if self._labels_match(sample.labels, labels):
                 raise AssertionError(
                     f"Metric '{metric_name}' with labels {labels} was set to {sample.value}, "
                     f"expected it not to be set"
                 )
-                
-    def get_metric_value(
-        self,
-        metric_name: str,
-        **labels: str
-    ) -> float | None:
+
+    def get_metric_value(self, metric_name: str, **labels: str) -> float | None:
         """Get the value of a metric with given labels.
-        
+
         Parameters
         ----------
         metric_name : str
             The metric name
         **labels : str
             Label key-value pairs
-            
+
         Returns
         -------
         float | None
             The metric value or None if not found
+
         """
         try:
             metric = self.get_metric(metric_name)
         except AssertionError:
             return None
-            
+
         for sample in metric.samples:
             if sample.name == metric_name and self._labels_match(sample.labels, labels):
                 return sample.value
-                
+
         return None
-        
+
     def get_all_label_sets(self, metric_name: str) -> list[dict[str, str]]:
         """Get all label combinations for a metric.
-        
+
         Parameters
         ----------
         metric_name : str
             The metric name
-            
+
         Returns
         -------
         list[dict[str, str]]
             List of label dictionaries
+
         """
         metric = self.get_metric(metric_name)
         label_sets = []
-        
+
         for sample in metric.samples:
             if sample.name == metric_name:
                 label_sets.append(dict(sample.labels))
-                
+
         return label_sets
-        
+
     def print_metric_samples(self, metric_name: str) -> None:
         """Print all samples for a metric (useful for debugging).
-        
+
         Parameters
         ----------
         metric_name : str
             The metric name
+
         """
         metric = self.get_metric(metric_name)
         print(f"\nSamples for {metric_name}:")
         for sample in metric.samples:
             if sample.name.startswith(metric_name):
                 print(f"  {sample.name}{sample.labels} = {sample.value}")
-                
-    def _labels_match(
-        self,
-        sample_labels: dict[str, str],
-        expected_labels: dict[str, str]
-    ) -> bool:
+
+    def _labels_match(self, sample_labels: dict[str, str], expected_labels: dict[str, str]) -> bool:
         """Check if sample labels match expected labels.
-        
+
         Parameters
         ----------
         sample_labels : dict[str, str]
             Labels from the sample
         expected_labels : dict[str, str]
             Expected label values
-            
+
         Returns
         -------
         bool
             True if all expected labels match
+
         """
         for key, value in expected_labels.items():
             if sample_labels.get(key) != value:
                 return False
         return True
-        
+
     def _get_available_labels(self, metric: Any, metric_name: str) -> list[dict[str, str]]:
         """Get all available label combinations for a metric.
-        
+
         Parameters
         ----------
         metric : Any
             The metric object
         metric_name : str
             The metric name
-            
+
         Returns
         -------
         list[dict[str, str]]
             Available label combinations
+
         """
         labels_list = []
         for sample in metric.samples:
@@ -426,34 +409,36 @@ class MetricAssertions:
 
 class MetricSnapshot:
     """Capture metric state for comparison.
-    
+
     Examples
     --------
     # Capture initial state
     before = MetricSnapshot(registry)
-    
+
     # Do some work...
-    
+
     # Capture final state
     after = MetricSnapshot(registry)
-    
+
     # Check what changed
     diff = after.diff(before)
     assert diff.counter_delta("api_calls_total", endpoint="getDevices") == 1
+
     """
-    
+
     def __init__(self, registry: CollectorRegistry) -> None:
         """Capture current metric state.
-        
+
         Parameters
         ----------
         registry : CollectorRegistry
             The registry to snapshot
+
         """
         self.registry = registry
         self.state: dict[str, dict[tuple, float]] = {}
         self._capture()
-        
+
     def _capture(self) -> None:
         """Capture current metric values."""
         for collector in self.registry._collector_to_names:
@@ -461,111 +446,112 @@ class MetricSnapshot:
             for metric in metrics:
                 if metric.name not in self.state:
                     self.state[metric.name] = {}
-                    
+
                 for sample in metric.samples:
                     # Create label tuple for consistent comparison
                     label_tuple = tuple(sorted(sample.labels.items()))
                     self.state[metric.name][(sample.name, label_tuple)] = sample.value
-                    
+
     def diff(self, other: MetricSnapshot) -> MetricDiff:
         """Compare with another snapshot.
-        
+
         Parameters
         ----------
         other : MetricSnapshot
             Earlier snapshot to compare against
-            
+
         Returns
         -------
         MetricDiff
             Difference between snapshots
+
         """
         return MetricDiff(other, self)
 
 
 class MetricDiff:
     """Difference between two metric snapshots."""
-    
+
     def __init__(self, before: MetricSnapshot, after: MetricSnapshot) -> None:
         """Initialize with before and after snapshots.
-        
+
         Parameters
         ----------
         before : MetricSnapshot
             Earlier snapshot
         after : MetricSnapshot
             Later snapshot
+
         """
         self.before = before
         self.after = after
-        
+
     def counter_delta(self, metric_name: str, **labels: str) -> float:
         """Get counter increment between snapshots.
-        
+
         Parameters
         ----------
         metric_name : str
             Counter name
         **labels : str
             Label filters
-            
+
         Returns
         -------
         float
             The delta value
+
         """
         full_name = metric_name if metric_name.endswith("_total") else f"{metric_name}_total"
         return self._get_delta(full_name, **labels)
-        
+
     def gauge_delta(self, metric_name: str, **labels: str) -> float:
         """Get gauge change between snapshots.
-        
+
         Parameters
         ----------
         metric_name : str
             Gauge name
         **labels : str
             Label filters
-            
+
         Returns
         -------
         float
             The delta value
+
         """
         return self._get_delta(metric_name, **labels)
-        
+
     def _get_delta(self, metric_name: str, **labels: str) -> float:
         """Get value change for a metric."""
         # Find matching samples in both snapshots
         before_value = self._find_value(self.before.state, metric_name, labels)
         after_value = self._find_value(self.after.state, metric_name, labels)
-        
+
         if before_value is None:
             before_value = 0
         if after_value is None:
             return 0
-            
+
         return after_value - before_value
-        
+
     def _find_value(
-        self,
-        state: dict[str, dict[tuple, float]],
-        metric_name: str,
-        labels: dict[str, str]
+        self, state: dict[str, dict[tuple, float]], metric_name: str, labels: dict[str, str]
     ) -> float | None:
         """Find metric value in state."""
         if metric_name not in state:
             return None
-            
+
         metric_state = state[metric_name]
-        
+
         for (sample_name, label_tuple), value in metric_state.items():
             if sample_name != metric_name:
                 continue
-                
+
             # Check if labels match
             sample_labels = dict(label_tuple)
             if all(sample_labels.get(k) == v for k, v in labels.items()):
                 return value
-                
+
         return None

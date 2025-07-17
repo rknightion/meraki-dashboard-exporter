@@ -27,7 +27,7 @@ class ManagedTaskGroup:
 
     Key differences from alternatives:
     - vs asyncio.gather: Allows dynamic task creation within context
-    - vs asyncio.TaskGroup (3.11+): Works on older Python versions  
+    - vs asyncio.TaskGroup (3.11+): Works on older Python versions
     - vs manual tracking: Automatic cleanup prevents orphaned tasks
 
     Examples

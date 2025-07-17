@@ -119,7 +119,7 @@ class ConfigCollector(MetricCollector):
         start_time = time.time()
         metrics_collected = 0
         api_calls_made = 0
-        
+
         try:
             # Get organizations with error handling
             organizations = await self._fetch_organizations()
@@ -131,13 +131,13 @@ class ConfigCollector(MetricCollector):
             # Collect metrics for each organization
             tasks = [self._collect_org_config(org) for org in organizations]
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            
+
             # Count successful collections
             for result in results:
                 if not isinstance(result, Exception):
                     # Each org makes 2 API calls (login security + config changes)
                     api_calls_made += 2
-            
+
             # Log collection summary
             duration = time.time() - start_time
             log_metric_collection_summary(

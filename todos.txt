@@ -43,4 +43,4 @@ Do not fall back to only implementing examples you must implement the log decora
 
   The logging decorator refactoring is making good progress. There are still 11 more files to update with logging decorators, followed by test refactoring tasks.
 
-  rather than trying to bulk update please do it file by file and method by method carefully to ensure nothing is missed and this way you will be properly replacing any existing logging with the decorators where its appropriate to do so as per the original refactor aim/intent. 
+  rather than trying to bulk update please do it file by file and method by method carefully to ensure nothing is missed and this way you will be properly replacing any existing logging with the decorators where its appropriate to do so as per the original refactor aim/intent.

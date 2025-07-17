@@ -215,7 +215,7 @@ The exporter provides comprehensive test helpers in the `testing` module to simp
 
 #### Data Factories
 - `OrganizationFactory` - Create organization test data
-- `NetworkFactory` - Create network test data  
+- `NetworkFactory` - Create network test data
 - `DeviceFactory` - Create device test data (with type-specific methods)
 - `AlertFactory` - Create alert test data
 - `SensorDataFactory` - Create sensor reading data
@@ -285,18 +285,18 @@ from meraki_dashboard_exporter.testing.base import BaseCollectorTest
 class TestMyCollector(BaseCollectorTest):
     collector_class = MyCollector
     update_tier = UpdateTier.MEDIUM
-    
+
     async def test_collection(self, collector, mock_api_builder, metrics):
         # mock_api_builder - MockAPIBuilder instance
         # metrics - MetricAssertions instance
         # collector - Your collector with isolated registry
-        
+
         # Set up test data
         test_data = self.setup_standard_test_data(mock_api_builder)
-        
+
         # Run collector
         await self.run_collector(collector)
-        
+
         # Assert success
         self.assert_collector_success(collector, metrics)
         self.assert_api_call_tracked(collector, metrics, "getOrganizations")
@@ -487,7 +487,7 @@ if result == "Unknown":
 #### Structured Logging Context
 Always include relevant identifiers in log messages:
 - `org_id`, `org_name` - Organization context
-- `network_id`, `network_name` - Network context  
+- `network_id`, `network_name` - Network context
 - `serial`, `name`, `model` - Device context
 - `count`, `duration`, `status` - Operation metrics
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import random
 import string
-import time
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -14,26 +13,26 @@ from meraki_dashboard_exporter.core.constants.sensor_constants import SensorMetr
 
 class DataFactory:
     """Factory for creating test data with sensible defaults."""
-    
+
     @staticmethod
     def generate_id(prefix: str = "") -> str:
         """Generate a random ID with optional prefix."""
         suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
         return f"{prefix}{suffix}" if prefix else suffix
-    
+
     @staticmethod
     def generate_serial() -> str:
         """Generate a device serial number."""
         prefix = random.choice(["Q2KD", "Q2LW", "Q2MX", "Q2SW", "Q2MT"])
         suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
         return f"{prefix}-{suffix}"
-    
+
     @staticmethod
     def generate_mac() -> str:
         """Generate a MAC address."""
         octets = [f"{random.randint(0, 255):02x}" for _ in range(6)]
         return ":".join(octets)
-    
+
     @staticmethod
     def generate_ip() -> str:
         """Generate an IP address."""
@@ -42,15 +41,11 @@ class DataFactory:
 
 class OrganizationFactory:
     """Factory for creating organization data."""
-    
+
     @staticmethod
-    def create(
-        org_id: str | None = None,
-        name: str | None = None,
-        **kwargs: Any
-    ) -> dict[str, Any]:
+    def create(org_id: str | None = None, name: str | None = None, **kwargs: Any) -> dict[str, Any]:
         """Create organization data.
-        
+
         Parameters
         ----------
         org_id : str, optional
@@ -59,11 +54,12 @@ class OrganizationFactory:
             Organization name
         **kwargs : Any
             Additional fields to include
-            
+
         Returns
         -------
         dict[str, Any]
             Organization data
+
         """
         org_data = {
             "id": org_id or DataFactory.generate_id("org_"),
@@ -72,7 +68,7 @@ class OrganizationFactory:
         }
         org_data.update(kwargs)
         return org_data
-    
+
     @staticmethod
     def create_many(count: int = 3) -> list[dict[str, Any]]:
         """Create multiple organizations."""
@@ -81,17 +77,17 @@ class OrganizationFactory:
 
 class NetworkFactory:
     """Factory for creating network data."""
-    
+
     @staticmethod
     def create(
         network_id: str | None = None,
         name: str | None = None,
         org_id: str | None = None,
         product_types: list[str] | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Create network data.
-        
+
         Parameters
         ----------
         network_id : str, optional
@@ -104,11 +100,12 @@ class NetworkFactory:
             Product types (defaults to ["wireless", "switch"])
         **kwargs : Any
             Additional fields
-            
+
         Returns
         -------
         dict[str, Any]
             Network data
+
         """
         network_data = {
             "id": network_id or DataFactory.generate_id("N_"),
@@ -121,23 +118,20 @@ class NetworkFactory:
         }
         network_data.update(kwargs)
         return network_data
-    
+
     @staticmethod
     def create_many(
-        count: int = 3,
-        org_id: str | None = None,
-        product_types: list[str] | None = None
+        count: int = 3, org_id: str | None = None, product_types: list[str] | None = None
     ) -> list[dict[str, Any]]:
         """Create multiple networks."""
         return [
-            NetworkFactory.create(org_id=org_id, product_types=product_types)
-            for _ in range(count)
+            NetworkFactory.create(org_id=org_id, product_types=product_types) for _ in range(count)
         ]
 
 
 class DeviceFactory:
     """Factory for creating device data."""
-    
+
     @staticmethod
     def create(
         serial: str | None = None,
@@ -145,10 +139,10 @@ class DeviceFactory:
         model: str | None = None,
         network_id: str | None = None,
         device_type: str | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Create device data.
-        
+
         Parameters
         ----------
         serial : str, optional
@@ -163,11 +157,12 @@ class DeviceFactory:
             Device type (MR, MS, MX, etc.)
         **kwargs : Any
             Additional fields
-            
+
         Returns
         -------
         dict[str, Any]
             Device data
+
         """
         # Auto-determine model from device type if not provided
         if not model and device_type:
@@ -182,11 +177,11 @@ class DeviceFactory:
             model = model_map.get(device_type, "MR36")
         elif not model:
             model = "MR36"
-            
+
         # Infer device type from model if not provided
         if not device_type:
             device_type = model[:2] if model else DeviceType.MR
-            
+
         device_data = {
             "serial": serial or DataFactory.generate_serial(),
             "name": name or f"{device_type} Device {random.randint(1, 100)}",
@@ -203,17 +198,14 @@ class DeviceFactory:
         }
         device_data.update(kwargs)
         return device_data
-    
+
     @staticmethod
     def create_mr(serial: str | None = None, **kwargs: Any) -> dict[str, Any]:
         """Create MR (access point) device."""
         return DeviceFactory.create(
-            serial=serial,
-            device_type=DeviceType.MR,
-            model=kwargs.pop("model", "MR36"),
-            **kwargs
+            serial=serial, device_type=DeviceType.MR, model=kwargs.pop("model", "MR36"), **kwargs
         )
-    
+
     @staticmethod
     def create_ms(serial: str | None = None, **kwargs: Any) -> dict[str, Any]:
         """Create MS (switch) device."""
@@ -221,34 +213,25 @@ class DeviceFactory:
             serial=serial,
             device_type=DeviceType.MS,
             model=kwargs.pop("model", "MS250-48"),
-            **kwargs
+            **kwargs,
         )
-    
+
     @staticmethod
     def create_mx(serial: str | None = None, **kwargs: Any) -> dict[str, Any]:
         """Create MX (security appliance) device."""
         return DeviceFactory.create(
-            serial=serial,
-            device_type=DeviceType.MX,
-            model=kwargs.pop("model", "MX64"),
-            **kwargs
+            serial=serial, device_type=DeviceType.MX, model=kwargs.pop("model", "MX64"), **kwargs
         )
-    
+
     @staticmethod
     def create_mt(serial: str | None = None, **kwargs: Any) -> dict[str, Any]:
         """Create MT (sensor) device."""
         return DeviceFactory.create(
-            serial=serial,
-            device_type=DeviceType.MT,
-            model=kwargs.pop("model", "MT10"),
-            **kwargs
+            serial=serial, device_type=DeviceType.MT, model=kwargs.pop("model", "MT10"), **kwargs
         )
-    
+
     @staticmethod
-    def create_mixed(
-        count: int = 6,
-        network_id: str | None = None
-    ) -> list[dict[str, Any]]:
+    def create_mixed(count: int = 6, network_id: str | None = None) -> list[dict[str, Any]]:
         """Create a mix of different device types."""
         devices = []
         device_types = [
@@ -257,27 +240,25 @@ class DeviceFactory:
             (DeviceFactory.create_mx, 1),
             (DeviceFactory.create_mt, 1),
         ]
-        
+
         for factory_func, type_count in device_types:
             for _ in range(min(type_count, count - len(devices))):
                 devices.append(factory_func(network_id=network_id))
                 if len(devices) >= count:
                     break
-                    
+
         return devices
 
 
 class DeviceStatusFactory:
     """Factory for creating device status/availability data."""
-    
+
     @staticmethod
     def create(
-        serial: str | None = None,
-        status: str | None = None,
-        **kwargs: Any
+        serial: str | None = None, status: str | None = None, **kwargs: Any
     ) -> dict[str, Any]:
         """Create device status data.
-        
+
         Parameters
         ----------
         serial : str, optional
@@ -286,11 +267,12 @@ class DeviceStatusFactory:
             Device status
         **kwargs : Any
             Additional fields
-            
+
         Returns
         -------
         dict[str, Any]
             Device status data
+
         """
         status_data = {
             "serial": serial or DataFactory.generate_serial(),
@@ -304,13 +286,13 @@ class DeviceStatusFactory:
         }
         status_data.update(kwargs)
         return status_data
-    
+
     @staticmethod
     def create_availability(
         serial: str | None = None,
         status: str | None = None,
         product_type: str | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Create device availability data (new API format)."""
         avail_data = {
@@ -325,17 +307,17 @@ class DeviceStatusFactory:
 
 class AlertFactory:
     """Factory for creating alert data."""
-    
+
     @staticmethod
     def create(
         alert_id: str | None = None,
         alert_type: str | None = None,
         severity: str | None = None,
         status: str | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Create alert data.
-        
+
         Parameters
         ----------
         alert_id : str, optional
@@ -348,15 +330,16 @@ class AlertFactory:
             Alert status
         **kwargs : Any
             Additional fields
-            
+
         Returns
         -------
         dict[str, Any]
             Alert data
+
         """
         alert_types = ["connectivity", "performance", "security", "configuration"]
         severities = ["critical", "warning", "informational"]
-        
+
         alert_data = {
             "id": alert_id or DataFactory.generate_id("alert_"),
             "type": alert_type or random.choice(alert_types),
@@ -364,29 +347,28 @@ class AlertFactory:
             "severity": severity or random.choice(severities),
             "status": status or "active",
             "deviceType": kwargs.pop("device_type", random.choice(["MR", "MS", "MX"])),
-            "occurredAt": (datetime.utcnow() - timedelta(minutes=random.randint(1, 60))).isoformat() + "Z",
+            "occurredAt": (datetime.utcnow() - timedelta(minutes=random.randint(1, 60))).isoformat()
+            + "Z",
             "dismissedAt": None if status == "active" else datetime.utcnow().isoformat() + "Z",
             "resolvedAt": None,
             "suppressedAt": None,
             "title": kwargs.pop("title", "Test Alert"),
             "description": kwargs.pop("description", "This is a test alert"),
         }
-        
+
         # Add network info if provided
         if "network_id" in kwargs:
             alert_data["network"] = {
                 "id": kwargs.pop("network_id"),
                 "name": kwargs.pop("network_name", "Test Network"),
             }
-            
+
         alert_data.update(kwargs)
         return alert_data
-    
+
     @staticmethod
     def create_many(
-        count: int = 5,
-        network_id: str | None = None,
-        status: str = "active"
+        count: int = 5, network_id: str | None = None, status: str = "active"
     ) -> list[dict[str, Any]]:
         """Create multiple alerts."""
         alerts = []
@@ -403,15 +385,13 @@ class AlertFactory:
 
 class SensorDataFactory:
     """Factory for creating sensor data."""
-    
+
     @staticmethod
     def create_reading(
-        metric: str | None = None,
-        value: float | None = None,
-        **kwargs: Any
+        metric: str | None = None, value: float | None = None, **kwargs: Any
     ) -> dict[str, Any]:
         """Create a sensor reading.
-        
+
         Parameters
         ----------
         metric : str, optional
@@ -420,11 +400,12 @@ class SensorDataFactory:
             Metric value
         **kwargs : Any
             Additional fields
-            
+
         Returns
         -------
         dict[str, Any]
             Sensor reading data
+
         """
         if not metric:
             metric = random.choice([
@@ -433,7 +414,7 @@ class SensorDataFactory:
                 SensorMetricType.CO2,
                 SensorMetricType.TVOC,
             ])
-            
+
         if value is None:
             # Generate realistic values based on metric type
             value_ranges = {
@@ -449,7 +430,7 @@ class SensorDataFactory:
             }
             min_val, max_val = value_ranges.get(metric, (0.0, 100.0))
             value = round(random.uniform(min_val, max_val), 2)
-            
+
         reading = {
             "metric": metric,
             "value": value,
@@ -457,16 +438,16 @@ class SensorDataFactory:
         }
         reading.update(kwargs)
         return reading
-    
+
     @staticmethod
     def create_sensor_data(
         serial: str | None = None,
         network_id: str | None = None,
         readings: list[dict[str, Any]] | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Create complete sensor data response.
-        
+
         Parameters
         ----------
         serial : str, optional
@@ -477,11 +458,12 @@ class SensorDataFactory:
             Sensor readings
         **kwargs : Any
             Additional fields
-            
+
         Returns
         -------
         dict[str, Any]
             Sensor data
+
         """
         if not readings:
             # Create a few random readings
@@ -493,10 +475,10 @@ class SensorDataFactory:
                     SensorMetricType.CO2,
                     SensorMetricType.BATTERY,
                 ],
-                num_readings
+                num_readings,
             )
             readings = [SensorDataFactory.create_reading(metric=m) for m in metrics]
-            
+
         sensor_data = {
             "serial": serial or DataFactory.generate_serial(),
             "networkId": network_id or DataFactory.generate_id("N_"),
@@ -508,7 +490,7 @@ class SensorDataFactory:
 
 class TimeSeriesFactory:
     """Factory for creating time series data."""
-    
+
     @staticmethod
     def create_data_points(
         count: int = 10,
@@ -518,7 +500,7 @@ class TimeSeriesFactory:
         trend: float = 0.0,
     ) -> list[dict[str, Any]]:
         """Create time series data points.
-        
+
         Parameters
         ----------
         count : int
@@ -531,15 +513,16 @@ class TimeSeriesFactory:
             Random variance to add
         trend : float
             Trend per interval
-            
+
         Returns
         -------
         list[dict[str, Any]]
             Time series data points
+
         """
         points = []
         current_time = datetime.utcnow() - timedelta(seconds=interval * count)
-        
+
         for i in range(count):
             value = base_value + (trend * i) + random.uniform(-variance, variance)
             points.append({
@@ -547,19 +530,17 @@ class TimeSeriesFactory:
                 "value": round(max(0, value), 2),
             })
             current_time += timedelta(seconds=interval)
-            
+
         return points
-    
+
     @staticmethod
     def create_memory_usage(
-        serial: str | None = None,
-        count: int = 10,
-        **kwargs: Any
+        serial: str | None = None, count: int = 10, **kwargs: Any
     ) -> list[dict[str, Any]]:
         """Create memory usage history data."""
         usage_data = []
         base_time = datetime.utcnow() - timedelta(minutes=count * 5)
-        
+
         for i in range(count):
             timestamp = base_time + timedelta(minutes=i * 5)
             usage_data.append({
@@ -569,13 +550,13 @@ class TimeSeriesFactory:
                     "percentage": round(random.uniform(40, 80), 2),
                 },
             })
-            
+
         return usage_data
 
 
 class ResponseFactory:
     """Factory for creating API response formats."""
-    
+
     @staticmethod
     def paginated_response(
         items: list[Any],
@@ -584,7 +565,7 @@ class ResponseFactory:
         total: int | None = None,
     ) -> dict[str, Any]:
         """Create a paginated response.
-        
+
         Parameters
         ----------
         items : list[Any]
@@ -595,15 +576,16 @@ class ResponseFactory:
             Items per page
         total : int, optional
             Total items (defaults to items count)
-            
+
         Returns
         -------
         dict[str, Any]
             Paginated response
+
         """
         if total is None:
             total = len(items)
-            
+
         return {
             "items": items,
             "meta": {
@@ -613,7 +595,7 @@ class ResponseFactory:
                 "totalPages": (total + per_page - 1) // per_page,
             },
         }
-    
+
     @staticmethod
     def error_response(
         status_code: int = 404,
@@ -621,7 +603,7 @@ class ResponseFactory:
         errors: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create an error response.
-        
+
         Parameters
         ----------
         status_code : int
@@ -630,11 +612,12 @@ class ResponseFactory:
             Error message
         errors : list[str], optional
             Detailed errors
-            
+
         Returns
         -------
         dict[str, Any]
             Error response
+
         """
         default_messages = {
             404: "Not found",
@@ -642,7 +625,7 @@ class ResponseFactory:
             500: "Internal server error",
             503: "Service unavailable",
         }
-        
+
         return {
             "errors": errors or [message or default_messages.get(status_code, "Error")],
         }

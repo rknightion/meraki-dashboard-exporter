@@ -67,7 +67,7 @@ class AlertsCollector(MetricCollector):
         start_time = time.time()
         metrics_collected = 0
         api_calls_made = 0
-        
+
         try:
             # Get organizations with error handling
             orgs_data = await self._fetch_organizations()
@@ -90,12 +90,12 @@ class AlertsCollector(MetricCollector):
                 for org_id in org_ids
             ]
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            
+
             # Count successful collections
             for result in results:
                 if not isinstance(result, Exception):
                     api_calls_made += 1
-            
+
             # Log collection summary
             duration = time.time() - start_time
             log_metric_collection_summary(
@@ -176,7 +176,7 @@ class AlertsCollector(MetricCollector):
     @log_batch_operation("process alerts")
     def _process_alerts(self, alerts: list[dict[str, Any]], org_id: str, org_name: str) -> None:
         """Process alert data and update metrics.
-        
+
         Parameters
         ----------
         alerts : list[dict[str, Any]]
@@ -185,6 +185,7 @@ class AlertsCollector(MetricCollector):
             Organization ID
         org_name : str
             Organization name
+
         """
         alert_counts: dict[tuple[str, str, str, str, str, str, str, str], int] = {}
         severity_counts = {"critical": 0, "warning": 0, "informational": 0}

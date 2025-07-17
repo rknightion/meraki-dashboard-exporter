@@ -83,7 +83,6 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
                     value,
                 )
 
-
         except Exception as e:
             # Log at debug level if it's just not available (400/404 errors)
             error_str = str(e)

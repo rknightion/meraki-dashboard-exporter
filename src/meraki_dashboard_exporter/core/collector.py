@@ -286,7 +286,7 @@ class MetricCollector(ABC):
             tier=self.update_tier.value,
             endpoint=endpoint,
         )
-        
+
         # Always try to track (metrics should be initialized)
         if MetricCollector._collector_api_calls is not None:
             MetricCollector._collector_api_calls.labels(

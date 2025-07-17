@@ -165,10 +165,10 @@ class MTSensorCollector(MetricCollector):
     async def _collect_impl(self) -> None:
         """Collect sensor metrics by delegating to MT collector."""
         start_time = asyncio.get_event_loop().time()
-        
+
         # Delegate to MT collector to collect sensor metrics
         await self.mt_collector.collect_sensor_metrics()
-        
+
         # Log collection summary
         # The actual metrics count and API calls will be tracked by MTCollector
         log_metric_collection_summary(
