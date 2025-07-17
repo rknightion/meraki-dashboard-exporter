@@ -30,8 +30,3 @@ class MXCollector(BaseDeviceCollector):
 
         # MX currently doesn't have specific metrics beyond common ones
         # Future MX-specific metrics can be added here
-        logger.debug(
-            "Collected MX device metrics",
-            serial=device["serial"],
-            name=device.get("name", device["serial"]),
-        )
