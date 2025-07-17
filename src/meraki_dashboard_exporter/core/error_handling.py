@@ -278,6 +278,13 @@ def validate_response_format(
             {"response_type": type(data).__name__, "operation": operation},
         )
 
+    logger.debug(
+        f"Successfully validated response format for {operation}",
+        response_type=expected_type.__name__,
+        item_count=len(data) if isinstance(data, (list, dict)) else 1,
+        wrapped="items" in response if isinstance(response, dict) else False,
+    )
+    
     return data
 
 
@@ -301,6 +308,11 @@ async def with_semaphore_limit(
 
     """
     async with semaphore:
+        logger.debug(
+            "Executing task with semaphore limit",
+            current_count=semaphore._value,
+            max_count=semaphore._initial_value,
+        )
         return await coro
 
 
@@ -323,5 +335,10 @@ def batch_with_concurrency_limit(
         Tasks wrapped with semaphore.
 
     """
+    logger.debug(
+        "Creating batch with concurrency limit",
+        task_count=len(tasks),
+        max_concurrent=max_concurrent,
+    )
     semaphore = asyncio.Semaphore(max_concurrent)
     return [with_semaphore_limit(semaphore, task) for task in tasks]

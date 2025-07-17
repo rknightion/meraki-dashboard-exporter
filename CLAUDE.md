@@ -354,10 +354,24 @@ The exporter follows a structured logging approach to balance operational visibi
 - **Repetitive Info**: Information that would be repetitive at INFO level (e.g., licensing model on each collection)
 
 ### Implementation
-- All API calls must use `self._track_api_call("method_name")` and include DEBUG logging
+- All API calls in collectors must use the `@log_api_call` decorator on methods that make Meraki API calls
+- The decorator automatically handles DEBUG logging and API call tracking via `self._track_api_call()`
 - All metric updates log at DEBUG level when successfully setting values
 - Discovery information is logged once at startup via `DiscoveryService`
 - Subsequent collections use DEBUG level for details to avoid log spam
+
+Example:
+```python
+@log_api_call("getOrganizationDevices")
+async def _fetch_devices(self, org_id: str) -> list[dict[str, Any]]:
+    """Fetch devices for an organization."""
+    self._track_api_call("getOrganizationDevices")
+    return await asyncio.to_thread(
+        self.api.organizations.getOrganizationDevices,
+        org_id,
+        total_pages="all"
+    )
+```
 
 ## Standardized Logging Patterns
 
@@ -430,6 +444,64 @@ with LogContext(org_id="123", network_id="456"):
 3. Use `@log_collection_progress` for operations that process many items
 4. Keep DEBUG logs detailed but structured for easy filtering
 5. Use INFO logs sparingly for important state changes only
+
+### Comprehensive Logging Guidelines
+
+#### Every Function Should Have Logging
+- **Success Path**: Log successful operations at DEBUG level with relevant details (counts, durations, IDs)
+- **Error Path**: Log errors with appropriate levels (ERROR for failures, WARNING for degraded functionality)
+- **Progress Updates**: For operations processing multiple items, log progress at regular intervals
+
+#### Logging Patterns by Function Type
+
+1. **API Operations** (including low-level wrappers):
+```python
+logger.debug("Fetching devices", org_id=org_id)
+result = await api_call()
+logger.debug("Successfully fetched devices", org_id=org_id, count=len(result))
+```
+
+2. **Data Processing**:
+```python
+logger.debug("Processing sensor data", device_count=len(devices))
+# ... processing logic ...
+logger.debug("Completed processing", successful=success_count, failed=fail_count)
+```
+
+3. **Metric Setting**:
+```python
+logger.debug(
+    "Setting device status metric",
+    serial=serial,
+    status=status,
+    value=metric_value
+)
+```
+
+4. **Validation/Determination Functions**:
+```python
+if result == "Unknown":
+    logger.warning("Unable to determine value", context=context_data)
+```
+
+#### Structured Logging Context
+Always include relevant identifiers in log messages:
+- `org_id`, `org_name` - Organization context
+- `network_id`, `network_name` - Network context  
+- `serial`, `name`, `model` - Device context
+- `count`, `duration`, `status` - Operation metrics
+
+#### Log Levels Usage
+- **DEBUG**: Normal operations, API calls, metric updates, progress tracking
+- **INFO**: Application startup, major state changes, discovery results
+- **WARNING**: Degraded functionality, missing optional data, recoverable issues
+- **ERROR**: Operation failures, unrecoverable errors, exceptions
+
+#### Performance Considerations
+- Use structured logging (key=value) for easy parsing and filtering
+- Keep log messages concise but informative
+- Include timing information for operations that might be slow
+- Log counts and summaries rather than full data dumps
 
 ## Error Handling Patterns
 
