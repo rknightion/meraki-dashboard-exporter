@@ -9,11 +9,13 @@ The exporter provides metrics across several categories:
 | Collector | Metrics | Description |
 |-----------|---------|-------------|
 | AlertsCollector | 3 | Active alerts by severity, type, and category |
+| AsyncPatternExampleCollector | 1 | Various metrics |
 | ConfigCollector | 14 | Organization security settings and configuration tracking |
 | DeviceCollector | 6 | Device status, performance, and uptime metrics |
 | MTSensorCollector | 18 | Environmental monitoring from MT sensors |
 | NetworkHealthCollector | 8 | Network-wide wireless health and performance |
 | OrganizationCollector | 13 | Organization-level metrics including API usage and licenses |
+| OrganizationCollectorAsync | 3 | Various metrics |
 
 ## Metrics by Collector
 
@@ -50,6 +52,20 @@ The exporter provides metrics across several categories:
 **Labels:** 
 
 **Variable:** `self._alerts_by_network` (line 51)
+
+### AsyncPatternExampleCollector
+
+**Source:** `src/meraki_dashboard_exporter/collectors/examples/async_pattern_example.py`
+
+#### `example_async_metric`
+
+**Description:** Example metric for async patterns
+
+**Type:** gauge
+
+**Labels:** `org_id`, `network_id`
+
+**Variable:** `self._example_gauge` (line 37)
 
 ### ConfigCollector
 
@@ -217,7 +233,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._device_status_info` (line 131)
+**Variable:** `self._device_status_info` (line 137)
 
 #### `Unknown`
 
@@ -227,7 +243,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._device_memory_used_bytes` (line 138)
+**Variable:** `self._device_memory_used_bytes` (line 151)
 
 #### `Unknown`
 
@@ -237,7 +253,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._device_memory_free_bytes` (line 144)
+**Variable:** `self._device_memory_free_bytes` (line 164)
 
 #### `Unknown`
 
@@ -247,7 +263,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._device_memory_total_bytes` (line 150)
+**Variable:** `self._device_memory_total_bytes` (line 177)
 
 #### `Unknown`
 
@@ -257,7 +273,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._device_memory_usage_percent` (line 156)
+**Variable:** `self._device_memory_usage_percent` (line 189)
 
 ### MTSensorCollector
 
@@ -465,7 +481,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._ap_utilization_5ghz` (line 56)
+**Variable:** `self._ap_utilization_5ghz` (line 63)
 
 #### `Unknown`
 
@@ -475,7 +491,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._network_utilization_2_4ghz` (line 63)
+**Variable:** `self._network_utilization_2_4ghz` (line 77)
 
 #### `Unknown`
 
@@ -485,7 +501,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._network_utilization_5ghz` (line 69)
+**Variable:** `self._network_utilization_5ghz` (line 83)
 
 #### `Unknown`
 
@@ -495,7 +511,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._network_connection_stats` (line 76)
+**Variable:** `self._network_connection_stats` (line 90)
 
 #### `Unknown`
 
@@ -505,7 +521,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._network_wireless_download_kbps` (line 83)
+**Variable:** `self._network_wireless_download_kbps` (line 97)
 
 #### `Unknown`
 
@@ -515,7 +531,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._network_wireless_upload_kbps` (line 89)
+**Variable:** `self._network_wireless_upload_kbps` (line 103)
 
 #### `Unknown`
 
@@ -525,7 +541,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._network_bluetooth_clients_total` (line 96)
+**Variable:** `self._network_bluetooth_clients_total` (line 110)
 
 ### OrganizationCollector
 
@@ -609,7 +625,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._licenses_total` (line 97)
+**Variable:** `self._licenses_total` (line 102)
 
 #### `Unknown`
 
@@ -619,7 +635,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._licenses_expiring` (line 103)
+**Variable:** `self._licenses_expiring` (line 113)
 
 #### `Unknown`
 
@@ -629,7 +645,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._clients_total` (line 110)
+**Variable:** `self._clients_total` (line 120)
 
 #### `Unknown`
 
@@ -639,7 +655,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._usage_total_kb` (line 117)
+**Variable:** `self._usage_total_kb` (line 127)
 
 #### `Unknown`
 
@@ -649,7 +665,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._usage_downstream_kb` (line 123)
+**Variable:** `self._usage_downstream_kb` (line 133)
 
 #### `Unknown`
 
@@ -659,7 +675,41 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._usage_upstream_kb` (line 129)
+**Variable:** `self._usage_upstream_kb` (line 139)
+
+### OrganizationCollectorAsync
+
+**Source:** `src/meraki_dashboard_exporter/collectors/examples/organization_async_refactored.py`
+
+#### `Unknown`
+
+**Description:** Organization information
+
+**Type:** info
+
+**Labels:** `org_id`, `org_name`
+
+**Variable:** `self._org_info` (line 52)
+
+#### `Unknown`
+
+**Description:** Total number of networks in the organization
+
+**Type:** gauge
+
+**Labels:** `org_id`, `org_name`
+
+**Variable:** `self._org_networks_total` (line 59)
+
+#### `Unknown`
+
+**Description:** Total number of devices in the organization
+
+**Type:** gauge
+
+**Labels:** `org_id`, `org_name`
+
+**Variable:** `self._org_devices_total` (line 66)
 
 ## Complete Metrics Index
 
@@ -729,6 +779,10 @@ All metrics in alphabetical order:
 | `Unknown` | gauge | NetworkHealthCollector | Network-wide wireless download bandwidth in kilobits per second |
 | `Unknown` | gauge | NetworkHealthCollector | Network-wide wireless upload bandwidth in kilobits per second |
 | `Unknown` | gauge | NetworkHealthCollector | Total number of Bluetooth clients detected by MR devices in the last 5 minutes |
+| `Unknown` | info | OrganizationCollectorAsync | Organization information |
+| `Unknown` | gauge | OrganizationCollectorAsync | Total number of networks in the organization |
+| `Unknown` | gauge | OrganizationCollectorAsync | Total number of devices in the organization |
+| `example_async_metric` | gauge | AsyncPatternExampleCollector | Example metric for async patterns |
 
 ## Notes
 

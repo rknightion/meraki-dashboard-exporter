@@ -11,13 +11,12 @@ from .config_models import (
     PROFILES,
     APISettings,
     CollectorSettings,
-    ConfigurationProfile,
     MonitoringSettings,
     OTelSettings,
     ServerSettings,
     UpdateIntervals,
 )
-from .constants import DEFAULT_API_TIMEOUT, DEFAULT_MAX_RETRIES, MERAKI_API_BASE_URL
+from .constants import MERAKI_API_BASE_URL
 
 
 class Settings(BaseSettings):
@@ -193,17 +192,17 @@ class Settings(BaseSettings):
 
     def get_collector_config(self, collector_name: str) -> dict[str, Any]:
         """Get configuration specific to a collector.
-        
+
         Parameters
         ----------
         collector_name : str
             Name of the collector.
-            
+
         Returns
         -------
         dict[str, Any]
             Collector-specific configuration.
-            
+
         """
         # Future: Can add collector-specific overrides here
         return {
@@ -213,12 +212,12 @@ class Settings(BaseSettings):
 
     def to_summary(self) -> dict[str, Any]:
         """Get a summary of the configuration (safe for logging).
-        
+
         Returns
         -------
         dict[str, Any]
             Configuration summary without sensitive data.
-            
+
         """
         return {
             "profile": self.profile,

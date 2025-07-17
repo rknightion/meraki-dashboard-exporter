@@ -19,7 +19,6 @@ from ...core.logging import get_logger
 from .base import BaseDeviceCollector
 
 if TYPE_CHECKING:
-
     from ..device import DeviceCollector
 
 logger = get_logger(__name__)
@@ -27,60 +26,60 @@ logger = get_logger(__name__)
 
 class MTCollector(BaseDeviceCollector):
     """Collector for Meraki MT (Sensor) devices.
-    
+
     This collector handles both device-level metrics (through DeviceCollector)
     and sensor-specific environmental metrics with FAST tier updates.
     """
-    
+
     # Sensor data updates frequently
     update_tier: UpdateTier = UpdateTier.FAST
 
     def __init__(self, parent: DeviceCollector | None = None) -> None:
         """Initialize MT collector.
-        
+
         Parameters
         ----------
         parent : DeviceCollector | None
             Parent DeviceCollector instance. If None, this collector
             operates in standalone sensor mode.
-            
+
         """
         if parent:
             super().__init__(parent)
         else:
             # Standalone mode - initialize base attributes without calling parent init
             # This avoids the "Parent collector not set" error
-            self.parent = None
-            self.api = None  # Will be set later
-            self.settings = None  # Will be set later
+            self.parent = None  # type: ignore[assignment]
+            self.api: AsyncMerakiClient | None = None
+            self.settings = None  # type: ignore[assignment]
             # Set a flag to indicate standalone mode for error checking
             self._standalone_mode = True
-    
+
     def _track_api_call(self, method_name: str) -> None:
         """Track API call, handling standalone mode.
-        
+
         Parameters
         ----------
         method_name : str
             Name of the API method being called.
-            
+
         """
         if self.parent and hasattr(self.parent, "_track_api_call"):
             self.parent._track_api_call(method_name)
         else:
             # In standalone mode, just log
             logger.debug("API call tracked", method=method_name)
-    
+
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect device-level MT metrics.
-        
+
         This is called by DeviceCollector for each MT device.
-        
+
         Parameters
         ----------
         device : dict[str, Any]
             Device data from Meraki API.
-            
+
         """
         # MT devices don't have device-specific metrics beyond common ones
         # Their main metrics come from sensor readings
@@ -89,18 +88,18 @@ class MTCollector(BaseDeviceCollector):
             serial=device.get("serial"),
             name=device.get("name"),
         )
-    
+
     async def collect_sensor_metrics(self, org_id: str | None = None) -> None:
         """Collect sensor metrics for all MT devices.
-        
+
         This method handles the full sensor collection process including
         fetching devices and their readings.
-        
+
         Parameters
         ----------
         org_id : str | None
             Organization ID. If None, collects for all orgs.
-            
+
         """
         try:
             # Get organizations
@@ -128,7 +127,7 @@ class MTCollector(BaseDeviceCollector):
 
         except Exception:
             logger.exception("Failed to collect sensor metrics")
-    
+
     async def _collect_org_sensors(self, org_id: str) -> None:
         """Collect sensor metrics for an organization.
 
@@ -154,7 +153,9 @@ class MTCollector(BaseDeviceCollector):
                 return
 
             # Extract sensor serials
-            sensor_serials = [d["serial"] for d in devices if d.get("model", "").startswith(DeviceType.MT)]
+            sensor_serials = [
+                d["serial"] for d in devices if d.get("model", "").startswith(DeviceType.MT)
+            ]
 
             if sensor_serials:
                 # Create device lookup map
@@ -179,7 +180,9 @@ class MTCollector(BaseDeviceCollector):
                 org_id=org_id,
             )
 
-    def _set_metric_value(self, metric_name: str, labels: dict[str, str], value: float) -> None:
+    def _set_metric_value(
+        self, metric_name: str, labels: dict[str, str], value: float | None
+    ) -> None:
         """Safely set a metric value with validation.
 
         Parameters
@@ -188,10 +191,13 @@ class MTCollector(BaseDeviceCollector):
             Name of the metric attribute on parent.
         labels : dict[str, str]
             Labels to apply to the metric.
-        value : float
-            Value to set.
+        value : float | None
+            Value to set. If None, the metric will not be updated.
 
         """
+        if value is None:
+            return
+
         if not self.parent:
             return
 
@@ -238,7 +244,7 @@ class MTCollector(BaseDeviceCollector):
             network_info = sensor_data.get("network", {})
             network_id = network_info.get("id", "")
             network_name = network_info.get("name", "")
-            
+
             # Try to parse to domain model for validation
             try:
                 measurements = []
@@ -256,12 +262,9 @@ class MTCollector(BaseDeviceCollector):
                     # Extract value based on metric type
                     value = self._extract_metric_value(metric_type, metric_data)
                     if value is not None:
-                        measurement = SensorMeasurement(
-                            metric=metric_type,
-                            value=value
-                        )
+                        measurement = SensorMeasurement(metric=metric_type, value=value)
                         measurements.append(measurement)
-                
+
                 if measurements:
                     # Process validated measurements
                     for measurement in measurements:
@@ -269,7 +272,9 @@ class MTCollector(BaseDeviceCollector):
                             serial, name, model, network_id, network_name, measurement
                         )
             except Exception as e:
-                logger.debug("Failed to parse sensor data to domain model", serial=serial, error=str(e))
+                logger.debug(
+                    "Failed to parse sensor data to domain model", serial=serial, error=str(e)
+                )
                 # Fall back to direct processing
                 for reading in sensor_data.get("readings", []):
                     metric_type = reading.get("metric")
@@ -293,14 +298,14 @@ class MTCollector(BaseDeviceCollector):
 
     def _extract_metric_value(self, metric_type: str, metric_data: dict[str, Any]) -> float | None:
         """Extract metric value from raw API data.
-        
+
         Parameters
         ----------
         metric_type : str
             Type of metric.
         metric_data : dict[str, Any]
             Raw metric data from API.
-            
+
         Returns
         -------
         float | None
@@ -345,7 +350,7 @@ class MTCollector(BaseDeviceCollector):
             locked = metric_data.get("locked")
             return 1 if locked else 0 if locked is not None else None
         return None
-    
+
     def _process_validated_metric(
         self,
         serial: str,
@@ -356,7 +361,7 @@ class MTCollector(BaseDeviceCollector):
         measurement: SensorMeasurement,
     ) -> None:
         """Process a validated sensor measurement.
-        
+
         Parameters
         ----------
         serial : str
@@ -393,7 +398,7 @@ class MTCollector(BaseDeviceCollector):
             SensorMetricType.DOWNSTREAM_POWER: "_sensor_downstream_power",
             "remoteLockoutSwitch": "_sensor_remote_lockout",
         }
-        
+
         metric_attr = metric_map.get(measurement.metric)
         if metric_attr:
             self._set_metric_value(
@@ -401,7 +406,7 @@ class MTCollector(BaseDeviceCollector):
                 {"serial": serial, "name": name, "sensor_type": model},
                 measurement.value,
             )
-    
+
     def _process_metric(
         self,
         serial: str,

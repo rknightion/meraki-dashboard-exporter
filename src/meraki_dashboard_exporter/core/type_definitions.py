@@ -11,7 +11,7 @@ from typing import Literal, NotRequired, TypeAlias, TypedDict
 
 class DeviceStatusInfo(TypedDict):
     """Device status information from API."""
-    
+
     serial: str
     status: Literal["online", "offline", "alerting", "dormant"]
     lastReportedAt: NotRequired[str]
@@ -23,7 +23,7 @@ class DeviceStatusInfo(TypedDict):
 
 class MemoryUsageData(TypedDict):
     """Memory usage data structure."""
-    
+
     serial: str
     network: NotRequired[dict[str, str]]
     percentage: NotRequired[float]
@@ -34,7 +34,7 @@ class MemoryUsageData(TypedDict):
 
 class PortStatusData(TypedDict):
     """Switch port status data."""
-    
+
     portId: str
     enabled: bool
     status: str
@@ -50,7 +50,7 @@ class PortStatusData(TypedDict):
 
 class WirelessStatusData(TypedDict):
     """Wireless device status data."""
-    
+
     basicServiceSets: NotRequired[list[dict[str, str]]]
     clientCount: NotRequired[int]
     connectionStats: NotRequired[dict[str, dict[str, float]]]
@@ -58,7 +58,7 @@ class WirelessStatusData(TypedDict):
 
 class SensorReadingData(TypedDict):
     """Sensor reading data."""
-    
+
     ts: str
     metric: str
     value: float
@@ -66,7 +66,7 @@ class SensorReadingData(TypedDict):
 
 class AlertData(TypedDict):
     """Alert data structure."""
-    
+
     id: str
     categoryType: str
     alertType: str
@@ -81,7 +81,7 @@ class AlertData(TypedDict):
 
 class LicenseData(TypedDict):
     """License data structure."""
-    
+
     id: NotRequired[str]
     licenseType: str
     licenseKey: NotRequired[str]
@@ -98,14 +98,14 @@ class LicenseData(TypedDict):
 
 class ClientOverviewData(TypedDict):
     """Client overview data structure."""
-    
+
     counts: dict[str, int]
     usages: dict[str, dict[str, int]]
 
 
 class NetworkHealthData(TypedDict):
     """Network health data structure."""
-    
+
     networkId: str
     devices: list[dict[str, float]]  # Device utilization data
     averagePercentages: dict[str, float]
@@ -113,7 +113,7 @@ class NetworkHealthData(TypedDict):
 
 class ConnectionStatsData(TypedDict):
     """Connection stats data structure."""
-    
+
     assoc: int
     auth: int
     dhcp: int
@@ -134,7 +134,7 @@ MetricValue: TypeAlias = float | int
 # Response type definitions
 class APIRequestData(TypedDict):
     """API request/usage data."""
-    
+
     method: str
     host: str
     path: str
@@ -147,7 +147,7 @@ class APIRequestData(TypedDict):
 
 class ConfigurationChangeData(TypedDict):
     """Configuration change data."""
-    
+
     ts: str
     adminName: str
     adminEmail: str
@@ -163,7 +163,7 @@ class ConfigurationChangeData(TypedDict):
 # Batch response types
 class BatchedResponse(TypedDict):
     """Generic batched API response."""
-    
+
     items: list[dict[str, str]]
     meta: NotRequired[dict[str, str]]
 
@@ -171,7 +171,7 @@ class BatchedResponse(TypedDict):
 # Settings types
 class UpdateInterval(TypedDict):
     """Update interval configuration."""
-    
+
     fast: int
     medium: int
     slow: int

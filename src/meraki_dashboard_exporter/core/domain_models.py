@@ -86,14 +86,12 @@ class DataRate(BaseModel):
         return max(0, int(v))
 
     @computed_field
-    @property
     def download_kbps(self) -> float:
         """Calculate download rate in kbps."""
         # Assuming this is bytes over last 5 minutes (300 seconds)
         return (self.received * 8) / 1000 / 300 if self.received > 0 else 0.0
 
     @computed_field
-    @property
     def upload_kbps(self) -> float:
         """Calculate upload rate in kbps."""
         # Assuming this is bytes over last 5 minutes (300 seconds)
@@ -101,6 +99,7 @@ class DataRate(BaseModel):
 
 
 # Device-specific Models
+
 
 class SwitchPort(BaseModel):
     """Enhanced switch port model with POE and traffic data."""
@@ -117,7 +116,9 @@ class SwitchPort(BaseModel):
     rstpEnabled: bool = True
     stpGuard: Literal["disabled", "root guard", "bpdu guard", "loop guard"] = "disabled"
     linkNegotiation: str = "Auto negotiate"
-    accessPolicyType: Literal["Open", "Custom access policy", "MAC allow list", "Sticky MAC allow list"] = "Open"
+    accessPolicyType: Literal[
+        "Open", "Custom access policy", "MAC allow list", "Sticky MAC allow list"
+    ] = "Open"
     tags: list[str] = Field(default_factory=list)
 
     class Config:
@@ -143,7 +144,6 @@ class SwitchPortPOE(BaseModel):
         return max(0.0, float(v))
 
     @computed_field
-    @property
     def utilization_percent(self) -> float:
         """Calculate POE utilization percentage."""
         if self.allocatedInWatts <= 0:
@@ -160,7 +160,7 @@ class MRDeviceStats(BaseModel):
     repeaterClients: int = 0
     cpuUsagePercent: float | None = None
     memoryUsagePercent: float | None = None
-    
+
     # Packet loss metrics
     backgroundTrafficLossPercent: float | None = None
     bestEffortTrafficLossPercent: float | None = None
@@ -217,6 +217,7 @@ class MRRadioStatus(BaseModel):
 
 # Configuration and Management Models
 
+
 class ConfigurationChange(BaseModel):
     """Configuration change event."""
 
@@ -239,10 +240,31 @@ class ConfigurationChange(BaseModel):
 
 # Sensor Models
 
+
 class SensorMeasurement(BaseModel):
     """Individual sensor measurement."""
 
-    metric: Literal["temperature", "humidity", "water", "door", "tvoc", "co2", "noise", "pm25", "indoorAirQuality"]
+    metric: Literal[
+        "temperature",
+        "humidity",
+        "water",
+        "door",
+        "tvoc",
+        "co2",
+        "noise",
+        "pm25",
+        "indoorAirQuality",
+        "battery",
+        "voltage",
+        "current",
+        "realPower",
+        "apparentPower",
+        "powerFactor",
+        "frequency",
+        "downstreamPower",
+        "remoteLockout",
+        "remoteLockoutSwitch",
+    ]
     value: float
     unit: str | None = None
 
@@ -255,7 +277,6 @@ class SensorMeasurement(BaseModel):
         return float(v)
 
     @computed_field
-    @property
     def normalized_unit(self) -> str:
         """Get normalized unit based on metric type."""
         unit_map = {
@@ -267,7 +288,17 @@ class SensorMeasurement(BaseModel):
             "co2": "ppm",
             "noise": "dB",
             "pm25": "ug/m3",
-            "indoorAirQuality": "score"
+            "indoorAirQuality": "score",
+            "battery": "percent",
+            "voltage": "volts",
+            "current": "amperes",
+            "realPower": "watts",
+            "apparentPower": "volt-amperes",
+            "powerFactor": "percent",
+            "frequency": "hertz",
+            "downstreamPower": "boolean",
+            "remoteLockout": "boolean",
+            "remoteLockoutSwitch": "boolean",
         }
         return unit_map.get(self.metric, self.unit or "unknown")
 
@@ -288,6 +319,7 @@ class MTSensorReading(BaseModel):
 
 # Organization Models
 
+
 class OrganizationSummary(BaseModel):
     """Organization summary with device and network counts."""
 
@@ -300,9 +332,8 @@ class OrganizationSummary(BaseModel):
     applianceNetworkCount: int = 0
     cameraNetworkCount: int = 0
     sensorNetworkCount: int = 0
-    
+
     @computed_field
-    @property
     def totalDevices(self) -> int:
         """Calculate total device count."""
         return sum(self.deviceCounts.values())
@@ -318,14 +349,15 @@ class OrganizationSummary(BaseModel):
 
 # Helper function to convert raw API responses to domain models
 
+
 def parse_rf_health_response(data: dict[str, Any]) -> RFHealthData | None:
     """Parse RF health API response to domain model.
-    
+
     Parameters
     ----------
     data : dict[str, Any]
         Raw API response data.
-        
+
     Returns
     -------
     RFHealthData | None
@@ -340,12 +372,12 @@ def parse_rf_health_response(data: dict[str, Any]) -> RFHealthData | None:
 
 def parse_connection_stats(data: dict[str, Any]) -> ConnectionStats:
     """Parse connection stats from API response.
-    
+
     Parameters
     ----------
     data : dict[str, Any]
         Raw connection stats data.
-        
+
     Returns
     -------
     ConnectionStats

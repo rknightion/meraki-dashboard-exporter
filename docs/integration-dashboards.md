@@ -120,7 +120,7 @@ groups:
   # Client density per access point
   - record: meraki:client_density_per_ap
     expr: |
-      meraki_mr_clients_connected / 
+      meraki_mr_clients_connected /
       count by (network_id, network_name) (meraki_device_up{device_model=~"MR.*"})
 
   # Network bandwidth utilization
@@ -139,7 +139,7 @@ groups:
   - record: meraki:temperature_anomaly
     expr: |
       abs(
-        meraki_mt_temperature_celsius - 
+        meraki_mt_temperature_celsius -
         avg by (network_name) (meraki_mt_temperature_celsius)
       ) > 5
 ```
@@ -161,9 +161,9 @@ groups:
     annotations:
       summary: "Meraki device {{ $labels.name }} is offline"
       description: |
-        Device {{ $labels.name }} ({{ $labels.serial }}) in network 
+        Device {{ $labels.name }} ({{ $labels.serial }}) in network
         {{ $labels.network_name }} has been offline for more than 5 minutes.
-        
+
         Organization: {{ $labels.org_name }}
         Device Model: {{ $labels.device_model }}
       runbook_url: "https://wiki.company.com/runbooks/meraki-device-down"
@@ -177,9 +177,9 @@ groups:
     annotations:
       summary: "High temperature detected at {{ $labels.name }}"
       description: |
-        Temperature sensor {{ $labels.name }} reports {{ $value }}°C, 
+        Temperature sensor {{ $labels.name }} reports {{ $value }}°C,
         which exceeds the 35°C threshold.
-        
+
         Location: {{ $labels.network_name }}
         Current: {{ $value }}°C
 
@@ -202,7 +202,7 @@ groups:
     annotations:
       summary: "High Meraki API error rate"
       description: |
-        Meraki API error rate is {{ $value | humanizePercentage }} 
+        Meraki API error rate is {{ $value | humanizePercentage }}
         over the last 5 minutes. This may indicate API issues or rate limiting.
 
   - alert: MerakiLicenseExpiring
@@ -214,7 +214,7 @@ groups:
     annotations:
       summary: "Meraki licenses expiring soon"
       description: |
-        {{ $value }} {{ $labels.license_type }} licenses in organization 
+        {{ $value }} {{ $labels.license_type }} licenses in organization
         {{ $labels.org_name }} are expiring within 30 days.
 ```
 
@@ -232,7 +232,7 @@ groups:
     annotations:
       summary: "High 5GHz channel utilization on {{ $labels.name }}"
       description: |
-        5GHz channel utilization on AP {{ $labels.name }} has been 
+        5GHz channel utilization on AP {{ $labels.name }} has been
         above 70% for 10 minutes. Current: {{ $value }}%
 
   - alert: MerakiLowConnectionSuccessRate
@@ -248,12 +248,12 @@ groups:
     annotations:
       summary: "Low wireless connection success rate in {{ $labels.network_name }}"
       description: |
-        Wireless connection success rate in network {{ $labels.network_name }} 
+        Wireless connection success rate in network {{ $labels.network_name }}
         is {{ $value }}%, below the 90% threshold.
 
   - alert: MerakiSlowMetricCollection
     expr: |
-      histogram_quantile(0.95, 
+      histogram_quantile(0.95,
         rate(meraki_collector_duration_seconds_bucket[5m])
       ) > 120
     for: 5m
@@ -263,7 +263,7 @@ groups:
     annotations:
       summary: "Slow Meraki metric collection"
       description: |
-        95th percentile collection time is {{ $value }}s, indicating 
+        95th percentile collection time is {{ $value }}s, indicating
         performance issues with the exporter or Meraki API.
 ```
 
@@ -700,11 +700,11 @@ topk(10, sum by (network_name) (meraki_mr_clients_connected))
 rate(meraki_org_usage_total_kb[5m]) * 1024
 
 # Switch port utilization (percentage)
-(rate(meraki_ms_port_traffic_bytes[5m]) * 8) / 
+(rate(meraki_ms_port_traffic_bytes[5m]) * 8) /
 (meraki_ms_port_speed_mbps * 1e6) * 100
 
 # Temperature anomalies
-abs(meraki_mt_temperature_celsius - 
+abs(meraki_mt_temperature_celsius -
     avg by (network_name) (meraki_mt_temperature_celsius)) > 5
 
 # Wireless connection success rate
@@ -715,7 +715,7 @@ abs(meraki_mt_temperature_celsius -
 rate(meraki_collector_api_calls_total[5m])
 
 # License expiration timeline
-(meraki_org_licenses_total{status="active"} - 
+(meraki_org_licenses_total{status="active"} -
  meraki_org_licenses_expiring) / meraki_org_licenses_total{status="active"} * 100
 ```
 
@@ -971,4 +971,4 @@ curl http://jaeger:16686/api/traces?service=meraki-dashboard-exporter
 - **Dashboard JSON Files**: Available in the [GitHub repository](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/dashboards)
 - **PromQL Examples**: More query examples in the repository documentation
 - **Community Dashboards**: Share and discover dashboards in [GitHub Discussions](https://github.com/rknightion/meraki-dashboard-exporter/discussions)
-- **Integration Issues**: Report problems in [GitHub Issues](https://github.com/rknightion/meraki-dashboard-exporter/issues) 
+- **Integration Issues**: Report problems in [GitHub Issues](https://github.com/rknightion/meraki-dashboard-exporter/issues)

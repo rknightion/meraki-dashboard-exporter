@@ -176,8 +176,4 @@ def extract_successful_results(
         List of successful results, excluding exceptions.
 
     """
-    return [
-        result
-        for item, result in results
-        if not isinstance(result, Exception)
-    ]
+    return [result for item, result in results if not isinstance(result, Exception)]

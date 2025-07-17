@@ -16,7 +16,7 @@ STPGuardStr = Literal["disabled", "root guard", "bpdu guard", "loop guard"]
 
 class APIField(StrEnum):
     """Common API response field names."""
-    
+
     # Device fields
     SERIAL = "serial"
     MODEL = "model"
@@ -31,16 +31,16 @@ class APIField(StrEnum):
     LAN_IP = "lanIp"
     PUBLIC_IP = "publicIp"
     STATUS = "status"
-    
+
     # Response structure
     ITEMS = "items"
-    
+
     # Error fields
     ERROR = "error"
     ERRORS = "errors"
     MESSAGE = "message"
     CODE = "code"
-    
+
     # Usage fields
     SENT = "sent"
     RECEIVED = "received"
@@ -50,7 +50,7 @@ class APIField(StrEnum):
     COUNT = "count"
     USED = "used"
     FREE = "free"
-    
+
     # Port fields
     PORT_ID = "portId"
     ENABLED = "enabled"
@@ -58,21 +58,21 @@ class APIField(StrEnum):
     LINK_NEGOTIATION = "linkNegotiation"
     DUPLEX = "duplex"
     SPEED = "speed"
-    
+
     # Sensor fields
     METRIC = "metric"
     READING = "reading"
     TS = "ts"
     READINGS = "readings"
-    
+
     # Time fields
     TIMESPAN = "timespan"
     INTERVAL = "interval"
-    
+
     # Organization fields
     ID = "id"
     URL = "url"
-    
+
     # Network health fields
     DEVICE = "device"
     NETWORK = "network"
@@ -83,7 +83,7 @@ class APIField(StrEnum):
 
 class APITimespan(IntEnum):
     """Common timespan values in seconds."""
-    
+
     FIVE_MINUTES = 300
     THIRTY_MINUTES = 1800
     ONE_HOUR = 3600
@@ -94,7 +94,7 @@ class APITimespan(IntEnum):
 
 class LicenseState(StrEnum):
     """License states from API responses."""
-    
+
     ACTIVE = "active"
     EXPIRED = "expired"
     EXPIRING = "expiring"
@@ -104,7 +104,7 @@ class LicenseState(StrEnum):
 
 class PortState(StrEnum):
     """Port and connection states."""
-    
+
     ENABLED = "enabled"
     DISABLED = "disabled"
     CONNECTED = "connected"
@@ -113,7 +113,7 @@ class PortState(StrEnum):
 
 class RFBand(StrEnum):
     """RF band identifiers."""
-    
+
     BAND_2_4_GHZ = "2.4Ghz"
     BAND_5_GHZ = "5Ghz"
 

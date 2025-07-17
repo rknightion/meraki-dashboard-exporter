@@ -7,16 +7,30 @@ from typing import Literal
 
 # Type alias for sensor metric types
 SensorMetricTypeStr = Literal[
-    "temperature", "humidity", "door", "water", "co2", "tvoc", "pm25",
-    "noise", "battery", "indoorAirQuality", "voltage", "current",
-    "realPower", "apparentPower", "powerFactor", "frequency",
-    "downstreamPower", "remoteLockout"
+    "temperature",
+    "humidity",
+    "door",
+    "water",
+    "co2",
+    "tvoc",
+    "pm25",
+    "noise",
+    "battery",
+    "indoorAirQuality",
+    "voltage",
+    "current",
+    "realPower",
+    "apparentPower",
+    "powerFactor",
+    "frequency",
+    "downstreamPower",
+    "remoteLockout",
 ]
 
 
 class SensorMetricType(StrEnum):
     """Sensor metric types as returned by the API."""
-    
+
     # Environmental sensors
     TEMPERATURE = "temperature"
     HUMIDITY = "humidity"
@@ -27,7 +41,7 @@ class SensorMetricType(StrEnum):
     PM25 = "pm25"
     NOISE = "noise"
     INDOOR_AIR_QUALITY = "indoorAirQuality"
-    
+
     # Power sensors
     BATTERY = "battery"
     VOLTAGE = "voltage"
@@ -42,7 +56,7 @@ class SensorMetricType(StrEnum):
 
 class SensorDataField(StrEnum):
     """Sensor data field names in API responses."""
-    
+
     # Value fields
     CELSIUS = "celsius"
     RELATIVE_PERCENTAGE = "relativePercentage"
@@ -52,7 +66,7 @@ class SensorDataField(StrEnum):
     PERCENTAGE = "percentage"
     SCORE = "score"
     DRAW = "draw"
-    
+
     # Boolean fields
     OPEN = "open"
     PRESENT = "present"

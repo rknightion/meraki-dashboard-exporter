@@ -174,7 +174,7 @@ class SensorReading(BaseModel):
     ts: datetime
     metric: str
     value: float
-    
+
     @field_validator("value", mode="before")
     @classmethod
     def validate_value(cls, v: Any) -> float:
@@ -263,9 +263,7 @@ class ClientOverview(BaseModel):
         result = {}
         for key, usage in v.items():
             if isinstance(usage, dict):
-                result[key] = {
-                    k: int(val) if val is not None else 0 for k, val in usage.items()
-                }
+                result[key] = {k: int(val) if val is not None else 0 for k, val in usage.items()}
             else:
                 result[key] = {}
         return result

@@ -59,6 +59,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
+  - Configuration: config.md
   - Deployment & Operations: deployment-operations.md
   - Integration & Dashboards: integration-dashboards.md
   - Metrics Reference:

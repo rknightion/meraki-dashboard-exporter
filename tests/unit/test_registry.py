@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from meraki_dashboard_exporter.core.collector import MetricCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.registry import (

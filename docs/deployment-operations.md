@@ -288,12 +288,12 @@ avg(meraki_device_up) * 100
 count(meraki_device_up == 0)
 
 # Switch port utilization
-histogram_quantile(0.95, 
+histogram_quantile(0.95,
   rate(meraki_ms_port_traffic_bytes_bucket[5m]) * 8 / 1e9
 )
 
 # Wireless client density
-meraki_mr_clients_connected / 
+meraki_mr_clients_connected /
 count by (network_name) (meraki_device_up{device_model=~"MR.*"})
 ```
 
@@ -305,7 +305,7 @@ avg by (network_name) (meraki_ap_channel_utilization_5ghz_percent)
 
 # Connection success rate
 meraki_network_wireless_connection_stats_total{stat_type="success"} /
-on(network_id) 
+on(network_id)
 meraki_network_wireless_connection_stats_total{stat_type="assoc"}
 
 # Data transfer rates
@@ -316,7 +316,7 @@ rate(meraki_org_usage_total_kb[5m]) * 1024 / 1000  # Convert to bytes/sec
 
 ```promql
 # Temperature anomalies
-abs(meraki_mt_temperature_celsius - 
+abs(meraki_mt_temperature_celsius -
     avg by (network_name) (meraki_mt_temperature_celsius)
 ) > 5
 
@@ -337,7 +337,7 @@ rate(meraki_collector_last_success_timestamp_seconds[5m]) > 0
 rate(meraki_collector_errors_total[5m])
 
 # Collection duration
-histogram_quantile(0.95, 
+histogram_quantile(0.95,
   rate(meraki_collector_duration_seconds_bucket[5m])
 )
 
@@ -726,4 +726,4 @@ docker logs meraki-exporter | grep -E "(timeout|slow|duration)"
 - **Documentation**: Complete reference in this guide
 - **GitHub Issues**: [Report problems](https://github.com/rknightion/meraki-dashboard-exporter/issues)
 - **Discussions**: [Community support](https://github.com/rknightion/meraki-dashboard-exporter/discussions)
-- **Monitoring Examples**: See [Integration & Dashboards](integration-dashboards.md) 
+- **Monitoring Examples**: See [Integration & Dashboards](integration-dashboards.md)

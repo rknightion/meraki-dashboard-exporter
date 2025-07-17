@@ -386,4 +386,4 @@ Now that you have the exporter running:
 
 - **Troubleshooting**: See the [Deployment & Operations](deployment-operations.md#troubleshooting) section
 - **GitHub Issues**: [Report bugs or request features](https://github.com/rknightion/meraki-dashboard-exporter/issues)
-- **Discussions**: [Ask questions and share tips](https://github.com/rknightion/meraki-dashboard-exporter/discussions) 
+- **Discussions**: [Ask questions and share tips](https://github.com/rknightion/meraki-dashboard-exporter/discussions)

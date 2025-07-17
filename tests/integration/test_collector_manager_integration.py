@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from meraki_dashboard_exporter.collectors.manager import CollectorManager
 from meraki_dashboard_exporter.core.constants import UpdateTier
-from meraki_dashboard_exporter.core.registry import clear_registry
 
 
 @pytest.fixture

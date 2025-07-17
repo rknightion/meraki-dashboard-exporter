@@ -50,13 +50,27 @@ class NetworkHealthCollector(MetricCollector):
         self._ap_utilization_2_4ghz = self._create_gauge(
             NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_2_4GHZ_PERCENT,
             "2.4GHz channel utilization percentage per AP",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.TYPE],
+            labelnames=[
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.TYPE,
+            ],
         )
 
         self._ap_utilization_5ghz = self._create_gauge(
             NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_5GHZ_PERCENT,
             "5GHz channel utilization percentage per AP",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.TYPE],
+            labelnames=[
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.TYPE,
+            ],
         )
 
         # Network-wide average utilization
@@ -136,11 +150,7 @@ class NetworkHealthCollector(MetricCollector):
             logger.debug("Fetching all organizations for network health")
             self._track_api_call("getOrganizations")
             orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
-            orgs = validate_response_format(
-                orgs,
-                expected_type=list,
-                operation="getOrganizations"
-            )
+            orgs = validate_response_format(orgs, expected_type=list, operation="getOrganizations")
             logger.debug("Successfully fetched organizations", count=len(orgs))
             return orgs
 
@@ -167,9 +177,7 @@ class NetworkHealthCollector(MetricCollector):
                 total_pages="all",
             )
             networks = validate_response_format(
-                networks,
-                expected_type=list,
-                operation="getOrganizationNetworks"
+                networks, expected_type=list, operation="getOrganizationNetworks"
             )
             logger.debug("Successfully fetched networks", org_id=org_id, count=len(networks))
 

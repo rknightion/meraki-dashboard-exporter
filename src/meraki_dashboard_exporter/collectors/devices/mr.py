@@ -22,19 +22,19 @@ class MRCollector(BaseDeviceCollector):
 
     def __init__(self, parent: DeviceCollector) -> None:
         """Initialize MR collector.
-        
+
         Parameters
         ----------
         parent : DeviceCollector
             Parent DeviceCollector instance.
-            
+
         """
         super().__init__(parent)
         # Create a cache for last known packet values (for retention logic)
         self._packet_value_cache: dict[str, float] = {}
         # Initialize MR-specific metrics
         self._initialize_metrics()
-    
+
     def _initialize_metrics(self) -> None:
         """Initialize MR-specific metrics."""
         # Wireless AP metrics
@@ -47,7 +47,13 @@ class MRCollector(BaseDeviceCollector):
         self._ap_connection_stats = self.parent._create_gauge(
             MRMetricName.MR_CONNECTION_STATS,
             "Wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.STAT_TYPE],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.NETWORK_ID,
+                LabelName.STAT_TYPE,
+            ],
         )
 
         # MR ethernet status metrics
@@ -72,19 +78,36 @@ class MRCollector(BaseDeviceCollector):
         self._mr_port_poe_info = self.parent._create_gauge(
             MRMetricName.MR_PORT_POE_INFO,
             "Access point port PoE information",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.PORT_NAME, LabelName.STANDARD],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.PORT_NAME,
+                LabelName.STANDARD,
+            ],
         )
 
         self._mr_port_link_negotiation_info = self.parent._create_gauge(
             MRMetricName.MR_PORT_LINK_NEGOTIATION_INFO,
             "Access point port link negotiation information",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.PORT_NAME, LabelName.DUPLEX],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.PORT_NAME,
+                LabelName.DUPLEX,
+            ],
         )
 
         self._mr_port_link_negotiation_speed = self.parent._create_gauge(
             MRMetricName.MR_PORT_LINK_NEGOTIATION_SPEED_MBPS,
             "Access point port link negotiation speed in Mbps",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.PORT_NAME],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.PORT_NAME,
+            ],
         )
 
         self._mr_aggregation_enabled = self.parent._create_gauge(
@@ -103,56 +126,101 @@ class MRCollector(BaseDeviceCollector):
         self._mr_packets_downstream_total = self.parent._create_gauge(
             MRMetricName.MR_PACKETS_DOWNSTREAM_TOTAL,
             "Total downstream packets transmitted by access point (5-minute window)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._mr_packets_downstream_lost = self.parent._create_gauge(
             MRMetricName.MR_PACKETS_DOWNSTREAM_LOST,
             "Downstream packets lost by access point (5-minute window)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._mr_packet_loss_downstream_percent = self.parent._create_gauge(
             MRMetricName.MR_PACKET_LOSS_DOWNSTREAM_PERCENT,
             "Downstream packet loss percentage for access point (5-minute window)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._mr_packets_upstream_total = self.parent._create_gauge(
             MRMetricName.MR_PACKETS_UPSTREAM_TOTAL,
             "Total upstream packets received by access point (5-minute window)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._mr_packets_upstream_lost = self.parent._create_gauge(
             MRMetricName.MR_PACKETS_UPSTREAM_LOST,
             "Upstream packets lost by access point (5-minute window)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._mr_packet_loss_upstream_percent = self.parent._create_gauge(
             MRMetricName.MR_PACKET_LOSS_UPSTREAM_PERCENT,
             "Upstream packet loss percentage for access point (5-minute window)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         # Combined packet metrics (calculated)
         self._mr_packets_total = self.parent._create_gauge(
             MRMetricName.MR_PACKETS_TOTAL,
             "Total packets (upstream + downstream) for access point (5-minute window)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._mr_packets_lost_total = self.parent._create_gauge(
             MRMetricName.MR_PACKETS_LOST_TOTAL,
             "Total packets lost (upstream + downstream) for access point (5-minute window)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._mr_packet_loss_total_percent = self.parent._create_gauge(
             MRMetricName.MR_PACKET_LOSS_TOTAL_PERCENT,
             "Total packet loss percentage (upstream + downstream) for access point (5-minute window)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         # Network-wide MR packet loss metrics (5-minute window)
@@ -215,32 +283,66 @@ class MRCollector(BaseDeviceCollector):
         self._mr_cpu_load_5min = self.parent._create_gauge(
             MRMetricName.MR_CPU_LOAD_5MIN,
             "Access point CPU load average over 5 minutes (normalized to 0-100 per core)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         # MR SSID/Radio status metrics
         self._mr_radio_broadcasting = self.parent._create_gauge(
             MRMetricName.MR_RADIO_BROADCASTING,
             "Access point radio broadcasting status (1 = broadcasting, 0 = not broadcasting)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.BAND, LabelName.RADIO_INDEX],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.BAND,
+                LabelName.RADIO_INDEX,
+            ],
         )
 
         self._mr_radio_channel = self.parent._create_gauge(
             MRMetricName.MR_RADIO_CHANNEL,
             "Access point radio channel number",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.BAND, LabelName.RADIO_INDEX],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.BAND,
+                LabelName.RADIO_INDEX,
+            ],
         )
 
         self._mr_radio_channel_width = self.parent._create_gauge(
             MRMetricName.MR_RADIO_CHANNEL_WIDTH_MHZ,
             "Access point radio channel width in MHz",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.BAND, LabelName.RADIO_INDEX],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.BAND,
+                LabelName.RADIO_INDEX,
+            ],
         )
 
         self._mr_radio_power = self.parent._create_gauge(
             MRMetricName.MR_RADIO_POWER_DBM,
             "Access point radio transmit power in dBm",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.BAND, LabelName.RADIO_INDEX],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.BAND,
+                LabelName.RADIO_INDEX,
+            ],
         )
 
     @with_error_handling(
@@ -275,9 +377,7 @@ class MRCollector(BaseDeviceCollector):
                 serial,
             )
             status = validate_response_format(
-                status,
-                expected_type=dict,
-                operation="getDeviceWirelessStatus"
+                status, expected_type=dict, operation="getDeviceWirelessStatus"
             )
 
             logger.debug(
@@ -390,7 +490,9 @@ class MRCollector(BaseDeviceCollector):
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def collect_wireless_clients(self, org_id: str, device_lookup: dict[str, dict[str, Any]]) -> None:
+    async def collect_wireless_clients(
+        self, org_id: str, device_lookup: dict[str, dict[str, Any]]
+    ) -> None:
         """Collect wireless client counts for MR devices.
 
         Parameters
@@ -413,7 +515,7 @@ class MRCollector(BaseDeviceCollector):
             client_overview = validate_response_format(
                 client_overview,
                 expected_type=list,
-                operation="getOrganizationWirelessClientsOverviewByDevice"
+                operation="getOrganizationWirelessClientsOverviewByDevice",
             )
 
             # Handle different API response formats
@@ -468,7 +570,9 @@ class MRCollector(BaseDeviceCollector):
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def collect_ethernet_status(self, org_id: str, device_lookup: dict[str, dict[str, Any]]) -> None:
+    async def collect_ethernet_status(
+        self, org_id: str, device_lookup: dict[str, dict[str, Any]]
+    ) -> None:
         """Collect ethernet status for MR devices.
 
         Parameters
@@ -517,45 +621,30 @@ class MRCollector(BaseDeviceCollector):
                 # Power mode information
                 power_mode = device_status.get("power", {}).get("mode")
                 if power_mode:
-                    if hasattr(self.parent, "_set_metric_value"):
-                        self.parent._set_metric_value(
-                            "_mr_power_info",
-                            {
-                                "serial": serial,
-                                "name": device_name,
-                                "network_id": network_id,
-                                "mode": power_mode,
-                            },
-                            1,
-                        )
+                    self._mr_power_info.labels(
+                        serial=serial,
+                        name=device_name,
+                        network_id=network_id,
+                        mode=power_mode,
+                    ).set(1)
 
                 # AC power status
                 ac_info = device_status.get("power", {}).get("ac", {})
                 ac_connected = ac_info.get("isConnected", False)
-                if hasattr(self.parent, "_set_metric_value"):
-                    self.parent._set_metric_value(
-                        "_mr_power_ac_connected",
-                        {
-                            "serial": serial,
-                            "name": device_name,
-                            "network_id": network_id,
-                        },
-                        1 if ac_connected else 0,
-                    )
+                self._mr_power_ac_connected.labels(
+                    serial=serial,
+                    name=device_name,
+                    network_id=network_id,
+                ).set(1 if ac_connected else 0)
 
                 # PoE power status
                 poe_info = device_status.get("power", {}).get("poe", {})
                 poe_connected = poe_info.get("isConnected", False)
-                if hasattr(self.parent, "_set_metric_value"):
-                    self.parent._set_metric_value(
-                        "_mr_power_poe_connected",
-                        {
-                            "serial": serial,
-                            "name": device_name,
-                            "network_id": network_id,
-                        },
-                        1 if poe_connected else 0,
-                    )
+                self._mr_power_poe_connected.labels(
+                    serial=serial,
+                    name=device_name,
+                    network_id=network_id,
+                ).set(1 if poe_connected else 0)
 
                 # Process port information
                 ports = device_status.get("ports", [])
@@ -567,49 +656,36 @@ class MRCollector(BaseDeviceCollector):
 
                     # PoE information
                     poe_standard = port.get("poe", {}).get("standard")
-                    if poe_standard and hasattr(self.parent, "_set_metric_value"):
-                        self.parent._set_metric_value(
-                            "_mr_port_poe_info",
-                            {
-                                "serial": serial,
-                                "name": device_name,
-                                "network_id": network_id,
-                                "port_name": port_name,
-                                "standard": poe_standard,
-                            },
-                            1,
-                        )
+                    if poe_standard:
+                        self._mr_port_poe_info.labels(
+                            serial=serial,
+                            name=device_name,
+                            network_id=network_id,
+                            port_name=port_name,
+                            standard=poe_standard,
+                        ).set(1)
 
                     # Link negotiation information
                     link_negotiation = port.get("linkNegotiation", {})
                     duplex = link_negotiation.get("duplex")
                     speed = link_negotiation.get("speed")
 
-                    if duplex and hasattr(self.parent, "_set_metric_value"):
-                        self.parent._set_metric_value(
-                            "_mr_port_link_negotiation_info",
-                            {
-                                "serial": serial,
-                                "name": device_name,
-                                "network_id": network_id,
-                                "port_name": port_name,
-                                "duplex": duplex,
-                            },
-                            1,
-                        )
+                    if duplex:
+                        self._mr_port_link_negotiation_info.labels(
+                            serial=serial,
+                            name=device_name,
+                            network_id=network_id,
+                            port_name=port_name,
+                            duplex=duplex,
+                        ).set(1)
 
                     # Set speed metric
-                    if hasattr(self.parent, "_set_metric_value"):
-                        self.parent._set_metric_value(
-                            "_mr_port_link_negotiation_speed",
-                            {
-                                "serial": serial,
-                                "name": device_name,
-                                "network_id": network_id,
-                                "port_name": port_name,
-                            },
-                            speed if speed is not None else 0,
-                        )
+                    self._mr_port_link_negotiation_speed.labels(
+                        serial=serial,
+                        name=device_name,
+                        network_id=network_id,
+                        port_name=port_name,
+                    ).set(speed if speed is not None else 0)
 
                     # Check for aggregation
                     if port.get("isAggregated", False):
@@ -617,26 +693,17 @@ class MRCollector(BaseDeviceCollector):
                         if speed is not None:
                             total_speed += speed
 
-                if hasattr(self.parent, "_set_metric_value"):
-                    self.parent._set_metric_value(
-                        "_mr_aggregation_enabled",
-                        {
-                            "serial": serial,
-                            "name": device_name,
-                            "network_id": network_id,
-                        },
-                        1 if aggregation_enabled else 0,
-                    )
+                self._mr_aggregation_enabled.labels(
+                    serial=serial,
+                    name=device_name,
+                    network_id=network_id,
+                ).set(1 if aggregation_enabled else 0)
 
-                    self.parent._set_metric_value(
-                        "_mr_aggregation_speed",
-                        {
-                            "serial": serial,
-                            "name": device_name,
-                            "network_id": network_id,
-                        },
-                        total_speed,
-                    )
+                self._mr_aggregation_speed.labels(
+                    serial=serial,
+                    name=device_name,
+                    network_id=network_id,
+                ).set(total_speed)
 
         except Exception:
             logger.exception(
@@ -644,7 +711,9 @@ class MRCollector(BaseDeviceCollector):
                 org_id=org_id,
             )
 
-    async def collect_packet_loss(self, org_id: str, device_lookup: dict[str, dict[str, Any]]) -> None:
+    async def collect_packet_loss(
+        self, org_id: str, device_lookup: dict[str, dict[str, Any]]
+    ) -> None:
         """Collect packet loss metrics for MR devices and networks.
 
         Parameters
@@ -985,95 +1054,150 @@ class MRCollector(BaseDeviceCollector):
             batch_size = 100
             for i in range(0, len(mr_devices), batch_size):
                 batch = mr_devices[i : i + batch_size]
-                serials = [d["serial"] for d in batch]
-
-                try:
-                    # Get CPU load history for batch (5 minute intervals)
-                    self._track_api_call("getOrganizationWirelessDevicesSystemCpuLoadHistory")
-                    cpu_history = await asyncio.to_thread(
-                        self.api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory,
-                        org_id,
-                        serials=serials,
-                        timespan=300,  # 5 minutes
-                        resolution=300,  # 5 minute resolution
-                    )
-
-                    # Handle different API response formats
-                    if isinstance(cpu_history, dict) and "items" in cpu_history:
-                        cpu_data = cpu_history["items"]
-                    elif isinstance(cpu_history, list):
-                        cpu_data = cpu_history
-                    else:
-                        logger.warning(
-                            "Unexpected CPU history format",
-                            org_id=org_id,
-                            batch_index=i // batch_size,
-                            response_type=type(cpu_history).__name__,
-                        )
-                        continue
-
-                    logger.debug(
-                        "Successfully fetched CPU history",
-                        org_id=org_id,
-                        batch_index=i // batch_size,
-                        device_count=len(cpu_data) if cpu_data else 0,
-                    )
-
-                    # Process CPU data for each device
-                    for device_cpu in cpu_data:
-                        serial = device_cpu.get("serial", "")
-                        device_info = next((d for d in batch if d["serial"] == serial), {})
-                        device_name = device_info.get("name", serial)
-                        device_model = device_info.get("model", "MR")
-                        network_id = device_info.get("networkId", "")
-
-                        # Get the network name
-                        networks = device_cpu.get("network", {})
-                        network_name = networks.get("name", "")
-
-                        # Get the most recent CPU load data
-                        usage_history = device_cpu.get("usageHistory", [])
-                        if usage_history:
-                            # Sort by timestamp to get most recent
-                            usage_history.sort(key=lambda x: x.get("ts", ""), reverse=True)
-                            latest_usage = usage_history[0]
-
-                            # Get 5-minute load average
-                            # The API returns it as a percentage (0-100 per core)
-                            avg_5min = latest_usage.get("avg5Minutes")
-                            if avg_5min is not None:
-                                if hasattr(self.parent, "_set_metric_value"):
-                                    self.parent._set_metric_value(
-                                        "_mr_cpu_load_5min",
-                                        {
-                                            "serial": serial,
-                                            "name": device_name,
-                                            "model": device_model,
-                                            "network_id": network_id,
-                                            "network_name": network_name,
-                                        },
-                                        avg_5min,
-                                    )
-                                    logger.debug(
-                                        "Set CPU load metric",
-                                        serial=serial,
-                                        name=device_name,
-                                        cpu_5min=avg_5min,
-                                    )
-
-                except Exception:
-                    logger.exception(
-                        "Failed to collect CPU load for batch",
-                        org_id=org_id,
-                        batch_index=i // batch_size,
-                        batch_size=len(batch),
-                    )
+                await self._process_cpu_load_batch(org_id, batch, i // batch_size)
 
         except Exception:
             logger.exception(
                 "Failed to collect MR CPU load metrics",
                 org_id=org_id,
             )
+
+    async def _process_cpu_load_batch(
+        self, org_id: str, batch: list[dict[str, Any]], batch_index: int
+    ) -> None:
+        """Process a batch of devices for CPU load collection.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        batch : list[dict[str, Any]]
+            Batch of devices to process.
+        batch_index : int
+            Index of the current batch.
+
+        """
+        try:
+            serials = [d["serial"] for d in batch]
+
+            # Get CPU load history for batch (5 minute intervals)
+            self._track_api_call("getOrganizationWirelessDevicesSystemCpuLoadHistory")
+            cpu_history = await asyncio.to_thread(
+                self.api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory,
+                org_id,
+                serials=serials,
+                timespan=300,  # 5 minutes
+                resolution=300,  # 5 minute resolution
+            )
+
+            # Handle different API response formats
+            cpu_data = self._extract_cpu_data(cpu_history, org_id, batch_index)
+            if not cpu_data:
+                return
+
+            logger.debug(
+                "Successfully fetched CPU history",
+                org_id=org_id,
+                batch_index=batch_index,
+                device_count=len(cpu_data),
+            )
+
+            # Process CPU data for each device
+            for device_cpu in cpu_data:
+                self._process_device_cpu_data(device_cpu, batch)
+
+        except Exception:
+            logger.exception(
+                "Failed to collect CPU load for batch",
+                org_id=org_id,
+                batch_index=batch_index,
+                batch_size=len(batch),
+            )
+
+    def _extract_cpu_data(
+        self, cpu_history: Any, org_id: str, batch_index: int
+    ) -> list[dict[str, Any]]:
+        """Extract CPU data from API response.
+
+        Parameters
+        ----------
+        cpu_history : Any
+            Raw API response.
+        org_id : str
+            Organization ID.
+        batch_index : int
+            Index of the current batch.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            Extracted CPU data.
+
+        """
+        if isinstance(cpu_history, dict) and "items" in cpu_history:
+            return cpu_history["items"]
+        elif isinstance(cpu_history, list):
+            return cpu_history
+        else:
+            logger.warning(
+                "Unexpected CPU history format",
+                org_id=org_id,
+                batch_index=batch_index,
+                response_type=type(cpu_history).__name__,
+            )
+            return []
+
+    def _process_device_cpu_data(
+        self, device_cpu: dict[str, Any], batch: list[dict[str, Any]]
+    ) -> None:
+        """Process CPU data for a single device.
+
+        Parameters
+        ----------
+        device_cpu : dict[str, Any]
+            CPU data for a device.
+        batch : list[dict[str, Any]]
+            Batch of devices for lookup.
+
+        """
+        serial = device_cpu.get("serial", "")
+        device_info = next((d for d in batch if d["serial"] == serial), {})
+        device_name = device_info.get("name", serial)
+        device_model = device_info.get("model", "MR")
+        network_id = device_info.get("networkId", "")
+
+        # Get the network name
+        networks = device_cpu.get("network", {})
+        network_name = networks.get("name", "")
+
+        # Get the most recent CPU load data
+        usage_history = device_cpu.get("usageHistory", [])
+        if not usage_history:
+            return
+
+        # Sort by timestamp to get most recent
+        usage_history.sort(key=lambda x: x.get("ts", ""), reverse=True)
+        latest_usage = usage_history[0]
+
+        # Get 5-minute load average
+        # The API returns it as a percentage (0-100 per core)
+        avg_5min = latest_usage.get("avg5Minutes")
+        if avg_5min is None:
+            return
+
+        self._mr_cpu_load_5min.labels(
+            serial=serial,
+            name=device_name,
+            model=device_model,
+            network_id=network_id,
+            network_name=network_name,
+        ).set(avg_5min)
+        logger.debug(
+            "Set CPU load metric",
+            serial=serial,
+            name=device_name,
+            cpu_5min=avg_5min,
+        )
 
     async def collect_ssid_status(self, org_id: str) -> None:
         """Collect SSID and radio status for MR devices.
@@ -1124,14 +1248,14 @@ class MRCollector(BaseDeviceCollector):
 
                 # Process radio status
                 basic_service_sets = device_data.get("basicServiceSets", [])
-                
+
                 # Group radios by band and index
                 radio_info = {}
                 for bss in basic_service_sets:
                     radio = bss.get("radio", {})
                     band = radio.get("band", "")
                     index = radio.get("index", 0)
-                    
+
                     if band and index is not None:
                         key = (band, index)
                         if key not in radio_info:
@@ -1141,67 +1265,50 @@ class MRCollector(BaseDeviceCollector):
                 for (band, index), radio in radio_info.items():
                     # Broadcasting status
                     is_broadcasting = radio.get("isBroadcasting", False)
-                    if hasattr(self.parent, "_set_metric_value"):
-                        self.parent._set_metric_value(
-                            "_mr_radio_broadcasting",
-                            {
-                                "serial": serial,
-                                "name": name,
-                                "network_id": network_id,
-                                "network_name": network_name,
-                                "band": band,
-                                "radio_index": str(index),
-                            },
-                            1 if is_broadcasting else 0,
-                        )
+                    self._mr_radio_broadcasting.labels(
+                        serial=serial,
+                        name=name,
+                        network_id=network_id,
+                        network_name=network_name,
+                        band=band,
+                        radio_index=str(index),
+                    ).set(1 if is_broadcasting else 0)
 
                     # Channel
                     channel = radio.get("channel")
-                    if channel is not None and hasattr(self.parent, "_set_metric_value"):
-                        self.parent._set_metric_value(
-                            "_mr_radio_channel",
-                            {
-                                "serial": serial,
-                                "name": name,
-                                "network_id": network_id,
-                                "network_name": network_name,
-                                "band": band,
-                                "radio_index": str(index),
-                            },
-                            channel,
-                        )
+                    if channel is not None:
+                        self._mr_radio_channel.labels(
+                            serial=serial,
+                            name=name,
+                            network_id=network_id,
+                            network_name=network_name,
+                            band=band,
+                            radio_index=str(index),
+                        ).set(channel)
 
                     # Channel width
                     channel_width = radio.get("channelWidth")
-                    if channel_width is not None and hasattr(self.parent, "_set_metric_value"):
-                        self.parent._set_metric_value(
-                            "_mr_radio_channel_width",
-                            {
-                                "serial": serial,
-                                "name": name,
-                                "network_id": network_id,
-                                "network_name": network_name,
-                                "band": band,
-                                "radio_index": str(index),
-                            },
-                            channel_width,
-                        )
+                    if channel_width is not None:
+                        self._mr_radio_channel_width.labels(
+                            serial=serial,
+                            name=name,
+                            network_id=network_id,
+                            network_name=network_name,
+                            band=band,
+                            radio_index=str(index),
+                        ).set(channel_width)
 
                     # Transmit power
                     power = radio.get("power")
-                    if power is not None and hasattr(self.parent, "_set_metric_value"):
-                        self.parent._set_metric_value(
-                            "_mr_radio_power",
-                            {
-                                "serial": serial,
-                                "name": name,
-                                "network_id": network_id,
-                                "network_name": network_name,
-                                "band": band,
-                                "radio_index": str(index),
-                            },
-                            power,
-                        )
+                    if power is not None:
+                        self._mr_radio_power.labels(
+                            serial=serial,
+                            name=name,
+                            network_id=network_id,
+                            network_name=network_name,
+                            band=band,
+                            radio_index=str(index),
+                        ).set(power)
 
                     logger.debug(
                         "Set radio metrics",
@@ -1260,19 +1367,15 @@ class MRCollector(BaseDeviceCollector):
                 # Update cache with new non-zero value
                 self._packet_value_cache[cache_key] = value
 
-        # Use parent's _set_metric_value if available
-        if hasattr(self.parent, "_set_metric_value"):
-            self.parent._set_metric_value(metric_name, labels, value)
-        else:
-            # Direct metric setting as fallback
-            metric = getattr(self, metric_name, None)
-            if metric and value is not None:
-                try:
-                    metric.labels(**labels).set(value)
-                except Exception:
-                    logger.exception(
-                        "Failed to set packet metric value",
-                        metric_name=metric_name,
-                        labels=labels,
-                        value=value,
-                    )
+        # Direct metric setting
+        metric = getattr(self, metric_name, None)
+        if metric and value is not None:
+            try:
+                metric.labels(**labels).set(value)
+            except Exception:
+                logger.exception(
+                    "Failed to set packet metric value",
+                    metric_name=metric_name,
+                    labels=labels,
+                    value=value,
+                )

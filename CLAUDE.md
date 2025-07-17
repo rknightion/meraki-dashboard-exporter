@@ -45,7 +45,7 @@ We use Pydantic models for API responses and internal data structures:
 - You are responsible for timekeeping and keeping data about the Meraki API up to date in our internal state (we do not wait for users to hit the exporter to update data)
 - Be aware of API module organization - endpoints like `getOrganizationWirelessClientsOverviewByDevice` are in the `wireless` module, not `organizations`
 - Memory metrics use the `getOrganizationDevicesSystemMemoryUsageHistoryByInterval` endpoint without `total_pages` parameter
-- **Deprecated API Updates**: 
+- **Deprecated API Updates**:
   - Use `getOrganizationDevices` instead of deprecated `getNetworkDevices` - filter by networkIds and productTypes
   - Use `getOrganizationDevicesAvailabilities` instead of deprecated `getOrganizationDevicesStatuses`
   - The new APIs provide productType information which is exposed in metrics
@@ -169,11 +169,11 @@ from ..core.registry import register_collector
 @register_collector(UpdateTier.MEDIUM)  # Specify the update tier
 class MyNewCollector(MetricCollector):
     """My new collector implementation."""
-    
+
     def _initialize_metrics(self) -> None:
         # Initialize your metrics here
         pass
-    
+
     async def _collect_impl(self) -> None:
         # Implement collection logic here
         pass
@@ -376,7 +376,7 @@ devices = [Device.model_validate(d) for d in device_list]
 Available models include:
 - **API Models** (`core/api_models.py`):
   - Organization, Network, Device, DeviceStatus
-  - PortStatus, WirelessClient  
+  - PortStatus, WirelessClient
   - SensorReading, SensorData
   - APIUsage, License, ClientOverview
   - Alert, MemoryUsage
@@ -428,3 +428,102 @@ batch_size = self.settings.api.batch_size
 Computed properties maintain compatibility:
 - `settings.api_timeout` → `settings.api.timeout`
 - `settings.fast_update_interval` → `settings.update_intervals.fast`
+
+## Async Patterns and Utilities
+
+The exporter provides standardized async utilities in `core/async_utils.py`:
+
+### ManagedTaskGroup
+Structured concurrency for managing related async tasks:
+```python
+async with ManagedTaskGroup("my_tasks") as group:
+    await group.create_task(operation1(), name="op1")
+    await group.create_task(operation2(), name="op2")
+    # All tasks automatically awaited and cleaned up
+```
+
+### Timeout Handling
+Execute operations with timeouts:
+```python
+result = await with_timeout(
+    fetch_data(),
+    timeout=30.0,
+    operation="fetch data",
+    default=[]
+)
+```
+
+### Safe Gathering
+Gather coroutines with error logging:
+```python
+results = await safe_gather(
+    *tasks,
+    description="network operations",
+    log_errors=True
+)
+```
+
+### Rate-Limited Operations
+Execute with semaphore-based rate limiting:
+```python
+semaphore = asyncio.Semaphore(5)
+results = await rate_limited_gather(
+    tasks,
+    semaphore,
+    description="API calls"
+)
+```
+
+### Retry Logic
+Retry operations with exponential backoff:
+```python
+retry = AsyncRetry(max_attempts=3, base_delay=2.0)
+result = await retry.execute(
+    lambda: fetch_configuration(),
+    operation="fetch config"
+)
+```
+
+### Chunked Processing
+Process items in chunks with delays:
+```python
+async for chunk in chunked_async_iter(items, chunk_size=10, delay_between_chunks=1.0):
+    await process_chunk(chunk)
+```
+
+### Circuit Breaker
+Prevent cascading failures:
+```python
+breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=60.0)
+result = await breaker.call(
+    lambda: api_operation(),
+    operation="API call"
+)
+```
+
+### Best Practices
+- Use `ManagedTaskGroup` for structured concurrency when coordinating multiple operations
+- Use `with_timeout` for operations that might hang beyond SDK timeouts
+- Use `safe_gather` instead of raw `asyncio.gather` for non-API operations
+- The Meraki SDK already handles retries and rate limiting for API calls
+- Use `AsyncRetry` only for non-API operations or when you need exponential backoff
+- Use `CircuitBreaker` for endpoints that frequently fail
+
+### When to Use Async Utilities vs SDK Defaults
+
+**Use SDK defaults (no extra wrapping) for**:
+- Simple API calls that return quickly
+- Operations where SDK's 3 retries are sufficient
+- Standard rate limit handling (429 errors)
+
+**Use async utilities for**:
+- Coordinating multiple collectors or operations (ManagedTaskGroup)
+- Operations that need specific timeout guarantees
+- Non-API async operations
+- Endpoints with persistent failures (CircuitBreaker)
+- When you need true exponential backoff
+
+**Note**: The Meraki SDK already provides:
+- Automatic retry on failures (up to 3 times)
+- Rate limit handling with wait_on_rate_limit=True
+- Configurable timeouts via api_timeout setting
