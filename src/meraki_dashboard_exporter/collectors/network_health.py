@@ -10,6 +10,7 @@ from ..core.constants import NetworkHealthMetricName, NetworkMetricName, Product
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
+from ..core.registry import register_collector
 from .network_health_collectors.bluetooth import BluetoothCollector
 from .network_health_collectors.connection_stats import ConnectionStatsCollector
 from .network_health_collectors.data_rates import DataRatesCollector
@@ -24,11 +25,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+@register_collector(UpdateTier.MEDIUM)
 class NetworkHealthCollector(MetricCollector):
     """Collector for medium-moving network health metrics."""
-
-    # Network health data updates at medium frequency
-    update_tier: UpdateTier = UpdateTier.MEDIUM
 
     def __init__(
         self,

@@ -14,17 +14,16 @@ from __future__ import annotations
 
 # Export all constants from domain-specific modules
 from .api_constants import (
-    APIField,
-    APITimespan,
     DEFAULT_DEVICE_MODEL_MR,
     DEFAULT_DEVICE_MODEL_MT,
     DEFAULT_DEVICE_STATUS,
+    APIField,
+    APITimespan,
     LicenseState,
     PortState,
     RFBand,
 )
 from .config_constants import (
-    APIConfig,
     DEFAULT_API_CONFIG,
     DEFAULT_API_TIMEOUT,
     DEFAULT_MAX_RETRIES,
@@ -33,6 +32,7 @@ from .config_constants import (
     MERAKI_API_BASE_URL_CHINA,
     MERAKI_API_BASE_URL_INDIA,
     MERAKI_API_BASE_URL_US_FED,
+    APIConfig,
     MerakiAPIConfig,
     RegionalURLs,
 )
@@ -67,7 +67,7 @@ __all__ = [
     "UpdateTier",
     # Metric constants (domain-specific)
     "OrgMetricName",
-    "NetworkMetricName", 
+    "NetworkMetricName",
     "DeviceMetricName",
     "MSMetricName",
     "MRMetricName",

@@ -201,4 +201,3 @@ class NetworkHealthMetricName(StrEnum):
     
     # Bluetooth metrics
     NETWORK_BLUETOOTH_CLIENTS_TOTAL = "meraki_network_bluetooth_clients_total"
-

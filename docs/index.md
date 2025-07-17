@@ -112,17 +112,17 @@ graph LR
 
 <div class="grid cards" markdown>
 
-- :material-rocket-launch: **[Getting Started](getting-started/quickstart.md)**
-  Get up and running in minutes
+- :material-rocket-launch: **[Getting Started](getting-started.md)**
+  Installation, configuration, and first setup
+
+- :material-wrench: **[Deployment & Operations](deployment-operations.md)**
+  Production deployment, monitoring, and troubleshooting
+
+- :material-puzzle: **[Integration & Dashboards](integration-dashboards.md)**
+  Prometheus, Grafana, and OpenTelemetry setup
 
 - :material-book-open-variant: **[Metrics Reference](metrics/overview.md)**
-  Detailed documentation of all metrics
-
-- :material-wrench: **[Operations Guide](operations/deployment.md)**
-  Production deployment best practices
-
-- :material-puzzle: **[Integration Guide](integration/prometheus.md)**
-  Connect with Prometheus and Grafana
+  Complete documentation of all available metrics
 
 </div>
 

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from ..core.constants import UpdateTier
 from ..core.logging import get_logger
+from ..core.registry import get_registered_collectors
 
 if TYPE_CHECKING:
     from ..api.client import AsyncMerakiClient
@@ -41,65 +42,44 @@ class CollectorManager:
 
     def _initialize_collectors(self) -> None:
         """Initialize all enabled collectors."""
-        # Import here to avoid circular imports
-        from .alerts import AlertsCollector
-        from .config import ConfigCollector
-        from .device import DeviceCollector
-        from .mt_sensor import MTSensorCollector
-        from .network_health import NetworkHealthCollector
-        from .organization import OrganizationCollector
-
-        # MEDIUM tier collectors
-        # Always collect organization metrics
-        org_collector = OrganizationCollector(
-            api=self.client.api,
-            settings=self.settings,
+        # Import all collectors to trigger registration
+        # This ensures the @register_collector decorators are executed
+        from . import (  # noqa: F401
+            alerts,
+            config,
+            device,
+            mt_sensor,
+            network_health,
+            organization,
         )
-        self.collectors[UpdateTier.MEDIUM].append(org_collector)
-        logger.info("Initialized organization collector (MEDIUM tier)")
 
-        # Initialize device collector
-        device_collector = DeviceCollector(
-            api=self.client.api,
-            settings=self.settings,
-        )
-        self.collectors[UpdateTier.MEDIUM].append(device_collector)
-        logger.info("Initialized device collector (MEDIUM tier)")
+        # Get all registered collectors
+        registered_collectors = get_registered_collectors()
 
-        # MEDIUM tier collectors
-        # Network health collector
-        network_health_collector = NetworkHealthCollector(
-            api=self.client.api,
-            settings=self.settings,
-        )
-        self.collectors[UpdateTier.MEDIUM].append(network_health_collector)
-        logger.info("Initialized network health collector (MEDIUM tier)")
-
-        # Alerts collector
-        alerts_collector = AlertsCollector(
-            api=self.client.api,
-            settings=self.settings,
-        )
-        self.collectors[UpdateTier.MEDIUM].append(alerts_collector)
-        logger.info("Initialized alerts collector (MEDIUM tier)")
-
-        # FAST tier collectors
-        # MT Sensor collector
-        mt_sensor_collector = MTSensorCollector(
-            api=self.client.api,
-            settings=self.settings,
-        )
-        self.collectors[UpdateTier.FAST].append(mt_sensor_collector)
-        logger.info("Initialized MT sensor collector (FAST tier)")
-
-        # SLOW tier collectors
-        # Configuration collector for security settings
-        config_collector = ConfigCollector(
-            api=self.client.api,
-            settings=self.settings,
-        )
-        self.collectors[UpdateTier.SLOW].append(config_collector)
-        logger.info("Initialized configuration collector (SLOW tier)")
+        # Initialize collectors for each tier
+        for tier, collector_classes in registered_collectors.items():
+            for collector_class in collector_classes:
+                try:
+                    # Create instance of the collector
+                    collector_instance = collector_class(
+                        api=self.client.api,
+                        settings=self.settings,
+                    )
+                    self.collectors[tier].append(collector_instance)
+                    logger.info(
+                        "Initialized collector",
+                        collector=collector_class.__name__,
+                        tier=tier.value,
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Failed to initialize collector",
+                        collector=collector_class.__name__,
+                        tier=tier.value,
+                        error=str(e),
+                        error_type=type(e).__name__,
+                    )
+                    # Continue with other collectors even if one fails to initialize
 
     async def collect_initial(self) -> None:
         """Run initial collection from all tiers sequentially to avoid API overload."""

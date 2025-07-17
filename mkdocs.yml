@@ -58,22 +58,12 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started:
-    - Installation: getting-started/installation.md
-    - Configuration: getting-started/configuration.md
-    - Quick Start: getting-started/quickstart.md
+  - Getting Started: getting-started.md
+  - Deployment & Operations: deployment-operations.md
+  - Integration & Dashboards: integration-dashboards.md
   - Metrics Reference:
     - Overview: metrics/overview.md
     - Complete Reference: metrics/metrics.md
-  - Operations:
-    - Deployment: operations/deployment.md
-    - Monitoring: operations/monitoring.md
-    - Troubleshooting: operations/troubleshooting.md
-    - Performance Tuning: operations/performance.md
-  - Integration:
-    - Prometheus: integration/prometheus.md
-    - Grafana: integration/grafana.md
-    - OpenTelemetry: integration/opentelemetry.md
 
 extra:
   social:

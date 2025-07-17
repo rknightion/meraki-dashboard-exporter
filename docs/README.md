@@ -22,10 +22,10 @@ The documentation will be available at http://localhost:8000
 ## Structure
 
 - `index.md` - Home page
-- `getting-started/` - Installation and setup guides
-- `metrics/` - Detailed metric documentation
-- `operations/` - Deployment and operational guides
-- `integration/` - Integration with Prometheus, Grafana, and OpenTelemetry
+- `getting-started.md` - Installation, configuration, and setup guide
+- `deployment-operations.md` - Production deployment, monitoring, and troubleshooting
+- `integration-dashboards.md` - Prometheus, Grafana, and OpenTelemetry integration
+- `metrics/` - Complete metrics reference documentation
 
 ## Deployment
 

@@ -49,4 +49,3 @@ class UpdateTier(StrEnum):
     FAST = "fast"  # Sensor data, real-time metrics (60s)
     MEDIUM = "medium"  # Device metrics, org metrics, network health (300s)
     SLOW = "slow"  # Configuration data, security settings (900s)
-
