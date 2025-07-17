@@ -1348,6 +1348,10 @@ class MRCollector(BaseDeviceCollector):
         For packet loss metrics, 0 is a valid value. For total packet counters,
         we retain the last known value if the API returns None or 0.
 
+        This caching strategy is necessary because the Meraki API sometimes returns
+        0 or null for total packet counters when there's no recent activity, but
+        Prometheus rate() calculations need monotonically increasing counters.
+
         Parameters
         ----------
         metric_name : str
@@ -1356,6 +1360,28 @@ class MRCollector(BaseDeviceCollector):
             Labels to apply to the metric.
         value : float | None
             Value to set. May be None if API returned null.
+
+        Examples
+        --------
+        >>> # Total packets - will use cache if API returns 0
+        >>> collector._set_packet_metric_value(
+        ...     "_mr_packets_total",
+        ...     {"serial": "Q2KD-XXXX", "name": "Office AP"},
+        ...     0  # Will use cached value instead
+        ... )
+        
+        >>> # Packet loss percentage - 0 is valid
+        >>> collector._set_packet_metric_value(
+        ...     "_mr_packet_loss_percent",
+        ...     {"serial": "Q2KD-XXXX", "name": "Office AP"},
+        ...     0  # Will set to 0 (no caching)
+        ... )
+
+        Notes
+        -----
+        The cache is maintained for the lifetime of the collector instance.
+        Cache keys include all label values to ensure uniqueness per device/network.
+        Only metrics with "total" in the name (excluding "percent") use caching.
 
         """
         # Create a cache key from metric name and sorted labels

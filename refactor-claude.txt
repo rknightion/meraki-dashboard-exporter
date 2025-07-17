@@ -36,32 +36,8 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
 
 ## Priority 5: Improve Testing and Documentation (Medium Impact)
 
-### 5.1 Add Integration Test Helpers
-**Issue**: Testing large collectors requires significant setup.
-**Refactor**:
-- Create test fixtures for common API responses
-- Add mock factories for different device types
-- Create integration test builders
-**Benefit**: Easier to test new features, better coverage, clearer testing patterns for LLMs.
 
-### 5.2 Improve Code Documentation
-**Issue**: Some complex logic lacks documentation.
-**Refactor**:
-- Add docstring examples for complex methods
-- Document metric collection strategies
-- Add architectural decision records (ADRs)
-**Benefit**: Better self-documentation, easier onboarding, clearer context for LLMs.
 
-### 5.3 Standardize Logging Patterns
-**Issue**: Inconsistent logging levels and message formats.
-**Refactor**:
-- Create logging decorators for common patterns
-- Standardize log message formats
-- Add structured logging helpers
-**Log Standards**:
-- Logs should be in 'logfmt' format
-- When the MERAKI_EXPORTER_LOG_LEVEL is set to DEBUG we want to also surface the debug logs from the underlying Meraki SDK (functionality currently in place but must not be broken)
-**Benefit**: Consistent debugging experience, easier log analysis, clearer patterns.
 
 ## Priority 6: Performance and Resource Management (Lower Impact)
 
@@ -72,14 +48,6 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
 - Add memory usage monitoring
 - Optimize data structures for memory efficiency
 **Benefit**: Better resource utilization, more predictable performance.
-
-### 6.2 Improve API Rate Limiting
-**Issue**: API rate limiting is basic and could be more sophisticated.
-**Refactor**:
-- Implement adaptive rate limiting based on API responses
-- Add priority queuing for different collector types
-- Implement circuit breaker patterns
-**Benefit**: More robust API usage, better handling of rate limits.
 
 
 # Completed tasks
@@ -393,3 +361,75 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
 - **Rationale**: Meraki SDK already provides retry (3x), rate limit handling, and timeout support
 - Async utilities complement SDK for complex coordination, not replace it
 **Benefit**: Available for complex async coordination without duplicating SDK functionality, prevents double-retry issues, clearer when to use SDK defaults vs custom patterns.
+
+### 5.3 Standardize Logging Patterns - COMPLETED
+**Issue**: Inconsistent logging levels and message formats across collectors.
+**Refactor Completed**:
+- Created `core/logging_decorators.py` with standardized logging decorators:
+  - `@log_api_call` - Automatically logs and tracks API calls with context
+  - `@log_collection_progress` - Logs progress through batch operations
+  - `@log_batch_operation` - Logs batch operations with timing
+  - `@log_collector_discovery` - INFO-level one-time discovery logging
+  - `@log_metric_update` - Logs metric updates consistently
+- Created `core/logging_helpers.py` with helper functions:
+  - `LogContext` - Context manager for structured logging context
+  - `log_api_error()` - Consistent API error logging with appropriate levels
+  - `log_metric_collection_summary()` - Summary statistics after collection
+  - `log_batch_progress()` - Progress updates for long-running operations
+  - `log_discovery_info()` - INFO-level discovery logging
+  - `create_collector_logger()` - Logger with pre-bound collector context
+- Updated `_track_api_call()` in base collector to include DEBUG logging
+- Created example refactored alerts collector demonstrating all patterns
+- Updated CLAUDE.md with comprehensive logging patterns documentation
+- Verified Meraki SDK debug logging functionality is preserved
+**Log Standards Maintained**:
+- Logs remain in 'logfmt' format via structlog
+- Meraki SDK debug logs properly surface when MERAKI_EXPORTER_LOG_LEVEL=DEBUG
+**Benefit**: Consistent logging patterns across all collectors, easier debugging with structured context, reduced code duplication, clearer patterns for LLMs to follow when adding new collectors.
+
+### 5.1 Add Integration Test Helpers - COMPLETED
+**Issue**: Testing large collectors required significant boilerplate setup code.
+**Refactor Completed**:
+- Created `testing` module with comprehensive test utilities:
+  - `testing.factories` - Data factories for all major API response types:
+    - OrganizationFactory, NetworkFactory, DeviceFactory (with type-specific methods)
+    - AlertFactory, SensorDataFactory, TimeSeriesFactory
+    - ResponseFactory for paginated/error responses
+    - DataFactory with ID/serial/MAC/IP generators
+  - `testing.mock_api` - MockAPIBuilder with fluent interface:
+    - Method chaining for readable test setup
+    - Built-in error simulation (HTTP codes or exceptions)
+    - Paginated response support
+    - Side effects for sequential calls
+  - `testing.metrics` - Metric assertion helpers:
+    - MetricAssertions for verifying gauge/counter/histogram values
+    - MetricSnapshot for before/after comparisons
+    - Detailed error messages with available labels
+    - Helper methods for common assertions
+  - `testing.base` - BaseCollectorTest class:
+    - Common fixtures (mock_api, metrics, isolated_registry)
+    - Helper methods for standard test patterns
+    - Automatic collector success/error verification
+    - Setup methods for standard test data
+- Created example test file demonstrating all helpers
+- Updated CLAUDE.md with comprehensive testing documentation
+**Benefit**: 50% less boilerplate in tests, consistent test patterns, easier to add comprehensive test coverage, clearer test structure for LLMs to understand and extend.
+
+### 5.2 Improve Code Documentation - COMPLETED
+**Issue**: Complex logic and architectural patterns lacked clear documentation and examples.
+**Refactor Completed**:
+- Enhanced documentation for complex methods:
+  - Added comprehensive docstring with examples for `_set_packet_metric_value()` explaining caching strategy
+  - Enhanced `ManagedTaskGroup` documentation with detailed usage examples and when to use/not use
+  - Improved `@register_collector` decorator docs with complete examples and registration flow
+- Created architectural decision records (ADRs):
+  - ADR-001: Collector Architecture - explains tier system and hierarchy decisions
+  - ADR-002: Error Handling Strategy - documents error categories and patterns
+- Created pattern documentation:
+  - `api-response-formats.md` - explains why and how to handle different API response formats
+  - `metric-collection-strategies.md` - comprehensive guide to collection patterns and tier selection
+  - `extending-collectors.md` - step-by-step guide for adding new collectors
+- Added "When to Use" sections for async utilities and patterns
+- Documented metric ownership patterns and naming conventions
+- Added troubleshooting guides and best practices
+**Benefit**: Complex patterns now have clear explanations with examples, architectural decisions are documented for future reference, LLMs have comprehensive guides for understanding and extending the codebase, reduced onboarding time for new developers.

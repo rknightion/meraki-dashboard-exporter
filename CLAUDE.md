@@ -207,6 +207,110 @@ Sub-collectors still require manual registration:
 - After making changes, restart the exporter process to load new code
 - Check metrics at http://localhost:9099/metrics
 
+## Integration Test Helpers
+
+The exporter provides comprehensive test helpers in the `testing` module to simplify writing tests:
+
+### Test Factories (`testing.factories`)
+
+#### Data Factories
+- `OrganizationFactory` - Create organization test data
+- `NetworkFactory` - Create network test data  
+- `DeviceFactory` - Create device test data (with type-specific methods)
+- `AlertFactory` - Create alert test data
+- `SensorDataFactory` - Create sensor reading data
+- `TimeSeriesFactory` - Create time series data
+- `ResponseFactory` - Create API response formats (paginated, errors)
+
+```python
+from meraki_dashboard_exporter.testing.factories import (
+    OrganizationFactory, NetworkFactory, DeviceFactory
+)
+
+# Create test data
+org = OrganizationFactory.create(org_id="org_123")
+networks = NetworkFactory.create_many(3, org_id=org["id"])
+devices = DeviceFactory.create_mixed(6, network_id=networks[0]["id"])
+```
+
+### Mock API Builder (`testing.mock_api`)
+
+Fluent interface for building mock API responses:
+
+```python
+from meraki_dashboard_exporter.testing.mock_api import MockAPIBuilder
+
+api = (MockAPIBuilder()
+    .with_organizations([org1, org2])
+    .with_networks(networks, org_id="org_123")
+    .with_devices(devices)
+    .with_error("getOrganizationAlerts", 404)
+    .with_custom_response("getDeviceClients", clients)
+    .build())
+```
+
+### Metric Assertions (`testing.metrics`)
+
+Helper class for asserting metric values:
+
+```python
+from meraki_dashboard_exporter.testing.metrics import MetricAssertions
+
+metrics = MetricAssertions(registry)
+metrics.assert_gauge_value("meraki_device_up", 1, serial="Q2KD-XXXX")
+metrics.assert_counter_incremented("meraki_api_calls_total", endpoint="getDevices")
+metrics.assert_metric_not_set("meraki_device_cpu_percent")
+```
+
+#### Metric Snapshots
+Compare metrics before and after operations:
+
+```python
+from meraki_dashboard_exporter.testing.metrics import MetricSnapshot
+
+before = MetricSnapshot(registry)
+# ... do work ...
+after = MetricSnapshot(registry)
+diff = after.diff(before)
+assert diff.counter_delta("api_calls_total", endpoint="getDevices") == 1
+```
+
+### Base Test Class (`testing.base`)
+
+Base class with common fixtures and helpers:
+
+```python
+from meraki_dashboard_exporter.testing.base import BaseCollectorTest
+
+class TestMyCollector(BaseCollectorTest):
+    collector_class = MyCollector
+    update_tier = UpdateTier.MEDIUM
+    
+    async def test_collection(self, collector, mock_api_builder, metrics):
+        # mock_api_builder - MockAPIBuilder instance
+        # metrics - MetricAssertions instance
+        # collector - Your collector with isolated registry
+        
+        # Set up test data
+        test_data = self.setup_standard_test_data(mock_api_builder)
+        
+        # Run collector
+        await self.run_collector(collector)
+        
+        # Assert success
+        self.assert_collector_success(collector, metrics)
+        self.assert_api_call_tracked(collector, metrics, "getOrganizations")
+```
+
+### Best Practices for Testing
+
+1. **Use factories for test data** - Consistent, realistic test data
+2. **Use MockAPIBuilder** - Cleaner than manual mocking
+3. **Inherit from BaseCollectorTest** - Automatic fixture setup
+4. **Use MetricAssertions** - Clear metric verification
+5. **Test error scenarios** - Use `.with_error()` to test failure handling
+6. **Use snapshots for deltas** - Track metric changes during operations
+
 ## Deprecated/Removed Metrics
 
 The following metrics have been removed or replaced:
@@ -254,6 +358,78 @@ The exporter follows a structured logging approach to balance operational visibi
 - All metric updates log at DEBUG level when successfully setting values
 - Discovery information is logged once at startup via `DiscoveryService`
 - Subsequent collections use DEBUG level for details to avoid log spam
+
+## Standardized Logging Patterns
+
+The exporter provides decorators and helpers in `core/logging_decorators.py` and `core/logging_helpers.py` for consistent logging:
+
+### Logging Decorators
+
+#### @log_api_call
+Automatically logs API calls with context and tracks them:
+```python
+from ..core.logging_decorators import log_api_call
+
+@log_api_call("getOrganizationDevices")
+async def _fetch_devices(self, org_id: str) -> list[Device]:
+    return await self.api.organizations.getOrganizationDevices(org_id)
+```
+
+#### @log_collection_progress
+Logs progress through batch operations:
+```python
+from ..core.logging_decorators import log_collection_progress
+
+@log_collection_progress("devices")
+async def _process_devices(self, devices: list, current: int, total: int):
+    # Process devices...
+```
+
+#### @log_batch_operation
+Logs batch operations with timing:
+```python
+from ..core.logging_decorators import log_batch_operation
+
+@log_batch_operation("process alerts", batch_size=50)
+async def _process_alerts_batch(self, org_id: str, alerts: list):
+    # Process batch...
+```
+
+#### @log_collector_discovery
+Logs one-time discovery at INFO level:
+```python
+from ..core.logging_decorators import log_collector_discovery
+
+@log_collector_discovery("network")
+async def _discover_networks(self) -> list[Network]:
+    # Discover networks...
+```
+
+### Logging Helpers
+
+#### LogContext
+Context manager for structured logging context:
+```python
+from ..core.logging_helpers import LogContext
+
+with LogContext(org_id="123", network_id="456"):
+    logger.info("Processing network")
+    # All logs within this context include org_id and network_id
+```
+
+#### Helper Functions
+- `log_api_error()` - Consistent API error logging with appropriate levels
+- `log_metric_collection_summary()` - Summary statistics after collection
+- `log_batch_progress()` - Progress updates for long-running operations
+- `log_discovery_info()` - INFO-level discovery logging
+- `create_collector_logger()` - Logger with pre-bound collector context
+
+### Best Practices
+1. Use `@log_api_call` for all API operations - it automatically tracks and logs
+2. Use `LogContext` to add structured context that applies to multiple log entries
+3. Use `@log_collection_progress` for operations that process many items
+4. Keep DEBUG logs detailed but structured for easy filtering
+5. Use INFO logs sparingly for important state changes only
 
 ## Error Handling Patterns
 

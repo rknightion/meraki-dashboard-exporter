@@ -279,6 +279,14 @@ class MetricCollector(ABC):
             The API endpoint being called.
 
         """
+        # Log the API call at DEBUG level
+        logger.debug(
+            "API call tracked",
+            collector=self.__class__.__name__,
+            tier=self.update_tier.value,
+            endpoint=endpoint,
+        )
+        
         # Always try to track (metrics should be initialized)
         if MetricCollector._collector_api_calls is not None:
             MetricCollector._collector_api_calls.labels(
