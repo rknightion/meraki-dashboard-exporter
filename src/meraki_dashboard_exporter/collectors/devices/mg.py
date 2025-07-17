@@ -30,8 +30,3 @@ class MGCollector(BaseDeviceCollector):
 
         # MG currently doesn't have specific metrics beyond common ones
         # Future MG-specific metrics (cellular signal strength, data usage, etc.) can be added here
-        logger.debug(
-            "Collected MG device metrics",
-            serial=device["serial"],
-            name=device.get("name", device["serial"]),
-        )

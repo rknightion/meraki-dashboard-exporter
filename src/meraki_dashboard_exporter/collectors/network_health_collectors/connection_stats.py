@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 from ...core.domain_models import ConnectionStats, NetworkConnectionStats
 from ...core.logging import get_logger
+from ...core.logging_decorators import log_api_call
+from ...core.logging_helpers import LogContext
 from .base import BaseNetworkHealthCollector
 
 if TYPE_CHECKING:
@@ -17,6 +19,28 @@ logger = get_logger(__name__)
 
 class ConnectionStatsCollector(BaseNetworkHealthCollector):
     """Collector for network-wide wireless connection statistics."""
+
+    @log_api_call("getNetworkWirelessConnectionStats")
+    async def _fetch_connection_stats(self, network_id: str) -> dict[str, Any]:
+        """Fetch network wireless connection statistics.
+
+        Parameters
+        ----------
+        network_id : str
+            Network ID.
+
+        Returns
+        -------
+        dict[str, Any]
+            Connection statistics data.
+
+        """
+        self._track_api_call("getNetworkWirelessConnectionStats")
+        return await asyncio.to_thread(
+            self.api.wireless.getNetworkWirelessConnectionStats,
+            network_id,
+            timespan=1800,  # 30 minutes
+        )
 
     async def collect(self, network: dict[str, Any]) -> None:
         """Collect network-wide wireless connection statistics.
@@ -31,21 +55,9 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
         network_name = network.get("name", network_id)
 
         try:
-            logger.debug(
-                "Fetching network connection stats",
-                network_id=network_id,
-                network_name=network_name,
-            )
-
-            # Track API call
-            self._track_api_call("getNetworkWirelessConnectionStats")
-
-            # Use 30 minute (1800 second) timespan as minimum
-            connection_stats = await asyncio.to_thread(
-                self.api.wireless.getNetworkWirelessConnectionStats,
-                network_id,
-                timespan=1800,  # 30 minutes
-            )
+            with LogContext(network_id=network_id, network_name=network_name):
+                # Use 30 minute (1800 second) timespan as minimum
+                connection_stats = await self._fetch_connection_stats(network_id)
 
             # Parse response using domain model
             if not connection_stats:
@@ -71,11 +83,6 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
                     value,
                 )
 
-            logger.debug(
-                "Successfully collected network connection stats",
-                network_id=network_id,
-                stats=network_stats.connectionStats.model_dump(),
-            )
 
         except Exception as e:
             # Log at debug level if it's just not available (400/404 errors)
