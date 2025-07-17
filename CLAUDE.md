@@ -91,10 +91,73 @@ The `getOrganizationConfigurationChanges` API is used to track configuration cha
 - Runs in the SLOW tier (15 minutes) as configuration changes are infrequent
 - Useful for compliance monitoring and change management
 
+## Collector Architecture
+
+The exporter uses a modular collector architecture where large collectors are split into focused sub-collectors:
+
+### Device Collectors (`src/meraki_dashboard_exporter/collectors/`)
+- **Main**: `device.py` - Coordinates all device-specific collectors (730 lines, down from 1,968)
+- **Sub-collectors** (`devices/`):
+  - `base.py` - BaseDeviceCollector with common functionality (includes memory collection for all devices)
+  - `ms.py` - MSCollector for Meraki switches (owns all MS-specific metrics via `_initialize_metrics()`)
+  - `mr.py` - MRCollector for Meraki access points (owns all MR-specific metrics via `_initialize_metrics()`, handles per-device and org-wide wireless metrics)
+  - `mx.py` - MXCollector for Meraki security appliances
+  - `mg.py` - MGCollector for Meraki cellular gateways
+  - `mv.py` - MVCollector for Meraki security cameras
+  - `mt.py` - MTCollector for Meraki sensors (also used by mt_sensor.py for FAST tier environmental metrics)
+
+**Important Metric Ownership Pattern**:
+- Device-specific metrics are owned by their respective collectors
+- MR metrics (like `meraki_mr_clients_connected`) are defined in `MRCollector._initialize_metrics()`
+- MS metrics (like `meraki_ms_port_status`) are defined in `MSCollector._initialize_metrics()`
+- Common metrics (like `meraki_device_up`) remain in `DeviceCollector._initialize_metrics()`
+- When adding new device types with specific metrics, create an `_initialize_metrics()` method and call it from `DeviceCollector.__init__()`
+
+### Network Health Collectors (`src/meraki_dashboard_exporter/collectors/`)
+- **Main**: `network_health.py` - Coordinates all network health collectors
+- **Sub-collectors** (`network_health_collectors/`):
+  - `base.py` - BaseNetworkHealthCollector with common functionality
+  - `rf_health.py` - RFHealthCollector for channel utilization metrics
+  - `connection_stats.py` - ConnectionStatsCollector for wireless connection statistics
+  - `data_rates.py` - DataRatesCollector for network throughput metrics
+  - `bluetooth.py` - BluetoothCollector for Bluetooth client detection
+
+### Organization Collectors (`src/meraki_dashboard_exporter/collectors/`)
+- **Main**: `organization.py` - Coordinates all organization-level collectors
+- **Sub-collectors** (`organization_collectors/`):
+  - `base.py` - BaseOrganizationCollector with common functionality
+  - `api_usage.py` - APIUsageCollector for API request metrics
+  - `license.py` - LicenseCollector for licensing metrics (supports both per-device and co-termination models)
+  - `client_overview.py` - ClientOverviewCollector for client count and usage metrics
+
+### Other Collectors
+- `mt_sensor.py` - Fast-tier MT sensor metrics collector (temperature, humidity, etc.)
+- `alerts.py` - Assurance alerts collector
+- `config.py` - Configuration tracking metrics
+- `manager.py` - Manages all collectors and their update schedules
+
+### Adding New Collectors
+1. For device-specific metrics: Create a new file in `devices/` inheriting from BaseDeviceCollector
+2. For network health metrics: Create a new file in `network_health_collectors/` inheriting from BaseNetworkHealthCollector
+3. For organization metrics: Create a new file in `organization_collectors/` inheriting from BaseOrganizationCollector
+4. Register the collector in the parent coordinator's `__init__` method
+5. Add appropriate dispatching logic in the parent collector
+
+### Enhanced Collector Capabilities
+- **MRCollector**: Handles both per-device metrics (via `collect()`) and organization-wide wireless metrics:
+  - `collect_wireless_clients()` - Client counts across all APs
+  - `collect_ethernet_status()` - Power and port status for all APs
+  - `collect_packet_loss()` - Packet loss metrics per device and network-wide
+  - `collect_cpu_load()` - CPU utilization for all APs
+  - `collect_ssid_status()` - SSID and radio configuration status
+- **BaseDeviceCollector**: Now includes `collect_memory_metrics()` for all device types
+- **MTCollector**: Handles both device metrics and sensor readings via `collect_sensor_metrics()`
+
 ## Testing and Validation
 
 - Run linting: `uv run ruff check --fix .`
 - Run type checking: `uv run mypy .`
+- Generate metric documentation: `uv run python src/meraki_dashboard_exporter/tools/generate_metrics_docs.py`
 - After making changes, restart the exporter process to load new code
 - Check metrics at http://localhost:9099/metrics
 

@@ -1,0 +1,301 @@
+"""License collector for organization licensing metrics."""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
+from ...core.logging import get_logger
+from .base import BaseOrganizationCollector
+
+if TYPE_CHECKING:
+    pass
+
+logger = get_logger(__name__)
+
+
+class LicenseCollector(BaseOrganizationCollector):
+    """Collector for organization license metrics."""
+
+    async def collect(self, org_id: str, org_name: str) -> None:
+        """Collect license metrics.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        try:
+            logger.debug("Fetching licensing overview", org_id=org_id)
+            self._track_api_call("getOrganizationLicensesOverview")
+            overview = await asyncio.to_thread(
+                self.api.organizations.getOrganizationLicensesOverview,
+                org_id,
+            )
+
+            # Check if this is co-termination or per-device licensing
+            if overview.get("licensedDeviceCounts"):
+                logger.debug(
+                    "Organization uses co-termination licensing model",
+                    org_id=org_id,
+                    org_name=org_name,
+                )
+                # Process co-termination licensing
+                self._process_licensing_overview(org_id, org_name, overview)
+            else:
+                # Per-device licensing
+                logger.debug(
+                    "Organization uses per-device licensing model",
+                    org_id=org_id,
+                    org_name=org_name,
+                )
+                # Fetch individual licenses
+                self._track_api_call("getOrganizationLicenses")
+                licenses = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationLicenses,
+                    org_id,
+                    total_pages="all",
+                )
+
+                if licenses:
+                    self._process_per_device_licenses(org_id, org_name, licenses)
+                else:
+                    logger.warning("No license data available", org_id=org_id)
+
+        except Exception as e:
+            # Check if this is a 404 error (no licensing info)
+            if "404" in str(e):
+                logger.debug(
+                    "No licensing information available for organization",
+                    org_id=org_id,
+                    org_name=org_name,
+                )
+            else:
+                logger.exception(
+                    "Failed to collect license metrics",
+                    org_id=org_id,
+                    org_name=org_name,
+                )
+
+    def _process_per_device_licenses(
+        self, org_id: str, org_name: str, licenses: list[dict[str, Any]]
+    ) -> None:
+        """Process per-device licenses.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        licenses : list[dict[str, Any]]
+            List of licenses.
+
+        """
+        # Count licenses by type and status
+        license_counts: dict[tuple[str, str], int] = {}
+        expiring_counts: dict[str, int] = {}
+
+        now = datetime.now(UTC)
+
+        for lic in licenses:
+            license_type = lic.get("licenseType", "Unknown")
+            status = lic.get("state", "Unknown")
+
+            # Count by type and status
+            key = (license_type, status)
+            license_counts[key] = license_counts.get(key, 0) + 1
+
+            # Check if expiring within 30 days
+            expiration_date = lic.get("expirationDate")
+            if expiration_date and status == "active":
+                exp_dt = self._parse_meraki_date(expiration_date)
+                if exp_dt:
+                    days_until_expiry = (exp_dt - now).days
+                    if days_until_expiry <= 30:
+                        expiring_counts[license_type] = expiring_counts.get(license_type, 0) + 1
+
+        # Set total license metrics
+        for (license_type, status), count in license_counts.items():
+            self._set_metric_value(
+                "_licenses_total",
+                {
+                    "org_id": org_id,
+                    "org_name": org_name,
+                    "license_type": license_type,
+                    "status": status,
+                },
+                count,
+            )
+            logger.debug(
+                "Set license count",
+                org_id=org_id,
+                license_type=license_type,
+                status=status,
+                count=count,
+            )
+
+        # Set expiring license metrics
+        # Set counts for all license types (0 if not expiring)
+        all_types = {lt for lt, _ in license_counts.keys()}
+        for license_type in all_types:
+            count = expiring_counts.get(license_type, 0)
+            self._set_metric_value(
+                "_licenses_expiring",
+                {
+                    "org_id": org_id,
+                    "org_name": org_name,
+                    "license_type": license_type,
+                },
+                count,
+            )
+            logger.debug(
+                "Set expiring license count",
+                org_id=org_id,
+                license_type=license_type,
+                count=count,
+            )
+
+    def _parse_meraki_date(self, date_str: str) -> datetime | None:
+        """Parse a date string from Meraki API.
+
+        Parameters
+        ----------
+        date_str : str
+            Date string in various Meraki formats.
+
+        Returns
+        -------
+        datetime | None
+            Parsed datetime or None if parsing failed.
+
+        """
+        if not date_str:
+            return None
+
+        try:
+            # First try ISO format (e.g., "2027-03-13T00:00:00Z")
+            if "T" in date_str or date_str.endswith("Z"):
+                try:
+                    return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                except ValueError:
+                    # Not a valid ISO format, continue to other formats
+                    pass
+
+            # Try Meraki's human-readable format (e.g., "Mar 13, 2027 UTC")
+            # Remove timezone suffix and parse
+            date_str_clean = date_str.replace(" UTC", "").replace(" GMT", "").strip()
+            # Handle both "Mar 13, 2027" and "March 13, 2027" formats
+            for fmt in ["%b %d, %Y", "%B %d, %Y"]:
+                try:
+                    return datetime.strptime(date_str_clean, fmt).replace(tzinfo=UTC)
+                except ValueError:
+                    continue
+
+            # If we get here, we couldn't parse the date
+            raise ValueError(f"Unknown date format: {date_str}")
+
+        except Exception as e:
+            logger.warning(
+                "Could not parse date",
+                date_str=date_str,
+                error=str(e),
+            )
+            return None
+
+    def _process_licensing_overview(
+        self, org_id: str, org_name: str, overview: dict[str, Any]
+    ) -> None:
+        """Process licensing overview for co-termination licensing model.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        overview : dict[str, Any]
+            Licensing overview data.
+
+        """
+        # Extract data from overview
+        status = overview.get("status", "Unknown")
+        expiration_date = overview.get("expirationDate")
+        licensed_device_counts = overview.get("licensedDeviceCounts", {})
+
+        # Set total licenses metric for each device type in co-termination model
+        if licensed_device_counts:
+            # Process each device type in the licensed device counts
+            for device_type, count in licensed_device_counts.items():
+                self._set_metric_value(
+                    "_licenses_total",
+                    {
+                        "org_id": org_id,
+                        "org_name": org_name,
+                        "license_type": device_type,
+                        "status": status,
+                    },
+                    count,
+                )
+                logger.debug(
+                    "Set license count",
+                    org_id=org_id,
+                    device_type=device_type,
+                    count=count,
+                    status=status,
+                )
+        else:
+            logger.warning(
+                "No licensed device counts in overview",
+                org_id=org_id,
+                org_name=org_name,
+            )
+
+        # Check if expiring soon
+        if expiration_date and status == "OK":
+            now = datetime.now(UTC)
+            exp_dt = self._parse_meraki_date(expiration_date)
+            if exp_dt:
+                days_until_expiry = (exp_dt - now).days
+
+                # For co-termination, all licenses expire together
+                # Set expiring metric for each device type if within 30 days
+                if licensed_device_counts:
+                    for device_type, count in licensed_device_counts.items():
+                        if days_until_expiry <= 30:
+                            self._set_metric_value(
+                                "_licenses_expiring",
+                                {
+                                    "org_id": org_id,
+                                    "org_name": org_name,
+                                    "license_type": device_type,
+                                },
+                                count,
+                            )
+                        else:
+                            self._set_metric_value(
+                                "_licenses_expiring",
+                                {
+                                    "org_id": org_id,
+                                    "org_name": org_name,
+                                    "license_type": device_type,
+                                },
+                                0,
+                            )
+                        logger.debug(
+                            "Set expiring license count",
+                            org_id=org_id,
+                            device_type=device_type,
+                            count=count if days_until_expiry <= 30 else 0,
+                            days_until_expiry=days_until_expiry,
+                        )
+            else:
+                logger.warning(
+                    "Could not parse expiration date",
+                    org_id=org_id,
+                    expiration_date=expiration_date,
+                )

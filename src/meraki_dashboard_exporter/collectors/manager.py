@@ -47,7 +47,7 @@ class CollectorManager:
         from .device import DeviceCollector
         from .network_health import NetworkHealthCollector
         from .organization import OrganizationCollector
-        from .sensor import SensorCollector
+        from .mt_sensor import MTSensorCollector
 
         # MEDIUM tier collectors
         # Always collect organization metrics
@@ -84,13 +84,13 @@ class CollectorManager:
         logger.info("Initialized alerts collector (MEDIUM tier)")
 
         # FAST tier collectors
-        # Sensor collector
-        sensor_collector = SensorCollector(
+        # MT Sensor collector
+        mt_sensor_collector = MTSensorCollector(
             api=self.client.api,
             settings=self.settings,
         )
-        self.collectors[UpdateTier.FAST].append(sensor_collector)
-        logger.info("Initialized sensor collector (FAST tier)")
+        self.collectors[UpdateTier.FAST].append(mt_sensor_collector)
+        logger.info("Initialized MT sensor collector (FAST tier)")
 
         # SLOW tier collectors
         # Configuration collector for security settings

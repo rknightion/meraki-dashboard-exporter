@@ -1,30 +1,31 @@
+
 # Meraki Dashboard Exporter - Refactoring Analysis
 
 This document provides a comprehensive analysis of refactoring opportunities for the Meraki Dashboard Exporter project to improve LLM maintainability and align with modern Python best practices.
+## Aims of refactor
+
+Easier for LLM consumption
+1. **Smaller, focused files**: Easier for LLMs to understand and modify specific functionality
+2. **Clear patterns**: Consistent code patterns make it easier for LLMs to replicate and extend
+3. **Strong typing**: Type annotations provide clear contracts and prevent errors
+4. **Self-documenting code**: Domain models and clear naming reduce need for external context
+5. **Modular architecture**: Easy to add new features without understanding entire codebase
+6. **Consistent error handling**: Predictable behavior makes debugging easier
+7. **Clear separation of concerns**: Each module has a single responsibility
+
+After each sub task is completed YOU MUST update this document to move the task from Pending or In progress to completed tasks at the bottom of this document. This is so we can split the refactor across multiple sessions.
+
+When refactoring ensure any failing tests are updated to support the post refactored code.
+Ensure claude.md file is updated where necessary for better LLM concept (only update it if it is useful or in line with claude.md best practices)
+
+# In Progress Tasks
+
+
+# Pending tasks
 
 ## Priority 1: Break Down Monolithic Files (High Impact)
 
-### 1.1 Split device.py (1,894 lines)
-**Issue**: The device.py collector is extremely large and handles multiple device types in a single file.
-**Refactor**:
-- Split into separate collectors per device type: DeviceCollector, MSDeviceCollector, MRDeviceCollector, etc.
-- Extract common device functionality into a BaseDeviceCollector
-- Move device-specific metric initialization to their respective classes
-**Benefit**: Easier for LLMs to understand, maintain, and modify specific device types without context confusion. Reduces cognitive load when working on specific device types.
 
-### 1.2 Split network_health.py (731 lines)
-**Issue**: Single file handles multiple network health aspects (RF health, connection stats, data rates, bluetooth clients).
-**Refactor**:
-- Create separate collectors: RFHealthCollector, ConnectionStatsCollector, DataRatesCollector, BluetoothCollector
-- Use a NetworkHealthManager to coordinate these collectors
-**Benefit**: Each collector focuses on a single responsibility, making it easier for LLMs to understand and modify specific network health aspects.
-
-### 1.3 Split organization.py (588 lines)
-**Issue**: Handles multiple organization-level concerns in one file.
-**Refactor**:
-- Split into OrganizationMetricsCollector, LicenseCollector, APIUsageCollector
-- Keep core organization logic separate from specific metric collection
-**Benefit**: Clearer separation of concerns, easier to modify specific organization metric types.
 
 ## Priority 2: Reduce Code Duplication (High Impact)
 
@@ -148,42 +149,82 @@ This document provides a comprehensive analysis of refactoring opportunities for
 - Implement circuit breaker patterns
 **Benefit**: More robust API usage, better handling of rate limits.
 
-## Implementation Strategy
 
-### Phase 1 (Immediate): File Splitting
-- Start with device.py splitting as it has the highest impact
-- Create base classes and interfaces first
-- Migrate existing tests to new structure
+# Completed tasks
 
-### Phase 2 (Short-term): Code Deduplication
-- Extract common patterns into utilities
-- Standardize error handling
-- Add comprehensive type annotations
+### Additional Refactoring: Metric Organization and Ownership - COMPLETED
+**Issue**: Metric initialization was scattered across files, with device-specific metrics defined in device.py rather than their respective sub-collectors.
+**Refactor Completed**:
+- Phase 1: Moved all 33 MR-specific metrics to MRCollector._initialize_metrics()
+- Phase 2: Moved all 8 MS-specific metrics to MSCollector._initialize_metrics()
+- Phase 3: Verified other collectors (MX, MG, MV) don't need changes as they have no device-specific metrics
+- Phase 4: Created generate_metrics_docs.py tool that:
+  - Uses AST parsing to find all metric definitions
+  - Resolves MetricName constants to actual values
+  - Generates comprehensive METRICS.md documentation
+  - Documents all 61 metrics with their types, labels, and descriptions
+- Reduced device.py from 782 to 730 lines
+- Added abstract collect() method to BaseDeviceCollector for type safety
+**Benefit**: Device-specific metrics are now owned by their respective collectors, making it much easier for LLMs to understand which metrics belong to which device type. The metric documentation generator provides comprehensive metric reference.
 
-### Phase 3 (Medium-term): Domain Modeling
-- Create Pydantic models for API responses
-- Improve configuration structure
-- Add auto-registration patterns
+### 1.1 Split device.py (1,894 lines) - COMPLETED
+**Issue**: The device.py collector was extremely large and handled multiple device types in a single file.
+**Refactor Completed**:
+- Enhanced BaseDeviceCollector with common functionality including memory metrics collection
+- Created MXCollector for MX security appliances
+- Created MGCollector for MG cellular gateways  
+- Created MVCollector for MV security cameras
+- Updated DeviceCollector to use a device type mapping dictionary for dynamic dispatch
+- Added generic _collect_device_with_timeout method that routes to appropriate collectors
+- Updated all imports and fixed type issues
+- All tests pass successfully
+**Benefit**: Device types are now modular, making it easier for LLMs to understand and modify specific device type logic without affecting others. The main DeviceCollector is now primarily a coordinator rather than containing all device-specific logic.
 
-### Phase 4 (Long-term): Performance and Testing
-- Optimize memory usage and API patterns
-- Improve testing infrastructure
-- Add comprehensive documentation
+### 1.2 Split network_health.py (731 lines) - COMPLETED
+**Issue**: Single file handled multiple network health aspects (RF health, connection stats, data rates, bluetooth clients).
+**Refactor Completed**:
+- Created BaseNetworkHealthCollector with common functionality
+- Created RFHealthCollector for channel utilization metrics
+- Created ConnectionStatsCollector for wireless connection statistics
+- Created DataRatesCollector for network throughput metrics
+- Created BluetoothCollector for Bluetooth client detection
+- Updated NetworkHealthCollector to coordinate sub-collectors
+- Renamed network_health directory to network_health_collectors to avoid module conflicts
+- All tests pass successfully (10 tests)
+**Benefit**: Each collector now focuses on a single responsibility, making it easier for LLMs to understand and modify specific network health aspects without affecting others.
 
-## Benefits for LLM Development
+### 1.3 Split organization.py (762 lines) - COMPLETED
+**Issue**: Handled multiple organization-level concerns in one file.
+**Refactor Completed**:
+- Created BaseOrganizationCollector with common functionality
+- Created APIUsageCollector for API request metrics
+- Created LicenseCollector for licensing metrics (supports both per-device and co-termination models)
+- Created ClientOverviewCollector for client count and usage metrics
+- Updated OrganizationCollector to coordinate sub-collectors
+- Removed helper methods that were moved to sub-collectors
+- Reduced file size from 762 to 396 lines (48% reduction)
+**Benefit**: Clearer separation of concerns, easier to modify specific organization metric types without understanding the entire organization collector.
 
-1. **Smaller, focused files**: Easier for LLMs to understand and modify specific functionality
-2. **Clear patterns**: Consistent code patterns make it easier for LLMs to replicate and extend
-3. **Strong typing**: Type annotations provide clear contracts and prevent errors
-4. **Self-documenting code**: Domain models and clear naming reduce need for external context
-5. **Modular architecture**: Easy to add new features without understanding entire codebase
-6. **Consistent error handling**: Predictable behavior makes debugging easier
-7. **Clear separation of concerns**: Each module has a single responsibility
+### Additional Refactoring: MT Sensor Collection - COMPLETED
+**Issue**: sensor.py was handling MT device sensor collection separately from the MT device collector, creating unnecessary separation.
+**Refactor Completed**:
+- Moved all sensor collection logic to MTCollector with a collect_sensor_metrics method
+- Created MTSensorCollector as a dedicated FAST tier collector that uses MTCollector internally
+- Removed sensor.py completely to avoid confusion
+- MTCollector now handles both device-level metrics (through DeviceCollector) and sensor-specific metrics
+- Updated manager.py to use MTSensorCollector directly
+**Benefit**: Single source of truth for MT device logic, clearer architecture, reduced code duplication.
 
-## Risk Mitigation
-
-- Maintain backward compatibility during refactoring
-- Comprehensive test coverage before making changes
-- Incremental refactoring with working intermediate states
-- Keep configuration API stable
-- Preserve existing metric names and labels for Grafana compatibility
+### Additional Refactoring: device.py Cleanup - COMPLETED
+**Issue**: device.py was still 1,968 lines after initial refactoring, containing many device-specific methods that belonged in sub-collectors.
+**Refactor Completed**:
+- Moved all MR-specific methods to MRCollector (822 lines removed):
+  - _collect_wireless_clients → MRCollector.collect_wireless_clients
+  - _collect_mr_ethernet_status → MRCollector.collect_ethernet_status
+  - _collect_mr_packet_loss → MRCollector.collect_packet_loss
+  - _collect_mr_cpu_load → MRCollector.collect_cpu_load
+  - _collect_mr_ssid_status → MRCollector.collect_ssid_status
+- Moved memory collection to BaseDeviceCollector.collect_memory_metrics (187 lines removed)
+- Enhanced MRCollector with packet value caching for retention logic
+- Reduced device.py from 1,968 to 984 lines (50% reduction)
+**Benefit**: device.py now properly serves as a coordinator, delegating device-specific logic to appropriate collectors while maintaining shared state and metric definitions.

@@ -3,9 +3,9 @@
 from .alerts import AlertsCollector
 from .config import ConfigCollector
 from .device import DeviceCollector
-from .network_health import NetworkHealthCollector
+from .network_health import NetworkHealthCollector  # noqa: F401
 from .organization import OrganizationCollector
-from .sensor import SensorCollector
+from .mt_sensor import MTSensorCollector
 
 __all__ = [
     "AlertsCollector",
@@ -13,5 +13,5 @@ __all__ = [
     "DeviceCollector",
     "NetworkHealthCollector",
     "OrganizationCollector",
-    "SensorCollector",
+    "MTSensorCollector",
 ]

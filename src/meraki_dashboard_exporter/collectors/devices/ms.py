@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.constants import MetricName
 from ...core.logging import get_logger
 from .base import BaseDeviceCollector
 
@@ -16,6 +17,59 @@ logger = get_logger(__name__)
 
 class MSCollector(BaseDeviceCollector):
     """Collector for Meraki MS (Switch) devices."""
+
+    def _initialize_metrics(self) -> None:
+        """Initialize MS-specific metrics."""
+        # Switch port metrics
+        self._switch_port_status = self.parent._create_gauge(
+            MetricName.MS_PORT_STATUS,
+            "Switch port status (1 = connected, 0 = disconnected)",
+            labelnames=["serial", "name", "port_id", "port_name"],
+        )
+
+        self._switch_port_traffic = self.parent._create_gauge(
+            MetricName.MS_PORT_TRAFFIC_BYTES,
+            "Switch port traffic in bytes",
+            labelnames=["serial", "name", "port_id", "port_name", "direction"],
+        )
+
+        self._switch_port_errors = self.parent._create_gauge(
+            MetricName.MS_PORT_ERRORS_TOTAL,
+            "Switch port error count",
+            labelnames=["serial", "name", "port_id", "port_name", "error_type"],
+        )
+
+        # Switch power metrics
+        self._switch_power = self.parent._create_gauge(
+            MetricName.MS_POWER_USAGE_WATTS,
+            "Switch power usage in watts",
+            labelnames=["serial", "name", "model"],
+        )
+
+        # POE metrics
+        self._switch_poe_port_power = self.parent._create_gauge(
+            MetricName.MS_POE_PORT_POWER_WATTS,
+            "Per-port POE power consumption in watt-hours (Wh)",
+            labelnames=["serial", "name", "port_id", "port_name"],
+        )
+
+        self._switch_poe_total_power = self.parent._create_gauge(
+            MetricName.MS_POE_TOTAL_POWER_WATTS,
+            "Total POE power consumption for switch in watt-hours (Wh)",
+            labelnames=["serial", "name", "model", "network_id"],
+        )
+
+        self._switch_poe_budget = self.parent._create_gauge(
+            MetricName.MS_POE_BUDGET_WATTS,
+            "Total POE power budget for switch in watts",
+            labelnames=["serial", "name", "model", "network_id"],
+        )
+
+        self._switch_poe_network_total = self.parent._create_gauge(
+            MetricName.MS_POE_NETWORK_TOTAL_WATTS,
+            "Total POE power consumption for all switches in network in watt-hours (Wh)",
+            labelnames=["network_id", "network_name"],
+        )
 
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect switch-specific metrics.
@@ -57,7 +111,7 @@ class MSCollector(BaseDeviceCollector):
 
                 # Port status
                 is_connected = 1 if port.get("status") == "Connected" else 0
-                self.parent._switch_port_status.labels(
+                self._switch_port_status.labels(
                     serial=serial,
                     name=name,
                     port_id=port_id,
@@ -69,7 +123,7 @@ class MSCollector(BaseDeviceCollector):
                     traffic_counters = port["trafficInKbps"]
 
                     if "recv" in traffic_counters:
-                        self.parent._switch_port_traffic.labels(
+                        self._switch_port_traffic.labels(
                             serial=serial,
                             name=name,
                             port_id=port_id,
@@ -78,7 +132,7 @@ class MSCollector(BaseDeviceCollector):
                         ).set(traffic_counters["recv"] * 1000 / 8)  # Convert to bytes
 
                     if "sent" in traffic_counters:
-                        self.parent._switch_port_traffic.labels(
+                        self._switch_port_traffic.labels(
                             serial=serial,
                             name=name,
                             port_id=port_id,
@@ -89,7 +143,7 @@ class MSCollector(BaseDeviceCollector):
                 # Error counters
                 if "errors" in port and isinstance(port["errors"], dict):
                     for error_type, count in port["errors"].items():
-                        self.parent._switch_port_errors.labels(
+                        self._switch_port_errors.labels(
                             serial=serial,
                             name=name,
                             port_id=port_id,
@@ -110,7 +164,7 @@ class MSCollector(BaseDeviceCollector):
                     # Port is drawing POE power
                     power_used = port.get("powerUsageInWh", 0)
 
-                    self.parent._switch_poe_port_power.labels(
+                    self._switch_poe_port_power.labels(
                         serial=serial,
                         name=name,
                         port_id=port_id,
@@ -120,7 +174,7 @@ class MSCollector(BaseDeviceCollector):
                     total_poe_consumption += power_used
                 else:
                     # Port is not drawing POE power
-                    self.parent._switch_poe_port_power.labels(
+                    self._switch_poe_port_power.labels(
                         serial=serial,
                         name=name,
                         port_id=port_id,
@@ -128,7 +182,7 @@ class MSCollector(BaseDeviceCollector):
                     ).set(0)
 
             # Set switch-level POE total
-            self.parent._switch_poe_total_power.labels(
+            self._switch_poe_total_power.labels(
                 serial=serial,
                 name=name,
                 model=model,
@@ -137,7 +191,7 @@ class MSCollector(BaseDeviceCollector):
 
             # Set total switch power usage (POE consumption is the main power draw)
             # This is an approximation - actual switch base power consumption varies by model
-            self.parent._switch_power.labels(
+            self._switch_power.labels(
                 serial=serial,
                 name=name,
                 model=model,

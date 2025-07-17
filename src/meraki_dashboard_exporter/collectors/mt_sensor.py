@@ -1,11 +1,12 @@
-"""Fast-tier sensor metric collector."""
+"""Fast-tier MT sensor metric collector.
+
+This collector handles environmental sensor metrics from MT devices.
+"""
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
-from ..api.client import AsyncMerakiClient
 from ..core.collector import MetricCollector
 from ..core.constants import MetricName, UpdateTier
 from ..core.logging import get_logger
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class SensorCollector(MetricCollector):
+class MTSensorCollector(MetricCollector):
     """Collector for fast-moving sensor metrics (MT devices)."""
 
     # Sensor data updates frequently
@@ -32,9 +33,13 @@ class SensorCollector(MetricCollector):
         settings: Settings,
         registry: CollectorRegistry | None = None,
     ) -> None:
-        """Initialize sensor collector with sub-collectors."""
+        """Initialize MT sensor collector."""
         super().__init__(api, settings, registry)
-        self.mt_collector = MTCollector(self)
+        # Create MT collector in standalone mode
+        self.mt_collector = MTCollector(None)
+        # Pass API and settings to MT collector
+        self.mt_collector.api = api
+        self.mt_collector.settings = settings
 
     def _initialize_metrics(self) -> None:
         """Initialize sensor metrics."""
@@ -147,79 +152,9 @@ class SensorCollector(MetricCollector):
             labelnames=["serial", "name", "sensor_type"],
         )
 
+        # Pass self as parent to MT collector so it can access metrics
+        self.mt_collector.parent = self
+
     async def _collect_impl(self) -> None:
-        """Collect sensor metrics."""
-        try:
-            # Get organizations
-            if self.settings.org_id:
-                org_ids = [self.settings.org_id]
-            else:
-                logger.debug("Fetching all organizations for sensor collection")
-                self._track_api_call("getOrganizations")
-                orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
-                org_ids = [org["id"] for org in orgs]
-                logger.debug("Successfully fetched organizations", count=len(org_ids))
-
-            # Collect sensors for each organization
-            for org_id in org_ids:
-                try:
-                    await self._collect_org_sensors(org_id)
-                except Exception:
-                    logger.exception(
-                        "Failed to collect sensors for organization",
-                        org_id=org_id,
-                    )
-                    # Continue with next organization
-
-        except Exception:
-            logger.exception("Failed to collect sensor metrics")
-
-    async def _collect_org_sensors(self, org_id: str) -> None:
-        """Collect sensor metrics for an organization.
-
-        Parameters
-        ----------
-        org_id : str
-            Organization ID.
-
-        """
-        try:
-            # Get all MT devices
-            logger.debug("Fetching sensor devices", org_id=org_id)
-            self._track_api_call("getOrganizationDevices")
-            devices = await asyncio.to_thread(
-                self.api.organizations.getOrganizationDevices,
-                org_id,
-                total_pages="all",
-                productTypes=["sensor"],
-            )
-            logger.debug("Successfully fetched sensor devices", org_id=org_id, count=len(devices))
-
-            if not devices:
-                return
-
-            # Extract sensor serials
-            sensor_serials = [d["serial"] for d in devices if d.get("model", "").startswith("MT")]
-
-            if sensor_serials:
-                # Create device lookup map
-                device_map = {d["serial"]: d for d in devices}
-
-                # Use async client for batch sensor reading
-                client = AsyncMerakiClient(self.settings)
-                readings = await client.get_sensor_readings_latest(org_id, sensor_serials)
-
-                # Process readings
-                logger.debug(
-                    "Processing sensor readings",
-                    org_id=org_id,
-                    sensor_count=len(sensor_serials),
-                    readings_count=len(readings),
-                )
-                self.mt_collector.collect_batch(readings, device_map)
-
-        except Exception:
-            logger.exception(
-                "Failed to collect sensors for organization",
-                org_id=org_id,
-            )
+        """Collect sensor metrics by delegating to MT collector."""
+        await self.mt_collector.collect_sensor_metrics()
