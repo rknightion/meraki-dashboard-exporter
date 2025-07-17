@@ -35,6 +35,12 @@ class AsyncMerakiClient:
         self._semaphore = asyncio.Semaphore(settings.api.concurrency_limit)
         self._api_lock = asyncio.Lock()  # Add lock for API client creation
         self._api_call_count = 0
+        logger.debug(
+            "Initialized AsyncMerakiClient",
+            concurrency_limit=settings.api.concurrency_limit,
+            api_timeout=settings.api.timeout,
+            max_retries=settings.api.max_retries,
+        )
 
     @property
     def api(self) -> meraki.DashboardAPI:
@@ -47,6 +53,12 @@ class AsyncMerakiClient:
 
         """
         if self._api is None:
+            logger.debug(
+                "Creating new Meraki Dashboard API client",
+                base_url=self.settings.api_base_url,
+                timeout=self.settings.api_timeout,
+                max_retries=self.settings.api_max_retries,
+            )
             self._api = meraki.DashboardAPI(
                 api_key=self.settings.api_key.get_secret_value(),
                 base_url=self.settings.api_base_url,
@@ -72,8 +84,11 @@ class AsyncMerakiClient:
             List of organization data.
 
         """
+        logger.debug("Fetching all organizations")
         async with self._semaphore:
-            return await asyncio.to_thread(self.api.organizations.getOrganizations)
+            result = await asyncio.to_thread(self.api.organizations.getOrganizations)
+            logger.debug("Successfully fetched organizations", count=len(result))
+            return result
 
     async def get_organization(self, org_id: str) -> dict[str, Any]:
         """Fetch a specific organization.
@@ -89,8 +104,15 @@ class AsyncMerakiClient:
             Organization data.
 
         """
+        logger.debug("Fetching organization", org_id=org_id)
         async with self._semaphore:
-            return await asyncio.to_thread(self.api.organizations.getOrganization, org_id)
+            result = await asyncio.to_thread(self.api.organizations.getOrganization, org_id)
+            logger.debug(
+                "Successfully fetched organization",
+                org_id=org_id,
+                org_name=result.get("name", "unknown"),
+            )
+            return result
 
     async def get_networks(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch all networks in an organization.
@@ -106,12 +128,15 @@ class AsyncMerakiClient:
             List of network data.
 
         """
+        logger.debug("Fetching networks", org_id=org_id)
         async with self._semaphore:
-            return await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 self.api.organizations.getOrganizationNetworks,
                 org_id,
                 total_pages="all",
             )
+            logger.debug("Successfully fetched networks", org_id=org_id, count=len(result))
+            return result
 
     async def get_devices(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch all devices in an organization.
@@ -127,12 +152,15 @@ class AsyncMerakiClient:
             List of device data.
 
         """
+        logger.debug("Fetching devices", org_id=org_id)
         async with self._semaphore:
-            return await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 self.api.organizations.getOrganizationDevices,
                 org_id,
                 total_pages="all",
             )
+            logger.debug("Successfully fetched devices", org_id=org_id, count=len(result))
+            return result
 
     async def get_device_availabilities(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch device availabilities for an organization.
@@ -148,12 +176,15 @@ class AsyncMerakiClient:
             List of device availability data.
 
         """
+        logger.debug("Fetching device availabilities", org_id=org_id)
         async with self._semaphore:
-            return await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 self.api.organizations.getOrganizationDevicesAvailabilities,
                 org_id,
                 total_pages="all",
             )
+            logger.debug("Successfully fetched device availabilities", org_id=org_id, count=len(result))
+            return result
 
     async def get_licenses(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch license information for an organization.
@@ -169,12 +200,15 @@ class AsyncMerakiClient:
             List of license data.
 
         """
+        logger.debug("Fetching licenses", org_id=org_id)
         async with self._semaphore:
-            return await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 self.api.organizations.getOrganizationLicenses,
                 org_id,
                 total_pages="all",
             )
+            logger.debug("Successfully fetched licenses", org_id=org_id, count=len(result))
+            return result
 
     async def get_api_requests(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch API request statistics for an organization.
@@ -190,12 +224,15 @@ class AsyncMerakiClient:
             API request statistics.
 
         """
+        logger.debug("Fetching API request statistics", org_id=org_id)
         async with self._semaphore:
-            return await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 self.api.organizations.getOrganizationApiRequests,
                 org_id,
                 total_pages="all",
             )
+            logger.debug("Successfully fetched API request statistics", org_id=org_id, count=len(result))
+            return result
 
     async def get_switch_port_statuses(self, serial: str) -> list[dict[str, Any]]:
         """Fetch switch port statuses.
@@ -211,8 +248,11 @@ class AsyncMerakiClient:
             List of port status data.
 
         """
+        logger.debug("Fetching switch port statuses", serial=serial)
         async with self._semaphore:
-            return await asyncio.to_thread(self.api.switch.getDeviceSwitchPortsStatuses, serial)
+            result = await asyncio.to_thread(self.api.switch.getDeviceSwitchPortsStatuses, serial)
+            logger.debug("Successfully fetched switch port statuses", serial=serial, count=len(result))
+            return result
 
     async def get_wireless_status(self, serial: str) -> dict[str, Any]:
         """Fetch wireless device status.
@@ -228,8 +268,15 @@ class AsyncMerakiClient:
             Wireless status data.
 
         """
+        logger.debug("Fetching wireless device status", serial=serial)
         async with self._semaphore:
-            return await asyncio.to_thread(self.api.wireless.getDeviceWirelessStatus, serial)
+            result = await asyncio.to_thread(self.api.wireless.getDeviceWirelessStatus, serial)
+            logger.debug(
+                "Successfully fetched wireless status",
+                serial=serial,
+                ssid_count=len(result.get("basicServiceSets", []))
+            )
+            return result
 
     async def get_sensor_readings_latest(
         self, org_id: str, serials: list[str] | None = None
@@ -249,19 +296,32 @@ class AsyncMerakiClient:
             List of sensor reading data.
 
         """
+        logger.debug(
+            "Fetching latest sensor readings",
+            org_id=org_id,
+            serial_filter_count=len(serials) if serials else 0
+        )
         async with self._semaphore:
             kwargs: dict[str, Any] = {"total_pages": "all"}
             if serials:
                 kwargs["serials"] = serials
-            return await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 self.api.sensor.getOrganizationSensorReadingsLatest,
                 org_id,
                 **kwargs,
             )
+            logger.debug(
+                "Successfully fetched sensor readings",
+                org_id=org_id,
+                sensor_count=len(result),
+                total_readings=sum(len(s.get("readings", [])) for s in result)
+            )
+            return result
 
     async def close(self) -> None:
         """Close the API client."""
         # The Meraki client doesn't have an explicit close method
+        logger.debug("Closing AsyncMerakiClient")
         self._api = None
 
     @asynccontextmanager

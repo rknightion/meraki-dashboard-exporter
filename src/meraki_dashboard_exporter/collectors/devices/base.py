@@ -68,6 +68,17 @@ class BaseDeviceCollector(ABC):
         # Device up/down status
         status = status_info.get("status", DeviceStatus.OFFLINE)
         is_online = 1 if status == DeviceStatus.ONLINE else 0
+        
+        logger.debug(
+            "Setting device status metric",
+            serial=serial,
+            name=name,
+            model=model,
+            device_type=device_type,
+            status=status,
+            is_online=is_online,
+        )
+        
         self.parent._device_up.labels(
             serial=serial,
             name=name,
@@ -80,6 +91,11 @@ class BaseDeviceCollector(ABC):
         if "uptimeInSeconds" in device:
             # Check if uptime metric exists (it was removed in a previous cleanup)
             if hasattr(self.parent, "_device_uptime"):
+                logger.debug(
+                    "Setting device uptime metric",
+                    serial=serial,
+                    uptime_seconds=device["uptimeInSeconds"],
+                )
                 self.parent._device_uptime.labels(
                     serial=serial,
                     name=name,
@@ -103,7 +119,16 @@ class BaseDeviceCollector(ABC):
 
         """
         model = device.get("model", "")
-        return model[:2] if len(model) >= 2 else "Unknown"
+        device_type = model[:2] if len(model) >= 2 else "Unknown"
+        
+        if device_type == "Unknown":
+            logger.warning(
+                "Unable to determine device type from model",
+                model=model,
+                serial=device.get("serial", "unknown"),
+            )
+        
+        return device_type
 
     def _track_api_call(self, method_name: str) -> None:
         """Track API call in parent collector.
@@ -160,6 +185,12 @@ class BaseDeviceCollector(ABC):
                 )
                 memory_data = []
 
+            if memory_data:
+                logger.debug(
+                    "Processing memory data for devices",
+                    org_id=org_id,
+                    device_count=len(memory_data),
+                )
 
             # Process each device's memory data
             for device_data in memory_data:

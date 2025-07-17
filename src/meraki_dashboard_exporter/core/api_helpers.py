@@ -243,6 +243,13 @@ class APIHelper:
                 else:
                     results.append(result)
 
+        logger.debug(
+            f"Completed batch processing of {description}",
+            total_processed=total_items,
+            successful=len(results),
+            failed=total_items - len(results),
+        )
+        
         return results
 
     @with_error_handling(
@@ -297,7 +304,19 @@ class APIHelper:
 
         # Handle wrapped responses
         if isinstance(response, dict) and "items" in response:
-            return response["items"]
+            data = response["items"]
+            logger.debug(
+                f"Successfully fetched time-based data: {method_name}",
+                item_count=len(data) if isinstance(data, list) else 1,
+                wrapped_response=True,
+            )
+            return data
+        
+        logger.debug(
+            f"Successfully fetched time-based data: {method_name}",
+            item_count=len(response) if isinstance(response, list) else 1,
+            wrapped_response=False,
+        )
         return response
 
 
