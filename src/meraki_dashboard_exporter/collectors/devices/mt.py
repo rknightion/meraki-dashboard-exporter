@@ -69,8 +69,8 @@ class MTCollector(BaseDeviceCollector):
         if self.parent and hasattr(self.parent, "_track_api_call"):
             self.parent._track_api_call(method_name)
         else:
-            # In standalone mode, just log
-            logger.debug("API call tracked", method=method_name)
+            # In standalone mode, tracking is not needed
+            pass
 
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect device-level MT metrics.
@@ -85,11 +85,7 @@ class MTCollector(BaseDeviceCollector):
         """
         # MT devices don't have device-specific metrics beyond common ones
         # Their main metrics come from sensor readings
-        logger.debug(
-            "MT device metrics collection (device-level)",
-            serial=device.get("serial"),
-            name=device.get("name"),
-        )
+        pass
 
     async def collect_sensor_metrics(self, org_id: str | None = None) -> None:
         """Collect sensor metrics for all MT devices.
@@ -113,11 +109,8 @@ class MTCollector(BaseDeviceCollector):
                 if not self.api:
                     logger.error("API client not initialized")
                     return
-                logger.debug("Fetching all organizations for sensor collection")
-                self._track_api_call("getOrganizations")
-                orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
+                orgs = await self._fetch_organizations()
                 org_ids = [org["id"] for org in orgs]
-                logger.debug("Successfully fetched organizations", count=len(org_ids))
 
             # Collect sensors for each organization
             for organization_id in org_ids:
@@ -132,6 +125,42 @@ class MTCollector(BaseDeviceCollector):
 
         except Exception:
             logger.exception("Failed to collect sensor metrics")
+
+    @log_api_call("getOrganizations")
+    async def _fetch_organizations(self) -> list[dict[str, Any]]:
+        """Fetch all organizations.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of organizations.
+
+        """
+        self._track_api_call("getOrganizations")
+        return await asyncio.to_thread(self.api.organizations.getOrganizations)
+
+    @log_api_call("getOrganizationDevices")
+    async def _fetch_sensor_devices(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch sensor devices for an organization.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of sensor devices.
+
+        """
+        self._track_api_call("getOrganizationDevices")
+        return await asyncio.to_thread(
+            self.api.organizations.getOrganizationDevices,
+            org_id,
+            total_pages="all",
+            productTypes=[ProductType.SENSOR],
+        )
 
     async def _collect_org_sensors(self, org_id: str) -> None:
         """Collect sensor metrics for an organization.
@@ -148,15 +177,8 @@ class MTCollector(BaseDeviceCollector):
                 return
 
             # Get all MT devices
-            logger.debug("Fetching sensor devices", org_id=org_id)
-            self._track_api_call("getOrganizationDevices")
-            devices = await asyncio.to_thread(
-                self.api.organizations.getOrganizationDevices,
-                org_id,
-                total_pages="all",
-                productTypes=[ProductType.SENSOR],
-            )
-            logger.debug("Successfully fetched sensor devices", org_id=org_id, count=len(devices))
+            with LogContext(org_id=org_id):
+                devices = await self._fetch_sensor_devices(org_id)
 
             if not devices:
                 return
@@ -175,12 +197,6 @@ class MTCollector(BaseDeviceCollector):
                 readings = await client.get_sensor_readings_latest(org_id, sensor_serials)
 
                 # Process readings
-                logger.debug(
-                    "Processing sensor readings",
-                    org_id=org_id,
-                    sensor_count=len(sensor_serials),
-                    readings_count=len(readings),
-                )
                 self.collect_batch(readings, device_map)
 
         except Exception:
@@ -454,11 +470,6 @@ class MTCollector(BaseDeviceCollector):
         try:
             # Skip undocumented rawTemperature to avoid duplicate processing
             if metric_type == "rawTemperature":
-                logger.debug(
-                    "Skipping undocumented rawTemperature metric",
-                    serial=serial,
-                    metric_data=metric_data,
-                )
                 return
 
             if metric_type == SensorMetricType.TEMPERATURE:
