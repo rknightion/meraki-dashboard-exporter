@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from ...core.constants import MetricName
-from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ...core.constants import MSMetricName
+from ...core.error_handling import validate_response_format, with_error_handling
 from ...core.logging import get_logger
 from ...core.metrics import LabelName
 from .base import BaseDeviceCollector
@@ -24,51 +24,51 @@ class MSCollector(BaseDeviceCollector):
         """Initialize MS-specific metrics."""
         # Switch port metrics
         self._switch_port_status = self.parent._create_gauge(
-            MetricName.MS_PORT_STATUS,
+            MSMetricName.MS_PORT_STATUS,
             "Switch port status (1 = connected, 0 = disconnected)",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.PORT_ID, LabelName.PORT_NAME],
         )
 
         self._switch_port_traffic = self.parent._create_gauge(
-            MetricName.MS_PORT_TRAFFIC_BYTES,
+            MSMetricName.MS_PORT_TRAFFIC_BYTES,
             "Switch port traffic in bytes",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.PORT_ID, LabelName.PORT_NAME, LabelName.DIRECTION],
         )
 
         self._switch_port_errors = self.parent._create_gauge(
-            MetricName.MS_PORT_ERRORS_TOTAL,
+            MSMetricName.MS_PORT_ERRORS_TOTAL,
             "Switch port error count",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.PORT_ID, LabelName.PORT_NAME, LabelName.ERROR_TYPE],
         )
 
         # Switch power metrics
         self._switch_power = self.parent._create_gauge(
-            MetricName.MS_POWER_USAGE_WATTS,
+            MSMetricName.MS_POWER_USAGE_WATTS,
             "Switch power usage in watts",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL],
         )
 
         # POE metrics
         self._switch_poe_port_power = self.parent._create_gauge(
-            MetricName.MS_POE_PORT_POWER_WATTS,
+            MSMetricName.MS_POE_PORT_POWER_WATTS,
             "Per-port POE power consumption in watt-hours (Wh)",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.PORT_ID, LabelName.PORT_NAME],
         )
 
         self._switch_poe_total_power = self.parent._create_gauge(
-            MetricName.MS_POE_TOTAL_POWER_WATTS,
+            MSMetricName.MS_POE_TOTAL_POWER_WATTS,
             "Total POE power consumption for switch in watt-hours (Wh)",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID],
         )
 
         self._switch_poe_budget = self.parent._create_gauge(
-            MetricName.MS_POE_BUDGET_WATTS,
+            MSMetricName.MS_POE_BUDGET_WATTS,
             "Total POE power budget for switch in watts",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID],
         )
 
         self._switch_poe_network_total = self.parent._create_gauge(
-            MetricName.MS_POE_NETWORK_TOTAL_WATTS,
+            MSMetricName.MS_POE_NETWORK_TOTAL_WATTS,
             "Total POE power consumption for all switches in network in watt-hours (Wh)",
             labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )

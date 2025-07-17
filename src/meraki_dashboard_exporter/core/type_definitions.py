@@ -6,7 +6,7 @@ throughout the codebase, especially for complex dictionary structures.
 
 from __future__ import annotations
 
-from typing import Literal, NotRequired, TypedDict, TypeAlias
+from typing import Literal, NotRequired, TypeAlias, TypedDict
 
 
 class DeviceStatusInfo(TypedDict):

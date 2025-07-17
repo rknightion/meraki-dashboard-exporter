@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.constants import DeviceType, ProductType
 from ...core.domain_models import RFHealthData
 from ...core.logging import get_logger
 from .base import BaseNetworkHealthCollector
@@ -50,7 +51,7 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                     self.api.organizations.getOrganizationDevices,
                     org_id,
                     networkIds=[network_id],
-                    productTypes=["wireless"],
+                    productTypes=[ProductType.WIRELESS],
                     total_pages="all",
                 )
                 logger.debug("Successfully fetched devices", network_id=network_id, count=len(all_devices))
@@ -58,7 +59,7 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                 device_names = {
                     d["serial"]: d.get("name", d["serial"])
                     for d in all_devices
-                    if d.get("model", "").startswith("MR") and d.get("networkId") == network_id
+                    if d.get("model", "").startswith(DeviceType.MR) and d.get("networkId") == network_id
                 }
 
             logger.debug("Fetching channel utilization data", network_id=network_id)

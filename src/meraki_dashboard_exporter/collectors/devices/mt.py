@@ -6,8 +6,15 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...api.client import AsyncMerakiClient
-from ...core.constants import UpdateTier
-from ...core.domain_models import MTSensorReading, SensorMeasurement
+from ...core.constants import (
+    DEFAULT_DEVICE_MODEL_MT,
+    DeviceType,
+    ProductType,
+    SensorDataField,
+    SensorMetricType,
+    UpdateTier,
+)
+from ...core.domain_models import SensorMeasurement
 from ...core.logging import get_logger
 from .base import BaseDeviceCollector
 
@@ -41,10 +48,13 @@ class MTCollector(BaseDeviceCollector):
         if parent:
             super().__init__(parent)
         else:
-            # Standalone mode - initialize without parent
+            # Standalone mode - initialize base attributes without calling parent init
+            # This avoids the "Parent collector not set" error
             self.parent = None
             self.api = None  # Will be set later
             self.settings = None  # Will be set later
+            # Set a flag to indicate standalone mode for error checking
+            self._standalone_mode = True
     
     def _track_api_call(self, method_name: str) -> None:
         """Track API call, handling standalone mode.
@@ -136,7 +146,7 @@ class MTCollector(BaseDeviceCollector):
                 self.api.organizations.getOrganizationDevices,
                 org_id,
                 total_pages="all",
-                productTypes=["sensor"],
+                productTypes=[ProductType.SENSOR],
             )
             logger.debug("Successfully fetched sensor devices", org_id=org_id, count=len(devices))
 
@@ -144,7 +154,7 @@ class MTCollector(BaseDeviceCollector):
                 return
 
             # Extract sensor serials
-            sensor_serials = [d["serial"] for d in devices if d.get("model", "").startswith("MT")]
+            sensor_serials = [d["serial"] for d in devices if d.get("model", "").startswith(DeviceType.MT)]
 
             if sensor_serials:
                 # Create device lookup map
@@ -224,7 +234,7 @@ class MTCollector(BaseDeviceCollector):
 
             device = device_map[serial]
             name = device.get("name", serial)
-            model = device.get("model", "MT")
+            model = device.get("model", DEFAULT_DEVICE_MODEL_MT)
             network_info = sensor_data.get("network", {})
             network_id = network_info.get("id", "")
             network_name = network_info.get("name", "")
@@ -295,40 +305,41 @@ class MTCollector(BaseDeviceCollector):
         -------
         float | None
             Extracted value or None if not found.
+
         """
-        if metric_type == "temperature":
-            return metric_data.get("celsius")
-        elif metric_type == "humidity":
-            return metric_data.get("relativePercentage")
-        elif metric_type == "door":
-            is_open = metric_data.get("open")
+        if metric_type == SensorMetricType.TEMPERATURE:
+            return metric_data.get(SensorDataField.CELSIUS)
+        elif metric_type == SensorMetricType.HUMIDITY:
+            return metric_data.get(SensorDataField.RELATIVE_PERCENTAGE)
+        elif metric_type == SensorMetricType.DOOR:
+            is_open = metric_data.get(SensorDataField.OPEN)
             return 1 if is_open else 0 if is_open is not None else None
-        elif metric_type == "water":
-            is_present = metric_data.get("present", False)
+        elif metric_type == SensorMetricType.WATER:
+            is_present = metric_data.get(SensorDataField.PRESENT, False)
             return 1 if is_present else 0
-        elif metric_type in ("co2", "tvoc", "pm25"):
-            return metric_data.get("concentration")
-        elif metric_type == "noise":
-            ambient = metric_data.get("ambient", {})
-            return ambient.get("level")
-        elif metric_type == "battery":
-            return metric_data.get("percentage")
-        elif metric_type == "indoorAirQuality":
-            return metric_data.get("score")
-        elif metric_type == "voltage":
-            return metric_data.get("level")
-        elif metric_type == "current":
-            return metric_data.get("draw")
-        elif metric_type == "realPower":
-            return metric_data.get("draw")
-        elif metric_type == "apparentPower":
-            return metric_data.get("draw")
-        elif metric_type == "powerFactor":
-            return metric_data.get("percentage")
-        elif metric_type == "frequency":
-            return metric_data.get("level")
-        elif metric_type == "downstreamPower":
-            enabled = metric_data.get("enabled")
+        elif metric_type in (SensorMetricType.CO2, SensorMetricType.TVOC, SensorMetricType.PM25):
+            return metric_data.get(SensorDataField.CONCENTRATION)
+        elif metric_type == SensorMetricType.NOISE:
+            ambient = metric_data.get(SensorDataField.AMBIENT, {})
+            return ambient.get(SensorDataField.LEVEL)
+        elif metric_type == SensorMetricType.BATTERY:
+            return metric_data.get(SensorDataField.PERCENTAGE)
+        elif metric_type == SensorMetricType.INDOOR_AIR_QUALITY:
+            return metric_data.get(SensorDataField.SCORE)
+        elif metric_type == SensorMetricType.VOLTAGE:
+            return metric_data.get(SensorDataField.LEVEL)
+        elif metric_type == SensorMetricType.CURRENT:
+            return metric_data.get(SensorDataField.DRAW)
+        elif metric_type == SensorMetricType.REAL_POWER:
+            return metric_data.get(SensorDataField.DRAW)
+        elif metric_type == SensorMetricType.APPARENT_POWER:
+            return metric_data.get(SensorDataField.DRAW)
+        elif metric_type == SensorMetricType.POWER_FACTOR:
+            return metric_data.get(SensorDataField.PERCENTAGE)
+        elif metric_type == SensorMetricType.FREQUENCY:
+            return metric_data.get(SensorDataField.LEVEL)
+        elif metric_type == SensorMetricType.DOWNSTREAM_POWER:
+            enabled = metric_data.get(SensorDataField.ENABLED)
             return 1 if enabled else 0 if enabled is not None else None
         elif metric_type == "remoteLockoutSwitch":
             locked = metric_data.get("locked")
@@ -360,25 +371,26 @@ class MTCollector(BaseDeviceCollector):
             Network name.
         measurement : SensorMeasurement
             Validated sensor measurement.
+
         """
         metric_map = {
-            "temperature": "_sensor_temperature",
-            "humidity": "_sensor_humidity",
-            "door": "_sensor_door",
-            "water": "_sensor_water",
-            "co2": "_sensor_co2",
-            "tvoc": "_sensor_tvoc",
-            "pm25": "_sensor_pm25",
-            "noise": "_sensor_noise",
-            "battery": "_sensor_battery",
-            "indoorAirQuality": "_sensor_air_quality",
-            "voltage": "_sensor_voltage",
-            "current": "_sensor_current",
-            "realPower": "_sensor_real_power",
-            "apparentPower": "_sensor_apparent_power",
-            "powerFactor": "_sensor_power_factor",
-            "frequency": "_sensor_frequency",
-            "downstreamPower": "_sensor_downstream_power",
+            SensorMetricType.TEMPERATURE: "_sensor_temperature",
+            SensorMetricType.HUMIDITY: "_sensor_humidity",
+            SensorMetricType.DOOR: "_sensor_door",
+            SensorMetricType.WATER: "_sensor_water",
+            SensorMetricType.CO2: "_sensor_co2",
+            SensorMetricType.TVOC: "_sensor_tvoc",
+            SensorMetricType.PM25: "_sensor_pm25",
+            SensorMetricType.NOISE: "_sensor_noise",
+            SensorMetricType.BATTERY: "_sensor_battery",
+            SensorMetricType.INDOOR_AIR_QUALITY: "_sensor_air_quality",
+            SensorMetricType.VOLTAGE: "_sensor_voltage",
+            SensorMetricType.CURRENT: "_sensor_current",
+            SensorMetricType.REAL_POWER: "_sensor_real_power",
+            SensorMetricType.APPARENT_POWER: "_sensor_apparent_power",
+            SensorMetricType.POWER_FACTOR: "_sensor_power_factor",
+            SensorMetricType.FREQUENCY: "_sensor_frequency",
+            SensorMetricType.DOWNSTREAM_POWER: "_sensor_downstream_power",
             "remoteLockoutSwitch": "_sensor_remote_lockout",
         }
         
@@ -420,8 +432,8 @@ class MTCollector(BaseDeviceCollector):
             Metric-specific data.
 
         """
-        # Validate parent exists
-        if not self.parent:
+        # Validate parent exists (skip check in standalone mode)
+        if not self.parent and not getattr(self, '_standalone_mode', False):
             logger.error("Parent collector not set for MTCollector")
             return
 
@@ -435,8 +447,8 @@ class MTCollector(BaseDeviceCollector):
                 )
                 return
 
-            if metric_type == "temperature":
-                celsius = metric_data.get("celsius")
+            if metric_type == SensorMetricType.TEMPERATURE:
+                celsius = metric_data.get(SensorDataField.CELSIUS)
                 if celsius is not None:
                     self._set_metric_value(
                         "_sensor_temperature",
@@ -444,8 +456,8 @@ class MTCollector(BaseDeviceCollector):
                         celsius,
                     )
 
-            elif metric_type == "humidity":
-                humidity = metric_data.get("relativePercentage")
+            elif metric_type == SensorMetricType.HUMIDITY:
+                humidity = metric_data.get(SensorDataField.RELATIVE_PERCENTAGE)
                 if humidity is not None:
                     self._set_metric_value(
                         "_sensor_humidity",
@@ -453,8 +465,8 @@ class MTCollector(BaseDeviceCollector):
                         humidity,
                     )
 
-            elif metric_type == "door":
-                is_open = metric_data.get("open")
+            elif metric_type == SensorMetricType.DOOR:
+                is_open = metric_data.get(SensorDataField.OPEN)
                 if is_open is not None:
                     self._set_metric_value(
                         "_sensor_door",
@@ -462,17 +474,17 @@ class MTCollector(BaseDeviceCollector):
                         1 if is_open else 0,
                     )
 
-            elif metric_type == "water":
+            elif metric_type == SensorMetricType.WATER:
                 # Note: The API example doesn't show water sensors, but keeping for completeness
-                is_present = metric_data.get("present", False)
+                is_present = metric_data.get(SensorDataField.PRESENT, False)
                 self._set_metric_value(
                     "_sensor_water",
                     {"serial": serial, "name": name, "sensor_type": model},
                     1 if is_present else 0,
                 )
 
-            elif metric_type == "co2":
-                concentration = metric_data.get("concentration")
+            elif metric_type == SensorMetricType.CO2:
+                concentration = metric_data.get(SensorDataField.CONCENTRATION)
                 if concentration is not None:
                     self._set_metric_value(
                         "_sensor_co2",
@@ -480,8 +492,8 @@ class MTCollector(BaseDeviceCollector):
                         concentration,
                     )
 
-            elif metric_type == "tvoc":
-                concentration = metric_data.get("concentration")
+            elif metric_type == SensorMetricType.TVOC:
+                concentration = metric_data.get(SensorDataField.CONCENTRATION)
                 if concentration is not None:
                     self._set_metric_value(
                         "_sensor_tvoc",
@@ -489,8 +501,8 @@ class MTCollector(BaseDeviceCollector):
                         concentration,
                     )
 
-            elif metric_type == "pm25":
-                concentration = metric_data.get("concentration")
+            elif metric_type == SensorMetricType.PM25:
+                concentration = metric_data.get(SensorDataField.CONCENTRATION)
                 if concentration is not None:
                     self._set_metric_value(
                         "_sensor_pm25",
@@ -498,9 +510,9 @@ class MTCollector(BaseDeviceCollector):
                         concentration,
                     )
 
-            elif metric_type == "noise":
-                ambient = metric_data.get("ambient", {})
-                level = ambient.get("level")
+            elif metric_type == SensorMetricType.NOISE:
+                ambient = metric_data.get(SensorDataField.AMBIENT, {})
+                level = ambient.get(SensorDataField.LEVEL)
                 if level is not None:
                     self._set_metric_value(
                         "_sensor_noise",
@@ -508,8 +520,8 @@ class MTCollector(BaseDeviceCollector):
                         level,
                     )
 
-            elif metric_type == "battery":
-                percentage = metric_data.get("percentage")
+            elif metric_type == SensorMetricType.BATTERY:
+                percentage = metric_data.get(SensorDataField.PERCENTAGE)
                 if percentage is not None:
                     self._set_metric_value(
                         "_sensor_battery",
@@ -517,8 +529,8 @@ class MTCollector(BaseDeviceCollector):
                         percentage,
                     )
 
-            elif metric_type == "indoorAirQuality":
-                score = metric_data.get("score")
+            elif metric_type == SensorMetricType.INDOOR_AIR_QUALITY:
+                score = metric_data.get(SensorDataField.SCORE)
                 if score is not None:
                     self._set_metric_value(
                         "_sensor_air_quality",
@@ -526,8 +538,8 @@ class MTCollector(BaseDeviceCollector):
                         score,
                     )
 
-            elif metric_type == "voltage":
-                level = metric_data.get("level")
+            elif metric_type == SensorMetricType.VOLTAGE:
+                level = metric_data.get(SensorDataField.LEVEL)
                 if level is not None:
                     self._set_metric_value(
                         "_sensor_voltage",
@@ -535,8 +547,8 @@ class MTCollector(BaseDeviceCollector):
                         level,
                     )
 
-            elif metric_type == "current":
-                draw = metric_data.get("draw")
+            elif metric_type == SensorMetricType.CURRENT:
+                draw = metric_data.get(SensorDataField.DRAW)
                 if draw is not None:
                     self._set_metric_value(
                         "_sensor_current",
@@ -544,8 +556,8 @@ class MTCollector(BaseDeviceCollector):
                         draw,
                     )
 
-            elif metric_type == "realPower":
-                draw = metric_data.get("draw")
+            elif metric_type == SensorMetricType.REAL_POWER:
+                draw = metric_data.get(SensorDataField.DRAW)
                 if draw is not None:
                     self._set_metric_value(
                         "_sensor_real_power",
@@ -553,8 +565,8 @@ class MTCollector(BaseDeviceCollector):
                         draw,
                     )
 
-            elif metric_type == "apparentPower":
-                draw = metric_data.get("draw")
+            elif metric_type == SensorMetricType.APPARENT_POWER:
+                draw = metric_data.get(SensorDataField.DRAW)
                 if draw is not None:
                     self._set_metric_value(
                         "_sensor_apparent_power",
@@ -562,8 +574,8 @@ class MTCollector(BaseDeviceCollector):
                         draw,
                     )
 
-            elif metric_type == "powerFactor":
-                percentage = metric_data.get("percentage")
+            elif metric_type == SensorMetricType.POWER_FACTOR:
+                percentage = metric_data.get(SensorDataField.PERCENTAGE)
                 if percentage is not None:
                     self._set_metric_value(
                         "_sensor_power_factor",
@@ -571,8 +583,8 @@ class MTCollector(BaseDeviceCollector):
                         percentage,
                     )
 
-            elif metric_type == "frequency":
-                level = metric_data.get("level")
+            elif metric_type == SensorMetricType.FREQUENCY:
+                level = metric_data.get(SensorDataField.LEVEL)
                 if level is not None:
                     self._set_metric_value(
                         "_sensor_frequency",
@@ -580,8 +592,8 @@ class MTCollector(BaseDeviceCollector):
                         level,
                     )
 
-            elif metric_type == "downstreamPower":
-                enabled = metric_data.get("enabled")
+            elif metric_type == SensorMetricType.DOWNSTREAM_POWER:
+                enabled = metric_data.get(SensorDataField.ENABLED)
                 if enabled is not None:
                     self._set_metric_value(
                         "_sensor_downstream_power",

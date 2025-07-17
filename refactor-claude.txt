@@ -28,22 +28,7 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
 
 ## Priority 3: Improve Type Safety and LLM Understanding (Medium-High Impact)
 
-### 3.1 Add Comprehensive Type Annotations
-**Issue**: Some areas lack complete type annotations, making it harder for LLMs to understand data flow.
-**Refactor**:
-- Add Pydantic models for all API responses
-- Create TypedDict classes for complex dictionary structures
-- Add generic types for collector base classes
-**Benefit**: Better IDE support, clearer data contracts, easier for LLMs to understand expected data structures.
 
-
-### 3.3 Improve Constants Organization
-**Issue**: All constants in a single file, some magic strings still scattered.
-**Refactor**:
-- Split constants by domain (DeviceConstants, NetworkConstants, etc.)
-- Use Literal types for string enums where appropriate
-- Create configuration dataclasses instead of individual settings
-**Benefit**: Better organization, type safety, easier to find relevant constants.
 
 ## Priority 4: Simplify Configuration and Dependencies (Medium Impact)
 
@@ -117,6 +102,24 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
 
 
 # Completed tasks
+
+### Additional Refactoring: Deprecated API Updates - COMPLETED
+**Issue**: Using deprecated Meraki API endpoints that needed to be updated.
+**Refactor Completed**:
+- Replaced getNetworkDevices with getOrganizationDevices in rf_health.py:
+  - Now filters by networkIds and productTypes parameters
+  - Extracts organization ID from network data to make proper API call
+- Replaced getOrganizationDevicesStatuses with getOrganizationDevicesAvailabilities:
+  - Updated device.py to use new API endpoint
+  - Updated client.py to rename get_device_statuses to get_device_availabilities
+  - Removed backward compatibility code per user request
+  - Uses availability data directly without conversion
+- Added new device availability metrics:
+  - Created ORG_DEVICES_AVAILABILITY_TOTAL metric name
+  - Added PRODUCT_TYPE label name
+  - Implemented _collect_device_availability_metrics in organization.py
+  - Groups devices by status and product type for better visibility
+**Benefit**: Using supported API endpoints, access to additional device availability data, no deprecated API warnings, cleaner code without compatibility layers.
 
 ### 3.2 Create Domain Models - COMPLETED
 **Issue**: Using raw dictionaries for domain objects throughout the codebase.
@@ -324,3 +327,24 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
 - Enhanced MRCollector with packet value caching for retention logic
 - Reduced device.py from 1,968 to 984 lines (50% reduction)
 **Benefit**: device.py now properly serves as a coordinator, delegating device-specific logic to appropriate collectors while maintaining shared state and metric definitions.
+
+### 3.3 Improve Constants Organization - COMPLETED
+**Issue**: All constants in a single file, some magic strings still scattered.
+**Refactor Completed**:
+- Created domain-specific constant modules under `core/constants/`:
+  - `device_constants.py`: DeviceType, DeviceStatus, ProductType, UpdateTier with Literal type aliases
+  - `api_constants.py`: APIField, APITimespan, LicenseState, PortState, RFBand, default values
+  - `sensor_constants.py`: SensorMetricType, SensorDataField for sensor-specific constants
+  - `metrics_constants.py`: Domain-specific metric name enums (OrgMetricName, NetworkMetricName, etc.)
+  - `config_constants.py`: APIConfig and MerakiAPIConfig dataclasses for configuration
+- Added Literal type aliases for small closed sets (e.g., DeviceTypeStr, DeviceStatusStr)
+- Replaced magic strings throughout codebase:
+  - Device type/model checks now use DeviceType enum
+  - Product types use ProductType enum
+  - Device status uses DeviceStatus enum with DEFAULT_DEVICE_STATUS
+  - Sensor metric types and fields use respective enums
+- Removed all backward compatibility code:
+  - All collectors now import and use domain-specific metric enums directly
+  - Removed the old constants.py re-export file
+  - Each collector uses the appropriate domain enum (e.g., OrgMetricName for organization metrics)
+**Benefit**: Better organization, type safety, easier to find relevant constants, reduced typos, clearer domain separation for LLMs, no extra backward compatibility code to maintain.

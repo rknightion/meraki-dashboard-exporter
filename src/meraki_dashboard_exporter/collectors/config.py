@@ -6,7 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ..core.collector import MetricCollector
-from ..core.constants import MetricName, UpdateTier
+from ..core.constants import OrgMetricName, UpdateTier
 from ..core.domain_models import ConfigurationChange
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
@@ -28,86 +28,86 @@ class ConfigCollector(MetricCollector):
         """Initialize configuration metrics."""
         # Login security metrics
         self._login_security_password_expiration_enabled = self._create_gauge(
-            MetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_ENABLED,
+            OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_ENABLED,
             "Whether password expiration is enforced (1=enabled, 0=disabled)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_password_expiration_days = self._create_gauge(
-            MetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_DAYS,
+            OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_DAYS,
             "Number of days before password expires (0 if not set)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_different_passwords_enabled = self._create_gauge(
-            MetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_ENABLED,
+            OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_ENABLED,
             "Whether different passwords are enforced (1=enabled, 0=disabled)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_different_passwords_count = self._create_gauge(
-            MetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_COUNT,
+            OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_COUNT,
             "Number of different passwords required (0 if not set)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_strong_passwords_enabled = self._create_gauge(
-            MetricName.ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED,
+            OrgMetricName.ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED,
             "Whether strong passwords are enforced (1=enabled, 0=disabled)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_minimum_password_length = self._create_gauge(
-            MetricName.ORG_LOGIN_SECURITY_MINIMUM_PASSWORD_LENGTH,
+            OrgMetricName.ORG_LOGIN_SECURITY_MINIMUM_PASSWORD_LENGTH,
             "Minimum password length required",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_account_lockout_enabled = self._create_gauge(
-            MetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ENABLED,
+            OrgMetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ENABLED,
             "Whether account lockout is enforced (1=enabled, 0=disabled)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_account_lockout_attempts = self._create_gauge(
-            MetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ATTEMPTS,
+            OrgMetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ATTEMPTS,
             "Number of failed login attempts before lockout (0 if not set)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_idle_timeout_enabled = self._create_gauge(
-            MetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_ENABLED,
+            OrgMetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_ENABLED,
             "Whether idle timeout is enforced (1=enabled, 0=disabled)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_idle_timeout_minutes = self._create_gauge(
-            MetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_MINUTES,
+            OrgMetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_MINUTES,
             "Minutes before idle timeout (0 if not set)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_two_factor_enabled = self._create_gauge(
-            MetricName.ORG_LOGIN_SECURITY_TWO_FACTOR_ENABLED,
+            OrgMetricName.ORG_LOGIN_SECURITY_TWO_FACTOR_ENABLED,
             "Whether two-factor authentication is enforced (1=enabled, 0=disabled)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_ip_ranges_enabled = self._create_gauge(
-            MetricName.ORG_LOGIN_SECURITY_IP_RANGES_ENABLED,
+            OrgMetricName.ORG_LOGIN_SECURITY_IP_RANGES_ENABLED,
             "Whether login IP ranges are enforced (1=enabled, 0=disabled)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._login_security_api_ip_restrictions_enabled = self._create_gauge(
-            MetricName.ORG_LOGIN_SECURITY_API_IP_RESTRICTIONS_ENABLED,
+            OrgMetricName.ORG_LOGIN_SECURITY_API_IP_RESTRICTIONS_ENABLED,
             "Whether API key IP restrictions are enabled (1=enabled, 0=disabled)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         # Configuration change metrics
         self._configuration_changes_total = self._create_gauge(
-            MetricName.ORG_CONFIGURATION_CHANGES_TOTAL,
+            OrgMetricName.ORG_CONFIGURATION_CHANGES_TOTAL,
             "Total number of configuration changes in the last 24 hours",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
