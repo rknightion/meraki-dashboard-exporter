@@ -45,6 +45,10 @@ We use Pydantic models for API responses and internal data structures:
 - You are responsible for timekeeping and keeping data about the Meraki API up to date in our internal state (we do not wait for users to hit the exporter to update data)
 - Be aware of API module organization - endpoints like `getOrganizationWirelessClientsOverviewByDevice` are in the `wireless` module, not `organizations`
 - Memory metrics use the `getOrganizationDevicesSystemMemoryUsageHistoryByInterval` endpoint without `total_pages` parameter
+- **Deprecated API Updates**: 
+  - Use `getOrganizationDevices` instead of deprecated `getNetworkDevices` - filter by networkIds and productTypes
+  - Use `getOrganizationDevicesAvailabilities` instead of deprecated `getOrganizationDevicesStatuses`
+  - The new APIs provide productType information which is exposed in metrics
 
 ## Metrics Guidelines
 - Use asyncio + anyio; expose /metrics via a Starlette or FastAPI app; Prometheus client supports async.

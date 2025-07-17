@@ -7,13 +7,12 @@ specific device types and metric collections.
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, computed_field, field_validator
 
-
 # Network Health Models
+
 
 class RFHealthData(BaseModel):
     """RF health data for wireless networks."""
@@ -36,6 +35,7 @@ class RFHealthData(BaseModel):
 
     class Config:
         """Pydantic configuration."""
+
         populate_by_name = True
         extra = "allow"
 
@@ -66,6 +66,7 @@ class NetworkConnectionStats(BaseModel):
 
     class Config:
         """Pydantic configuration."""
+
         extra = "allow"
 
 
@@ -121,6 +122,7 @@ class SwitchPort(BaseModel):
 
     class Config:
         """Pydantic configuration."""
+
         extra = "allow"
 
 
@@ -184,6 +186,7 @@ class MRDeviceStats(BaseModel):
 
     class Config:
         """Pydantic configuration."""
+
         extra = "allow"
 
 
@@ -208,6 +211,7 @@ class MRRadioStatus(BaseModel):
 
     class Config:
         """Pydantic configuration."""
+
         extra = "allow"
 
 
@@ -229,6 +233,7 @@ class ConfigurationChange(BaseModel):
 
     class Config:
         """Pydantic configuration."""
+
         extra = "allow"
 
 
@@ -257,7 +262,7 @@ class SensorMeasurement(BaseModel):
             "temperature": "celsius",
             "humidity": "percent",
             "water": "boolean",
-            "door": "boolean", 
+            "door": "boolean",
             "tvoc": "ppb",
             "co2": "ppm",
             "noise": "dB",
@@ -277,6 +282,7 @@ class MTSensorReading(BaseModel):
 
     class Config:
         """Pydantic configuration."""
+
         extra = "allow"
 
 
@@ -324,6 +330,7 @@ def parse_rf_health_response(data: dict[str, Any]) -> RFHealthData | None:
     -------
     RFHealthData | None
         Parsed RF health data or None if parsing fails.
+
     """
     try:
         return RFHealthData(**data)
@@ -343,5 +350,6 @@ def parse_connection_stats(data: dict[str, Any]) -> ConnectionStats:
     -------
     ConnectionStats
         Parsed connection statistics with defaults for missing values.
+
     """
     return ConnectionStats(**data)

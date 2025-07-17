@@ -6,7 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ..core.collector import MetricCollector
-from ..core.constants import MetricName, UpdateTier
+from ..core.constants import AlertMetricName, UpdateTier
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
@@ -27,7 +27,7 @@ class AlertsCollector(MetricCollector):
         """Initialize alert metrics."""
         # Active alerts count by various dimensions
         self._alerts_active = self._create_gauge(
-            MetricName.ALERTS_ACTIVE,
+            AlertMetricName.ALERTS_ACTIVE,
             "Number of active Meraki assurance alerts",
             labelnames=[
                 LabelName.ORG_ID,
@@ -43,14 +43,14 @@ class AlertsCollector(MetricCollector):
 
         # Total alerts by severity (simpler metric for quick dashboards)
         self._alerts_by_severity = self._create_gauge(
-            MetricName.ALERTS_TOTAL_BY_SEVERITY,
+            AlertMetricName.ALERTS_TOTAL_BY_SEVERITY,
             "Total number of active alerts by severity",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.SEVERITY],
         )
 
         # Alerts by network (for network-level overview)
         self._alerts_by_network = self._create_gauge(
-            MetricName.ALERTS_TOTAL_BY_NETWORK,
+            AlertMetricName.ALERTS_TOTAL_BY_NETWORK,
             "Total number of active alerts per network",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )

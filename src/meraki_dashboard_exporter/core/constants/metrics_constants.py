@@ -1,88 +1,33 @@
-"""Constants and enums for the Meraki Dashboard Exporter."""
+"""Metric name constants organized by domain for the Meraki Dashboard Exporter."""
 
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Final
 
 
-class MetricName(StrEnum):
-    """Prometheus metric names."""
-
-    # Organization metrics
+class OrgMetricName(StrEnum):
+    """Organization-level metric names."""
+    
+    # Basic organization metrics
+    ORG_INFO = "meraki_org_info"
     ORG_API_REQUESTS_TOTAL = "meraki_org_api_requests_total"
     ORG_API_REQUESTS_RATE_LIMIT = "meraki_org_api_requests_rate_limit"
     ORG_NETWORKS_TOTAL = "meraki_org_networks_total"
     ORG_DEVICES_TOTAL = "meraki_org_devices_total"
-    ORG_LICENSES_TOTAL = "meraki_org_licenses_total"
-    ORG_LICENSES_EXPIRING = "meraki_org_licenses_expiring"
-
-    # Network metrics
-    NETWORK_CLIENTS_TOTAL = "meraki_network_clients_total"
-    NETWORK_TRAFFIC_BYTES = "meraki_network_traffic_bytes"
-    NETWORK_DEVICE_STATUS = "meraki_network_device_status"
-    NETWORK_WIRELESS_CONNECTION_STATS = "meraki_network_wireless_connection_stats_total"
-
-    # Device common metrics
-    DEVICE_UP = "meraki_device_up"
-    DEVICE_MEMORY_USAGE_PERCENT = "meraki_device_memory_usage_percent"
-
-    # MS (Switch) specific metrics
-    MS_PORT_STATUS = "meraki_ms_port_status"
-    MS_PORT_TRAFFIC_BYTES = "meraki_ms_port_traffic_bytes"
-    MS_PORT_ERRORS_TOTAL = "meraki_ms_port_errors_total"
-    MS_POWER_USAGE_WATTS = "meraki_ms_power_usage_watts"
-    MS_POE_PORT_POWER_WATTS = "meraki_ms_poe_port_power_watthours"  # Actually Wh not W
-    MS_POE_TOTAL_POWER_WATTS = "meraki_ms_poe_total_power_watthours"  # Actually Wh not W
-    MS_POE_BUDGET_WATTS = "meraki_ms_poe_budget_watts"
-    MS_POE_NETWORK_TOTAL_WATTS = "meraki_ms_poe_network_total_watthours"  # Actually Wh not W
-
-    # MR (Access Point) specific metrics
-    MR_CLIENTS_CONNECTED = "meraki_mr_clients_connected"
-    MR_SIGNAL_QUALITY = "meraki_mr_signal_quality"
-    MR_CONNECTION_STATS = "meraki_mr_connection_stats_total"
-
-    # MV (Camera) specific metrics
-    MV_RECORDING_STATUS = "meraki_mv_recording_status"
-    MV_ANALYTICS_ZONES = "meraki_mv_analytics_zones"
-    MV_PEOPLE_COUNT = "meraki_mv_people_count"
-
-    # MT (Sensor) specific metrics
-    MT_TEMPERATURE_CELSIUS = "meraki_mt_temperature_celsius"
-    MT_HUMIDITY_PERCENT = "meraki_mt_humidity_percent"
-    MT_DOOR_STATUS = "meraki_mt_door_status"
-    MT_WATER_DETECTED = "meraki_mt_water_detected"
-    MT_CO2_PPM = "meraki_mt_co2_ppm"
-    MT_TVOC_PPB = "meraki_mt_tvoc_ppb"
-    MT_PM25_UG_M3 = "meraki_mt_pm25_ug_m3"
-    MT_NOISE_DB = "meraki_mt_noise_db"
-    MT_BATTERY_PERCENTAGE = "meraki_mt_battery_percentage"
-    MT_INDOOR_AIR_QUALITY_SCORE = "meraki_mt_indoor_air_quality_score"
-    MT_VOLTAGE_VOLTS = "meraki_mt_voltage_volts"
-    MT_CURRENT_AMPS = "meraki_mt_current_amps"
-    MT_REAL_POWER_WATTS = "meraki_mt_real_power_watts"
-    MT_APPARENT_POWER_VA = "meraki_mt_apparent_power_va"
-    MT_POWER_FACTOR_PERCENT = "meraki_mt_power_factor_percent"
-    MT_FREQUENCY_HZ = "meraki_mt_frequency_hz"
-    MT_DOWNSTREAM_POWER_ENABLED = "meraki_mt_downstream_power_enabled"
-    MT_REMOTE_LOCKOUT_STATUS = "meraki_mt_remote_lockout_status"
-    
-    # Additional metrics found in the codebase
-    # Organization metrics
-    ORG_INFO = "meraki_org_info"
     ORG_DEVICES_BY_MODEL_TOTAL = "meraki_org_devices_by_model_total"
     ORG_DEVICES_AVAILABILITY_TOTAL = "meraki_org_devices_availability_total"
+    
+    # License metrics
+    ORG_LICENSES_TOTAL = "meraki_org_licenses_total"
+    ORG_LICENSES_EXPIRING = "meraki_org_licenses_expiring"
+    
+    # Client and usage metrics
     ORG_CLIENTS_TOTAL = "meraki_org_clients_total"
     ORG_USAGE_TOTAL_KB = "meraki_org_usage_total_kb"
     ORG_USAGE_DOWNSTREAM_KB = "meraki_org_usage_downstream_kb"
     ORG_USAGE_UPSTREAM_KB = "meraki_org_usage_upstream_kb"
     
-    # Alert metrics
-    ALERTS_ACTIVE = "meraki_alerts_active"
-    ALERTS_TOTAL_BY_SEVERITY = "meraki_alerts_total_by_severity"
-    ALERTS_TOTAL_BY_NETWORK = "meraki_alerts_total_by_network"
-    
-    # Configuration/Security metrics
+    # Configuration and security metrics
     ORG_CONFIGURATION_CHANGES_TOTAL = "meraki_org_configuration_changes_total"
     ORG_LOGIN_SECURITY_ENABLED = "meraki_org_login_security_enabled"
     ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED = "meraki_org_login_security_strong_passwords_enabled"
@@ -99,23 +44,50 @@ class MetricName(StrEnum):
     ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ATTEMPTS = "meraki_org_login_security_account_lockout_attempts"
     ORG_LOGIN_SECURITY_API_IP_RESTRICTIONS_ENABLED = "meraki_org_login_security_api_ip_restrictions_enabled"
     ORG_LOGIN_SECURITY_MINIMUM_PASSWORD_LENGTH = "meraki_org_login_security_minimum_password_length"
+
+
+class NetworkMetricName(StrEnum):
+    """Network-level metric names."""
     
-    # Network health metrics
-    AP_CHANNEL_UTILIZATION_2_4GHZ_PERCENT = "meraki_ap_channel_utilization_2_4ghz_percent"
-    AP_CHANNEL_UTILIZATION_5GHZ_PERCENT = "meraki_ap_channel_utilization_5ghz_percent"
-    NETWORK_CHANNEL_UTILIZATION_2_4GHZ_PERCENT = "meraki_network_channel_utilization_2_4ghz_percent"
-    NETWORK_CHANNEL_UTILIZATION_5GHZ_PERCENT = "meraki_network_channel_utilization_5ghz_percent"
-    NETWORK_WIRELESS_DOWNLOAD_KBPS = "meraki_network_wireless_download_kbps"
-    NETWORK_WIRELESS_UPLOAD_KBPS = "meraki_network_wireless_upload_kbps"
-    NETWORK_BLUETOOTH_CLIENTS_TOTAL = "meraki_network_bluetooth_clients_total"
+    NETWORK_CLIENTS_TOTAL = "meraki_network_clients_total"
+    NETWORK_TRAFFIC_BYTES = "meraki_network_traffic_bytes"
+    NETWORK_DEVICE_STATUS = "meraki_network_device_status"
+    NETWORK_WIRELESS_CONNECTION_STATS = "meraki_network_wireless_connection_stats_total"
+
+
+class DeviceMetricName(StrEnum):
+    """Common device metric names."""
     
-    # Device status info metrics
+    DEVICE_UP = "meraki_device_up"
     DEVICE_STATUS_INFO = "meraki_device_status_info"
+    DEVICE_MEMORY_USAGE_PERCENT = "meraki_device_memory_usage_percent"
     DEVICE_MEMORY_USED_BYTES = "meraki_device_memory_used_bytes"
     DEVICE_MEMORY_FREE_BYTES = "meraki_device_memory_free_bytes"
     DEVICE_MEMORY_TOTAL_BYTES = "meraki_device_memory_total_bytes"
+
+
+class MSMetricName(StrEnum):
+    """MS (Switch) specific metric names."""
     
-    # MR additional metrics
+    MS_PORT_STATUS = "meraki_ms_port_status"
+    MS_PORT_TRAFFIC_BYTES = "meraki_ms_port_traffic_bytes"
+    MS_PORT_ERRORS_TOTAL = "meraki_ms_port_errors_total"
+    MS_POWER_USAGE_WATTS = "meraki_ms_power_usage_watts"
+    MS_POE_PORT_POWER_WATTS = "meraki_ms_poe_port_power_watthours"  # Actually Wh not W
+    MS_POE_TOTAL_POWER_WATTS = "meraki_ms_poe_total_power_watthours"  # Actually Wh not W
+    MS_POE_BUDGET_WATTS = "meraki_ms_poe_budget_watts"
+    MS_POE_NETWORK_TOTAL_WATTS = "meraki_ms_poe_network_total_watthours"  # Actually Wh not W
+
+
+class MRMetricName(StrEnum):
+    """MR (Access Point) specific metric names."""
+    
+    # Basic metrics
+    MR_CLIENTS_CONNECTED = "meraki_mr_clients_connected"
+    MR_SIGNAL_QUALITY = "meraki_mr_signal_quality"
+    MR_CONNECTION_STATS = "meraki_mr_connection_stats_total"
+    
+    # Power and port metrics
     MR_POWER_INFO = "meraki_mr_power_info"
     MR_POWER_AC_CONNECTED = "meraki_mr_power_ac_connected"
     MR_POWER_POE_CONNECTED = "meraki_mr_power_poe_connected"
@@ -123,12 +95,18 @@ class MetricName(StrEnum):
     MR_PORT_LINK_NEGOTIATION_INFO = "meraki_mr_port_link_negotiation_info"
     MR_PORT_LINK_NEGOTIATION_SPEED_MBPS = "meraki_mr_port_link_negotiation_speed_mbps"
     MR_CABLE_LENGTH_METERS = "meraki_mr_cable_length_meters"
+    
+    # Aggregation metrics
     MR_AGGREGATION_SPEED_MBPS = "meraki_mr_aggregation_speed_mbps"
     MR_AGGREGATION_FULL_DUPLEX = "meraki_mr_aggregation_full_duplex"
     MR_AGGREGATION_ENABLED = "meraki_mr_aggregation_enabled"
+    
+    # Uplink and signal metrics
     MR_UPLINK_INFO = "meraki_mr_uplink_info"
     MR_SIGNAL_QUALITY_PERCENT = "meraki_mr_signal_quality_percent"
     MR_SIGNAL_NOISE_RATIO_DB = "meraki_mr_signal_noise_ratio_db"
+    
+    # Packet loss metrics - Device level
     MR_PACKETS_DOWNSTREAM_TOTAL = "meraki_mr_packets_downstream_total"
     MR_PACKETS_DOWNSTREAM_LOST = "meraki_mr_packets_downstream_lost"
     MR_PACKET_LOSS_DOWNSTREAM_PERCENT = "meraki_mr_packet_loss_downstream_percent"
@@ -138,6 +116,8 @@ class MetricName(StrEnum):
     MR_PACKETS_TOTAL = "meraki_mr_packets_total"
     MR_PACKETS_LOST_TOTAL = "meraki_mr_packets_lost_total"
     MR_PACKET_LOSS_TOTAL_PERCENT = "meraki_mr_packet_loss_total_percent"
+    
+    # Packet loss metrics - Network level
     MR_NETWORK_PACKETS_DOWNSTREAM_TOTAL = "meraki_mr_network_packets_downstream_total"
     MR_NETWORK_PACKETS_DOWNSTREAM_LOST = "meraki_mr_network_packets_downstream_lost"
     MR_NETWORK_PACKET_LOSS_DOWNSTREAM_PERCENT = "meraki_mr_network_packet_loss_downstream_percent"
@@ -147,6 +127,8 @@ class MetricName(StrEnum):
     MR_NETWORK_PACKETS_TOTAL = "meraki_mr_network_packets_total"
     MR_NETWORK_PACKETS_LOST_TOTAL = "meraki_mr_network_packets_lost_total"
     MR_NETWORK_PACKET_LOSS_TOTAL_PERCENT = "meraki_mr_network_packet_loss_total_percent"
+    
+    # Other metrics
     MR_NETWORK_TRAFFIC_KBPS = "meraki_mr_network_traffic_kbps"
     MR_CPU_LOAD_5MIN = "meraki_mr_cpu_load_5min"
     MR_RADIO_BROADCASTING = "meraki_mr_radio_broadcasting"
@@ -155,41 +137,68 @@ class MetricName(StrEnum):
     MR_RADIO_POWER_DBM = "meraki_mr_radio_power_dbm"
 
 
-class DeviceType(StrEnum):
-    """Meraki device types."""
-
-    MS = "MS"  # Switches
-    MR = "MR"  # Wireless APs
-    MV = "MV"  # Cameras
-    MT = "MT"  # Sensors
-    MX = "MX"  # Security appliances
-    MG = "MG"  # Cellular gateways
+class MVMetricName(StrEnum):
+    """MV (Camera) specific metric names."""
+    
+    MV_RECORDING_STATUS = "meraki_mv_recording_status"
+    MV_ANALYTICS_ZONES = "meraki_mv_analytics_zones"
+    MV_PEOPLE_COUNT = "meraki_mv_people_count"
 
 
-class DeviceStatus(StrEnum):
-    """Device status values."""
+class MTMetricName(StrEnum):
+    """MT (Sensor) specific metric names."""
+    
+    # Environmental metrics
+    MT_TEMPERATURE_CELSIUS = "meraki_mt_temperature_celsius"
+    MT_HUMIDITY_PERCENT = "meraki_mt_humidity_percent"
+    MT_DOOR_STATUS = "meraki_mt_door_status"
+    MT_WATER_DETECTED = "meraki_mt_water_detected"
+    MT_CO2_PPM = "meraki_mt_co2_ppm"
+    MT_TVOC_PPB = "meraki_mt_tvoc_ppb"
+    MT_PM25_UG_M3 = "meraki_mt_pm25_ug_m3"
+    MT_NOISE_DB = "meraki_mt_noise_db"
+    MT_INDOOR_AIR_QUALITY_SCORE = "meraki_mt_indoor_air_quality_score"
+    
+    # Power metrics
+    MT_BATTERY_PERCENTAGE = "meraki_mt_battery_percentage"
+    MT_VOLTAGE_VOLTS = "meraki_mt_voltage_volts"
+    MT_CURRENT_AMPS = "meraki_mt_current_amps"
+    MT_REAL_POWER_WATTS = "meraki_mt_real_power_watts"
+    MT_APPARENT_POWER_VA = "meraki_mt_apparent_power_va"
+    MT_POWER_FACTOR_PERCENT = "meraki_mt_power_factor_percent"
+    MT_FREQUENCY_HZ = "meraki_mt_frequency_hz"
+    MT_DOWNSTREAM_POWER_ENABLED = "meraki_mt_downstream_power_enabled"
+    MT_REMOTE_LOCKOUT_STATUS = "meraki_mt_remote_lockout_status"
 
-    ONLINE = "online"
-    OFFLINE = "offline"
-    ALERTING = "alerting"
-    DORMANT = "dormant"
+
+class AlertMetricName(StrEnum):
+    """Alert metric names."""
+    
+    ALERTS_ACTIVE = "meraki_alerts_active"
+    ALERTS_TOTAL_BY_SEVERITY = "meraki_alerts_total_by_severity"
+    ALERTS_TOTAL_BY_NETWORK = "meraki_alerts_total_by_network"
 
 
-class UpdateTier(StrEnum):
-    """Update tier for metrics collection."""
+class ConfigMetricName(StrEnum):
+    """Configuration metric names."""
+    
+    # Currently no separate config metrics - configuration changes are tracked under OrgMetricName
+    pass
 
-    FAST = "fast"  # Sensor data, real-time metrics
-    MEDIUM = "medium"  # Device metrics, org metrics, network health
-    SLOW = "slow"  # Configuration data, security settings
 
+class NetworkHealthMetricName(StrEnum):
+    """Network health metric names."""
+    
+    # Channel utilization metrics
+    AP_CHANNEL_UTILIZATION_2_4GHZ_PERCENT = "meraki_ap_channel_utilization_2_4ghz_percent"
+    AP_CHANNEL_UTILIZATION_5GHZ_PERCENT = "meraki_ap_channel_utilization_5ghz_percent"
+    NETWORK_CHANNEL_UTILIZATION_2_4GHZ_PERCENT = "meraki_network_channel_utilization_2_4ghz_percent"
+    NETWORK_CHANNEL_UTILIZATION_5GHZ_PERCENT = "meraki_network_channel_utilization_5ghz_percent"
+    
+    # Data rate metrics
+    NETWORK_WIRELESS_DOWNLOAD_KBPS = "meraki_network_wireless_download_kbps"
+    NETWORK_WIRELESS_UPLOAD_KBPS = "meraki_network_wireless_upload_kbps"
+    
+    # Bluetooth metrics
+    NETWORK_BLUETOOTH_CLIENTS_TOTAL = "meraki_network_bluetooth_clients_total"
 
-# Default values
-DEFAULT_API_TIMEOUT: Final[int] = 30  # seconds
-DEFAULT_MAX_RETRIES: Final[int] = 4  # default for Meraki SDK
-
-# Meraki API regional base URLs
-MERAKI_API_BASE_URL: Final[str] = "https://api.meraki.com/api/v1"  # Default/Global
-MERAKI_API_BASE_URL_CANADA: Final[str] = "https://api.meraki.ca/api/v1"
-MERAKI_API_BASE_URL_CHINA: Final[str] = "https://api.meraki.cn/api/v1"
-MERAKI_API_BASE_URL_INDIA: Final[str] = "https://api.meraki.in/api/v1"
-MERAKI_API_BASE_URL_US_FED: Final[str] = "https://api.gov-meraki.com/api/v1"

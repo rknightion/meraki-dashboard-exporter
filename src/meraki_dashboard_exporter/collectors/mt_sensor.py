@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..core.collector import MetricCollector
-from ..core.constants import MetricName, UpdateTier
+from ..core.constants import MTMetricName, UpdateTier
 from ..core.error_handling import with_error_handling
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
@@ -42,120 +42,120 @@ class MTSensorCollector(MetricCollector):
         # Pass API and settings to MT collector
         self.mt_collector.api = api
         self.mt_collector.settings = settings
+        # Pass this collector as the parent for metric access
+        # This allows MTCollector to use MTSensorCollector's metrics
+        self.mt_collector.parent = self
 
     def _initialize_metrics(self) -> None:
         """Initialize sensor metrics."""
         # Temperature sensors
         self._sensor_temperature = self._create_gauge(
-            MetricName.MT_TEMPERATURE_CELSIUS,
+            MTMetricName.MT_TEMPERATURE_CELSIUS,
             "Temperature reading in Celsius",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_humidity = self._create_gauge(
-            MetricName.MT_HUMIDITY_PERCENT,
+            MTMetricName.MT_HUMIDITY_PERCENT,
             "Humidity percentage",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_door = self._create_gauge(
-            MetricName.MT_DOOR_STATUS,
+            MTMetricName.MT_DOOR_STATUS,
             "Door sensor status (1 = open, 0 = closed)",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_water = self._create_gauge(
-            MetricName.MT_WATER_DETECTED,
+            MTMetricName.MT_WATER_DETECTED,
             "Water detection status (1 = detected, 0 = not detected)",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_co2 = self._create_gauge(
-            MetricName.MT_CO2_PPM,
+            MTMetricName.MT_CO2_PPM,
             "CO2 level in parts per million",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_tvoc = self._create_gauge(
-            MetricName.MT_TVOC_PPB,
+            MTMetricName.MT_TVOC_PPB,
             "Total volatile organic compounds in parts per billion",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_pm25 = self._create_gauge(
-            MetricName.MT_PM25_UG_M3,
+            MTMetricName.MT_PM25_UG_M3,
             "PM2.5 particulate matter in micrograms per cubic meter",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_noise = self._create_gauge(
-            MetricName.MT_NOISE_DB,
+            MTMetricName.MT_NOISE_DB,
             "Noise level in decibels",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_battery = self._create_gauge(
-            MetricName.MT_BATTERY_PERCENTAGE,
+            MTMetricName.MT_BATTERY_PERCENTAGE,
             "Battery level percentage",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_air_quality = self._create_gauge(
-            MetricName.MT_INDOOR_AIR_QUALITY_SCORE,
+            MTMetricName.MT_INDOOR_AIR_QUALITY_SCORE,
             "Indoor air quality score (0-100)",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_voltage = self._create_gauge(
-            MetricName.MT_VOLTAGE_VOLTS,
+            MTMetricName.MT_VOLTAGE_VOLTS,
             "Voltage in volts",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_current = self._create_gauge(
-            MetricName.MT_CURRENT_AMPS,
+            MTMetricName.MT_CURRENT_AMPS,
             "Current in amperes",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_real_power = self._create_gauge(
-            MetricName.MT_REAL_POWER_WATTS,
+            MTMetricName.MT_REAL_POWER_WATTS,
             "Real power in watts",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_apparent_power = self._create_gauge(
-            MetricName.MT_APPARENT_POWER_VA,
+            MTMetricName.MT_APPARENT_POWER_VA,
             "Apparent power in volt-amperes",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_power_factor = self._create_gauge(
-            MetricName.MT_POWER_FACTOR_PERCENT,
+            MTMetricName.MT_POWER_FACTOR_PERCENT,
             "Power factor percentage",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_frequency = self._create_gauge(
-            MetricName.MT_FREQUENCY_HZ,
+            MTMetricName.MT_FREQUENCY_HZ,
             "Frequency in hertz",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_downstream_power = self._create_gauge(
-            MetricName.MT_DOWNSTREAM_POWER_ENABLED,
+            MTMetricName.MT_DOWNSTREAM_POWER_ENABLED,
             "Downstream power status (1 = enabled, 0 = disabled)",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
 
         self._sensor_remote_lockout = self._create_gauge(
-            MetricName.MT_REMOTE_LOCKOUT_STATUS,
+            MTMetricName.MT_REMOTE_LOCKOUT_STATUS,
             "Remote lockout switch status (1 = locked, 0 = unlocked)",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
         )
-
-        # Pass self as parent to MT collector so it can access metrics
-        self.mt_collector.parent = self
 
     @with_error_handling(
         operation="Collect MT sensor metrics",

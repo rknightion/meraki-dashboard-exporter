@@ -6,7 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ..core.collector import MetricCollector
-from ..core.constants import MetricName, UpdateTier
+from ..core.constants import NetworkHealthMetricName, NetworkMetricName, ProductType, UpdateTier
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
@@ -49,53 +49,53 @@ class NetworkHealthCollector(MetricCollector):
         """Initialize network health metrics."""
         # RF channel utilization metrics per AP
         self._ap_utilization_2_4ghz = self._create_gauge(
-            MetricName.AP_CHANNEL_UTILIZATION_2_4GHZ_PERCENT,
+            NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_2_4GHZ_PERCENT,
             "2.4GHz channel utilization percentage per AP",
             labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.TYPE],
         )
 
         self._ap_utilization_5ghz = self._create_gauge(
-            MetricName.AP_CHANNEL_UTILIZATION_5GHZ_PERCENT,
+            NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_5GHZ_PERCENT,
             "5GHz channel utilization percentage per AP",
             labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.TYPE],
         )
 
         # Network-wide average utilization
         self._network_utilization_2_4ghz = self._create_gauge(
-            MetricName.NETWORK_CHANNEL_UTILIZATION_2_4GHZ_PERCENT,
+            NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_2_4GHZ_PERCENT,
             "Network-wide average 2.4GHz channel utilization percentage",
             labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.TYPE],
         )
 
         self._network_utilization_5ghz = self._create_gauge(
-            MetricName.NETWORK_CHANNEL_UTILIZATION_5GHZ_PERCENT,
+            NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_5GHZ_PERCENT,
             "Network-wide average 5GHz channel utilization percentage",
             labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.TYPE],
         )
 
         # Network-wide wireless connection statistics
         self._network_connection_stats = self._create_gauge(
-            MetricName.NETWORK_WIRELESS_CONNECTION_STATS,
+            NetworkMetricName.NETWORK_WIRELESS_CONNECTION_STATS,
             "Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)",
             labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.STAT_TYPE],
         )
 
         # Network-wide wireless data rate metrics
         self._network_wireless_download_kbps = self._create_gauge(
-            MetricName.NETWORK_WIRELESS_DOWNLOAD_KBPS,
+            NetworkHealthMetricName.NETWORK_WIRELESS_DOWNLOAD_KBPS,
             "Network-wide wireless download bandwidth in kilobits per second",
             labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         self._network_wireless_upload_kbps = self._create_gauge(
-            MetricName.NETWORK_WIRELESS_UPLOAD_KBPS,
+            NetworkHealthMetricName.NETWORK_WIRELESS_UPLOAD_KBPS,
             "Network-wide wireless upload bandwidth in kilobits per second",
             labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         # Bluetooth clients detected by MR devices
         self._network_bluetooth_clients_total = self._create_gauge(
-            MetricName.NETWORK_BLUETOOTH_CLIENTS_TOTAL,
+            NetworkHealthMetricName.NETWORK_BLUETOOTH_CLIENTS_TOTAL,
             "Total number of Bluetooth clients detected by MR devices in the last 5 minutes",
             labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
@@ -185,28 +185,28 @@ class NetworkHealthCollector(MetricCollector):
                 tasks = [
                     self._collect_network_rf_health(network)
                     for network in batch
-                    if "wireless" in network.get("productTypes", [])
+                    if ProductType.WIRELESS in network.get("productTypes", [])
                 ]
 
                 # Also collect connection stats for wireless networks
                 connection_tasks = [
                     self._collect_network_connection_stats(network)
                     for network in batch
-                    if "wireless" in network.get("productTypes", [])
+                    if ProductType.WIRELESS in network.get("productTypes", [])
                 ]
 
                 # Also collect data rate metrics for wireless networks
                 data_rate_tasks = [
                     self._collect_network_data_rates(network)
                     for network in batch
-                    if "wireless" in network.get("productTypes", [])
+                    if ProductType.WIRELESS in network.get("productTypes", [])
                 ]
 
                 # Also collect Bluetooth clients for wireless networks
                 bluetooth_tasks = [
                     self._collect_network_bluetooth_clients(network)
                     for network in batch
-                    if "wireless" in network.get("productTypes", [])
+                    if ProductType.WIRELESS in network.get("productTypes", [])
                 ]
 
                 all_tasks = tasks + connection_tasks + data_rate_tasks + bluetooth_tasks

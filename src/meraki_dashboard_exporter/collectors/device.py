@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
-from ..core.constants import DeviceType, MetricName, UpdateTier
+from ..core.constants import DEFAULT_DEVICE_STATUS, DeviceMetricName, DeviceStatus, DeviceType, UpdateTier
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
@@ -100,57 +100,56 @@ class DeviceCollector(MetricCollector):
 
         # Map device type strings to collectors
         self._device_collectors = {
-            "MG": self.mg_collector,
-            "MR": self.mr_collector,
-            "MS": self.ms_collector,
-            "MT": self.mt_collector,
-            "MV": self.mv_collector,
-            "MX": self.mx_collector,
+            DeviceType.MG: self.mg_collector,
+            DeviceType.MR: self.mr_collector,
+            DeviceType.MS: self.ms_collector,
+            DeviceType.MT: self.mt_collector,
+            DeviceType.MV: self.mv_collector,
+            DeviceType.MX: self.mx_collector,
         }
 
         # Cache for retaining last known packet metric values
         self._packet_metrics_cache: dict[str, float] = {}
         
-        # Initialize sub-collector metrics
-        self.mr_collector._initialize_metrics()
+        # Initialize sub-collector metrics (only for collectors without their own __init__)
         self.ms_collector._initialize_metrics()
 
     def _initialize_metrics(self) -> None:
         """Initialize device metrics."""
         # Common device metrics
         self._device_up = self._create_gauge(
-            MetricName.DEVICE_UP,
+            DeviceMetricName.DEVICE_UP,
             "Device online status (1 = online, 0 = offline)",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE],
         )
 
         self._device_status_info = self._create_gauge(
-            MetricName.DEVICE_STATUS_INFO,
+            DeviceMetricName.DEVICE_STATUS_INFO,
             "Device status information",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE, LabelName.STATUS],
         )
 
         # Memory metrics - available via system memory usage history API
         self._device_memory_used_bytes = self._create_gauge(
-            MetricName.DEVICE_MEMORY_USED_BYTES,
+            DeviceMetricName.DEVICE_MEMORY_USED_BYTES,
             "Device memory used in bytes",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE, LabelName.STAT],
         )
 
         self._device_memory_free_bytes = self._create_gauge(
-            MetricName.DEVICE_MEMORY_FREE_BYTES,
+            DeviceMetricName.DEVICE_MEMORY_FREE_BYTES,
             "Device memory free in bytes",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE, LabelName.STAT],
         )
 
         self._device_memory_total_bytes = self._create_gauge(
-            MetricName.DEVICE_MEMORY_TOTAL_BYTES,
+            DeviceMetricName.DEVICE_MEMORY_TOTAL_BYTES,
             "Device memory total provisioned in bytes",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE],
         )
 
         self._device_memory_usage_percent = self._create_gauge(
-            MetricName.DEVICE_MEMORY_USAGE_PERCENT,
+            DeviceMetricName.DEVICE_MEMORY_USAGE_PERCENT,
             "Device memory usage percentage (maximum from most recent interval)",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE],
         )
@@ -253,7 +252,7 @@ class DeviceCollector(MetricCollector):
             )
 
             # Create availability lookup by serial
-            availability_map = {a["serial"]: a.get("status", "offline") for a in availabilities}
+            availability_map = {a["serial"]: a.get("status", DEFAULT_DEVICE_STATUS) for a in availabilities}
 
             # Track network POE usage (removed for now - not implemented)
 
@@ -273,7 +272,7 @@ class DeviceCollector(MetricCollector):
                 }
 
                 # Add availability status to device
-                device["availability_status"] = availability_map.get(device["serial"], "offline")
+                device["availability_status"] = availability_map.get(device["serial"], DEFAULT_DEVICE_STATUS)
 
                 # Collect common metrics
                 self._collect_common_metrics(device)
@@ -284,8 +283,8 @@ class DeviceCollector(MetricCollector):
                 devices_by_type[device_type].append(device)
 
             # Store references for legacy code
-            ms_devices = devices_by_type.get("MS", [])
-            mr_devices = devices_by_type.get("MR", [])
+            ms_devices = devices_by_type.get(DeviceType.MS, [])
+            mr_devices = devices_by_type.get(DeviceType.MR, [])
 
             # Process MS devices
             if ms_devices:
@@ -323,7 +322,7 @@ class DeviceCollector(MetricCollector):
             # Process other device types (MX, MG, MV)
             for device_type, type_devices in devices_by_type.items():
                 # Skip MS and MR as they're handled above (for now)
-                if device_type in {"MS", "MR"}:
+                if device_type in {DeviceType.MS, DeviceType.MR}:
                     continue
 
                 if type_devices:
@@ -357,7 +356,7 @@ class DeviceCollector(MetricCollector):
                 logger.exception("Failed to collect memory metrics")
 
             # Collect MR-specific metrics
-            if any(d for d in devices if d.get("model", "").startswith("MR")):
+            if any(d for d in devices if d.get("model", "").startswith(DeviceType.MR)):
                 logger.debug("Collecting MR-specific metrics")
                 # Use MR collector for all MR-specific metrics
                 await self._collect_mr_specific_metrics(org_id, devices)
@@ -497,10 +496,10 @@ class DeviceCollector(MetricCollector):
         model = device.get("model", "Unknown")
         network_id = device.get("networkId", "")
         device_type = self._get_device_type(device)
-        availability_status = device.get("availability_status", "offline")
+        availability_status = device.get("availability_status", DEFAULT_DEVICE_STATUS)
 
         # Device up/down status
-        is_online = 1 if availability_status == "online" else 0
+        is_online = 1 if availability_status == DeviceStatus.ONLINE else 0
         self._set_metric_value(
             "_device_up",
             {

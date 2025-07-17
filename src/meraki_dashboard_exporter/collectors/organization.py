@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 from ..core.api_helpers import create_api_helper
 from ..core.collector import MetricCollector
-from ..core.constants import MetricName, UpdateTier
-from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ..core.constants import OrgMetricName, UpdateTier
+from ..core.error_handling import ErrorCategory, with_error_handling
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
 from .organization_collectors import APIUsageCollector, ClientOverviewCollector, LicenseCollector
@@ -49,86 +49,86 @@ class OrganizationCollector(MetricCollector):
         """Initialize organization metrics."""
         # Organization info
         self._org_info = self._create_info(
-            MetricName.ORG_INFO,
+            OrgMetricName.ORG_INFO,
             "Organization information",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         # API metrics
         self._api_requests_total = self._create_gauge(
-            MetricName.ORG_API_REQUESTS_TOTAL,
+            OrgMetricName.ORG_API_REQUESTS_TOTAL,
             "Total API requests made by the organization",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._api_rate_limit = self._create_gauge(
-            MetricName.ORG_API_REQUESTS_RATE_LIMIT,
+            OrgMetricName.ORG_API_REQUESTS_RATE_LIMIT,
             "API rate limit for the organization",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         # Network metrics
         self._networks_total = self._create_gauge(
-            MetricName.ORG_NETWORKS_TOTAL,
+            OrgMetricName.ORG_NETWORKS_TOTAL,
             "Total number of networks in the organization",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         # Device metrics
         self._devices_total = self._create_gauge(
-            MetricName.ORG_DEVICES_TOTAL,
+            OrgMetricName.ORG_DEVICES_TOTAL,
             "Total number of devices in the organization",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.DEVICE_TYPE],
         )
 
         self._devices_by_model_total = self._create_gauge(
-            MetricName.ORG_DEVICES_BY_MODEL_TOTAL,
+            OrgMetricName.ORG_DEVICES_BY_MODEL_TOTAL,
             "Total number of devices by specific model",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.MODEL],
         )
 
         # Device availability metrics (from new API)
         self._devices_availability_total = self._create_gauge(
-            MetricName.ORG_DEVICES_AVAILABILITY_TOTAL,
+            OrgMetricName.ORG_DEVICES_AVAILABILITY_TOTAL,
             "Total number of devices by availability status and product type",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.STATUS, LabelName.PRODUCT_TYPE],
         )
 
         # License metrics
         self._licenses_total = self._create_gauge(
-            MetricName.ORG_LICENSES_TOTAL,
+            OrgMetricName.ORG_LICENSES_TOTAL,
             "Total number of licenses",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.LICENSE_TYPE, LabelName.STATUS],
         )
 
         self._licenses_expiring = self._create_gauge(
-            MetricName.ORG_LICENSES_EXPIRING,
+            OrgMetricName.ORG_LICENSES_EXPIRING,
             "Number of licenses expiring within 30 days",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.LICENSE_TYPE],
         )
 
         # Client metrics
         self._clients_total = self._create_gauge(
-            MetricName.ORG_CLIENTS_TOTAL,
+            OrgMetricName.ORG_CLIENTS_TOTAL,
             "Total number of active clients in the organization (5-minute window from last complete interval)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         # Usage metrics (in KB for the 5-minute window)
         self._usage_total_kb = self._create_gauge(
-            MetricName.ORG_USAGE_TOTAL_KB,
+            OrgMetricName.ORG_USAGE_TOTAL_KB,
             "Total data usage in KB for the 5-minute window (last complete 5-min interval, e.g., 11:04 call returns 10:55-11:00)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._usage_downstream_kb = self._create_gauge(
-            MetricName.ORG_USAGE_DOWNSTREAM_KB,
+            OrgMetricName.ORG_USAGE_DOWNSTREAM_KB,
             "Downstream data usage in KB for the 5-minute window (last complete 5-min interval)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._usage_upstream_kb = self._create_gauge(
-            MetricName.ORG_USAGE_UPSTREAM_KB,
+            OrgMetricName.ORG_USAGE_UPSTREAM_KB,
             "Upstream data usage in KB for the 5-minute window (last complete 5-min interval)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
@@ -202,6 +202,9 @@ class OrganizationCollector(MetricCollector):
 
             logger.debug("Collecting device counts by model", org_id=org_id)
             await self._collect_device_counts_by_model(org_id, org_name)
+
+            logger.debug("Collecting device availability metrics", org_id=org_id)
+            await self._collect_device_availability_metrics(org_id, org_name)
 
             logger.debug("Collecting license metrics", org_id=org_id)
             await self._collect_license_metrics(org_id, org_name)
@@ -395,6 +398,60 @@ class OrganizationCollector(MetricCollector):
 
         """
         await self.license_collector.collect(org_id, org_name)
+
+    async def _collect_device_availability_metrics(self, org_id: str, org_name: str) -> None:
+        """Collect device availability metrics.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        try:
+            logger.debug("Fetching device availabilities", org_id=org_id)
+            self._track_api_call("getOrganizationDevicesAvailabilities")
+            availabilities = await asyncio.to_thread(
+                self.api.organizations.getOrganizationDevicesAvailabilities,
+                org_id,
+                total_pages="all",
+            )
+
+            # Group by status and product type
+            availability_counts: dict[tuple[str, str], int] = {}
+            for device in availabilities:
+                status = device.get("status", "unknown")
+                product_type = device.get("productType", "unknown")
+                key = (status, product_type)
+                availability_counts[key] = availability_counts.get(key, 0) + 1
+
+            # Set metrics for each combination
+            if self._devices_availability_total:
+                for (status, product_type), count in availability_counts.items():
+                    self._devices_availability_total.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                        status=status,
+                        product_type=product_type,
+                    ).set(count)
+                    logger.debug(
+                        "Set device availability count",
+                        org_id=org_id,
+                        status=status,
+                        product_type=product_type,
+                        count=count,
+                    )
+            else:
+                logger.error("_devices_availability_total metric not initialized")
+
+        except Exception:
+            logger.exception(
+                "Failed to collect device availability metrics",
+                org_id=org_id,
+                org_name=org_name,
+            )
 
     async def _collect_client_overview(self, org_id: str, org_name: str) -> None:
         """Collect client overview metrics.

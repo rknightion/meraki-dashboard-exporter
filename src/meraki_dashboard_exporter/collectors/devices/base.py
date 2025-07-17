@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants import DeviceStatus
-from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ...core.error_handling import ErrorCategory, with_error_handling
 from ...core.logging import get_logger
 
 if TYPE_CHECKING:

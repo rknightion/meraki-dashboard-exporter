@@ -73,6 +73,7 @@ class LabelName(StrEnum):
     DUPLEX = "duplex"  # Port duplex status
     STANDARD = "standard"  # Port standard
     RADIO_INDEX = "radio_index"  # Radio index for MR devices
+    PRODUCT_TYPE = "product_type"  # Product type from device availability API
 
 
 MetricType = Literal["gauge", "counter", "histogram", "info"]
