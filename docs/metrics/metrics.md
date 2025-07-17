@@ -9,13 +9,11 @@ The exporter provides metrics across several categories:
 | Collector | Metrics | Description |
 |-----------|---------|-------------|
 | AlertsCollector | 3 | Active alerts by severity, type, and category |
-| AsyncPatternExampleCollector | 1 | Various metrics |
 | ConfigCollector | 14 | Organization security settings and configuration tracking |
 | DeviceCollector | 6 | Device status, performance, and uptime metrics |
 | MTSensorCollector | 18 | Environmental monitoring from MT sensors |
 | NetworkHealthCollector | 8 | Network-wide wireless health and performance |
 | OrganizationCollector | 13 | Organization-level metrics including API usage and licenses |
-| OrganizationCollectorAsync | 3 | Various metrics |
 
 ## Metrics by Collector
 
@@ -52,20 +50,6 @@ The exporter provides metrics across several categories:
 **Labels:** 
 
 **Variable:** `self._alerts_by_network` (line 51)
-
-### AsyncPatternExampleCollector
-
-**Source:** `src/meraki_dashboard_exporter/collectors/examples/async_pattern_example.py`
-
-#### `example_async_metric`
-
-**Description:** Example metric for async patterns
-
-**Type:** gauge
-
-**Labels:** `org_id`, `network_id`
-
-**Variable:** `self._example_gauge` (line 37)
 
 ### ConfigCollector
 
@@ -677,40 +661,6 @@ The exporter provides metrics across several categories:
 
 **Variable:** `self._usage_upstream_kb` (line 139)
 
-### OrganizationCollectorAsync
-
-**Source:** `src/meraki_dashboard_exporter/collectors/examples/organization_async_refactored.py`
-
-#### `Unknown`
-
-**Description:** Organization information
-
-**Type:** info
-
-**Labels:** `org_id`, `org_name`
-
-**Variable:** `self._org_info` (line 52)
-
-#### `Unknown`
-
-**Description:** Total number of networks in the organization
-
-**Type:** gauge
-
-**Labels:** `org_id`, `org_name`
-
-**Variable:** `self._org_networks_total` (line 59)
-
-#### `Unknown`
-
-**Description:** Total number of devices in the organization
-
-**Type:** gauge
-
-**Labels:** `org_id`, `org_name`
-
-**Variable:** `self._org_devices_total` (line 66)
-
 ## Complete Metrics Index
 
 All metrics in alphabetical order:
@@ -779,10 +729,6 @@ All metrics in alphabetical order:
 | `Unknown` | gauge | NetworkHealthCollector | Network-wide wireless download bandwidth in kilobits per second |
 | `Unknown` | gauge | NetworkHealthCollector | Network-wide wireless upload bandwidth in kilobits per second |
 | `Unknown` | gauge | NetworkHealthCollector | Total number of Bluetooth clients detected by MR devices in the last 5 minutes |
-| `Unknown` | info | OrganizationCollectorAsync | Organization information |
-| `Unknown` | gauge | OrganizationCollectorAsync | Total number of networks in the organization |
-| `Unknown` | gauge | OrganizationCollectorAsync | Total number of devices in the organization |
-| `example_async_metric` | gauge | AsyncPatternExampleCollector | Example metric for async patterns |
 
 ## Notes
 

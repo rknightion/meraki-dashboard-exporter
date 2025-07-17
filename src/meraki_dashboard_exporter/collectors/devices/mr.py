@@ -615,8 +615,11 @@ class MRCollector(BaseDeviceCollector):
             for device_status in ethernet_data:
                 serial = device_status.get("serial", "")
                 device_info = device_lookup.get(serial, {})
-                device_name = device_info.get("name", serial)
-                network_id = device_info.get("networkId", "")
+                # Use device name from API response if not in lookup, fallback to serial
+                device_name = device_info.get("name") or device_status.get("name", serial)
+                # Get network_id from the API response itself, not device_lookup
+                network_info = device_status.get("network", {})
+                network_id = network_info.get("id", "")
 
                 # Power mode information
                 power_mode = device_status.get("power", {}).get("mode")
@@ -687,11 +690,16 @@ class MRCollector(BaseDeviceCollector):
                         port_name=port_name,
                     ).set(speed if speed is not None else 0)
 
-                    # Check for aggregation
-                    if port.get("isAggregated", False):
-                        aggregation_enabled = True
-                        if speed is not None:
-                            total_speed += speed
+                    # Check for aggregation - Note: ports don't have isAggregated field
+                    # but we can get aggregation info from the device level
+                    if speed is not None:
+                        total_speed += speed
+
+                # Get aggregation info from device level (not per-port)
+                aggregation_info = device_status.get("aggregation", {})
+                aggregation_enabled = aggregation_info.get("enabled", False)
+                # Use aggregation speed from device level if available, otherwise use total from ports
+                agg_speed = aggregation_info.get("speed", total_speed)
 
                 self._mr_aggregation_enabled.labels(
                     serial=serial,
@@ -703,7 +711,7 @@ class MRCollector(BaseDeviceCollector):
                     serial=serial,
                     name=device_name,
                     network_id=network_id,
-                ).set(total_speed)
+                ).set(agg_speed)
 
         except Exception:
             logger.exception(
@@ -728,11 +736,11 @@ class MRCollector(BaseDeviceCollector):
             logger.debug("Fetching MR packet loss metrics", org_id=org_id)
             self._track_api_call("getOrganizationWirelessDevicesPacketLossByDevice")
 
-            # Use 5-minute timespan (300 seconds)
+            # Use 10-minute timespan (600 seconds)
             packet_loss_data = await asyncio.to_thread(
                 self.api.wireless.getOrganizationWirelessDevicesPacketLossByDevice,
                 org_id,
-                timespan=300,  # 5 minutes
+                timespan=600,  # 10 minutes
                 perPage=1000,
                 total_pages="all",
             )
@@ -1254,7 +1262,12 @@ class MRCollector(BaseDeviceCollector):
                 for bss in basic_service_sets:
                     radio = bss.get("radio", {})
                     band = radio.get("band", "")
-                    index = radio.get("index", 0)
+                    # Convert string index to integer - API returns index as string
+                    index_str = radio.get("index", "0")
+                    try:
+                        index = int(index_str) if index_str is not None else 0
+                    except (ValueError, TypeError):
+                        index = 0
 
                     if band and index is not None:
                         key = (band, index)

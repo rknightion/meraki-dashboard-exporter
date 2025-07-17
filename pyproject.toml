@@ -54,11 +54,14 @@ ignore = [
     "D212",  # multi-line-summary-first-line
     "D213",  # multi-line docstring summary should start at the second line
     "D401",  # first line of docstring should be in imperative mood
+    "D403",  # First word capitalization - needed for proper nouns like OpenTelemetry
     "PLR2004",  # magic value used in comparison
     "PLR6301",  # method could be function/class method/static method
     "PLW0603",  # using global statement
     "PLC0415",  # import should be at top-level of file
     "C901",  # function is too complex
+    "PLR0911",  # too many return statements
+    "N815",  # mixed case variable names - needed for API compatibility
     "W293",  # blank line contains whitespace
     "PLR0912",  # too many branches
     "PLR0913",  # too many arguments in function definition
@@ -68,6 +71,9 @@ ignore = [
     "PERF401",  # use list comprehension
     "E501",  # line too long (handled by formatter)
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"src/meraki_dashboard_exporter/tools/*.py" = ["PTH123", "PLW1514", "C414", "PLR6201", "PLR0916"]
 
 [dependency-groups]
 dev = [

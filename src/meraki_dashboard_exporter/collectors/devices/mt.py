@@ -108,6 +108,9 @@ class MTCollector(BaseDeviceCollector):
             elif self.settings and self.settings.org_id:
                 org_ids = [self.settings.org_id]
             else:
+                if not self.api:
+                    logger.error("API client not initialized")
+                    return
                 logger.debug("Fetching all organizations for sensor collection")
                 self._track_api_call("getOrganizations")
                 orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
@@ -115,13 +118,13 @@ class MTCollector(BaseDeviceCollector):
                 logger.debug("Successfully fetched organizations", count=len(org_ids))
 
             # Collect sensors for each organization
-            for org_id in org_ids:
+            for organization_id in org_ids:
                 try:
-                    await self._collect_org_sensors(org_id)
+                    await self._collect_org_sensors(organization_id)
                 except Exception:
                     logger.exception(
                         "Failed to collect sensors for organization",
-                        org_id=org_id,
+                        org_id=organization_id,
                     )
                     # Continue with next organization
 
@@ -138,6 +141,10 @@ class MTCollector(BaseDeviceCollector):
 
         """
         try:
+            if not self.api:
+                logger.error("API client not initialized")
+                return
+
             # Get all MT devices
             logger.debug("Fetching sensor devices", org_id=org_id)
             self._track_api_call("getOrganizationDevices")
@@ -322,7 +329,7 @@ class MTCollector(BaseDeviceCollector):
         elif metric_type == SensorMetricType.WATER:
             is_present = metric_data.get(SensorDataField.PRESENT, False)
             return 1 if is_present else 0
-        elif metric_type in (SensorMetricType.CO2, SensorMetricType.TVOC, SensorMetricType.PM25):
+        elif metric_type in {SensorMetricType.CO2, SensorMetricType.TVOC, SensorMetricType.PM25}:
             return metric_data.get(SensorDataField.CONCENTRATION)
         elif metric_type == SensorMetricType.NOISE:
             ambient = metric_data.get(SensorDataField.AMBIENT, {})

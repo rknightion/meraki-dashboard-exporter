@@ -59,7 +59,7 @@ class MetricVisitor(ast.NodeVisitor):
             metric_name_attr = node.targets[0].attr
 
             # Extract arguments
-            args_dict = {}
+            args_dict: dict[str, Any] = {}
             if node.value.args:
                 # First positional arg is usually the metric name
                 if isinstance(node.value.args[0], ast.Constant):
