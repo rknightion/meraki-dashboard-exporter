@@ -183,7 +183,9 @@ class AsyncMerakiClient:
                 org_id,
                 total_pages="all",
             )
-            logger.debug("Successfully fetched device availabilities", org_id=org_id, count=len(result))
+            logger.debug(
+                "Successfully fetched device availabilities", org_id=org_id, count=len(result)
+            )
             return result
 
     async def get_licenses(self, org_id: str) -> list[dict[str, Any]]:
@@ -231,7 +233,9 @@ class AsyncMerakiClient:
                 org_id,
                 total_pages="all",
             )
-            logger.debug("Successfully fetched API request statistics", org_id=org_id, count=len(result))
+            logger.debug(
+                "Successfully fetched API request statistics", org_id=org_id, count=len(result)
+            )
             return result
 
     async def get_switch_port_statuses(self, serial: str) -> list[dict[str, Any]]:
@@ -251,7 +255,9 @@ class AsyncMerakiClient:
         logger.debug("Fetching switch port statuses", serial=serial)
         async with self._semaphore:
             result = await asyncio.to_thread(self.api.switch.getDeviceSwitchPortsStatuses, serial)
-            logger.debug("Successfully fetched switch port statuses", serial=serial, count=len(result))
+            logger.debug(
+                "Successfully fetched switch port statuses", serial=serial, count=len(result)
+            )
             return result
 
     async def get_wireless_status(self, serial: str) -> dict[str, Any]:
@@ -274,7 +280,7 @@ class AsyncMerakiClient:
             logger.debug(
                 "Successfully fetched wireless status",
                 serial=serial,
-                ssid_count=len(result.get("basicServiceSets", []))
+                ssid_count=len(result.get("basicServiceSets", [])),
             )
             return result
 
@@ -299,7 +305,7 @@ class AsyncMerakiClient:
         logger.debug(
             "Fetching latest sensor readings",
             org_id=org_id,
-            serial_filter_count=len(serials) if serials else 0
+            serial_filter_count=len(serials) if serials else 0,
         )
         async with self._semaphore:
             kwargs: dict[str, Any] = {"total_pages": "all"}
@@ -314,7 +320,7 @@ class AsyncMerakiClient:
                 "Successfully fetched sensor readings",
                 org_id=org_id,
                 sensor_count=len(result),
-                total_readings=sum(len(s.get("readings", [])) for s in result)
+                total_readings=sum(len(s.get("readings", [])) for s in result),
             )
             return result
 

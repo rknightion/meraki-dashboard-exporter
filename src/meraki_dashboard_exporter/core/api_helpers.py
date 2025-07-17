@@ -249,7 +249,7 @@ class APIHelper:
             successful=len(results),
             failed=total_items - len(results),
         )
-        
+
         return results
 
     @with_error_handling(
@@ -311,7 +311,7 @@ class APIHelper:
                 wrapped_response=True,
             )
             return data
-        
+
         logger.debug(
             f"Successfully fetched time-based data: {method_name}",
             item_count=len(response) if isinstance(response, list) else 1,

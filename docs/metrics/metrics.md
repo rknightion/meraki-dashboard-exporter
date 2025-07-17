@@ -29,7 +29,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._alerts_active` (line 28)
+**Variable:** `self._alerts_active` (line 31)
 
 #### `Unknown`
 
@@ -39,7 +39,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._alerts_by_severity` (line 44)
+**Variable:** `self._alerts_by_severity` (line 47)
 
 #### `Unknown`
 
@@ -49,7 +49,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._alerts_by_network` (line 51)
+**Variable:** `self._alerts_by_network` (line 54)
 
 ### ConfigCollector
 
@@ -63,7 +63,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._login_security_password_expiration_enabled` (line 29)
+**Variable:** `self._login_security_password_expiration_enabled` (line 32)
 
 #### `Unknown`
 
@@ -73,7 +73,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._login_security_password_expiration_days` (line 35)
+**Variable:** `self._login_security_password_expiration_days` (line 38)
 
 #### `Unknown`
 
@@ -83,7 +83,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._login_security_different_passwords_enabled` (line 41)
+**Variable:** `self._login_security_different_passwords_enabled` (line 44)
 
 #### `Unknown`
 
@@ -93,7 +93,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._login_security_different_passwords_count` (line 47)
+**Variable:** `self._login_security_different_passwords_count` (line 50)
 
 #### `Unknown`
 
@@ -103,7 +103,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._login_security_strong_passwords_enabled` (line 53)
+**Variable:** `self._login_security_strong_passwords_enabled` (line 56)
 
 #### `Unknown`
 
@@ -113,7 +113,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._login_security_minimum_password_length` (line 59)
+**Variable:** `self._login_security_minimum_password_length` (line 62)
 
 #### `Unknown`
 
@@ -123,7 +123,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._login_security_account_lockout_enabled` (line 65)
+**Variable:** `self._login_security_account_lockout_enabled` (line 68)
 
 #### `Unknown`
 
@@ -133,7 +133,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._login_security_account_lockout_attempts` (line 71)
+**Variable:** `self._login_security_account_lockout_attempts` (line 74)
 
 #### `Unknown`
 
@@ -143,7 +143,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._login_security_idle_timeout_enabled` (line 77)
+**Variable:** `self._login_security_idle_timeout_enabled` (line 80)
 
 #### `Unknown`
 
@@ -153,7 +153,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._login_security_idle_timeout_minutes` (line 83)
+**Variable:** `self._login_security_idle_timeout_minutes` (line 86)
 
 #### `Unknown`
 
@@ -163,7 +163,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._login_security_two_factor_enabled` (line 89)
+**Variable:** `self._login_security_two_factor_enabled` (line 92)
 
 #### `Unknown`
 
@@ -173,7 +173,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._login_security_ip_ranges_enabled` (line 95)
+**Variable:** `self._login_security_ip_ranges_enabled` (line 98)
 
 #### `Unknown`
 
@@ -183,7 +183,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._login_security_api_ip_restrictions_enabled` (line 101)
+**Variable:** `self._login_security_api_ip_restrictions_enabled` (line 104)
 
 #### `Unknown`
 
@@ -193,7 +193,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._configuration_changes_total` (line 108)
+**Variable:** `self._configuration_changes_total` (line 111)
 
 ### DeviceCollector
 
@@ -207,7 +207,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._device_up` (line 125)
+**Variable:** `self._device_up` (line 127)
 
 #### `Unknown`
 
@@ -217,7 +217,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._device_status_info` (line 137)
+**Variable:** `self._device_status_info` (line 139)
 
 #### `Unknown`
 
@@ -227,7 +227,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._device_memory_used_bytes` (line 151)
+**Variable:** `self._device_memory_used_bytes` (line 153)
 
 #### `Unknown`
 
@@ -237,7 +237,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._device_memory_free_bytes` (line 164)
+**Variable:** `self._device_memory_free_bytes` (line 166)
 
 #### `Unknown`
 
@@ -247,7 +247,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._device_memory_total_bytes` (line 177)
+**Variable:** `self._device_memory_total_bytes` (line 179)
 
 #### `Unknown`
 
@@ -257,7 +257,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._device_memory_usage_percent` (line 189)
+**Variable:** `self._device_memory_usage_percent` (line 191)
 
 ### MTSensorCollector
 
@@ -271,7 +271,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_temperature` (line 51)
+**Variable:** `self._sensor_temperature` (line 53)
 
 #### `Unknown`
 
@@ -281,7 +281,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_humidity` (line 57)
+**Variable:** `self._sensor_humidity` (line 59)
 
 #### `Unknown`
 
@@ -291,7 +291,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_door` (line 63)
+**Variable:** `self._sensor_door` (line 65)
 
 #### `Unknown`
 
@@ -301,7 +301,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_water` (line 69)
+**Variable:** `self._sensor_water` (line 71)
 
 #### `Unknown`
 
@@ -311,7 +311,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_co2` (line 75)
+**Variable:** `self._sensor_co2` (line 77)
 
 #### `Unknown`
 
@@ -321,7 +321,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_tvoc` (line 81)
+**Variable:** `self._sensor_tvoc` (line 83)
 
 #### `Unknown`
 
@@ -331,7 +331,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_pm25` (line 87)
+**Variable:** `self._sensor_pm25` (line 89)
 
 #### `Unknown`
 
@@ -341,7 +341,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_noise` (line 93)
+**Variable:** `self._sensor_noise` (line 95)
 
 #### `Unknown`
 
@@ -351,7 +351,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_battery` (line 99)
+**Variable:** `self._sensor_battery` (line 101)
 
 #### `Unknown`
 
@@ -361,7 +361,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_air_quality` (line 105)
+**Variable:** `self._sensor_air_quality` (line 107)
 
 #### `Unknown`
 
@@ -371,7 +371,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_voltage` (line 111)
+**Variable:** `self._sensor_voltage` (line 113)
 
 #### `Unknown`
 
@@ -381,7 +381,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_current` (line 117)
+**Variable:** `self._sensor_current` (line 119)
 
 #### `Unknown`
 
@@ -391,7 +391,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_real_power` (line 123)
+**Variable:** `self._sensor_real_power` (line 125)
 
 #### `Unknown`
 
@@ -401,7 +401,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_apparent_power` (line 129)
+**Variable:** `self._sensor_apparent_power` (line 131)
 
 #### `Unknown`
 
@@ -411,7 +411,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_power_factor` (line 135)
+**Variable:** `self._sensor_power_factor` (line 137)
 
 #### `Unknown`
 
@@ -421,7 +421,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_frequency` (line 141)
+**Variable:** `self._sensor_frequency` (line 143)
 
 #### `Unknown`
 
@@ -431,7 +431,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_downstream_power` (line 147)
+**Variable:** `self._sensor_downstream_power` (line 149)
 
 #### `Unknown`
 
@@ -441,7 +441,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._sensor_remote_lockout` (line 153)
+**Variable:** `self._sensor_remote_lockout` (line 155)
 
 ### NetworkHealthCollector
 
@@ -455,7 +455,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._ap_utilization_2_4ghz` (line 50)
+**Variable:** `self._ap_utilization_2_4ghz` (line 52)
 
 #### `Unknown`
 
@@ -465,7 +465,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._ap_utilization_5ghz` (line 63)
+**Variable:** `self._ap_utilization_5ghz` (line 65)
 
 #### `Unknown`
 
@@ -475,7 +475,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._network_utilization_2_4ghz` (line 77)
+**Variable:** `self._network_utilization_2_4ghz` (line 79)
 
 #### `Unknown`
 
@@ -485,7 +485,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._network_utilization_5ghz` (line 83)
+**Variable:** `self._network_utilization_5ghz` (line 85)
 
 #### `Unknown`
 
@@ -495,7 +495,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._network_connection_stats` (line 90)
+**Variable:** `self._network_connection_stats` (line 92)
 
 #### `Unknown`
 
@@ -505,7 +505,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._network_wireless_download_kbps` (line 97)
+**Variable:** `self._network_wireless_download_kbps` (line 99)
 
 #### `Unknown`
 
@@ -515,7 +515,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._network_wireless_upload_kbps` (line 103)
+**Variable:** `self._network_wireless_upload_kbps` (line 105)
 
 #### `Unknown`
 
@@ -525,7 +525,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._network_bluetooth_clients_total` (line 110)
+**Variable:** `self._network_bluetooth_clients_total` (line 112)
 
 ### OrganizationCollector
 
@@ -539,7 +539,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._org_info` (line 50)
+**Variable:** `self._org_info` (line 52)
 
 #### `Unknown`
 
@@ -549,7 +549,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._api_requests_total` (line 57)
+**Variable:** `self._api_requests_total` (line 59)
 
 #### `Unknown`
 
@@ -559,7 +559,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._api_rate_limit` (line 63)
+**Variable:** `self._api_rate_limit` (line 65)
 
 #### `Unknown`
 
@@ -569,7 +569,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._networks_total` (line 70)
+**Variable:** `self._networks_total` (line 72)
 
 #### `Unknown`
 
@@ -579,7 +579,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._devices_total` (line 77)
+**Variable:** `self._devices_total` (line 79)
 
 #### `Unknown`
 
@@ -589,7 +589,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._devices_by_model_total` (line 83)
+**Variable:** `self._devices_by_model_total` (line 85)
 
 #### `Unknown`
 
@@ -599,7 +599,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._devices_availability_total` (line 90)
+**Variable:** `self._devices_availability_total` (line 92)
 
 #### `Unknown`
 
@@ -609,7 +609,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._licenses_total` (line 102)
+**Variable:** `self._licenses_total` (line 104)
 
 #### `Unknown`
 
@@ -619,7 +619,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._licenses_expiring` (line 113)
+**Variable:** `self._licenses_expiring` (line 115)
 
 #### `Unknown`
 
@@ -629,7 +629,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._clients_total` (line 120)
+**Variable:** `self._clients_total` (line 122)
 
 #### `Unknown`
 
@@ -639,7 +639,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._usage_total_kb` (line 127)
+**Variable:** `self._usage_total_kb` (line 129)
 
 #### `Unknown`
 
@@ -649,7 +649,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._usage_downstream_kb` (line 133)
+**Variable:** `self._usage_downstream_kb` (line 135)
 
 #### `Unknown`
 
@@ -659,7 +659,7 @@ The exporter provides metrics across several categories:
 
 **Labels:** 
 
-**Variable:** `self._usage_upstream_kb` (line 139)
+**Variable:** `self._usage_upstream_kb` (line 141)
 
 ## Complete Metrics Index
 

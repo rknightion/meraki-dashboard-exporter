@@ -150,7 +150,7 @@ class OrganizationCollector(MetricCollector):
         metrics_collected = 0
         organizations_processed = 0
         api_calls_made = 0
-        
+
         try:
             # Get organizations
             organizations = await self._fetch_organizations()
@@ -162,7 +162,7 @@ class OrganizationCollector(MetricCollector):
             # Collect metrics for each organization
             tasks = [self._collect_org_metrics(org) for org in organizations]
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            
+
             # Count successful collections
             for result in results:
                 if not isinstance(result, Exception):

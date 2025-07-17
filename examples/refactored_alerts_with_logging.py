@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 @register_collector(UpdateTier.MEDIUM)
 class AlertsCollectorWithLogging(MetricCollector):
     """Collector for assurance alerts from the Meraki Dashboard API.
-    
+
     This example shows how to use the new standardized logging patterns.
     """
 
@@ -82,7 +82,7 @@ class AlertsCollectorWithLogging(MetricCollector):
         start_time = time.time()
         metrics_collected = 0
         api_calls_made = 0
-        
+
         # Use context manager for structured logging context
         with LogContext(tier=self.update_tier.value):
             # First, fetch organizations
@@ -102,17 +102,14 @@ class AlertsCollectorWithLogging(MetricCollector):
             for idx, org in enumerate(organizations, 1):
                 org_id = org.get("id", "")
                 org_name = org.get("name", "Unknown")
-                
+
                 # Add org context for all logs in this scope
                 with LogContext(org_id=org_id, org_name=org_name):
                     # Use progress logging decorator
                     await self._process_organization_alerts(
-                        org_id=org_id,
-                        org_name=org_name,
-                        current=idx,
-                        total=len(organizations)
+                        org_id=org_id, org_name=org_name, current=idx, total=len(organizations)
                     )
-                    
+
                     metrics_collected += await self._get_metrics_count_for_org(org_id)
                     api_calls_made += 1
 
@@ -138,11 +135,7 @@ class AlertsCollectorWithLogging(MetricCollector):
 
     @log_collection_progress("organization alerts")
     async def _process_organization_alerts(
-        self,
-        org_id: str,
-        org_name: str,
-        current: int,
-        total: int
+        self, org_id: str, org_name: str, current: int, total: int
     ) -> None:
         """Process alerts for a single organization."""
         alerts = await self._fetch_alerts_for_org(org_id)
@@ -162,35 +155,29 @@ class AlertsCollectorWithLogging(MetricCollector):
             alerts = await self.api.organizations.getOrganizationAssuranceAlerts(
                 organizationId=org_id
             )
-            
+
             # Validate response format
             alerts = validate_response_format(
-                alerts,
-                expected_type=list,
-                operation="getOrganizationAssuranceAlerts"
+                alerts, expected_type=list, operation="getOrganizationAssuranceAlerts"
             )
-            
+
             # Filter for active alerts only
             active_alerts = [a for a in alerts if a.get("status") == "active"]
-            
+
             self._logger.debug(
                 "Filtered active alerts",
                 total_alerts=len(alerts),
                 active_alerts=len(active_alerts),
             )
-            
+
             return active_alerts
-            
+
         except Exception:
             # Error already logged by decorator
             return None
 
     @log_batch_operation("process alerts", batch_size=50)
-    async def _process_alerts_batch(
-        self,
-        org_id: str,
-        alerts: list[dict[str, Any]]
-    ) -> None:
+    async def _process_alerts_batch(self, org_id: str, alerts: list[dict[str, Any]]) -> None:
         """Process a batch of alerts."""
         # Group alerts for metric updates
         alerts_by_type: dict[tuple[str, str, str], int] = {}

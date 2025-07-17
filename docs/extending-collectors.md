@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 @register_collector(UpdateTier.MEDIUM)  # Auto-registers with manager
 class MyNewCollector(MetricCollector):
     """Collector for my new metrics."""
-    
+
     def _initialize_metrics(self) -> None:
         """Initialize Prometheus metrics."""
         self._my_metric = self._create_gauge(
@@ -39,7 +39,7 @@ class MyNewCollector(MetricCollector):
             "Description of my metric",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME]
         )
-    
+
     @with_error_handling(
         operation="Collect my metrics",
         continue_on_error=True,
@@ -48,10 +48,10 @@ class MyNewCollector(MetricCollector):
         """Implement collection logic."""
         # Fetch organizations
         organizations = await self._fetch_organizations()
-        
+
         for org in organizations:
             value = await self._collect_org_data(org["id"])
-            
+
             self._set_metric_value(
                 "_my_metric",
                 {
@@ -95,7 +95,7 @@ from .base import BaseDeviceCollector
 
 class MyDeviceCollector(BaseDeviceCollector):
     """Collector for MY device type."""
-    
+
     def collect(self, device: dict[str, Any]) -> None:
         """Collect metrics for a single device."""
         # Device-specific logic
@@ -120,14 +120,14 @@ Always use the error handling decorator:
 async def _fetch_widgets(self, org_id: str) -> list[Widget] | None:
     """Fetch widgets with automatic error handling."""
     response = await self.api.organizations.getOrganizationWidgets(org_id)
-    
+
     # Validate response format
     widgets = validate_response_format(
         response,
         expected_type=list,
         operation="getOrganizationWidgets"
     )
-    
+
     return widgets
 ```
 
@@ -155,14 +155,14 @@ async def _collect_impl(self) -> None:
     """Use API helpers for cleaner code."""
     # Get organizations (handles single/multi-org configs)
     organizations = await self.api_helper.get_organizations()
-    
+
     # Get devices with filtering
     devices = await self.api_helper.get_organization_devices(
         org_id,
         product_types=["wireless", "switch"],
         models=["MR36", "MS250"]
     )
-    
+
     # Process in batches
     await self.api_helper.process_in_batches(
         devices,
@@ -181,7 +181,7 @@ Follow these patterns for metric names:
 meraki_organization_<metric>_<unit>
 meraki_organization_widgets_total
 
-# Network level  
+# Network level
 meraki_network_<metric>_<unit>
 meraki_network_bandwidth_mbps
 
@@ -215,13 +215,13 @@ from meraki_dashboard_exporter.testing.factories import OrganizationFactory
 class TestMyNewCollector(BaseCollectorTest):
     collector_class = MyNewCollector
     update_tier = UpdateTier.MEDIUM
-    
+
     @pytest.mark.asyncio
     async def test_collect_basic(self, collector, mock_api_builder, metrics):
         """Test basic collection."""
         # Set up test data
         org = OrganizationFactory.create()
-        
+
         # Configure mock API
         api = (mock_api_builder
             .with_organizations([org])
@@ -229,12 +229,12 @@ class TestMyNewCollector(BaseCollectorTest):
                 {"id": "1", "value": 42}
             ])
             .build())
-        
+
         collector.api = api
-        
+
         # Run collection
         await self.run_collector(collector)
-        
+
         # Verify metrics
         self.assert_collector_success(collector, metrics)
         metrics.assert_gauge_value(
@@ -252,13 +252,13 @@ async def _collect_impl(self) -> None:
     """Collect metrics hierarchically."""
     for org in await self.api_helper.get_organizations():
         networks = await self.api_helper.get_organization_networks(org["id"])
-        
+
         for network in networks:
             devices = await self.api_helper.get_organization_devices(
                 org["id"],
                 network_ids=[network["id"]]
             )
-            
+
             # Set network-level metric
             self._network_device_count.labels(
                 org_id=org["id"],
@@ -278,7 +278,7 @@ async def _collect_bandwidth_usage(self, network_id: str) -> None:
         timespan=300,
         network_id=network_id
     )
-    
+
     if usage:
         # Use most recent data point
         latest = usage[-1]
@@ -294,7 +294,7 @@ async def _collect_bandwidth_usage(self, network_id: str) -> None:
 def _set_device_metric(self, device: dict[str, Any]) -> None:
     """Set metrics based on device type."""
     device_type = device["model"][:2]
-    
+
     if device_type == "MR":
         # Access point specific metrics
         self._mr_specific_metric.labels(...).set(...)

@@ -458,7 +458,6 @@ class MRCollector(BaseDeviceCollector):
                         stat_type=stat_type,
                     ).set(value)
 
-
         except Exception:
             logger.exception(
                 "Failed to collect connection stats",
@@ -509,7 +508,6 @@ class MRCollector(BaseDeviceCollector):
                     response_type=type(client_overview).__name__,
                 )
                 client_data = []
-
 
             # Process each device's client data
             for device_data in client_data:
@@ -749,7 +747,6 @@ class MRCollector(BaseDeviceCollector):
                     response_type=type(packet_loss_data).__name__,
                 )
                 devices_data = []
-
 
             # Process each device's packet loss data
             for device_data in devices_data:
@@ -1211,7 +1208,6 @@ class MRCollector(BaseDeviceCollector):
                 )
                 devices_data = []
 
-
             # Process each device's SSID and radio status
             for device_data in devices_data:
                 serial = device_data.get("serial", "")
@@ -1309,17 +1305,17 @@ class MRCollector(BaseDeviceCollector):
     @log_api_call("getOrganizationWirelessDevicesPacketLossByNetwork")
     async def _fetch_network_packet_loss(self, org_id: str) -> Any:
         """Fetch network-wide packet loss metrics.
-        
+
         Parameters
         ----------
         org_id : str
             Organization ID.
-            
+
         Returns
         -------
         Any
             Network packet loss data.
-            
+
         """
         with LogContext(org_id=org_id):
             return await asyncio.to_thread(
@@ -1359,7 +1355,7 @@ class MRCollector(BaseDeviceCollector):
         ...     {"serial": "Q2KD-XXXX", "name": "Office AP"},
         ...     0  # Will use cached value instead
         ... )
-        
+
         >>> # Packet loss percentage - 0 is valid
         >>> collector._set_packet_metric_value(
         ...     "_mr_packet_loss_percent",

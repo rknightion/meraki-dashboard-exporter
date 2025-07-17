@@ -1,7 +1,7 @@
 # ADR-001: Collector Architecture
 
-**Status**: Accepted  
-**Date**: 2024-01-15  
+**Status**: Accepted
+**Date**: 2024-01-15
 **Decision Makers**: Development Team
 
 ## Context

@@ -284,7 +284,7 @@ def validate_response_format(
         item_count=len(data) if isinstance(data, (list, dict)) else 1,
         wrapped="items" in response if isinstance(response, dict) else False,
     )
-    
+
     return data
 
 
