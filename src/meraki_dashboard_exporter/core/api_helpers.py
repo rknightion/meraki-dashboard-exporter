@@ -210,7 +210,7 @@ class APIHelper:
         """
         results = []
         total_items = len(items)
-        
+
         # Use configured batch size if not specified
         if batch_size is None:
             batch_size = self.settings.api.batch_size

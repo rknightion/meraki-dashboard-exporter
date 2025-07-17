@@ -90,14 +90,24 @@ class OrganizationCollector(MetricCollector):
         self._devices_availability_total = self._create_gauge(
             OrgMetricName.ORG_DEVICES_AVAILABILITY_TOTAL,
             "Total number of devices by availability status and product type",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.STATUS, LabelName.PRODUCT_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.STATUS,
+                LabelName.PRODUCT_TYPE,
+            ],
         )
 
         # License metrics
         self._licenses_total = self._create_gauge(
             OrgMetricName.ORG_LICENSES_TOTAL,
             "Total number of licenses",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.LICENSE_TYPE, LabelName.STATUS],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.LICENSE_TYPE,
+                LabelName.STATUS,
+            ],
         )
 
         self._licenses_expiring = self._create_gauge(

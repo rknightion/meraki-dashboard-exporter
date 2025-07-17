@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, TypeVar
+from collections.abc import Callable
+from typing import TYPE_CHECKING, TypeVar
 
 from ..core.constants import UpdateTier
 from ..core.logging import get_logger
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 # Type variable for collector classes
-T = TypeVar("T", bound=type["MetricCollector"])
+T = TypeVar("T", bound="MetricCollector")
 
 # Global registry of all collectors
 _COLLECTOR_REGISTRY: dict[UpdateTier, list[type[MetricCollector]]] = {
@@ -23,7 +24,7 @@ _COLLECTOR_REGISTRY: dict[UpdateTier, list[type[MetricCollector]]] = {
 }
 
 
-def register_collector(tier: UpdateTier | None = None) -> Callable[[T], T]:
+def register_collector(tier: UpdateTier | None = None) -> Callable[[type[T]], type[T]]:
     """Decorator to automatically register collectors.
 
     Parameters

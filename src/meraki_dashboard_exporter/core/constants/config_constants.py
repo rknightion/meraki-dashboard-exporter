@@ -9,7 +9,7 @@ from typing import Final
 @dataclass(frozen=True)
 class APIConfig:
     """API configuration settings."""
-    
+
     timeout: int = 30  # seconds
     max_retries: int = 4  # default for Meraki SDK
     max_concurrent_requests: int = 5
@@ -19,7 +19,7 @@ class APIConfig:
 @dataclass(frozen=True)
 class RegionalURLs:
     """Meraki API regional base URLs."""
-    
+
     default: str = "https://api.meraki.com/api/v1"  # Global/Default
     canada: str = "https://api.meraki.ca/api/v1"
     china: str = "https://api.meraki.cn/api/v1"
@@ -30,10 +30,10 @@ class RegionalURLs:
 @dataclass(frozen=True)
 class MerakiAPIConfig:
     """Complete Meraki API configuration."""
-    
+
     api_config: APIConfig = field(default_factory=APIConfig)
     regional_urls: RegionalURLs = field(default_factory=RegionalURLs)
-    
+
     @property
     def base_url(self) -> str:
         """Get the default base URL."""

@@ -33,13 +33,6 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
 ## Priority 4: Simplify Configuration and Dependencies (Medium Impact)
 
 
-### 4.3 Standardize Async Patterns
-**Issue**: Inconsistent async/await patterns and error handling in async contexts.
-**Refactor**:
-- Create async context managers for common patterns
-- Standardize async error handling and cleanup
-- Add async utilities for common operations
-**Benefit**: Consistent async behavior, easier debugging, clearer patterns for LLMs to follow.
 
 ## Priority 5: Improve Testing and Documentation (Medium Impact)
 
@@ -65,6 +58,9 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
 - Create logging decorators for common patterns
 - Standardize log message formats
 - Add structured logging helpers
+**Log Standards**:
+- Logs should be in 'logfmt' format
+- When the MERAKI_EXPORTER_LOG_LEVEL is set to DEBUG we want to also surface the debug logs from the underlying Meraki SDK (functionality currently in place but must not be broken)
 **Benefit**: Consistent debugging experience, easier log analysis, clearer patterns.
 
 ## Priority 6: Performance and Resource Management (Lower Impact)
@@ -256,7 +252,7 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
 **Refactor Completed**:
 - Enhanced BaseDeviceCollector with common functionality including memory metrics collection
 - Created MXCollector for MX security appliances
-- Created MGCollector for MG cellular gateways  
+- Created MGCollector for MG cellular gateways
 - Created MVCollector for MV security cameras
 - Updated DeviceCollector to use a device type mapping dictionary for dynamic dispatch
 - Added generic _collect_device_with_timeout method that routes to appropriate collectors
@@ -375,3 +371,25 @@ Ensure claude.md file is updated where necessary for better LLM concept (only up
 - Created configuration documentation generator tool
 - Updated CLAUDE.md with configuration management section
 **Benefit**: Clearer configuration structure with validation, profile-based deployment scenarios, backward compatibility maintained, easier for LLMs to understand nested configuration with proper typing.
+
+### 4.3 Standardize Async Patterns - COMPLETED
+**Issue**: Inconsistent async/await patterns and error handling in async contexts.
+**Refactor Completed**:
+- Created `core/async_utils.py` with standardized async utilities:
+  - `ManagedTaskGroup`: Context manager for structured concurrency with automatic cleanup
+  - `with_timeout`: Execute operations with timeout and default values
+  - `safe_gather`: Enhanced gather with error logging and tracking
+  - `rate_limited_gather`: Gather with semaphore-based rate limiting
+  - `AsyncRetry`: Retry logic with exponential backoff
+  - `chunked_async_iter`: Process items in chunks with delays
+  - `CircuitBreaker`: Prevent cascading failures with circuit breaker pattern
+  - `managed_resource`: Resource management with guaranteed cleanup
+- Created example collectors showing usage patterns:
+  - `async_pattern_example.py`: Comprehensive examples of all utilities
+  - `organization_async_refactored.py`: Real-world refactoring example
+- Updated CLAUDE.md with async patterns documentation and best practices
+- Added imports to app.py (ready for selective use)
+- **Decision**: Keep utilities for complex scenarios but don't migrate all API calls
+- **Rationale**: Meraki SDK already provides retry (3x), rate limit handling, and timeout support
+- Async utilities complement SDK for complex coordination, not replace it
+**Benefit**: Available for complex async coordination without duplicating SDK functionality, prevents double-retry issues, clearer when to use SDK defaults vs custom patterns.

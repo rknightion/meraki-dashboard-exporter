@@ -54,12 +54,9 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
             else:
                 # Parse API response to domain model
                 stats = ConnectionStats(**connection_stats)
-            
+
             # Create full network stats model
-            network_stats = NetworkConnectionStats(
-                networkId=network_id,
-                connectionStats=stats
-            )
+            network_stats = NetworkConnectionStats(networkId=network_id, connectionStats=stats)
 
             # Set metrics for each connection stat type
             for stat_type in ("assoc", "auth", "dhcp", "dns", "success"):

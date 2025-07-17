@@ -156,9 +156,7 @@ class ConfigCollector(MetricCollector):
             self._track_api_call("getOrganizations")
             organizations = await asyncio.to_thread(self.api.organizations.getOrganizations)
             organizations = validate_response_format(
-                organizations,
-                expected_type=list,
-                operation="getOrganizations"
+                organizations, expected_type=list, operation="getOrganizations"
             )
             logger.debug("Successfully fetched organizations", count=len(organizations))
             return organizations
@@ -214,40 +212,40 @@ class ConfigCollector(MetricCollector):
             logger.debug("Successfully fetched login security settings", org_id=org_id)
 
             # Password expiration
-            self._login_security_password_expiration_enabled.labels(
-                org_id, org_name
-            ).set(1 if security.get("enforcePasswordExpiration", False) else 0)
+            self._login_security_password_expiration_enabled.labels(org_id, org_name).set(
+                1 if security.get("enforcePasswordExpiration", False) else 0
+            )
 
-            self._login_security_password_expiration_days.labels(
-                org_id, org_name
-            ).set(security.get("passwordExpirationDays") or 0)
+            self._login_security_password_expiration_days.labels(org_id, org_name).set(
+                security.get("passwordExpirationDays") or 0
+            )
 
             # Different passwords
-            self._login_security_different_passwords_enabled.labels(
-                org_id, org_name
-            ).set(1 if security.get("enforceDifferentPasswords", False) else 0)
+            self._login_security_different_passwords_enabled.labels(org_id, org_name).set(
+                1 if security.get("enforceDifferentPasswords", False) else 0
+            )
 
-            self._login_security_different_passwords_count.labels(
-                org_id, org_name
-            ).set(security.get("numDifferentPasswords") or 0)
+            self._login_security_different_passwords_count.labels(org_id, org_name).set(
+                security.get("numDifferentPasswords") or 0
+            )
 
             # Strong passwords
-            self._login_security_strong_passwords_enabled.labels(
-                org_id, org_name
-            ).set(1 if security.get("enforceStrongPasswords", False) else 0)
+            self._login_security_strong_passwords_enabled.labels(org_id, org_name).set(
+                1 if security.get("enforceStrongPasswords", False) else 0
+            )
 
-            self._login_security_minimum_password_length.labels(
-                org_id, org_name
-            ).set(security.get("minimumPasswordLength") or 0)
+            self._login_security_minimum_password_length.labels(org_id, org_name).set(
+                security.get("minimumPasswordLength") or 0
+            )
 
             # Account lockout
-            self._login_security_account_lockout_enabled.labels(
-                org_id, org_name
-            ).set(1 if security.get("enforceAccountLockout", False) else 0)
+            self._login_security_account_lockout_enabled.labels(org_id, org_name).set(
+                1 if security.get("enforceAccountLockout", False) else 0
+            )
 
-            self._login_security_account_lockout_attempts.labels(
-                org_id, org_name
-            ).set(security.get("accountLockoutAttempts") or 0)
+            self._login_security_account_lockout_attempts.labels(org_id, org_name).set(
+                security.get("accountLockoutAttempts") or 0
+            )
 
             # Idle timeout
             self._login_security_idle_timeout_enabled.labels(org_id, org_name).set(
@@ -273,9 +271,9 @@ class ConfigCollector(MetricCollector):
             ip_restrictions = api_auth.get("ipRestrictionsForKeys", {})
             api_ip_enabled = ip_restrictions.get("enabled", False)
 
-            self._login_security_api_ip_restrictions_enabled.labels(
-                org_id, org_name
-            ).set(1 if api_ip_enabled else 0)
+            self._login_security_api_ip_restrictions_enabled.labels(org_id, org_name).set(
+                1 if api_ip_enabled else 0
+            )
 
             logger.debug(
                 "Successfully collected login security metrics",
@@ -331,9 +329,7 @@ class ConfigCollector(MetricCollector):
 
             # Set the metric
             if self._configuration_changes_total:
-                self._configuration_changes_total.labels(
-                    org_id, org_name
-                ).set(change_count)
+                self._configuration_changes_total.labels(org_id, org_name).set(change_count)
                 logger.debug(
                     "Successfully collected configuration changes",
                     org_id=org_id,
@@ -354,9 +350,7 @@ class ConfigCollector(MetricCollector):
                 )
                 # Set metric to 0 when API is not available
                 if self._configuration_changes_total:
-                    self._configuration_changes_total.labels(
-                        org_id, org_name
-                    ).set(0)
+                    self._configuration_changes_total.labels(org_id, org_name).set(0)
             else:
                 logger.exception(
                     "Failed to collect configuration changes",

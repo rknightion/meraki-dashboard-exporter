@@ -51,7 +51,12 @@ class AlertsCollector(MetricCollector):
         self._alerts_by_network = self._create_gauge(
             AlertMetricName.ALERTS_TOTAL_BY_NETWORK,
             "Total number of active alerts per network",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
     async def _collect_impl(self) -> None:
@@ -107,11 +112,7 @@ class AlertsCollector(MetricCollector):
             logger.debug("Fetching all organizations for alerts collection")
             self._track_api_call("getOrganizations")
             orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
-            orgs = validate_response_format(
-                orgs,
-                expected_type=list,
-                operation="getOrganizations"
-            )
+            orgs = validate_response_format(orgs, expected_type=list, operation="getOrganizations")
             logger.debug("Successfully fetched organizations", count=len(orgs))
             return orgs
 
@@ -142,9 +143,7 @@ class AlertsCollector(MetricCollector):
                 total_pages="all",
             )
             alerts = validate_response_format(
-                alerts,
-                expected_type=list,
-                operation="getOrganizationAssuranceAlerts"
+                alerts, expected_type=list, operation="getOrganizationAssuranceAlerts"
             )
 
             logger.debug("Successfully fetched alerts", org_id=org_id, count=len(alerts))

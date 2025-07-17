@@ -79,8 +79,20 @@ class TestNetworkHealthCollector:
         )
         mock_api.organizations.getOrganizationDevices = MagicMock(
             return_value=[
-                {"serial": "Q2KD-XXXX", "name": "AP1", "model": "MR36", "networkId": "N_123", "productType": "wireless"},
-                {"serial": "Q2KD-YYYY", "name": "AP2", "model": "MR46", "networkId": "N_123", "productType": "wireless"},
+                {
+                    "serial": "Q2KD-XXXX",
+                    "name": "AP1",
+                    "model": "MR36",
+                    "networkId": "N_123",
+                    "productType": "wireless",
+                },
+                {
+                    "serial": "Q2KD-YYYY",
+                    "name": "AP2",
+                    "model": "MR46",
+                    "networkId": "N_123",
+                    "productType": "wireless",
+                },
             ]
         )
 

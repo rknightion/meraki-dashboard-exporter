@@ -288,15 +288,15 @@ class MetricCollector(ABC):
             ).inc()
         else:
             logger.warning("Collector API calls metric not initialized", endpoint=endpoint)
-    
+
     def _track_error(self, category: ErrorCategory) -> None:
         """Track an error for monitoring.
-        
+
         Parameters
         ----------
         category : ErrorCategory
             The category of error that occurred.
-            
+
         """
         if MetricCollector._collector_errors is not None:
             MetricCollector._collector_errors.labels(

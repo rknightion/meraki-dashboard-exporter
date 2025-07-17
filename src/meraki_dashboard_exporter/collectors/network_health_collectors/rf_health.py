@@ -42,10 +42,17 @@ class RFHealthCollector(BaseNetworkHealthCollector):
 
             # Get AP names for lookup using organization devices API
             if not org_id:
-                logger.warning("No organization ID in network data, cannot fetch devices", network_id=network_id)
+                logger.warning(
+                    "No organization ID in network data, cannot fetch devices",
+                    network_id=network_id,
+                )
                 device_names = {}
             else:
-                logger.debug("Fetching organization devices for RF health", network_id=network_id, org_id=org_id)
+                logger.debug(
+                    "Fetching organization devices for RF health",
+                    network_id=network_id,
+                    org_id=org_id,
+                )
                 self._track_api_call("getOrganizationDevices")
                 all_devices = await asyncio.to_thread(
                     self.api.organizations.getOrganizationDevices,
@@ -54,12 +61,15 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                     productTypes=[ProductType.WIRELESS],
                     total_pages="all",
                 )
-                logger.debug("Successfully fetched devices", network_id=network_id, count=len(all_devices))
+                logger.debug(
+                    "Successfully fetched devices", network_id=network_id, count=len(all_devices)
+                )
                 # Filter for MR devices in this network
                 device_names = {
                     d["serial"]: d.get("name", d["serial"])
                     for d in all_devices
-                    if d.get("model", "").startswith(DeviceType.MR) and d.get("networkId") == network_id
+                    if d.get("model", "").startswith(DeviceType.MR)
+                    and d.get("networkId") == network_id
                 }
 
             logger.debug("Fetching channel utilization data", network_id=network_id)
@@ -84,15 +94,19 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                     serial = ap_data.get("serial", "")
                     model = ap_data.get("model", "")
                     name = device_names.get(serial, serial)
-                    
+
                     # Try to parse to domain model for validation
                     try:
                         RFHealthData(
                             serial=serial,
                             apName=name,
                             model=model,
-                            band2_4GhzUtilization=ap_data.get("wifi0", [{}])[0].get("utilization") if "wifi0" in ap_data and ap_data["wifi0"] else None,
-                            band5GhzUtilization=ap_data.get("wifi1", [{}])[0].get("utilization") if "wifi1" in ap_data and ap_data["wifi1"] else None
+                            band2_4GhzUtilization=ap_data.get("wifi0", [{}])[0].get("utilization")
+                            if "wifi0" in ap_data and ap_data["wifi0"]
+                            else None,
+                            band5GhzUtilization=ap_data.get("wifi1", [{}])[0].get("utilization")
+                            if "wifi1" in ap_data and ap_data["wifi1"]
+                            else None,
                         )
                     except Exception:
                         logger.debug("Failed to parse RF data to domain model", serial=serial)

@@ -120,7 +120,9 @@ class BaseDeviceCollector(ABC):
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def collect_memory_metrics(self, org_id: str, device_lookup: dict[str, dict[str, Any]] | None = None) -> None:
+    async def collect_memory_metrics(
+        self, org_id: str, device_lookup: dict[str, dict[str, Any]] | None = None
+    ) -> None:
         """Collect memory metrics for all devices in an organization.
 
         Parameters
@@ -249,12 +251,12 @@ class BaseDeviceCollector(ABC):
                 "Failed to collect memory metrics",
                 org_id=org_id,
             )
-    
+
     def _set_metric_value(
         self, metric_name: str, labels: dict[str, str], value: float | None
     ) -> None:
         """Set a metric value through parent collector.
-        
+
         Parameters
         ----------
         metric_name : str
@@ -263,7 +265,7 @@ class BaseDeviceCollector(ABC):
             Labels to apply to the metric.
         value : float | None
             Value to set. If None, the metric will not be updated.
-            
+
         """
         if self.parent and hasattr(self.parent, "_set_metric_value"):
             self.parent._set_metric_value(metric_name, labels, value)

@@ -32,13 +32,25 @@ class MSCollector(BaseDeviceCollector):
         self._switch_port_traffic = self.parent._create_gauge(
             MSMetricName.MS_PORT_TRAFFIC_BYTES,
             "Switch port traffic in bytes",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.PORT_ID, LabelName.PORT_NAME, LabelName.DIRECTION],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.PORT_ID,
+                LabelName.PORT_NAME,
+                LabelName.DIRECTION,
+            ],
         )
 
         self._switch_port_errors = self.parent._create_gauge(
             MSMetricName.MS_PORT_ERRORS_TOTAL,
             "Switch port error count",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.PORT_ID, LabelName.PORT_NAME, LabelName.ERROR_TYPE],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.PORT_ID,
+                LabelName.PORT_NAME,
+                LabelName.ERROR_TYPE,
+            ],
         )
 
         # Switch power metrics
@@ -105,9 +117,7 @@ class MSCollector(BaseDeviceCollector):
                 serial,
             )
             port_statuses = validate_response_format(
-                port_statuses,
-                expected_type=list,
-                operation="getDeviceSwitchPortsStatuses"
+                port_statuses, expected_type=list, operation="getDeviceSwitchPortsStatuses"
             )
 
             logger.debug(

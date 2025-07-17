@@ -115,7 +115,7 @@ class DeviceCollector(MetricCollector):
 
         # Cache for retaining last known packet metric values
         self._packet_metrics_cache: dict[str, float] = {}
-        
+
         # Initialize sub-collector metrics (only for collectors without their own __init__)
         self.ms_collector._initialize_metrics()
 
@@ -125,38 +125,77 @@ class DeviceCollector(MetricCollector):
         self._device_up = self._create_gauge(
             DeviceMetricName.DEVICE_UP,
             "Device online status (1 = online, 0 = offline)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.NETWORK_ID,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._device_status_info = self._create_gauge(
             DeviceMetricName.DEVICE_STATUS_INFO,
             "Device status information",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE, LabelName.STATUS],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.NETWORK_ID,
+                LabelName.DEVICE_TYPE,
+                LabelName.STATUS,
+            ],
         )
 
         # Memory metrics - available via system memory usage history API
         self._device_memory_used_bytes = self._create_gauge(
             DeviceMetricName.DEVICE_MEMORY_USED_BYTES,
             "Device memory used in bytes",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE, LabelName.STAT],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.NETWORK_ID,
+                LabelName.DEVICE_TYPE,
+                LabelName.STAT,
+            ],
         )
 
         self._device_memory_free_bytes = self._create_gauge(
             DeviceMetricName.DEVICE_MEMORY_FREE_BYTES,
             "Device memory free in bytes",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE, LabelName.STAT],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.NETWORK_ID,
+                LabelName.DEVICE_TYPE,
+                LabelName.STAT,
+            ],
         )
 
         self._device_memory_total_bytes = self._create_gauge(
             DeviceMetricName.DEVICE_MEMORY_TOTAL_BYTES,
             "Device memory total provisioned in bytes",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.NETWORK_ID,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._device_memory_usage_percent = self._create_gauge(
             DeviceMetricName.DEVICE_MEMORY_USAGE_PERCENT,
             "Device memory usage percentage (maximum from most recent interval)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID, LabelName.DEVICE_TYPE],
+            labelnames=[
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.NETWORK_ID,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
     async def _collect_impl(self) -> None:
@@ -196,11 +235,7 @@ class DeviceCollector(MetricCollector):
             logger.debug("Fetching all organizations for device collection")
             self._track_api_call("getOrganizations")
             orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
-            orgs = validate_response_format(
-                orgs,
-                expected_type=list,
-                operation="getOrganizations"
-            )
+            orgs = validate_response_format(orgs, expected_type=list, operation="getOrganizations")
             logger.debug("Successfully fetched organizations", count=len(orgs))
             return orgs
 
@@ -257,7 +292,9 @@ class DeviceCollector(MetricCollector):
             )
 
             # Create availability lookup by serial
-            availability_map = {a["serial"]: a.get("status", DEFAULT_DEVICE_STATUS) for a in availabilities}
+            availability_map = {
+                a["serial"]: a.get("status", DEFAULT_DEVICE_STATUS) for a in availabilities
+            }
 
             # Track network POE usage (removed for now - not implemented)
 
@@ -277,7 +314,9 @@ class DeviceCollector(MetricCollector):
                 }
 
                 # Add availability status to device
-                device["availability_status"] = availability_map.get(device["serial"], DEFAULT_DEVICE_STATUS)
+                device["availability_status"] = availability_map.get(
+                    device["serial"], DEFAULT_DEVICE_STATUS
+                )
 
                 # Collect common metrics
                 self._collect_common_metrics(device)
@@ -374,15 +413,17 @@ class DeviceCollector(MetricCollector):
                 error=str(e),
             )
 
-    async def _collect_device_with_timeout(self, device: dict[str, Any], device_type: str) -> None:
+    async def _collect_device_with_timeout(
+        self, device: dict[str, Any], device_type: DeviceType
+    ) -> None:
         """Collect device metrics with timeout.
 
         Parameters
         ----------
         device : dict[str, Any]
             Device data.
-        device_type : str
-            Device type (e.g., DeviceType.MS).
+        device_type : DeviceType
+            Device type enum value.
 
         """
         collector = self._device_collectors.get(device_type)
@@ -416,17 +457,19 @@ class DeviceCollector(MetricCollector):
 
         """
         await self.mr_collector.collect(device)
-    
-    async def _collect_mr_specific_metrics(self, org_id: str, devices: list[dict[str, Any]]) -> None:
+
+    async def _collect_mr_specific_metrics(
+        self, org_id: str, devices: list[dict[str, Any]]
+    ) -> None:
         """Collect MR-specific organization-wide metrics.
-        
+
         Parameters
         ----------
         org_id : str
             Organization ID.
         devices : list[dict[str, Any]]
             All devices in the organization.
-            
+
         """
         try:
             # Collect wireless client counts
@@ -463,7 +506,7 @@ class DeviceCollector(MetricCollector):
                 await self.mr_collector.collect_ssid_status(org_id)
             except Exception:
                 logger.exception("Failed to collect MR SSID status metrics")
-                
+
         except Exception:
             logger.exception(
                 "Failed to collect MR-specific metrics",
@@ -640,9 +683,7 @@ class DeviceCollector(MetricCollector):
             total_pages="all",
         )
         devices = validate_response_format(
-            devices,
-            expected_type=list,
-            operation="getOrganizationDevices"
+            devices, expected_type=list, operation="getOrganizationDevices"
         )
         logger.debug(
             "Successfully fetched devices",
@@ -679,11 +720,9 @@ class DeviceCollector(MetricCollector):
             total_pages="all",
         )
         availabilities = validate_response_format(
-            availabilities,
-            expected_type=list,
-            operation="getOrganizationDevicesAvailabilities"
+            availabilities, expected_type=list, operation="getOrganizationDevicesAvailabilities"
         )
-        
+
         logger.debug(
             "Successfully fetched availabilities",
             org_id=org_id,
