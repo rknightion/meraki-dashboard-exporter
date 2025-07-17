@@ -6,6 +6,8 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...core.logging import get_logger
+from ...core.logging_decorators import log_api_call
+from ...core.logging_helpers import LogContext
 from .base import BaseNetworkHealthCollector
 
 if TYPE_CHECKING:
@@ -16,6 +18,30 @@ logger = get_logger(__name__)
 
 class BluetoothCollector(BaseNetworkHealthCollector):
     """Collector for Bluetooth clients detected by MR devices in a network."""
+
+    @log_api_call("getNetworkBluetoothClients")
+    async def _fetch_bluetooth_clients(self, network_id: str) -> list[dict[str, Any]]:
+        """Fetch Bluetooth clients for a network.
+
+        Parameters
+        ----------
+        network_id : str
+            Network ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of Bluetooth clients.
+
+        """
+        self._track_api_call("getNetworkBluetoothClients")
+        return await asyncio.to_thread(
+            self.api.networks.getNetworkBluetoothClients,
+            network_id,
+            timespan=300,  # 5 minutes
+            perPage=1000,
+            total_pages="all",
+        )
 
     async def collect(self, network: dict[str, Any]) -> None:
         """Collect Bluetooth clients detected by MR devices in a network.
@@ -30,23 +56,9 @@ class BluetoothCollector(BaseNetworkHealthCollector):
         network_name = network.get("name", network_id)
 
         try:
-            logger.debug(
-                "Fetching Bluetooth clients",
-                network_id=network_id,
-                network_name=network_name,
-            )
-
-            # Track API call
-            self._track_api_call("getNetworkBluetoothClients")
-
-            # Get Bluetooth clients for the last 5 minutes with page size 1000
-            bluetooth_clients = await asyncio.to_thread(
-                self.api.networks.getNetworkBluetoothClients,
-                network_id,
-                timespan=300,  # 5 minutes
-                perPage=1000,
-                total_pages="all",
-            )
+            with LogContext(network_id=network_id, network_name=network_name):
+                # Get Bluetooth clients for the last 5 minutes with page size 1000
+                bluetooth_clients = await self._fetch_bluetooth_clients(network_id)
 
             # Count the total number of Bluetooth clients
             client_count = len(bluetooth_clients) if bluetooth_clients else 0
@@ -61,12 +73,6 @@ class BluetoothCollector(BaseNetworkHealthCollector):
                 client_count,
             )
 
-            logger.debug(
-                "Successfully collected Bluetooth clients",
-                network_id=network_id,
-                network_name=network_name,
-                client_count=client_count,
-            )
 
         except Exception as e:
             # Log at debug level if it's just not available (400/404 errors)
