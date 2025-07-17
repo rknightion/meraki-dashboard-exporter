@@ -52,13 +52,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install mkdocs mkdocs-material mkdocstrings[python] pymdown-extensions
+      - name: Set up uv
+        uses: astral-sh/setup-uv@bd01e18f51369d5a26f1651c3cb451d3417e3bba # v6.3.1
+        with:
+          python-version: 3.13
+          activate-environment: true
+          enable-cache: true
+
+      - name: Install project (incl. dev extras)
+        run: uv sync
 
       - name: Build documentation
-        run: mkdocs build --strict --verbose
+        run: uv run mkdocs build --verbose
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
