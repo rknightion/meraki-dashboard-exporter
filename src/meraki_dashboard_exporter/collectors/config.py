@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import TYPE_CHECKING, Any
 
 from ..core.collector import MetricCollector
@@ -10,6 +11,8 @@ from ..core.constants import OrgMetricName, UpdateTier
 from ..core.domain_models import ConfigurationChange
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
+from ..core.logging_decorators import log_api_call
+from ..core.logging_helpers import LogContext, log_metric_collection_summary
 from ..core.metrics import LabelName
 from ..core.registry import register_collector
 
@@ -113,20 +116,42 @@ class ConfigCollector(MetricCollector):
 
     async def _collect_impl(self) -> None:
         """Collect configuration metrics."""
+        start_time = time.time()
+        metrics_collected = 0
+        api_calls_made = 0
+        
         try:
             # Get organizations with error handling
             organizations = await self._fetch_organizations()
             if not organizations:
                 logger.warning("No organizations found for config collection")
                 return
+            api_calls_made += 1
 
             # Collect metrics for each organization
             tasks = [self._collect_org_config(org) for org in organizations]
-            await asyncio.gather(*tasks, return_exceptions=True)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Count successful collections
+            for result in results:
+                if not isinstance(result, Exception):
+                    # Each org makes 2 API calls (login security + config changes)
+                    api_calls_made += 2
+            
+            # Log collection summary
+            duration = time.time() - start_time
+            log_metric_collection_summary(
+                "ConfigCollector",
+                metrics_collected=metrics_collected,
+                duration_seconds=duration,
+                organizations_processed=len(organizations),
+                api_calls_made=api_calls_made,
+            )
 
         except Exception:
             logger.exception("Failed to collect configuration metrics")
 
+    @log_api_call("getOrganization")
     @with_error_handling(
         operation="Fetch organizations",
         continue_on_error=True,
@@ -143,8 +168,6 @@ class ConfigCollector(MetricCollector):
         """
         if self.settings.org_id:
             # Single organization
-            logger.debug("Fetching single organization", org_id=self.settings.org_id)
-            self._track_api_call("getOrganization")
             org = await asyncio.to_thread(
                 self.api.organizations.getOrganization,
                 self.settings.org_id,
@@ -152,13 +175,10 @@ class ConfigCollector(MetricCollector):
             return [org]
         else:
             # All accessible organizations
-            logger.debug("Fetching all organizations for config collection")
-            self._track_api_call("getOrganizations")
             organizations = await asyncio.to_thread(self.api.organizations.getOrganizations)
             organizations = validate_response_format(
                 organizations, expected_type=list, operation="getOrganizations"
             )
-            logger.debug("Successfully fetched organizations", count=len(organizations))
             return organizations
 
     @with_error_handling(
@@ -191,6 +211,7 @@ class ConfigCollector(MetricCollector):
                 org_name=org_name,
             )
 
+    @log_api_call("getOrganizationLoginSecurity")
     async def _collect_login_security(self, org_id: str, org_name: str) -> None:
         """Collect login security configuration.
 
@@ -203,13 +224,11 @@ class ConfigCollector(MetricCollector):
 
         """
         try:
-            logger.debug("Fetching login security settings", org_id=org_id)
-            self._track_api_call("getOrganizationLoginSecurity")
-            security = await asyncio.to_thread(
-                self.api.organizations.getOrganizationLoginSecurity,
-                org_id,
-            )
-            logger.debug("Successfully fetched login security settings", org_id=org_id)
+            with LogContext(org_id=org_id, org_name=org_name):
+                security = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationLoginSecurity,
+                    org_id,
+                )
 
             # Password expiration
             self._login_security_password_expiration_enabled.labels(org_id, org_name).set(
@@ -290,6 +309,7 @@ class ConfigCollector(MetricCollector):
                 org_name=org_name,
             )
 
+    @log_api_call("getOrganizationConfigurationChanges")
     async def _collect_configuration_changes(self, org_id: str, org_name: str) -> None:
         """Collect configuration changes count for the last 24 hours.
 
@@ -302,16 +322,14 @@ class ConfigCollector(MetricCollector):
 
         """
         try:
-            logger.debug("Fetching configuration changes", org_id=org_id)
-            self._track_api_call("getOrganizationConfigurationChanges")
-
-            # Get configuration changes for the last 24 hours
-            config_changes = await asyncio.to_thread(
-                self.api.organizations.getOrganizationConfigurationChanges,
-                org_id,
-                timespan=86400,  # 24 hours in seconds
-                total_pages="all",
-            )
+            with LogContext(org_id=org_id, org_name=org_name):
+                # Get configuration changes for the last 24 hours
+                config_changes = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationConfigurationChanges,
+                    org_id,
+                    timespan=86400,  # 24 hours in seconds
+                    total_pages="all",
+                )
 
             # Parse changes using domain model for validation
             parsed_changes = []

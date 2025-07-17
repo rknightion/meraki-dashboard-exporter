@@ -5,12 +5,14 @@ This collector handles environmental sensor metrics from MT devices.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from ..core.collector import MetricCollector
 from ..core.constants import MTMetricName, UpdateTier
 from ..core.error_handling import with_error_handling
 from ..core.logging import get_logger
+from ..core.logging_helpers import log_metric_collection_summary
 from ..core.metrics import LabelName
 from ..core.registry import register_collector
 from .devices import MTCollector
@@ -162,4 +164,17 @@ class MTSensorCollector(MetricCollector):
     )
     async def _collect_impl(self) -> None:
         """Collect sensor metrics by delegating to MT collector."""
+        start_time = asyncio.get_event_loop().time()
+        
+        # Delegate to MT collector to collect sensor metrics
         await self.mt_collector.collect_sensor_metrics()
+        
+        # Log collection summary
+        # The actual metrics count and API calls will be tracked by MTCollector
+        log_metric_collection_summary(
+            "MTSensorCollector",
+            metrics_collected=0,  # Metrics tracked by MT collector
+            duration_seconds=asyncio.get_event_loop().time() - start_time,
+            organizations_processed=0,  # Will be set by MT collector
+            api_calls_made=0,  # API calls tracked by MT collector
+        )

@@ -16,6 +16,8 @@ from ..core.constants import (
 )
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
+from ..core.logging_decorators import log_api_call, log_batch_operation, log_collection_progress
+from ..core.logging_helpers import LogContext, log_metric_collection_summary
 from ..core.metrics import LabelName
 from ..core.registry import register_collector
 from .devices import MGCollector, MRCollector, MSCollector, MTCollector, MVCollector, MXCollector
@@ -200,21 +202,40 @@ class DeviceCollector(MetricCollector):
 
     async def _collect_impl(self) -> None:
         """Collect device metrics."""
+        start_time = asyncio.get_event_loop().time()
+        metrics_collected = 0
+        organizations_processed = 0
+        api_calls_made = 0
+        
         try:
             # Get organizations with error handling
             organizations = await self._fetch_organizations()
             if not organizations:
                 logger.warning("No organizations found for device collection")
                 return
+            api_calls_made += 1
 
             # Collect devices for each organization
             org_ids = [org["id"] for org in organizations]
             for org_id in org_ids:
                 await self._collect_org_devices(org_id)
+                organizations_processed += 1
+                # Each org makes multiple API calls
+                api_calls_made += 10  # Approximate
+
+            # Log collection summary
+            log_metric_collection_summary(
+                "DeviceCollector",
+                metrics_collected=metrics_collected,
+                duration_seconds=asyncio.get_event_loop().time() - start_time,
+                organizations_processed=organizations_processed,
+                api_calls_made=api_calls_made,
+            )
 
         except Exception:
             logger.exception("Failed to collect device metrics")
 
+    @log_api_call("getOrganizations")
     @with_error_handling(
         operation="Fetch organizations",
         continue_on_error=True,
@@ -232,13 +253,12 @@ class DeviceCollector(MetricCollector):
         if self.settings.org_id:
             return [{"id": self.settings.org_id}]
         else:
-            logger.debug("Fetching all organizations for device collection")
-            self._track_api_call("getOrganizations")
-            orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
-            orgs = validate_response_format(orgs, expected_type=list, operation="getOrganizations")
-            logger.debug("Successfully fetched organizations", count=len(orgs))
-            return orgs
+            with LogContext(operation="fetch_organizations"):
+                orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
+                orgs = validate_response_format(orgs, expected_type=list, operation="getOrganizations")
+                return orgs
 
+    @log_batch_operation("collect devices", batch_size=None)
     @with_error_handling(
         operation="Collect organization devices",
         continue_on_error=True,
@@ -253,43 +273,24 @@ class DeviceCollector(MetricCollector):
 
         """
         try:
-            # Get all devices and their statuses with timeout
-            logger.debug(
-                "Starting device collection",
-                org_id=org_id,
-            )
+            with LogContext(org_id=org_id):
+                # Store device lookup map for use in other collectors
+                self._device_lookup: dict[str, dict[str, Any]] = {}
 
-            # Check if API is accessible
-            logger.debug("Checking API access", org_id=org_id)
+                # Fetch devices with error handling
+                devices = await self._fetch_devices(org_id)
+                if not devices:
+                    logger.warning("No devices found", org_id=org_id)
+                    return
 
-            # Fetch devices and availabilities separately to better handle timeouts
-            devices = None
+                # Fetch availabilities with error handling
+                availabilities = await self._fetch_device_availabilities(org_id) or []
 
-            # Store device lookup map for use in other collectors
-            self._device_lookup: dict[str, dict[str, Any]] = {}
-
-            # Fetch devices with error handling
-            devices = await self._fetch_devices(org_id)
-            if not devices:
-                logger.warning("No devices found", org_id=org_id)
-                return
-
-            # Fetch availabilities with error handling
-            availabilities = await self._fetch_device_availabilities(org_id) or []
-
-            if not devices:
-                logger.warning(
-                    "No devices found for organization",
-                    org_id=org_id,
+                logger.debug(
+                    "Processing devices",
+                    device_count=len(devices),
+                    availability_count=len(availabilities),
                 )
-                return
-
-            logger.debug(
-                "Processing devices",
-                org_id=org_id,
-                device_count=len(devices),
-                availability_count=len(availabilities),
-            )
 
             # Create availability lookup by serial
             availability_map = {
@@ -332,10 +333,6 @@ class DeviceCollector(MetricCollector):
 
             # Process MS devices
             if ms_devices:
-                logger.debug(
-                    "Processing MS devices",
-                    count=len(ms_devices),
-                )
                 # Process devices in smaller batches to avoid overwhelming the API
                 await process_in_batches_with_errors(
                     ms_devices,
@@ -348,11 +345,6 @@ class DeviceCollector(MetricCollector):
 
             # Process MR devices
             if mr_devices:
-                logger.debug(
-                    "Processing MR devices",
-                    count=len(mr_devices),
-                    mr_serials=[d["serial"] for d in mr_devices],
-                )
                 # Process devices in smaller batches to avoid overwhelming the API
                 await process_in_batches_with_errors(
                     mr_devices,
@@ -370,10 +362,6 @@ class DeviceCollector(MetricCollector):
                     continue
 
                 if type_devices:
-                    logger.debug(
-                        f"Processing {device_type} devices",
-                        count=len(type_devices),
-                    )
                     # Process devices in smaller batches
                     await process_in_batches_with_errors(
                         type_devices,
@@ -385,14 +373,12 @@ class DeviceCollector(MetricCollector):
                     )
 
             # Aggregate network-wide POE metrics after all switches are collected
-            logger.debug("Aggregating network POE metrics")
             try:
                 await self._aggregate_network_poe(org_id, devices)
             except Exception:
                 logger.exception("Failed to aggregate POE metrics")
 
             # Collect memory metrics for all devices
-            logger.debug("Collecting device memory metrics")
             try:
                 # Use base collector's memory collection
                 await self.ms_collector.collect_memory_metrics(org_id, self._device_lookup)
@@ -401,7 +387,6 @@ class DeviceCollector(MetricCollector):
 
             # Collect MR-specific metrics
             if any(d for d in devices if d.get("model", "").startswith(DeviceType.MR)):
-                logger.debug("Collecting MR-specific metrics")
                 # Use MR collector for all MR-specific metrics
                 await self._collect_mr_specific_metrics(org_id, devices)
 
@@ -473,35 +458,30 @@ class DeviceCollector(MetricCollector):
         """
         try:
             # Collect wireless client counts
-            logger.debug("Collecting wireless client counts")
             try:
                 await self.mr_collector.collect_wireless_clients(org_id, self._device_lookup)
             except Exception:
                 logger.exception("Failed to collect wireless client counts")
 
             # Collect MR ethernet status
-            logger.debug("Collecting MR ethernet status")
             try:
                 await self.mr_collector.collect_ethernet_status(org_id, self._device_lookup)
             except Exception:
                 logger.exception("Failed to collect MR ethernet status")
 
             # Collect MR packet loss metrics
-            logger.debug("Collecting MR packet loss metrics")
             try:
                 await self.mr_collector.collect_packet_loss(org_id, self._device_lookup)
             except Exception:
                 logger.exception("Failed to collect MR packet loss metrics")
 
             # Collect MR CPU load metrics
-            logger.debug("Collecting MR CPU load metrics")
             try:
                 await self.mr_collector.collect_cpu_load(org_id, devices)
             except Exception:
                 logger.exception("Failed to collect MR CPU load metrics")
 
             # Collect MR SSID status metrics
-            logger.debug("Collecting MR SSID status metrics")
             try:
                 await self.mr_collector.collect_ssid_status(org_id)
             except Exception:
@@ -588,6 +568,29 @@ class DeviceCollector(MetricCollector):
                 device["uptimeInSeconds"],
             )
 
+    @log_api_call("getOrganizationNetworks")
+    async def _fetch_networks_for_poe(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch networks for POE aggregation.
+        
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+            
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of networks.
+            
+        """
+        with LogContext(org_id=org_id):
+            networks = await asyncio.to_thread(
+                self.api.organizations.getOrganizationNetworks,
+                org_id,
+                total_pages="all",
+            )
+            return networks
+
     async def _aggregate_network_poe(self, org_id: str, devices: list[dict[str, Any]]) -> None:
         """Aggregate POE metrics at the network level.
 
@@ -601,14 +604,7 @@ class DeviceCollector(MetricCollector):
         """
         try:
             # Get network names
-            logger.debug("Fetching networks for POE aggregation", org_id=org_id)
-            self._track_api_call("getOrganizationNetworks")
-            networks = await asyncio.to_thread(
-                self.api.organizations.getOrganizationNetworks,
-                org_id,
-                total_pages="all",
-            )
-            logger.debug("Successfully fetched networks", org_id=org_id, count=len(networks))
+            networks = await self._fetch_networks_for_poe(org_id)
             network_map = {n["id"]: n["name"] for n in networks}
 
             # Group switches by network
@@ -655,6 +651,7 @@ class DeviceCollector(MetricCollector):
                 org_id=org_id,
             )
 
+    @log_api_call("getOrganizationDevices")
     @with_error_handling(
         operation="Fetch devices",
         continue_on_error=True,
@@ -674,24 +671,18 @@ class DeviceCollector(MetricCollector):
             List of devices or None on error.
 
         """
-        logger.debug("Fetching devices list", org_id=org_id)
-        self._track_api_call("getOrganizationDevices")
+        with LogContext(org_id=org_id):
+            devices = await asyncio.to_thread(
+                self.api.organizations.getOrganizationDevices,
+                org_id,
+                total_pages="all",
+            )
+            devices = validate_response_format(
+                devices, expected_type=list, operation="getOrganizationDevices"
+            )
+            return devices
 
-        devices = await asyncio.to_thread(
-            self.api.organizations.getOrganizationDevices,
-            org_id,
-            total_pages="all",
-        )
-        devices = validate_response_format(
-            devices, expected_type=list, operation="getOrganizationDevices"
-        )
-        logger.debug(
-            "Successfully fetched devices",
-            org_id=org_id,
-            count=len(devices),
-        )
-        return devices
-
+    @log_api_call("getOrganizationDevicesAvailabilities")
     @with_error_handling(
         operation="Fetch device availabilities",
         continue_on_error=True,
@@ -711,21 +702,13 @@ class DeviceCollector(MetricCollector):
             List of device availabilities or None on error.
 
         """
-        logger.debug("Fetching device availabilities", org_id=org_id)
-        self._track_api_call("getOrganizationDevicesAvailabilities")
-
-        availabilities = await asyncio.to_thread(
-            self.api.organizations.getOrganizationDevicesAvailabilities,
-            org_id,
-            total_pages="all",
-        )
-        availabilities = validate_response_format(
-            availabilities, expected_type=list, operation="getOrganizationDevicesAvailabilities"
-        )
-
-        logger.debug(
-            "Successfully fetched availabilities",
-            org_id=org_id,
-            count=len(availabilities) if availabilities else 0,
-        )
-        return availabilities
+        with LogContext(org_id=org_id):
+            availabilities = await asyncio.to_thread(
+                self.api.organizations.getOrganizationDevicesAvailabilities,
+                org_id,
+                total_pages="all",
+            )
+            availabilities = validate_response_format(
+                availabilities, expected_type=list, operation="getOrganizationDevicesAvailabilities"
+            )
+            return availabilities

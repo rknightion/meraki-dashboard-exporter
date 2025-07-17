@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 from ...core.constants import MSMetricName
 from ...core.error_handling import validate_response_format, with_error_handling
 from ...core.logging import get_logger
+from ...core.logging_decorators import log_api_call
+from ...core.logging_helpers import LogContext
 from ...core.metrics import LabelName
 from .base import BaseDeviceCollector
 
@@ -85,6 +87,7 @@ class MSCollector(BaseDeviceCollector):
             labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
+    @log_api_call("getDeviceSwitchPortsStatuses")
     @with_error_handling(
         operation="Collect MS device metrics",
         continue_on_error=True,
@@ -105,26 +108,14 @@ class MSCollector(BaseDeviceCollector):
 
         try:
             # Get port statuses with timeout
-            logger.debug(
-                "Fetching switch port statuses",
-                serial=serial,
-                name=name,
-            )
-            self.parent._track_api_call("getDeviceSwitchPortsStatuses")
-
-            port_statuses = await asyncio.to_thread(
-                self.api.switch.getDeviceSwitchPortsStatuses,
-                serial,
-            )
-            port_statuses = validate_response_format(
-                port_statuses, expected_type=list, operation="getDeviceSwitchPortsStatuses"
-            )
-
-            logger.debug(
-                "Successfully fetched port statuses",
-                serial=serial,
-                port_count=len(port_statuses) if port_statuses else 0,
-            )
+            with LogContext(serial=serial, name=name):
+                port_statuses = await asyncio.to_thread(
+                    self.api.switch.getDeviceSwitchPortsStatuses,
+                    serial,
+                )
+                port_statuses = validate_response_format(
+                    port_statuses, expected_type=list, operation="getDeviceSwitchPortsStatuses"
+                )
 
             for port in port_statuses:
                 port_id = str(port.get("portId", ""))
