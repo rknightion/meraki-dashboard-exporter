@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import TYPE_CHECKING, Any
 
 from ..core.collector import MetricCollector
 from ..core.constants import AlertMetricName, UpdateTier
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
+from ..core.logging_decorators import log_api_call, log_batch_operation
+from ..core.logging_helpers import LogContext, log_metric_collection_summary
 from ..core.metrics import LabelName
 from ..core.registry import register_collector
 
@@ -61,12 +64,17 @@ class AlertsCollector(MetricCollector):
 
     async def _collect_impl(self) -> None:
         """Collect alert metrics."""
+        start_time = time.time()
+        metrics_collected = 0
+        api_calls_made = 0
+        
         try:
             # Get organizations with error handling
             orgs_data = await self._fetch_organizations()
             if not orgs_data:
                 logger.warning("No organizations found for alerts collection")
                 return
+            api_calls_made += 1
 
             # Build org mapping
             if self.settings.org_id:
@@ -81,11 +89,27 @@ class AlertsCollector(MetricCollector):
                 self._collect_org_alerts(org_id, org_names.get(org_id, "unknown"))
                 for org_id in org_ids
             ]
-            await asyncio.gather(*tasks, return_exceptions=True)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Count successful collections
+            for result in results:
+                if not isinstance(result, Exception):
+                    api_calls_made += 1
+            
+            # Log collection summary
+            duration = time.time() - start_time
+            log_metric_collection_summary(
+                "AlertsCollector",
+                metrics_collected=metrics_collected,  # This would need to be tracked
+                duration_seconds=duration,
+                organizations_processed=len(org_ids),
+                api_calls_made=api_calls_made,
+            )
 
         except Exception:
             logger.exception("Failed to collect alert metrics")
 
+    @log_api_call("getOrganization")
     @with_error_handling(
         operation="Fetch organizations",
         continue_on_error=True,
@@ -101,21 +125,17 @@ class AlertsCollector(MetricCollector):
 
         """
         if self.settings.org_id:
-            logger.debug("Fetching single organization", org_id=self.settings.org_id)
-            self._track_api_call("getOrganization")
             org = await asyncio.to_thread(
                 self.api.organizations.getOrganization,
                 self.settings.org_id,
             )
             return [org]
         else:
-            logger.debug("Fetching all organizations for alerts collection")
-            self._track_api_call("getOrganizations")
             orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
             orgs = validate_response_format(orgs, expected_type=list, operation="getOrganizations")
-            logger.debug("Successfully fetched organizations", count=len(orgs))
             return orgs
 
+    @log_api_call("getOrganizationAssuranceAlerts")
     @with_error_handling(
         operation="Collect organization alerts",
         continue_on_error=True,
@@ -132,10 +152,7 @@ class AlertsCollector(MetricCollector):
             Organization name.
 
         """
-        try:
-            logger.debug("Fetching assurance alerts", org_id=org_id)
-            self._track_api_call("getOrganizationAssuranceAlerts")
-
+        with LogContext(org_id=org_id, org_name=org_name):
             # Get all active alerts
             alerts = await asyncio.to_thread(
                 self.api.organizations.getOrganizationAssuranceAlerts,
@@ -146,8 +163,6 @@ class AlertsCollector(MetricCollector):
                 alerts, expected_type=list, operation="getOrganizationAssuranceAlerts"
             )
 
-            logger.debug("Successfully fetched alerts", org_id=org_id, count=len(alerts))
-
             # Clear previous metrics for this org to handle resolved alerts
             self._clear_org_metrics(org_id)
 
@@ -156,114 +171,113 @@ class AlertsCollector(MetricCollector):
                 return
 
             # Process alerts and aggregate counts
-            alert_counts: dict[tuple[str, str, str, str, str, str, str, str], int] = {}
-            severity_counts = {"critical": 0, "warning": 0, "informational": 0}
-            network_counts: dict[tuple[str, str], int] = {}
+            self._process_alerts(alerts, org_id, org_name)
 
-            for alert in alerts:
-                # Skip dismissed or resolved alerts
-                if alert.get("dismissedAt") or alert.get("resolvedAt"):
-                    continue
+    @log_batch_operation("process alerts")
+    def _process_alerts(self, alerts: list[dict[str, Any]], org_id: str, org_name: str) -> None:
+        """Process alert data and update metrics.
+        
+        Parameters
+        ----------
+        alerts : list[dict[str, Any]]
+            List of alert data
+        org_id : str
+            Organization ID
+        org_name : str
+            Organization name
+        """
+        alert_counts: dict[tuple[str, str, str, str, str, str, str, str], int] = {}
+        severity_counts = {"critical": 0, "warning": 0, "informational": 0}
+        network_counts: dict[tuple[str, str], int] = {}
 
-                # Extract alert details
-                alert_type = alert.get("type", "unknown")
-                category_type = alert.get("categoryType", "unknown")
-                severity = alert.get("severity", "unknown")
-                device_type = alert.get("deviceType", "none")  # Can be null for org-wide alerts
+        for alert in alerts:
+            # Skip dismissed or resolved alerts
+            if alert.get("dismissedAt") or alert.get("resolvedAt"):
+                continue
 
-                network = alert.get("network", {})
-                network_id = network.get("id", "unknown")
-                network_name = network.get("name", "unknown")
+            # Extract alert details
+            alert_type = alert.get("type", "unknown")
+            category_type = alert.get("categoryType", "unknown")
+            severity = alert.get("severity", "unknown")
+            device_type = alert.get("deviceType", "none")  # Can be null for org-wide alerts
 
-                # Create composite key for aggregation
-                key = (
-                    org_id,
-                    org_name,
-                    network_id,
-                    network_name,
-                    alert_type,
-                    category_type,
-                    severity,
-                    device_type or "none",  # Handle null device types
-                )
+            network = alert.get("network", {})
+            network_id = network.get("id", "unknown")
+            network_name = network.get("name", "unknown")
 
-                # Count alerts by composite key
-                alert_counts[key] = alert_counts.get(key, 0) + 1
-
-                # Count by severity
-                if severity in severity_counts:
-                    severity_counts[severity] += 1
-
-                # Count by network
-                network_key = (network_id, network_name)
-                network_counts[network_key] = network_counts.get(network_key, 0) + 1
-
-            # Set metrics for active alerts
-            for key, count in alert_counts.items():
-                (
-                    org_id,
-                    org_name,
-                    network_id,
-                    network_name,
-                    alert_type,
-                    category_type,
-                    severity,
-                    device_type,
-                ) = key
-
-                self._alerts_active.labels(
-                    org_id=org_id,
-                    org_name=org_name,
-                    network_id=network_id,
-                    network_name=network_name,
-                    alert_type=alert_type,
-                    category_type=category_type,
-                    severity=severity,
-                    device_type=device_type,
-                ).set(count)
-
-            # Set severity summary metrics
-            for severity, count in severity_counts.items():
-                self._alerts_by_severity.labels(
-                    org_id=org_id,
-                    org_name=org_name,
-                    severity=severity,
-                ).set(count)
-
-            # Set network summary metrics
-            for (network_id, network_name), count in network_counts.items():
-                self._alerts_by_network.labels(
-                    org_id=org_id,
-                    org_name=org_name,
-                    network_id=network_id,
-                    network_name=network_name,
-                ).set(count)
-
-            logger.debug(
-                "Collected alert metrics",
-                org_id=org_id,
-                org_name=org_name,
-                total_alerts=len(alerts),
-                active_alerts=sum(alert_counts.values()),
-                severity_breakdown=severity_counts,
-                affected_networks=len(network_counts),
+            # Create composite key for aggregation
+            key = (
+                org_id,
+                org_name,
+                network_id,
+                network_name,
+                alert_type,
+                category_type,
+                severity,
+                device_type or "none",  # Handle null device types
             )
 
-        except Exception as e:
-            # Check if alerts API is available for this org
-            error_str = str(e)
-            if "404" in error_str or "not found" in error_str:
-                logger.debug(
-                    "Assurance alerts API not available",
-                    org_id=org_id,
-                    org_name=org_name,
-                )
-            else:
-                logger.exception(
-                    "Failed to collect alerts",
-                    org_id=org_id,
-                    org_name=org_name,
-                )
+            # Count alerts by composite key
+            alert_counts[key] = alert_counts.get(key, 0) + 1
+
+            # Count by severity
+            if severity in severity_counts:
+                severity_counts[severity] += 1
+
+            # Count by network
+            network_key = (network_id, network_name)
+            network_counts[network_key] = network_counts.get(network_key, 0) + 1
+
+        # Set metrics for active alerts
+        for key, count in alert_counts.items():
+            (
+                org_id,
+                org_name,
+                network_id,
+                network_name,
+                alert_type,
+                category_type,
+                severity,
+                device_type,
+            ) = key
+
+            self._alerts_active.labels(
+                org_id=org_id,
+                org_name=org_name,
+                network_id=network_id,
+                network_name=network_name,
+                alert_type=alert_type,
+                category_type=category_type,
+                severity=severity,
+                device_type=device_type,
+            ).set(count)
+
+        # Set severity summary metrics
+        for severity, count in severity_counts.items():
+            self._alerts_by_severity.labels(
+                org_id=org_id,
+                org_name=org_name,
+                severity=severity,
+            ).set(count)
+
+        # Set network summary metrics
+        for (network_id, network_name), count in network_counts.items():
+            self._alerts_by_network.labels(
+                org_id=org_id,
+                org_name=org_name,
+                network_id=network_id,
+                network_name=network_name,
+            ).set(count)
+
+        logger.debug(
+            "Collected alert metrics",
+            org_id=org_id,
+            org_name=org_name,
+            total_alerts=len(alerts),
+            active_alerts=sum(alert_counts.values()),
+            severity_breakdown=severity_counts,
+            affected_networks=len(network_counts),
+        )
 
     def _clear_org_metrics(self, org_id: str) -> None:
         """Clear all metrics for an organization to handle resolved alerts.

@@ -1,0 +1,33 @@
+⏺ Update Todos
+  ⎿  ☒ 5.2 Improve Code Documentation - Add docstring examples and document strategies
+     ☐ 5.3 Standardize Logging Patterns - Apply logging decorators to all collectors
+     ☐ Apply logging decorators to alerts.py
+     ☐ 5.1 Add Integration Test Helpers - Move testing helpers to tests/ and refactor existing tests
+     ☐ Apply logging decorators to config.py
+     ☐ Apply logging decorators to device.py
+     ☐ Apply logging decorators to mt_sensor.py
+     ☐ Apply logging decorators to network_health.py
+     ☐ Apply logging decorators to organization.py
+     ☐ Apply logging decorators to devices/base.py
+     ☐ Apply logging decorators to devices/mr.py
+     ☐ Apply logging decorators to devices/ms.py
+     ☐ Apply logging decorators to devices/mt.py
+     ☐ Apply logging decorators to devices/mx.py
+     ☐ Apply logging decorators to devices/mg.py
+     ☐ Apply logging decorators to devices/mv.py
+     ☐ Apply logging decorators to network_health_collectors/rf_health.py
+     ☐ Apply logging decorators to network_health_collectors/connection_stats.py
+     ☐ Apply logging decorators to network_health_collectors/data_rates.py
+     ☐ Apply logging decorators to network_health_collectors/bluetooth.py
+     ☐ Apply logging decorators to organization_collectors/api_usage.py
+     ☐ Apply logging decorators to organization_collectors/client_overview.py
+     ☐ Apply logging decorators to organization_collectors/license.py
+     ☐ Refactor test_alerts_collector.py to use test helpers
+     ☐ Refactor test_device_collector.py to use test helpers
+     ☐ Refactor test_mt_collector.py to use test helpers
+     ☐ Refactor test_network_health_collector.py to use test helpers
+     ☐ Refactor test_discovery_service.py to use test helpers
+     ☐ Refactor test_collector_base.py to use test helpers
+     ☐ Refactor test_registry.py to use test helpers
+     ☐ Refactor test_config.py to use test helpers
+     ☐ Refactor integration tests to use test helpers

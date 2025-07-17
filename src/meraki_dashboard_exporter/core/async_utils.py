@@ -19,17 +19,61 @@ R = TypeVar("R")
 
 
 class ManagedTaskGroup:
-    """Context manager for tracking and cleaning up async tasks.
+    """Context manager for tracking and cleaning up async tasks with structured concurrency.
 
-    This provides structured concurrency patterns for managing groups
-    of related async tasks with proper cleanup.
+    Provides structured concurrency for managing groups of related async tasks,
+    ensuring proper cleanup even in error scenarios. All tasks created within
+    the group are automatically tracked and cleaned up on exit.
 
-    Example:
-    -------
-    async with ManagedTaskGroup() as group:
-        await group.create_task(async_operation1())
-        await group.create_task(async_operation2())
-        # All tasks are automatically awaited and cleaned up
+    Key differences from alternatives:
+    - vs asyncio.gather: Allows dynamic task creation within context
+    - vs asyncio.TaskGroup (3.11+): Works on older Python versions  
+    - vs manual tracking: Automatic cleanup prevents orphaned tasks
+
+    Examples
+    --------
+    Basic parallel API calls:
+    >>> async with ManagedTaskGroup("api_calls") as group:
+    ...     await group.create_task(fetch_organizations())
+    ...     await group.create_task(fetch_networks())
+    ...     # Both tasks run in parallel and are awaited on exit
+
+    Dynamic task creation based on results:
+    >>> async with ManagedTaskGroup("device_fetch") as group:
+    ...     orgs = await fetch_organizations()
+    ...     for org in orgs:
+    ...         await group.create_task(
+    ...             fetch_devices(org["id"]),
+    ...             name=f"devices_{org['id']}"
+    ...         )
+
+    Error handling - all tasks cancelled on exception:
+    >>> async with ManagedTaskGroup("metrics") as group:
+    ...     await group.create_task(collect_fast_metrics())
+    ...     await group.create_task(collect_slow_metrics())
+    ...     raise ValueError("Something went wrong")
+    ...     # Both tasks will be cancelled
+
+    When to Use
+    -----------
+    - Multiple independent API calls that should run in parallel
+    - Dynamic number of tasks based on API responses
+    - Operations that should all complete or all be cancelled
+    - When you need task lifecycle tracking
+
+    When NOT to Use
+    ---------------
+    - Single async operation (just await directly)
+    - CPU-bound operations (use ProcessPoolExecutor)
+    - Fire-and-forget tasks (use asyncio.create_task)
+    - When you need return values (use gather or as_completed)
+
+    Notes
+    -----
+    - Tasks are cancelled on exception but not on normal exit
+    - Task exceptions are propagated after all tasks complete
+    - Memory usage scales with number of concurrent tasks
+    - Use for I/O-bound operations, not CPU-bound work
 
     """
 
