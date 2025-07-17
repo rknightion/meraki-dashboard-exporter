@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from ...core.logging import get_logger
+from ...core.logging_decorators import log_api_call
+from ...core.logging_helpers import LogContext
 from .base import BaseOrganizationCollector
 
 if TYPE_CHECKING:
@@ -17,6 +19,49 @@ logger = get_logger(__name__)
 
 class LicenseCollector(BaseOrganizationCollector):
     """Collector for organization license metrics."""
+
+    @log_api_call("getOrganizationLicensesOverview")
+    async def _fetch_licenses_overview(self, org_id: str) -> dict[str, Any]:
+        """Fetch organization licenses overview.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        dict[str, Any]
+            Licenses overview data.
+
+        """
+        self._track_api_call("getOrganizationLicensesOverview")
+        return await asyncio.to_thread(
+            self.api.organizations.getOrganizationLicensesOverview,
+            org_id,
+        )
+
+    @log_api_call("getOrganizationLicenses")
+    async def _fetch_licenses(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch organization licenses.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of licenses.
+
+        """
+        self._track_api_call("getOrganizationLicenses")
+        return await asyncio.to_thread(
+            self.api.organizations.getOrganizationLicenses,
+            org_id,
+            total_pages="all",
+        )
 
     async def collect(self, org_id: str, org_name: str) -> None:
         """Collect license metrics.
@@ -30,12 +75,8 @@ class LicenseCollector(BaseOrganizationCollector):
 
         """
         try:
-            logger.debug("Fetching licensing overview", org_id=org_id)
-            self._track_api_call("getOrganizationLicensesOverview")
-            overview = await asyncio.to_thread(
-                self.api.organizations.getOrganizationLicensesOverview,
-                org_id,
-            )
+            with LogContext(org_id=org_id, org_name=org_name):
+                overview = await self._fetch_licenses_overview(org_id)
 
             # Check if this is co-termination or per-device licensing
             if overview.get("licensedDeviceCounts"):
@@ -54,12 +95,7 @@ class LicenseCollector(BaseOrganizationCollector):
                     org_name=org_name,
                 )
                 # Fetch individual licenses
-                self._track_api_call("getOrganizationLicenses")
-                licenses = await asyncio.to_thread(
-                    self.api.organizations.getOrganizationLicenses,
-                    org_id,
-                    total_pages="all",
-                )
+                licenses = await self._fetch_licenses(org_id)
 
                 if licenses:
                     self._process_per_device_licenses(org_id, org_name, licenses)
@@ -131,13 +167,6 @@ class LicenseCollector(BaseOrganizationCollector):
                 },
                 count,
             )
-            logger.debug(
-                "Set license count",
-                org_id=org_id,
-                license_type=license_type,
-                status=status,
-                count=count,
-            )
 
         # Set expiring license metrics
         # Set counts for all license types (0 if not expiring)
@@ -152,12 +181,6 @@ class LicenseCollector(BaseOrganizationCollector):
                     "license_type": license_type,
                 },
                 count,
-            )
-            logger.debug(
-                "Set expiring license count",
-                org_id=org_id,
-                license_type=license_type,
-                count=count,
             )
 
     def _parse_meraki_date(self, date_str: str) -> datetime | None:
@@ -241,13 +264,6 @@ class LicenseCollector(BaseOrganizationCollector):
                     },
                     count,
                 )
-                logger.debug(
-                    "Set license count",
-                    org_id=org_id,
-                    device_type=device_type,
-                    count=count,
-                    status=status,
-                )
         else:
             logger.warning(
                 "No licensed device counts in overview",
@@ -286,13 +302,6 @@ class LicenseCollector(BaseOrganizationCollector):
                                 },
                                 0,
                             )
-                        logger.debug(
-                            "Set expiring license count",
-                            org_id=org_id,
-                            device_type=device_type,
-                            count=count if days_until_expiry <= 30 else 0,
-                            days_until_expiry=days_until_expiry,
-                        )
             else:
                 logger.warning(
                     "Could not parse expiration date",
