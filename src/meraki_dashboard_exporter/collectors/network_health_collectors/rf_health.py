@@ -40,7 +40,6 @@ class RFHealthCollector(BaseNetworkHealthCollector):
             List of devices.
 
         """
-        self._track_api_call("getOrganizationDevices")
         return await asyncio.to_thread(
             self.api.organizations.getOrganizationDevices,
             org_id,
@@ -64,7 +63,6 @@ class RFHealthCollector(BaseNetworkHealthCollector):
             Channel utilization data.
 
         """
-        self._track_api_call("getNetworkNetworkHealthChannelUtilization")
         return await asyncio.to_thread(
             self.api.networks.getNetworkNetworkHealthChannelUtilization,
             network_id,

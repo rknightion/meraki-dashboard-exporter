@@ -117,9 +117,27 @@ class MetricAssertions:
             If assertion fails
 
         """
-        # Counters typically have _total suffix
-        full_name = metric_name if metric_name.endswith("_total") else f"{metric_name}_total"
-        self.assert_gauge_value(full_name, expected_value, **labels)
+        # Get the metric
+        metric = self.get_metric(metric_name)
+
+        # Counter samples have _total suffix
+        sample_name = f"{metric_name}_total"
+
+        # Find the sample with matching labels
+        for sample in metric.samples:
+            if sample.name == sample_name and self._labels_match(sample.labels, labels):
+                if sample.value != expected_value:
+                    raise AssertionError(
+                        f"Counter '{metric_name}' with labels {labels} has value "
+                        f"{sample.value}, expected {expected_value}"
+                    )
+                return
+
+        # If we get here, no matching sample was found
+        raise AssertionError(
+            f"Counter '{metric_name}' with labels {labels} not found. "
+            f"Available labels: {self._get_available_labels(metric, sample_name)}"
+        )
 
     def assert_counter_incremented(
         self, metric_name: str, min_increment: int = 1, **labels: str
@@ -141,11 +159,13 @@ class MetricAssertions:
             If assertion fails
 
         """
-        full_name = metric_name if metric_name.endswith("_total") else f"{metric_name}_total"
-        metric = self.get_metric(full_name)
+        metric = self.get_metric(metric_name)
+
+        # Counter samples have _total suffix
+        sample_name = f"{metric_name}_total"
 
         for sample in metric.samples:
-            if sample.name == full_name and self._labels_match(sample.labels, labels):
+            if sample.name == sample_name and self._labels_match(sample.labels, labels):
                 if sample.value < min_increment:
                     raise AssertionError(
                         f"Counter '{metric_name}' with labels {labels} has value "
@@ -173,8 +193,24 @@ class MetricAssertions:
             If assertion fails
 
         """
+        metric = self.get_metric(metric_name)
         count_name = f"{metric_name}_count"
-        self.assert_gauge_value(count_name, expected_count, **labels)
+
+        # Find the count sample with matching labels
+        for sample in metric.samples:
+            if sample.name == count_name and self._labels_match(sample.labels, labels):
+                if sample.value != expected_count:
+                    raise AssertionError(
+                        f"Histogram '{metric_name}' count with labels {labels} has value "
+                        f"{sample.value}, expected {expected_count}"
+                    )
+                return
+
+        # If we get here, no matching sample was found
+        raise AssertionError(
+            f"Histogram '{metric_name}' count with labels {labels} not found. "
+            f"Available labels: {self._get_available_labels(metric, count_name)}"
+        )
 
     def assert_histogram_sum_range(
         self, metric_name: str, min_sum: float, max_sum: float, **labels: str
@@ -304,7 +340,7 @@ class MetricAssertions:
         Parameters
         ----------
         metric_name : str
-            The metric name
+            The metric name (can include suffixes like _count, _sum for histograms)
         **labels : str
             Label key-value pairs
 
@@ -314,8 +350,17 @@ class MetricAssertions:
             The metric value or None if not found
 
         """
+        # Handle histogram suffixes - if looking for something like metric_count,
+        # we need to find the base metric first
+        base_metric_name = metric_name
+        if metric_name.endswith(("_count", "_sum", "_bucket")):
+            for suffix in ["_count", "_sum", "_bucket"]:
+                if metric_name.endswith(suffix):
+                    base_metric_name = metric_name[: -len(suffix)]
+                    break
+
         try:
-            metric = self.get_metric(metric_name)
+            metric = self.get_metric(base_metric_name)
         except AssertionError:
             return None
 
@@ -324,6 +369,107 @@ class MetricAssertions:
                 return sample.value
 
         return None
+
+    def assert_histogram_observed(self, metric_name: str, **labels: str) -> None:
+        """Assert a histogram has been observed (count > 0).
+
+        Parameters
+        ----------
+        metric_name : str
+            The metric name
+        **labels : str
+            Label key-value pairs
+
+        Raises
+        ------
+        AssertionError
+            If histogram count is 0
+
+        """
+        count = self.get_histogram_count(metric_name, **labels)
+        if count == 0:
+            raise AssertionError(
+                f"Histogram '{metric_name}' with labels {labels} has not been observed"
+            )
+
+    def get_gauge_value(self, metric_name: str, **labels: str) -> float:
+        """Get the value of a gauge metric.
+
+        Parameters
+        ----------
+        metric_name : str
+            The metric name
+        **labels : str
+            Label key-value pairs
+
+        Returns
+        -------
+        float
+            The gauge value
+
+        Raises
+        ------
+        AssertionError
+            If metric not found
+
+        """
+        value = self.get_metric_value(metric_name, **labels)
+        if value is None:
+            raise AssertionError(f"Gauge '{metric_name}' with labels {labels} not found")
+        return value
+
+    def get_counter_value(self, metric_name: str, **labels: str) -> float:
+        """Get the value of a counter metric.
+
+        Parameters
+        ----------
+        metric_name : str
+            The metric name
+        **labels : str
+            Label key-value pairs
+
+        Returns
+        -------
+        float
+            The counter value
+
+        Raises
+        ------
+        AssertionError
+            If metric not found
+
+        """
+        value = self.get_metric_value(metric_name, **labels)
+        if value is None:
+            raise AssertionError(f"Counter '{metric_name}' with labels {labels} not found")
+        return value
+
+    def get_histogram_count(self, metric_name: str, **labels: str) -> int:
+        """Get the count value of a histogram metric.
+
+        Parameters
+        ----------
+        metric_name : str
+            The metric name
+        **labels : str
+            Label key-value pairs
+
+        Returns
+        -------
+        int
+            The histogram count
+
+        Raises
+        ------
+        AssertionError
+            If metric not found
+
+        """
+        count_name = f"{metric_name}_count"
+        value = self.get_metric_value(count_name, **labels)
+        if value is None:
+            raise AssertionError(f"Histogram '{metric_name}' with labels {labels} not found")
+        return int(value)
 
     def get_all_label_sets(self, metric_name: str) -> list[dict[str, str]]:
         """Get all label combinations for a metric.
@@ -380,7 +526,21 @@ class MetricAssertions:
 
         """
         for key, value in expected_labels.items():
-            if sample_labels.get(key) != value:
+            # Convert enum values to strings for comparison
+            expected_value = value.value if hasattr(value, "value") else str(value)
+
+            # Handle case where sample labels have enum keys
+            sample_value = None
+            for sample_key, sample_val in sample_labels.items():
+                # If sample_key is an enum, get its value
+                if hasattr(sample_key, "value") and sample_key.value == key:
+                    sample_value = sample_val
+                    break
+                elif sample_key == key:
+                    sample_value = sample_val
+                    break
+
+            if sample_value != expected_value:
                 return False
         return True
 
@@ -403,7 +563,13 @@ class MetricAssertions:
         labels_list = []
         for sample in metric.samples:
             if sample.name == metric_name:
-                labels_list.append(dict(sample.labels))
+                # Convert enum keys to strings for display
+                label_dict = {}
+                for key, value in sample.labels.items():
+                    # If key is an enum, use its value
+                    key_str = key.value if hasattr(key, "value") else str(key)
+                    label_dict[key_str] = value
+                labels_list.append(label_dict)
         return labels_list
 
 

@@ -34,7 +34,6 @@ class DataRatesCollector(BaseNetworkHealthCollector):
             Data rate history.
 
         """
-        self._track_api_call("getNetworkWirelessDataRateHistory")
         return await asyncio.to_thread(
             self.api.wireless.getNetworkWirelessDataRateHistory,
             network_id,

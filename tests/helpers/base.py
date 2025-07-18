@@ -55,6 +55,10 @@ class BaseCollectorTest:
         registry = CollectorRegistry()
         # Patch the global registry used by collectors
         monkeypatch.setattr("meraki_dashboard_exporter.core.collector.REGISTRY", registry)
+        # Also reset the initialization flag so metrics get created on the new registry
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.core.collector.MetricCollector._metrics_initialized", False
+        )
         return registry
 
     @pytest.fixture
@@ -110,14 +114,14 @@ class BaseCollectorTest:
             "meraki_collector_duration_seconds",
             1,
             collector=collector_name,
-            tier=self.update_tier or "medium",
+            tier=(self.update_tier.value if self.update_tier else "medium"),
         )
 
         # Should have set last success timestamp
         last_success = metrics.get_metric_value(
             "meraki_collector_last_success_timestamp_seconds",
             collector=collector_name,
-            tier=self.update_tier or "medium",
+            tier=(self.update_tier.value if self.update_tier else "medium"),
         )
         assert last_success is not None
         assert last_success > 0
@@ -140,9 +144,9 @@ class BaseCollectorTest:
         collector_name = collector.__class__.__name__
 
         metrics.assert_counter_incremented(
-            "meraki_collector_errors",
+            "meraki_collector_errors_total",
             collector=collector_name,
-            tier=self.update_tier or "medium",
+            tier=(self.update_tier.value if self.update_tier else "medium"),
             error_type=error_type,
         )
 
@@ -169,7 +173,7 @@ class BaseCollectorTest:
             "meraki_collector_api_calls",
             count,
             collector=collector_name,
-            tier=self.update_tier or "medium",
+            tier=(self.update_tier.value if self.update_tier else "medium"),
             endpoint=endpoint,
         )
 
