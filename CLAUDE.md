@@ -99,11 +99,14 @@ Many Meraki API responses can return data in different formats:
 ## Client Overview Metrics
 
 The `getOrganizationClientsOverview` API has specific requirements:
-- **Minimum timespan**: Must use at least 1800 seconds (30 minutes) to get valid data
-- Timespans less than 1800 seconds will return empty or zero data
+- **Required timespan**: Must use 3600 seconds (1 hour) for reliable data
+- Timespans less than 3600 seconds may return empty or zero data
 - Usage data is provided in KB (kilobytes), not Kbps or MB
 - The metrics are suitable for Prometheus rate/increase functions to calculate data transfer rates
-- Even though we query with 30-minute timespan, we can still collect metrics every 5 minutes in MEDIUM tier
+- Even though we query with 1-hour timespan, we can still collect metrics every 5 minutes in MEDIUM tier
+- **Caching**: The collector caches the last non-zero values per organization
+- If the API returns all zeros (which can happen occasionally), the cached values are used instead
+- This prevents false zero readings in metrics when organizations have active usage
 
 ## Configuration Changes Metric
 

@@ -19,6 +19,12 @@ logger = get_logger(__name__)
 class ClientOverviewCollector(BaseOrganizationCollector):
     """Collector for organization client overview metrics."""
 
+    def __init__(self, parent: Any) -> None:
+        """Initialize the collector with caching for last non-zero values."""
+        super().__init__(parent)
+        # Cache for last non-zero values per org
+        self._last_non_zero_values: dict[str, dict[str, float]] = {}
+
     @log_api_call("getOrganizationClientsOverview")
     async def _fetch_client_overview(self, org_id: str) -> dict[str, Any]:
         """Fetch organization client overview.
@@ -38,7 +44,7 @@ class ClientOverviewCollector(BaseOrganizationCollector):
         return await asyncio.to_thread(
             self.api.organizations.getOrganizationClientsOverview,
             org_id,
-            timespan=1800,  # 30 minutes - minimum required for valid data
+            timespan=3600,  # 1 hour - required for reliable data
         )
 
     async def collect(self, org_id: str, org_name: str) -> None:
@@ -54,15 +60,8 @@ class ClientOverviewCollector(BaseOrganizationCollector):
         """
         try:
             with LogContext(org_id=org_id, org_name=org_name):
-                # Use 30-minute timespan (minimum required for valid data)
+                # Use 1-hour timespan for reliable data
                 client_overview = await self._fetch_client_overview(org_id)
-
-                logger.debug(
-                    "Fetched client overview data",
-                    org_id=org_id,
-                    has_data=bool(client_overview),
-                    data_keys=list(client_overview.keys()) if client_overview else [],
-                )
 
                 logger.debug(
                     "Fetched client overview data",
@@ -76,6 +75,54 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                 counts = client_overview.get("counts", {})
                 total_clients = counts.get("total", 0)
 
+                # Extract usage data (in KB)
+                usage = client_overview.get("usage", {})
+                overall_usage = usage.get("overall", {})
+
+                total_kb = overall_usage.get("total", 0)
+                downstream_kb = overall_usage.get("downstream", 0)
+                upstream_kb = overall_usage.get("upstream", 0)
+
+                # Check if all values are zero (likely an API issue)
+                if total_clients == 0 and total_kb == 0 and downstream_kb == 0 and upstream_kb == 0:
+                    logger.warning(
+                        "API returned all zero values, using cached non-zero values if available",
+                        org_id=org_id,
+                    )
+
+                    # Use cached values if available
+                    if org_id in self._last_non_zero_values:
+                        cached = self._last_non_zero_values[org_id]
+                        total_clients = cached.get("total_clients", 0)
+                        total_kb = cached.get("total_kb", 0)
+                        downstream_kb = cached.get("downstream_kb", 0)
+                        upstream_kb = cached.get("upstream_kb", 0)
+
+                        logger.info(
+                            "Using cached non-zero values",
+                            org_id=org_id,
+                            total_clients=total_clients,
+                            total_kb=total_kb,
+                        )
+                else:
+                    # Update cache with non-zero values
+                    self._last_non_zero_values[org_id] = {
+                        "total_clients": total_clients,
+                        "total_kb": total_kb,
+                        "downstream_kb": downstream_kb,
+                        "upstream_kb": upstream_kb,
+                    }
+
+                logger.debug(
+                    "Client overview metrics",
+                    org_id=org_id,
+                    total_clients=total_clients,
+                    total_kb=total_kb,
+                    downstream_kb=downstream_kb,
+                    upstream_kb=upstream_kb,
+                )
+
+                # Set metrics
                 self._set_metric_value(
                     "_clients_total",
                     {
@@ -85,33 +132,6 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                     total_clients,
                 )
 
-                # Extract usage data (in KB)
-                usage = client_overview.get("usage", {})
-                overall_usage = usage.get("overall", {})
-
-                total_kb = overall_usage.get("total", 0)
-                downstream_kb = overall_usage.get("downstream", 0)
-                upstream_kb = overall_usage.get("upstream", 0)
-
-                logger.debug(
-                    "Client overview metrics",
-                    org_id=org_id,
-                    total_clients=total_clients,
-                    total_kb=total_kb,
-                    downstream_kb=downstream_kb,
-                    upstream_kb=upstream_kb,
-                )
-
-                logger.debug(
-                    "Client overview metrics",
-                    org_id=org_id,
-                    total_clients=total_clients,
-                    total_kb=total_kb,
-                    downstream_kb=downstream_kb,
-                    upstream_kb=upstream_kb,
-                )
-
-                # Set usage metrics
                 self._set_metric_value(
                     "_usage_total_kb",
                     {
