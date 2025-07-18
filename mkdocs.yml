@@ -63,7 +63,6 @@ theme:
     view: material/eye
     logo: material/cloud-outline
   favicon: assets/favicon.png
-  custom_dir: docs/overrides
 
 plugins:
   - search:
@@ -81,20 +80,14 @@ plugins:
       custom_format: "%d. %B %Y"
       timezone: UTC
       locale: en
-      fallback_to_build_date: false
+      fallback_to_build_date: true
       exclude:
         - index.md
   - git-committers:
       repository: rknightion/meraki-dashboard-exporter
       branch: main
   - git-authors
-  - tags:
-      tags_file: tags.md
-  - social:
-      enabled: !ENV [CI, false]
-      cards_layout_options:
-        background_color: "#0f7c7c"
-        color: "#ffffff"
+  - tags
   - glightbox:
       touchNavigation: true
       loop: false
@@ -106,7 +99,6 @@ plugins:
       draggable: true
       auto_caption: false
       caption_position: bottom
-  - macros
   - include-markdown
 
 markdown_extensions:
@@ -242,5 +234,7 @@ copyright: |
   <a href="#__consent">Change cookie settings</a>
 
 watch:
-  - includes/
-  - docs/overrides/
+  - docs/includes/
+
+not_in_nav: |
+  /includes/

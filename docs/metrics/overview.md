@@ -1,3 +1,13 @@
+---
+title: Metrics Overview
+description: Overview of metric collection system, categories, and usage examples for the Meraki Dashboard Exporter
+tags:
+  - prometheus
+  - monitoring
+  - metrics
+  - overview
+---
+
 # Metrics Overview
 
 The Meraki Dashboard Exporter provides comprehensive metrics across all aspects of your Meraki infrastructure. This guide explains the metric collection system and available metrics.
@@ -88,13 +98,13 @@ All metrics include relevant labels for filtering and grouping:
 
 <div class="grid cards" markdown>
 
-- :material-domain: **[Organization Metrics](organization.md)**
+- :material-domain: **Organization Metrics**
   API usage, licenses, device counts, client statistics
 
-- :material-router-network: **[Device Metrics](devices.md)**
+- :material-router-network: **Device Metrics**
   Status, performance, uptime for all device types
 
-- :material-alert: **[Alert Metrics](alerts.md)**
+- :material-alert: **Alert Metrics**
   Active alerts by severity, type, and category
 
 - :material-thermometer: **Sensor Metrics**
@@ -192,7 +202,7 @@ rate(meraki_org_api_requests_total[5m])
 
 ## Next Steps
 
-- Explore [Organization Metrics](organization.md) in detail
-- Learn about [Device-specific Metrics](devices.md)
-- Set up [Alert Metrics](alerts.md) monitoring
-- Configure [Prometheus Integration](../integration/prometheus.md)
+- Explore the [Complete Metrics Reference](metrics.md) for detailed metric information
+- Learn about [Integration & Dashboards](../integration-dashboards.md) for visualization setup
+- Set up [Deployment & Operations](../deployment-operations.md) for production monitoring
+- Configure alerts using the examples in [Integration & Dashboards](../integration-dashboards.md)
