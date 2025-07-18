@@ -38,7 +38,7 @@ class ClientOverviewCollector(BaseOrganizationCollector):
         return await asyncio.to_thread(
             self.api.organizations.getOrganizationClientsOverview,
             org_id,
-            timespan=300,  # 5 minutes
+            timespan=1800,  # 30 minutes - minimum required for valid data
         )
 
     async def collect(self, org_id: str, org_name: str) -> None:
@@ -54,8 +54,15 @@ class ClientOverviewCollector(BaseOrganizationCollector):
         """
         try:
             with LogContext(org_id=org_id, org_name=org_name):
-                # Use 5-minute timespan to get the last complete 5-minute window
+                # Use 30-minute timespan (minimum required for valid data)
                 client_overview = await self._fetch_client_overview(org_id)
+
+                logger.debug(
+                    "Fetched client overview data",
+                    org_id=org_id,
+                    has_data=bool(client_overview),
+                    data_keys=list(client_overview.keys()) if client_overview else [],
+                )
 
             if client_overview:
                 # Extract client count
@@ -78,6 +85,15 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                 total_kb = overall_usage.get("total", 0)
                 downstream_kb = overall_usage.get("downstream", 0)
                 upstream_kb = overall_usage.get("upstream", 0)
+
+                logger.debug(
+                    "Client overview metrics",
+                    org_id=org_id,
+                    total_clients=total_clients,
+                    total_kb=total_kb,
+                    downstream_kb=downstream_kb,
+                    upstream_kb=upstream_kb,
+                )
 
                 # Set usage metrics
                 self._set_metric_value(

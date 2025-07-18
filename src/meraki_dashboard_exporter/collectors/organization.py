@@ -121,26 +121,26 @@ class OrganizationCollector(MetricCollector):
         # Client metrics
         self._clients_total = self._create_gauge(
             OrgMetricName.ORG_CLIENTS_TOTAL,
-            "Total number of active clients in the organization (5-minute window from last complete interval)",
+            "Total number of active clients in the organization (30-minute window)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
-        # Usage metrics (in KB for the 5-minute window)
+        # Usage metrics (in KB for the 30-minute window)
         self._usage_total_kb = self._create_gauge(
             OrgMetricName.ORG_USAGE_TOTAL_KB,
-            "Total data usage in KB for the 5-minute window (last complete 5-min interval, e.g., 11:04 call returns 10:55-11:00)",
+            "Total data usage in KB for the 30-minute window",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._usage_downstream_kb = self._create_gauge(
             OrgMetricName.ORG_USAGE_DOWNSTREAM_KB,
-            "Downstream data usage in KB for the 5-minute window (last complete 5-min interval)",
+            "Downstream data usage in KB for the 30-minute window",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._usage_upstream_kb = self._create_gauge(
             OrgMetricName.ORG_USAGE_UPSTREAM_KB,
-            "Upstream data usage in KB for the 5-minute window (last complete 5-min interval)",
+            "Upstream data usage in KB for the 30-minute window",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
