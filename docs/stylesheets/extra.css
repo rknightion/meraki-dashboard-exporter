@@ -1,0 +1,193 @@
+/* Custom styles for Meraki Dashboard Exporter documentation */
+
+/* Hero section styling */
+.hero {
+  padding: 2rem 0;
+  text-align: center;
+  background: linear-gradient(135deg, var(--md-primary-fg-color--light) 0%, var(--md-primary-fg-color) 100%);
+  color: var(--md-primary-bg-color);
+  margin: -1.5rem -1.5rem 2rem -1.5rem;
+  border-radius: 0 0 1rem 1rem;
+}
+
+[data-md-color-scheme="slate"] .hero {
+  background: linear-gradient(135deg, var(--md-primary-fg-color) 0%, var(--md-primary-fg-color--dark) 100%);
+}
+
+.hero p {
+  font-size: 1.1rem;
+  margin-bottom: 2rem;
+  opacity: 0.9;
+}
+
+.hero-badges {
+  margin: 1.5rem 0;
+}
+
+.hero-badges .md-button {
+  margin: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.hero .md-button--primary {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.hero .md-button--primary:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.hero .md-button--stretch {
+  min-width: 200px;
+  margin: 0.5rem 0.25rem;
+}
+
+/* Enhanced grid cards */
+.md-typeset .grid.cards > .card-item {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-typeset .grid.cards > .card-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-color: var(--md-primary-fg-color--light);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .grid.cards > .card-item:hover {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+/* Status badges */
+.md-typeset .admonition.new,
+.md-typeset details.new {
+  border-color: #00c853;
+}
+
+.md-typeset .admonition.new > .admonition-title,
+.md-typeset details.new > .admonition-title {
+  background-color: rgba(0, 200, 83, 0.1);
+  border-color: #00c853;
+}
+
+.md-typeset .admonition.new > .admonition-title::before,
+.md-typeset details.new > .admonition-title::before {
+  background-color: #00c853;
+  mask-image: var(--md-admonition-icon--note);
+}
+
+.md-typeset .admonition.deprecated,
+.md-typeset details.deprecated {
+  border-color: #ff5722;
+}
+
+.md-typeset .admonition.deprecated > .admonition-title,
+.md-typeset details.deprecated > .admonition-title {
+  background-color: rgba(255, 87, 34, 0.1);
+  border-color: #ff5722;
+}
+
+.md-typeset .admonition.deprecated > .admonition-title::before,
+.md-typeset details.deprecated > .admonition-title::before {
+  background-color: #ff5722;
+  mask-image: var(--md-admonition-icon--warning);
+}
+
+/* Code block enhancements */
+.md-typeset .highlight .filename {
+  background-color: var(--md-code-bg-color);
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  color: var(--md-default-fg-color--light);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.5rem 1rem;
+  margin: 0;
+}
+
+/* Tables styling */
+.md-typeset table:not([class]) {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.2rem;
+  overflow: hidden;
+}
+
+.md-typeset table:not([class]) th {
+  background-color: var(--md-default-fg-color--lightest);
+  font-weight: 700;
+}
+
+.md-typeset table:not([class]) tr:hover {
+  background-color: var(--md-default-fg-color--lightest);
+}
+
+/* Tag styling */
+.md-tag {
+  background-color: var(--md-primary-fg-color);
+  color: var(--md-primary-bg-color);
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 0.2rem;
+  padding: 0.1rem 0.3rem;
+  margin: 0.1rem;
+  display: inline-block;
+}
+
+/* Navigation breadcrumbs enhancement */
+.md-nav__title .md-nav__button img {
+  width: 24px;
+  height: 24px;
+}
+
+/* Custom metrics table styling */
+.metrics-table {
+  font-size: 0.8rem;
+}
+
+.metrics-table .metric-name {
+  font-family: var(--md-code-font);
+  font-weight: 700;
+  color: var(--md-primary-fg-color);
+}
+
+.metrics-table .metric-type {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+}
+
+.metrics-table .tier-fast { color: #f44336; }
+.metrics-table .tier-medium { color: #ff9800; }
+.metrics-table .tier-slow { color: #4caf50; }
+
+/* Responsive improvements */
+@media screen and (max-width: 76.1875em) {
+  .hero {
+    margin: -1rem -1rem 2rem -1rem;
+    padding: 1.5rem 1rem;
+  }
+
+  .hero .md-button--stretch {
+    display: block;
+    width: 100%;
+    margin: 0.5rem 0;
+  }
+}
+
+/* Print styles */
+@media print {
+  .hero {
+    background: none !important;
+    color: var(--md-default-fg-color) !important;
+    margin: 0 !important;
+    padding: 1rem 0 !important;
+  }
+
+  .md-typeset .grid.cards > .card-item {
+    break-inside: avoid;
+    border: 1px solid #ccc;
+  }
+}

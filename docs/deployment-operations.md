@@ -1,3 +1,16 @@
+---
+title: Deployment & Operations
+description: Production deployment strategies, monitoring best practices, performance optimization, and troubleshooting
+tags:
+  - deployment
+  - operations
+  - production
+  - kubernetes
+  - docker
+  - monitoring
+  - troubleshooting
+---
+
 # Deployment & Operations
 
 This guide covers production deployment strategies, monitoring best practices, performance optimization, and comprehensive troubleshooting for the Meraki Dashboard Exporter.

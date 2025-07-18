@@ -1,3 +1,13 @@
+---
+title: Getting Started
+description: Installation, configuration, and setup guide for the Meraki Dashboard Exporter
+tags:
+  - getting-started
+  - installation
+  - docker
+  - configuration
+---
+
 # Getting Started
 
 Get the Meraki Dashboard Exporter up and running quickly with this comprehensive guide that covers installation, configuration, and your first metrics collection.
