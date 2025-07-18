@@ -1,4 +1,4 @@
-"""Tests for the DiscoveryService."""
+"""Tests for the DiscoveryService using test helpers."""
 
 from __future__ import annotations
 
@@ -8,14 +8,7 @@ import pytest
 
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.discovery import DiscoveryService
-
-
-@pytest.fixture
-def mock_api():
-    """Create a mock Meraki API client."""
-    mock = MagicMock()
-    mock.organizations = MagicMock()
-    return mock
+from tests.helpers.factories import AlertFactory, DeviceFactory, NetworkFactory, OrganizationFactory
 
 
 @pytest.fixture
@@ -32,6 +25,14 @@ def discovery_service(mock_api, mock_settings):
     return DiscoveryService(api=mock_api, settings=mock_settings)
 
 
+@pytest.fixture
+def mock_api():
+    """Create a mock Meraki API client."""
+    mock = MagicMock()
+    mock.organizations = MagicMock()
+    return mock
+
+
 class TestDiscoveryService:
     """Test DiscoveryService functionality."""
 
@@ -42,35 +43,52 @@ class TestDiscoveryService:
         mock_settings.org_id = "123"
         service = DiscoveryService(api=mock_api, settings=mock_settings)
 
+        # Create test data using factories
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        networks = [
+            NetworkFactory.create(
+                network_id="N_123",
+                name="Network1",
+                product_types=["wireless", "switch"],
+                org_id=org["id"],
+            ),
+            NetworkFactory.create(
+                network_id="N_456",
+                name="Network2",
+                product_types=["appliance"],
+                org_id=org["id"],
+            ),
+        ]
+        devices = [
+            DeviceFactory.create_mr(serial="Q2KD-XXXX", network_id=networks[0]["id"]),
+            DeviceFactory.create_ms(serial="Q2SW-XXXX", network_id=networks[0]["id"]),
+            DeviceFactory.create_mx(serial="Q2MX-XXXX", network_id=networks[1]["id"]),
+        ]
+
+        licenses = [
+            {"licenseType": "ENT", "state": "active"},
+            {"licenseType": "MR", "state": "active"},
+        ]
+
+        alerts = [
+            AlertFactory.create(
+                alert_id="alert1",
+                dismissedAt=None,
+                resolvedAt=None,
+            ),
+            AlertFactory.create(
+                alert_id="alert2",
+                dismissedAt="2024-01-01",
+                resolvedAt=None,
+            ),
+        ]
+
         # Mock API responses
-        mock_api.organizations.getOrganization = MagicMock(
-            return_value={"id": "123", "name": "Test Org", "url": "https://test.meraki.com"}
-        )
-        mock_api.organizations.getOrganizationLicenses = MagicMock(
-            return_value=[
-                {"licenseType": "ENT", "state": "active"},
-                {"licenseType": "MR", "state": "active"},
-            ]
-        )
-        mock_api.organizations.getOrganizationNetworks = MagicMock(
-            return_value=[
-                {"id": "N_123", "name": "Network1", "productTypes": ["wireless", "switch"]},
-                {"id": "N_456", "name": "Network2", "productTypes": ["appliance"]},
-            ]
-        )
-        mock_api.organizations.getOrganizationDevices = MagicMock(
-            return_value=[
-                {"model": "MR36", "serial": "Q2KD-XXXX"},
-                {"model": "MS120", "serial": "Q2SW-XXXX"},
-                {"model": "MX64", "serial": "Q2MX-XXXX"},
-            ]
-        )
-        mock_api.organizations.getOrganizationAssuranceAlerts = MagicMock(
-            return_value=[
-                {"id": "alert1", "dismissedAt": None, "resolvedAt": None},
-                {"id": "alert2", "dismissedAt": "2024-01-01", "resolvedAt": None},
-            ]
-        )
+        mock_api.organizations.getOrganization = MagicMock(return_value=org)
+        mock_api.organizations.getOrganizationLicenses = MagicMock(return_value=licenses)
+        mock_api.organizations.getOrganizationNetworks = MagicMock(return_value=networks)
+        mock_api.organizations.getOrganizationDevices = MagicMock(return_value=devices)
+        mock_api.organizations.getOrganizationAssuranceAlerts = MagicMock(return_value=alerts)
 
         # Run discovery
         await service.run_discovery()
@@ -85,24 +103,24 @@ class TestDiscoveryService:
     @pytest.mark.asyncio
     async def test_run_discovery_with_multiple_orgs(self, discovery_service, mock_api):
         """Test discovery with multiple organizations."""
-        # Mock API responses
-        mock_api.organizations.getOrganizations = MagicMock(
-            return_value=[
-                {"id": "123", "name": "Org1", "url": "https://org1.meraki.com"},
-                {"id": "456", "name": "Org2", "url": "https://org2.meraki.com"},
-            ]
+        # Create test data
+        orgs = [
+            OrganizationFactory.create(org_id="123", name="Org1"),
+            OrganizationFactory.create(org_id="456", name="Org2"),
+        ]
+        network = NetworkFactory.create(
+            network_id="N_123",
+            name="Network1",
+            product_types=["wireless"],
         )
+        device = DeviceFactory.create_mr(serial="Q2KD-XXXX")
+        license = {"licenseType": "ENT", "state": "active"}
 
-        # Mock responses for each org
-        mock_api.organizations.getOrganizationLicenses = MagicMock(
-            return_value=[{"licenseType": "ENT", "state": "active"}]
-        )
-        mock_api.organizations.getOrganizationNetworks = MagicMock(
-            return_value=[{"id": "N_123", "name": "Network1", "productTypes": ["wireless"]}]
-        )
-        mock_api.organizations.getOrganizationDevices = MagicMock(
-            return_value=[{"model": "MR36", "serial": "Q2KD-XXXX"}]
-        )
+        # Mock API responses
+        mock_api.organizations.getOrganizations = MagicMock(return_value=orgs)
+        mock_api.organizations.getOrganizationLicenses = MagicMock(return_value=[license])
+        mock_api.organizations.getOrganizationNetworks = MagicMock(return_value=[network])
+        mock_api.organizations.getOrganizationDevices = MagicMock(return_value=[device])
         mock_api.organizations.getOrganizationAssuranceAlerts = MagicMock(return_value=[])
 
         # Run discovery
@@ -118,11 +136,11 @@ class TestDiscoveryService:
     @pytest.mark.asyncio
     async def test_discovery_handles_cotermination_licensing(self, discovery_service, mock_api):
         """Test handling of co-termination licensing model."""
-        # Mock API responses
-        mock_api.organizations.getOrganizations = MagicMock(
-            return_value=[{"id": "123", "name": "Test Org"}]
-        )
+        # Create test data
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
 
+        # Mock API responses
+        mock_api.organizations.getOrganizations = MagicMock(return_value=[org])
         # Mock co-termination licensing error
         mock_api.organizations.getOrganizationLicenses = MagicMock(
             side_effect=Exception("Organization 123 does not support per-device licensing")
@@ -140,10 +158,11 @@ class TestDiscoveryService:
     @pytest.mark.asyncio
     async def test_discovery_handles_alerts_api_not_available(self, discovery_service, mock_api):
         """Test handling when alerts API is not available."""
+        # Create test data
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+
         # Mock API responses
-        mock_api.organizations.getOrganizations = MagicMock(
-            return_value=[{"id": "123", "name": "Test Org"}]
-        )
+        mock_api.organizations.getOrganizations = MagicMock(return_value=[org])
         mock_api.organizations.getOrganizationLicenses = MagicMock(return_value=[])
         mock_api.organizations.getOrganizationNetworks = MagicMock(return_value=[])
         mock_api.organizations.getOrganizationDevices = MagicMock(return_value=[])
@@ -162,10 +181,11 @@ class TestDiscoveryService:
     @pytest.mark.asyncio
     async def test_discovery_handles_network_fetch_failure(self, discovery_service, mock_api):
         """Test handling of network fetch failures."""
+        # Create test data
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+
         # Mock API responses
-        mock_api.organizations.getOrganizations = MagicMock(
-            return_value=[{"id": "123", "name": "Test Org"}]
-        )
+        mock_api.organizations.getOrganizations = MagicMock(return_value=[org])
         mock_api.organizations.getOrganizationLicenses = MagicMock(return_value=[])
 
         # Mock network fetch failure
@@ -184,10 +204,11 @@ class TestDiscoveryService:
     @pytest.mark.asyncio
     async def test_discovery_handles_device_fetch_failure(self, discovery_service, mock_api):
         """Test handling of device fetch failures."""
+        # Create test data
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+
         # Mock API responses
-        mock_api.organizations.getOrganizations = MagicMock(
-            return_value=[{"id": "123", "name": "Test Org"}]
-        )
+        mock_api.organizations.getOrganizations = MagicMock(return_value=[org])
         mock_api.organizations.getOrganizationLicenses = MagicMock(return_value=[])
         mock_api.organizations.getOrganizationNetworks = MagicMock(return_value=[])
 
@@ -220,33 +241,45 @@ class TestDiscoveryService:
     @pytest.mark.asyncio
     async def test_discovery_counts_products_and_devices(self, discovery_service, mock_api):
         """Test that discovery correctly counts products and device types."""
+        # Create test data
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+
+        networks = [
+            NetworkFactory.create(
+                network_id="N_1",
+                name="Net1",
+                product_types=["wireless", "switch"],
+                org_id=org["id"],
+            ),
+            NetworkFactory.create(
+                network_id="N_2",
+                name="Net2",
+                product_types=["wireless"],
+                org_id=org["id"],
+            ),
+            NetworkFactory.create(
+                network_id="N_3",
+                name="Net3",
+                product_types=["appliance", "switch"],
+                org_id=org["id"],
+            ),
+        ]
+
+        devices = [
+            DeviceFactory.create_mr(serial="Q2KD-1111", model="MR36"),
+            DeviceFactory.create_mr(serial="Q2KD-2222", model="MR46"),
+            DeviceFactory.create_ms(serial="Q2SW-1111", model="MS120"),
+            DeviceFactory.create_ms(serial="Q2SW-2222", model="MS220"),
+            DeviceFactory.create_mx(serial="Q2MX-1111", model="MX64"),
+            DeviceFactory.create_mt(serial="Q2MT-1111", model="MT10"),
+            DeviceFactory.create(serial="XXXX-1111", model="unknown_model"),  # Unknown prefix
+        ]
+
         # Mock API responses
-        mock_api.organizations.getOrganizations = MagicMock(
-            return_value=[{"id": "123", "name": "Test Org"}]
-        )
+        mock_api.organizations.getOrganizations = MagicMock(return_value=[org])
         mock_api.organizations.getOrganizationLicenses = MagicMock(return_value=[])
-
-        # Mock networks with various product types
-        mock_api.organizations.getOrganizationNetworks = MagicMock(
-            return_value=[
-                {"id": "N_1", "name": "Net1", "productTypes": ["wireless", "switch"]},
-                {"id": "N_2", "name": "Net2", "productTypes": ["wireless"]},
-                {"id": "N_3", "name": "Net3", "productTypes": ["appliance", "switch"]},
-            ]
-        )
-
-        # Mock devices with various models
-        mock_api.organizations.getOrganizationDevices = MagicMock(
-            return_value=[
-                {"model": "MR36", "serial": "Q2KD-1111"},
-                {"model": "MR46", "serial": "Q2KD-2222"},
-                {"model": "MS120", "serial": "Q2SW-1111"},
-                {"model": "MS220", "serial": "Q2SW-2222"},
-                {"model": "MX64", "serial": "Q2MX-1111"},
-                {"model": "MT10", "serial": "Q2MT-1111"},
-                {"model": "unknown_model", "serial": "XXXX-1111"},  # Unknown prefix
-            ]
-        )
+        mock_api.organizations.getOrganizationNetworks = MagicMock(return_value=networks)
+        mock_api.organizations.getOrganizationDevices = MagicMock(return_value=devices)
         mock_api.organizations.getOrganizationAssuranceAlerts = MagicMock(return_value=[])
 
         # Run discovery

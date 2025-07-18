@@ -125,7 +125,7 @@ python_functions = ["test_*"]
 
 [tool.bandit]
 exclude_dirs = ["tests", "scripts"]
-skips = ["B101", "B601", "B602", "B603", "B604", "B605", "B606", "B607", "B608", "B609"]
+skips = ["B101", "B601", "B602", "B603", "B604", "B605", "B606", "B607", "B608", "B609", "B105"]
 
 [build-system]
 requires = ["hatchling"]

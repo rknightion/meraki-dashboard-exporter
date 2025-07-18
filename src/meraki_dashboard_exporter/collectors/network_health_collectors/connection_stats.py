@@ -35,7 +35,6 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
             Connection statistics data.
 
         """
-        self._track_api_call("getNetworkWirelessConnectionStats")
         return await asyncio.to_thread(
             self.api.wireless.getNetworkWirelessConnectionStats,
             network_id,

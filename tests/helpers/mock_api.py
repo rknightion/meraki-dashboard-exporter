@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 
 class MockAPIBuilder:
@@ -339,6 +339,7 @@ class MockAPIBuilder:
             "getNetworkDevices": "networks",
             "getDeviceSwitchPortsStatuses": "switch",
             "getNetworkWireless": "wireless",
+            "getOrganizationWireless": "wireless",  # Add organization wireless methods
             "getOrganizationSensorReadingsHistory": "sensor",
             "getDeviceSensorReadings": "sensor",
         }
@@ -367,8 +368,13 @@ class MockAPIBuilder:
 
             # Set up the method
             module = getattr(api, module_name)
-            method = AsyncMock(return_value=response)
-            setattr(module, method_name, method)
+            # Check if method already exists as a MagicMock
+            if hasattr(module, method_name):
+                method = getattr(module, method_name)
+                method.return_value = response
+            else:
+                method = MagicMock(return_value=response)
+                setattr(module, method_name, method)
 
         # Configure errors
         for key, error in self._errors.items():
@@ -378,7 +384,7 @@ class MockAPIBuilder:
             module_name = self._find_module_for_method(method_name)
             module = getattr(api, module_name)
 
-            method = AsyncMock(side_effect=error)
+            method = MagicMock(side_effect=error)
             setattr(module, method_name, method)
 
         # Configure side effects
@@ -388,15 +394,16 @@ class MockAPIBuilder:
             module_name = self._find_module_for_method(method_name)
             module = getattr(api, module_name)
 
-            method = AsyncMock(side_effect=effects)
+            method = MagicMock(side_effect=effects)
             setattr(module, method_name, method)
 
     def _find_module_for_method(self, method_name: str) -> str:
         """Find the module for a method name."""
-        if "Organization" in method_name:
-            return "organizations"
-        elif "Network" in method_name and "Wireless" in method_name:
+        # Check for wireless methods first (can be Organization or Network)
+        if "Wireless" in method_name:
             return "wireless"
+        elif "Organization" in method_name:
+            return "organizations"
         elif "Network" in method_name:
             return "networks"
         elif "Device" in method_name and "Switch" in method_name:

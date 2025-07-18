@@ -34,7 +34,6 @@ class BluetoothCollector(BaseNetworkHealthCollector):
             List of Bluetooth clients.
 
         """
-        self._track_api_call("getNetworkBluetoothClients")
         return await asyncio.to_thread(
             self.api.networks.getNetworkBluetoothClients,
             network_id,
