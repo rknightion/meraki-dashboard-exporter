@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a prometheus exporter that connects to the Cisco Meraki Dashboard API and exposes various metrics as a prometheus exporter. It also acts as an opentelemetry collector pushing metrics and logs to an OTEL endpoint.
+This is a prometheus exporter that connects to the Cisco Meraki Dashboard API and exposes various metrics as a prometheus exporter. It also supports OpenTelemetry (OTEL) by automatically mirroring all Prometheus metrics to an OTEL collector endpoint when enabled.
 
 ## Development Patterns
 
@@ -780,3 +780,34 @@ result = await breaker.call(
 - Automatic retry on failures (up to 3 times)
 - Rate limit handling with wait_on_rate_limit=True
 - Configurable timeouts via api_timeout setting
+
+## OpenTelemetry (OTEL) Integration
+
+The exporter includes automatic OpenTelemetry support that mirrors all Prometheus metrics:
+
+### How It Works
+- **Automatic Mirroring**: Every Prometheus metric is automatically exported to OTEL
+- **No Code Changes**: Adding new Prometheus metrics automatically adds OTEL metrics
+- **Dual Export**: Metrics are available in both `/metrics` (Prometheus) and OTEL formats
+- **Label Preservation**: All Prometheus labels become OTEL attributes
+
+### Configuration
+Enable OTEL export via environment variables:
+```bash
+MERAKI_EXPORTER_OTEL__ENABLED=true
+MERAKI_EXPORTER_OTEL__ENDPOINT=http://localhost:4317
+MERAKI_EXPORTER_OTEL__EXPORT_INTERVAL=60  # seconds
+MERAKI_EXPORTER_OTEL__SERVICE_NAME=meraki-dashboard-exporter
+MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES='{"environment":"prod"}'
+```
+
+### Implementation Details
+- Uses `PrometheusToOTelBridge` in `core/otel_metrics.py`
+- Syncs metrics at configured interval (default 60s)
+- Maps Prometheus types to OTEL equivalents:
+  - Gauge → Gauge
+  - Counter → Counter (with delta tracking)
+  - Histogram → Histogram
+  - Info → Gauge (value=1)
+- Runs as separate async task with no impact on metric collection
+- See `OTEL.md` for comprehensive documentation
