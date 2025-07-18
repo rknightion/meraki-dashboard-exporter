@@ -56,7 +56,7 @@ class ClientOverviewCollector(BaseOrganizationCollector):
             with LogContext(org_id=org_id, org_name=org_name):
                 # Use 30-minute timespan (minimum required for valid data)
                 client_overview = await self._fetch_client_overview(org_id)
-                
+
                 logger.debug(
                     "Fetched client overview data",
                     org_id=org_id,
@@ -92,7 +92,7 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                 total_kb = overall_usage.get("total", 0)
                 downstream_kb = overall_usage.get("downstream", 0)
                 upstream_kb = overall_usage.get("upstream", 0)
-                
+
                 logger.debug(
                     "Client overview metrics",
                     org_id=org_id,
