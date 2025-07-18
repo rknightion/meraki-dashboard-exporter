@@ -98,10 +98,12 @@ Many Meraki API responses can return data in different formats:
 
 ## Client Overview Metrics
 
-The `getOrganizationClientsOverview` API returns usage data for the last complete 5-minute window:
-- When called at 11:04, it returns data from 10:55-11:00 (not 10:59-11:04)
+The `getOrganizationClientsOverview` API has specific requirements:
+- **Minimum timespan**: Must use at least 1800 seconds (30 minutes) to get valid data
+- Timespans less than 1800 seconds will return empty or zero data
 - Usage data is provided in KB (kilobytes), not Kbps or MB
 - The metrics are suitable for Prometheus rate/increase functions to calculate data transfer rates
+- Even though we query with 30-minute timespan, we can still collect metrics every 5 minutes in MEDIUM tier
 
 ## Configuration Changes Metric
 

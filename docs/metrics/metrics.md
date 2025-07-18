@@ -1143,7 +1143,7 @@ The exporter provides metrics across several categories:
 
 #### `meraki_org_clients_total`
 
-**Description:** Total number of active clients in the organization (5-minute window from last complete interval)
+**Description:** Total number of active clients in the organization (30-minute window)
 
 **Type:** gauge
 
@@ -1239,7 +1239,7 @@ The exporter provides metrics across several categories:
 
 #### `meraki_org_usage_downstream_kb`
 
-**Description:** Downstream data usage in KB for the 5-minute window (last complete 5-min interval)
+**Description:** Downstream data usage in KB for the 30-minute window
 
 **Type:** gauge
 
@@ -1251,7 +1251,7 @@ The exporter provides metrics across several categories:
 
 #### `meraki_org_usage_total_kb`
 
-**Description:** Total data usage in KB for the 5-minute window (last complete 5-min interval, e.g., 11:04 call returns 10:55-11:00)
+**Description:** Total data usage in KB for the 30-minute window
 
 **Type:** gauge
 
@@ -1263,7 +1263,7 @@ The exporter provides metrics across several categories:
 
 #### `meraki_org_usage_upstream_kb`
 
-**Description:** Upstream data usage in KB for the 5-minute window (last complete 5-min interval)
+**Description:** Upstream data usage in KB for the 30-minute window
 
 **Type:** gauge
 
@@ -1364,7 +1364,7 @@ All metrics in alphabetical order:
 | `meraki_network_wireless_upload_kbps` | gauge | NetworkHealthCollector | Network-wide wireless upload bandwidth in kilobits per second |
 | `meraki_org_api_requests_rate_limit` | gauge | OrganizationCollector | API rate limit for the organization |
 | `meraki_org_api_requests_total` | gauge | OrganizationCollector | Total API requests made by the organization |
-| `meraki_org_clients_total` | gauge | OrganizationCollector | Total number of active clients in the organization (5-minute window from last complete interval) |
+| `meraki_org_clients_total` | gauge | OrganizationCollector | Total number of active clients in the organization (30-minute window) |
 | `meraki_org_configuration_changes_total` | gauge | ConfigCollector | Total number of configuration changes in the last 24 hours |
 | `meraki_org_devices_availability_total` | gauge | OrganizationCollector | Total number of devices by availability status and product type |
 | `meraki_org_devices_by_model_total` | gauge | OrganizationCollector | Total number of devices by specific model |
@@ -1379,9 +1379,9 @@ All metrics in alphabetical order:
 | `meraki_org_login_security_minimum_password_length` | gauge | ConfigCollector | Minimum password length required |
 | `meraki_org_login_security_two_factor_enabled` | gauge | ConfigCollector | Whether two-factor authentication is enforced (1=enabled, 0=disabled) |
 | `meraki_org_networks_total` | gauge | OrganizationCollector | Total number of networks in the organization |
-| `meraki_org_usage_downstream_kb` | gauge | OrganizationCollector | Downstream data usage in KB for the 5-minute window (last complete 5-min interval) |
-| `meraki_org_usage_total_kb` | gauge | OrganizationCollector | Total data usage in KB for the 5-minute window (last complete 5-min interval, e.g., 11:04 call returns 10:55-11:00) |
-| `meraki_org_usage_upstream_kb` | gauge | OrganizationCollector | Upstream data usage in KB for the 5-minute window (last complete 5-min interval) |
+| `meraki_org_usage_downstream_kb` | gauge | OrganizationCollector | Downstream data usage in KB for the 30-minute window |
+| `meraki_org_usage_total_kb` | gauge | OrganizationCollector | Total data usage in KB for the 30-minute window |
+| `meraki_org_usage_upstream_kb` | gauge | OrganizationCollector | Upstream data usage in KB for the 30-minute window |
 
 ## Notes
 
