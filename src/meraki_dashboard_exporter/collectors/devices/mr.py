@@ -1154,24 +1154,28 @@ class MRCollector(BaseDeviceCollector):
         device_model = device_info.get("model", "MR")
         network_id = device_info.get("networkId", "")
 
-        # Get the network name
-        networks = device_cpu.get("network", {})
-        network_name = networks.get("name", "")
+        # Get the network name from API response, not device lookup
+        network_info = device_cpu.get("network", {})
+        network_name = network_info.get("name", "")
 
-        # Get the most recent CPU load data
-        usage_history = device_cpu.get("usageHistory", [])
-        if not usage_history:
+        # Get the most recent CPU load data - API returns "series" not "usageHistory"
+        series_data = device_cpu.get("series", [])
+        if not series_data:
             return
 
         # Sort by timestamp to get most recent
-        usage_history.sort(key=lambda x: x.get("ts", ""), reverse=True)
-        latest_usage = usage_history[0]
+        series_data.sort(key=lambda x: x.get("ts", ""), reverse=True)
+        latest_reading = series_data[0]
 
-        # Get 5-minute load average
-        # The API returns it as a percentage (0-100 per core)
-        avg_5min = latest_usage.get("avg5Minutes")
-        if avg_5min is None:
+        # Get 5-minute load average - API returns "cpuLoad5" not "avg5Minutes"
+        # The API returns values in hundredths of percent (22880 = 228.80%)
+        # We need to divide by 100 to get the actual percentage
+        cpu_load_raw = latest_reading.get("cpuLoad5")
+        if cpu_load_raw is None:
             return
+
+        # Convert from hundredths of percent to percentage
+        avg_5min = cpu_load_raw / 100.0
 
         self._mr_cpu_load_5min.labels(
             serial=serial,
