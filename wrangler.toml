@@ -1,4 +1,4 @@
-name = "meraki-exporter-site"
+name = "meraki-exporter-docs"
 compatibility_date = "2025-04-01"
 routes = [
   { pattern = "meraki.exporters.m7kni.com", custom_domain = true }
