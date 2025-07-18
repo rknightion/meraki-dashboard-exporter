@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import meraki
 from meraki.exceptions import APIError
+from opentelemetry import trace
 
 from ..core.logging import get_logger
 
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
     from ..core.config import Settings
 
 logger = get_logger(__name__)
+tracer = trace.get_tracer(__name__)
 
 
 class AsyncMerakiClient:
@@ -85,10 +87,15 @@ class AsyncMerakiClient:
             List of organization data.
 
         """
-        logger.debug("Fetching all organizations")
-        async with self._semaphore:
-            result = await asyncio.to_thread(self.api.organizations.getOrganizations)
+        with tracer.start_as_current_span("get_organizations") as span:
+            logger.debug("Fetching all organizations")
+            span.set_attribute("api.endpoint", "getOrganizations")
+
+            async with self._semaphore:
+                result = await asyncio.to_thread(self.api.organizations.getOrganizations)
+
             logger.debug("Successfully fetched organizations", count=len(result))
+            span.set_attribute("org.count", len(result))
             return result
 
     async def get_organization(self, org_id: str) -> dict[str, Any]:

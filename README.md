@@ -11,7 +11,8 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 - Device-specific metrics (status, performance, sensor readings)
 - Async collection for improved performance
 - **Dual metric export**: Prometheus `/metrics` endpoint + automatic OpenTelemetry export
-- Structured logging with JSON output and OpenTelemetry correlation
+- **Distributed tracing**: Full request tracing with OpenTelemetry instrumentation
+- Structured logging with JSON output and trace correlation
 - Docker support with health checks
 - Configurable collection intervals
 
@@ -51,10 +52,30 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 
 ## OpenTelemetry Support
 
-The exporter automatically mirrors all Prometheus metrics to OpenTelemetry when enabled. This allows you to:
-- Use existing Prometheus dashboards and queries
-- Send the same metrics to OTEL-compatible backends (Datadog, New Relic, etc.)
-- Correlate metrics with traces and logs
+The exporter provides comprehensive OpenTelemetry support when enabled:
+
+**Metrics**: All Prometheus metrics are automatically mirrored to OTEL
+- Use existing Prometheus dashboards while sending to OTEL backends
+- No code changes needed - new metrics are automatically exported
+
+**Tracing**: Distributed tracing for all operations
+- Every Meraki API call is traced with timing and metadata
+- Automatic instrumentation of HTTP, threading, and logging
+- Configurable sampling rates for production use
+- Correlation with logs via trace IDs
+- **Automatic RED metrics** from spans (Rate, Errors, Duration)
+
+**Logs**: Structured logging with trace correlation
+- Automatic trace context injection (trace_id, span_id)
+- All logs include trace context when within a span
+- Structured log fields preserved for easy parsing
+- Compatible with log aggregation systems
+
+**Benefits**:
+- Full observability with metrics, traces, and logs
+- Debug slow API calls and identify bottlenecks
+- Track request flow across the entire system
+- Compatible with Jaeger, Tempo, Datadog, New Relic, etc.
 
 ### Enabling OpenTelemetry
 
@@ -72,6 +93,9 @@ export MERAKI_EXPORTER_OTEL__EXPORT_INTERVAL=30
 
 # Optional: Add resource attributes
 export MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES='{"environment":"production","region":"us-east"}'
+
+# Optional: Configure trace sampling rate (default: 0.1 = 10%)
+export MERAKI_EXPORTER_OTEL__SAMPLING_RATE=0.1
 ```
 
 ### Docker Compose Example
@@ -96,7 +120,7 @@ services:
       - "4317:4317"  # OTLP gRPC receiver
 ```
 
-See [OTEL.md](OTEL.md) for detailed OpenTelemetry configuration and examples.
+See [OTEL.md](OTEL.md) for detailed OpenTelemetry configuration and [TRACING.md](TRACING.md) for distributed tracing documentation.
 
 ## Configuration
 
@@ -175,6 +199,30 @@ export MERAKI_EXPORTER_API_BASE_URL="https://api.meraki.ca/api/v1"  # For Canada
 ### Configuration Metrics
 - `meraki_org_login_security_*`: Various login security settings (see config collector for full list)
 - `meraki_org_configuration_changes_total`: Total configuration changes in the last 24 hours
+
+### Observability Metrics (Auto-generated)
+When OpenTelemetry tracing is enabled, these metrics are automatically generated from spans:
+- `meraki_span_requests_total`: Request rate by operation, collector, endpoint, and status
+- `meraki_span_duration_seconds`: Request duration histogram by operation
+- `meraki_span_errors_total`: Error rate by operation, collector, endpoint, and error type
+- `meraki_sli_*`: Service Level Indicator metrics for availability, latency, and error rates
+
+### Cardinality Monitoring
+The exporter includes built-in cardinality monitoring to help track metric growth:
+- `meraki_metric_cardinality_total`: Total unique label combinations per metric
+- `meraki_label_cardinality_total`: Cardinality per label per metric
+- `meraki_cardinality_warnings_total`: Warnings when metrics exceed thresholds
+- `meraki_total_series`: Total time series count across all metrics
+
+Access cardinality report at: `/debug/cardinality`
+
+### Circuit Breaker Metrics
+The exporter includes circuit breaker metrics for monitoring reliability:
+- `meraki_circuit_breaker_state`: Current state of circuit breakers (closed/open/half_open)
+- `meraki_circuit_breaker_failures_total`: Total failures handled by circuit breakers
+- `meraki_circuit_breaker_success_total`: Successful calls through circuit breakers
+- `meraki_circuit_breaker_rejections_total`: Calls rejected by open circuit breakers
+- `meraki_circuit_breaker_state_changes_total`: State transitions tracked by from/to state
 
 ## Development
 

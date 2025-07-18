@@ -7,6 +7,9 @@ from collections.abc import AsyncIterator, Callable, Coroutine
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from prometheus_client import Counter, Gauge
+from prometheus_client.core import REGISTRY
+
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -509,11 +512,20 @@ class CircuitBreaker:
         OPEN = "open"
         HALF_OPEN = "half_open"
 
+    # Class-level metrics shared by all circuit breakers
+    _metrics_initialized = False
+    _state_gauge: Gauge | None = None
+    _failures_counter: Counter | None = None
+    _success_counter: Counter | None = None
+    _rejections_counter: Counter | None = None
+    _state_changes_counter: Counter | None = None
+
     def __init__(
         self,
         failure_threshold: int = 5,
         recovery_timeout: float = 60.0,
         expected_exception: type[Exception] = Exception,
+        name: str = "default",
     ) -> None:
         """Initialize circuit breaker.
 
@@ -525,16 +537,77 @@ class CircuitBreaker:
             Time in seconds before attempting recovery.
         expected_exception : type[Exception]
             Exception type that triggers the circuit breaker.
+        name : str
+            Name of the circuit breaker for metrics.
 
         """
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.expected_exception = expected_exception
+        self.name = name
 
         self._state = self.State.CLOSED
         self._failure_count = 0
         self._last_failure_time: float | None = None
         self._lock = asyncio.Lock()
+
+        # Initialize metrics if not done yet
+        if not CircuitBreaker._metrics_initialized:
+            CircuitBreaker._initialize_metrics()
+
+        # Set initial state in metrics
+        if CircuitBreaker._state_gauge:
+            CircuitBreaker._state_gauge.labels(breaker=self.name, state=self.State.CLOSED).set(1)
+            CircuitBreaker._state_gauge.labels(breaker=self.name, state=self.State.OPEN).set(0)
+            CircuitBreaker._state_gauge.labels(breaker=self.name, state=self.State.HALF_OPEN).set(0)
+
+    @classmethod
+    def _initialize_metrics(cls) -> None:
+        """Initialize circuit breaker metrics."""
+        if cls._metrics_initialized:
+            return
+
+        try:
+            cls._state_gauge = Gauge(
+                "meraki_circuit_breaker_state",
+                "Current state of circuit breakers (1=active, 0=inactive)",
+                labelnames=["breaker", "state"],
+                registry=REGISTRY,
+            )
+
+            cls._failures_counter = Counter(
+                "meraki_circuit_breaker_failures_total",
+                "Total number of failures handled by circuit breakers",
+                labelnames=["breaker"],
+                registry=REGISTRY,
+            )
+
+            cls._success_counter = Counter(
+                "meraki_circuit_breaker_success_total",
+                "Total number of successful calls through circuit breakers",
+                labelnames=["breaker"],
+                registry=REGISTRY,
+            )
+
+            cls._rejections_counter = Counter(
+                "meraki_circuit_breaker_rejections_total",
+                "Total number of calls rejected by open circuit breakers",
+                labelnames=["breaker"],
+                registry=REGISTRY,
+            )
+
+            cls._state_changes_counter = Counter(
+                "meraki_circuit_breaker_state_changes_total",
+                "Total number of state changes in circuit breakers",
+                labelnames=["breaker", "from_state", "to_state"],
+                registry=REGISTRY,
+            )
+
+            cls._metrics_initialized = True
+            logger.info("Initialized circuit breaker metrics")
+
+        except Exception:
+            logger.exception("Failed to initialize circuit breaker metrics")
 
     async def call(
         self,
@@ -565,6 +638,10 @@ class CircuitBreaker:
             current_state = await self._get_state()
 
             if current_state == self.State.OPEN:
+                # Track rejection
+                if CircuitBreaker._rejections_counter:
+                    CircuitBreaker._rejections_counter.labels(breaker=self.name).inc()
+
                 raise RuntimeError(
                     f"Circuit breaker is OPEN for {operation} (failures: {self._failure_count})"
                 )
@@ -588,29 +665,94 @@ class CircuitBreaker:
                 and asyncio.get_event_loop().time() - self._last_failure_time
                 >= self.recovery_timeout
             ):
+                old_state = self._state
                 self._state = self.State.HALF_OPEN
-                logger.info("Circuit breaker entering HALF_OPEN state")
+
+                # Track state change
+                if CircuitBreaker._state_changes_counter:
+                    CircuitBreaker._state_changes_counter.labels(
+                        breaker=self.name,
+                        from_state=old_state,
+                        to_state=self.State.HALF_OPEN,
+                    ).inc()
+
+                # Update state gauge
+                self._update_state_gauge(old_state, self.State.HALF_OPEN)
+
+                logger.info("Circuit breaker entering HALF_OPEN state", breaker=self.name)
 
         return self._state
 
     async def _on_success(self) -> None:
         """Handle successful operation."""
         async with self._lock:
+            # Track success
+            if CircuitBreaker._success_counter:
+                CircuitBreaker._success_counter.labels(breaker=self.name).inc()
+
             if self._state == self.State.HALF_OPEN:
+                old_state = self._state
                 self._state = self.State.CLOSED
                 self._failure_count = 0
-                logger.info("Circuit breaker reset to CLOSED state")
+
+                # Track state change
+                if CircuitBreaker._state_changes_counter:
+                    CircuitBreaker._state_changes_counter.labels(
+                        breaker=self.name,
+                        from_state=old_state,
+                        to_state=self.State.CLOSED,
+                    ).inc()
+
+                # Update state gauge
+                self._update_state_gauge(old_state, self.State.CLOSED)
+
+                logger.info("Circuit breaker reset to CLOSED state", breaker=self.name)
 
     async def _on_failure(self) -> None:
         """Handle failed operation."""
         async with self._lock:
+            # Track failure
+            if CircuitBreaker._failures_counter:
+                CircuitBreaker._failures_counter.labels(breaker=self.name).inc()
+
             self._failure_count += 1
             self._last_failure_time = asyncio.get_event_loop().time()
 
             if self._failure_count >= self.failure_threshold:
+                old_state = self._state
                 self._state = self.State.OPEN
+
+                # Track state change
+                if CircuitBreaker._state_changes_counter:
+                    CircuitBreaker._state_changes_counter.labels(
+                        breaker=self.name,
+                        from_state=old_state,
+                        to_state=self.State.OPEN,
+                    ).inc()
+
+                # Update state gauge
+                self._update_state_gauge(old_state, self.State.OPEN)
+
                 logger.warning(
                     "Circuit breaker opened",
+                    breaker=self.name,
                     failures=self._failure_count,
                     threshold=self.failure_threshold,
                 )
+
+    def _update_state_gauge(self, old_state: str, new_state: str) -> None:
+        """Update state gauge metrics.
+
+        Parameters
+        ----------
+        old_state : str
+            Previous state.
+        new_state : str
+            New state.
+
+        """
+        if CircuitBreaker._state_gauge:
+            # Set old state to 0
+            CircuitBreaker._state_gauge.labels(breaker=self.name, state=old_state).set(0)
+            # Set new state to 1
+            CircuitBreaker._state_gauge.labels(breaker=self.name, state=new_state).set(1)

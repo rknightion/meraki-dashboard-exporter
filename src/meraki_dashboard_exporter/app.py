@@ -18,11 +18,15 @@ from starlette.requests import Request
 from .__version__ import __version__
 from .api.client import AsyncMerakiClient
 from .collectors.manager import CollectorManager
+from .core.cardinality import CardinalityMonitor, setup_cardinality_endpoint
 from .core.config import Settings
+from .core.config_logger import log_configuration
 from .core.constants import UpdateTier
 from .core.discovery import DiscoveryService
 from .core.logging import get_logger, setup_logging
+from .core.otel_logging import OTELLoggingConfig
 from .core.otel_metrics import PrometheusToOTelBridge
+from .core.otel_tracing import TracingConfig
 from .profiling import ProfilingUtils
 
 if TYPE_CHECKING:
@@ -45,6 +49,18 @@ class ExporterApp:
         """Initialize the exporter application with settings."""
         self.settings = settings or Settings()
         setup_logging(self.settings)
+
+        # Initialize tracing before anything else
+        self.tracing = TracingConfig(self.settings)
+        self.tracing.setup_tracing()
+
+        # Initialize OTEL logging if enabled
+        self.otel_logging = OTELLoggingConfig(self.settings)
+        if self.settings.otel.enabled:
+            self.otel_logging.setup_otel_logging()
+
+        # Log configuration early for visibility
+        log_configuration(self.settings)
 
         self.client = AsyncMerakiClient(self.settings)
         self.collector_manager = CollectorManager(
@@ -71,6 +87,13 @@ class ExporterApp:
                 export_interval_seconds=self.settings.otel.export_interval,
                 resource_attributes=self.settings.otel.resource_attributes,
             )
+
+        # Setup cardinality monitor
+        self.cardinality_monitor = CardinalityMonitor(
+            registry=REGISTRY,
+            warning_threshold=1000,
+            critical_threshold=10000,
+        )
 
     def _handle_shutdown(self) -> None:
         """Handle shutdown request."""
@@ -134,6 +157,11 @@ class ExporterApp:
         self._background_tasks.add(startup_task)
         startup_task.add_done_callback(self._background_tasks.discard)
 
+        # Start periodic cardinality analysis
+        cardinality_task = asyncio.create_task(self._cardinality_monitor_loop())
+        self._background_tasks.add(cardinality_task)
+        cardinality_task.add_done_callback(self._background_tasks.discard)
+
         try:
             yield
         finally:
@@ -165,6 +193,14 @@ class ExporterApp:
 
             # Cleanup
             await self.client.close()
+
+            # Shutdown tracing
+            self.tracing.shutdown()
+
+            # Shutdown OTEL logging
+            if self.settings.otel.enabled:
+                self.otel_logging.shutdown()
+
             logger.info("Shutdown complete")
 
     async def _startup_collections(self) -> None:
@@ -271,6 +307,35 @@ class ExporterApp:
             logger.info("Collection task cancelled, exiting cleanly", tier=tier)
             raise
 
+    async def _cardinality_monitor_loop(self) -> None:
+        """Background task for periodic cardinality monitoring."""
+        # Check cardinality every 5 minutes
+        check_interval = 300  # 5 minutes
+
+        logger.info(
+            "Starting cardinality monitoring loop",
+            check_interval=check_interval,
+        )
+
+        try:
+            while not self._shutdown_event.is_set():
+                try:
+                    # Run cardinality analysis
+                    self.cardinality_monitor.analyze_cardinality()
+                except Exception:
+                    logger.exception("Error during cardinality analysis")
+
+                # Wait for next check
+                remaining_time = float(check_interval)
+                while remaining_time > 0 and not self._shutdown_event.is_set():
+                    wait_time = min(1.0, remaining_time)
+                    await asyncio.sleep(wait_time)
+                    remaining_time -= wait_time
+
+        except asyncio.CancelledError:
+            logger.info("Cardinality monitoring task cancelled")
+            raise
+
     def create_app(self) -> FastAPI:
         """Create the FastAPI application.
 
@@ -286,6 +351,9 @@ class ExporterApp:
             version=__version__,
             lifespan=self.lifespan,
         )
+
+        # Instrument FastAPI with tracing
+        self.tracing.instrument_fastapi(app)
 
         # Store reference to templates in app state
         app.state.templates = self.templates
@@ -424,6 +492,9 @@ class ExporterApp:
                 """Exceptions profile endpoint."""
                 profile_data = ProfilingUtils.get_exceptions_profile()
                 return PlainTextResponse(content=profile_data)
+
+        # Setup cardinality monitoring endpoint
+        setup_cardinality_endpoint(app, self.cardinality_monitor)
 
         return app
 

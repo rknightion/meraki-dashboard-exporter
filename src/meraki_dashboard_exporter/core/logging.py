@@ -116,8 +116,14 @@ def setup_logging(settings: Settings) -> None:
         structlog.dev.set_exc_info,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.dict_tracebacks,
-        structlog.processors.LogfmtRenderer(),
     ]
+
+    # Add OTEL context processor if OTEL is enabled
+    if settings.otel.enabled:
+        processors.append(add_otel_context)
+
+    # Add the final renderer
+    processors.append(structlog.processors.LogfmtRenderer())
 
     structlog.configure(
         processors=processors,
