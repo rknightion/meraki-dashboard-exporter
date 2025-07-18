@@ -122,12 +122,6 @@ def log_configuration(settings: Settings) -> None:
     else:
         logger.info("  OpenTelemetry: DISABLED")
 
-    # Profiling
-    if settings.enable_profiling:
-        logger.info("  Profiling: ENABLED (/debug/pprof/* endpoints available)")
-    else:
-        logger.info("  Profiling: DISABLED")
-
     # Update Intervals
     logger.info("  Update Intervals:")
     logger.info(f"    - Fast: {settings.update_intervals.fast}s (sensor metrics)")

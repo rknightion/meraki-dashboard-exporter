@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, Response
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 from starlette.requests import Request
@@ -27,7 +27,6 @@ from .core.logging import get_logger, setup_logging
 from .core.otel_logging import OTELLoggingConfig
 from .core.otel_metrics import PrometheusToOTelBridge
 from .core.otel_tracing import TracingConfig
-from .profiling import ProfilingUtils
 
 if TYPE_CHECKING:
     pass
@@ -405,93 +404,6 @@ class ExporterApp:
                 content=data,
                 media_type=CONTENT_TYPE_LATEST,
             )
-
-        # Profiling endpoints for pprof compatibility
-        if self.settings.enable_profiling:
-            # Enable profiling on startup
-            ProfilingUtils.enable_profiling()
-
-            @app.get("/debug/pprof/heap", response_class=PlainTextResponse)
-            async def heap_profile() -> PlainTextResponse:
-                """Heap memory profile endpoint."""
-                profile_data = ProfilingUtils.get_heap_profile()
-                return PlainTextResponse(content=profile_data)
-
-            @app.get("/debug/pprof/allocs", response_class=PlainTextResponse)
-            async def allocs_profile() -> PlainTextResponse:
-                """Memory allocations profile endpoint."""
-                profile_data = ProfilingUtils.get_allocs_profile()
-                return PlainTextResponse(content=profile_data)
-
-            @app.get("/debug/pprof/inuse_objects", response_class=PlainTextResponse)
-            async def inuse_objects_profile() -> PlainTextResponse:
-                """In-use objects profile endpoint."""
-                profile_data = ProfilingUtils.get_inuse_objects_profile()
-                return PlainTextResponse(content=profile_data)
-
-            @app.get("/debug/pprof/inuse_space", response_class=PlainTextResponse)
-            async def inuse_space_profile() -> PlainTextResponse:
-                """In-use space profile endpoint."""
-                profile_data = ProfilingUtils.get_inuse_space_profile()
-                return PlainTextResponse(content=profile_data)
-
-            @app.get("/debug/pprof/profile")
-            async def cpu_profile(seconds: int = 30) -> Response:
-                """CPU profile endpoint.
-
-                Parameters
-                ----------
-                seconds : int
-                    Duration to profile in seconds (default 30, max 300).
-
-                """
-                # Limit profiling duration to prevent abuse
-                duration = min(seconds, 300)
-                profile_data = await ProfilingUtils.get_cpu_profile(duration)
-                return Response(
-                    content=profile_data,
-                    media_type="application/octet-stream",
-                    headers={"Content-Disposition": "attachment; filename=profile.pprof"},
-                )
-
-            @app.get("/debug/pprof/wall")
-            async def wall_profile(seconds: int = 30) -> PlainTextResponse:
-                """Wall clock time profile endpoint.
-
-                Parameters
-                ----------
-                seconds : int
-                    Duration to profile in seconds (default 30, max 300).
-
-                """
-                # Limit profiling duration to prevent abuse
-                duration = min(seconds, 300)
-                profile_data = await ProfilingUtils.get_wall_profile(duration)
-                return PlainTextResponse(content=profile_data)
-
-            @app.get("/debug/pprof/goroutine", response_class=PlainTextResponse)
-            async def goroutine_profile() -> PlainTextResponse:
-                """Thread/asyncio task profile endpoint."""
-                profile_data = ProfilingUtils.get_goroutines_profile()
-                return PlainTextResponse(content=profile_data)
-
-            @app.get("/debug/pprof/block", response_class=PlainTextResponse)
-            async def block_profile() -> PlainTextResponse:
-                """Blocking operations profile endpoint."""
-                profile_data = ProfilingUtils.get_block_profile()
-                return PlainTextResponse(content=profile_data)
-
-            @app.get("/debug/pprof/mutex", response_class=PlainTextResponse)
-            async def mutex_profile() -> PlainTextResponse:
-                """Mutex (lock) contention profile endpoint."""
-                profile_data = ProfilingUtils.get_mutex_profile()
-                return PlainTextResponse(content=profile_data)
-
-            @app.get("/debug/pprof/exceptions", response_class=PlainTextResponse)
-            async def exceptions_profile() -> PlainTextResponse:
-                """Exceptions profile endpoint."""
-                profile_data = ProfilingUtils.get_exceptions_profile()
-                return PlainTextResponse(content=profile_data)
 
         # Setup cardinality monitoring endpoint
         setup_cardinality_endpoint(app, self.cardinality_monitor)
