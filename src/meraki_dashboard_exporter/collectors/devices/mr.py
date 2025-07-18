@@ -750,17 +750,24 @@ class MRCollector(BaseDeviceCollector):
 
             # Process each device's packet loss data
             for device_data in devices_data:
-                serial = device_data.get("serial", "")
-                device_info = device_lookup.get(serial, {})
-                device_name = device_info.get("name", serial)
-                network_id = device_data.get("network", {}).get("id", "")
-                network_name = device_data.get("network", {}).get("name", "")
+                # Extract device info from nested "device" object
+                device_info_api = device_data.get("device", {})
+                serial = device_info_api.get("serial", "")
 
-                # Get packet loss data
-                packet_loss = device_data.get("packetLoss", {})
+                # Try to get device name from API response first, then fallback to lookup
+                device_name = device_info_api.get("name", "")
+                if not device_name:
+                    device_info = device_lookup.get(serial, {})
+                    device_name = device_info.get("name", serial)
 
+                # Extract network info
+                network_info = device_data.get("network", {})
+                network_id = network_info.get("id", "")
+                network_name = network_info.get("name", "")
+
+                # Get packet loss data directly from top level (not nested under "packetLoss")
                 # Downstream metrics
-                downstream = packet_loss.get("downstream", {})
+                downstream = device_data.get("downstream", {})
                 downstream_total = downstream.get("total", 0)
                 downstream_lost = downstream.get("lost", 0)
                 downstream_percent = downstream.get("lossPercentage", 0)
@@ -799,7 +806,7 @@ class MRCollector(BaseDeviceCollector):
                 )
 
                 # Upstream metrics
-                upstream = packet_loss.get("upstream", {})
+                upstream = device_data.get("upstream", {})
                 upstream_total = upstream.get("total", 0)
                 upstream_lost = upstream.get("lost", 0)
                 upstream_percent = upstream.get("lossPercentage", 0)
@@ -902,11 +909,9 @@ class MRCollector(BaseDeviceCollector):
                 network_id = network_data.get("network", {}).get("id", "")
                 network_name = network_data.get("network", {}).get("name", "")
 
-                # Get packet loss data
-                packet_loss = network_data.get("packetLoss", {})
-
+                # Get packet loss data directly from top level (no "packetLoss" wrapper)
                 # Downstream metrics
-                downstream = packet_loss.get("downstream", {})
+                downstream = network_data.get("downstream", {})
                 downstream_total = downstream.get("total", 0)
                 downstream_lost = downstream.get("lost", 0)
                 downstream_percent = downstream.get("lossPercentage", 0)
@@ -939,7 +944,7 @@ class MRCollector(BaseDeviceCollector):
                 )
 
                 # Upstream metrics
-                upstream = packet_loss.get("upstream", {})
+                upstream = network_data.get("upstream", {})
                 upstream_total = upstream.get("total", 0)
                 upstream_lost = upstream.get("lost", 0)
                 upstream_percent = upstream.get("lossPercentage", 0)
