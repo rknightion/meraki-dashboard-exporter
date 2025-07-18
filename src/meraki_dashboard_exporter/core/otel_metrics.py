@@ -109,27 +109,19 @@ class PrometheusToOTelBridge:
     def _get_prometheus_metrics(self) -> None:
         """Collect all metrics from Prometheus registry and cache values."""
         new_cache: dict[str, list[tuple[dict[str, str], float]]] = {}
+        histogram_data: dict[str, dict[str, float]] = {}
 
         try:
             # Collect all metrics from Prometheus registry
             for collector in self.registry._collector_to_names:
                 for metric in collector.collect():
-                    metric_values = []
+                    if metric.type == "histogram":
+                        self._process_histogram_metric(metric, histogram_data)
+                    else:
+                        self._process_regular_metric(metric, new_cache)
 
-                    # Process each sample in the metric
-                    for sample in metric.samples:
-                        # Skip histogram buckets, counts, and sums for now
-                        if any(
-                            suffix in sample.name
-                            for suffix in ["_bucket", "_count", "_sum", "_created"]
-                        ):
-                            continue
-
-                        # Store labels and value
-                        metric_values.append((sample.labels, sample.value))
-
-                    if metric_values:
-                        new_cache[metric.name] = metric_values
+            # Add histogram averages to cache
+            self._add_histogram_averages(histogram_data, new_cache)
 
             # Update cache
             self._metric_cache = new_cache
@@ -137,10 +129,49 @@ class PrometheusToOTelBridge:
             logger.debug(
                 "Updated Prometheus metric cache",
                 metric_count=len(self._metric_cache),
+                histogram_count=len(histogram_data),
             )
 
         except Exception:
             logger.exception("Error collecting Prometheus metrics")
+
+    def _process_histogram_metric(
+        self, metric: Any, histogram_data: dict[str, dict[str, float]]
+    ) -> None:
+        """Process histogram metric samples."""
+        for sample in metric.samples:
+            if sample.name.endswith("_sum"):
+                histogram_data.setdefault(metric.name, {})["sum"] = sample.value
+            elif sample.name.endswith("_count"):
+                histogram_data.setdefault(metric.name, {})["count"] = sample.value
+            # Note: We skip buckets for now as OTEL histograms work differently
+
+    def _process_regular_metric(
+        self, metric: Any, new_cache: dict[str, list[tuple[dict[str, str], float]]]
+    ) -> None:
+        """Process non-histogram metric samples."""
+        metric_values = []
+        # Process each sample in the metric
+        for sample in metric.samples:
+            # Skip created timestamps
+            if sample.name.endswith("_created"):
+                continue
+            # Store labels and value
+            metric_values.append((sample.labels, sample.value))
+
+        if metric_values:
+            new_cache[metric.name] = metric_values
+
+    def _add_histogram_averages(
+        self,
+        histogram_data: dict[str, dict[str, float]],
+        new_cache: dict[str, list[tuple[dict[str, str], float]]],
+    ) -> None:
+        """Add histogram averages to the cache."""
+        for hist_name, hist_data in histogram_data.items():
+            if "sum" in hist_data and "count" in hist_data and hist_data["count"] > 0:
+                avg_value = hist_data["sum"] / hist_data["count"]
+                new_cache[hist_name] = [({"_type": "histogram_avg"}, avg_value)]
 
     def _create_metric_callback(self, metric_name: str, metric_type: str) -> Any:
         """Create a callback function for an observable metric.
@@ -190,7 +221,7 @@ class PrometheusToOTelBridge:
         callback = self._create_metric_callback(metric_name, metric_type)
 
         try:
-            if metric_type == "gauge" or metric_type == "info":
+            if metric_type in {"gauge", "info"}:
                 # Gauges and info metrics use ObservableGauge
                 self._otel_metrics[metric_name] = self.meter.create_observable_gauge(
                     name=metric_name,
@@ -204,6 +235,16 @@ class PrometheusToOTelBridge:
                     name=metric_name,
                     callbacks=[callback],
                     description=documentation,
+                    unit="1",
+                )
+            elif metric_type == "histogram":
+                # Histograms use ObservableGauge for average values
+                # Note: This is a simplification - full histogram support would require
+                # recording individual observations, not just averages
+                self._otel_metrics[metric_name] = self.meter.create_observable_gauge(
+                    name=metric_name,
+                    callbacks=[callback],
+                    description=f"{documentation} (average)",
                     unit="1",
                 )
             else:

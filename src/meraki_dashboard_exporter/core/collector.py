@@ -11,6 +11,7 @@ from prometheus_client.core import REGISTRY
 
 from ..core.constants import UpdateTier
 from ..core.error_handling import ErrorCategory
+from ..core.exemplars import add_exemplar
 from ..core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -92,10 +93,22 @@ class MetricCollector(ABC):
 
             # Always try to record metrics (they should be initialized)
             if MetricCollector._collector_duration is not None:
+                # Record the metric value
                 MetricCollector._collector_duration.labels(
                     collector=collector_name,
                     tier=self.update_tier.value,
                 ).observe(duration)
+
+                # Also try to add exemplar to link metric to trace
+                # Note: This is a no-op if no trace is active
+                add_exemplar(
+                    MetricCollector._collector_duration,
+                    value=duration,
+                    labels={
+                        "collector": collector_name,
+                        "tier": self.update_tier.value,
+                    },
+                )
             else:
                 logger.warning("Collector duration metric not initialized")
 
@@ -120,11 +133,24 @@ class MetricCollector(ABC):
 
             # Always try to record metrics (they should be initialized)
             if MetricCollector._collector_errors is not None:
+                # Record the error
                 MetricCollector._collector_errors.labels(
                     collector=collector_name,
                     tier=self.update_tier.value,
                     error_type=type(e).__name__,
                 ).inc()
+
+                # Also try to add exemplar to link error metric to trace
+                # Note: This is a no-op if no trace is active
+                add_exemplar(
+                    MetricCollector._collector_errors,
+                    value=1,
+                    labels={
+                        "collector": collector_name,
+                        "tier": self.update_tier.value,
+                        "error_type": type(e).__name__,
+                    },
+                )
             else:
                 logger.warning("Collector errors metric not initialized")
 
@@ -289,11 +315,24 @@ class MetricCollector(ABC):
 
         # Always try to track (metrics should be initialized)
         if MetricCollector._collector_api_calls is not None:
+            # Record the API call
             MetricCollector._collector_api_calls.labels(
                 collector=self.__class__.__name__,
                 tier=self.update_tier.value,
                 endpoint=endpoint,
             ).inc()
+
+            # Also try to add exemplar to link API call metric to trace
+            # Note: This is a no-op if no trace is active
+            add_exemplar(
+                MetricCollector._collector_api_calls,
+                value=1,
+                labels={
+                    "collector": self.__class__.__name__,
+                    "tier": self.update_tier.value,
+                    "endpoint": endpoint,
+                },
+            )
         else:
             logger.warning("Collector API calls metric not initialized", endpoint=endpoint)
 
@@ -307,11 +346,24 @@ class MetricCollector(ABC):
 
         """
         if MetricCollector._collector_errors is not None:
+            # Record the error
             MetricCollector._collector_errors.labels(
                 collector=self.__class__.__name__,
                 tier=self.update_tier.value,
                 error_type=category.value,
             ).inc()
+
+            # Also try to add exemplar to link error metric to trace
+            # Note: This is a no-op if no trace is active
+            add_exemplar(
+                MetricCollector._collector_errors,
+                value=1,
+                labels={
+                    "collector": self.__class__.__name__,
+                    "tier": self.update_tier.value,
+                    "error_type": category.value,
+                },
+            )
 
     def _set_metric_value(
         self, metric_name: str, labels: dict[str, str], value: float | None

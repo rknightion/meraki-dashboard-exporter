@@ -1,14 +1,19 @@
 # OpenTelemetry Support
 
-The Meraki Dashboard Exporter includes comprehensive OpenTelemetry (OTEL) support, automatically mirroring all Prometheus metrics to an OTEL collector.
+The Meraki Dashboard Exporter includes comprehensive OpenTelemetry (OTEL) support for both metrics and distributed tracing.
 
 ## Overview
 
-The exporter implements a **dual-export** strategy:
-- **Primary**: Prometheus metrics exposed via `/metrics` endpoint
-- **Secondary**: All Prometheus metrics are automatically mirrored to OTEL
+The exporter provides:
+- **Metrics**: All Prometheus metrics are automatically mirrored to OTEL
+- **Tracing**: Distributed tracing for all API calls and operations
+- **Logging**: Correlated logs with trace context
 
-This means every metric collected by the exporter is available in both Prometheus and OTEL formats without any additional configuration per metric.
+### Dual-Export Strategy
+- **Primary**: Prometheus metrics exposed via `/metrics` endpoint
+- **Secondary**: All metrics and traces sent to OTEL collector
+
+This means every metric collected by the exporter is available in both Prometheus and OTEL formats, plus you get full observability with distributed tracing.
 
 ## Configuration
 
@@ -155,13 +160,77 @@ If you have thousands of metrics with high cardinality:
 2. Consider filtering metrics at the OTEL collector level
 3. Monitor the `metric_count` in debug logs
 
+## Distributed Tracing
+
+When OTEL is enabled, the exporter automatically provides distributed tracing:
+
+### Automatic Instrumentation
+- **HTTP Requests**: All Meraki API calls via requests library
+- **FastAPI**: All HTTP endpoints (except /health and /metrics)
+- **Threading**: asyncio.to_thread operations
+- **Logging**: Automatic trace ID injection
+
+### Configuration
+```bash
+# Set sampling rate (default: 10%)
+export MERAKI_EXPORTER_OTEL__SAMPLING_RATE=0.1
+```
+
+### Trace Attributes
+- Meraki request IDs
+- Rate limit information
+- Organization and network IDs
+- API endpoint names
+- Response sizes and status codes
+
+See [TRACING.md](TRACING.md) for detailed tracing documentation.
+
+## Log Correlation
+
+When OTEL is enabled, all structured logs automatically include trace context:
+
+### Features
+- **Automatic Trace Correlation**: Every log entry includes trace_id and span_id when within a trace context
+- **Structured Field Preservation**: All structured log fields are preserved in logfmt format
+- **Context Propagation**: Trace context flows through all log entries
+- **Easy Integration**: Works with any log aggregation system that can parse structured logs
+
+### Log Attributes
+Each log entry includes:
+- `trace_id`, `span_id`, `trace_flags` - When within a trace context
+- `timestamp` - ISO format timestamp
+- `level` - Log severity level
+- `event` - Log message
+- All custom fields added via structured logging
+
+### Example Log Output
+```json
+{
+  "timestamp": "2024-01-15T10:30:45.123Z",
+  "level": "info",
+  "event": "Collected metrics successfully",
+  "trace_id": "a1b2c3d4e5f6789012345678901234567",
+  "span_id": "1234567890123456",
+  "collector": "DeviceCollector",
+  "duration": "2.34s",
+  "device_count": 150
+}
+```
+
+### Benefits
+- **Unified Telemetry**: Metrics, traces, and logs in one platform
+- **Correlation**: Easy to find logs for a specific trace or span
+- **Filtering**: Use trace context to filter relevant logs
+- **Debugging**: Full context for troubleshooting issues
+
 ## Benefits
 
 1. **No code changes required**: Adding new Prometheus metrics automatically adds OTEL metrics
-2. **Unified monitoring**: Use the same metrics in both Prometheus and OTEL ecosystems
-3. **Gradual migration**: Transition from Prometheus to OTEL at your own pace
-4. **Correlation**: Correlate metrics with traces and logs in OTEL backends
-5. **Flexibility**: Send metrics to multiple backends via OTEL collector
+2. **Full observability**: Metrics, traces, and logs in one platform
+3. **Unified monitoring**: Use the same data in both Prometheus and OTEL ecosystems
+4. **Gradual migration**: Transition from Prometheus to OTEL at your own pace
+5. **Root cause analysis**: Correlate metrics with traces to debug issues
+6. **Flexibility**: Send telemetry to multiple backends via OTEL collector
 
 ## Future Enhancements
 
@@ -170,3 +239,4 @@ If you have thousands of metrics with high cardinality:
 - Delta calculation optimization for counters
 - Support for OTLP/HTTP protocol
 - Metric metadata preservation
+- Baggage propagation for request context

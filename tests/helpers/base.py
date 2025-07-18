@@ -56,9 +56,21 @@ class BaseCollectorTest:
         registry = CollectorRegistry()
         # Patch the global registry used by collectors
         monkeypatch.setattr("meraki_dashboard_exporter.core.collector.REGISTRY", registry)
-        # Also reset the initialization flag so metrics get created on the new registry
+        # Also reset the initialization flag and clear class-level metrics
         monkeypatch.setattr(
             "meraki_dashboard_exporter.core.collector.MetricCollector._metrics_initialized", False
+        )
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.core.collector.MetricCollector._collector_duration", None
+        )
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.core.collector.MetricCollector._collector_errors", None
+        )
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.core.collector.MetricCollector._collector_last_success", None
+        )
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.core.collector.MetricCollector._collector_api_calls", None
         )
         return registry
 
