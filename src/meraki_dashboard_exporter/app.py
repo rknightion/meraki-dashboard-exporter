@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, Response
+from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.templating import Jinja2Templates
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
+from starlette.requests import Request
 
 from .__version__ import __version__
 from .api.client import AsyncMerakiClient
@@ -17,6 +22,7 @@ from .core.config import Settings
 from .core.constants import UpdateTier
 from .core.discovery import DiscoveryService
 from .core.logging import get_logger, setup_logging
+from .profiling import ProfilingUtils
 
 if TYPE_CHECKING:
     pass
@@ -48,11 +54,30 @@ class ExporterApp:
         self._background_tasks: set[asyncio.Task[Any]] = set()
         self._shutdown_event = asyncio.Event()
         self._tier_tasks: dict[str, asyncio.Task[Any]] = {}
+        self._start_time = time.time()
+
+        # Setup Jinja2 templates
+        template_dir = Path(__file__).parent / "templates"
+        self.templates = Jinja2Templates(directory=str(template_dir))
 
     def _handle_shutdown(self) -> None:
         """Handle shutdown request."""
         logger.info("Shutdown requested, stopping collection...")
         self._shutdown_event.set()
+
+    def _format_uptime(self) -> str:
+        """Format uptime in a human-readable format."""
+        uptime_seconds = int(time.time() - self._start_time)
+        days = uptime_seconds // 86400
+        hours = (uptime_seconds % 86400) // 3600
+        minutes = (uptime_seconds % 3600) // 60
+
+        if days > 0:
+            return f"{days}d {hours}h"
+        elif hours > 0:
+            return f"{hours}h {minutes}m"
+        else:
+            return f"{minutes}m"
 
     @asynccontextmanager
     async def lifespan(self, app: FastAPI) -> AsyncIterator[None]:
@@ -236,14 +261,42 @@ class ExporterApp:
             lifespan=self.lifespan,
         )
 
-        @app.get("/")
-        async def root() -> dict[str, str]:
-            """Root endpoint."""
-            return {
-                "name": "Meraki Dashboard Exporter",
+        # Store reference to templates in app state
+        app.state.templates = self.templates
+        app.state.exporter = self
+
+        @app.get("/", response_class=HTMLResponse)
+        async def root(request: Request) -> HTMLResponse:
+            """Root endpoint with HTML landing page."""
+            # Get exporter instance from app state
+            exporter = app.state.exporter
+
+            # Get collector information
+            collectors = []
+            for tier, collector_list in exporter.collector_manager.collectors.items():
+                for collector in collector_list:
+                    collectors.append({
+                        "name": collector.__class__.__name__.replace("Collector", ""),
+                        "tier": tier.value.upper(),
+                    })
+
+            # Get organization count (if available)
+            org_count = 1 if exporter.settings.org_id else "All"
+
+            context = {
+                "request": request,
                 "version": __version__,
-                "metrics_path": "/metrics",
+                "uptime": exporter._format_uptime(),
+                "collector_count": len(collectors),
+                "org_count": org_count,
+                "collectors": collectors,
+                "fast_interval": exporter.settings.update_intervals.fast,
+                "medium_interval": exporter.settings.update_intervals.medium,
+                "slow_interval": exporter.settings.update_intervals.slow,
+                "org_id": exporter.settings.org_id,
             }
+
+            return app.state.templates.TemplateResponse("index.html", context)  # type: ignore[no-any-return]
 
         @app.get("/health")
         async def health() -> dict[str, str]:
@@ -258,6 +311,93 @@ class ExporterApp:
                 content=data,
                 media_type=CONTENT_TYPE_LATEST,
             )
+
+        # Profiling endpoints for pprof compatibility
+        if self.settings.enable_profiling:
+            # Enable profiling on startup
+            ProfilingUtils.enable_profiling()
+
+            @app.get("/debug/pprof/heap", response_class=PlainTextResponse)
+            async def heap_profile() -> PlainTextResponse:
+                """Heap memory profile endpoint."""
+                profile_data = ProfilingUtils.get_heap_profile()
+                return PlainTextResponse(content=profile_data)
+
+            @app.get("/debug/pprof/allocs", response_class=PlainTextResponse)
+            async def allocs_profile() -> PlainTextResponse:
+                """Memory allocations profile endpoint."""
+                profile_data = ProfilingUtils.get_allocs_profile()
+                return PlainTextResponse(content=profile_data)
+
+            @app.get("/debug/pprof/inuse_objects", response_class=PlainTextResponse)
+            async def inuse_objects_profile() -> PlainTextResponse:
+                """In-use objects profile endpoint."""
+                profile_data = ProfilingUtils.get_inuse_objects_profile()
+                return PlainTextResponse(content=profile_data)
+
+            @app.get("/debug/pprof/inuse_space", response_class=PlainTextResponse)
+            async def inuse_space_profile() -> PlainTextResponse:
+                """In-use space profile endpoint."""
+                profile_data = ProfilingUtils.get_inuse_space_profile()
+                return PlainTextResponse(content=profile_data)
+
+            @app.get("/debug/pprof/profile")
+            async def cpu_profile(seconds: int = 30) -> Response:
+                """CPU profile endpoint.
+
+                Parameters
+                ----------
+                seconds : int
+                    Duration to profile in seconds (default 30, max 300).
+
+                """
+                # Limit profiling duration to prevent abuse
+                duration = min(seconds, 300)
+                profile_data = await ProfilingUtils.get_cpu_profile(duration)
+                return Response(
+                    content=profile_data,
+                    media_type="application/octet-stream",
+                    headers={"Content-Disposition": "attachment; filename=profile.pprof"},
+                )
+
+            @app.get("/debug/pprof/wall")
+            async def wall_profile(seconds: int = 30) -> PlainTextResponse:
+                """Wall clock time profile endpoint.
+
+                Parameters
+                ----------
+                seconds : int
+                    Duration to profile in seconds (default 30, max 300).
+
+                """
+                # Limit profiling duration to prevent abuse
+                duration = min(seconds, 300)
+                profile_data = await ProfilingUtils.get_wall_profile(duration)
+                return PlainTextResponse(content=profile_data)
+
+            @app.get("/debug/pprof/goroutine", response_class=PlainTextResponse)
+            async def goroutine_profile() -> PlainTextResponse:
+                """Thread/asyncio task profile endpoint."""
+                profile_data = ProfilingUtils.get_goroutines_profile()
+                return PlainTextResponse(content=profile_data)
+
+            @app.get("/debug/pprof/block", response_class=PlainTextResponse)
+            async def block_profile() -> PlainTextResponse:
+                """Blocking operations profile endpoint."""
+                profile_data = ProfilingUtils.get_block_profile()
+                return PlainTextResponse(content=profile_data)
+
+            @app.get("/debug/pprof/mutex", response_class=PlainTextResponse)
+            async def mutex_profile() -> PlainTextResponse:
+                """Mutex (lock) contention profile endpoint."""
+                profile_data = ProfilingUtils.get_mutex_profile()
+                return PlainTextResponse(content=profile_data)
+
+            @app.get("/debug/pprof/exceptions", response_class=PlainTextResponse)
+            async def exceptions_profile() -> PlainTextResponse:
+                """Exceptions profile endpoint."""
+                profile_data = ProfilingUtils.get_exceptions_profile()
+                return PlainTextResponse(content=profile_data)
 
         return app
 
