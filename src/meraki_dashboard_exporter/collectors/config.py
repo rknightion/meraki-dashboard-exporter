@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ..core.collector import MetricCollector
 from ..core.constants import OrgMetricName, UpdateTier
@@ -179,7 +179,7 @@ class ConfigCollector(MetricCollector):
             organizations = validate_response_format(
                 organizations, expected_type=list, operation="getOrganizations"
             )
-            return organizations
+            return cast(list[dict[str, Any]], organizations)
 
     @with_error_handling(
         operation="Collect organization config",

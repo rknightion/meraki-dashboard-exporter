@@ -20,7 +20,7 @@ class MetricVisitor(ast.NodeVisitor):
         """Initialize visitor."""
         self.filepath = filepath
         self.metrics: list[dict[str, Any]] = []
-        self.current_class = None
+        self.current_class: str | None = None
         self.in_initialize_metrics = False
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
@@ -43,20 +43,37 @@ class MetricVisitor(ast.NodeVisitor):
         if not self.in_initialize_metrics:
             return
 
-        # Check if this is a metric assignment (self._something = self._create_...)
-        if (
+        # Check if this is a metric assignment (self._something = self._create_... or self.parent._create_...)
+        if (  # noqa: PLR1702
             len(node.targets) == 1
             and isinstance(node.targets[0], ast.Attribute)
             and isinstance(node.targets[0].value, ast.Name)
             and node.targets[0].value.id == "self"
             and isinstance(node.value, ast.Call)
             and isinstance(node.value.func, ast.Attribute)
-            and isinstance(node.value.func.value, ast.Name)
-            and node.value.func.value.id in ("self", "self.parent")
-            and node.value.func.attr.startswith("_create_")
         ):
-            metric_type = node.value.func.attr.replace("_create_", "")
-            metric_name_attr = node.targets[0].attr
+            # Handle both self._create_... and self.parent._create_...
+            if (
+                isinstance(node.value.func.value, ast.Name)
+                and node.value.func.value.id == "self"
+                and node.value.func.attr.startswith("_create_")
+            ):
+                # Direct metric creation: self._create_gauge(...)
+                metric_type = node.value.func.attr.replace("_create_", "")
+                metric_name_attr = node.targets[0].attr
+            elif (
+                isinstance(node.value.func.value, ast.Attribute)
+                and isinstance(node.value.func.value.value, ast.Name)
+                and node.value.func.value.value.id == "self"
+                and node.value.func.value.attr == "parent"
+                and node.value.func.attr.startswith("_create_")
+            ):
+                # Parent metric creation: self.parent._create_gauge(...)
+                metric_type = node.value.func.attr.replace("_create_", "")
+                metric_name_attr = node.targets[0].attr
+            else:
+                self.generic_visit(node)
+                return
 
             # Extract arguments
             args_dict: dict[str, Any] = {}
@@ -65,12 +82,11 @@ class MetricVisitor(ast.NodeVisitor):
                 if isinstance(node.value.args[0], ast.Constant):
                     args_dict["name"] = node.value.args[0].value
                 elif isinstance(node.value.args[0], ast.Attribute):
-                    # Handle MetricName.SOMETHING
-                    if (
-                        isinstance(node.value.args[0].value, ast.Name)
-                        and node.value.args[0].value.id == "MetricName"
-                    ):
-                        args_dict["name"] = f"MetricName.{node.value.args[0].attr}"
+                    # Handle various MetricName patterns: MetricName.X, OrgMetricName.X, MRMetricName.X, etc.
+                    if isinstance(node.value.args[0].value, ast.Name):
+                        metric_class = node.value.args[0].value.id
+                        metric_attr = node.value.args[0].attr
+                        args_dict["name"] = f"{metric_class}.{metric_attr}"
 
                 # Second positional arg is usually the description
                 if len(node.value.args) > 1 and isinstance(node.value.args[1], ast.Constant):
@@ -83,6 +99,14 @@ class MetricVisitor(ast.NodeVisitor):
                     for elt in keyword.value.elts:
                         if isinstance(elt, ast.Constant):
                             labels.append(elt.value)
+                        elif isinstance(elt, ast.Attribute):
+                            # Handle LabelName.SOMETHING
+                            if isinstance(elt.value, ast.Name) and elt.value.id == "LabelName":
+                                labels.append(f"LabelName.{elt.attr}")
+                            elif hasattr(elt.value, "id"):
+                                labels.append(f"{elt.value.id}.{elt.attr}")
+                            else:
+                                labels.append(str(elt.attr))
                     args_dict["labels"] = labels
 
             self.metrics.append({
@@ -101,6 +125,8 @@ def scan_for_metrics(root_path: Path) -> list[dict[str, Any]]:
     """Scan Python files for metric definitions."""
     all_metrics = []
 
+    print(f"Scanning directory: {root_path}")
+
     for py_file in root_path.rglob("*.py"):
         # Skip test files and this script
         if "test" in py_file.parts or py_file.name == "generate_metrics_docs.py":
@@ -112,6 +138,10 @@ def scan_for_metrics(root_path: Path) -> list[dict[str, Any]]:
 
             visitor = MetricVisitor(py_file)
             visitor.visit(tree)
+
+            if visitor.metrics:
+                print(f"  Found {len(visitor.metrics)} metrics in {py_file.relative_to(root_path)}")
+
             all_metrics.extend(visitor.metrics)
         except Exception as e:
             print(f"Error parsing {py_file}: {e}")
@@ -119,38 +149,67 @@ def scan_for_metrics(root_path: Path) -> list[dict[str, Any]]:
     return all_metrics
 
 
-def resolve_metric_names(metrics: list[dict[str, Any]], constants_file: Path) -> None:
-    """Resolve MetricName.SOMETHING to actual string values."""
-    # Parse constants file to get MetricName values
+def resolve_metric_names(metrics: list[dict[str, Any]], constants_dir: Path) -> None:
+    """Resolve various MetricName classes to actual string values."""
+    # Parse all constants files to get metric name values
     metric_name_map = {}
 
-    try:
-        with open(constants_file) as f:
-            content = f.read()
+    # Look for all metric constant files
+    for constants_file in constants_dir.glob("*_constants.py"):
+        try:
+            with open(constants_file) as f:
+                content = f.read()
 
-        # Find MetricName class definition
-        class_match = re.search(
-            r"class MetricName\(StrEnum\):(.*?)(?=class|\Z)", content, re.DOTALL
-        )
-        if class_match:
-            class_body = class_match.group(1)
-            # Find all constant definitions
-            for match in re.finditer(r'(\w+)\s*=\s*"([^"]+)"', class_body):
-                const_name, const_value = match.groups()
-                metric_name_map[f"MetricName.{const_name}"] = const_value
-    except Exception as e:
-        print(f"Error parsing constants file: {e}")
+            # Find all StrEnum classes that end with "MetricName"
+            for class_match in re.finditer(
+                r"class (\w*MetricName)\(StrEnum\):(.*?)(?=class|\Z)", content, re.DOTALL
+            ):
+                class_name, class_body = class_match.groups()
+                # Find all constant definitions
+                for const_match in re.finditer(r'(\w+)\s*=\s*"([^"]+)"', class_body):
+                    const_name, const_value = const_match.groups()
+                    metric_name_map[f"{class_name}.{const_name}"] = const_value
+
+        except Exception as e:
+            print(f"Error parsing constants file {constants_file}: {e}")
+
+    print(f"Resolved {len(metric_name_map)} metric name constants")
 
     # Resolve metric names
     for metric in metrics:
-        if "name" in metric and metric["name"].startswith("MetricName."):
+        if "name" in metric:
             if metric["name"] in metric_name_map:
                 metric["actual_name"] = metric_name_map[metric["name"]]
                 metric["constant_name"] = metric["name"]
+            elif not metric["name"].startswith((
+                "Org",
+                "Device",
+                "Network",
+                "MS",
+                "MR",
+                "MV",
+                "MT",
+                "Alert",
+                "Config",
+            )):
+                # If it's already a string constant, use it directly
+                metric["actual_name"] = metric["name"]
             else:
                 metric["actual_name"] = metric["name"]  # Couldn't resolve
         else:
-            metric["actual_name"] = metric.get("name", "")
+            metric["actual_name"] = "Unknown"
+
+    # Resolve label names
+    for metric in metrics:
+        if "labels" in metric:
+            resolved_labels = []
+            for label in metric["labels"]:
+                if label.startswith("LabelName."):
+                    # Keep the constant name for documentation
+                    resolved_labels.append(label)
+                else:
+                    resolved_labels.append(label)
+            metric["labels"] = resolved_labels
 
 
 def generate_markdown(metrics: list[dict[str, Any]]) -> str:
@@ -168,7 +227,7 @@ def generate_markdown(metrics: list[dict[str, Any]]) -> str:
     lines.append("")
 
     # Count metrics by collector
-    collector_counts = {}
+    collector_counts: dict[str, int] = {}
     for metric in metrics:
         collector = metric["class"] or "Unknown"
         collector_counts[collector] = collector_counts.get(collector, 0) + 1
@@ -180,9 +239,19 @@ def generate_markdown(metrics: list[dict[str, Any]]) -> str:
         "AlertsCollector": "Active alerts by severity, type, and category",
         "ConfigCollector": "Organization security settings and configuration tracking",
         "DeviceCollector": "Device status, performance, and uptime metrics",
+        "MSCollector": "Switch-specific metrics including port status, power, and PoE",
+        "MRCollector": "Access point metrics including clients, power, and performance",
+        "MTCollector": "Environmental sensor metrics from MT devices",
         "MTSensorCollector": "Environmental monitoring from MT sensors",
         "NetworkHealthCollector": "Network-wide wireless health and performance",
         "OrganizationCollector": "Organization-level metrics including API usage and licenses",
+        "RFHealthCollector": "RF health and channel utilization metrics",
+        "ConnectionStatsCollector": "Wireless connection statistics",
+        "DataRatesCollector": "Network throughput and data rate metrics",
+        "BluetoothCollector": "Bluetooth client detection metrics",
+        "APIUsageCollector": "API request tracking and rate limit metrics",
+        "LicenseCollector": "License usage and expiration tracking",
+        "ClientOverviewCollector": "Client count and usage overview metrics",
     }
 
     for collector in sorted(collector_counts.keys()):
@@ -307,11 +376,11 @@ def main() -> None:
     metrics = scan_for_metrics(src_path)
     print(f"Found {len(metrics)} metric definitions")
 
-    # Resolve MetricName constants
-    constants_file = src_path / "meraki_dashboard_exporter" / "core" / "constants.py"
-    if constants_file.exists():
-        print("Resolving MetricName constants...")
-        resolve_metric_names(metrics, constants_file)
+    # Resolve metric name constants
+    constants_dir = src_path / "meraki_dashboard_exporter" / "core" / "constants"
+    if constants_dir.exists():
+        print("Resolving metric name constants...")
+        resolve_metric_names(metrics, constants_dir)
 
     # Generate markdown
     print("Generating documentation...")

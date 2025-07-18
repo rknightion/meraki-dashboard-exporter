@@ -46,7 +46,7 @@ def get_field_type_str(field_info: FieldInfo) -> str:
                 return f"{non_none_types[0].__name__} | None"
 
     # Handle literal types
-    if hasattr(field_type, "__name__"):
+    if hasattr(field_type, "__name__") and field_type is not None:
         return field_type.__name__
 
     # Handle complex types
@@ -87,7 +87,11 @@ def generate_model_docs(model: type[BaseModel], prefix: str = "") -> list[dict[s
         docs.append(doc)
 
         # Recursively handle nested models
-        if hasattr(field_info.annotation, "__mro__") and BaseModel in field_info.annotation.__mro__:
+        if (
+            field_info.annotation is not None
+            and hasattr(field_info.annotation, "__mro__")
+            and BaseModel in field_info.annotation.__mro__
+        ):
             nested_docs = generate_model_docs(field_info.annotation, prefix=f"{env_var}__")
             docs.extend(nested_docs)
 
@@ -218,7 +222,7 @@ def generate_configuration_docs() -> str:
         sections.append("")
         sections.append(description)
         sections.append("")
-        docs = generate_model_docs(model, f"{prefix}__")
+        docs = generate_model_docs(model, f"{prefix}__")  # type: ignore[arg-type]
 
         if docs:
             sections.append("| Environment Variable | Type | Default | Description |")

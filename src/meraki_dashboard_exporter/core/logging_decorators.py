@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import time
 from collections.abc import Callable
-from typing import Any, ParamSpec, TypeVar
+from typing import Any, ParamSpec, TypeVar, cast
 
 import structlog
 
@@ -15,7 +16,9 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 
-def log_api_call(operation: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
+def log_api_call(
+    operation: str,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator to log API calls with consistent context.
 
     Parameters
@@ -53,7 +56,7 @@ def log_api_call(operation: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
 
             start_time = time.time()
             try:
-                result = await func(self, *args, **kwargs)
+                result = await func(self, *args, **kwargs)  # type: ignore[misc]
                 duration = time.time() - start_time
 
                 # Log successful API call with result info
@@ -65,7 +68,7 @@ def log_api_call(operation: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
                     **context,
                     **result_info,
                 )
-                return result
+                return cast(R, result)
 
             except Exception as e:
                 duration = time.time() - start_time
@@ -123,9 +126,9 @@ def log_api_call(operation: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
 
         # Return appropriate wrapper based on function type
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
+            return cast(Callable[P, R], async_wrapper)
         else:
-            return sync_wrapper
+            return cast(Callable[P, R], sync_wrapper)
 
     return decorator
 
@@ -165,15 +168,21 @@ def log_collection_progress(
             current = kwargs.get(current_field)
 
             if total is not None and current is not None:
+                # Cast to float for division
+                total_val = float(cast(int | float, total))
+                current_val = float(cast(int | float, current))
                 logger.debug(
                     f"Processing {description}",
                     description=description,
                     current=current,
                     total=total,
-                    progress_percent=round((current / total) * 100, 1) if total > 0 else 0,
+                    progress_percent=round((current_val / total_val) * 100, 1)
+                    if total_val > 0
+                    else 0,
                 )
 
-            return await func(self, *args, **kwargs)
+            result = await func(self, *args, **kwargs)  # type: ignore[misc]
+            return cast(R, result)
 
         @functools.wraps(func)
         def sync_wrapper(self: Any, *args: P.args, **kwargs: P.kwargs) -> R:
@@ -182,21 +191,26 @@ def log_collection_progress(
             current = kwargs.get(current_field)
 
             if total is not None and current is not None:
+                # Cast to float for division
+                total_val = float(cast(int | float, total))
+                current_val = float(cast(int | float, current))
                 logger.debug(
                     f"Processing {description}",
                     description=description,
                     current=current,
                     total=total,
-                    progress_percent=round((current / total) * 100, 1) if total > 0 else 0,
+                    progress_percent=round((current_val / total_val) * 100, 1)
+                    if total_val > 0
+                    else 0,
                 )
 
             return func(self, *args, **kwargs)
 
         # Return appropriate wrapper based on function type
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
+            return cast(Callable[P, R], async_wrapper)
         else:
-            return sync_wrapper
+            return cast(Callable[P, R], sync_wrapper)
 
     return decorator
 
@@ -224,10 +238,10 @@ def log_metric_update(metric_name: str) -> Callable[[Callable[P, R]], Callable[P
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @functools.wraps(func)
-        def wrapper(self: Any, *args: P.args, **kwargs: P.kwargs) -> R:
+        async def async_wrapper(self: Any, *args: P.args, **kwargs: P.kwargs) -> R:
             # Extract metric value and labels from args/kwargs
             value = None
-            labels = {}
+            labels: dict[str, Any] = {}
 
             # Try to extract value (usually first arg after self)
             if args:
@@ -235,7 +249,35 @@ def log_metric_update(metric_name: str) -> Callable[[Callable[P, R]], Callable[P
 
             # Extract label context
             if "labels" in kwargs:
-                labels = kwargs["labels"]
+                labels = cast(dict[str, Any], kwargs["labels"])
+            else:
+                # Common label names to extract
+                for label_name in ["serial", "name", "org_id", "network_id", "type", "status"]:
+                    if label_name in kwargs:
+                        labels[label_name] = kwargs[label_name]
+
+            result = await func(self, *args, **kwargs)  # type: ignore[misc]
+
+            # Log the metric update
+            logger.debug(
+                f"Metric updated: {metric_name}", metric_name=metric_name, value=value, **labels
+            )
+
+            return cast(R, result)
+
+        @functools.wraps(func)
+        def sync_wrapper(self: Any, *args: P.args, **kwargs: P.kwargs) -> R:
+            # Extract metric value and labels from args/kwargs
+            value = None
+            labels: dict[str, Any] = {}
+
+            # Try to extract value (usually first arg after self)
+            if args:
+                value = args[0]
+
+            # Extract label context
+            if "labels" in kwargs:
+                labels = cast(dict[str, Any], kwargs["labels"])
             else:
                 # Common label names to extract
                 for label_name in ["serial", "name", "org_id", "network_id", "type", "status"]:
@@ -251,7 +293,11 @@ def log_metric_update(metric_name: str) -> Callable[[Callable[P, R]], Callable[P
 
             return result
 
-        return wrapper
+        # Return appropriate wrapper based on function type
+        if asyncio.iscoroutinefunction(func):
+            return cast(Callable[P, R], async_wrapper)
+        else:
+            return cast(Callable[P, R], sync_wrapper)
 
     return decorator
 
@@ -275,7 +321,7 @@ def log_collector_discovery(collector_type: str) -> Callable[[Callable[P, R]], C
         @functools.wraps(func)
         async def async_wrapper(self: Any, *args: P.args, **kwargs: P.kwargs) -> R:
             logger.info(f"Starting {collector_type} discovery", collector_type=collector_type)
-            result = await func(self, *args, **kwargs)
+            result = await func(self, *args, **kwargs)  # type: ignore[misc]
 
             # Log discovery summary
             summary = _get_discovery_summary(collector_type, result)
@@ -286,7 +332,7 @@ def log_collector_discovery(collector_type: str) -> Callable[[Callable[P, R]], C
                     **summary,
                 )
 
-            return result
+            return cast(R, result)
 
         @functools.wraps(func)
         def sync_wrapper(self: Any, *args: P.args, **kwargs: P.kwargs) -> R:
@@ -306,9 +352,9 @@ def log_collector_discovery(collector_type: str) -> Callable[[Callable[P, R]], C
 
         # Return appropriate wrapper based on function type
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
+            return cast(Callable[P, R], async_wrapper)
         else:
-            return sync_wrapper
+            return cast(Callable[P, R], sync_wrapper)
 
     return decorator
 
@@ -316,7 +362,7 @@ def log_collector_discovery(collector_type: str) -> Callable[[Callable[P, R]], C
 # Helper functions
 
 
-def _extract_context(args: tuple, kwargs: dict) -> dict[str, Any]:
+def _extract_context(args: tuple[Any, ...], kwargs: dict[str, Any]) -> dict[str, Any]:
     """Extract common context parameters from function arguments."""
     context = {}
 
@@ -336,7 +382,7 @@ def _extract_context(args: tuple, kwargs: dict) -> dict[str, Any]:
 
 def _get_result_info(result: Any) -> dict[str, Any]:
     """Extract information about API call results."""
-    info = {}
+    info: dict[str, Any] = {}
 
     if result is None:
         info["result"] = "none"
@@ -355,7 +401,7 @@ def _get_result_info(result: Any) -> dict[str, Any]:
 
 def _get_discovery_summary(collector_type: str, result: Any) -> dict[str, Any]:
     """Generate summary information for discovery results."""
-    summary = {}
+    summary: dict[str, Any] = {}
 
     if result is None:
         return summary
@@ -370,7 +416,7 @@ def _get_discovery_summary(collector_type: str, result: Any) -> dict[str, Any]:
     elif collector_type == "network" and isinstance(result, list):
         summary["network_count"] = len(result)
         # Group by product type
-        by_type = {}
+        by_type: dict[str, int] = {}
         for net in result:
             for prod_type in net.get("productTypes", []):
                 by_type[prod_type] = by_type.get(prod_type, 0) + 1
@@ -421,7 +467,7 @@ def log_batch_operation(
 
             start_time = time.time()
             try:
-                result = await func(self, *args, **kwargs)
+                result = await func(self, *args, **kwargs)  # type: ignore[misc]
                 duration = time.time() - start_time
 
                 logger.debug(
@@ -432,7 +478,7 @@ def log_batch_operation(
                     batch_size=actual_batch_size,
                 )
 
-                return result
+                return cast(R, result)
             except Exception as e:
                 duration = time.time() - start_time
                 logger.error(
@@ -491,12 +537,8 @@ def log_batch_operation(
 
         # Return appropriate wrapper based on function type
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
+            return cast(Callable[P, R], async_wrapper)
         else:
-            return sync_wrapper
+            return cast(Callable[P, R], sync_wrapper)
 
     return decorator
-
-
-# Import asyncio at the end to avoid circular imports
-import asyncio

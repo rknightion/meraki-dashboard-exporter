@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ...core.constants import MRMetricName
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -1118,9 +1118,9 @@ class MRCollector(BaseDeviceCollector):
 
         """
         if isinstance(cpu_history, dict) and "items" in cpu_history:
-            return cpu_history["items"]
+            return cast(list[dict[str, Any]], cpu_history["items"])
         elif isinstance(cpu_history, list):
-            return cpu_history
+            return cast(list[dict[str, Any]], cpu_history)
         else:
             logger.warning(
                 "Unexpected CPU history format",

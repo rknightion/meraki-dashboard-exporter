@@ -162,7 +162,7 @@ class ManagedTaskGroup:
         self.tasks.add(task)
 
         # Remove from set when done
-        task.add_done_callback(lambda t: self.tasks.discard(t))
+        task.add_done_callback(self.tasks.discard)
 
         return task
 
@@ -259,7 +259,7 @@ async def managed_resource(
                 logger.exception(f"Error cleaning up {resource_name}")
 
 
-async def safe_gather(
+async def safe_gather[T](
     *coros: Coroutine[Any, Any, T],
     return_exceptions: bool = True,
     description: str = "operations",
@@ -294,17 +294,29 @@ async def safe_gather(
 
     results = await asyncio.gather(*coros, return_exceptions=return_exceptions)
 
+    # Filter out non-Exception BaseExceptions (like SystemExit, KeyboardInterrupt)
+    filtered_results: list[T | Exception] = []
+    for result in results:
+        if isinstance(result, BaseException) and not isinstance(result, Exception):
+            # Log and skip non-Exception BaseExceptions
+            logger.warning(
+                f"Skipping non-Exception BaseException in {description}",
+                error_type=type(result).__name__,
+            )
+            continue
+        filtered_results.append(result)
+
     if log_errors:
-        error_count = sum(1 for r in results if isinstance(r, Exception))
+        error_count = sum(1 for r in filtered_results if isinstance(r, Exception))
         if error_count > 0:
             logger.warning(
                 f"Errors in {description}",
-                total=len(results),
+                total=len(filtered_results),
                 errors=error_count,
             )
 
             # Log individual errors at debug level
-            for i, result in enumerate(results):
+            for i, result in enumerate(filtered_results):
                 if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
                     logger.debug(
                         f"Error in {description}[{i}]",
@@ -312,10 +324,10 @@ async def safe_gather(
                         error_type=type(result).__name__,
                     )
 
-    return results
+    return filtered_results
 
 
-async def rate_limited_gather(
+async def rate_limited_gather[T](
     coros: list[Coroutine[Any, Any, T]],
     semaphore: Semaphore,
     description: str = "operations",
@@ -449,7 +461,7 @@ class AsyncRetry:
         raise RuntimeError(f"Unexpected error in retry logic for {operation}")
 
 
-async def chunked_async_iter(
+async def chunked_async_iter[T](
     items: list[T],
     chunk_size: int,
     delay_between_chunks: float = 0.0,

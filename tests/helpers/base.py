@@ -9,6 +9,7 @@ import pytest
 from prometheus_client import CollectorRegistry
 
 from meraki_dashboard_exporter.core.config import Settings
+from meraki_dashboard_exporter.core.constants import UpdateTier
 
 from .metrics import MetricAssertions, MetricSnapshot
 from .mock_api import MockAPIBuilder
@@ -37,7 +38,7 @@ class BaseCollectorTest:
     """
 
     collector_class: type[MetricCollector] | None = None
-    update_tier: str | None = None
+    update_tier: UpdateTier | None = None
 
     @pytest.fixture(autouse=True)
     def setup_env(self, monkeypatch: pytest.MonkeyPatch) -> None:

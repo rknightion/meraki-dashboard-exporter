@@ -6,6 +6,23 @@ from typing import Any
 from unittest.mock import MagicMock
 
 
+class HTTPError(Exception):
+    """Mock HTTP error with response attribute."""
+
+    def __init__(self, message: str, status_code: int) -> None:
+        """Initialize HTTP error."""
+        super().__init__(message)
+        self.response = MagicMock()
+        self.response.status_code = status_code
+
+        if status_code == 404:
+            self.response.text = '{"errors": ["Not found"]}'
+        elif status_code == 429:
+            self.response.text = '{"errors": ["Too many requests"]}'
+        else:
+            self.response.text = f'{{"errors": ["HTTP {status_code} error"]}}'
+
+
 class MockAPIBuilder:
     """Fluent builder for creating mock Meraki API instances.
 
@@ -288,7 +305,7 @@ class MockAPIBuilder:
             Self for chaining
 
         """
-        pages = []
+        pages: list[dict[str, list[Any]] | list[Any]] = []
         for i in range(0, len(items), per_page):
             page_items = items[i : i + per_page]
             if use_items_wrapper:
@@ -417,18 +434,7 @@ class MockAPIBuilder:
 
     def _create_http_error(self, status_code: int) -> Exception:
         """Create an HTTP error exception."""
-        error = Exception(f"HTTP {status_code}")
-        error.response = MagicMock()
-        error.response.status_code = status_code
-
-        if status_code == 404:
-            error.response.text = '{"errors": ["Not found"]}'
-        elif status_code == 429:
-            error.response.text = '{"errors": ["Too many requests"]}'
-        else:
-            error.response.text = f'{{"errors": ["HTTP {status_code} error"]}}'
-
-        return error
+        return HTTPError(f"HTTP {status_code}", status_code)
 
 
 class MockAsyncIterator:

@@ -90,6 +90,10 @@ dev = [
     "pymdown-extensions>=10.16",
 ]
 
+[tool.pydocstyle]
+convention = "numpy"
+add-ignore = ["D103", "D104", "D202", "D203", "D212", "D213", "D401", "D403"]
+
 [tool.mypy]
 python_version = "3.13"
 strict = true

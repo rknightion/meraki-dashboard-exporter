@@ -6,7 +6,7 @@ throughout the codebase, especially for complex dictionary structures.
 
 from __future__ import annotations
 
-from typing import Literal, NotRequired, TypeAlias, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 
 class DeviceStatusInfo(TypedDict):
@@ -122,13 +122,13 @@ class ConnectionStatsData(TypedDict):
 
 
 # Type aliases for common patterns
-OrganizationId: TypeAlias = str
-NetworkId: TypeAlias = str
-DeviceSerial: TypeAlias = str
-PortId: TypeAlias = str
-Timespan: TypeAlias = int  # Seconds
-Timestamp: TypeAlias = str  # ISO format
-MetricValue: TypeAlias = float | int
+type OrganizationId = str
+type NetworkId = str
+type DeviceSerial = str
+type PortId = str
+type Timespan = int  # Seconds
+type Timestamp = str  # ISO format
+type MetricValue = float | int
 
 
 # Response type definitions

@@ -1,4 +1,5 @@
 """Meraki API client wrapper with async support."""
+# mypy: disable-error-code="no-any-return"
 
 from __future__ import annotations
 

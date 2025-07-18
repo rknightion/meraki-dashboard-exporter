@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from .error_handling import ErrorCategory, with_error_handling
 from .logging import get_logger
@@ -68,7 +68,7 @@ class APIHelper:
             self.collector._track_api_call("getOrganizations")
             orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
             logger.debug("Successfully fetched organizations", count=len(orgs))
-            return orgs
+            return cast(list[dict[str, Any]], orgs)
 
     @with_error_handling(
         operation="Fetch organization networks",
@@ -116,7 +116,7 @@ class APIHelper:
                 filtered_count=len(networks),
             )
 
-        return networks
+        return cast(list[dict[str, Any]], networks)
 
     @with_error_handling(
         operation="Fetch organization devices",
@@ -155,11 +155,11 @@ class APIHelper:
         self.collector._track_api_call("getOrganizationDevices")
 
         # Build API call parameters
-        params = {"total_pages": "all"}
+        params: dict[str, Any] = {"total_pages": "all"}
         if product_types:
             params["productTypes"] = product_types
 
-        devices = await asyncio.to_thread(
+        devices: list[dict[str, Any]] = await asyncio.to_thread(
             self.api.organizations.getOrganizationDevices,
             org_id,
             **params,
@@ -259,7 +259,7 @@ class APIHelper:
     )
     async def get_time_based_data(
         self,
-        api_method: Callable,
+        api_method: Callable[..., Any],
         method_name: str,
         timespan: int = 300,
         interval: int | None = None,
@@ -310,14 +310,14 @@ class APIHelper:
                 item_count=len(data) if isinstance(data, list) else 1,
                 wrapped_response=True,
             )
-            return data
+            return cast(dict[str, Any] | list[dict[str, Any]], data)
 
         logger.debug(
             f"Successfully fetched time-based data: {method_name}",
             item_count=len(response) if isinstance(response, list) else 1,
             wrapped_response=False,
         )
-        return response
+        return cast(dict[str, Any] | list[dict[str, Any]], response)
 
 
 def create_api_helper(collector: MetricCollector) -> APIHelper:

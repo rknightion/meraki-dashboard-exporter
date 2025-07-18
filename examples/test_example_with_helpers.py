@@ -1,4 +1,5 @@
 """Example test file demonstrating the new test helpers."""
+# mypy: ignore-errors
 
 from __future__ import annotations
 

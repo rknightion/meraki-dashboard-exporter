@@ -205,7 +205,7 @@ class MRRadioStatus(BaseModel):
     def validate_radio_index(cls, v: Any) -> int:
         """Ensure radio index is valid."""
         val = int(v)
-        if val not in [0, 1, 2]:  # 0=2.4GHz, 1=5GHz, 2=6GHz
+        if val not in {0, 1, 2}:  # 0=2.4GHz, 1=5GHz, 2=6GHz
             raise ValueError(f"Invalid radio index: {val}")
         return val
 
@@ -334,7 +334,7 @@ class OrganizationSummary(BaseModel):
     sensorNetworkCount: int = 0
 
     @computed_field
-    def totalDevices(self) -> int:
+    def total_devices(self) -> int:
         """Calculate total device count."""
         return sum(self.deviceCounts.values())
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ..core.collector import MetricCollector
 from ..core.constants import AlertMetricName, UpdateTier
@@ -133,7 +133,7 @@ class AlertsCollector(MetricCollector):
         else:
             orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
             orgs = validate_response_format(orgs, expected_type=list, operation="getOrganizations")
-            return orgs
+            return cast(list[dict[str, Any]], orgs)
 
     @log_api_call("getOrganizationAssuranceAlerts")
     @with_error_handling(

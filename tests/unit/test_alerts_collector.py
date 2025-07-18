@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from meraki_dashboard_exporter.collectors.alerts import AlertsCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
+from meraki_dashboard_exporter.core.constants import AlertMetricName, UpdateTier
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import AlertFactory, NetworkFactory, OrganizationFactory
+from tests.helpers.metrics import MetricAssertions
 
 
 class TestAlertsCollector(BaseCollectorTest):
@@ -260,9 +261,3 @@ class TestAlertsCollector(BaseCollectorTest):
         """Test that alerts collector has correct update tier."""
         assert collector.update_tier == UpdateTier.MEDIUM
         assert self.update_tier == UpdateTier.MEDIUM
-
-
-# Import MetricAssertions for the specific org_id test
-# Import AlertMetricName for correct metric names
-from meraki_dashboard_exporter.core.constants import AlertMetricName
-from tests.helpers.metrics import MetricAssertions

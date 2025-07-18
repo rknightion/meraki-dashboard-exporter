@@ -23,7 +23,7 @@ class LogContext:
     def __init__(self, **kwargs: Any) -> None:
         """Initialize with context fields."""
         self.context = kwargs
-        self._token = None
+        self._token: Any = None
 
     def __enter__(self) -> LogContext:
         """Add context on entry."""
@@ -276,8 +276,6 @@ def log_with_context(
         log_context["collector"] = collector
 
     # Add any non-None context values
-    for key, value in context.items():
-        if value is not None:
-            log_context[key] = value
+    log_context.update({k: v for k, v in context.items() if v is not None})
 
     log_func(message, **log_context)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ..core.collector import MetricCollector
 from ..core.constants import NetworkHealthMetricName, NetworkMetricName, ProductType, UpdateTier
@@ -173,7 +173,7 @@ class NetworkHealthCollector(MetricCollector):
                 orgs = validate_response_format(
                     orgs, expected_type=list, operation="getOrganizations"
                 )
-                return orgs
+                return cast(list[dict[str, Any]], orgs)
 
     @log_batch_operation("collect network health", batch_size=None)
     @with_error_handling(
@@ -262,7 +262,7 @@ class NetworkHealthCollector(MetricCollector):
             networks = validate_response_format(
                 networks, expected_type=list, operation="getOrganizationNetworks"
             )
-            return networks
+            return cast(list[dict[str, Any]], networks)
 
     async def _collect_network_rf_health(self, network: dict[str, Any]) -> None:
         """Collect RF health metrics for a network.

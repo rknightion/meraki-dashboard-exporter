@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from meraki import DashboardAPI
 
 from ...api.client import AsyncMerakiClient
 from ...core.constants import (
@@ -52,7 +55,7 @@ class MTCollector(BaseDeviceCollector):
             # Standalone mode - initialize base attributes without calling parent init
             # This avoids the "Parent collector not set" error
             self.parent = None  # type: ignore[assignment]
-            self.api: AsyncMerakiClient | None = None
+            self.api: DashboardAPI | None = None
             self.settings = None  # type: ignore[assignment]
             # Set a flag to indicate standalone mode for error checking
             self._standalone_mode = True
@@ -137,6 +140,9 @@ class MTCollector(BaseDeviceCollector):
 
         """
         self._track_api_call("getOrganizations")
+        if self.api is None:
+            raise RuntimeError("API client not initialized")
+        # Access the API - self.api should already be the DashboardAPI
         return await asyncio.to_thread(self.api.organizations.getOrganizations)
 
     @log_api_call("getOrganizationDevices")
@@ -155,6 +161,8 @@ class MTCollector(BaseDeviceCollector):
 
         """
         self._track_api_call("getOrganizationDevices")
+        if self.api is None:
+            raise RuntimeError("API client not initialized")
         return await asyncio.to_thread(
             self.api.organizations.getOrganizationDevices,
             org_id,
@@ -351,7 +359,8 @@ class MTCollector(BaseDeviceCollector):
             return metric_data.get(SensorDataField.CONCENTRATION)
         elif metric_type == SensorMetricType.NOISE:
             ambient = metric_data.get(SensorDataField.AMBIENT, {})
-            return ambient.get(SensorDataField.LEVEL)
+            level = ambient.get(SensorDataField.LEVEL) if isinstance(ambient, dict) else None
+            return cast(float | None, level)
         elif metric_type == SensorMetricType.BATTERY:
             return metric_data.get(SensorDataField.PERCENTAGE)
         elif metric_type == SensorMetricType.INDOOR_AIR_QUALITY:
