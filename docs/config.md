@@ -38,7 +38,6 @@ These are the primary configuration options for the exporter:
 | `MERAKI_EXPORTER_ORG_ID` | `str | None` | `_(none)_` | ❌ No | Meraki organization ID (optional, will fetch all orgs if not set) |
 | `MERAKI_EXPORTER_API_BASE_URL` | `str` | `https://api.meraki.com/api/v1` | ❌ No | Meraki API base URL (use regional endpoints if needed) |
 | `MERAKI_EXPORTER_LOG_LEVEL` | `Literal` | `INFO` | ❌ No | Logging level |
-| `MERAKI_EXPORTER_ENABLE_PROFILING` | `bool` | `False` | ❌ No | Enable profiling endpoints (/debug/pprof/*) |
 
 ## API Settings
 

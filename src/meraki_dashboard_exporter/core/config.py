@@ -87,12 +87,6 @@ class Settings(BaseSettings):
         description="Logging level",
     )
 
-    # Profiling
-    enable_profiling: bool = Field(
-        False,
-        description="Enable profiling endpoints (/debug/pprof/*)",
-    )
-
     # Computed properties for backward compatibility
     @property
     def api_max_retries(self) -> int:
