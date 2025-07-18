@@ -29,7 +29,7 @@
         "y": 0
       },
       "id": 100,
-      "title": "Switch Overview",
+      "title": "Environmental Sensors Overview",
       "type": "row"
     },
     {
@@ -42,37 +42,29 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "red",
-                  "index": 0,
-                  "text": "Offline"
-                },
-                "1": {
-                  "color": "green",
-                  "index": 1,
-                  "text": "Online"
-                }
-              },
-              "type": "value"
-            }
-          ],
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "blue",
                 "value": null
               },
               {
                 "color": "green",
-                "value": 1
+                "value": 20
+              },
+              {
+                "color": "yellow",
+                "value": 25
+              },
+              {
+                "color": "red",
+                "value": 30
               }
             ]
           },
-          "unit": "none"
+          "unit": "celsius"
         },
         "overrides": []
       },
@@ -84,9 +76,8 @@
       },
       "id": 1,
       "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -95,10 +86,9 @@
           "fields": "",
           "values": false
         },
-        "showPercentChange": false,
-        "text": {},
-        "textMode": "name",
-        "wideLayout": true
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "pluginVersion": "11.0.0",
       "targets": [
@@ -108,15 +98,15 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_device_up{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MS.*\"}",
+          "expr": "avg(meraki_mt_temperature_celsius{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"})",
           "instant": true,
-          "legendFormat": "{{name}}",
+          "legendFormat": "Avg Temperature",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Switch Status",
-      "type": "stat"
+      "title": "Average Temperature",
+      "type": "gauge"
     },
     {
       "datasource": {
@@ -126,29 +116,37 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "continuous-GrYlRd"
+            "mode": "thresholds"
           },
           "mappings": [],
           "max": 100,
           "min": 0,
           "thresholds": {
-            "mode": "percentage",
+            "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": null
               },
               {
                 "color": "yellow",
-                "value": 70
+                "value": 30
+              },
+              {
+                "color": "green",
+                "value": 40
+              },
+              {
+                "color": "yellow",
+                "value": 60
               },
               {
                 "color": "red",
-                "value": 90
+                "value": 70
               }
             ]
           },
-          "unit": "percent"
+          "unit": "humidity"
         },
         "overrides": []
       },
@@ -182,15 +180,768 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg(meraki_device_memory_usage_percent{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MS.*\"})",
+          "expr": "avg(meraki_mt_humidity_percent{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"})",
           "instant": true,
-          "legendFormat": "Avg Memory Usage",
+          "legendFormat": "Avg Humidity",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Average Memory Usage",
+      "title": "Average Humidity",
       "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max", "min"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_mt_temperature_celsius{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "legendFormat": "{{name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Temperature Trends",
+      "type": "timeseries"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 101,
+      "title": "Air Quality",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 1000,
+          "min": 400,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 600
+              },
+              {
+                "color": "orange",
+                "value": 800
+              },
+              {
+                "color": "red",
+                "value": 1000
+              }
+            ]
+          },
+          "unit": "ppm"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 10
+      },
+      "id": 4,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "avg(meraki_mt_co2_ppm{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"})",
+          "instant": true,
+          "legendFormat": "CO2 Level",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Average CO2 Level",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 20
+              },
+              {
+                "color": "yellow",
+                "value": 40
+              },
+              {
+                "color": "light-green",
+                "value": 60
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 10
+      },
+      "id": 5,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "avg(meraki_mt_indoor_air_quality_score{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"})",
+          "instant": true,
+          "legendFormat": "Air Quality Score",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Indoor Air Quality Score",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*CO2.*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ppm"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "left"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*TVOC.*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ppb"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*PM2.5.*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "µg/m³"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_mt_co2_ppm{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "legendFormat": "{{name}} - CO2",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_mt_tvoc_ppb{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "legendFormat": "{{name}} - TVOC",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_mt_pm25_ug_m3{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "legendFormat": "{{name}} - PM2.5",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Air Quality Metrics",
+      "type": "timeseries"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "id": 102,
+      "title": "Physical Security",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "Closed"
+                },
+                "1": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "Open"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 19
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "name",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_mt_door_status{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "instant": true,
+          "legendFormat": "{{name}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Door Status",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "Dry"
+                },
+                "1": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "Water Detected"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 19
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "name",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_mt_water_detected{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "instant": true,
+          "legendFormat": "{{name}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Water Detection",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "max": 1.5,
+          "min": -0.5,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Door.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Water.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 19
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_mt_door_status{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "legendFormat": "{{name}} - Door",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_mt_water_detected{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "legendFormat": "{{name}} - Water",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Security Events Timeline",
+      "type": "timeseries"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "id": 103,
+      "title": "Power & Electrical",
+      "type": "row"
     },
     {
       "datasource": {
@@ -250,11 +1001,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 1
+        "w": 8,
+        "x": 0,
+        "y": 28
       },
-      "id": 3,
+      "id": 10,
       "options": {
         "legend": {
           "calcs": ["mean", "max"],
@@ -274,25 +1025,14 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_ms_power_usage_watts{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "expr": "meraki_mt_real_power_watts{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
           "legendFormat": "{{name}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Switch Power Usage",
+      "title": "Real Power Consumption",
       "type": "timeseries"
-    },
-    {
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 9
-      },
-      "id": 101,
-      "title": "Port Statistics",
-      "type": "row"
     },
     {
       "datasource": {
@@ -305,64 +1045,40 @@
             "mode": "thresholds"
           },
           "mappings": [],
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 80
               }
             ]
           },
-          "unit": "short"
+          "unit": "percent"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Connected"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Disconnected"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "dark-red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 6,
-        "x": 0,
-        "y": 10
+        "w": 8,
+        "x": 8,
+        "y": 28
       },
-      "id": 4,
+      "id": 11,
       "options": {
-        "displayMode": "lcd",
-        "maxVizHeight": 200,
-        "minVizHeight": 16,
-        "minVizWidth": 8,
-        "namePlacement": "auto",
-        "orientation": "horizontal",
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -370,9 +1086,9 @@
           "fields": "",
           "values": false
         },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "valueMode": "text"
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "pluginVersion": "11.0.0",
       "targets": [
@@ -382,234 +1098,15 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(meraki_ms_port_status{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", status=\"connected\"})",
+          "expr": "avg(meraki_mt_power_factor_percent{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"})",
           "instant": true,
-          "legendFormat": "Connected",
+          "legendFormat": "Power Factor",
           "range": false,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "sum(meraki_ms_port_status{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", status=\"disconnected\"})",
-          "instant": true,
-          "legendFormat": "Disconnected",
-          "range": false,
-          "refId": "B"
         }
       ],
-      "title": "Port Status Summary",
-      "type": "bargauge"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "Bps"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": ".*recv.*"
-            },
-            "properties": [
-              {
-                "id": "custom.transform",
-                "value": "negative-Y"
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 18,
-        "x": 6,
-        "y": 10
-      },
-      "id": 5,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true,
-          "width": 200
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "rate(meraki_ms_port_traffic_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"sent\"}[$__rate_interval])",
-          "legendFormat": "{{name}} - Port {{port_id}} - sent",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "rate(meraki_ms_port_traffic_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"recv\"}[$__rate_interval])",
-          "legendFormat": "{{name}} - Port {{port_id}} - recv",
-          "range": true,
-          "refId": "B"
-        }
-      ],
-      "title": "Port Traffic (Sent/Received)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 18
-      },
-      "id": 6,
-      "options": {
-        "legend": {
-          "calcs": ["last", "sum"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "rate(meraki_ms_port_errors_total{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}[$__rate_interval])",
-          "legendFormat": "{{name}} - Port {{port_id}} - {{error_type}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Port Errors by Type",
-      "type": "timeseries"
+      "title": "Average Power Factor",
+      "type": "gauge"
     },
     {
       "datasource": {
@@ -643,90 +1140,99 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Status"
+              "options": "Voltage"
             },
             "properties": [
               {
-                "id": "mappings",
-                "value": [
-                  {
-                    "options": {
-                      "0": {
-                        "color": "dark-red",
-                        "index": 0,
-                        "text": "Disconnected"
-                      },
-                      "1": {
-                        "color": "green",
-                        "index": 1,
-                        "text": "Connected"
-                      }
-                    },
-                    "type": "value"
-                  }
-                ]
+                "id": "unit",
+                "value": "volt"
               },
               {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
+                "id": "decimals",
+                "value": 1
               }
             ]
           },
           {
             "matcher": {
               "id": "byName",
-              "options": "Traffic Rate"
+              "options": "Current"
             },
             "properties": [
               {
                 "id": "unit",
-                "value": "Bps"
+                "value": "amp"
               },
               {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "sparkline"
-                }
+                "id": "decimals",
+                "value": 2
               }
             ]
           },
           {
             "matcher": {
               "id": "byName",
-              "options": "Error Rate"
+              "options": "Real Power"
             },
             "properties": [
               {
                 "id": "unit",
-                "value": "cps"
-              },
+                "value": "watt"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Apparent Power"
+            },
+            "properties": [
               {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 0.01
-                    },
-                    {
-                      "color": "red",
-                      "value": 0.1
-                    }
-                  ]
-                }
+                "id": "unit",
+                "value": "voltamp"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Power Factor"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
               },
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background"
+                  "type": "gauge",
+                  "mode": "gradient"
                 }
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "min",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Frequency"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "hertz"
+              },
+              {
+                "id": "decimals",
+                "value": 1
               }
             ]
           }
@@ -734,11 +1240,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 18
+        "w": 8,
+        "x": 16,
+        "y": 28
       },
-      "id": 7,
+      "id": 12,
       "options": {
         "cellHeight": "sm",
         "footer": {
@@ -749,13 +1255,7 @@
           ],
           "show": false
         },
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "Traffic Rate"
-          }
-        ]
+        "showHeader": true
       },
       "pluginVersion": "11.0.0",
       "targets": [
@@ -765,7 +1265,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_ms_port_status{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", status=\"connected\"}",
+          "expr": "meraki_mt_voltage_volts{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
           "format": "table",
           "instant": true,
           "range": false,
@@ -777,7 +1277,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (name, port_id) (rate(meraki_ms_port_traffic_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}[$__rate_interval]))",
+          "expr": "meraki_mt_current_amps{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -790,15 +1290,54 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (name, port_id) (rate(meraki_ms_port_errors_total{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}[$__rate_interval]))",
+          "expr": "meraki_mt_real_power_watts{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
           "format": "table",
           "hide": false,
           "instant": true,
           "range": false,
           "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_mt_apparent_power_va{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "range": false,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_mt_power_factor_percent{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "range": false,
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_mt_frequency_hz{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "range": false,
+          "refId": "F"
         }
       ],
-      "title": "Port Status Table",
+      "title": "Electrical Measurements",
       "transformations": [
         {
           "id": "merge",
@@ -813,22 +1352,17 @@
               "org_id": true,
               "org_name": true,
               "network_id": true,
-              "network_name": true,
-              "status": true
+              "network_name": true
             },
-            "indexByName": {
-              "name": 0,
-              "port_id": 1,
-              "Value #A": 2,
-              "Value #B": 3,
-              "Value #C": 4
-            },
+            "indexByName": {},
             "renameByName": {
-              "Value #A": "Status",
-              "Value #B": "Traffic Rate",
-              "Value #C": "Error Rate",
-              "name": "Switch",
-              "port_id": "Port"
+              "Value #A": "Voltage",
+              "Value #B": "Current",
+              "Value #C": "Real Power",
+              "Value #D": "Apparent Power",
+              "Value #E": "Power Factor",
+              "Value #F": "Frequency",
+              "name": "Sensor"
             }
           }
         }
@@ -840,89 +1374,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 26
+        "y": 36
       },
-      "id": 102,
-      "title": "PoE (Power over Ethernet)",
+      "id": 104,
+      "title": "Sensor Device Health",
       "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "max": 1,
-          "min": 0,
-          "thresholds": {
-            "mode": "percentage",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 70
-              },
-              {
-                "color": "orange",
-                "value": 85
-              },
-              {
-                "color": "red",
-                "value": 95
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 0,
-        "y": 27
-      },
-      "id": 8,
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
-      },
-      "pluginVersion": "11.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "avg(meraki_ms_poe_total_power_watthours{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"} / meraki_ms_poe_budget_watts{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"})",
-          "instant": true,
-          "legendFormat": "PoE Usage",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Average PoE Budget Utilization",
-      "type": "gauge"
     },
     {
       "datasource": {
@@ -960,104 +1416,15 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "normal"
+              "mode": "none"
             },
             "thresholdsStyle": {
               "mode": "off"
             }
           },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "watth"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 9,
-        "x": 6,
-        "y": 27
-      },
-      "id": 9,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "meraki_ms_poe_port_power_watthours{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}",
-          "legendFormat": "{{name}} - Port {{port_id}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "PoE Power per Port",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "line+area"
-            }
-          },
-          "mappings": [],
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1067,24 +1434,24 @@
               },
               {
                 "color": "red",
-                "value": 0.9
+                "value": 20
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "percent"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 9,
-        "x": 15,
-        "y": 27
+        "w": 12,
+        "x": 0,
+        "y": 37
       },
-      "id": 10,
+      "id": 13,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": ["mean", "min"],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -1101,13 +1468,13 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_ms_poe_total_power_watthours{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"} / meraki_ms_poe_budget_watts{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "expr": "meraki_mt_battery_percentage{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
           "legendFormat": "{{name}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "PoE Budget Utilization",
+      "title": "Sensor Battery Levels",
       "type": "timeseries"
     },
     {
@@ -1127,28 +1494,20 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 500
-              },
-              {
-                "color": "red",
-                "value": 1000
               }
             ]
           },
-          "unit": "watth"
+          "unit": "percent"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 35
+        "x": 12,
+        "y": 37
       },
-      "id": 11,
+      "id": 14,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -1174,14 +1533,14 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(meraki_ms_poe_network_total_watthours{network_id=~\"$network\", org_id=~\"$organization\"})",
+          "expr": "avg(meraki_device_memory_usage_percent{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MT.*\"})",
           "instant": true,
-          "legendFormat": "Network Total PoE",
+          "legendFormat": "Avg Memory Usage",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Network-wide PoE Consumption",
+      "title": "Average Memory Usage",
       "type": "stat"
     },
     {
@@ -1192,261 +1551,21 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "continuous-GrYlRd"
           },
           "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Power"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "watth"
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "continuous-GrYlRd"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Budget"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "watt"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Utilization"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percentunit"
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "gauge",
-                  "mode": "gradient"
-                }
-              },
-              {
-                "id": "max",
-                "value": 1
-              },
-              {
-                "id": "min",
-                "value": 0
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "percentage",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 70
-                    },
-                    {
-                      "color": "red",
-                      "value": 90
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 35
-      },
-      "id": 12,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "Utilization"
-          }
-        ]
-      },
-      "pluginVersion": "11.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "meraki_ms_poe_total_power_watthours{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}",
-          "format": "table",
-          "instant": true,
-          "range": false,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "meraki_ms_poe_budget_watts{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}",
-          "format": "table",
-          "hide": false,
-          "instant": true,
-          "range": false,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "meraki_ms_poe_total_power_watthours{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"} / meraki_ms_poe_budget_watts{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}",
-          "format": "table",
-          "hide": false,
-          "instant": true,
-          "range": false,
-          "refId": "C"
-        }
-      ],
-      "title": "PoE Budget Summary",
-      "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "serial": true,
-              "org_id": true,
-              "org_name": true,
-              "network_id": true,
-              "network_name": true
-            },
-            "indexByName": {},
-            "renameByName": {
-              "Value #A": "Power",
-              "Value #B": "Budget",
-              "Value #C": "Utilization",
-              "name": "Switch"
-            }
-          }
-        }
-      ],
-      "type": "table"
-    },
-    {
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 43
-      },
-      "id": 103,
-      "title": "Device Health",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
             "hideFrom": {
               "tooltip": false,
               "viz": false,
               "legend": false
             },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
             }
           },
           "mappings": [],
+          "max": 40,
+          "min": 10,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1456,183 +1575,57 @@
               }
             ]
           },
-          "unit": "percent"
+          "unit": "celsius"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 10,
         "w": 12,
         "x": 0,
-        "y": 44
+        "y": 45
       },
-      "id": 13,
+      "id": 15,
       "options": {
+        "calculate": false,
+        "cellGap": 1,
+        "cellValues": {
+          "unit": "celsius"
+        },
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "max": 35,
+          "min": 15,
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "Turbo",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
         "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
+          "show": true
         },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "showValue": "auto",
         "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "meraki_device_memory_usage_percent{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MS.*\"}",
-          "legendFormat": "{{name}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Memory Usage",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
+          "mode": "single",
+          "showColorScale": false,
+          "yHistogram": false
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Memory Used"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "bytes"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Memory Free"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "bytes"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Memory Total"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "bytes"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Usage %"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "gauge",
-                  "mode": "gradient"
-                }
-              },
-              {
-                "id": "max",
-                "value": 100
-              },
-              {
-                "id": "min",
-                "value": 0
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "percentage",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 70
-                    },
-                    {
-                      "color": "red",
-                      "value": 90
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 44
-      },
-      "id": 14,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "Usage %"
-          }
-        ]
+        "yAxis": {
+          "axisPlacement": "left",
+          "reverse": false,
+          "unit": "short"
+        }
       },
       "pluginVersion": "11.0.0",
       "targets": [
@@ -1642,92 +1635,127 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_device_memory_used_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MS.*\", stat=\"used\"}",
-          "format": "table",
-          "instant": true,
-          "range": false,
+          "expr": "meraki_mt_temperature_celsius{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "format": "time_series",
+          "legendFormat": "{{name}}",
+          "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "meraki_device_memory_free_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MS.*\", stat=\"free\"}",
-          "format": "table",
-          "hide": false,
-          "instant": true,
-          "range": false,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "meraki_device_memory_total_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MS.*\"}",
-          "format": "table",
-          "hide": false,
-          "instant": true,
-          "range": false,
-          "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "meraki_device_memory_usage_percent{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MS.*\"}",
-          "format": "table",
-          "hide": false,
-          "instant": true,
-          "range": false,
-          "refId": "D"
         }
       ],
-      "title": "Memory Details",
-      "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "serial": true,
-              "org_id": true,
-              "org_name": true,
-              "network_id": true,
-              "network_name": true,
-              "model": true,
-              "stat": true
+      "title": "Temperature Heatmap",
+      "type": "heatmap"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "custom": {
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
             },
-            "indexByName": {},
-            "renameByName": {
-              "Value #A": "Memory Used",
-              "Value #B": "Memory Free",
-              "Value #C": "Memory Total",
-              "Value #D": "Usage %",
-              "name": "Switch"
+            "scaleDistribution": {
+              "type": "linear"
             }
-          }
+          },
+          "mappings": [],
+          "max": 80,
+          "min": 20,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "humidity"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 45
+      },
+      "id": 16,
+      "options": {
+        "calculate": false,
+        "cellGap": 1,
+        "cellValues": {
+          "unit": "humidity"
+        },
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-blue",
+          "max": 70,
+          "min": 30,
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "Blues",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "showValue": "auto",
+        "tooltip": {
+          "mode": "single",
+          "showColorScale": false,
+          "yHistogram": false
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "reverse": false,
+          "unit": "short"
+        }
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_mt_humidity_percent{serial=~\"$sensor\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "format": "time_series",
+          "legendFormat": "{{name}}",
+          "range": true,
+          "refId": "A"
         }
       ],
-      "type": "table"
+      "title": "Humidity Heatmap",
+      "type": "heatmap"
     }
   ],
   "refresh": "60s",
   "schemaVersion": 39,
   "tags": [
     "meraki",
-    "switches",
-    "ms",
-    "devices"
+    "sensors",
+    "mt",
+    "environmental",
+    "monitoring"
   ],
   "templating": {
     "list": [
@@ -1764,7 +1792,7 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(meraki_device_up{model=~\"MS.*\"}, org_id)",
+        "definition": "label_values(meraki_mt_temperature_celsius, org_id)",
         "hide": 0,
         "includeAll": true,
         "label": "Organization",
@@ -1773,7 +1801,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(meraki_device_up{model=~\"MS.*\"}, org_id)",
+          "query": "label_values(meraki_mt_temperature_celsius, org_id)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -1796,7 +1824,7 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(meraki_device_up{model=~\"MS.*\", org_id=~\"$organization\"}, network_id)",
+        "definition": "label_values(meraki_mt_temperature_celsius{org_id=~\"$organization\"}, network_id)",
         "hide": 0,
         "includeAll": true,
         "label": "Network",
@@ -1805,7 +1833,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(meraki_device_up{model=~\"MS.*\", org_id=~\"$organization\"}, network_id)",
+          "query": "label_values(meraki_mt_temperature_celsius{org_id=~\"$organization\"}, network_id)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -1828,16 +1856,16 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(meraki_device_up{model=~\"MS.*\", org_id=~\"$organization\", network_id=~\"$network\"}, serial)",
+        "definition": "label_values(meraki_mt_temperature_celsius{org_id=~\"$organization\", network_id=~\"$network\"}, serial)",
         "hide": 0,
         "includeAll": true,
-        "label": "Switch",
+        "label": "Sensor",
         "multi": true,
-        "name": "switch",
+        "name": "sensor",
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(meraki_device_up{model=~\"MS.*\", org_id=~\"$organization\", network_id=~\"$network\"}, serial)",
+          "query": "label_values(meraki_mt_temperature_celsius{org_id=~\"$organization\", network_id=~\"$network\"}, serial)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -1854,8 +1882,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Meraki - MS Switches",
-  "uid": "meraki-ms-switches",
+  "title": "Meraki - MT Sensors",
+  "uid": "meraki-mt-sensors",
   "version": 1,
   "weekStart": ""
 }
