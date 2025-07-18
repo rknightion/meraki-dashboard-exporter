@@ -409,8 +409,16 @@ class ProfilingUtils:
 
         # Add lock information
         output.write("\n# Active locks:\n")
-        active_locks = [obj for obj in gc.get_objects() if isinstance(obj, threading.Lock)]
-        locked_count = sum(1 for lock in active_locks if lock.locked())
+        lock_type = type(threading.Lock())
+        active_locks = [obj for obj in gc.get_objects() if isinstance(obj, lock_type)]
+        locked_count = 0
+        for lock in active_locks:
+            try:
+                if hasattr(lock, "locked") and lock.locked():
+                    locked_count += 1
+            except Exception:  # nosec B110
+                # Some lock objects may not support locked() or may raise exceptions
+                pass
         output.write(f"# Total locks: {len(active_locks)}, Locked: {locked_count}\n")
 
         return output.getvalue()
@@ -433,9 +441,14 @@ class ProfilingUtils:
         output.write("# Lock contention analysis\n\n")
 
         # Find all Lock objects
+        # threading.Lock and threading.RLock are factory functions, not types
+        # We need to check the actual type of created lock objects
+        lock_type = type(threading.Lock())
+        rlock_type = type(threading.RLock())
+
         locks = []
         for obj in gc.get_objects():
-            if isinstance(obj, (threading.Lock, threading.RLock)):
+            if isinstance(obj, (lock_type, rlock_type)):
                 locks.append(obj)
 
         output.write(f"# Total locks found: {len(locks)}\n")
@@ -456,9 +469,14 @@ class ProfilingUtils:
 
         # Add threading synchronization primitives
         output.write("\n# Other synchronization primitives:\n")
-        conditions = [obj for obj in gc.get_objects() if isinstance(obj, threading.Condition)]
-        events = [obj for obj in gc.get_objects() if isinstance(obj, threading.Event)]
-        semaphores = [obj for obj in gc.get_objects() if isinstance(obj, threading.Semaphore)]
+        # Get the actual types since these are also factory functions
+        condition_type = type(threading.Condition())
+        event_type = type(threading.Event())
+        semaphore_type = type(threading.Semaphore())
+
+        conditions = [obj for obj in gc.get_objects() if isinstance(obj, condition_type)]
+        events = [obj for obj in gc.get_objects() if isinstance(obj, event_type)]
+        semaphores = [obj for obj in gc.get_objects() if isinstance(obj, semaphore_type)]
 
         output.write(f"# Conditions: {len(conditions)}\n")
         output.write(f"# Events: {len(events)}\n")
