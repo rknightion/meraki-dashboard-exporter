@@ -22,6 +22,7 @@ from .core.config import Settings
 from .core.constants import UpdateTier
 from .core.discovery import DiscoveryService
 from .core.logging import get_logger, setup_logging
+from .core.otel_metrics import PrometheusToOTelBridge
 from .profiling import ProfilingUtils
 
 if TYPE_CHECKING:
@@ -59,6 +60,17 @@ class ExporterApp:
         # Setup Jinja2 templates
         template_dir = Path(__file__).parent / "templates"
         self.templates = Jinja2Templates(directory=str(template_dir))
+
+        # Setup OTEL bridge if enabled
+        self.otel_bridge: PrometheusToOTelBridge | None = None
+        if self.settings.otel.enabled and self.settings.otel.endpoint:
+            self.otel_bridge = PrometheusToOTelBridge(
+                registry=REGISTRY,
+                endpoint=self.settings.otel.endpoint,
+                service_name=self.settings.otel.service_name,
+                export_interval_seconds=self.settings.otel.export_interval,
+                resource_attributes=self.settings.otel.resource_attributes,
+            )
 
     def _handle_shutdown(self) -> None:
         """Handle shutdown request."""
@@ -108,6 +120,15 @@ class ExporterApp:
         except Exception:
             logger.exception("Discovery failed, continuing with normal operation")
 
+        # Start OTEL bridge if enabled
+        if self.otel_bridge:
+            await self.otel_bridge.start()
+            logger.info(
+                "Started OpenTelemetry metric export",
+                endpoint=self.settings.otel.endpoint,
+                interval=self.settings.otel.export_interval,
+            )
+
         # Start background task for initial collection and tiered loops
         startup_task = asyncio.create_task(self._startup_collections())
         self._background_tasks.add(startup_task)
@@ -136,6 +157,11 @@ class ExporterApp:
                     )
                 except TimeoutError:
                     logger.warning("Some tasks did not complete within timeout")
+
+            # Stop OTEL bridge if running
+            if self.otel_bridge:
+                await self.otel_bridge.stop()
+                logger.info("Stopped OpenTelemetry metric export")
 
             # Cleanup
             await self.client.close()

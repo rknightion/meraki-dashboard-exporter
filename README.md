@@ -10,8 +10,8 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 - Organization-level metrics (API usage, licenses, device counts)
 - Device-specific metrics (status, performance, sensor readings)
 - Async collection for improved performance
-- OpenTelemetry support for metrics and logs
-- Structured logging with JSON output
+- **Dual metric export**: Prometheus `/metrics` endpoint + automatic OpenTelemetry export
+- Structured logging with JSON output and OpenTelemetry correlation
 - Docker support with health checks
 - Configurable collection intervals
 
@@ -48,6 +48,55 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
    ```bash
    python -m meraki_dashboard_exporter
    ```
+
+## OpenTelemetry Support
+
+The exporter automatically mirrors all Prometheus metrics to OpenTelemetry when enabled. This allows you to:
+- Use existing Prometheus dashboards and queries
+- Send the same metrics to OTEL-compatible backends (Datadog, New Relic, etc.)
+- Correlate metrics with traces and logs
+
+### Enabling OpenTelemetry
+
+Set these environment variables:
+
+```bash
+# Enable OTEL export
+export MERAKI_EXPORTER_OTEL__ENABLED=true
+
+# Set the OTEL collector endpoint
+export MERAKI_EXPORTER_OTEL__ENDPOINT=http://localhost:4317
+
+# Optional: Configure export interval (default: 60 seconds)
+export MERAKI_EXPORTER_OTEL__EXPORT_INTERVAL=30
+
+# Optional: Add resource attributes
+export MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES='{"environment":"production","region":"us-east"}'
+```
+
+### Docker Compose Example
+
+```yaml
+services:
+  meraki-exporter:
+    image: meraki-dashboard-exporter
+    environment:
+      - MERAKI_API_KEY=${MERAKI_API_KEY}
+      - MERAKI_EXPORTER_OTEL__ENABLED=true
+      - MERAKI_EXPORTER_OTEL__ENDPOINT=http://otel-collector:4317
+    ports:
+      - "9099:9099"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"  # OTLP gRPC receiver
+```
+
+See [OTEL.md](OTEL.md) for detailed OpenTelemetry configuration and examples.
 
 ## Configuration
 

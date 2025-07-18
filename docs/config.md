@@ -4,7 +4,7 @@ This document provides a comprehensive reference for all configuration options a
 
 ## Overview
 
-The exporter can be configured using environment variables or configuration files. 
+The exporter can be configured using environment variables or configuration files.
 All configuration is based on Pydantic models with built-in validation.
 
 ## Environment Variable Format
@@ -19,10 +19,10 @@ Configuration follows a hierarchical structure using environment variables:
     ```bash
     # Main setting
     export MERAKI_EXPORTER_LOG_LEVEL=INFO
-    
+
     # Nested setting
     export MERAKI_EXPORTER_API__TIMEOUT=30
-    
+
     # API key (special case)
     export MERAKI_API_KEY=your_api_key_here
     ```
