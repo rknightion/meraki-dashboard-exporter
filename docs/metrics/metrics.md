@@ -27,7 +27,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._alerts_active` (line 31)
 
@@ -37,7 +37,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._alerts_by_severity` (line 47)
 
@@ -47,7 +47,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._alerts_by_network` (line 54)
 
@@ -61,7 +61,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._login_security_password_expiration_enabled` (line 32)
 
@@ -71,7 +71,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._login_security_password_expiration_days` (line 38)
 
@@ -81,7 +81,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._login_security_different_passwords_enabled` (line 44)
 
@@ -91,7 +91,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._login_security_different_passwords_count` (line 50)
 
@@ -101,7 +101,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._login_security_strong_passwords_enabled` (line 56)
 
@@ -111,7 +111,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._login_security_minimum_password_length` (line 62)
 
@@ -121,7 +121,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._login_security_account_lockout_enabled` (line 68)
 
@@ -131,7 +131,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._login_security_account_lockout_attempts` (line 74)
 
@@ -141,7 +141,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._login_security_idle_timeout_enabled` (line 80)
 
@@ -151,7 +151,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._login_security_idle_timeout_minutes` (line 86)
 
@@ -161,7 +161,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._login_security_two_factor_enabled` (line 92)
 
@@ -171,7 +171,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._login_security_ip_ranges_enabled` (line 98)
 
@@ -181,7 +181,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._login_security_api_ip_restrictions_enabled` (line 104)
 
@@ -191,7 +191,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._configuration_changes_total` (line 111)
 
@@ -205,7 +205,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._device_up` (line 127)
 
@@ -215,7 +215,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._device_status_info` (line 139)
 
@@ -225,7 +225,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._device_memory_used_bytes` (line 153)
 
@@ -235,7 +235,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._device_memory_free_bytes` (line 166)
 
@@ -245,7 +245,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._device_memory_total_bytes` (line 179)
 
@@ -255,7 +255,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._device_memory_usage_percent` (line 191)
 
@@ -269,7 +269,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_temperature` (line 53)
 
@@ -279,7 +279,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_humidity` (line 59)
 
@@ -289,7 +289,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_door` (line 65)
 
@@ -299,7 +299,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_water` (line 71)
 
@@ -309,7 +309,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_co2` (line 77)
 
@@ -319,7 +319,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_tvoc` (line 83)
 
@@ -329,7 +329,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_pm25` (line 89)
 
@@ -339,7 +339,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_noise` (line 95)
 
@@ -349,7 +349,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_battery` (line 101)
 
@@ -359,7 +359,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_air_quality` (line 107)
 
@@ -369,7 +369,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_voltage` (line 113)
 
@@ -379,7 +379,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_current` (line 119)
 
@@ -389,7 +389,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_real_power` (line 125)
 
@@ -399,7 +399,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_apparent_power` (line 131)
 
@@ -409,7 +409,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_power_factor` (line 137)
 
@@ -419,7 +419,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_frequency` (line 143)
 
@@ -429,7 +429,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_downstream_power` (line 149)
 
@@ -439,7 +439,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._sensor_remote_lockout` (line 155)
 
@@ -453,7 +453,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._ap_utilization_2_4ghz` (line 52)
 
@@ -463,7 +463,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._ap_utilization_5ghz` (line 65)
 
@@ -473,7 +473,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._network_utilization_2_4ghz` (line 79)
 
@@ -483,7 +483,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._network_utilization_5ghz` (line 85)
 
@@ -493,7 +493,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._network_connection_stats` (line 92)
 
@@ -503,7 +503,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._network_wireless_download_kbps` (line 99)
 
@@ -513,7 +513,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._network_wireless_upload_kbps` (line 105)
 
@@ -523,7 +523,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._network_bluetooth_clients_total` (line 112)
 
@@ -537,7 +537,7 @@ The exporter provides metrics across several categories:
 
 **Type:** info
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._org_info` (line 52)
 
@@ -547,7 +547,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._api_requests_total` (line 59)
 
@@ -557,7 +557,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._api_rate_limit` (line 65)
 
@@ -567,7 +567,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._networks_total` (line 72)
 
@@ -577,7 +577,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._devices_total` (line 79)
 
@@ -587,7 +587,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._devices_by_model_total` (line 85)
 
@@ -597,7 +597,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._devices_availability_total` (line 92)
 
@@ -607,7 +607,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._licenses_total` (line 104)
 
@@ -617,7 +617,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._licenses_expiring` (line 115)
 
@@ -627,7 +627,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._clients_total` (line 122)
 
@@ -637,7 +637,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._usage_total_kb` (line 129)
 
@@ -647,7 +647,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._usage_downstream_kb` (line 135)
 
@@ -657,7 +657,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** 
+**Labels:**
 
 **Variable:** `self._usage_upstream_kb` (line 141)
 
@@ -742,7 +742,7 @@ All metrics in alphabetical order:
     ```promql
     # Filter by organization
     meraki_device_up{org_name="Production"}
-    
+
     # Filter by device type
     meraki_device_up{device_model=~"MS.*"}
     ```

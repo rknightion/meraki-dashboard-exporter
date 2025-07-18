@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 import string
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from meraki_dashboard_exporter.core.constants import DeviceStatus, DeviceType, ProductType
@@ -174,7 +174,13 @@ class DeviceFactory:
                 DeviceType.MV: "MV12",
                 DeviceType.MT: "MT10",
             }
-            model = model_map.get(device_type, "MR36")
+            # Cast device_type to DeviceType if it's a valid enum value
+            if device_type in DeviceType.__members__.values():
+                # Cast to DeviceType for type safety
+                device_type_enum = DeviceType(device_type)
+                model = model_map.get(device_type_enum, "MR36")
+            else:
+                model = "MR36"
         elif not model:
             model = "MR36"
 
@@ -347,9 +353,10 @@ class AlertFactory:
             "severity": severity or random.choice(severities),
             "status": status or "active",
             "deviceType": kwargs.pop("device_type", random.choice(["MR", "MS", "MX"])),
-            "occurredAt": (datetime.utcnow() - timedelta(minutes=random.randint(1, 60))).isoformat()
-            + "Z",
-            "dismissedAt": None if status == "active" else datetime.utcnow().isoformat() + "Z",
+            "occurredAt": (
+                datetime.now(UTC) - timedelta(minutes=random.randint(1, 60))
+            ).isoformat(),
+            "dismissedAt": None if status == "active" else datetime.now(UTC).isoformat(),
             "resolvedAt": None,
             "suppressedAt": None,
             "title": kwargs.pop("title", "Test Alert"),
@@ -428,13 +435,18 @@ class SensorDataFactory:
                 SensorMetricType.DOOR: (0.0, 1.0),
                 SensorMetricType.BATTERY: (0.0, 100.0),
             }
-            min_val, max_val = value_ranges.get(metric, (0.0, 100.0))
+            # Handle metric that might be a string
+            if isinstance(metric, str) and metric in SensorMetricType.__members__.values():
+                metric_enum = SensorMetricType(metric)
+                min_val, max_val = value_ranges.get(metric_enum, (0.0, 100.0))
+            else:
+                min_val, max_val = (0.0, 100.0)
             value = round(random.uniform(min_val, max_val), 2)
 
         reading = {
             "metric": metric,
             "value": value,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         reading.update(kwargs)
         return reading

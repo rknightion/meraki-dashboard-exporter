@@ -75,7 +75,7 @@ async def process_in_batches_with_errors(
 
         # Process results
         for item, result in zip(batch, batch_results, strict=False):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 # Extract context for error logging
                 context = {"error": str(result), "error_type": type(result).__name__}
                 if error_context_func:
@@ -83,7 +83,9 @@ async def process_in_batches_with_errors(
 
                 logger.error(f"Failed to process {item_description}", **context)
 
-            results.append((item, result))
+            # Only append if it's the expected type or Exception
+            if not isinstance(result, BaseException) or isinstance(result, Exception):
+                results.append((item, result))
 
         # Delay between batches (except for the last batch)
         if i + batch_size < total_items and delay_between_batches > 0:
@@ -160,7 +162,7 @@ async def process_grouped_items(
     return results
 
 
-def extract_successful_results(
+def extract_successful_results[T, R](
     results: list[tuple[T, R | Exception]],
 ) -> list[R]:
     """Extract successful results from batch processing results.

@@ -273,6 +273,9 @@ class OrganizationCollector(MetricCollector):
         """
         try:
             networks = await self.api_helper.get_organization_networks(org_id)
+            if not networks:
+                logger.warning("No networks found or error fetching networks", org_id=org_id)
+                return
 
             # Count total networks
             total_networks = len(networks)
@@ -309,6 +312,8 @@ class OrganizationCollector(MetricCollector):
         """
         try:
             devices = await self.api_helper.get_organization_devices(org_id)
+            if not devices:
+                return
 
             # Count devices by type
             device_counts: dict[str, int] = {}

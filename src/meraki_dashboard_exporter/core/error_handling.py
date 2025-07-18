@@ -137,11 +137,13 @@ def with_error_handling(
                 return result
 
             except TimeoutError as e:
-                context["duration_seconds"] = round(time.time() - start_time, 2)
+                # Create a new context dict with the duration
+                error_context: dict[str, Any] = dict(context)
+                error_context["duration_seconds"] = round(time.time() - start_time, 2)
                 logger.error(
                     f"{operation} timed out",
                     error_type="TimeoutError",
-                    **context,
+                    **error_context,
                 )
 
                 # Track error metric if collector available
@@ -153,7 +155,7 @@ def with_error_handling(
                 raise CollectorError(
                     f"{operation} timed out",
                     ErrorCategory.TIMEOUT,
-                    context,
+                    error_context,
                 ) from e
 
             except Exception as e:
@@ -164,7 +166,9 @@ def with_error_handling(
                 # Determine error category
                 category = error_category or _categorize_error(e)
 
-                context.update({
+                # Create new context with mixed types
+                exc_context: dict[str, Any] = dict(context)
+                exc_context.update({
                     "duration_seconds": round(duration, 2),
                     "error_type": error_type,
                     "error": error_msg,
@@ -174,13 +178,13 @@ def with_error_handling(
                 if "404" in error_msg:
                     logger.debug(
                         f"{operation} - API endpoint not available",
-                        **context,
+                        **exc_context,
                     )
                     category = ErrorCategory.API_NOT_AVAILABLE
                 else:
                     logger.exception(
                         f"{operation} failed",
-                        **context,
+                        **exc_context,
                     )
 
                 # Track error metric if collector available
@@ -288,7 +292,7 @@ def validate_response_format(
     return data
 
 
-async def with_semaphore_limit(
+async def with_semaphore_limit[T](
     semaphore: asyncio.Semaphore,
     coro: Coroutine[Any, Any, T],
 ) -> T:
@@ -311,12 +315,11 @@ async def with_semaphore_limit(
         logger.debug(
             "Executing task with semaphore limit",
             current_count=semaphore._value,
-            max_count=semaphore._initial_value,
         )
         return await coro
 
 
-def batch_with_concurrency_limit(
+def batch_with_concurrency_limit[T](
     tasks: list[Coroutine[Any, Any, T]],
     max_concurrent: int = 5,
 ) -> list[Coroutine[Any, Any, T]]:

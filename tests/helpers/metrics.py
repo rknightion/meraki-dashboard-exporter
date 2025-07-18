@@ -366,7 +366,7 @@ class MetricAssertions:
 
         for sample in metric.samples:
             if sample.name == metric_name and self._labels_match(sample.labels, labels):
-                return sample.value
+                return float(sample.value)
 
         return None
 
@@ -602,7 +602,7 @@ class MetricSnapshot:
 
         """
         self.registry = registry
-        self.state: dict[str, dict[tuple, float]] = {}
+        self.state: dict[str, dict[tuple[str, ...], float]] = {}
         self._capture()
 
     def _capture(self) -> None:
@@ -614,9 +614,14 @@ class MetricSnapshot:
                     self.state[metric.name] = {}
 
                 for sample in metric.samples:
-                    # Create label tuple for consistent comparison
-                    label_tuple = tuple(sorted(sample.labels.items()))
-                    self.state[metric.name][(sample.name, label_tuple)] = sample.value
+                    # Create a flat tuple key for consistent comparison
+                    # First element is sample name, rest are sorted label pairs
+                    label_items = sorted(sample.labels.items())
+                    key_parts = [sample.name]
+                    for k, v in label_items:
+                        key_parts.extend([k, v])
+                    key_tuple = tuple(key_parts)
+                    self.state[metric.name][key_tuple] = sample.value
 
     def diff(self, other: MetricSnapshot) -> MetricDiff:
         """Compare with another snapshot.
@@ -703,7 +708,10 @@ class MetricDiff:
         return after_value - before_value
 
     def _find_value(
-        self, state: dict[str, dict[tuple, float]], metric_name: str, labels: dict[str, str]
+        self,
+        state: dict[str, dict[tuple[str, ...], float]],
+        metric_name: str,
+        labels: dict[str, str],
     ) -> float | None:
         """Find metric value in state."""
         if metric_name not in state:
@@ -711,12 +719,18 @@ class MetricDiff:
 
         metric_state = state[metric_name]
 
-        for (sample_name, label_tuple), value in metric_state.items():
-            if sample_name != metric_name:
+        for key_tuple, value in metric_state.items():
+            # First element is sample name
+            if len(key_tuple) == 0 or key_tuple[0] != metric_name:
                 continue
 
-            # Check if labels match
-            sample_labels = dict(label_tuple)
+            # Reconstruct labels from the flat tuple
+            # Skip first element (sample name) and process pairs
+            sample_labels = {}
+            for i in range(1, len(key_tuple), 2):
+                if i + 1 < len(key_tuple):
+                    sample_labels[key_tuple[i]] = key_tuple[i + 1]
+
             if all(sample_labels.get(k) == v for k, v in labels.items()):
                 return value
 

@@ -227,10 +227,12 @@ version-set: ## Set version explicitly (use VERSION=x.y.z)
 
 # Release Management
 .PHONY: release-prepare
-release-prepare: ## Prepare release (run checks)
+release-prepare: ## Prepare release (run checks and generate docs)
 	@echo "$(BLUE)Preparing release...$(NC)"
 	@make check
-	@echo "$(GREEN)All checks passed!$(NC)"
+	@echo "$(BLUE)Generating documentation...$(NC)"
+	@make docgen
+	@echo "$(GREEN)All checks passed and documentation generated!$(NC)"
 
 .PHONY: release-patch
 release-patch: release-prepare ## Create patch release (0.0.X)
@@ -251,6 +253,8 @@ release-major: release-prepare ## Create major release (X.0.0)
 _release-finalize: ## Internal: Finalize release after version bump
 	@echo "$(BLUE)Updating lock file with new version...$(NC)"
 	@uv lock
+	@echo "$(BLUE)Ensuring documentation is up-to-date...$(NC)"
+	@make docgen
 	@make _release-create
 
 .PHONY: _release-create
@@ -258,7 +262,7 @@ _release-create: ## Internal: Create release after version bump
 	@NEW_VERSION=$$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml) && \
 	echo "$(BLUE)Creating release for version $$NEW_VERSION...$(NC)" && \
 	echo "$(BLUE)Staging all changes...$(NC)" && \
-	git add pyproject.toml uv.lock && \
+	git add pyproject.toml uv.lock docs/ && \
 	if [ -z "$$(git diff --cached --name-only)" ]; then \
 		echo "$(RED)No changes to commit. Did the version bump fail?$(NC)"; \
 		exit 1; \
@@ -322,6 +326,22 @@ release-manual: check build ## Manual release to PyPI (requires auth)
 	else \
 		echo "$(RED)Release cancelled.$(NC)"; \
 	fi
+
+# Documentation
+.PHONY: docgen
+docgen: ## Generate all documentation (metrics and configuration)
+	@echo "$(BLUE)Generating documentation...$(NC)"
+	./scripts/generate-docs.sh
+
+.PHONY: docs-metrics
+docs-metrics: ## Generate metrics documentation only
+	@echo "$(BLUE)Generating metrics documentation...$(NC)"
+	uv run python src/meraki_dashboard_exporter/tools/generate_metrics_docs.py
+
+.PHONY: docs-config
+docs-config: ## Generate configuration documentation only
+	@echo "$(BLUE)Generating configuration documentation...$(NC)"
+	uv run python -m meraki_dashboard_exporter.tools.generate_config_docs
 
 # Development Server
 .PHONY: run

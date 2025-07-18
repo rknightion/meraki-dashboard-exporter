@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import Field, SecretStr, computed_field, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .config_models import (
@@ -88,67 +88,56 @@ class Settings(BaseSettings):
     )
 
     # Computed properties for backward compatibility
-    @computed_field
     @property
     def api_max_retries(self) -> int:
         """Legacy property for API max retries."""
         return self.api.max_retries
 
-    @computed_field
     @property
     def api_timeout(self) -> int:
         """Legacy property for API timeout."""
         return self.api.timeout
 
-    @computed_field
     @property
     def fast_update_interval(self) -> int:
         """Fast update interval in seconds."""
         return self.update_intervals.fast
 
-    @computed_field
     @property
     def medium_update_interval(self) -> int:
         """Medium update interval in seconds."""
         return self.update_intervals.medium
 
-    @computed_field
     @property
     def slow_update_interval(self) -> int:
         """Slow update interval in seconds."""
         return self.update_intervals.slow
 
-    @computed_field
     @property
     def scrape_interval(self) -> int:
         """Legacy scrape interval property, returns fast update interval."""
         return self.update_intervals.fast
 
-    @computed_field
     @property
     def host(self) -> str:
         """Server host."""
         return self.server.host
 
-    @computed_field
     @property
     def port(self) -> int:
         """Server port."""
         return self.server.port
 
-    @computed_field
     @property
     def otel_enabled(self) -> bool:
         """Whether OpenTelemetry is enabled."""
         return self.otel.enabled
 
-    @computed_field
     @property
     def otel_endpoint(self) -> str | None:
         """OpenTelemetry endpoint."""
         return self.otel.endpoint
 
-    @computed_field
     @property
     def otel_service_name(self) -> str:
         """OpenTelemetry service name."""

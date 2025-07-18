@@ -98,23 +98,13 @@ repos:
         always_run: true
         stages: [pre-commit]
 
-    # Generate metrics documentation
-    -   id: generate-metrics-docs
-        name: Generate metrics documentation
-        entry: uv run python
-          src/meraki_dashboard_exporter/tools/generate_metrics_docs.py
-        language: system
-        files: ^src/meraki_dashboard_exporter/(collectors|core|tools)/.*\.py$
-        pass_filenames: false
-        stages: [pre-commit]
+
 
   # Python docstring checking
 -   repo: https://github.com/PyCQA/pydocstyle
     rev: 6.3.0
     hooks:
     -   id: pydocstyle
-        args: [--convention=numpy, --add-ignore=D104, D202, D203, D212, D213,
-              D401]
         additional_dependencies: [tomli]
 
   # Check for common security issues (removed - requires Poetry)

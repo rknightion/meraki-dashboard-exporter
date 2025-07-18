@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
@@ -258,7 +258,7 @@ class DeviceCollector(MetricCollector):
                 orgs = validate_response_format(
                     orgs, expected_type=list, operation="getOrganizations"
                 )
-                return orgs
+                return cast(list[dict[str, Any]], orgs)
 
     @log_batch_operation("collect devices", batch_size=None)
     @with_error_handling(
@@ -302,10 +302,10 @@ class DeviceCollector(MetricCollector):
             # Track network POE usage (removed for now - not implemented)
 
             # Group devices by type for batch processing
-            devices_by_type: dict[str, list[dict[str, Any]]] = {}
+            devices_by_type: dict[DeviceType, list[dict[str, Any]]] = {}
 
             for device in devices:
-                device_type = self._get_device_type(device)
+                device_type_str = self._get_device_type(device)
 
                 # Add to device lookup map
                 serial = device["serial"]
@@ -313,8 +313,21 @@ class DeviceCollector(MetricCollector):
                     "name": device.get("name", serial),
                     "model": device.get("model", "Unknown"),
                     "network_id": device.get("networkId", ""),
-                    "device_type": device_type,
+                    "device_type": device_type_str,
                 }
+
+                # Skip unsupported device types
+                if device_type_str not in DeviceType.__members__.values():
+                    logger.debug(
+                        "Skipping device with unsupported type",
+                        serial=device["serial"],
+                        model=device.get("model", "Unknown"),
+                        device_type=device_type_str,
+                    )
+                    continue
+
+                # Convert to enum
+                device_type = DeviceType(device_type_str)
 
                 # Add availability status to device
                 device["availability_status"] = availability_map.get(
@@ -365,9 +378,16 @@ class DeviceCollector(MetricCollector):
 
                 if type_devices:
                     # Process devices in smaller batches
+                    # Create a coroutine factory to avoid loop variable issues
+                    def make_collect_coroutine(dt: DeviceType) -> Any:
+                        async def collect_device(d: dict[str, Any]) -> None:
+                            await self._collect_device_with_timeout(d, dt)
+
+                        return collect_device
+
                     await process_in_batches_with_errors(
                         type_devices,
-                        lambda d, dt=device_type: self._collect_device_with_timeout(d, dt),
+                        make_collect_coroutine(device_type),
                         batch_size=5,
                         delay_between_batches=self.settings.api.batch_delay,
                         item_description=f"{device_type} device",
@@ -591,7 +611,7 @@ class DeviceCollector(MetricCollector):
                 org_id,
                 total_pages="all",
             )
-            return networks
+            return cast(list[dict[str, Any]], networks)
 
     async def _aggregate_network_poe(self, org_id: str, devices: list[dict[str, Any]]) -> None:
         """Aggregate POE metrics at the network level.
@@ -682,7 +702,7 @@ class DeviceCollector(MetricCollector):
             devices = validate_response_format(
                 devices, expected_type=list, operation="getOrganizationDevices"
             )
-            return devices
+            return cast(list[dict[str, Any]], devices)
 
     @log_api_call("getOrganizationDevicesAvailabilities")
     @with_error_handling(
@@ -713,4 +733,4 @@ class DeviceCollector(MetricCollector):
             availabilities = validate_response_format(
                 availabilities, expected_type=list, operation="getOrganizationDevicesAvailabilities"
             )
-            return availabilities
+            return cast(list[dict[str, Any]], availabilities)

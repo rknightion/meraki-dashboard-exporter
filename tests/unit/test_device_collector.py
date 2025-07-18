@@ -287,7 +287,7 @@ class TestDeviceCollector(BaseCollectorTest):
     async def test_device_collection_basic(self, collector, mock_api_builder, metrics):
         """Test basic device collection functionality."""
         # Set up standard test data
-        test_data = self.setup_standard_test_data(mock_api_builder)
+        self.setup_standard_test_data(mock_api_builder)
         collector.api = mock_api_builder.build()
 
         # Run collection
