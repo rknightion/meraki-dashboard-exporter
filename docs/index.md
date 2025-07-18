@@ -1,13 +1,29 @@
+---
+title: Meraki Dashboard Exporter
+description: A high-performance Prometheus exporter for Cisco Meraki Dashboard API metrics with comprehensive monitoring capabilities and OpenTelemetry support
+tags:
+  - prometheus
+  - monitoring
+  - meraki
+  - docker
+  - opentelemetry
+---
+
 # Meraki Dashboard Exporter
 
-<div align="center">
-  <h1>Meraki Dashboard Exporter</h1>
+<div class="hero" markdown>
 
-  **A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry support**
+**A high-performance Prometheus exporter for Cisco Meraki Dashboard API metrics with comprehensive monitoring capabilities and OpenTelemetry support**
 
-  [![GitHub Release](https://img.shields.io/github/v/release/rknightion/meraki-dashboard-exporter?style=flat-square)](https://github.com/rknightion/meraki-dashboard-exporter/releases)
-  [![Docker Pulls](https://img.shields.io/docker/pulls/ghcr.io/rknightion/meraki-dashboard-exporter?style=flat-square)](https://github.com/rknightion/meraki-dashboard-exporter/pkgs/container/meraki-dashboard-exporter)
-  [![License](https://img.shields.io/github/license/rknightion/meraki-dashboard-exporter?style=flat-square)](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/LICENSE)
+<div class="hero-badges" markdown>
+[![GitHub Release](https://img.shields.io/github/v/release/rknightion/meraki-dashboard-exporter?style=flat-square)](https://github.com/rknightion/meraki-dashboard-exporter/releases){ .md-button .md-button--primary }
+[![Docker Pulls](https://img.shields.io/docker/pulls/ghcr.io/rknightion/meraki-dashboard-exporter?style=flat-square)](https://github.com/rknightion/meraki-dashboard-exporter/pkgs/container/meraki-dashboard-exporter){ .md-button }
+[![License](https://img.shields.io/github/license/rknightion/meraki-dashboard-exporter?style=flat-square)](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/LICENSE){ .md-button }
+</div>
+
+[Get Started :material-rocket-launch:](getting-started.md){ .md-button .md-button--primary .md-button--stretch }
+[View on GitHub :fontawesome-brands-github:](https://github.com/rknightion/meraki-dashboard-exporter){ .md-button .md-button--stretch }
+
 </div>
 
 ## Overview
@@ -19,22 +35,40 @@ The Meraki Dashboard Exporter is a high-performance Prometheus exporter that col
 <div class="grid cards" markdown>
 
 - :material-speedometer: **High Performance**
-  Asynchronous collection with intelligent tiering for optimal API usage
+
+    ---
+
+    Asynchronous collection with intelligent tiering for optimal API usage
 
 - :material-chart-line: **Comprehensive Metrics**
-  Support for all Meraki device types (MS, MR, MV, MT, MX, MG)
+
+    ---
+
+    Support for all Meraki device types (MS, MR, MV, MT, MX, MG)
 
 - :material-docker: **Container Ready**
-  Production-ready Docker images with health checks
+
+    ---
+
+    Production-ready Docker images with health checks
 
 - :material-cloud-sync: **OpenTelemetry**
-  Built-in support for metrics and structured logging
+
+    ---
+
+    Built-in support for metrics and structured logging
 
 - :material-gauge: **Smart Collection**
-  Three-tier update system matching Meraki API data freshness
+
+    ---
+
+    Three-tier update system matching Meraki API data freshness
 
 - :material-shield-check: **Enterprise Ready**
-  Structured logging, error handling, and performance monitoring
+
+    ---
+
+    Structured logging, error handling, and performance monitoring
 
 </div>
 
@@ -113,16 +147,28 @@ graph LR
 <div class="grid cards" markdown>
 
 - :material-rocket-launch: **[Getting Started](getting-started.md)**
-  Installation, configuration, and first setup
+
+    ---
+
+    Installation, configuration, and first setup
 
 - :material-wrench: **[Deployment & Operations](deployment-operations.md)**
-  Production deployment, monitoring, and troubleshooting
+
+    ---
+
+    Production deployment, monitoring, and troubleshooting
 
 - :material-puzzle: **[Integration & Dashboards](integration-dashboards.md)**
-  Prometheus, Grafana, and OpenTelemetry setup
+
+    ---
+
+    Prometheus, Grafana, and OpenTelemetry setup
 
 - :material-book-open-variant: **[Metrics Reference](metrics/overview.md)**
-  Complete documentation of all available metrics
+
+    ---
+
+    Complete documentation of all available metrics
 
 </div>
 

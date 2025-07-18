@@ -1,3 +1,13 @@
+---
+title: Configuration Reference
+description: Comprehensive reference for all configuration options available in the Meraki Dashboard Exporter
+tags:
+  - configuration
+  - environment-variables
+  - api
+  - setup
+---
+
 # Configuration Reference
 
 This document provides a comprehensive reference for all configuration options available in the Meraki Dashboard Exporter.

@@ -1,5 +1,5 @@
 site_name: Meraki Dashboard Exporter
-site_description: A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry support
+site_description: A high-performance Prometheus exporter for Cisco Meraki Dashboard API metrics with comprehensive monitoring capabilities and OpenTelemetry support
 site_url: https://rknightion.github.io/meraki-dashboard-exporter/
 repo_name: rknightion/meraki-dashboard-exporter
 repo_url: https://github.com/rknightion/meraki-dashboard-exporter
@@ -7,39 +7,142 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  language: en
   palette:
-    - scheme: default
-      primary: teal
-      accent: teal
+    - media: "(prefers-color-scheme)"
       toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - scheme: slate
-      primary: teal
-      accent: teal
-      toggle:
-        icon: material/brightness-4
+        icon: material/link
         name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to system preference
   features:
+    # Navigation
     - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
     - navigation.tracking
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.expand
     - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - navigation.path
+    # Search
     - search.suggest
     - search.highlight
+    - search.share
+    # Table of contents
+    - toc.follow
+    - toc.integrate
+    # Content
     - content.code.copy
+    - content.code.select
     - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+    - content.footnote.tooltips
+    - content.action.edit
+    - content.action.view
   icon:
     repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+    logo: material/cloud-outline
+  favicon: assets/favicon.png
+  custom_dir: docs/overrides
 
 plugins:
-  - search
+  - search:
+      separator: '[\s\u200b\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+  - minify:
+      minify_html: true
+      minify_js: true
+      minify_css: true
+      htmlmin_opts:
+        remove_comments: true
+      cache_safe: true
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: timeago
+      custom_format: "%d. %B %Y"
+      timezone: UTC
+      locale: en
+      fallback_to_build_date: false
+      exclude:
+        - index.md
+  - git-committers:
+      repository: rknightion/meraki-dashboard-exporter
+      branch: main
+  - git-authors
+  - tags:
+      tags_file: tags.md
+  - social:
+      enabled: !ENV [CI, false]
+      cards_layout_options:
+        background_color: "#0f7c7c"
+        color: "#ffffff"
+  - glightbox:
+      touchNavigation: true
+      loop: false
+      effect: zoom
+      slide_effect: slide
+      width: 100%
+      height: auto
+      zoomable: true
+      draggable: true
+      auto_caption: false
+      caption_position: bottom
+  - macros
+  - include-markdown
 
 markdown_extensions:
+  # Python Markdown
+  - abbr
   - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      title: On this page
+      permalink_title: Anchor link to this section for reference
+  # Python Markdown Extensions
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
   - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      auto_append:
+        - includes/abbreviations.md
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -47,28 +150,97 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
-  - pymdownx.emoji:
-      emoji_index: !!python/name:material.extensions.emoji.twemoji
-      emoji_generator: !!python/name:material.extensions.emoji.to_svg
-  - tables
-  - attr_list
-  - md_in_html
-  - toc:
-      permalink: true
+      combine_header_slug: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+  - pymdownx.critic
+  - pymdownx.blocks.admonition:
+      types:
+      - new
+      - settings
+      - note
+      - abstract
+      - info
+      - tip
+      - success
+      - question
+      - warning
+      - failure
+      - danger
+      - bug
+      - example
+      - quote
 
 nav:
-  - Home: index.md
+  - Home:
+    - index.md
+    - Tags: tags.md
   - Getting Started: getting-started.md
   - Configuration: config.md
   - Deployment & Operations: deployment-operations.md
   - Integration & Dashboards: integration-dashboards.md
   - Metrics Reference:
+    - metrics/index.md
     - Overview: metrics/overview.md
     - Complete Reference: metrics/metrics.md
+  - Development:
+    - Extending Collectors: extending-collectors.md
+    - Architecture Decisions:
+      - adr/index.md
+      - Collector Architecture: adr/001-collector-architecture.md
+      - Error Handling Strategy: adr/002-error-handling-strategy.md
+    - Patterns:
+      - patterns/index.md
+      - API Response Formats: patterns/api-response-formats.md
+      - Metric Collection Strategies: patterns/metric-collection-strategies.md
 
 extra:
+  analytics:
+    provider: google
+    property: !ENV GOOGLE_ANALYTICS_KEY
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/rknightion/meraki-dashboard-exporter
+      name: GitHub Repository
+    - icon: fontawesome/brands/docker
+      link: https://github.com/rknightion/meraki-dashboard-exporter/pkgs/container/meraki-dashboard-exporter
+      name: Docker Images
+    - icon: fontawesome/solid/paper-plane
+      link: mailto:rob@example.com
+      name: Send a message
+  version:
+    provider: mike
+    default: stable
+  status:
+    new: Recently added
+    deprecated: Deprecated
+  tags:
+    Prometheus: prometheus
+    Docker: docker
+    Kubernetes: kubernetes
+    Monitoring: monitoring
+    API: api
+    Configuration: config
+    Deployment: deployment
+    Troubleshooting: troubleshooting
 
-copyright: Copyright &copy; 2024 Rob Knighton
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+  - javascripts/extra.js
+
+copyright: |
+  &copy; 2024 <a href="https://github.com/rknightion"  target="_blank" rel="noopener">Rob Knighton</a> &nbsp;
+  <a href="#__consent">Change cookie settings</a>
+
+watch:
+  - includes/
+  - docs/overrides/
