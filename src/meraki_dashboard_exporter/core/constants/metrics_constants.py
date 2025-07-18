@@ -9,7 +9,7 @@ class OrgMetricName(StrEnum):
     """Organization-level metric names."""
 
     # Basic organization metrics
-    ORG_INFO = "meraki_org_info"
+    ORG_INFO = "meraki_org"
     ORG_API_REQUESTS_TOTAL = "meraki_org_api_requests_total"
     ORG_API_REQUESTS_RATE_LIMIT = "meraki_org_api_requests_rate_limit"
     ORG_NETWORKS_TOTAL = "meraki_org_networks_total"

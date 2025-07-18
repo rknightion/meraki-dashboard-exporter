@@ -1117,6 +1117,18 @@ The exporter provides metrics across several categories:
 
 **Source:** `src/meraki_dashboard_exporter/collectors/organization.py`
 
+#### `meraki_org`
+
+**Description:** Organization information
+
+**Type:** info
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+
+**Constant:** `OrgMetricName.ORG_INFO`
+
+**Variable:** `self._org_info` (line 52)
+
 #### `meraki_org_api_requests_rate_limit`
 
 **Description:** API rate limit for the organization
@@ -1188,18 +1200,6 @@ The exporter provides metrics across several categories:
 **Constant:** `OrgMetricName.ORG_DEVICES_TOTAL`
 
 **Variable:** `self._devices_total` (line 79)
-
-#### `meraki_org_info`
-
-**Description:** Organization information
-
-**Type:** info
-
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
-
-**Constant:** `OrgMetricName.ORG_INFO`
-
-**Variable:** `self._org_info` (line 52)
 
 #### `meraki_org_licenses_expiring`
 
@@ -1362,6 +1362,7 @@ All metrics in alphabetical order:
 | `meraki_network_wireless_connection_stats_total` | gauge | NetworkHealthCollector | Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success) |
 | `meraki_network_wireless_download_kbps` | gauge | NetworkHealthCollector | Network-wide wireless download bandwidth in kilobits per second |
 | `meraki_network_wireless_upload_kbps` | gauge | NetworkHealthCollector | Network-wide wireless upload bandwidth in kilobits per second |
+| `meraki_org` | info | OrganizationCollector | Organization information |
 | `meraki_org_api_requests_rate_limit` | gauge | OrganizationCollector | API rate limit for the organization |
 | `meraki_org_api_requests_total` | gauge | OrganizationCollector | Total API requests made by the organization |
 | `meraki_org_clients_total` | gauge | OrganizationCollector | Total number of active clients in the organization (1-hour window) |
@@ -1369,7 +1370,6 @@ All metrics in alphabetical order:
 | `meraki_org_devices_availability_total` | gauge | OrganizationCollector | Total number of devices by availability status and product type |
 | `meraki_org_devices_by_model_total` | gauge | OrganizationCollector | Total number of devices by specific model |
 | `meraki_org_devices_total` | gauge | OrganizationCollector | Total number of devices in the organization |
-| `meraki_org_info` | info | OrganizationCollector | Organization information |
 | `meraki_org_licenses_expiring` | gauge | OrganizationCollector | Number of licenses expiring within 30 days |
 | `meraki_org_licenses_total` | gauge | OrganizationCollector | Total number of licenses |
 | `meraki_org_login_security_account_lockout_enabled` | gauge | ConfigCollector | Whether account lockout is enforced (1=enabled, 0=disabled) |
@@ -1395,7 +1395,7 @@ All metrics in alphabetical order:
     ```promql
     # Filter by organization
     meraki_device_up{org_name="Production"}
-    
+
     # Filter by device type
     meraki_device_up{device_model=~"MS.*"}
     ```

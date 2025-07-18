@@ -88,7 +88,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(meraki_client_count_total{org_id=~\"$organization\"})",
+          "expr": "sum(meraki_org_clients_total{org_id=~\"$organization\"})",
           "instant": true,
           "legendFormat": "Total Clients",
           "range": false,
@@ -247,7 +247,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (org_name) (meraki_client_count_total{org_id=~\"$organization\"})",
+          "expr": "sum by (org_name) (meraki_org_clients_total{org_id=~\"$organization\"})",
           "legendFormat": "{{org_name}}",
           "range": true,
           "refId": "A"
@@ -349,7 +349,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "rate(meraki_client_usage_sent_kb{org_id=~\"$organization\"}[$__rate_interval])",
+          "expr": "rate(meraki_org_usage_upstream_kb{org_id=~\"$organization\"}[$__rate_interval])",
           "legendFormat": "{{org_name}} - Sent",
           "range": true,
           "refId": "A"
@@ -360,7 +360,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "rate(meraki_client_usage_recv_kb{org_id=~\"$organization\"}[$__rate_interval])",
+          "expr": "rate(meraki_org_usage_downstream_kb{org_id=~\"$organization\"}[$__rate_interval])",
           "hide": false,
           "legendFormat": "{{org_name}} - Received",
           "range": true,
@@ -426,7 +426,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(meraki_client_usage_sent_kb{org_id=~\"$organization\"}) * 1024",
+          "expr": "sum(meraki_org_usage_upstream_kb{org_id=~\"$organization\"}) * 1024",
           "instant": true,
           "legendFormat": "Total Sent",
           "range": false,
@@ -492,7 +492,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(meraki_client_usage_recv_kb{org_id=~\"$organization\"}) * 1024",
+          "expr": "sum(meraki_org_usage_downstream_kb{org_id=~\"$organization\"}) * 1024",
           "instant": true,
           "legendFormat": "Total Received",
           "range": false,
@@ -815,7 +815,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_client_count_total{org_id=~\"$organization\"}",
+          "expr": "meraki_org_clients_total{org_id=~\"$organization\"}",
           "format": "table",
           "instant": true,
           "range": false,
@@ -827,7 +827,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "rate(meraki_client_usage_sent_kb{org_id=~\"$organization\"}[$__rate_interval])",
+          "expr": "rate(meraki_org_usage_upstream_kb{org_id=~\"$organization\"}[$__rate_interval])",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -840,7 +840,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "rate(meraki_client_usage_recv_kb{org_id=~\"$organization\"}[$__rate_interval])",
+          "expr": "rate(meraki_org_usage_downstream_kb{org_id=~\"$organization\"}[$__rate_interval])",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -853,7 +853,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_client_usage_sent_kb{org_id=~\"$organization\"} * 1024",
+          "expr": "meraki_org_usage_upstream_kb{org_id=~\"$organization\"} * 1024",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -866,7 +866,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_client_usage_recv_kb{org_id=~\"$organization\"} * 1024",
+          "expr": "meraki_org_usage_downstream_kb{org_id=~\"$organization\"} * 1024",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -996,7 +996,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_client_count_total{org_id=~\"$organization\"}",
+          "expr": "meraki_org_clients_total{org_id=~\"$organization\"}",
           "format": "time_series",
           "legendFormat": "{{org_name}}",
           "range": true,
@@ -1050,7 +1050,7 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(meraki_client_count_total, org_id)",
+        "definition": "label_values(meraki_org_clients_total, org_id)",
         "hide": 0,
         "includeAll": true,
         "label": "Organization",
@@ -1059,7 +1059,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(meraki_client_count_total, org_id)",
+          "query": "label_values(meraki_org_clients_total, org_id)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
