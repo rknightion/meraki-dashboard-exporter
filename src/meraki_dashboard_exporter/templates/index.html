@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meraki Dashboard Exporter</title>
+    <style>
+        :root {
+            --bg-color: #f5f5f5;
+            --card-bg: #ffffff;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --success-color: #4caf50;
+            --info-color: #2196f3;
+            --warning-color: #ff9800;
+            --border-color: #e0e0e0;
+            --link-color: #1976d2;
+            --link-hover: #1565c0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+        }
+
+        .status-banner {
+            background-color: #e8f5e9;
+            border: 1px solid #c8e6c9;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .status-banner.healthy {
+            background-color: #e8f5e9;
+            border-color: #c8e6c9;
+        }
+
+        .status-icon {
+            font-size: 1.5rem;
+        }
+
+        .status-icon.healthy {
+            color: var(--success-color);
+        }
+
+        .status-content h2 {
+            font-size: 1.3rem;
+            margin-bottom: 5px;
+        }
+
+        .status-content p {
+            color: var(--text-secondary);
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h3 {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+
+        .card p {
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        .card a {
+            color: var(--link-color);
+            text-decoration: none;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .card a:hover {
+            color: var(--link-hover);
+            text-decoration: underline;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat {
+            background-color: #f8f8f8;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--info-color);
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .endpoints {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .endpoints h3 {
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+        }
+
+        .endpoint-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .endpoint {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background-color: #f8f8f8;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+        }
+
+        .endpoint:hover {
+            background-color: #f0f0f0;
+        }
+
+        .endpoint-info {
+            flex: 1;
+        }
+
+        .endpoint-path {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            color: var(--text-primary);
+            margin-bottom: 5px;
+        }
+
+        .endpoint-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .endpoint-link {
+            padding: 8px 16px;
+            background-color: var(--info-color);
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            transition: background-color 0.2s;
+        }
+
+        .endpoint-link:hover {
+            background-color: var(--link-hover);
+        }
+
+        .collectors {
+            margin-top: 20px;
+        }
+
+        .collector-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .collector-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            background-color: #e3f2fd;
+            color: #1976d2;
+            border-radius: 16px;
+            font-size: 0.9rem;
+        }
+
+        .tier-badge {
+            margin-left: 8px;
+            padding: 2px 6px;
+            background-color: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .cards {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Meraki Dashboard Exporter</h1>
+            <p>Prometheus exporter for Cisco Meraki Dashboard metrics</p>
+        </div>
+
+        <div class="status-banner healthy">
+            <div class="status-icon healthy">✓</div>
+            <div class="status-content">
+                <h2>Exporter health check successful</h2>
+                <p>The exporter is running and ready to serve metrics. You can explore the available endpoints below.</p>
+            </div>
+        </div>
+
+        <div class="cards">
+            <div class="card">
+                <h3>🎯 Getting Started</h3>
+                <p>This exporter collects metrics from the Cisco Meraki Dashboard API and exposes them in Prometheus format.</p>
+                <a href="/metrics">View Metrics →</a>
+            </div>
+
+            <div class="card">
+                <h3>📊 Exporter Stats</h3>
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-value">{{ uptime }}</div>
+                        <div class="stat-label">Uptime</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">{{ collector_count }}</div>
+                        <div class="stat-label">Active Collectors</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">{{ org_count }}</div>
+                        <div class="stat-label">Organizations</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🔧 Configuration</h3>
+                <p><strong>Version:</strong> {{ version }}</p>
+                <p><strong>Update Intervals:</strong><br>
+                   Fast: {{ fast_interval }}s | Medium: {{ medium_interval }}s | Slow: {{ slow_interval }}s
+                </p>
+                {% if org_id %}
+                <p><strong>Organization ID:</strong> {{ org_id }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="endpoints">
+            <h3>Available Endpoints</h3>
+            <div class="endpoint-list">
+                <div class="endpoint">
+                    <div class="endpoint-info">
+                        <div class="endpoint-path">/metrics</div>
+                        <div class="endpoint-desc">Prometheus metrics endpoint - scrape this for all collected metrics</div>
+                    </div>
+                    <a href="/metrics" class="endpoint-link">View Metrics</a>
+                </div>
+
+                <div class="endpoint">
+                    <div class="endpoint-info">
+                        <div class="endpoint-path">/health</div>
+                        <div class="endpoint-desc">Health check endpoint - returns current health status</div>
+                    </div>
+                    <a href="/health" class="endpoint-link">Check Health</a>
+                </div>
+
+                <div class="endpoint">
+                    <div class="endpoint-info">
+                        <div class="endpoint-path">/debug/pprof/profile</div>
+                        <div class="endpoint-desc">CPU profiling endpoint - 30 second CPU profile for performance analysis</div>
+                    </div>
+                    <a href="/debug/pprof/profile" class="endpoint-link">CPU Profile</a>
+                </div>
+
+                <div class="endpoint">
+                    <div class="endpoint-info">
+                        <div class="endpoint-path">/debug/pprof/heap</div>
+                        <div class="endpoint-desc">Heap profiling endpoint - current memory allocation profile</div>
+                    </div>
+                    <a href="/debug/pprof/heap" class="endpoint-link">Heap Profile</a>
+                </div>
+
+                <div class="endpoint">
+                    <div class="endpoint-info">
+                        <div class="endpoint-path">/debug/pprof/allocs</div>
+                        <div class="endpoint-desc">Allocation profiling endpoint - memory allocation statistics</div>
+                    </div>
+                    <a href="/debug/pprof/allocs" class="endpoint-link">Allocation Profile</a>
+                </div>
+
+                <div class="endpoint">
+                    <div class="endpoint-info">
+                        <div class="endpoint-path">/debug/pprof/inuse_objects</div>
+                        <div class="endpoint-desc">In-use objects profile - currently allocated objects by type</div>
+                    </div>
+                    <a href="/debug/pprof/inuse_objects" class="endpoint-link">In-Use Objects</a>
+                </div>
+
+                <div class="endpoint">
+                    <div class="endpoint-info">
+                        <div class="endpoint-path">/debug/pprof/inuse_space</div>
+                        <div class="endpoint-desc">In-use space profile - memory usage by allocation site</div>
+                    </div>
+                    <a href="/debug/pprof/inuse_space" class="endpoint-link">In-Use Space</a>
+                </div>
+
+                <div class="endpoint">
+                    <div class="endpoint-info">
+                        <div class="endpoint-path">/debug/pprof/wall</div>
+                        <div class="endpoint-desc">Wall clock profile - wall time sampling over 30 seconds</div>
+                    </div>
+                    <a href="/debug/pprof/wall" class="endpoint-link">Wall Profile</a>
+                </div>
+
+                <div class="endpoint">
+                    <div class="endpoint-info">
+                        <div class="endpoint-path">/debug/pprof/goroutine</div>
+                        <div class="endpoint-desc">Thread profile - threads and asyncio tasks information</div>
+                    </div>
+                    <a href="/debug/pprof/goroutine" class="endpoint-link">Thread Profile</a>
+                </div>
+
+                <div class="endpoint">
+                    <div class="endpoint-info">
+                        <div class="endpoint-path">/debug/pprof/block</div>
+                        <div class="endpoint-desc">Blocking operations profile - thread blocking analysis</div>
+                    </div>
+                    <a href="/debug/pprof/block" class="endpoint-link">Block Profile</a>
+                </div>
+
+                <div class="endpoint">
+                    <div class="endpoint-info">
+                        <div class="endpoint-path">/debug/pprof/mutex</div>
+                        <div class="endpoint-desc">Mutex profile - lock contention analysis</div>
+                    </div>
+                    <a href="/debug/pprof/mutex" class="endpoint-link">Mutex Profile</a>
+                </div>
+
+                <div class="endpoint">
+                    <div class="endpoint-info">
+                        <div class="endpoint-path">/debug/pprof/exceptions</div>
+                        <div class="endpoint-desc">Exceptions profile - exception counts and samples</div>
+                    </div>
+                    <a href="/debug/pprof/exceptions" class="endpoint-link">Exceptions Profile</a>
+                </div>
+            </div>
+
+            <div class="collectors">
+                <h3>Active Collectors</h3>
+                <div class="collector-list">
+                    {% for collector in collectors %}
+                    <div class="collector-badge">
+                        {{ collector.name }}
+                        <span class="tier-badge">{{ collector.tier }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
