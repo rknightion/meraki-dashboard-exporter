@@ -387,7 +387,7 @@ MERAKI_API_KEY_FILE=/etc/secrets/meraki_api_key
 
 Now that you have the exporter running:
 
-1. **Explore Metrics**: Check the [Metrics Reference](metrics.md) for all available metrics
+1. **Explore Metrics**: Check the [Metrics Reference](metrics/overview.md) for all available metrics
 2. **Set Up Monitoring**: Follow the [Deployment & Operations](deployment-operations.md) guide
 3. **Create Dashboards**: Use the [Integration & Dashboards](integration-dashboards.md) guide
 4. **Configure Alerts**: Set up Prometheus alerting rules for critical metrics

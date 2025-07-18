@@ -1,6 +1,8 @@
 ---
-template: tags.html
 title: Tags
+description: Browse documentation content organized by tags
+tags:
+  - navigation
 ---
 
 # Tags
