@@ -1250,7 +1250,7 @@
       "type": "table"
     }
   ],
-  "refresh": "30s",
+  "refresh": "60s",
   "schemaVersion": 39,
   "tags": [
     "meraki",
