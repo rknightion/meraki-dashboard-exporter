@@ -230,46 +230,40 @@
             background-color: #1976d2;
         }
 
-        .modal {
+        .show-metrics-btn.expanded {
+            background-color: var(--warning-color);
+        }
+
+        .show-metrics-btn.expanded:hover {
+            background-color: #e68900;
+        }
+
+        .metrics-container {
             display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-
-        .modal-content {
-            background-color: white;
-            margin: 10% auto;
-            padding: 20px;
-            border-radius: 8px;
-            width: 80%;
-            max-width: 600px;
-            max-height: 70vh;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            max-height: 300px;
             overflow-y: auto;
+            width: 100%;
+            line-height: 2;
         }
 
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid var(--border-color);
+        .metrics-container.show {
+            display: block;
         }
 
-        .modal-close {
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
+        .metric-item {
+            display: inline-block;
+            margin: 4px;
+            padding: 4px 8px;
+            background-color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
             color: var(--text-secondary);
-        }
-
-        .modal-close:hover {
-            color: var(--text-primary);
         }
 
         .value-badge {
@@ -330,26 +324,20 @@
                             <td>{{ "{:,}".format(label.unique_value_count) }}</td>
                             <td>{{ label.metrics_used_in }}</td>
                             <td>
-                                <button class="show-metrics-btn" onclick="showMetrics('{{ label.label }}', {{ label.metrics | tojson }})">
+                                <button class="show-metrics-btn" id="btn-{{ loop.index }}" onclick="toggleMetrics({{ loop.index }})">
                                     Show {{ label.metrics_used_in }} Metrics
                                 </button>
+                                <div class="metrics-container" id="metrics-{{ loop.index }}">
+                                    {% for metric in label.metrics %}
+                                        <span class="metric-item">{{ metric }}</span>
+                                    {% endfor %}
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-        </div>
-    </div>
-
-    <!-- Modal for showing metrics -->
-    <div id="metricsModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modalTitle">Metrics using label</h2>
-                <span class="modal-close" onclick="closeModal()">&times;</span>
-            </div>
-            <div id="modalBody"></div>
         </div>
     </div>
 
@@ -421,37 +409,21 @@
             });
         }
 
-        // Modal functionality
-        function showMetrics(labelName, metrics) {
-            const modal = document.getElementById('metricsModal');
-            const modalTitle = document.getElementById('modalTitle');
-            const modalBody = document.getElementById('modalBody');
+        // Toggle metrics visibility
+        function toggleMetrics(index) {
+            const button = document.getElementById(`btn-${index}`);
+            const container = document.getElementById(`metrics-${index}`);
 
-            modalTitle.textContent = `Metrics using label: ${labelName}`;
-
-            const metricsList = metrics.map(metric =>
-                `<div class="metric-name">${metric}</div>`
-            ).join('');
-
-            modalBody.innerHTML = `
-                <div class="metrics-list">
-                    ${metricsList}
-                </div>
-            `;
-
-            modal.style.display = 'block';
-        }
-
-        function closeModal() {
-            const modal = document.getElementById('metricsModal');
-            modal.style.display = 'none';
-        }
-
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            const modal = document.getElementById('metricsModal');
-            if (event.target === modal) {
-                modal.style.display = 'none';
+            if (container.classList.contains('show')) {
+                // Hide metrics
+                container.classList.remove('show');
+                button.classList.remove('expanded');
+                button.textContent = button.textContent.replace('Hide', 'Show');
+            } else {
+                // Show metrics
+                container.classList.add('show');
+                button.classList.add('expanded');
+                button.textContent = button.textContent.replace('Show', 'Hide');
             }
         }
 
