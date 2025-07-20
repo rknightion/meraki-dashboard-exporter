@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Metrics - Cardinality Monitor</title>
+    <style>
+        :root {
+            --bg-color: #f5f5f5;
+            --card-bg: #ffffff;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --success-color: #4caf50;
+            --info-color: #2196f3;
+            --warning-color: #ff9800;
+            --error-color: #f44336;
+            --border-color: #e0e0e0;
+            --link-color: #1976d2;
+            --link-hover: #1565c0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .nav-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: var(--link-color);
+            text-decoration: none;
+            font-size: 1rem;
+        }
+
+        .nav-link:hover {
+            color: var(--link-hover);
+            text-decoration: underline;
+        }
+
+        .stats-card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .stats-card h2 {
+            font-size: 2rem;
+            color: var(--info-color);
+            margin-bottom: 5px;
+        }
+
+        .section {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .search-box {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        .search-label {
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+
+        .data-table tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .metric-name {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            word-break: break-all;
+        }
+
+        .metric-type {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            background-color: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .cardinality-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .cardinality-normal {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .cardinality-warning {
+            background-color: #fff3e0;
+            color: #ef6c00;
+        }
+
+        .cardinality-critical {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+
+        .label-tag {
+            display: inline-block;
+            background-color: #f5f5f5;
+            color: var(--text-secondary);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            margin: 2px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .metric-details {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+
+        .sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding-right: 20px;
+        }
+
+        .sortable::after {
+            content: '⇅';
+            position: absolute;
+            right: 5px;
+            opacity: 0.5;
+        }
+
+        .sortable.sort-asc::after {
+            content: '↑';
+            opacity: 1;
+        }
+
+        .sortable.sort-desc::after {
+            content: '↓';
+            opacity: 1;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .pagination button {
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
+            background-color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background-color: var(--info-color);
+            color: white;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination .page-info {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/cardinality" class="nav-link">← Back to Cardinality Overview</a>
+
+        <div class="header">
+            <h1>All Metrics</h1>
+            <p>Complete list of all metrics tracked by the exporter with cardinality information</p>
+        </div>
+
+        <div class="stats-card">
+            <h2>{{ total_metrics }}</h2>
+            <p>Total Metrics</p>
+        </div>
+
+        <div class="section">
+            <div class="search-box">
+                <span class="search-label">Search:</span>
+                <input type="text" id="metrics-search" class="search-input" placeholder="Filter by metric name, type, labels, or documentation...">
+            </div>
+
+            <div class="table-responsive">
+                <table class="data-table" id="metrics-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable">Metric Name</th>
+                            <th class="sortable" data-type="numeric">Cardinality</th>
+                            <th class="sortable">Type</th>
+                            <th class="sortable" data-type="numeric">Label Count</th>
+                            <th>Labels</th>
+                            <th>Documentation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for metric in metrics %}
+                        <tr>
+                            <td>
+                                <div class="metric-name">{{ metric.name }}</div>
+                            </td>
+                            <td>
+                                <span class="cardinality-badge {% if metric.cardinality >= 10000 %}cardinality-critical{% elif metric.cardinality >= 1000 %}cardinality-warning{% else %}cardinality-normal{% endif %}">
+                                    {{ "{:,}".format(metric.cardinality) }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="metric-type">{{ metric.type }}</span>
+                            </td>
+                            <td>{{ metric.label_count }}</td>
+                            <td>
+                                <div style="max-width: 300px;">
+                                    {% for label in metric.labels %}
+                                        <span class="label-tag">{{ label }}</span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="metric-details">
+                                    {{ metric.documentation }}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination" id="pagination">
+                <button id="prev-page" onclick="changePage(-1)">Previous</button>
+                <span class="page-info">
+                    Page <span id="current-page">1</span> of <span id="total-pages">1</span>
+                </span>
+                <button id="next-page" onclick="changePage(1)">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+        const rowsPerPage = 50;
+        let filteredRows = [];
+
+        // Table sorting functionality
+        function makeTableSortable(tableId) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+
+            const headers = table.querySelectorAll('th.sortable');
+            headers.forEach((header, index) => {
+                header.addEventListener('click', () => {
+                    sortTable(table, index, header);
+                });
+            });
+        }
+
+        function sortTable(table, column, header) {
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const isNumeric = header.dataset.type === 'numeric';
+            const currentOrder = header.classList.contains('sort-asc') ? 'asc' :
+                               header.classList.contains('sort-desc') ? 'desc' : null;
+
+            // Clear all sort indicators
+            table.querySelectorAll('th').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+            });
+
+            // Determine new order
+            const newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+            header.classList.add(`sort-${newOrder}`);
+
+            // Sort rows
+            rows.sort((a, b) => {
+                const aValue = a.cells[column].textContent.trim();
+                const bValue = b.cells[column].textContent.trim();
+
+                if (isNumeric) {
+                    const aNum = parseFloat(aValue.replace(/[^0-9.-]/g, '')) || 0;
+                    const bNum = parseFloat(bValue.replace(/[^0-9.-]/g, '')) || 0;
+                    return newOrder === 'asc' ? aNum - bNum : bNum - aNum;
+                } else {
+                    return newOrder === 'asc' ?
+                        aValue.localeCompare(bValue) :
+                        bValue.localeCompare(aValue);
+                }
+            });
+
+            // Reorder rows in table
+            rows.forEach(row => tbody.appendChild(row));
+            updatePagination();
+        }
+
+        // Filtering functionality
+        function setupTableFilter() {
+            const input = document.getElementById('metrics-search');
+            const table = document.getElementById('metrics-table');
+            if (!input || !table) return;
+
+            input.addEventListener('input', () => {
+                const filter = input.value.toLowerCase();
+                const tbody = table.querySelector('tbody');
+                const rows = tbody.querySelectorAll('tr');
+
+                rows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    const matches = text.includes(filter);
+                    row.style.display = matches ? '' : 'none';
+                    row.dataset.filtered = matches ? 'true' : 'false';
+                });
+
+                currentPage = 1;
+                updatePagination();
+            });
+        }
+
+        // Pagination functionality
+        function updatePagination() {
+            const table = document.getElementById('metrics-table');
+            const tbody = table.querySelector('tbody');
+            const allRows = Array.from(tbody.querySelectorAll('tr'));
+
+            // Get filtered rows
+            filteredRows = allRows.filter(row => row.dataset.filtered !== 'false');
+
+            const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
+            document.getElementById('total-pages').textContent = totalPages;
+            document.getElementById('current-page').textContent = currentPage;
+
+            // Show/hide rows based on current page
+            const start = (currentPage - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+
+            allRows.forEach(row => {
+                if (row.dataset.filtered === 'false') {
+                    row.style.display = 'none';
+                } else {
+                    const index = filteredRows.indexOf(row);
+                    row.style.display = (index >= start && index < end) ? '' : 'none';
+                }
+            });
+
+            // Update button states
+            document.getElementById('prev-page').disabled = currentPage === 1;
+            document.getElementById('next-page').disabled = currentPage === totalPages || totalPages === 0;
+        }
+
+        function changePage(delta) {
+            const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
+            currentPage = Math.max(1, Math.min(currentPage + delta, totalPages));
+            updatePagination();
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            makeTableSortable('metrics-table');
+            setupTableFilter();
+            updatePagination();
+        });
+    </script>
+</body>
+</html>

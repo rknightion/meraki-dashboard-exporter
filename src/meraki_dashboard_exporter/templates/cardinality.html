@@ -357,6 +357,117 @@
                 font-size: 0.9rem;
             }
         }
+        .action-links {
+            margin: 20px 0;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .action-link {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: var(--info-color);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        .action-link:hover {
+            background-color: #1976d2;
+            color: white;
+            text-decoration: none;
+        }
+
+        .search-box {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        .search-label {
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding-right: 20px;
+        }
+
+        .sortable::after {
+            content: '⇅';
+            position: absolute;
+            right: 5px;
+            opacity: 0.5;
+        }
+
+        .sortable.sort-asc::after {
+            content: '↑';
+            opacity: 1;
+        }
+
+        .sortable.sort-desc::after {
+            content: '↓';
+            opacity: 1;
+        }
+
+        .loading-notice {
+            background-color: #e3f2fd;
+            border: 1px solid #2196f3;
+            color: #1565c0;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .loading-notice h2 {
+            margin-bottom: 10px;
+        }
+
+        .label-value-cell {
+            max-width: 400px;
+        }
+
+        .label-value-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            max-height: 150px;
+            overflow-y: auto;
+            padding: 5px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .show-more-btn {
+            background-color: var(--info-color);
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            margin-top: 5px;
+        }
+
+        .show-more-btn:hover {
+            background-color: #1976d2;
+        }
     </style>
 </head>
 <body>
@@ -368,6 +479,19 @@
             <p>Monitor and analyze Prometheus metric cardinality to identify potential performance issues</p>
             <div class="last-updated">Last updated: {{ report.summary.analysis_timestamp }}</div>
         </div>
+
+        {% if report.first_run_pending %}
+        <div class="loading-notice">
+            <h2>⏳ Waiting for Initial Data Collection</h2>
+            <p>The collectors are completing their first run. Cardinality analysis will be available shortly.</p>
+            <p>This page will automatically refresh when data is ready.</p>
+        </div>
+        <script>
+            setTimeout(() => {
+                window.location.reload();
+            }, 5000);  // Refresh every 5 seconds until data is ready
+        </script>
+        {% else %}
 
         <div class="status-banner {{ report.summary.health_status }}">
             <div class="status-icon {{ report.summary.health_status }}">
@@ -461,15 +585,19 @@
 
         <div class="section">
             <h2>📈 Top Metrics by Cardinality</h2>
+            <div class="search-box">
+                <span class="search-label">Search:</span>
+                <input type="text" id="metrics-search" class="search-input" placeholder="Filter metrics by name, type, or labels...">
+            </div>
             <div class="table-responsive">
-                <table class="data-table">
+                <table class="data-table" id="metrics-table">
                     <thead>
                         <tr>
-                            <th>Metric Name</th>
-                            <th>Cardinality</th>
-                            <th>Type</th>
-                            <th>Labels ({{ "Count" }})</th>
-                            <th>Growth Rate</th>
+                            <th class="sortable">Metric Name</th>
+                            <th class="sortable" data-type="numeric">Cardinality</th>
+                            <th class="sortable">Type</th>
+                            <th class="sortable" data-type="numeric">Labels (Count)</th>
+                            <th class="sortable" data-type="numeric">Growth Rate</th>
                             <th>Documentation</th>
                         </tr>
                     </thead>
@@ -490,12 +618,9 @@
                             <td>
                                 <div class="label-list">
                                     <strong>({{ metric.label_count }})</strong>
-                                    {% for label in metric.labels[:5] %}
+                                    {% for label in metric.labels %}
                                         <span class="label-tag">{{ label }}</span>
                                     {% endfor %}
-                                    {% if metric.labels|length > 5 %}
-                                        <span class="label-tag">+{{ metric.labels|length - 5 }} more</span>
-                                    {% endif %}
                                 </div>
                             </td>
                             <td>
@@ -522,14 +647,18 @@
 
         <div class="section">
             <h2>🏷️ High Cardinality Labels</h2>
+            <div class="search-box">
+                <span class="search-label">Search:</span>
+                <input type="text" id="labels-search" class="search-input" placeholder="Filter labels by name or metrics...">
+            </div>
             <div class="table-responsive">
-                <table class="data-table">
+                <table class="data-table" id="labels-table">
                     <thead>
                         <tr>
-                            <th>Label Name</th>
-                            <th>Total Cardinality</th>
-                            <th>Max Single Metric</th>
-                            <th>Used in Metrics</th>
+                            <th class="sortable">Label Name</th>
+                            <th class="sortable" data-type="numeric">Total Cardinality</th>
+                            <th class="sortable" data-type="numeric">Max Single Metric</th>
+                            <th class="sortable" data-type="numeric">Used in Metrics</th>
                             <th>Example Metrics</th>
                         </tr>
                     </thead>
@@ -566,13 +695,17 @@
             <p style="margin-bottom: 15px; color: var(--text-secondary);">
                 Growth rates calculated over the last 10 minutes. Positive values indicate increasing cardinality.
             </p>
+            <div class="search-box">
+                <span class="search-label">Search:</span>
+                <input type="text" id="growth-search" class="search-input" placeholder="Filter by metric name...">
+            </div>
             <div class="table-responsive">
-                <table class="data-table">
+                <table class="data-table" id="growth-table">
                     <thead>
                         <tr>
-                            <th>Metric Name</th>
-                            <th>Growth Rate</th>
-                            <th>Current Cardinality</th>
+                            <th class="sortable">Metric Name</th>
+                            <th class="sortable" data-type="numeric">Growth Rate</th>
+                            <th class="sortable" data-type="numeric">Current Cardinality</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -604,6 +737,115 @@
             </div>
         </div>
         {% endif %}
+
+        <div class="section">
+            <h2>📊 Quick Actions</h2>
+            <div class="action-links">
+                <a href="/cardinality/all-metrics" class="action-link">View All Metrics</a>
+                <a href="/cardinality/all-labels" class="action-link">View All Labels</a>
+                <a href="/cardinality/export/json" class="action-link" download="cardinality_export.json">Export as JSON</a>
+                <button class="action-link" onclick="window.location.reload()">Refresh Analysis</button>
+            </div>
+        </div>
+        {% endif %}  <!-- End of first_run_pending check -->
     </div>
+
+    <script>
+        // Table sorting functionality
+        function makeTableSortable(tableId) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+
+            const headers = table.querySelectorAll('th.sortable');
+            headers.forEach((header, index) => {
+                header.addEventListener('click', () => {
+                    sortTable(table, index, header);
+                });
+            });
+        }
+
+        function sortTable(table, column, header) {
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const isNumeric = header.dataset.type === 'numeric';
+            const currentOrder = header.classList.contains('sort-asc') ? 'asc' :
+                               header.classList.contains('sort-desc') ? 'desc' : null;
+
+            // Clear all sort indicators
+            table.querySelectorAll('th').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+            });
+
+            // Determine new order
+            const newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+            header.classList.add(`sort-${newOrder}`);
+
+            // Sort rows
+            rows.sort((a, b) => {
+                const aValue = a.cells[column].textContent.trim();
+                const bValue = b.cells[column].textContent.trim();
+
+                if (isNumeric) {
+                    const aNum = parseFloat(aValue.replace(/[^0-9.-]/g, '')) || 0;
+                    const bNum = parseFloat(bValue.replace(/[^0-9.-]/g, '')) || 0;
+                    return newOrder === 'asc' ? aNum - bNum : bNum - aNum;
+                } else {
+                    return newOrder === 'asc' ?
+                        aValue.localeCompare(bValue) :
+                        bValue.localeCompare(aValue);
+                }
+            });
+
+            // Reorder rows in table
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        // Table filtering functionality
+        function setupTableFilter(inputId, tableId) {
+            const input = document.getElementById(inputId);
+            const table = document.getElementById(tableId);
+            if (!input || !table) return;
+
+            input.addEventListener('input', () => {
+                const filter = input.value.toLowerCase();
+                const tbody = table.querySelector('tbody');
+                const rows = tbody.querySelectorAll('tr');
+
+                rows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = text.includes(filter) ? '' : 'none';
+                });
+            });
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Make tables sortable
+            makeTableSortable('metrics-table');
+            makeTableSortable('labels-table');
+            makeTableSortable('growth-table');
+
+            // Setup filters
+            setupTableFilter('metrics-search', 'metrics-table');
+            setupTableFilter('labels-search', 'labels-table');
+            setupTableFilter('growth-search', 'growth-table');
+        });
+
+        // Show more labels functionality
+        function toggleLabels(button, metricName) {
+            const container = button.parentElement;
+            const hiddenLabels = container.querySelectorAll('.label-tag.hidden');
+
+            if (button.textContent.includes('Show')) {
+                hiddenLabels.forEach(label => label.classList.remove('hidden'));
+                button.textContent = 'Show Less';
+            } else {
+                hiddenLabels.forEach((label, index) => {
+                    if (index >= 5) label.classList.add('hidden');
+                });
+                button.textContent = `Show ${hiddenLabels.length - 5} More`;
+            }
+        }
+    </script>
 </body>
 </html>
