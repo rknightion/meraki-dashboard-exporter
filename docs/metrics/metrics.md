@@ -1465,7 +1465,7 @@ All metrics in alphabetical order:
     ```promql
     # Filter by organization
     meraki_device_up{org_name="Production"}
-
+    
     # Filter by device type
     meraki_device_up{device_model=~"MS.*"}
     ```
