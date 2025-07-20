@@ -351,7 +351,7 @@ def generate_markdown(metrics: list[dict[str, Any]]) -> str:
     lines.append("    ```promql")
     lines.append("    # Filter by organization")
     lines.append('    meraki_device_up{org_name="Production"}')
-    lines.append("    ")
+    lines.append("")
     lines.append("    # Filter by device type")
     lines.append('    meraki_device_up{device_model=~"MS.*"}')
     lines.append("    ```")
@@ -359,6 +359,7 @@ def generate_markdown(metrics: list[dict[str, Any]]) -> str:
     lines.append(
         "For more information on using these metrics, see the [Overview](overview.md) page."
     )
+    lines.append("")  # Add trailing blank line
 
     return "\n".join(lines)
 
@@ -394,6 +395,7 @@ def main() -> None:
     output_file.parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, "w") as f:
         f.write(markdown)
+        f.write("\n")  # Ensure file ends with newline
 
     print(f"Documentation written to {output_file}")
 
