@@ -58,13 +58,13 @@ class AsyncMerakiClient:
         if self._api is None:
             logger.debug(
                 "Creating new Meraki Dashboard API client",
-                base_url=self.settings.api_base_url,
+                base_url=self.settings.meraki.api_base_url,
                 timeout=self.settings.api.timeout,
                 max_retries=self.settings.api.max_retries,
             )
             self._api = meraki.DashboardAPI(
-                api_key=self.settings.api_key.get_secret_value(),
-                base_url=self.settings.api_base_url,
+                api_key=self.settings.meraki.api_key.get_secret_value(),
+                base_url=self.settings.meraki.api_base_url,
                 output_log=False,
                 suppress_logging=False,
                 inherit_logging_config=True,

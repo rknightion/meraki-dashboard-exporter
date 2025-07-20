@@ -26,7 +26,7 @@ def setup_logging(settings: Settings) -> None:
     logging.basicConfig(
         format="%(message)s",
         stream=sys.stdout,
-        level=getattr(logging, settings.log_level),
+        level=getattr(logging, settings.logging.level),
     )
 
     # Control third-party library logging
@@ -36,7 +36,7 @@ def setup_logging(settings: Settings) -> None:
 
     # For Meraki SDK, respect DEBUG level but default to WARNING for other levels
     meraki_logger = logging.getLogger("meraki")
-    if settings.log_level == "DEBUG":
+    if settings.logging.level == "DEBUG":
         meraki_logger.setLevel(logging.DEBUG)
     else:
         meraki_logger.setLevel(logging.WARNING)
@@ -103,7 +103,7 @@ def setup_logging(settings: Settings) -> None:
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
     # Control uvicorn logging - only show warnings and above unless in DEBUG mode
-    if settings.log_level != "DEBUG":
+    if settings.logging.level != "DEBUG":
         logging.getLogger("uvicorn").setLevel(logging.WARNING)
         logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
         logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
@@ -127,7 +127,9 @@ def setup_logging(settings: Settings) -> None:
 
     structlog.configure(
         processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, settings.log_level)),
+        wrapper_class=structlog.make_filtering_bound_logger(
+            getattr(logging, settings.logging.level)
+        ),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(),
         cache_logger_on_first_use=True,

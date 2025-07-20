@@ -196,7 +196,7 @@ class TestAlertsCollector(BaseCollectorTest):
     ):
         """Test collection with a specific org_id configured."""
         # Configure specific org_id
-        settings.org_id = "456"
+        settings.meraki.org_id = "456"
 
         # Create collector with specific settings
         collector = AlertsCollector(

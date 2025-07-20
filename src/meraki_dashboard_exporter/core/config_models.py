@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
 
 class APISettings(BaseModel):
@@ -241,92 +241,37 @@ class ClientSettings(BaseModel):
     )
 
 
-class ConfigurationProfile(BaseModel):
-    """Configuration profile for different deployment scenarios."""
+class MerakiSettings(BaseModel):
+    """Meraki API configuration."""
 
-    name: str = Field(description="Profile name")
-    description: str = Field(description="Profile description")
-    api: APISettings = Field(default_factory=APISettings)
-    update_intervals: UpdateIntervals = Field(default_factory=UpdateIntervals)
-    monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
-    collectors: CollectorSettings = Field(default_factory=CollectorSettings)
-    clients: ClientSettings = Field(default_factory=ClientSettings)
+    api_key: SecretStr = Field(
+        ...,
+        description="Meraki Dashboard API key",
+    )
+    org_id: str | None = Field(
+        None,
+        description="Meraki organization ID (optional, will fetch all orgs if not set)",
+    )
+    api_base_url: str = Field(
+        "https://api.meraki.com/api/v1",
+        description="Meraki API base URL (use regional endpoints if needed)",
+    )
+
+    @field_validator("api_key")
+    @classmethod
+    def validate_api_key(cls, v: SecretStr) -> SecretStr:
+        """Validate API key format."""
+        key = v.get_secret_value()
+        if not key or len(key) < 30:
+            raise ValueError("Invalid API key format")
+        return v
 
 
-# Predefined configuration profiles
-PROFILES: dict[str, ConfigurationProfile] = {
-    "development": ConfigurationProfile(
-        name="development",
-        description="Development environment with relaxed limits",
-        api=APISettings(
-            max_retries=1,
-            timeout=60,
-            concurrency_limit=2,
-            batch_size=5,
-        ),
-        update_intervals=UpdateIntervals(
-            fast=60,
-            medium=300,
-            slow=900,
-        ),
-        monitoring=MonitoringSettings(
-            max_consecutive_failures=3,
-            histogram_buckets=[0.1, 0.5, 1.0, 5.0, 10.0, 30.0],
-        ),
-    ),
-    "production": ConfigurationProfile(
-        name="production",
-        description="Production environment with standard settings",
-        api=APISettings(
-            max_retries=3,
-            timeout=30,
-            concurrency_limit=5,
-            batch_size=10,
-        ),
-        update_intervals=UpdateIntervals(
-            fast=60,
-            medium=300,
-            slow=900,
-        ),
-        monitoring=MonitoringSettings(),
-    ),
-    "high_volume": ConfigurationProfile(
-        name="high_volume",
-        description="High volume environment with aggressive settings",
-        api=APISettings(
-            max_retries=5,
-            timeout=45,
-            concurrency_limit=10,
-            batch_size=20,
-            batch_delay=1.0,
-        ),
-        update_intervals=UpdateIntervals(
-            fast=120,
-            medium=600,
-            slow=1800,
-        ),
-        monitoring=MonitoringSettings(
-            max_consecutive_failures=20,
-            license_expiration_warning_days=60,
-        ),
-        collectors=CollectorSettings(
-            collector_timeout=300,
-        ),
-    ),
-    "minimal": ConfigurationProfile(
-        name="minimal",
-        description="Minimal configuration for testing",
-        api=APISettings(
-            concurrency_limit=1,
-            batch_size=1,
-        ),
-        update_intervals=UpdateIntervals(
-            fast=300,
-            medium=600,
-            slow=1800,
-        ),
-        collectors=CollectorSettings(
-            enabled_collectors={"device", "organization"},
-        ),
-    ),
-}
+class LoggingSettings(BaseModel):
+    """Logging configuration."""
+
+    level: str = Field(
+        "INFO",
+        description="Logging level",
+        pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$",
+    )

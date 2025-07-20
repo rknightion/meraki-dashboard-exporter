@@ -25,8 +25,8 @@ def test_registry():
 @pytest.fixture
 def mock_settings(monkeypatch):
     """Create mock settings for integration tests."""
-    monkeypatch.setenv("MERAKI_API_KEY", "a" * 40)
-    monkeypatch.setenv("MERAKI_EXPORTER_ORG_ID", "123456")
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__ORG_ID", "123456")
     settings = Settings()
     return settings
 
@@ -52,7 +52,7 @@ class TestMetricsIntegration:
     async def test_full_collection_cycle(self, mock_api_client, monkeypatch):
         """Test a complete collection cycle with multiple collectors."""
         # Create settings without org_id for full testing
-        monkeypatch.setenv("MERAKI_API_KEY", "a" * 40)
+        monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
         # No org_id set
         mock_settings = Settings()
 

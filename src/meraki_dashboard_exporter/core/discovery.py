@@ -29,11 +29,13 @@ class DiscoveryService:
 
         try:
             # Get organizations
-            if self.settings.org_id:
-                logger.info("Configured for single organization", org_id=self.settings.org_id)
+            if self.settings.meraki.org_id:
+                logger.info(
+                    "Configured for single organization", org_id=self.settings.meraki.org_id
+                )
                 org = await asyncio.to_thread(
                     self.api.organizations.getOrganization,
-                    self.settings.org_id,
+                    self.settings.meraki.org_id,
                 )
                 organizations = [org]
             else:

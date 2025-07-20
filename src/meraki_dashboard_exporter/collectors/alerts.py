@@ -77,9 +77,11 @@ class AlertsCollector(MetricCollector):
             api_calls_made += 1
 
             # Build org mapping
-            if self.settings.org_id:
-                org_ids = [self.settings.org_id]
-                org_names = {self.settings.org_id: orgs_data[0].get("name", "configured_org")}
+            if self.settings.meraki.org_id:
+                org_ids = [self.settings.meraki.org_id]
+                org_names = {
+                    self.settings.meraki.org_id: orgs_data[0].get("name", "configured_org")
+                }
             else:
                 org_ids = [org["id"] for org in orgs_data]
                 org_names = {org["id"]: org.get("name", "unknown") for org in orgs_data}
@@ -124,10 +126,10 @@ class AlertsCollector(MetricCollector):
             List of organizations or None on error.
 
         """
-        if self.settings.org_id:
+        if self.settings.meraki.org_id:
             org = await asyncio.to_thread(
                 self.api.organizations.getOrganization,
-                self.settings.org_id,
+                self.settings.meraki.org_id,
             )
             return [org]
         else:

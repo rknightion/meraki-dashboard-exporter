@@ -166,11 +166,11 @@ class ConfigCollector(MetricCollector):
             List of organizations or None on error.
 
         """
-        if self.settings.org_id:
+        if self.settings.meraki.org_id:
             # Single organization
             org = await asyncio.to_thread(
                 self.api.organizations.getOrganization,
-                self.settings.org_id,
+                self.settings.meraki.org_id,
             )
             return [org]
         else:
