@@ -227,6 +227,12 @@ class ClientSettings(BaseModel):
         le=10.0,
         description="DNS lookup timeout in seconds",
     )
+    dns_cache_ttl: int = Field(
+        21600,  # 6 hours
+        ge=300,  # 5 minutes minimum
+        le=86400,  # 24 hours maximum
+        description="DNS cache TTL in seconds (default: 6 hours)",
+    )
     cache_ttl: int = Field(
         3600,
         ge=300,

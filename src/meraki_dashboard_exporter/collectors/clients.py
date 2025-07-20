@@ -13,7 +13,7 @@ from ..core.collector import MetricCollector
 from ..core.constants import ClientMetricName, UpdateTier
 from ..core.error_handling import ErrorCategory, with_error_handling
 from ..core.logging_decorators import log_api_call, log_collection_progress
-from ..core.metrics import LabelName, create_info_labels
+from ..core.metrics import LabelName
 from ..core.registry import register_collector
 from ..services.client_store import ClientStore
 from ..services.dns_resolver import DNSResolver
@@ -56,15 +56,16 @@ class ClientsCollector(MetricCollector):
         self.client_store = ClientStore(self.settings)
         self.dns_resolver = DNSResolver(self.settings)
 
-        # Initialize metrics
-        self._initialize_metrics()
-
     def _initialize_metrics(self) -> None:
         """Initialize Prometheus metrics for client data."""
-        # Client info metric
-        self.client_info = self._create_info(
+        # Skip metric initialization if collector is disabled
+        if not self.settings.clients.enabled:
+            return
+
+        # Client info metric - using Gauge instead of Info to avoid Prometheus Info metric issues
+        self.client_info = self._create_gauge(
             ClientMetricName.CLIENT_INFO,
-            "Client information",
+            "Client information (value is always 1)",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -78,6 +79,10 @@ class ClientsCollector(MetricCollector):
                 LabelName.MANUFACTURER,
                 LabelName.OS,
                 LabelName.RECENT_DEVICE_NAME,
+                LabelName.IP,
+                LabelName.VLAN,
+                LabelName.FIRST_SEEN,
+                LabelName.LAST_SEEN,
             ],
         )
 
@@ -195,8 +200,8 @@ class ClientsCollector(MetricCollector):
             task = self._collect_network_clients(
                 org_id,
                 org_name,
-                network.id,
-                network.name,
+                network["id"],
+                network["name"],
             )
             tasks.append(task)
 
@@ -270,30 +275,16 @@ class ClientsCollector(MetricCollector):
             client_count=len(clients),
         )
 
-        # Get existing client data to reuse cached hostnames
-        existing_clients = self.client_store.get_network_clients(network_id)
-        existing_hostnames = {
-            client.ip: client.hostname
-            for client in existing_clients
-            if client.ip and client.hostname
-        }
+        # Prepare client data for DNS resolution
+        client_data = [(c.id, c.ip, c.description) for c in clients]
 
-        # Extract IPs that need DNS resolution (new IPs or ones without hostnames)
-        ips_to_resolve = {c.ip for c in clients if c.ip and c.ip not in existing_hostnames}
-
-        # Resolve only new hostnames
-        new_hostnames = {}
-        if ips_to_resolve:
-            logger.debug(
-                "Resolving new hostnames",
-                network_id=network_id,
-                new_ip_count=len(ips_to_resolve),
-                cached_count=len(existing_hostnames),
-            )
-            new_hostnames = await self.dns_resolver.resolve_multiple(list(ips_to_resolve))
-
-        # Combine existing and new hostnames
-        hostnames = {**existing_hostnames, **new_hostnames}
+        # Resolve hostnames with client tracking
+        logger.debug(
+            "Resolving hostnames for network",
+            network_id=network_id,
+            client_count=len(clients),
+        )
+        hostnames = await self.dns_resolver.resolve_multiple(client_data)
 
         # Update client store
         self.client_store.update_clients(
@@ -306,6 +297,81 @@ class ClientsCollector(MetricCollector):
 
         # Update metrics
         await self._update_metrics(org_id, org_name, network_id, network_name, clients, hostnames)
+
+    def _sanitize_label_value(self, value: str | None, max_length: int = 2048) -> str:
+        """Sanitize a label value for Prometheus.
+
+        Parameters
+        ----------
+        value : str | None
+            Value to sanitize.
+        max_length : int
+            Maximum length for the label value.
+
+        Returns
+        -------
+        str
+            Sanitized value.
+
+        """
+        if not value:
+            return ""
+
+        # Replace characters not allowed in Prometheus labels with hyphen
+        # Allowed: [a-zA-Z0-9_-]
+        sanitized = ""
+        for char in value:
+            if char.isalnum() or char in "_- ":
+                sanitized += char
+            else:
+                sanitized += "-"
+
+        # Truncate to max length
+        if len(sanitized) > max_length:
+            sanitized = sanitized[:max_length]
+
+        return sanitized
+
+    def _determine_hostname(
+        self,
+        client: NetworkClient,
+        resolved_hostname: str | None,
+    ) -> str:
+        """Determine the hostname to use for a client.
+
+        Priority:
+        1. Resolved hostname from DNS
+        2. Client description (if not empty)
+        3. Client IP address
+        4. "unknown"
+
+        Parameters
+        ----------
+        client : NetworkClient
+            Client data.
+        resolved_hostname : str | None
+            Hostname resolved from DNS.
+
+        Returns
+        -------
+        str
+            Hostname to use.
+
+        """
+        # Priority 1: DNS resolved hostname
+        if resolved_hostname:
+            return resolved_hostname
+
+        # Priority 2: Client description
+        if client.description:
+            return client.description
+
+        # Priority 3: Client IP
+        if client.ip:
+            return client.ip
+
+        # Priority 4: Fallback
+        return "unknown"
 
     @log_collection_progress("clients")
     async def _update_metrics(
@@ -342,8 +408,15 @@ class ClientsCollector(MetricCollector):
 
         """
         for client in clients:
-            # Get hostname
-            hostname = hostnames.get(client.ip) if client.ip else None
+            # Get resolved hostname from DNS
+            resolved_hostname = hostnames.get(client.ip) if client.ip else None
+
+            # Determine final hostname using fallback logic
+            hostname = self._determine_hostname(client, resolved_hostname)
+
+            # Sanitize label values
+            sanitized_hostname = self._sanitize_label_value(hostname)
+            sanitized_description = self._sanitize_label_value(client.description)
 
             # Determine effective SSID
             ssid = client.ssid if client.recentDeviceConnection == "Wireless" else "Wired"
@@ -356,29 +429,24 @@ class ClientsCollector(MetricCollector):
                 str(LabelName.NETWORK_NAME): network_name,
                 str(LabelName.CLIENT_ID): client.id,
                 str(LabelName.MAC): client.mac,
-                str(LabelName.DESCRIPTION): client.description or "",
-                str(LabelName.HOSTNAME): hostname or "",
+                str(LabelName.DESCRIPTION): sanitized_description,
+                str(LabelName.HOSTNAME): sanitized_hostname,
                 str(LabelName.SSID): ssid or "Unknown",
             }
 
-            # Set client info
-            info_labels = create_info_labels({
-                "first_seen": client.firstSeen.isoformat(),
-                "last_seen": client.lastSeen.isoformat(),
-                "manufacturer": client.manufacturer or "",
-                "os": client.os or "",
-                "recent_device_name": client.recentDeviceName or "",
-                "vlan": client.vlan or "",
-                "ip": client.ip or "",
-                "ip6": client.ip6 or "",
-            })
-
+            # Set client info (as gauge with value 1)
             self.client_info.labels(**{
                 **labels,
-                str(LabelName.MANUFACTURER): client.manufacturer or "",
-                str(LabelName.OS): client.os or "",
-                str(LabelName.RECENT_DEVICE_NAME): client.recentDeviceName or "",
-            }).info(info_labels)
+                str(LabelName.MANUFACTURER): self._sanitize_label_value(client.manufacturer),
+                str(LabelName.OS): self._sanitize_label_value(client.os),
+                str(LabelName.RECENT_DEVICE_NAME): self._sanitize_label_value(
+                    client.recentDeviceName
+                ),
+                str(LabelName.IP): client.ip or "",
+                str(LabelName.VLAN): client.vlan or "",
+                str(LabelName.FIRST_SEEN): client.firstSeen.isoformat(),
+                str(LabelName.LAST_SEEN): client.lastSeen.isoformat(),
+            }).set(1)
 
             # Set client status
             status_value = 1 if client.status == "Online" else 0

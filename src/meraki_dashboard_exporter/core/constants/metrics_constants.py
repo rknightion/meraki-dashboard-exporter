@@ -220,7 +220,7 @@ class NetworkHealthMetricName(StrEnum):
 class ClientMetricName(StrEnum):
     """Client-level metric names."""
 
-    # Client info metric
+    # Client info metric (using Gauge instead of Info to avoid registration issues)
     CLIENT_INFO = "meraki_client_info"
 
     # Client status metrics

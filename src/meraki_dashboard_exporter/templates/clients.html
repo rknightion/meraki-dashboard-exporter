@@ -182,6 +182,65 @@
             font-size: 0.95rem;
         }
 
+        .dns-cache-card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .dns-cache-card h3 {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+        }
+
+        .cache-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .cache-stat {
+            background-color: #f8f8f8;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .cache-stat .label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 3px;
+        }
+
+        .cache-stat .value {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--info-color);
+        }
+
+        .clear-cache-btn {
+            background-color: var(--warning-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .clear-cache-btn:hover {
+            background-color: #e68900;
+        }
+
+        .clear-cache-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
         .nav-link {
             display: inline-block;
             margin-bottom: 20px;
@@ -216,6 +275,35 @@
             <p><strong>DNS Server:</strong> {{ dns_server }}</p>
             <p><strong>Cache TTL:</strong> {{ cache_ttl }} seconds</p>
         </div>
+
+        {% if dns_cache_stats %}
+        <div class="dns-cache-card">
+            <h3>DNS Cache Statistics</h3>
+            <div class="cache-stats">
+                <div class="cache-stat">
+                    <div class="label">Total Entries</div>
+                    <div class="value">{{ dns_cache_stats.total_entries }}</div>
+                </div>
+                <div class="cache-stat">
+                    <div class="label">Valid Entries</div>
+                    <div class="value">{{ dns_cache_stats.valid_entries }}</div>
+                </div>
+                <div class="cache-stat">
+                    <div class="label">Expired Entries</div>
+                    <div class="value">{{ dns_cache_stats.expired_entries }}</div>
+                </div>
+                <div class="cache-stat">
+                    <div class="label">Tracked Clients</div>
+                    <div class="value">{{ dns_cache_stats.tracked_clients }}</div>
+                </div>
+                <div class="cache-stat">
+                    <div class="label">Cache TTL</div>
+                    <div class="value">{{ dns_cache_stats.cache_ttl_seconds }}s</div>
+                </div>
+            </div>
+            <button class="clear-cache-btn" onclick="clearDNSCache()">Clear DNS Cache</button>
+        </div>
+        {% endif %}
 
         <div class="stats-grid">
             <div class="stat-card">
@@ -305,5 +393,43 @@
             </div>
         {% endif %}
     </div>
+
+    <script>
+        async function clearDNSCache() {
+            const button = document.querySelector('.clear-cache-btn');
+            button.disabled = true;
+            button.textContent = 'Clearing...';
+
+            try {
+                const response = await fetch('/api/clients/clear-dns-cache', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    button.textContent = 'Cache Cleared!';
+                    setTimeout(() => {
+                        button.textContent = 'Clear DNS Cache';
+                        button.disabled = false;
+                        // Reload the page to show updated stats
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    throw new Error(data.message || 'Failed to clear cache');
+                }
+            } catch (error) {
+                console.error('Error clearing DNS cache:', error);
+                button.textContent = 'Error!';
+                setTimeout(() => {
+                    button.textContent = 'Clear DNS Cache';
+                    button.disabled = false;
+                }, 2000);
+            }
+        }
+    </script>
 </body>
 </html>

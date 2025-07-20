@@ -83,6 +83,10 @@ class LabelName(StrEnum):
     MANUFACTURER = "manufacturer"
     OS = "os"
     RECENT_DEVICE_NAME = "recent_device_name"
+    IP = "ip"
+    VLAN = "vlan"
+    FIRST_SEEN = "first_seen"
+    LAST_SEEN = "last_seen"
 
 
 MetricType = Literal["gauge", "counter", "histogram", "info"]

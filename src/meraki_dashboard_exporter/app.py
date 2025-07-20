@@ -424,11 +424,13 @@ class ExporterApp:
                     status_code=404,
                 )
 
-            # Get client store from collector
+            # Get client store and DNS resolver from collector
             client_store = None
+            dns_resolver = None
             for collector in exporter.collector_manager.collectors[UpdateTier.MEDIUM]:
                 if collector.__class__.__name__ == "ClientsCollector" and collector.is_active:
                     client_store = getattr(collector, "client_store", None)
+                    dns_resolver = getattr(collector, "dns_resolver", None)
                     break
 
             if not client_store:
@@ -454,6 +456,9 @@ class ExporterApp:
             # Get statistics
             stats = client_store.get_statistics()
 
+            # Get DNS cache statistics
+            dns_cache_stats = dns_resolver.get_cache_stats() if dns_resolver else {}
+
             context = {
                 "request": request,
                 "version": __version__,
@@ -464,9 +469,34 @@ class ExporterApp:
                 "network_count": stats["total_networks"],
                 "cache_ttl": exporter.settings.clients.cache_ttl,
                 "dns_server": exporter.settings.clients.dns_server or "System Default",
+                "dns_cache_stats": dns_cache_stats,
             }
 
             return app.state.templates.TemplateResponse("clients.html", context)  # type: ignore[no-any-return]
+
+        @app.post("/api/clients/clear-dns-cache")
+        async def clear_dns_cache() -> dict[str, str]:
+            """Clear the DNS cache."""
+            # Get exporter instance from app state
+            exporter = app.state.exporter
+
+            # Check if client collection is enabled
+            if not exporter.settings.clients.enabled:
+                return {"status": "error", "message": "Client collection is disabled"}
+
+            # Get DNS resolver from collector
+            dns_resolver = None
+            for collector in exporter.collector_manager.collectors[UpdateTier.MEDIUM]:
+                if collector.__class__.__name__ == "ClientsCollector" and collector.is_active:
+                    dns_resolver = getattr(collector, "dns_resolver", None)
+                    break
+
+            if not dns_resolver:
+                return {"status": "error", "message": "DNS resolver not found"}
+
+            # Clear the cache
+            dns_resolver.clear_cache()
+            return {"status": "success", "message": "DNS cache cleared"}
 
         return app
 

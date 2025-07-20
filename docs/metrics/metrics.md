@@ -66,15 +66,15 @@ The exporter provides metrics across several categories:
 
 #### `meraki_client_info`
 
-**Description:** Client information
+**Description:** Client information (value is always 1)
 
-**Type:** info
+**Type:** gauge
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.SSID`, `LabelName.MANUFACTURER`, `LabelName.OS`, `LabelName.RECENT_DEVICE_NAME`
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.SSID`, `LabelName.MANUFACTURER`, `LabelName.OS`, `LabelName.RECENT_DEVICE_NAME`, `LabelName.IP`, `LabelName.VLAN`, `LabelName.FIRST_SEEN`, `LabelName.LAST_SEEN`
 
 **Constant:** `ClientMetricName.CLIENT_INFO`
 
-**Variable:** `self.client_info` (line 65)
+**Variable:** `self.client_info` (line 66)
 
 #### `meraki_client_status`
 
@@ -86,7 +86,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `ClientMetricName.CLIENT_STATUS`
 
-**Variable:** `self.client_status` (line 85)
+**Variable:** `self.client_status` (line 90)
 
 #### `meraki_client_usage_recv_kb`
 
@@ -98,7 +98,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `ClientMetricName.CLIENT_USAGE_RECV_KB`
 
-**Variable:** `self.client_usage_recv` (line 118)
+**Variable:** `self.client_usage_recv` (line 123)
 
 #### `meraki_client_usage_sent_kb`
 
@@ -110,7 +110,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `ClientMetricName.CLIENT_USAGE_SENT_KB`
 
-**Variable:** `self.client_usage_sent` (line 102)
+**Variable:** `self.client_usage_sent` (line 107)
 
 #### `meraki_client_usage_total_kb`
 
@@ -122,7 +122,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `ClientMetricName.CLIENT_USAGE_TOTAL_KB`
 
-**Variable:** `self.client_usage_total` (line 134)
+**Variable:** `self.client_usage_total` (line 139)
 
 ### ConfigCollector
 
@@ -1356,7 +1356,7 @@ All metrics in alphabetical order:
 | `meraki_alerts_total_by_severity` | gauge | AlertsCollector | Total number of active alerts by severity |
 | `meraki_ap_channel_utilization_2_4ghz_percent` | gauge | NetworkHealthCollector | 2.4GHz channel utilization percentage per AP |
 | `meraki_ap_channel_utilization_5ghz_percent` | gauge | NetworkHealthCollector | 5GHz channel utilization percentage per AP |
-| `meraki_client_info` | info | ClientsCollector | Client information |
+| `meraki_client_info` | gauge | ClientsCollector | Client information (value is always 1) |
 | `meraki_client_status` | gauge | ClientsCollector | Client online status (1 = online, 0 = offline) |
 | `meraki_client_usage_recv_kb` | counter | ClientsCollector | Total kilobytes received by client |
 | `meraki_client_usage_sent_kb` | counter | ClientsCollector | Total kilobytes sent by client |
