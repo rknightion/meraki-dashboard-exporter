@@ -4,40 +4,47 @@ This document provides a comprehensive reference for all configuration options a
 
 ## Overview
 
-The exporter can be configured using environment variables or configuration files.
+The exporter can be configured using environment variables.
 All configuration is based on Pydantic models with built-in validation.
 
 ## Environment Variable Format
 
 Configuration follows a hierarchical structure using environment variables:
 
-- **Main settings**: `MERAKI_EXPORTER_{SETTING}`
-- **Nested settings**: `MERAKI_EXPORTER_{SECTION}__{SETTING}`
-- **Special case**: `MERAKI_API_KEY` (no prefix required)
+- **All settings**: `MERAKI_EXPORTER_{SECTION}__{SETTING}`
+- **Double underscore** (`__`) separates nested configuration levels
 
 !!! example "Environment Variable Examples"
     ```bash
-    # Main setting
-    export MERAKI_EXPORTER_LOG_LEVEL=INFO
+    # Meraki API configuration
+    export MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here
+    export MERAKI_EXPORTER_MERAKI__ORG_ID=123456
 
-    # Nested setting
+    # Logging configuration
+    export MERAKI_EXPORTER_LOGGING__LEVEL=INFO
+
+    # API settings
     export MERAKI_EXPORTER_API__TIMEOUT=30
-
-    # API key (special case)
-    export MERAKI_API_KEY=your_api_key_here
+    export MERAKI_EXPORTER_API__CONCURRENCY_LIMIT=5
     ```
 
-## Main Settings
+## Meraki Settings
 
-These are the primary configuration options for the exporter:
+Core Meraki API configuration
 
-| Environment Variable | Type | Default | Required | Description |
-|---------------------|------|---------|----------|-------------|
-| `MERAKI_EXPORTER_PROFILE` | `str | None` | `_(none)_` | ❌ No | Configuration profile to use (development, production, high_volume, minimal) |
-| `MERAKI_API_KEY` | `SecretStr` | `PydanticUndefined` | ✅ Yes | Meraki Dashboard API key |
-| `MERAKI_EXPORTER_ORG_ID` | `str | None` | `_(none)_` | ❌ No | Meraki organization ID (optional, will fetch all orgs if not set) |
-| `MERAKI_EXPORTER_API_BASE_URL` | `str` | `https://api.meraki.com/api/v1` | ❌ No | Meraki API base URL (use regional endpoints if needed) |
-| `MERAKI_EXPORTER_LOG_LEVEL` | `Literal` | `INFO` | ❌ No | Logging level |
+| Environment Variable | Type | Default | Description |
+|---------------------|------|---------|-------------|
+| `MERAKI_EXPORTER_MERAKI__API_KEY` | `SecretStr` | `PydanticUndefined` | Meraki Dashboard API key |
+| `MERAKI_EXPORTER_MERAKI__ORG_ID` | `str | None` | `_(none)_` | Meraki organization ID (optional, will fetch all orgs if not set) |
+| `MERAKI_EXPORTER_MERAKI__API_BASE_URL` | `str` | `https://api.meraki.com/api/v1` | Meraki API base URL (use regional endpoints if needed) |
+
+## Logging Settings
+
+Logging configuration
+
+| Environment Variable | Type | Default | Description |
+|---------------------|------|---------|-------------|
+| `MERAKI_EXPORTER_LOGGING__LEVEL` | `str` | `INFO` | Logging level |
 
 ## API Settings
 
@@ -117,149 +124,3 @@ Client data collection and DNS resolution settings
 | `MERAKI_EXPORTER_CLIENTS__DNS_TIMEOUT` | `float` | `2.0` | DNS lookup timeout in seconds |
 | `MERAKI_EXPORTER_CLIENTS__CACHE_TTL` | `int` | `3600` | Client cache TTL in seconds (for ID/hostname mappings, not metrics) |
 | `MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_PER_NETWORK` | `int` | `10000` | Maximum clients to track per network |
-
-## Configuration Profiles
-
-Pre-defined configuration profiles provide optimized settings for different deployment scenarios. Activate a profile using `MERAKI_EXPORTER_PROFILE`.
-
-### Development
-
-**Description:** Development environment with relaxed limits
-
-**Usage:**
-```bash
-export MERAKI_EXPORTER_PROFILE=development
-```
-
-**Key Settings:**
-
-- **API Concurrency:** 2 concurrent requests
-- **Batch Size:** 5 items per batch
-- **API Timeout:** 60 seconds
-- **Update Intervals:** 60s / 300s / 900s
-- **Max Failures:** 3
-- **Collector Timeout:** 120 seconds
-- **Client Collection:** Disabled
-
-### Production
-
-**Description:** Production environment with standard settings
-
-**Usage:**
-```bash
-export MERAKI_EXPORTER_PROFILE=production
-```
-
-**Key Settings:**
-
-- **API Concurrency:** 5 concurrent requests
-- **Batch Size:** 10 items per batch
-- **API Timeout:** 30 seconds
-- **Update Intervals:** 60s / 300s / 900s
-- **Max Failures:** 10
-- **Collector Timeout:** 120 seconds
-- **Client Collection:** Disabled
-
-### High_Volume
-
-**Description:** High volume environment with aggressive settings
-
-**Usage:**
-```bash
-export MERAKI_EXPORTER_PROFILE=high_volume
-```
-
-**Key Settings:**
-
-- **API Concurrency:** 10 concurrent requests
-- **Batch Size:** 20 items per batch
-- **API Timeout:** 45 seconds
-- **Update Intervals:** 120s / 600s / 1800s
-- **Max Failures:** 20
-- **Collector Timeout:** 300 seconds
-- **Client Collection:** Disabled
-
-### Minimal
-
-**Description:** Minimal configuration for testing
-
-**Usage:**
-```bash
-export MERAKI_EXPORTER_PROFILE=minimal
-```
-
-**Key Settings:**
-
-- **API Concurrency:** 1 concurrent requests
-- **Batch Size:** 1 items per batch
-- **API Timeout:** 30 seconds
-- **Update Intervals:** 300s / 600s / 1800s
-- **Max Failures:** 10
-- **Collector Timeout:** 120 seconds
-- **Client Collection:** Disabled
-
-## Configuration Examples
-
-### Basic Setup
-
-Minimal configuration for getting started:
-
-```bash
-export MERAKI_API_KEY=your_api_key_here
-export MERAKI_EXPORTER_LOG_LEVEL=INFO
-```
-
-### Production Deployment
-
-Production-ready configuration with optimized settings:
-
-```bash
-export MERAKI_API_KEY=your_api_key_here
-export MERAKI_EXPORTER_PROFILE=production
-export MERAKI_EXPORTER_ORG_ID=123456
-export MERAKI_EXPORTER_API__CONCURRENCY_LIMIT=10
-export MERAKI_EXPORTER_API__TIMEOUT=45
-export MERAKI_EXPORTER_OTEL__ENABLED=true
-export MERAKI_EXPORTER_OTEL__ENDPOINT=http://otel-collector:4317
-```
-
-### High Volume Environment
-
-Configuration for large organizations with many devices:
-
-```bash
-export MERAKI_API_KEY=your_api_key_here
-export MERAKI_EXPORTER_PROFILE=high_volume
-export MERAKI_EXPORTER_UPDATE_INTERVALS__FAST=120
-export MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM=600
-export MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW=1800
-export MERAKI_EXPORTER_API__CONCURRENCY_LIMIT=15
-export MERAKI_EXPORTER_API__BATCH_SIZE=20
-export MERAKI_EXPORTER_MONITORING__MAX_CONSECUTIVE_FAILURES=20
-```
-
-### Development Environment
-
-Configuration for development and testing:
-
-```bash
-export MERAKI_API_KEY=your_api_key_here
-export MERAKI_EXPORTER_PROFILE=development
-export MERAKI_EXPORTER_LOG_LEVEL=DEBUG
-export MERAKI_EXPORTER_SERVER__PORT=9099
-```
-
-## Best Practices
-
-!!! tip "Configuration Recommendations"
-    - **Use profiles** for consistent deployments across environments
-    - **Set organization ID** (`MERAKI_EXPORTER_ORG_ID`) to limit scope and improve performance
-    - **Adjust intervals** based on your monitoring needs and API rate limits
-    - **Enable OpenTelemetry** in production for better observability
-    - **Monitor API usage** to stay within Meraki's rate limits
-
-!!! warning "Important Notes"
-    - The `MERAKI_API_KEY` is required and must be kept secure
-    - Some metrics require specific Meraki license types
-    - Network-specific collectors may not work with all device types
-    - Rate limiting is automatically handled but can be tuned
