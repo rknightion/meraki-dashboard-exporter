@@ -78,20 +78,6 @@ class CardinalityMonitor:
 
     def _initialize_metrics(self) -> None:
         """Initialize cardinality monitoring metrics."""
-        self.metric_cardinality = Gauge(
-            "meraki_metric_cardinality_total",
-            "Total cardinality (unique label combinations) per metric",
-            labelnames=["metric_name"],
-            registry=self.registry,
-        )
-
-        self.label_cardinality = Gauge(
-            "meraki_label_cardinality_total",
-            "Cardinality per label per metric",
-            labelnames=["metric_name", "label_name"],
-            registry=self.registry,
-        )
-
         self.cardinality_warnings = Counter(
             "meraki_cardinality_warnings_total",
             "Number of cardinality warnings triggered",
@@ -214,9 +200,10 @@ class CardinalityMonitor:
         try:
             for metric_family in self.registry.collect():
                 if (
-                    metric_family.name.startswith("meraki_metric_cardinality")
-                    or metric_family.name.startswith("meraki_cardinality_")
+                    metric_family.name.startswith("meraki_cardinality_")
                     or metric_family.name.startswith("meraki_total_series")
+                    or metric_family.name.startswith("meraki_analyzed_metrics_")
+                    or metric_family.name.startswith("meraki_analysis_duration")
                 ):
                     # Skip our own metrics to avoid recursion
                     continue
@@ -318,20 +305,6 @@ class CardinalityMonitor:
 
             # Calculate per-label cardinality
             label_cardinalities = {label: len(values) for label, values in label_values.items()}
-
-            # Update metrics (only if not our own monitoring metrics)
-            if (
-                not metric_family.name.startswith("meraki_metric_cardinality")
-                and not metric_family.name.startswith("meraki_cardinality_")
-                and not metric_family.name.startswith("meraki_total_series")
-            ):
-                self.metric_cardinality.labels(metric_name=metric_family.name).set(sample_count)
-
-                for label_name, cardinality in label_cardinalities.items():
-                    self.label_cardinality.labels(
-                        metric_name=metric_family.name,
-                        label_name=label_name,
-                    ).set(cardinality)
 
             # Store history
             current_time = time.time()

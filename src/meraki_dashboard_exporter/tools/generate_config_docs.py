@@ -114,7 +114,7 @@ def generate_configuration_docs() -> str:
     # Overview section
     sections.append("## Overview")
     sections.append("")
-    sections.append("The exporter can be configured using environment variables. ")
+    sections.append("The exporter can be configured using environment variables.")
     sections.append("All configuration is based on Pydantic models with built-in validation.")
     sections.append("")
 
@@ -254,6 +254,7 @@ def main() -> None:
     output_file = docs_path / "config.md"
     with open(output_file, "w") as f:
         f.write(markdown)
+        f.write("\n")  # Ensure file ends with newline
 
     print(f"Configuration documentation written to {output_file}")
 
