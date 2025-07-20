@@ -155,9 +155,9 @@ class DiscoveryService:
             # Log collector configuration
             logger.info(
                 "Collector configuration",
-                fast_update_interval=self.settings.fast_update_interval,
-                medium_update_interval=self.settings.medium_update_interval,
-                slow_update_interval=self.settings.slow_update_interval,
+                fast_update_interval=self.settings.update_intervals.fast,
+                medium_update_interval=self.settings.update_intervals.medium,
+                slow_update_interval=self.settings.update_intervals.slow,
             )
 
             logger.info("Environment discovery completed")

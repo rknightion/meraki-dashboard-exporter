@@ -75,6 +75,15 @@ class LabelName(StrEnum):
     RADIO_INDEX = "radio_index"  # Radio index for MR devices
     PRODUCT_TYPE = "product_type"  # Product type from device availability API
 
+    # Client specific labels
+    CLIENT_ID = "client_id"
+    MAC = "mac"
+    DESCRIPTION = "description"
+    HOSTNAME = "hostname"
+    MANUFACTURER = "manufacturer"
+    OS = "os"
+    RECENT_DEVICE_NAME = "recent_device_name"
+
 
 MetricType = Literal["gauge", "counter", "histogram", "info"]
 
@@ -255,3 +264,20 @@ def validate_metric_name(name: str) -> None:
         logging.getLogger(__name__).warning(
             "Metric '%s' may be missing a unit suffix (e.g., _total, _bytes, _seconds)", name
         )
+
+
+def create_info_labels(data: dict[str, str | int | float | bool]) -> dict[str, str]:
+    """Create labels dictionary for info metrics.
+
+    Parameters
+    ----------
+    data : dict[str, str | int | float | bool]
+        Data to convert to info labels.
+
+    Returns
+    -------
+    dict[str, str]
+        Labels with all values converted to strings.
+
+    """
+    return {k: str(v) for k, v in data.items()}

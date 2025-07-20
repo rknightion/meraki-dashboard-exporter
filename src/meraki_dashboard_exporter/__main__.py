@@ -71,8 +71,8 @@ def main() -> None:
     uvicorn.run(
         "meraki_dashboard_exporter.app:create_app",
         factory=True,
-        host=settings.host,
-        port=settings.port,
+        host=settings.server.host,
+        port=settings.server.port,
         log_config=None,  # We handle logging ourselves
         loop="asyncio",
         reload=False,

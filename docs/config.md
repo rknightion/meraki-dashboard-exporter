@@ -4,7 +4,7 @@ This document provides a comprehensive reference for all configuration options a
 
 ## Overview
 
-The exporter can be configured using environment variables or configuration files. 
+The exporter can be configured using environment variables or configuration files.
 All configuration is based on Pydantic models with built-in validation.
 
 ## Environment Variable Format
@@ -19,10 +19,10 @@ Configuration follows a hierarchical structure using environment variables:
     ```bash
     # Main setting
     export MERAKI_EXPORTER_LOG_LEVEL=INFO
-    
+
     # Nested setting
     export MERAKI_EXPORTER_API__TIMEOUT=30
-    
+
     # API key (special case)
     export MERAKI_API_KEY=your_api_key_here
     ```
@@ -106,6 +106,18 @@ Enable/disable specific metric collectors
 | `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` | `set` | `PydanticUndefined` | Explicitly disabled collectors (overrides enabled) |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` | `int` | `120` | Timeout for individual collector runs in seconds |
 
+## Client Settings
+
+Client data collection and DNS resolution settings
+
+| Environment Variable | Type | Default | Description |
+|---------------------|------|---------|-------------|
+| `MERAKI_EXPORTER_CLIENTS__ENABLED` | `bool` | `False` | Enable client data collection |
+| `MERAKI_EXPORTER_CLIENTS__DNS_SERVER` | `str | None` | `_(none)_` | DNS server for reverse lookups (uses system default if not set) |
+| `MERAKI_EXPORTER_CLIENTS__DNS_TIMEOUT` | `float` | `2.0` | DNS lookup timeout in seconds |
+| `MERAKI_EXPORTER_CLIENTS__CACHE_TTL` | `int` | `3600` | Client cache TTL in seconds (for ID/hostname mappings, not metrics) |
+| `MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_PER_NETWORK` | `int` | `10000` | Maximum clients to track per network |
+
 ## Configuration Profiles
 
 Pre-defined configuration profiles provide optimized settings for different deployment scenarios. Activate a profile using `MERAKI_EXPORTER_PROFILE`.
@@ -126,6 +138,8 @@ export MERAKI_EXPORTER_PROFILE=development
 - **API Timeout:** 60 seconds
 - **Update Intervals:** 60s / 300s / 900s
 - **Max Failures:** 3
+- **Collector Timeout:** 120 seconds
+- **Client Collection:** Disabled
 
 ### Production
 
@@ -143,6 +157,8 @@ export MERAKI_EXPORTER_PROFILE=production
 - **API Timeout:** 30 seconds
 - **Update Intervals:** 60s / 300s / 900s
 - **Max Failures:** 10
+- **Collector Timeout:** 120 seconds
+- **Client Collection:** Disabled
 
 ### High_Volume
 
@@ -160,6 +176,8 @@ export MERAKI_EXPORTER_PROFILE=high_volume
 - **API Timeout:** 45 seconds
 - **Update Intervals:** 120s / 600s / 1800s
 - **Max Failures:** 20
+- **Collector Timeout:** 300 seconds
+- **Client Collection:** Disabled
 
 ### Minimal
 
@@ -177,6 +195,8 @@ export MERAKI_EXPORTER_PROFILE=minimal
 - **API Timeout:** 30 seconds
 - **Update Intervals:** 300s / 600s / 1800s
 - **Max Failures:** 10
+- **Collector Timeout:** 120 seconds
+- **Client Collection:** Disabled
 
 ## Configuration Examples
 

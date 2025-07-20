@@ -44,6 +44,7 @@ from .device_constants import (
 )
 from .metrics_constants import (
     AlertMetricName,
+    ClientMetricName,
     ConfigMetricName,
     DeviceMetricName,
     MRMetricName,
@@ -76,6 +77,7 @@ __all__ = [
     "AlertMetricName",
     "ConfigMetricName",
     "NetworkHealthMetricName",
+    "ClientMetricName",
     # API constants
     "APIField",
     "APITimespan",

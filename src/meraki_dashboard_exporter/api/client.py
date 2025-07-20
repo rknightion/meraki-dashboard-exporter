@@ -59,8 +59,8 @@ class AsyncMerakiClient:
             logger.debug(
                 "Creating new Meraki Dashboard API client",
                 base_url=self.settings.api_base_url,
-                timeout=self.settings.api_timeout,
-                max_retries=self.settings.api_max_retries,
+                timeout=self.settings.api.timeout,
+                max_retries=self.settings.api.max_retries,
             )
             self._api = meraki.DashboardAPI(
                 api_key=self.settings.api_key.get_secret_value(),
@@ -68,8 +68,8 @@ class AsyncMerakiClient:
                 output_log=False,
                 suppress_logging=False,
                 inherit_logging_config=True,
-                single_request_timeout=self.settings.api_timeout,
-                maximum_retries=self.settings.api_max_retries,
+                single_request_timeout=self.settings.api.timeout,
+                maximum_retries=self.settings.api.max_retries,
                 action_batch_retry_wait_time=10,
                 nginx_429_retry_wait_time=5,
                 wait_on_rate_limit=True,

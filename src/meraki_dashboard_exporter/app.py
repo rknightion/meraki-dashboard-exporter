@@ -130,8 +130,8 @@ class ExporterApp:
         """
         logger.info(
             "Starting Meraki Dashboard Exporter",
-            host=self.settings.host,
-            port=self.settings.port,
+            host=self.settings.server.host,
+            port=self.settings.server.port,
             org_id=self.settings.org_id,
         )
 
@@ -407,6 +407,64 @@ class ExporterApp:
 
         # Setup cardinality monitoring endpoint
         setup_cardinality_endpoint(app, self.cardinality_monitor)
+
+        @app.get("/clients", response_class=HTMLResponse)
+        async def clients(request: Request) -> HTMLResponse:
+            """Client data visualization endpoint."""
+            # Get exporter instance from app state
+            exporter = app.state.exporter
+
+            # Check if client collection is enabled
+            if not exporter.settings.clients.enabled:
+                return HTMLResponse(
+                    content="<h1>Client data collection is disabled</h1>"
+                    "<p>Set MERAKI_EXPORTER_CLIENTS__ENABLED=true to enable.</p>",
+                    status_code=404,
+                )
+
+            # Get client store from collector
+            client_store = None
+            for collector in exporter.collector_manager.collectors[UpdateTier.MEDIUM]:
+                if collector.__class__.__name__ == "ClientsCollector":
+                    client_store = collector.client_store
+                    break
+
+            if not client_store:
+                return HTMLResponse(
+                    content="<h1>Client collector not found</h1>",
+                    status_code=500,
+                )
+
+            # Get all clients
+            all_clients = client_store.get_all_clients()
+
+            # Sort by network and then by description/hostname
+            all_clients.sort(key=lambda c: (c.networkName or "", c.display_name))
+
+            # Group by network
+            clients_by_network: dict[str, list[Any]] = {}
+            for client in all_clients:
+                network_key = f"{client.networkName or 'Unknown'} ({client.networkId or 'Unknown'})"
+                if network_key not in clients_by_network:
+                    clients_by_network[network_key] = []
+                clients_by_network[network_key].append(client)
+
+            # Get statistics
+            stats = client_store.get_statistics()
+
+            context = {
+                "request": request,
+                "version": __version__,
+                "clients_by_network": clients_by_network,
+                "total_clients": stats["total_clients"],
+                "online_clients": stats["online_clients"],
+                "offline_clients": stats["offline_clients"],
+                "network_count": stats["total_networks"],
+                "cache_ttl": exporter.settings.clients.cache_ttl,
+                "dns_server": exporter.settings.clients.dns_server or "System Default",
+            }
+
+            return app.state.templates.TemplateResponse("clients.html", context)  # type: ignore[no-any-return]
 
         return app
 

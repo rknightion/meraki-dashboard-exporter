@@ -46,6 +46,7 @@ class CollectorManager:
         # This ensures the @register_collector decorators are executed
         from . import (  # noqa: F401
             alerts,
+            clients,
             config,
             device,
             mt_sensor,
@@ -176,11 +177,11 @@ class CollectorManager:
 
         """
         if tier == UpdateTier.FAST:
-            return self.settings.fast_update_interval
+            return self.settings.update_intervals.fast
         elif tier == UpdateTier.MEDIUM:
-            return self.settings.medium_update_interval
+            return self.settings.update_intervals.medium
         else:  # SLOW
-            return self.settings.slow_update_interval
+            return self.settings.update_intervals.slow
 
     def register_collector(self, collector: MetricCollector) -> None:
         """Register an additional collector.

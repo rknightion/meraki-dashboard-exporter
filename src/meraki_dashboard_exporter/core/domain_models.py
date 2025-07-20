@@ -347,6 +347,52 @@ class OrganizationSummary(BaseModel):
         return {k: max(0, int(val)) for k, val in v.items() if val is not None}
 
 
+# Client Models
+
+
+class ClientData(BaseModel):
+    """Enhanced client data with resolved hostname."""
+
+    id: str
+    mac: str
+    description: str | None = None
+    hostname: str | None = None  # Resolved via reverse DNS
+    ip: str | None = None
+    ip6: str | None = None
+    firstSeen: datetime
+    lastSeen: datetime
+    manufacturer: str | None = None
+    os: str | None = None
+    recentDeviceSerial: str | None = None
+    recentDeviceName: str | None = None
+    recentDeviceConnection: Literal["Wired", "Wireless"] | str | None = None
+    ssid: str | None = None
+    vlan: str | None = None
+    switchport: str | None = None
+    status: Literal["Online", "Offline"] | str = "Offline"
+    usage: dict[str, int] | None = None
+    networkId: str | None = None
+    networkName: str | None = None
+    organizationId: str | None = None
+
+    @computed_field
+    def effective_ssid(self) -> str:
+        """Get effective SSID (use 'Wired' for wired connections)."""
+        if self.recentDeviceConnection == "Wired":
+            return "Wired"
+        return self.ssid or "Unknown"
+
+    @computed_field
+    def display_name(self) -> str:
+        """Get best available display name."""
+        return self.description or self.hostname or self.mac
+
+    class Config:
+        """Pydantic configuration."""
+
+        extra = "allow"
+
+
 # Helper function to convert raw API responses to domain models
 
 

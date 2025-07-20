@@ -14,9 +14,9 @@ def test_settings_with_valid_api_key(monkeypatch):
 
     settings = Settings()
     assert settings.api_key.get_secret_value() == "a" * 40
-    assert settings.scrape_interval == 60  # fast_update_interval is the default
-    assert settings.host == "0.0.0.0"
-    assert settings.port == 9099
+    assert settings.update_intervals.fast == 60  # fast_update_interval is the default
+    assert settings.server.host == "0.0.0.0"
+    assert settings.server.port == 9099
 
 
 def test_settings_with_invalid_api_key(monkeypatch):
@@ -51,7 +51,7 @@ def test_settings_with_custom_values(monkeypatch):
 
     settings = Settings()
     assert settings.org_id == "123456"
-    assert settings.fast_update_interval == 60
+
     assert settings.update_intervals.fast == 60
     assert settings.update_intervals.medium == 300
     assert settings.update_intervals.slow == 900

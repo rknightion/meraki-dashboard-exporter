@@ -214,7 +214,7 @@ The exporter includes built-in cardinality monitoring to help track metric growt
 - `meraki_cardinality_warnings_total`: Warnings when metrics exceed thresholds
 - `meraki_total_series`: Total time series count across all metrics
 
-Access cardinality report at: `/debug/cardinality`
+Access cardinality report at: `/cardinality`
 
 ### Circuit Breaker Metrics
 The exporter includes circuit breaker metrics for monitoring reliability:

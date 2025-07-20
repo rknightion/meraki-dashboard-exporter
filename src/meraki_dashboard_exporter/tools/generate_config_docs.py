@@ -19,6 +19,7 @@ from ..core.config import Settings
 from ..core.config_models import (
     PROFILES,
     APISettings,
+    ClientSettings,
     CollectorSettings,
     MonitoringSettings,
     OTelSettings,
@@ -144,7 +145,15 @@ def generate_configuration_docs() -> str:
     # Generate docs for main settings
     main_docs = []
     for field_name, field_info in Settings.model_fields.items():
-        if field_name in ["api", "update_intervals", "server", "otel", "monitoring", "collectors"]:
+        if field_name in [
+            "api",
+            "update_intervals",
+            "server",
+            "otel",
+            "monitoring",
+            "collectors",
+            "clients",
+        ]:
             continue  # Handle these separately
 
         env_var = f"MERAKI_EXPORTER_{field_name.upper()}"
@@ -215,6 +224,12 @@ def generate_configuration_docs() -> str:
             "MERAKI_EXPORTER_COLLECTORS",
             "Enable/disable specific metric collectors",
         ),
+        (
+            "Client Settings",
+            ClientSettings,
+            "MERAKI_EXPORTER_CLIENTS",
+            "Client data collection and DNS resolution settings",
+        ),
     ]
 
     for title, model, prefix, description in nested_models:
@@ -278,6 +293,10 @@ def generate_configuration_docs() -> str:
             f"- **Update Intervals:** {profile.update_intervals.fast}s / {profile.update_intervals.medium}s / {profile.update_intervals.slow}s"
         )
         sections.append(f"- **Max Failures:** {profile.monitoring.max_consecutive_failures}")
+        sections.append(f"- **Collector Timeout:** {profile.collectors.collector_timeout} seconds")
+        sections.append(
+            f"- **Client Collection:** {'Enabled' if profile.clients.enabled else 'Disabled'}"
+        )
         sections.append("")
 
     # Examples section

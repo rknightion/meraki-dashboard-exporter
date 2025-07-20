@@ -22,9 +22,9 @@ def mock_client():
 def mock_settings():
     """Create mock settings."""
     settings = MagicMock()
-    settings.fast_update_interval = 60
-    settings.medium_update_interval = 300
-    settings.slow_update_interval = 900
+    settings.update_intervals.fast = 60
+    settings.update_intervals.medium = 300
+    settings.update_intervals.slow = 900
     settings.organization_ids = ["123456"]
     return settings
 
