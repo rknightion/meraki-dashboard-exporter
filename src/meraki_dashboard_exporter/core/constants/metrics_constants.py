@@ -11,7 +11,7 @@ class OrgMetricName(StrEnum):
     # Basic organization metrics
     ORG_INFO = "meraki_org"
     ORG_API_REQUESTS_TOTAL = "meraki_org_api_requests_total"
-    ORG_API_REQUESTS_RATE_LIMIT = "meraki_org_api_requests_rate_limit"
+    ORG_API_REQUESTS_BY_STATUS = "meraki_org_api_requests_by_status"
     ORG_NETWORKS_TOTAL = "meraki_org_networks_total"
     ORG_DEVICES_TOTAL = "meraki_org_devices_total"
     ORG_DEVICES_BY_MODEL_TOTAL = "meraki_org_devices_by_model_total"

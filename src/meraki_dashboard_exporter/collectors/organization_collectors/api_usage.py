@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -19,9 +19,9 @@ logger = get_logger(__name__)
 class APIUsageCollector(BaseOrganizationCollector):
     """Collector for organization API usage metrics."""
 
-    @log_api_call("getOrganizationApiRequests")
-    async def _fetch_api_requests(self, org_id: str) -> list[dict[str, int]]:
-        """Fetch organization API requests.
+    @log_api_call("getOrganizationApiRequestsOverview")
+    async def _fetch_api_requests_overview(self, org_id: str) -> dict[str, Any]:
+        """Fetch organization API requests overview.
 
         Parameters
         ----------
@@ -30,16 +30,15 @@ class APIUsageCollector(BaseOrganizationCollector):
 
         Returns
         -------
-        list[dict[str, int]]
-            API request data.
+        dict[str, Any]
+            API request overview data with response code counts.
 
         """
-        self._track_api_call("getOrganizationApiRequests")
+        self._track_api_call("getOrganizationApiRequestsOverview")
         return await asyncio.to_thread(
-            self.api.organizations.getOrganizationApiRequests,
+            self.api.organizations.getOrganizationApiRequestsOverview,
             org_id,
-            total_pages="all",
-            timespan=86400,  # Last 24 hours
+            timespan=3600,  # Last 1 hour
         )
 
     async def collect(self, org_id: str, org_name: str) -> None:
@@ -55,11 +54,42 @@ class APIUsageCollector(BaseOrganizationCollector):
         """
         try:
             with LogContext(org_id=org_id, org_name=org_name):
-                api_requests = await self._fetch_api_requests(org_id)
+                overview = await self._fetch_api_requests_overview(org_id)
+                logger.debug(
+                    "Fetched API requests overview",
+                    org_id=org_id,
+                    has_data=bool(overview),
+                    response_type=type(overview).__name__,
+                )
 
-            if api_requests:
-                # Sum up total requests
-                total_requests = sum(req.get("total", 0) for req in api_requests)
+            if overview and isinstance(overview, dict) and "responseCodeCounts" in overview:
+                response_codes = overview["responseCodeCounts"]
+
+                # Calculate total requests
+                total_requests = 0
+
+                # Set metrics for each non-zero status code
+                for status_code, count in response_codes.items():
+                    if count > 0:
+                        total_requests += count
+                        # Set metric for this status code
+                        self._set_metric_value(
+                            "_api_requests_by_status",
+                            {
+                                "org_id": org_id,
+                                "org_name": org_name,
+                                "status_code": status_code,
+                            },
+                            count,
+                        )
+                        logger.debug(
+                            "Set API request metric",
+                            org_id=org_id,
+                            status_code=status_code,
+                            count=count,
+                        )
+
+                # Also set total requests metric
                 self._set_metric_value(
                     "_api_requests_total",
                     {
@@ -69,15 +99,22 @@ class APIUsageCollector(BaseOrganizationCollector):
                     total_requests,
                 )
 
-                # Get rate limit if available
-                # Rate limit is usually consistent across all requests
-                if api_requests and api_requests[0].get("responseCodeCounts"):
-                    # Look for 429 responses which indicate rate limiting
-                    # This is a simplified approach - actual rate limit may vary
-                    # TODO: Get actual rate limit from headers or API response
-                    pass
-                else:
-                    logger.debug("No API request data available", org_id=org_id)
+                logger.info(
+                    "Collected API usage metrics",
+                    org_id=org_id,
+                    org_name=org_name,
+                    total_requests=total_requests,
+                    unique_status_codes=sum(1 for c in response_codes.values() if c > 0),
+                )
+            else:
+                logger.warning(
+                    "No API request overview data available",
+                    org_id=org_id,
+                    overview_type=type(overview).__name__ if overview else "None",
+                    has_response_codes="responseCodeCounts" in overview
+                    if isinstance(overview, dict)
+                    else False,
+                )
 
         except Exception:
             logger.exception(

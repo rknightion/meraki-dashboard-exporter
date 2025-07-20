@@ -58,14 +58,14 @@ class OrganizationCollector(MetricCollector):
         # API metrics
         self._api_requests_total = self._create_gauge(
             OrgMetricName.ORG_API_REQUESTS_TOTAL,
-            "Total API requests made by the organization",
+            "Total API requests made by the organization in the last hour",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
-        self._api_rate_limit = self._create_gauge(
-            OrgMetricName.ORG_API_REQUESTS_RATE_LIMIT,
-            "API rate limit for the organization",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+        self._api_requests_by_status = self._create_gauge(
+            OrgMetricName.ORG_API_REQUESTS_BY_STATUS,
+            "API requests by HTTP status code in the last hour",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.STATUS_CODE],
         )
 
         # Network metrics

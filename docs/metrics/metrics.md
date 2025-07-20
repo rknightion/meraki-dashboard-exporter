@@ -1254,21 +1254,21 @@ The exporter provides metrics across several categories:
 
 **Variable:** `self._org_info` (line 52)
 
-#### `meraki_org_api_requests_rate_limit`
+#### `meraki_org_api_requests_by_status`
 
-**Description:** API rate limit for the organization
+**Description:** API requests by HTTP status code in the last hour
 
 **Type:** gauge
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.STATUS_CODE`
 
-**Constant:** `OrgMetricName.ORG_API_REQUESTS_RATE_LIMIT`
+**Constant:** `OrgMetricName.ORG_API_REQUESTS_BY_STATUS`
 
-**Variable:** `self._api_rate_limit` (line 65)
+**Variable:** `self._api_requests_by_status` (line 65)
 
 #### `meraki_org_api_requests_total`
 
-**Description:** Total API requests made by the organization
+**Description:** Total API requests made by the organization in the last hour
 
 **Type:** gauge
 
@@ -1501,8 +1501,8 @@ All metrics in alphabetical order:
 | `meraki_network_wireless_download_kbps` | gauge | NetworkHealthCollector | Network-wide wireless download bandwidth in kilobits per second |
 | `meraki_network_wireless_upload_kbps` | gauge | NetworkHealthCollector | Network-wide wireless upload bandwidth in kilobits per second |
 | `meraki_org` | info | OrganizationCollector | Organization information |
-| `meraki_org_api_requests_rate_limit` | gauge | OrganizationCollector | API rate limit for the organization |
-| `meraki_org_api_requests_total` | gauge | OrganizationCollector | Total API requests made by the organization |
+| `meraki_org_api_requests_by_status` | gauge | OrganizationCollector | API requests by HTTP status code in the last hour |
+| `meraki_org_api_requests_total` | gauge | OrganizationCollector | Total API requests made by the organization in the last hour |
 | `meraki_org_clients_total` | gauge | OrganizationCollector | Total number of active clients in the organization (1-hour window) |
 | `meraki_org_configuration_changes_total` | gauge | ConfigCollector | Total number of configuration changes in the last 24 hours |
 | `meraki_org_devices_availability_total` | gauge | OrganizationCollector | Total number of devices by availability status and product type |
@@ -1539,4 +1539,3 @@ All metrics in alphabetical order:
     ```
 
 For more information on using these metrics, see the [Overview](overview.md) page.
-
