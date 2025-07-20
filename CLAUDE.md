@@ -108,6 +108,55 @@ The `getOrganizationClientsOverview` API has specific requirements:
 - If the API returns all zeros (which can happen occasionally), the cached values are used instead
 - This prevents false zero readings in metrics when organizations have active usage
 
+## Client Data Collection
+
+The exporter supports detailed client-level metrics and data collection:
+
+### Configuration
+Client data collection is opt-in due to potential high cardinality:
+- `MERAKI_EXPORTER_CLIENTS__ENABLED=true` - Enable client collection
+- `MERAKI_EXPORTER_CLIENTS__DNS_SERVER=8.8.8.8` - Optional custom DNS server for hostname resolution
+- `MERAKI_EXPORTER_CLIENTS__DNS_TIMEOUT=2.0` - DNS lookup timeout (default: 2s)
+- `MERAKI_EXPORTER_CLIENTS__CACHE_TTL=3600` - Client store TTL in seconds (default: 1 hour, used for tracking stale networks)
+- `MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_PER_NETWORK=10000` - Max clients per network
+
+### Features
+- **Detailed Client Metrics**: Usage (sent/recv/total KB), online/offline status
+- **Hostname Resolution**: Automatic reverse DNS lookups for client IPs
+- **Client Store**: In-memory store for client data and hostname mappings
+- **Web UI**: `/clients` endpoint shows all client data in a searchable interface
+
+### How Caching Works
+- The collector runs every 5 minutes (MEDIUM tier) and always fetches fresh data from the API
+- Hostname lookups are cached to avoid redundant DNS queries for the same IPs
+- The client store maintains mappings of client ID → MAC/description for use in labels
+- Cache TTL (default: 1 hour) is used for tracking stale networks in the store
+- This approach ensures fresh metrics while minimizing DNS lookups
+
+### API Usage
+- Uses `getNetworkClients` with `timespan=3600` (1 hour) to get both online and offline clients
+- Runs in MEDIUM tier (5 minutes) to balance freshness with API limits
+- Uses `perPage=5000` (maximum) for efficient pagination
+
+### Metrics Exposed
+- `meraki_client_info` - Client information as info metric (labels: id, mac, description, hostname, ssid, manufacturer, os, recent_device_name)
+- `meraki_client_status` - Client online status (1=online, 0=offline)
+- `meraki_client_usage_sent_kb` - Total KB sent by client (counter)
+- `meraki_client_usage_recv_kb` - Total KB received by client (counter)
+- `meraki_client_usage_total_kb` - Total KB transferred by client (counter)
+
+### Label Strategy
+- Core labels: `org_id`, `org_name`, `network_id`, `network_name`, `client_id`, `mac`, `description`, `hostname`, `ssid`
+- SSID label shows "Wired" for wired connections
+- Hostname is resolved via reverse DNS and shows short name only (no FQDN)
+
+### Implementation Details
+- **ClientsCollector** (`collectors/clients.py`) - Main collector in MEDIUM tier
+- **ClientStore** (`services/client_store.py`) - In-memory client data cache
+- **DNSResolver** (`services/dns_resolver.py`) - Async DNS resolution service
+- **NetworkClient** model in `core/api_models.py` - Type-safe client data
+- **ClientData** model in `core/domain_models.py` - Enhanced with hostname
+
 ## Configuration Changes Metric
 
 The `getOrganizationConfigurationChanges` API is used to track configuration changes:

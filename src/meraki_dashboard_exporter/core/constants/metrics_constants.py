@@ -215,3 +215,18 @@ class NetworkHealthMetricName(StrEnum):
 
     # Bluetooth metrics
     NETWORK_BLUETOOTH_CLIENTS_TOTAL = "meraki_network_bluetooth_clients_total"
+
+
+class ClientMetricName(StrEnum):
+    """Client-level metric names."""
+
+    # Client info metric
+    CLIENT_INFO = "meraki_client"
+
+    # Client status metrics
+    CLIENT_STATUS = "meraki_client_status"
+
+    # Client usage metrics
+    CLIENT_USAGE_SENT_KB = "meraki_client_usage_sent_kb"
+    CLIENT_USAGE_RECV_KB = "meraki_client_usage_recv_kb"
+    CLIENT_USAGE_TOTAL_KB = "meraki_client_usage_total_kb"

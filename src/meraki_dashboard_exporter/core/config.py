@@ -10,6 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from .config_models import (
     PROFILES,
     APISettings,
+    ClientSettings,
     CollectorSettings,
     MonitoringSettings,
     OTelSettings,
@@ -80,68 +81,16 @@ class Settings(BaseSettings):
         default_factory=CollectorSettings,
         description="Collector-specific settings",
     )
+    clients: ClientSettings = Field(
+        default_factory=ClientSettings,
+        description="Client data collection settings",
+    )
 
     # Logging
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         "INFO",
         description="Logging level",
     )
-
-    # Computed properties for backward compatibility
-    @property
-    def api_max_retries(self) -> int:
-        """Legacy property for API max retries."""
-        return self.api.max_retries
-
-    @property
-    def api_timeout(self) -> int:
-        """Legacy property for API timeout."""
-        return self.api.timeout
-
-    @property
-    def fast_update_interval(self) -> int:
-        """Fast update interval in seconds."""
-        return self.update_intervals.fast
-
-    @property
-    def medium_update_interval(self) -> int:
-        """Medium update interval in seconds."""
-        return self.update_intervals.medium
-
-    @property
-    def slow_update_interval(self) -> int:
-        """Slow update interval in seconds."""
-        return self.update_intervals.slow
-
-    @property
-    def scrape_interval(self) -> int:
-        """Legacy scrape interval property, returns fast update interval."""
-        return self.update_intervals.fast
-
-    @property
-    def host(self) -> str:
-        """Server host."""
-        return self.server.host
-
-    @property
-    def port(self) -> int:
-        """Server port."""
-        return self.server.port
-
-    @property
-    def otel_enabled(self) -> bool:
-        """Whether OpenTelemetry is enabled."""
-        return self.otel.enabled
-
-    @property
-    def otel_endpoint(self) -> str | None:
-        """OpenTelemetry endpoint."""
-        return self.otel.endpoint
-
-    @property
-    def otel_service_name(self) -> str:
-        """OpenTelemetry service name."""
-        return self.otel.service_name
 
     @field_validator("api_key")
     @classmethod
@@ -168,6 +117,7 @@ class Settings(BaseSettings):
                 values["monitoring"] = profile.monitoring.model_dump()
             if "collectors" not in values:
                 values["collectors"] = profile.collectors.model_dump()
+
         return values
 
     @model_validator(mode="after")

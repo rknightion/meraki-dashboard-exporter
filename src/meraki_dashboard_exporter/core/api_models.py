@@ -306,6 +306,57 @@ class MemoryUsage(BaseModel):
         return float(v) if "." in str(v) else int(v)
 
 
+class NetworkClient(BaseModel):
+    """Network client model for client-level metrics."""
+
+    id: str
+    mac: str
+    description: str | None = None
+    ip: str | None = None
+    ip6: str | None = None
+    ip6Local: str | None = None
+    user: str | None = None
+    firstSeen: datetime
+    lastSeen: datetime
+    manufacturer: str | None = None
+    os: str | None = None
+    deviceTypePrediction: str | None = None
+    recentDeviceSerial: str | None = None
+    recentDeviceName: str | None = None
+    recentDeviceMac: str | None = None
+    recentDeviceConnection: Literal["Wired", "Wireless"] | str | None = None
+    ssid: str | None = None
+    vlan: str | None = None  # Can be string or None in API
+    switchport: str | None = None
+    usage: dict[str, int] | None = None
+    status: Literal["Online", "Offline"] | str = "Offline"
+    notes: str | None = None
+    groupPolicy8021x: str | None = None
+    adaptivePolicyGroup: str | None = None
+    smInstalled: bool = False
+    namedVlan: str | None = None
+    pskGroup: str | None = None
+    wirelessCapabilities: str | None = None
+    is11beCapable: bool | None = None
+    mcgSerial: str | None = None
+    mcgNodeName: str | None = None
+    mcgNodeMac: str | None = None
+    mcgNetworkId: str | None = None
+
+    @field_validator("vlan", mode="before")
+    @classmethod
+    def validate_vlan(cls, v: Any) -> str | None:
+        """Convert vlan to string if needed."""
+        if v is None:
+            return None
+        return str(v)
+
+    class Config:
+        """Pydantic configuration."""
+
+        extra = "allow"
+
+
 # Response wrapper models
 class PaginatedResponse(BaseModel):
     """Paginated API response wrapper."""

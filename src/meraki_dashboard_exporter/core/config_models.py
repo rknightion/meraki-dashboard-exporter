@@ -210,6 +210,37 @@ class CollectorSettings(BaseModel):
         return self.enabled_collectors - self.disable_collectors
 
 
+class ClientSettings(BaseModel):
+    """Client data collection settings."""
+
+    enabled: bool = Field(
+        False,
+        description="Enable client data collection",
+    )
+    dns_server: str | None = Field(
+        None,
+        description="DNS server for reverse lookups (uses system default if not set)",
+    )
+    dns_timeout: float = Field(
+        2.0,
+        ge=0.5,
+        le=10.0,
+        description="DNS lookup timeout in seconds",
+    )
+    cache_ttl: int = Field(
+        3600,
+        ge=300,
+        le=86400,
+        description="Client cache TTL in seconds (for ID/hostname mappings, not metrics)",
+    )
+    max_clients_per_network: int = Field(
+        10000,
+        ge=100,
+        le=50000,
+        description="Maximum clients to track per network",
+    )
+
+
 class ConfigurationProfile(BaseModel):
     """Configuration profile for different deployment scenarios."""
 
@@ -219,6 +250,7 @@ class ConfigurationProfile(BaseModel):
     update_intervals: UpdateIntervals = Field(default_factory=UpdateIntervals)
     monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
     collectors: CollectorSettings = Field(default_factory=CollectorSettings)
+    clients: ClientSettings = Field(default_factory=ClientSettings)
 
 
 # Predefined configuration profiles
