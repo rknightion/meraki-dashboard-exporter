@@ -4,7 +4,7 @@ This document provides a comprehensive reference for all configuration options a
 
 ## Overview
 
-The exporter can be configured using environment variables.
+The exporter can be configured using environment variables. 
 All configuration is based on Pydantic models with built-in validation.
 
 ## Environment Variable Format
@@ -19,10 +19,10 @@ Configuration follows a hierarchical structure using environment variables:
     # Meraki API configuration
     export MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here
     export MERAKI_EXPORTER_MERAKI__ORG_ID=123456
-
+    
     # Logging configuration
     export MERAKI_EXPORTER_LOGGING__LEVEL=INFO
-
+    
     # API settings
     export MERAKI_EXPORTER_API__TIMEOUT=30
     export MERAKI_EXPORTER_API__CONCURRENCY_LIMIT=5
