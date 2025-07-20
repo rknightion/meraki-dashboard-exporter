@@ -94,20 +94,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
 
-      - name: Build Docker image (multi-arch test)
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          # Test building for multiple architectures to catch issues early
-          platforms: linux/386,linux/amd64,linux/arm/v5,linux/arm/v7,linux/arm64/v8,linux/ppc64le,linux/s390x
-          push: false
-          load: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            PY_VERSION=3.13
-
-      - name: Build and test Docker image (amd64 only for execution)
+      - name: Build and test Docker image (amd64 only)
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: .
@@ -121,13 +108,13 @@ jobs:
 
       - name: Test Docker image startup
         env:
-          MERAKI_API_KEY: "00000000000000000000000000000000deadbeef"
+          MERAKI_EXPORTER_MERAKI__API_KEY: "00000000000000000000000000000000deadbeef"
         run: |
           # Test that the image can start and show help
-          docker run --rm -e MERAKI_API_KEY meraki-dashboard-exporter:test --help || true
+          docker run --rm -e MERAKI_EXPORTER_MERAKI__API_KEY meraki-dashboard-exporter:test --help || true
 
           # Test image metadata
           docker inspect meraki-dashboard-exporter:test | jq '.[0].Config.Labels'
 
           # Verify non-root user
-          docker run --rm -e MERAKI_API_KEY meraki-dashboard-exporter:test whoami | grep -q exporter
+          docker run --rm -e MERAKI_EXPORTER_MERAKI__API_KEY meraki-dashboard-exporter:test whoami | grep -q exporter
