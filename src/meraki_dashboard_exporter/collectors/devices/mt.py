@@ -106,8 +106,8 @@ class MTCollector(BaseDeviceCollector):
             # Get organizations
             if org_id:
                 org_ids = [org_id]
-            elif self.settings and self.settings.org_id:
-                org_ids = [self.settings.org_id]
+            elif self.settings and self.settings.meraki.org_id:
+                org_ids = [self.settings.meraki.org_id]
             else:
                 if not self.api:
                     logger.error("API client not initialized")

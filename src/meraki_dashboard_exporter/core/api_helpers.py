@@ -53,13 +53,15 @@ class APIHelper:
             List of organization dictionaries.
 
         """
-        if self.collector.settings.org_id:
+        if self.collector.settings.meraki.org_id:
             # Single organization configured
-            logger.debug("Using configured organization", org_id=self.collector.settings.org_id)
+            logger.debug(
+                "Using configured organization", org_id=self.collector.settings.meraki.org_id
+            )
             self.collector._track_api_call("getOrganization")
             org = await asyncio.to_thread(
                 self.api.organizations.getOrganization,
-                self.collector.settings.org_id,
+                self.collector.settings.meraki.org_id,
             )
             return [org]
         else:

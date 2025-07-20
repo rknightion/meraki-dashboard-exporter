@@ -132,7 +132,7 @@ class ExporterApp:
             "Starting Meraki Dashboard Exporter",
             host=self.settings.server.host,
             port=self.settings.server.port,
-            org_id=self.settings.org_id,
+            org_id=self.settings.meraki.org_id,
         )
 
         # Run discovery to log environment information once at startup
@@ -374,7 +374,7 @@ class ExporterApp:
                     })
 
             # Get organization count (if available)
-            org_count = 1 if exporter.settings.org_id else "All"
+            org_count = 1 if exporter.settings.meraki.org_id else "All"
 
             context = {
                 "request": request,
@@ -386,7 +386,7 @@ class ExporterApp:
                 "fast_interval": exporter.settings.update_intervals.fast,
                 "medium_interval": exporter.settings.update_intervals.medium,
                 "slow_interval": exporter.settings.update_intervals.slow,
-                "org_id": exporter.settings.org_id,
+                "org_id": exporter.settings.meraki.org_id,
             }
 
             return app.state.templates.TemplateResponse("index.html", context)  # type: ignore[no-any-return]

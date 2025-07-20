@@ -250,8 +250,8 @@ class DeviceCollector(MetricCollector):
             List of organizations or None on error.
 
         """
-        if self.settings.org_id:
-            return [{"id": self.settings.org_id}]
+        if self.settings.meraki.org_id:
+            return [{"id": self.settings.meraki.org_id}]
         else:
             with LogContext(operation="fetch_organizations"):
                 orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)

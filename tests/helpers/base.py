@@ -43,7 +43,7 @@ class BaseCollectorTest:
     @pytest.fixture(autouse=True)
     def setup_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Set up environment for tests."""
-        monkeypatch.setenv("MERAKI_API_KEY", "a" * 40)
+        monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
 
     @pytest.fixture
     def settings(self) -> Settings:

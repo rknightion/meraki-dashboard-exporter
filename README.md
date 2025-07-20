@@ -42,7 +42,7 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 
 2. Set environment variables:
    ```bash
-   export MERAKI_API_KEY=your_api_key_here
+   export MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here
    ```
 
 3. Run the exporter:
@@ -105,7 +105,7 @@ services:
   meraki-exporter:
     image: meraki-dashboard-exporter
     environment:
-      - MERAKI_API_KEY=${MERAKI_API_KEY}
+      - MERAKI_EXPORTER_MERAKI__API_KEY=${MERAKI_EXPORTER_MERAKI__API_KEY}
       - MERAKI_EXPORTER_OTEL__ENABLED=true
       - MERAKI_EXPORTER_OTEL__ENDPOINT=http://otel-collector:4317
     ports:
@@ -129,19 +129,19 @@ All configuration is done via environment variables. See `.env.example` for all 
 ### Key Settings
 
 #### Required
-- `MERAKI_API_KEY`: Your Meraki Dashboard API key
+- `MERAKI_EXPORTER_MERAKI__API_KEY`: Your Meraki Dashboard API key
 
 #### Optional
-- `MERAKI_EXPORTER_ORG_ID`: Specific org ID to monitor (monitors all orgs if not set)
-- `MERAKI_EXPORTER_LOG_LEVEL`: Logging level (default: INFO)
-- `MERAKI_EXPORTER_API_BASE_URL`: API base URL for regional endpoints (default: https://api.meraki.com/api/v1)
-- `MERAKI_EXPORTER_API_TIMEOUT`: API request timeout in seconds (default: 30)
-- `MERAKI_EXPORTER_API_MAX_RETRIES`: Maximum API request retries (default: 4)
+- `MERAKI_EXPORTER_MERAKI__ORG_ID`: Specific org ID to monitor (monitors all orgs if not set)
+- `MERAKI_EXPORTER_LOGGING__LEVEL`: Logging level (default: INFO)
+- `MERAKI_EXPORTER_MERAKI__API_BASE_URL`: API base URL for regional endpoints (default: https://api.meraki.com/api/v1)
+- `MERAKI_EXPORTER_API__TIMEOUT`: API request timeout in seconds (default: 30)
+- `MERAKI_EXPORTER_API__MAX_RETRIES`: Maximum API request retries (default: 4)
 
 ### Update Intervals
-- `MERAKI_EXPORTER_FAST_UPDATE_INTERVAL`: Fast tier interval in seconds (default: 60, range: 30-300)
-- `MERAKI_EXPORTER_MEDIUM_UPDATE_INTERVAL`: Medium tier interval in seconds (default: 300, range: 300-1800)
-- `MERAKI_EXPORTER_SLOW_UPDATE_INTERVAL`: Slow tier interval in seconds (default: 900, range: 600-3600)
+- `MERAKI_EXPORTER_UPDATE_INTERVALS__FAST`: Fast tier interval in seconds (default: 60, range: 30-300)
+- `MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM`: Medium tier interval in seconds (default: 300, range: 300-1800)
+- `MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW`: Slow tier interval in seconds (default: 900, range: 600-3600)
 
 ### Regional API Endpoints
 
@@ -155,7 +155,7 @@ For users in specific regions, use the appropriate API base URL:
 
 Example:
 ```bash
-export MERAKI_EXPORTER_API_BASE_URL="https://api.meraki.ca/api/v1"  # For Canada region
+export MERAKI_EXPORTER_MERAKI__API_BASE_URL="https://api.meraki.ca/api/v1"  # For Canada region
 ```
 
 ## Metrics

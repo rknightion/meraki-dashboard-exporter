@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Organization(BaseModel):
@@ -22,10 +22,7 @@ class Organization(BaseModel):
     licensing: dict[str, Any] | None = None
     cloud: dict[str, Any] | None = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class Network(BaseModel):
@@ -42,10 +39,7 @@ class Network(BaseModel):
     notes: str | None = None
     isBoundToConfigTemplate: bool = False
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class Device(BaseModel):
@@ -70,10 +64,7 @@ class Device(BaseModel):
     firmware: str | None = None
     floorPlanId: str | None = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class DeviceStatus(BaseModel):
@@ -94,10 +85,7 @@ class DeviceStatus(BaseModel):
     wan1IpType: str | None = None
     wan2IpType: str | None = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class PortStatus(BaseModel):
@@ -127,10 +115,7 @@ class PortStatus(BaseModel):
             return 0.0
         return float(v)
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class WirelessClient(BaseModel):
@@ -162,10 +147,7 @@ class WirelessClient(BaseModel):
     adaptivePolicyGroup: str | None = None
     wirelessCapabilities: str | None = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class SensorReading(BaseModel):
@@ -191,10 +173,7 @@ class SensorData(BaseModel):
     network: dict[str, str] | None = None
     readings: list[SensorReading] = Field(default_factory=list)
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class APIUsage(BaseModel):
@@ -209,10 +188,7 @@ class APIUsage(BaseModel):
     responseCode: int
     sourceIp: str | None = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class License(BaseModel):
@@ -234,10 +210,7 @@ class License(BaseModel):
     invalidAt: datetime | None = None
     invalidReason: str | None = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class ClientOverview(BaseModel):
@@ -282,10 +255,7 @@ class Alert(BaseModel):
     occurredAt: datetime
     dismissedAt: datetime | None = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class MemoryUsage(BaseModel):
@@ -351,10 +321,7 @@ class NetworkClient(BaseModel):
             return None
         return str(v)
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 # Response wrapper models
@@ -364,7 +331,4 @@ class PaginatedResponse(BaseModel):
     items: list[dict[str, Any]]
     meta: dict[str, Any] | None = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")

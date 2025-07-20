@@ -14,7 +14,7 @@ from tests.helpers.factories import AlertFactory, DeviceFactory, NetworkFactory,
 @pytest.fixture
 def mock_settings(monkeypatch):
     """Create mock settings."""
-    monkeypatch.setenv("MERAKI_API_KEY", "a" * 40)
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
     settings = Settings()
     return settings
 
@@ -40,7 +40,7 @@ class TestDiscoveryService:
     async def test_run_discovery_with_single_org(self, mock_api, mock_settings):
         """Test discovery with a specific org_id configured."""
         # Configure specific org_id
-        mock_settings.org_id = "123"
+        mock_settings.meraki.org_id = "123"
         service = DiscoveryService(api=mock_api, settings=mock_settings)
 
         # Create test data using factories

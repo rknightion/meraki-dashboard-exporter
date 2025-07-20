@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 # Network Health Models
 
@@ -33,11 +33,7 @@ class RFHealthData(BaseModel):
         val = float(v)
         return max(0.0, min(100.0, val))
 
-    class Config:
-        """Pydantic configuration."""
-
-        populate_by_name = True
-        extra = "allow"
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 
 class ConnectionStats(BaseModel):
@@ -64,10 +60,7 @@ class NetworkConnectionStats(BaseModel):
     networkId: str
     connectionStats: ConnectionStats
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class DataRate(BaseModel):
@@ -121,10 +114,7 @@ class SwitchPort(BaseModel):
     ] = "Open"
     tags: list[str] = Field(default_factory=list)
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class SwitchPortPOE(BaseModel):
@@ -184,10 +174,7 @@ class MRDeviceStats(BaseModel):
             return 0
         return max(0, int(v))
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class MRRadioStatus(BaseModel):
@@ -209,10 +196,7 @@ class MRRadioStatus(BaseModel):
             raise ValueError(f"Invalid radio index: {val}")
         return val
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 # Configuration and Management Models
@@ -232,10 +216,7 @@ class ConfigurationChange(BaseModel):
     oldValue: Any = None
     newValue: Any = None
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 # Sensor Models
@@ -311,10 +292,7 @@ class MTSensorReading(BaseModel):
     timestamp: datetime
     measurements: list[SensorMeasurement]
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 # Organization Models
@@ -387,10 +365,7 @@ class ClientData(BaseModel):
         """Get best available display name."""
         return self.description or self.hostname or self.mac
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 # Helper function to convert raw API responses to domain models

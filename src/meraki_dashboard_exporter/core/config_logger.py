@@ -105,7 +105,7 @@ def log_configuration(settings: Settings) -> None:
     logger.info("Feature Status:")
 
     # API Configuration
-    logger.info(f"  API Base URL: {settings.api_base_url}")
+    logger.info(f"  API Base URL: {settings.meraki.api_base_url}")
     logger.info(f"  API Timeout: {settings.api.timeout}s")
     logger.info(f"  API Max Retries: {settings.api.max_retries}")
     logger.info(f"  API Max Concurrent Requests: {settings.api.concurrency_limit}")
@@ -134,8 +134,8 @@ def log_configuration(settings: Settings) -> None:
     logger.info(f"    - Port: {settings.server.port}")
 
     # Organization Configuration
-    if settings.org_id:
-        logger.info(f"  Organization Filter: {settings.org_id}")
+    if settings.meraki.org_id:
+        logger.info(f"  Organization Filter: {settings.meraki.org_id}")
     else:
         logger.info("  Organization Filter: None (all organizations)")
 
