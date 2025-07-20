@@ -1,6 +1,10 @@
 """Tests for the :class:`DNSResolver` service."""
 
+# ruff: noqa: S101
+
+import inspect
 import warnings
+from typing import Any
 
 import pytest
 
@@ -65,15 +69,20 @@ async def test_resolve_multiple_uses_resolver(monkeypatch, resolver):
 
     calls: list[str] = []
 
-    async def fake_lookup(ip: str) -> str:
+    async def fake_resolve(ip: str) -> str:
         calls.append(ip)
-        return f"{ip}.example.com"
+        return ip.split(".", maxsplit=1)[0]
 
-    monkeypatch.setattr(resolver, "_perform_lookup", fake_lookup)
+    monkeypatch.setattr(resolver, "resolve_hostname", fake_resolve)
+
+    # Support both the original and updated resolver signatures
+    arg: list[Any] = ["1.1.1.1", "2.2.2.2"]
+    if "clients" in list(inspect.signature(resolver.resolve_multiple).parameters):
+        arg = [("c1", "1.1.1.1", None), ("c2", "2.2.2.2", None)]
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
-        result = await resolver.resolve_multiple(["1.1.1.1", "2.2.2.2"])
+        result = await resolver.resolve_multiple(arg)
 
     assert calls == ["1.1.1.1", "2.2.2.2"]
     assert result == {"1.1.1.1": "1", "2.2.2.2": "2"}

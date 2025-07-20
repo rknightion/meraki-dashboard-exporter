@@ -1,5 +1,7 @@
 """Tests for exemplar utilities."""
 
+# ruff: noqa: S101
+
 from opentelemetry import trace
 from prometheus_client import Gauge
 

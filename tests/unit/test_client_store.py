@@ -1,5 +1,7 @@
 """Unit tests for the :mod:`client_store` service."""
 
+# ruff: noqa: S101
+
 import time
 from datetime import UTC, datetime
 

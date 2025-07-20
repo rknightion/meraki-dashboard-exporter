@@ -1,5 +1,7 @@
 """Tests for logging helpers functions."""
 
+# ruff: noqa: S101
+
 import structlog
 
 from meraki_dashboard_exporter.core import logging_helpers as lh
