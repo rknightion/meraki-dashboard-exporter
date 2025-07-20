@@ -220,13 +220,10 @@ class NetworkHealthMetricName(StrEnum):
 class ClientMetricName(StrEnum):
     """Client-level metric names."""
 
-    # Client info metric (using Gauge instead of Info to avoid registration issues)
-    CLIENT_INFO = "meraki_client_info"
-
     # Client status metrics
     CLIENT_STATUS = "meraki_client_status"
 
-    # Client usage metrics
+    # Client usage metrics (gauges for point-in-time hourly measurements)
     CLIENT_USAGE_SENT_KB = "meraki_client_usage_sent_kb"
     CLIENT_USAGE_RECV_KB = "meraki_client_usage_recv_kb"
     CLIENT_USAGE_TOTAL_KB = "meraki_client_usage_total_kb"

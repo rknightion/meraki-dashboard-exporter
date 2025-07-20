@@ -100,22 +100,38 @@ class ClientStore:
             if hostnames and client.ip:
                 hostname = hostnames.get(client.ip)
 
+            # Calculate the hostname that will be used in metrics
+            # This follows the same logic as ClientsCollector._determine_hostname
+            calculated_hostname = hostname or client.description or client.ip or "unknown"
+
             # Create or update client data
             if client_id in network_clients:
                 # Update existing client
                 existing = network_clients[client_id]
                 existing.ip = client.ip
                 existing.ip6 = client.ip6
+                existing.ip6Local = client.ip6Local
+                existing.user = client.user
                 existing.hostname = hostname or existing.hostname
+                existing.calculatedHostname = calculated_hostname
                 existing.lastSeen = client.lastSeen
                 existing.status = client.status
                 existing.usage = client.usage
                 existing.ssid = client.ssid
                 existing.vlan = client.vlan
                 existing.switchport = client.switchport
+                existing.deviceTypePrediction = client.deviceTypePrediction
                 existing.recentDeviceSerial = client.recentDeviceSerial
                 existing.recentDeviceName = client.recentDeviceName
+                existing.recentDeviceMac = client.recentDeviceMac
                 existing.recentDeviceConnection = client.recentDeviceConnection
+                existing.notes = client.notes
+                existing.groupPolicy8021x = client.groupPolicy8021x
+                existing.adaptivePolicyGroup = client.adaptivePolicyGroup
+                existing.smInstalled = client.smInstalled
+                existing.namedVlan = client.namedVlan
+                existing.pskGroup = client.pskGroup
+                existing.wirelessCapabilities = client.wirelessCapabilities
                 updated_count += 1
             else:
                 # Add new client
@@ -124,20 +140,32 @@ class ClientStore:
                     mac=client.mac,
                     description=client.description,
                     hostname=hostname,
+                    calculatedHostname=calculated_hostname,
                     ip=client.ip,
                     ip6=client.ip6,
+                    ip6Local=client.ip6Local,
+                    user=client.user,
                     firstSeen=client.firstSeen,
                     lastSeen=client.lastSeen,
                     manufacturer=client.manufacturer,
                     os=client.os,
+                    deviceTypePrediction=client.deviceTypePrediction,
                     recentDeviceSerial=client.recentDeviceSerial,
                     recentDeviceName=client.recentDeviceName,
+                    recentDeviceMac=client.recentDeviceMac,
                     recentDeviceConnection=client.recentDeviceConnection,
                     ssid=client.ssid,
                     vlan=client.vlan,
                     switchport=client.switchport,
                     status=client.status,
                     usage=client.usage,
+                    notes=client.notes,
+                    groupPolicy8021x=client.groupPolicy8021x,
+                    adaptivePolicyGroup=client.adaptivePolicyGroup,
+                    smInstalled=client.smInstalled,
+                    namedVlan=client.namedVlan,
+                    pskGroup=client.pskGroup,
+                    wirelessCapabilities=client.wirelessCapabilities,
                     networkId=network_id,
                     networkName=network_name,
                     organizationId=org_id,

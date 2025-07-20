@@ -585,6 +585,7 @@
 
         <div class="section">
             <h2>📈 Top Metrics by Cardinality</h2>
+            {% if report.top_metrics %}
             <div class="search-box">
                 <span class="search-label">Search:</span>
                 <input type="text" id="metrics-search" class="search-input" placeholder="Filter metrics by name, type, or labels...">
@@ -643,10 +644,17 @@
                     </tbody>
                 </table>
             </div>
+            {% else %}
+            <div class="empty-state">
+                <p>⏳ No metric data available yet. Collectors are still gathering data.</p>
+                <p>This page will refresh automatically when data becomes available.</p>
+            </div>
+            {% endif %}
         </div>
 
         <div class="section">
             <h2>🏷️ High Cardinality Labels</h2>
+            {% if report.high_cardinality_labels %}
             <div class="search-box">
                 <span class="search-label">Search:</span>
                 <input type="text" id="labels-search" class="search-input" placeholder="Filter labels by name or metrics...">
@@ -687,6 +695,12 @@
                     </tbody>
                 </table>
             </div>
+            {% else %}
+            <div class="empty-state">
+                <p>⏳ No label data available yet. Collectors are still gathering data.</p>
+                <p>This page will refresh automatically when data becomes available.</p>
+            </div>
+            {% endif %}
         </div>
 
         {% if report.growth_rate %}
@@ -744,7 +758,6 @@
                 <a href="/cardinality/all-metrics" class="action-link">View All Metrics</a>
                 <a href="/cardinality/all-labels" class="action-link">View All Labels</a>
                 <a href="/cardinality/export/json" class="action-link" download="cardinality_export.json">Export as JSON</a>
-                <button class="action-link" onclick="window.location.reload()">Refresh Analysis</button>
             </div>
         </div>
         {% endif %}  <!-- End of first_run_pending check -->
@@ -846,6 +859,13 @@
                 button.textContent = `Show ${hiddenLabels.length - 5} More`;
             }
         }
+
+        // Auto-refresh if no data is available
+        {% if not report.top_metrics and not report.high_cardinality_labels %}
+        setTimeout(() => {
+            window.location.reload();
+        }, 5000);  // Refresh every 5 seconds until data is ready
+        {% endif %}
     </script>
 </body>
 </html>

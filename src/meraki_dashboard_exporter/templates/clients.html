@@ -33,7 +33,7 @@
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
         }
 
@@ -53,6 +53,28 @@
         .header p {
             color: var(--text-secondary);
             font-size: 1.1rem;
+        }
+
+        .search-container {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 20px;
+            font-size: 1rem;
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .search-input:focus {
+            border-color: var(--info-color);
         }
 
         .stats-grid {
@@ -97,25 +119,57 @@
             border-bottom: 2px solid var(--border-color);
         }
 
+        .table-wrapper {
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+
         .clients-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
+            min-width: 1200px;
         }
 
         .clients-table th,
         .clients-table td {
-            padding: 12px;
+            padding: 10px 8px;
             text-align: left;
             border-bottom: 1px solid var(--border-color);
+            font-size: 0.9rem;
         }
 
         .clients-table th {
             background-color: #f8f9fa;
             font-weight: 600;
             color: var(--text-secondary);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             text-transform: uppercase;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .clients-table th:hover {
+            background-color: #e8e9ea;
+        }
+
+        .clients-table th.sortable::after {
+            content: ' ↕';
+            opacity: 0.5;
+            font-size: 0.8rem;
+        }
+
+        .clients-table th.sorted-asc::after {
+            content: ' ↑';
+            opacity: 1;
+        }
+
+        .clients-table th.sorted-desc::after {
+            content: ' ↓';
+            opacity: 1;
         }
 
         .clients-table tr:hover {
@@ -126,7 +180,7 @@
             display: inline-block;
             padding: 4px 8px;
             border-radius: 4px;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             font-weight: 500;
         }
 
@@ -144,7 +198,7 @@
             display: inline-block;
             padding: 2px 6px;
             border-radius: 3px;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             background-color: #e3f2fd;
             color: #1565c0;
         }
@@ -154,15 +208,16 @@
             color: #6a1b9a;
         }
 
-        .mac-address {
+        .mac-address, .ip-address {
             font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: var(--text-secondary);
         }
 
         .usage-data {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: var(--text-secondary);
+            white-space: nowrap;
         }
 
         .config-info {
@@ -259,6 +314,36 @@
             padding: 40px;
             color: var(--text-secondary);
         }
+
+        .truncate {
+            max-width: 150px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .timestamp {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .sm-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .no-sm-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            background-color: #f5f5f5;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -268,6 +353,10 @@
         <div class="header">
             <h1>Network Clients</h1>
             <p>Real-time view of all network clients across your Meraki organization</p>
+        </div>
+
+        <div class="search-container">
+            <input type="text" class="search-input" id="searchInput" placeholder="Search clients by any field...">
         </div>
 
         <div class="config-info">
@@ -326,62 +415,104 @@
 
         {% if clients_by_network %}
             {% for network_name, clients in clients_by_network.items() %}
-            <div class="network-section">
+            <div class="network-section" data-network="{{ network_name }}">
                 <h2>{{ network_name }}</h2>
-                <table class="clients-table">
-                    <thead>
-                        <tr>
-                            <th>Description</th>
-                            <th>Hostname</th>
-                            <th>IP Address</th>
-                            <th>MAC Address</th>
-                            <th>Status</th>
-                            <th>Connection</th>
-                            <th>SSID/VLAN</th>
-                            <th>Usage (Sent/Recv/Total KB)</th>
-                            <th>Device</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for client in clients %}
-                        <tr>
-                            <td>{{ client.description or "-" }}</td>
-                            <td>{{ client.hostname or "-" }}</td>
-                            <td>{{ client.ip or "-" }}</td>
-                            <td class="mac-address">{{ client.mac }}</td>
-                            <td>
-                                <span class="status-badge {% if client.status == 'Online' %}status-online{% else %}status-offline{% endif %}">
-                                    {{ client.status }}
-                                </span>
-                            </td>
-                            <td>
-                                <span class="connection-type {% if client.recentDeviceConnection == 'Wired' %}connection-wired{% endif %}">
-                                    {{ client.recentDeviceConnection or "-" }}
-                                </span>
-                            </td>
-                            <td>
-                                {% if client.ssid %}
-                                    {{ client.ssid }}
-                                {% elif client.namedVlan %}
-                                    VLAN: {{ client.namedVlan }}
-                                {% elif client.vlan %}
-                                    VLAN: {{ client.vlan }}
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </td>
-                            <td class="usage-data">
-                                {% if client.usage %}
-                                    {{ client.usage.sent }}/{{ client.usage.recv }}/{{ client.usage.total }}
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </td>
-                            <td>{{ client.recentDeviceName or "-" }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <div class="table-wrapper">
+                    <table class="clients-table" data-network-table="{{ network_name }}">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-column="description">Description</th>
+                                <th class="sortable" data-column="hostname">Hostname (DNS)</th>
+                                <th class="sortable" data-column="calculatedHostname">Calculated Hostname</th>
+                                <th class="sortable" data-column="ip">IP Address</th>
+                                <th class="sortable" data-column="ip6">IPv6 Address</th>
+                                <th class="sortable" data-column="mac">MAC Address</th>
+                                <th class="sortable" data-column="status">Status</th>
+                                <th class="sortable" data-column="manufacturer">Manufacturer</th>
+                                <th class="sortable" data-column="os">OS</th>
+                                <th class="sortable" data-column="deviceTypePrediction">Device Type</th>
+                                <th class="sortable" data-column="user">User</th>
+                                <th class="sortable" data-column="recentDeviceConnection">Connection</th>
+                                <th class="sortable" data-column="ssid">SSID/VLAN</th>
+                                <th class="sortable" data-column="switchport">Switch Port</th>
+                                <th class="sortable" data-column="usage">Usage (KB)</th>
+                                <th class="sortable" data-column="recentDeviceName">Device</th>
+                                <th class="sortable" data-column="smInstalled">SM</th>
+                                <th class="sortable" data-column="firstSeen">First Seen</th>
+                                <th class="sortable" data-column="lastSeen">Last Seen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for client in clients %}
+                            <tr class="client-row">
+                                <td data-value="{{ client.description or '' }}">{{ client.description or "-" }}</td>
+                                <td data-value="{{ client.hostname or '' }}">{{ client.hostname or "-" }}</td>
+                                <td data-value="{{ client.calculatedHostname or '' }}"><strong>{{ client.calculatedHostname or "-" }}</strong></td>
+                                <td data-value="{{ client.ip or '' }}" class="ip-address">{{ client.ip or "-" }}</td>
+                                <td data-value="{{ client.ip6 or '' }}" class="ip-address truncate" title="{{ client.ip6 or '' }}">{{ client.ip6 or "-" }}</td>
+                                <td data-value="{{ client.mac }}" class="mac-address">{{ client.mac }}</td>
+                                <td data-value="{{ client.status }}" data-sort="{{ 1 if client.status == 'Online' else 0 }}">
+                                    <span class="status-badge {% if client.status == 'Online' %}status-online{% else %}status-offline{% endif %}">
+                                        {{ client.status }}
+                                    </span>
+                                </td>
+                                <td data-value="{{ client.manufacturer or '' }}" class="truncate" title="{{ client.manufacturer or '' }}">{{ client.manufacturer or "-" }}</td>
+                                <td data-value="{{ client.os or '' }}" class="truncate" title="{{ client.os or '' }}">{{ client.os or "-" }}</td>
+                                <td data-value="{{ client.deviceTypePrediction or '' }}" class="truncate" title="{{ client.deviceTypePrediction or '' }}">{{ client.deviceTypePrediction or "-" }}</td>
+                                <td data-value="{{ client.user or '' }}" class="truncate" title="{{ client.user or '' }}">{{ client.user or "-" }}</td>
+                                <td data-value="{{ client.recentDeviceConnection or '' }}">
+                                    <span class="connection-type {% if client.recentDeviceConnection == 'Wired' %}connection-wired{% endif %}">
+                                        {{ client.recentDeviceConnection or "-" }}
+                                    </span>
+                                </td>
+                                <td data-value="{{ client.ssid or client.namedVlan or client.vlan or '' }}">
+                                    {% if client.ssid %}
+                                        {{ client.ssid }}
+                                    {% elif client.namedVlan %}
+                                        VLAN: {{ client.namedVlan }}
+                                    {% elif client.vlan %}
+                                        VLAN: {{ client.vlan }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td data-value="{{ client.switchport or '' }}">{{ client.switchport or "-" }}</td>
+                                <td data-value="{{ client.usage.total if client.usage else 0 }}" class="usage-data">
+                                    {% if client.usage %}
+                                        <span title="Sent: {{ client.usage.sent }} KB, Received: {{ client.usage.recv }} KB">
+                                            {{ client.usage.total }} KB
+                                        </span>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td data-value="{{ client.recentDeviceName or '' }}" class="truncate" title="{{ client.recentDeviceName or '' }}">{{ client.recentDeviceName or "-" }}</td>
+                                <td data-value="{{ client.smInstalled }}" data-sort="{{ 1 if client.smInstalled else 0 }}">
+                                    {% if client.smInstalled %}
+                                        <span class="sm-badge">Yes</span>
+                                    {% else %}
+                                        <span class="no-sm-badge">No</span>
+                                    {% endif %}
+                                </td>
+                                <td data-value="{{ client.firstSeen.isoformat() if client.firstSeen else '' }}" class="timestamp">
+                                    {% if client.firstSeen %}
+                                        {{ client.firstSeen.strftime('%Y-%m-%d %H:%M') }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td data-value="{{ client.lastSeen.isoformat() if client.lastSeen else '' }}" class="timestamp">
+                                    {% if client.lastSeen %}
+                                        {{ client.lastSeen.strftime('%Y-%m-%d %H:%M') }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
             {% endfor %}
         {% else %}
@@ -395,6 +526,113 @@
     </div>
 
     <script>
+        // Search functionality
+        const searchInput = document.getElementById('searchInput');
+        const allRows = document.querySelectorAll('.client-row');
+
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+
+            allRows.forEach(row => {
+                const rowText = row.textContent.toLowerCase();
+                const dataValues = Array.from(row.querySelectorAll('td')).map(td =>
+                    td.getAttribute('data-value') || td.textContent
+                ).join(' ').toLowerCase();
+
+                if (rowText.includes(searchTerm) || dataValues.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Update network section visibility
+            document.querySelectorAll('.network-section').forEach(section => {
+                const table = section.querySelector('.clients-table');
+                if (!table) return;
+
+                const visibleRows = section.querySelectorAll('.client-row:not([style*="display: none"])');
+                section.style.display = visibleRows.length > 0 ? '' : 'none';
+            });
+        });
+
+        // Sorting functionality
+        let sortStates = new Map(); // Track sort state for each column
+
+        document.querySelectorAll('.sortable').forEach(header => {
+            header.addEventListener('click', function() {
+                const table = this.closest('table');
+                const tbody = table.querySelector('tbody');
+                const column = this.getAttribute('data-column');
+                const headerIndex = Array.from(this.parentElement.children).indexOf(this);
+
+                // Get current sort state
+                const tableId = table.getAttribute('data-network-table');
+                const columnKey = `${tableId}-${column}`;
+                let sortOrder = sortStates.get(columnKey) || 'none';
+
+                // Cycle through sort states: none -> asc -> desc -> none
+                if (sortOrder === 'none') {
+                    sortOrder = 'asc';
+                } else if (sortOrder === 'asc') {
+                    sortOrder = 'desc';
+                } else {
+                    sortOrder = 'none';
+                }
+
+                sortStates.set(columnKey, sortOrder);
+
+                // Update header classes
+                table.querySelectorAll('th').forEach(th => {
+                    th.classList.remove('sorted-asc', 'sorted-desc');
+                });
+
+                if (sortOrder !== 'none') {
+                    this.classList.add(`sorted-${sortOrder}`);
+                }
+
+                // Get all rows
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+
+                if (sortOrder === 'none') {
+                    // Reset to original order (reload page or store original order)
+                    window.location.reload();
+                    return;
+                }
+
+                // Sort rows
+                rows.sort((a, b) => {
+                    const cellA = a.children[headerIndex];
+                    const cellB = b.children[headerIndex];
+
+                    let valueA = cellA.getAttribute('data-sort') || cellA.getAttribute('data-value') || cellA.textContent.trim();
+                    let valueB = cellB.getAttribute('data-sort') || cellB.getAttribute('data-value') || cellB.textContent.trim();
+
+                    // Try to parse as numbers
+                    const numA = parseFloat(valueA);
+                    const numB = parseFloat(valueB);
+
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                        return sortOrder === 'asc' ? numA - numB : numB - numA;
+                    }
+
+                    // Sort as strings
+                    valueA = valueA.toLowerCase();
+                    valueB = valueB.toLowerCase();
+
+                    if (sortOrder === 'asc') {
+                        return valueA < valueB ? -1 : valueA > valueB ? 1 : 0;
+                    } else {
+                        return valueA > valueB ? -1 : valueA < valueB ? 1 : 0;
+                    }
+                });
+
+                // Reorder rows in the table
+                rows.forEach(row => tbody.appendChild(row));
+            });
+        });
+
+        // Clear DNS cache functionality
         async function clearDNSCache() {
             const button = document.querySelector('.clear-cache-btn');
             button.disabled = true;

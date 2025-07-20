@@ -335,20 +335,32 @@ class ClientData(BaseModel):
     mac: str
     description: str | None = None
     hostname: str | None = None  # Resolved via reverse DNS
+    calculatedHostname: str | None = None  # The actual hostname used in metrics
     ip: str | None = None
     ip6: str | None = None
+    ip6Local: str | None = None
+    user: str | None = None
     firstSeen: datetime
     lastSeen: datetime
     manufacturer: str | None = None
     os: str | None = None
+    deviceTypePrediction: str | None = None
     recentDeviceSerial: str | None = None
     recentDeviceName: str | None = None
+    recentDeviceMac: str | None = None
     recentDeviceConnection: Literal["Wired", "Wireless"] | str | None = None
     ssid: str | None = None
     vlan: str | None = None
     switchport: str | None = None
     status: Literal["Online", "Offline"] | str = "Offline"
     usage: dict[str, int] | None = None
+    notes: str | None = None
+    groupPolicy8021x: str | None = None
+    adaptivePolicyGroup: str | None = None
+    smInstalled: bool = False
+    namedVlan: str | None = None
+    pskGroup: str | None = None
+    wirelessCapabilities: str | None = None
     networkId: str | None = None
     networkName: str | None = None
     organizationId: str | None = None

@@ -62,30 +62,6 @@ class ClientsCollector(MetricCollector):
         if not self.settings.clients.enabled:
             return
 
-        # Client info metric - using Gauge instead of Info to avoid Prometheus Info metric issues
-        self.client_info = self._create_gauge(
-            ClientMetricName.CLIENT_INFO,
-            "Client information (value is always 1)",
-            labelnames=[
-                LabelName.ORG_ID,
-                LabelName.ORG_NAME,
-                LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
-                LabelName.CLIENT_ID,
-                LabelName.MAC,
-                LabelName.DESCRIPTION,
-                LabelName.HOSTNAME,
-                LabelName.SSID,
-                LabelName.MANUFACTURER,
-                LabelName.OS,
-                LabelName.RECENT_DEVICE_NAME,
-                LabelName.IP,
-                LabelName.VLAN,
-                LabelName.FIRST_SEEN,
-                LabelName.LAST_SEEN,
-            ],
-        )
-
         # Client status metric (1 = online, 0 = offline)
         self.client_status = self._create_gauge(
             ClientMetricName.CLIENT_STATUS,
@@ -103,10 +79,11 @@ class ClientsCollector(MetricCollector):
             ],
         )
 
-        # Client usage metrics
-        self.client_usage_sent = self._create_counter(
+        # Client usage metrics - using Gauge since these are point-in-time measurements
+        # that can go up or down (hourly usage windows from API)
+        self.client_usage_sent = self._create_gauge(
             ClientMetricName.CLIENT_USAGE_SENT_KB,
-            "Total kilobytes sent by client",
+            "Kilobytes sent by client in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -120,9 +97,9 @@ class ClientsCollector(MetricCollector):
             ],
         )
 
-        self.client_usage_recv = self._create_counter(
+        self.client_usage_recv = self._create_gauge(
             ClientMetricName.CLIENT_USAGE_RECV_KB,
-            "Total kilobytes received by client",
+            "Kilobytes received by client in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -136,9 +113,9 @@ class ClientsCollector(MetricCollector):
             ],
         )
 
-        self.client_usage_total = self._create_counter(
+        self.client_usage_total = self._create_gauge(
             ClientMetricName.CLIENT_USAGE_TOTAL_KB,
-            "Total kilobytes transferred by client",
+            "Total kilobytes transferred by client in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -434,37 +411,20 @@ class ClientsCollector(MetricCollector):
                 str(LabelName.SSID): ssid or "Unknown",
             }
 
-            # Set client info (as gauge with value 1)
-            self.client_info.labels(**{
-                **labels,
-                str(LabelName.MANUFACTURER): self._sanitize_label_value(client.manufacturer),
-                str(LabelName.OS): self._sanitize_label_value(client.os),
-                str(LabelName.RECENT_DEVICE_NAME): self._sanitize_label_value(
-                    client.recentDeviceName
-                ),
-                str(LabelName.IP): client.ip or "",
-                str(LabelName.VLAN): client.vlan or "",
-                str(LabelName.FIRST_SEEN): client.firstSeen.isoformat(),
-                str(LabelName.LAST_SEEN): client.lastSeen.isoformat(),
-            }).set(1)
-
             # Set client status
             status_value = 1 if client.status == "Online" else 0
             self.client_status.labels(**labels).set(status_value)
 
-            # Set usage metrics (as counters)
+            # Set usage metrics (as gauges - these are point-in-time measurements)
             if client.usage:
-                # Set the counter to the current value
-                # Note: In production, we'd track deltas, but for now we'll use _created
                 sent_kb = client.usage.get("sent", 0)
                 recv_kb = client.usage.get("recv", 0)
                 total_kb = client.usage.get("total", 0)
 
-                # Update counters by setting internal value
-                # This is a workaround since we can't truly track deltas without persistence
-                self.client_usage_sent.labels(**labels)._value.set(float(sent_kb))
-                self.client_usage_recv.labels(**labels)._value.set(float(recv_kb))
-                self.client_usage_total.labels(**labels)._value.set(float(total_kb))
+                # Set gauge values
+                self.client_usage_sent.labels(**labels).set(float(sent_kb))
+                self.client_usage_recv.labels(**labels).set(float(recv_kb))
+                self.client_usage_total.labels(**labels).set(float(total_kb))
 
             logger.debug(
                 "Updated client metrics",

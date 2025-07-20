@@ -9,7 +9,7 @@ The exporter provides metrics across several categories:
 | Collector | Metrics | Description |
 |-----------|---------|-------------|
 | AlertsCollector | 3 | Active alerts by severity, type, and category |
-| ClientsCollector | 5 | Detailed client-level metrics including usage and status |
+| ClientsCollector | 4 | Detailed client-level metrics including usage and status |
 | ConfigCollector | 14 | Organization security settings and configuration tracking |
 | DeviceCollector | 6 | Device status, performance, and uptime metrics |
 | MRCollector | 33 | Access point metrics including clients, power, and performance |
@@ -64,18 +64,6 @@ The exporter provides metrics across several categories:
 
 **Source:** `src/meraki_dashboard_exporter/collectors/clients.py`
 
-#### `meraki_client_info`
-
-**Description:** Client information (value is always 1)
-
-**Type:** gauge
-
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.SSID`, `LabelName.MANUFACTURER`, `LabelName.OS`, `LabelName.RECENT_DEVICE_NAME`, `LabelName.IP`, `LabelName.VLAN`, `LabelName.FIRST_SEEN`, `LabelName.LAST_SEEN`
-
-**Constant:** `ClientMetricName.CLIENT_INFO`
-
-**Variable:** `self.client_info` (line 66)
-
 #### `meraki_client_status`
 
 **Description:** Client online status (1 = online, 0 = offline)
@@ -86,43 +74,43 @@ The exporter provides metrics across several categories:
 
 **Constant:** `ClientMetricName.CLIENT_STATUS`
 
-**Variable:** `self.client_status` (line 90)
+**Variable:** `self.client_status` (line 66)
 
 #### `meraki_client_usage_recv_kb`
 
-**Description:** Total kilobytes received by client
+**Description:** Kilobytes received by client in the last hour
 
-**Type:** counter
+**Type:** gauge
 
 **Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.SSID`
 
 **Constant:** `ClientMetricName.CLIENT_USAGE_RECV_KB`
 
-**Variable:** `self.client_usage_recv` (line 123)
+**Variable:** `self.client_usage_recv` (line 100)
 
 #### `meraki_client_usage_sent_kb`
 
-**Description:** Total kilobytes sent by client
+**Description:** Kilobytes sent by client in the last hour
 
-**Type:** counter
+**Type:** gauge
 
 **Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.SSID`
 
 **Constant:** `ClientMetricName.CLIENT_USAGE_SENT_KB`
 
-**Variable:** `self.client_usage_sent` (line 107)
+**Variable:** `self.client_usage_sent` (line 84)
 
 #### `meraki_client_usage_total_kb`
 
-**Description:** Total kilobytes transferred by client
+**Description:** Total kilobytes transferred by client in the last hour
 
-**Type:** counter
+**Type:** gauge
 
 **Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.SSID`
 
 **Constant:** `ClientMetricName.CLIENT_USAGE_TOTAL_KB`
 
-**Variable:** `self.client_usage_total` (line 139)
+**Variable:** `self.client_usage_total` (line 116)
 
 ### ConfigCollector
 
@@ -1356,11 +1344,10 @@ All metrics in alphabetical order:
 | `meraki_alerts_total_by_severity` | gauge | AlertsCollector | Total number of active alerts by severity |
 | `meraki_ap_channel_utilization_2_4ghz_percent` | gauge | NetworkHealthCollector | 2.4GHz channel utilization percentage per AP |
 | `meraki_ap_channel_utilization_5ghz_percent` | gauge | NetworkHealthCollector | 5GHz channel utilization percentage per AP |
-| `meraki_client_info` | gauge | ClientsCollector | Client information (value is always 1) |
 | `meraki_client_status` | gauge | ClientsCollector | Client online status (1 = online, 0 = offline) |
-| `meraki_client_usage_recv_kb` | counter | ClientsCollector | Total kilobytes received by client |
-| `meraki_client_usage_sent_kb` | counter | ClientsCollector | Total kilobytes sent by client |
-| `meraki_client_usage_total_kb` | counter | ClientsCollector | Total kilobytes transferred by client |
+| `meraki_client_usage_recv_kb` | gauge | ClientsCollector | Kilobytes received by client in the last hour |
+| `meraki_client_usage_sent_kb` | gauge | ClientsCollector | Kilobytes sent by client in the last hour |
+| `meraki_client_usage_total_kb` | gauge | ClientsCollector | Total kilobytes transferred by client in the last hour |
 | `meraki_device_memory_free_bytes` | gauge | DeviceCollector | Device memory free in bytes |
 | `meraki_device_memory_total_bytes` | gauge | DeviceCollector | Device memory total provisioned in bytes |
 | `meraki_device_memory_usage_percent` | gauge | DeviceCollector | Device memory usage percentage (maximum from most recent interval) |

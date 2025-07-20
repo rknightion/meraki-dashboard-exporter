@@ -319,15 +319,23 @@ class ExporterApp:
 
     async def _cardinality_monitor_loop(self) -> None:
         """Background task for periodic cardinality monitoring."""
-        # Check cardinality every minute (matching fast tier)
-        check_interval = 60  # 1 minute
+        # Check cardinality every 5 minutes
+        check_interval = 300  # 5 minutes
+
+        # Wait 30 seconds after each collection cycle to ensure metrics are updated
+        post_collection_delay = 30  # seconds
 
         logger.info(
             "Starting cardinality monitoring loop",
             check_interval=check_interval,
+            post_collection_delay=post_collection_delay,
         )
 
         try:
+            # Initial delay to let collectors run
+            medium_interval = self.collector_manager.get_tier_interval(UpdateTier.MEDIUM)
+            await asyncio.sleep(medium_interval + post_collection_delay)
+
             while not self._shutdown_event.is_set():
                 try:
                     # Run cardinality analysis
