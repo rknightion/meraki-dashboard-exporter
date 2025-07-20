@@ -55,7 +55,17 @@ class CardinalityMonitor:
         # Cache for expensive analysis results
         self._analysis_cache: dict[str, Any] | None = None
         self._cache_timestamp = 0.0
-        self._cache_ttl = 30.0  # Cache for 30 seconds
+        self._cache_ttl = 60.0  # Cache for 60 seconds (matching fast tier)
+
+        # Track if collectors have run at least once
+        self._first_run_complete = False
+        self._first_analysis_time: float | None = None
+
+        # Store full metric data for detailed views
+        self._full_metric_data: dict[str, Any] = {}
+        self._label_value_distribution: dict[str, dict[str, set[str]]] = defaultdict(
+            lambda: defaultdict(set)
+        )
 
         # Initialize monitoring metrics
         self._initialize_metrics()
@@ -149,6 +159,11 @@ class CardinalityMonitor:
         self._cache_timestamp = time.time()
         logger.debug("Cached cardinality analysis results")
 
+    def mark_first_run_complete(self) -> None:
+        """Mark that collectors have completed their first run."""
+        self._first_run_complete = True
+        logger.info("First collector run completed, cardinality analysis now available")
+
     def analyze_cardinality(self, use_cache: bool = True) -> dict[str, Any]:
         """Analyze current metric cardinality.
 
@@ -169,13 +184,29 @@ class CardinalityMonitor:
             if cached is not None:
                 return cached
 
+        # Don't analyze if collectors haven't run yet
+        if not self._first_run_complete:
+            return {
+                "timestamp": time.time(),
+                "metrics": {},
+                "total_series": 0,
+                "warnings": [],
+                "critical": [],
+                "error": "Waiting for initial collector run to complete",
+                "first_run_pending": True,
+            }
+
         start_time = time.time()
+        if self._first_analysis_time is None:
+            self._first_analysis_time = start_time
+
         results: dict[str, Any] = {
             "timestamp": start_time,
             "metrics": {},
             "total_series": 0,
             "warnings": [],
             "critical": [],
+            "first_analysis_time": self._first_analysis_time,
         }
 
         metric_count = 0
@@ -277,6 +308,10 @@ class CardinalityMonitor:
                 # Track unique label values
                 for label_name, label_value in sample.labels.items():
                     label_values[label_name].add(str(label_value))
+                    # Track label value distribution
+                    self._label_value_distribution[metric_family.name][label_name].add(
+                        str(label_value)
+                    )
 
             if sample_count == 0:
                 return None
@@ -309,13 +344,19 @@ class CardinalityMonitor:
                 (t, c) for t, c in history if t > cutoff_time
             ]
 
-            return {
+            metric_data = {
                 "cardinality": sample_count,
                 "label_cardinalities": label_cardinalities,
+                "label_values": {label: list(values) for label, values in label_values.items()},
                 "type": metric_family.type,
                 "documentation": metric_family.documentation or "No documentation available",
                 "label_count": len(label_cardinalities),
             }
+
+            # Store full data for detailed views
+            self._full_metric_data[metric_family.name] = metric_data
+
+            return metric_data
 
         except Exception as e:
             logger.exception(
@@ -368,11 +409,12 @@ class CardinalityMonitor:
                     "name": name,
                     "cardinality": info["cardinality"],
                     "labels": list(info["label_cardinalities"].keys()),
+                    "label_values": info.get("label_values", {}),
                     "label_count": info.get("label_count", len(info["label_cardinalities"])),
                     "type": info.get("type", "unknown"),
                     "documentation": info.get("documentation", "No documentation"),
                 }
-                for name, info in sorted_metrics[:20]
+                for name, info in sorted_metrics[:30]  # Increased from 20 to 30
             ],
             "high_cardinality_labels": self._find_high_cardinality_labels(analysis),
             "growth_rate": self._calculate_growth_rates(),
@@ -423,7 +465,7 @@ class CardinalityMonitor:
                 "metric_count": len(stats["metrics"]),
                 "example_metrics": stats["metrics"][:5],
             }
-            for label_name, stats in sorted_labels[:15]
+            for label_name, stats in sorted_labels[:30]  # Increased from 15 to 30
         ]
 
     def _calculate_growth_rates(self) -> dict[str, float]:
@@ -499,6 +541,166 @@ class CardinalityMonitor:
 
         return recommendations
 
+    def get_label_value_distribution(self, metric_name: str | None = None) -> dict[str, Any]:
+        """Get distribution of label values.
+
+        Parameters
+        ----------
+        metric_name : str | None
+            Specific metric to analyze, or None for all metrics.
+
+        Returns
+        -------
+        dict[str, Any]
+            Label value distribution data.
+
+        """
+        if metric_name:
+            return {
+                metric_name: {
+                    label: list(values)
+                    for label, values in self._label_value_distribution.get(metric_name, {}).items()
+                }
+            }
+
+        # Get top label values across all metrics
+        label_value_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+
+        for labels in self._label_value_distribution.values():
+            for label, values in labels.items():
+                for value in values:
+                    label_value_counts[label][value] += 1
+
+        # Get top 10 values per label
+        result = {}
+        for label, value_counts in label_value_counts.items():
+            sorted_values = sorted(value_counts.items(), key=lambda x: x[1], reverse=True)
+            result[label] = {
+                "total_unique_values": len(value_counts),
+                "top_values": [
+                    {"value": value, "occurrence_count": count}
+                    for value, count in sorted_values[:10]
+                ],
+            }
+
+        return result
+
+    def get_all_metrics(self) -> list[dict[str, Any]]:
+        """Get all metrics with full details.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            All metrics sorted by name.
+
+        """
+        return [
+            {
+                "name": name,
+                "cardinality": data.get("cardinality", 0),
+                "type": data.get("type", "unknown"),
+                "labels": list(data.get("label_cardinalities", {}).keys()),
+                "label_count": data.get("label_count", 0),
+                "documentation": data.get("documentation", ""),
+            }
+            for name, data in sorted(self._full_metric_data.items())
+        ]
+
+    def get_all_labels(self) -> list[dict[str, Any]]:
+        """Get all labels with usage statistics.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            All labels sorted by total cardinality.
+
+        """
+        label_stats: dict[str, dict[str, Any]] = defaultdict(
+            lambda: {
+                "total_cardinality": 0,
+                "metrics_used_in": set(),
+                "max_cardinality": 0,
+                "unique_values": set(),
+            }
+        )
+
+        for metric_name, metric_data in self._full_metric_data.items():
+            for label_name, cardinality in metric_data.get("label_cardinalities", {}).items():
+                label_stats[label_name]["total_cardinality"] += cardinality
+                label_stats[label_name]["metrics_used_in"].add(metric_name)
+                label_stats[label_name]["max_cardinality"] = max(
+                    label_stats[label_name]["max_cardinality"], cardinality
+                )
+                # Add unique values
+                if label_name in self._label_value_distribution.get(metric_name, {}):
+                    label_stats[label_name]["unique_values"].update(
+                        self._label_value_distribution[metric_name][label_name]
+                    )
+
+        # Convert to list and sort
+        result = []
+        for label_name, stats in label_stats.items():
+            result.append({
+                "label": label_name,
+                "total_cardinality": stats["total_cardinality"],
+                "max_cardinality": stats["max_cardinality"],
+                "metrics_used_in": len(stats["metrics_used_in"]),
+                "unique_value_count": len(stats["unique_values"]),
+                "metrics": sorted(stats["metrics_used_in"]),
+            })
+
+        return sorted(result, key=lambda x: x["total_cardinality"], reverse=True)
+
+    def get_histogram_analysis(self) -> list[dict[str, Any]]:
+        """Analyze histogram metrics for bucket cardinality.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            Histogram metrics with bucket analysis.
+
+        """
+        histograms = []
+
+        for metric_name, data in self._full_metric_data.items():
+            if data.get("type") == "histogram":
+                # Count bucket metrics
+                bucket_count = sum(1 for label in data.get("label_values", {}).get("le", []))
+
+                histograms.append({
+                    "name": metric_name,
+                    "total_cardinality": data.get("cardinality", 0),
+                    "bucket_count": bucket_count,
+                    "base_labels": [
+                        label
+                        for label in data.get("label_cardinalities", {}).keys()
+                        if label != "le"
+                    ],
+                    "documentation": data.get("documentation", ""),
+                })
+
+        return sorted(histograms, key=lambda x: x["total_cardinality"], reverse=True)
+
+    def export_as_json(self) -> dict[str, Any]:
+        """Export full cardinality data as JSON.
+
+        Returns
+        -------
+        dict[str, Any]
+            Complete cardinality data for export.
+
+        """
+        report = self.get_cardinality_report()
+        return {
+            "timestamp": report["summary"]["analysis_timestamp"],
+            "summary": report["summary"],
+            "all_metrics": self.get_all_metrics(),
+            "all_labels": self.get_all_labels(),
+            "label_value_distribution": self.get_label_value_distribution(),
+            "histogram_analysis": self.get_histogram_analysis(),
+            "growth_rates": report.get("growth_rate", {}),
+        }
+
     def clear_cache(self) -> None:
         """Clear the analysis cache to force fresh analysis."""
         self._analysis_cache = None
@@ -537,4 +739,52 @@ def setup_cardinality_endpoint(app: FastAPI, monitor: CardinalityMonitor) -> Non
 
         return templates.TemplateResponse("cardinality.html", context)  # type: ignore[no-any-return]
 
-    logger.info("Added cardinality monitoring endpoint: /cardinality")
+    @app.get("/cardinality/all-metrics", response_class=HTMLResponse)
+    async def get_all_metrics(request: Request) -> HTMLResponse:
+        """Get all metrics with cardinality details."""
+        # Get all metrics data
+        all_metrics = monitor.get_all_metrics()
+
+        # Get app state for template access
+        templates = app.state.templates
+
+        # Prepare context for template
+        context = {
+            "request": request,
+            "metrics": all_metrics,
+            "total_metrics": len(all_metrics),
+        }
+
+        return templates.TemplateResponse("cardinality_all_metrics.html", context)  # type: ignore[no-any-return]
+
+    @app.get("/cardinality/all-labels", response_class=HTMLResponse)
+    async def get_all_labels(request: Request) -> HTMLResponse:
+        """Get all labels with usage statistics."""
+        # Get all labels data
+        all_labels = monitor.get_all_labels()
+
+        # Get app state for template access
+        templates = app.state.templates
+
+        # Prepare context for template
+        context = {
+            "request": request,
+            "labels": all_labels,
+            "total_labels": len(all_labels),
+        }
+
+        return templates.TemplateResponse("cardinality_all_labels.html", context)  # type: ignore[no-any-return]
+
+    @app.get("/cardinality/export/json")
+    async def export_cardinality_json() -> dict[str, Any]:
+        """Export cardinality data as JSON."""
+        return monitor.export_as_json()
+
+    @app.get("/cardinality/label-values/{metric_name}")
+    async def get_metric_label_values(metric_name: str) -> dict[str, Any]:
+        """Get label value distribution for a specific metric."""
+        return monitor.get_label_value_distribution(metric_name)
+
+    logger.info(
+        "Added cardinality monitoring endpoints: /cardinality, /cardinality/all-metrics, /cardinality/all-labels"
+    )

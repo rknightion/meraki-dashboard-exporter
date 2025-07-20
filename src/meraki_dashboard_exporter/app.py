@@ -226,6 +226,9 @@ class ExporterApp:
                 tiers=list(self._tier_tasks.keys()),
             )
 
+            # Wait for first collection cycle to complete
+            asyncio.create_task(self._wait_for_first_collection())
+
         except Exception:
             logger.exception("Failed during startup collections")
             # Don't crash the server if initial collection fails
@@ -306,10 +309,18 @@ class ExporterApp:
             logger.info("Collection task cancelled, exiting cleanly", tier=tier)
             raise
 
+    async def _wait_for_first_collection(self) -> None:
+        """Wait for all collectors to complete their first run."""
+        # Wait for the slowest tier (SLOW) to complete once
+        slow_interval = self.collector_manager.get_tier_interval(UpdateTier.SLOW)
+        await asyncio.sleep(slow_interval + 5)  # Add 5 seconds buffer
+        self.cardinality_monitor.mark_first_run_complete()
+        logger.info("First collection cycle complete, cardinality analysis enabled")
+
     async def _cardinality_monitor_loop(self) -> None:
         """Background task for periodic cardinality monitoring."""
-        # Check cardinality every 5 minutes
-        check_interval = 300  # 5 minutes
+        # Check cardinality every minute (matching fast tier)
+        check_interval = 60  # 1 minute
 
         logger.info(
             "Starting cardinality monitoring loop",
