@@ -368,10 +368,12 @@ class ExporterApp:
             collectors = []
             for tier, collector_list in exporter.collector_manager.collectors.items():
                 for collector in collector_list:
-                    collectors.append({
-                        "name": collector.__class__.__name__.replace("Collector", ""),
-                        "tier": tier.value.upper(),
-                    })
+                    # Only show active collectors
+                    if collector.is_active:
+                        collectors.append({
+                            "name": collector.__class__.__name__.replace("Collector", ""),
+                            "tier": tier.value.upper(),
+                        })
 
             # Get organization count (if available)
             org_count = 1 if exporter.settings.meraki.org_id else "All"
@@ -425,8 +427,8 @@ class ExporterApp:
             # Get client store from collector
             client_store = None
             for collector in exporter.collector_manager.collectors[UpdateTier.MEDIUM]:
-                if collector.__class__.__name__ == "ClientsCollector":
-                    client_store = collector.client_store
+                if collector.__class__.__name__ == "ClientsCollector" and collector.is_active:
+                    client_store = getattr(collector, "client_store", None)
                     break
 
             if not client_store:

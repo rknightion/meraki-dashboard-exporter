@@ -6,7 +6,6 @@ import asyncio
 from typing import Any
 
 import structlog
-from prometheus_client import Counter, Gauge, Info
 
 from ..core.api_helpers import create_api_helper
 from ..core.api_models import NetworkClient
@@ -25,6 +24,11 @@ logger = structlog.get_logger(__name__)
 @register_collector(UpdateTier.MEDIUM)
 class ClientsCollector(MetricCollector):
     """Collector for client-level metrics across all networks."""
+
+    @property
+    def is_active(self) -> bool:
+        """Check if this collector is actively collecting metrics."""
+        return getattr(self, "_enabled", False)
 
     def __init__(self, *args: Any, **kwargs: Any):
         """Initialize the clients collector.
@@ -58,7 +62,7 @@ class ClientsCollector(MetricCollector):
     def _initialize_metrics(self) -> None:
         """Initialize Prometheus metrics for client data."""
         # Client info metric
-        self.client_info = Info(
+        self.client_info = self._create_info(
             ClientMetricName.CLIENT_INFO,
             "Client information",
             labelnames=[
@@ -75,11 +79,10 @@ class ClientsCollector(MetricCollector):
                 LabelName.OS,
                 LabelName.RECENT_DEVICE_NAME,
             ],
-            registry=self.registry,
         )
 
         # Client status metric (1 = online, 0 = offline)
-        self.client_status = Gauge(
+        self.client_status = self._create_gauge(
             ClientMetricName.CLIENT_STATUS,
             "Client online status (1 = online, 0 = offline)",
             labelnames=[
@@ -93,11 +96,10 @@ class ClientsCollector(MetricCollector):
                 LabelName.HOSTNAME,
                 LabelName.SSID,
             ],
-            registry=self.registry,
         )
 
         # Client usage metrics
-        self.client_usage_sent = Counter(
+        self.client_usage_sent = self._create_counter(
             ClientMetricName.CLIENT_USAGE_SENT_KB,
             "Total kilobytes sent by client",
             labelnames=[
@@ -111,10 +113,9 @@ class ClientsCollector(MetricCollector):
                 LabelName.HOSTNAME,
                 LabelName.SSID,
             ],
-            registry=self.registry,
         )
 
-        self.client_usage_recv = Counter(
+        self.client_usage_recv = self._create_counter(
             ClientMetricName.CLIENT_USAGE_RECV_KB,
             "Total kilobytes received by client",
             labelnames=[
@@ -128,10 +129,9 @@ class ClientsCollector(MetricCollector):
                 LabelName.HOSTNAME,
                 LabelName.SSID,
             ],
-            registry=self.registry,
         )
 
-        self.client_usage_total = Counter(
+        self.client_usage_total = self._create_counter(
             ClientMetricName.CLIENT_USAGE_TOTAL_KB,
             "Total kilobytes transferred by client",
             labelnames=[
@@ -145,7 +145,6 @@ class ClientsCollector(MetricCollector):
                 LabelName.HOSTNAME,
                 LabelName.SSID,
             ],
-            registry=self.registry,
         )
 
     async def _collect_impl(self) -> None:

@@ -48,6 +48,20 @@ class MetricCollector(ABC):
     # Flag to ensure we initialize only once
     _metrics_initialized: bool = False
 
+    # Whether this collector is actively collecting metrics
+    # Subclasses can override this based on their configuration
+    @property
+    def is_active(self) -> bool:
+        """Check if this collector is actively collecting metrics.
+
+        Returns
+        -------
+        bool
+            True if the collector is active, False otherwise.
+
+        """
+        return True
+
     def __init__(
         self,
         api: DashboardAPI,

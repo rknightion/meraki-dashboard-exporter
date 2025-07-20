@@ -191,6 +191,8 @@ def resolve_metric_names(metrics: list[dict[str, Any]], constants_dir: Path) -> 
                 "MT",
                 "Alert",
                 "Config",
+                "Client",
+                "NetworkHealth",
             )):
                 # If it's already a string constant, use it directly
                 metric["actual_name"] = metric["name"]
@@ -237,6 +239,7 @@ def generate_markdown(metrics: list[dict[str, Any]]) -> str:
 
     collector_descriptions = {
         "AlertsCollector": "Active alerts by severity, type, and category",
+        "ClientsCollector": "Detailed client-level metrics including usage and status",
         "ConfigCollector": "Organization security settings and configuration tracking",
         "DeviceCollector": "Device status, performance, and uptime metrics",
         "MSCollector": "Switch-specific metrics including port status, power, and PoE",

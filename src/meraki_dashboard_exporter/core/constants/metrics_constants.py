@@ -221,7 +221,7 @@ class ClientMetricName(StrEnum):
     """Client-level metric names."""
 
     # Client info metric
-    CLIENT_INFO = "meraki_client"
+    CLIENT_INFO = "meraki_client_info"
 
     # Client status metrics
     CLIENT_STATUS = "meraki_client_status"
