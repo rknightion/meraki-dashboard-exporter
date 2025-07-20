@@ -1,5 +1,7 @@
 """Tests for logging decorator helper functions."""
 
+# ruff: noqa: S101
+
 import meraki_dashboard_exporter.core.logging_decorators as ld
 
 

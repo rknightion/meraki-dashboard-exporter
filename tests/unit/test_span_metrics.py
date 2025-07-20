@@ -1,5 +1,7 @@
 """Tests for span metrics generation from OpenTelemetry spans."""
 
+# ruff: noqa: S101
+
 from __future__ import annotations
 
 import time
