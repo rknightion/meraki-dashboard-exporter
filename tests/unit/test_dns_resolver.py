@@ -1,6 +1,5 @@
 """Tests for the :class:`DNSResolver` service."""
 
-import asyncio
 import warnings
 
 import pytest
@@ -64,17 +63,20 @@ async def test_resolve_hostname_invalid_ip(resolver, monkeypatch):
 async def test_resolve_multiple_uses_resolver(monkeypatch, resolver):
     """``resolve_multiple`` should delegate to :meth:`resolve_hostname`."""
 
-    async def fake_resolve(ip: str) -> str:
-        await asyncio.sleep(0.01)
-        return f"host-{ip}"
+    calls: list[str] = []
 
-    monkeypatch.setattr(resolver, "resolve_hostname", fake_resolve)
+    async def fake_lookup(ip: str) -> str:
+        calls.append(ip)
+        return f"{ip}.example.com"
+
+    monkeypatch.setattr(resolver, "_perform_lookup", fake_lookup)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
         result = await resolver.resolve_multiple(["1.1.1.1", "2.2.2.2"])
 
-    assert result == {"1.1.1.1": "host-1.1.1.1", "2.2.2.2": "host-2.2.2.2"}
+    assert calls == ["1.1.1.1", "2.2.2.2"]
+    assert result == {"1.1.1.1": "1", "2.2.2.2": "2"}
 
 
 @pytest.mark.asyncio
