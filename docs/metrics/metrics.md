@@ -9,7 +9,7 @@ The exporter provides metrics across several categories:
 | Collector | Metrics | Description |
 |-----------|---------|-------------|
 | AlertsCollector | 3 | Active alerts by severity, type, and category |
-| ClientsCollector | 4 | Detailed client-level metrics including usage and status |
+| ClientsCollector | 13 | Detailed client-level metrics including usage and status |
 | ConfigCollector | 14 | Organization security settings and configuration tracking |
 | DeviceCollector | 6 | Device status, performance, and uptime metrics |
 | MRCollector | 33 | Access point metrics including clients, power, and performance |
@@ -74,7 +74,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `ClientMetricName.CLIENT_STATUS`
 
-**Variable:** `self.client_status` (line 66)
+**Variable:** `self.client_status` (line 69)
 
 #### `meraki_client_usage_recv_kb`
 
@@ -86,7 +86,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `ClientMetricName.CLIENT_USAGE_RECV_KB`
 
-**Variable:** `self.client_usage_recv` (line 100)
+**Variable:** `self.client_usage_recv` (line 103)
 
 #### `meraki_client_usage_sent_kb`
 
@@ -98,7 +98,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `ClientMetricName.CLIENT_USAGE_SENT_KB`
 
-**Variable:** `self.client_usage_sent` (line 84)
+**Variable:** `self.client_usage_sent` (line 87)
 
 #### `meraki_client_usage_total_kb`
 
@@ -110,7 +110,79 @@ The exporter provides metrics across several categories:
 
 **Constant:** `ClientMetricName.CLIENT_USAGE_TOTAL_KB`
 
-**Variable:** `self.client_usage_total` (line 116)
+**Variable:** `self.client_usage_total` (line 119)
+
+#### `meraki_exporter_client_dns_cache_expired`
+
+**Description:** Number of expired entries in DNS cache
+
+**Type:** gauge
+
+**Variable:** `self.dns_cache_expired` (line 146)
+
+#### `meraki_exporter_client_dns_cache_total`
+
+**Description:** Total number of entries in DNS cache
+
+**Type:** gauge
+
+**Variable:** `self.dns_cache_total` (line 136)
+
+#### `meraki_exporter_client_dns_cache_valid`
+
+**Description:** Number of valid entries in DNS cache
+
+**Type:** gauge
+
+**Variable:** `self.dns_cache_valid` (line 141)
+
+#### `meraki_exporter_client_dns_lookups_cached_total`
+
+**Description:** Total number of DNS lookups served from cache
+
+**Type:** counter
+
+**Variable:** `self.dns_lookups_cached` (line 166)
+
+#### `meraki_exporter_client_dns_lookups_failed_total`
+
+**Description:** Total number of failed DNS lookups
+
+**Type:** counter
+
+**Variable:** `self.dns_lookups_failed` (line 161)
+
+#### `meraki_exporter_client_dns_lookups_successful_total`
+
+**Description:** Total number of successful DNS lookups
+
+**Type:** counter
+
+**Variable:** `self.dns_lookups_successful` (line 156)
+
+#### `meraki_exporter_client_dns_lookups_total`
+
+**Description:** Total number of DNS lookups performed
+
+**Type:** counter
+
+**Variable:** `self.dns_lookups_total` (line 151)
+
+#### `meraki_exporter_client_store_networks`
+
+**Description:** Total number of networks with clients
+
+**Type:** gauge
+
+**Variable:** `self.client_store_networks` (line 177)
+
+#### `meraki_exporter_client_store_total`
+
+**Description:** Total number of clients in the store
+
+**Type:** gauge
+
+**Variable:** `self.client_store_total` (line 172)
 
 ### ConfigCollector
 
@@ -1354,6 +1426,15 @@ All metrics in alphabetical order:
 | `meraki_device_memory_used_bytes` | gauge | DeviceCollector | Device memory used in bytes |
 | `meraki_device_status_info` | gauge | DeviceCollector | Device status information |
 | `meraki_device_up` | gauge | DeviceCollector | Device online status (1 = online, 0 = offline) |
+| `meraki_exporter_client_dns_cache_expired` | gauge | ClientsCollector | Number of expired entries in DNS cache |
+| `meraki_exporter_client_dns_cache_total` | gauge | ClientsCollector | Total number of entries in DNS cache |
+| `meraki_exporter_client_dns_cache_valid` | gauge | ClientsCollector | Number of valid entries in DNS cache |
+| `meraki_exporter_client_dns_lookups_cached_total` | counter | ClientsCollector | Total number of DNS lookups served from cache |
+| `meraki_exporter_client_dns_lookups_failed_total` | counter | ClientsCollector | Total number of failed DNS lookups |
+| `meraki_exporter_client_dns_lookups_successful_total` | counter | ClientsCollector | Total number of successful DNS lookups |
+| `meraki_exporter_client_dns_lookups_total` | counter | ClientsCollector | Total number of DNS lookups performed |
+| `meraki_exporter_client_store_networks` | gauge | ClientsCollector | Total number of networks with clients |
+| `meraki_exporter_client_store_total` | gauge | ClientsCollector | Total number of clients in the store |
 | `meraki_mr_aggregation_enabled` | gauge | MRCollector | Access point port aggregation enabled status (1 = enabled, 0 = disabled) |
 | `meraki_mr_aggregation_speed_mbps` | gauge | MRCollector | Access point total aggregated port speed in Mbps |
 | `meraki_mr_clients_connected` | gauge | MRCollector | Number of clients connected to access point |
@@ -1458,4 +1539,3 @@ All metrics in alphabetical order:
     ```
 
 For more information on using these metrics, see the [Overview](overview.md) page.
-
