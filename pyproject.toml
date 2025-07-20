@@ -1,6 +1,6 @@
 [project]
 name = "meraki-dashboard-exporter"
-version = "0.15.2"
+version = "0.15.3"
 description = "Prometheus exporter for Cisco Meraki Dashboard API metrics"
 readme = "README.md"
 authors = [
