@@ -5,13 +5,25 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import socket
+import time
+from dataclasses import dataclass
 
 import structlog
 
-from ..core.async_utils import with_timeout
+from ..core.async_utils import AsyncRetry, with_timeout
 from ..core.config import Settings
 
 logger = structlog.get_logger(__name__)
+
+
+@dataclass
+class CacheEntry:
+    """DNS cache entry with TTL."""
+
+    hostname: str | None
+    timestamp: float
+    client_id: str | None = None
+    description: str | None = None
 
 
 class DNSResolver:
@@ -29,8 +41,11 @@ class DNSResolver:
         self.settings = settings
         self.dns_server = settings.clients.dns_server
         self.timeout = settings.clients.dns_timeout
-        self._cache: dict[str, str | None] = {}
+        self.cache_ttl = settings.clients.dns_cache_ttl
+        self._cache: dict[str, CacheEntry] = {}
+        self._client_tracking: dict[str, dict[str, str]] = {}  # client_id -> {ip, description}
         self._resolver_configured = False
+        self._retry = AsyncRetry(max_attempts=3, base_delay=1.0, max_delay=5.0)
         self._configure_resolver()
 
     def _configure_resolver(self) -> None:
@@ -48,13 +63,69 @@ class DNSResolver:
                 )
                 self.dns_server = None
 
-    async def resolve_hostname(self, ip: str | None) -> str | None:
+    def track_client(self, client_id: str, ip: str | None, description: str | None) -> bool:
+        """Track client information to detect changes.
+
+        Parameters
+        ----------
+        client_id : str
+            Client ID.
+        ip : str | None
+            Client IP address.
+        description : str | None
+            Client description.
+
+        Returns
+        -------
+        bool
+            True if client info changed, False otherwise.
+
+        """
+        current_info = {"ip": ip or "", "description": description or ""}
+        previous_info = self._client_tracking.get(client_id)
+
+        if previous_info != current_info:
+            self._client_tracking[client_id] = current_info
+            if previous_info and previous_info.get("ip") != current_info["ip"]:
+                # IP changed, invalidate cache for old IP
+                old_ip = previous_info.get("ip")
+                if old_ip and old_ip in self._cache:
+                    logger.info(
+                        "Client IP changed, invalidating DNS cache",
+                        client_id=client_id,
+                        old_ip=old_ip,
+                        new_ip=ip,
+                    )
+                    del self._cache[old_ip]
+            return True
+        return False
+
+    def _is_cache_valid(self, entry: CacheEntry) -> bool:
+        """Check if a cache entry is still valid.
+
+        Parameters
+        ----------
+        entry : CacheEntry
+            Cache entry to check.
+
+        Returns
+        -------
+        bool
+            True if entry is still valid, False otherwise.
+
+        """
+        age = time.time() - entry.timestamp
+        return age < self.cache_ttl
+
+    async def resolve_hostname(self, ip: str | None, client_id: str | None = None) -> str | None:
         """Resolve hostname from IP address.
 
         Parameters
         ----------
         ip : str | None
             IP address to resolve.
+        client_id : str | None
+            Client ID for tracking.
 
         Returns
         -------
@@ -67,26 +138,43 @@ class DNSResolver:
 
         # Check cache first
         if ip in self._cache:
-            logger.debug("Using cached hostname", ip=ip, hostname=self._cache[ip])
-            return self._cache[ip]
+            entry = self._cache[ip]
+            if self._is_cache_valid(entry):
+                logger.debug(
+                    "Using cached hostname",
+                    ip=ip,
+                    hostname=entry.hostname,
+                    age=int(time.time() - entry.timestamp),
+                )
+                return entry.hostname
+            else:
+                logger.debug("Cache entry expired", ip=ip, age=int(time.time() - entry.timestamp))
+                del self._cache[ip]
 
         try:
             # Validate IP address
             ipaddress.ip_address(ip)
         except ValueError:
             logger.debug("Invalid IP address format", ip=ip)
-            self._cache[ip] = None
+            self._cache[ip] = CacheEntry(hostname=None, timestamp=time.time(), client_id=client_id)
             return None
 
-        # Perform reverse DNS lookup
-        hostname = await self._perform_lookup(ip)
+        # Perform reverse DNS lookup with retry
+        hostname = await self._retry.execute(
+            lambda: self._perform_lookup(ip),
+            operation=f"DNS lookup for {ip}",
+        )
 
         # Extract short hostname (remove domain)
         if hostname:
             hostname = hostname.split(".")[0]
 
         # Cache the result
-        self._cache[ip] = hostname
+        self._cache[ip] = CacheEntry(
+            hostname=hostname,
+            timestamp=time.time(),
+            client_id=client_id,
+        )
 
         return hostname
 
@@ -172,13 +260,16 @@ class DNSResolver:
         )
         return await self._system_dns_lookup(ip)
 
-    async def resolve_multiple(self, ips: list[str]) -> dict[str, str | None]:
-        """Resolve multiple IP addresses concurrently.
+    async def resolve_multiple(
+        self,
+        clients: list[tuple[str, str | None, str | None]],
+    ) -> dict[str, str | None]:
+        """Resolve multiple IP addresses concurrently with client tracking.
 
         Parameters
         ----------
-        ips : list[str]
-            List of IP addresses to resolve.
+        clients : list[tuple[str, str | None, str | None]]
+            List of (client_id, ip, description) tuples.
 
         Returns
         -------
@@ -186,40 +277,111 @@ class DNSResolver:
             Mapping of IP addresses to hostnames.
 
         """
-        # Create tasks for all IPs
-        tasks = {ip: self.resolve_hostname(ip) for ip in ips if ip}
+        if not clients:
+            logger.debug("No clients to resolve")
+            return {}
 
-        # Resolve concurrently with limited concurrency
-        semaphore = asyncio.Semaphore(10)  # Limit concurrent DNS lookups
+        # Track client changes and filter IPs to resolve
+        ips_to_resolve = []
+        for client_id, ip, description in clients:
+            if ip:
+                # Track client info changes
+                self.track_client(client_id, ip, description)
+                ips_to_resolve.append((client_id, ip))
 
-        async def resolve_with_limit(ip: str) -> tuple[str, str | None]:
+        if not ips_to_resolve:
+            return {}
+
+        logger.info(
+            "Starting DNS resolution",
+            total_clients=len(clients),
+            ips_to_resolve=len(ips_to_resolve),
+        )
+
+        # Resolve concurrently with limited concurrency (reduced from 10 to 5)
+        semaphore = asyncio.Semaphore(5)  # Limit concurrent DNS lookups
+
+        async def resolve_with_limit(client_id: str, ip: str) -> tuple[str, str | None]:
             async with semaphore:
-                hostname = await self.resolve_hostname(ip)
+                hostname = await self.resolve_hostname(ip, client_id)
                 return ip, hostname
 
         results = await asyncio.gather(
-            *[resolve_with_limit(ip) for ip in tasks.keys()],
+            *[resolve_with_limit(client_id, ip) for client_id, ip in ips_to_resolve],
             return_exceptions=True,
         )
 
         # Build result dictionary
         resolved = {}
+        successful = 0
+        failed = 0
+        cached = 0
+
         for result in results:
             if isinstance(result, Exception):
                 logger.debug("DNS resolution error", error=str(result))
+                failed += 1
                 continue
             if isinstance(result, tuple) and len(result) == 2:
                 ip, hostname = result
                 resolved[ip] = hostname
+                if hostname:
+                    successful += 1
+                else:
+                    failed += 1
+
+        # Count cached entries
+        for _, ip, _ in clients:
+            if ip and ip in self._cache and self._is_cache_valid(self._cache[ip]):
+                cached += 1
+
+        logger.info(
+            "Completed DNS resolution batch",
+            total=len(clients),
+            resolved=successful,
+            failed=failed,
+            cached=cached,
+            cache_size=len(self._cache),
+        )
 
         return resolved
 
     def clear_cache(self) -> None:
         """Clear the DNS cache."""
+        old_size = len(self._cache)
         self._cache.clear()
-        logger.debug("DNS cache cleared")
+        self._client_tracking.clear()
+        logger.info("DNS cache cleared", entries_cleared=old_size)
 
     @property
     def cache_size(self) -> int:
         """Get current cache size."""
         return len(self._cache)
+
+    def get_cache_stats(self) -> dict[str, int]:
+        """Get cache statistics.
+
+        Returns
+        -------
+        dict[str, int]
+            Cache statistics including size, valid entries, and expired entries.
+
+        """
+        total = len(self._cache)
+        valid = 0
+        expired = 0
+
+        current_time = time.time()
+        for entry in self._cache.values():
+            if current_time - entry.timestamp < self.cache_ttl:
+                valid += 1
+            else:
+                expired += 1
+
+        return {
+            "total_entries": total,
+            "valid_entries": valid,
+            "expired_entries": expired,
+            "tracked_clients": len(self._client_tracking),
+            "cache_ttl_seconds": self.cache_ttl,
+        }

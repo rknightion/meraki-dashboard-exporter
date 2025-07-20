@@ -139,7 +139,8 @@ Client data collection is opt-in due to potential high cardinality:
 - Uses `perPage=5000` (maximum) for efficient pagination
 
 ### Metrics Exposed
-- `meraki_client_info` - Client information as info metric (labels: id, mac, description, hostname, ssid, manufacturer, os, recent_device_name)
+- `meraki_client_info` - Client information as gauge metric with value 1 (labels: id, mac, description, hostname, ssid, manufacturer, os, recent_device_name, ip, vlan, first_seen, last_seen)
+  - Note: Using Gauge instead of Info metric to avoid Prometheus registration issues
 - `meraki_client_status` - Client online status (1=online, 0=offline)
 - `meraki_client_usage_sent_kb` - Total KB sent by client (counter)
 - `meraki_client_usage_recv_kb` - Total KB received by client (counter)
