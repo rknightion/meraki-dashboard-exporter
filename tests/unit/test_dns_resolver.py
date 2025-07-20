@@ -2,8 +2,6 @@
 
 # ruff: noqa: S101
 
-import warnings
-
 import pytest
 
 from meraki_dashboard_exporter.core.config import Settings
@@ -67,21 +65,16 @@ async def test_resolve_multiple_uses_resolver(monkeypatch, resolver):
 
     calls: list[str] = []
 
-    async def fake_resolve(ip: str) -> str:
+    async def fake_resolve(ip: str, client_id: str | None = None) -> str:
         calls.append(ip)
         return ip.split(".", maxsplit=1)[0]
 
     monkeypatch.setattr(resolver, "resolve_hostname", fake_resolve)
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        try:
-            result = await resolver.resolve_multiple(["1.1.1.1", "2.2.2.2"])
-        except (TypeError, ValueError):
-            result = await resolver.resolve_multiple([
-                ("c1", "1.1.1.1", None),
-                ("c2", "2.2.2.2", None),
-            ])
+    result = await resolver.resolve_multiple([
+        ("c1", "1.1.1.1", None),
+        ("c2", "2.2.2.2", None),
+    ])
 
     assert calls == ["1.1.1.1", "2.2.2.2"]
     assert result == {"1.1.1.1": "1", "2.2.2.2": "2"}

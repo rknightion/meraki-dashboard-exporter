@@ -139,7 +139,6 @@ class MTCollector(BaseDeviceCollector):
             List of organizations.
 
         """
-        self._track_api_call("getOrganizations")
         if self.api is None:
             raise RuntimeError("API client not initialized")
         # Access the API - self.api should already be the DashboardAPI
@@ -160,7 +159,6 @@ class MTCollector(BaseDeviceCollector):
             List of sensor devices.
 
         """
-        self._track_api_call("getOrganizationDevices")
         if self.api is None:
             raise RuntimeError("API client not initialized")
         return await asyncio.to_thread(
