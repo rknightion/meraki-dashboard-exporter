@@ -87,7 +87,6 @@ plugins:
       repository: rknightion/meraki-dashboard-exporter
       branch: main
   - git-authors
-  - tags
   - glightbox:
       touchNavigation: true
       loop: false
