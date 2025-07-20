@@ -56,6 +56,9 @@ class ClientsCollector(MetricCollector):
         self.client_store = ClientStore(self.settings)
         self.dns_resolver = DNSResolver(self.settings)
 
+        # Initialize DNS stats tracking
+        self._last_dns_stats: dict[str, int] | None = None
+
     def _initialize_metrics(self) -> None:
         """Initialize Prometheus metrics for client data."""
         # Skip metric initialization if collector is disabled
@@ -129,6 +132,53 @@ class ClientsCollector(MetricCollector):
             ],
         )
 
+        # DNS cache metrics
+        self.dns_cache_total = self._create_gauge(
+            "meraki_exporter_client_dns_cache_total",
+            "Total number of entries in DNS cache",
+        )
+
+        self.dns_cache_valid = self._create_gauge(
+            "meraki_exporter_client_dns_cache_valid",
+            "Number of valid entries in DNS cache",
+        )
+
+        self.dns_cache_expired = self._create_gauge(
+            "meraki_exporter_client_dns_cache_expired",
+            "Number of expired entries in DNS cache",
+        )
+
+        self.dns_lookups_total = self._create_counter(
+            "meraki_exporter_client_dns_lookups_total",
+            "Total number of DNS lookups performed",
+        )
+
+        self.dns_lookups_successful = self._create_counter(
+            "meraki_exporter_client_dns_lookups_successful_total",
+            "Total number of successful DNS lookups",
+        )
+
+        self.dns_lookups_failed = self._create_counter(
+            "meraki_exporter_client_dns_lookups_failed_total",
+            "Total number of failed DNS lookups",
+        )
+
+        self.dns_lookups_cached = self._create_counter(
+            "meraki_exporter_client_dns_lookups_cached_total",
+            "Total number of DNS lookups served from cache",
+        )
+
+        # Client store metrics
+        self.client_store_total = self._create_gauge(
+            "meraki_exporter_client_store_total",
+            "Total number of clients in the store",
+        )
+
+        self.client_store_networks = self._create_gauge(
+            "meraki_exporter_client_store_networks",
+            "Total number of networks with clients",
+        )
+
     async def _collect_impl(self) -> None:
         """Collect client metrics from all organizations and networks."""
         if not self._enabled:
@@ -153,6 +203,9 @@ class ClientsCollector(MetricCollector):
             # Process networks directly without batching to avoid lambda issues
             # Since we're already processing one org at a time, this is fine
             await self._process_network_batch(org_id, org_name, networks)
+
+        # Update DNS cache and client store metrics after all collections
+        self._update_cache_metrics()
 
     async def _process_network_batch(
         self,
@@ -435,3 +488,67 @@ class ClientsCollector(MetricCollector):
                 status=client.status,
                 ssid=ssid,
             )
+
+    def _update_cache_metrics(self) -> None:
+        """Update DNS cache and client store metrics."""
+        # Get DNS cache statistics
+        dns_stats = self.dns_resolver.get_cache_stats()
+
+        # Update DNS cache metrics
+        self.dns_cache_total.set(dns_stats["total_entries"])
+        self.dns_cache_valid.set(dns_stats["valid_entries"])
+        self.dns_cache_expired.set(dns_stats["expired_entries"])
+
+        # Update DNS lookup counters (these are cumulative counters)
+        # We need to track the difference since last update
+        if self._last_dns_stats is not None:
+            # Calculate deltas and increment counters
+            total_delta = dns_stats["total_lookups"] - self._last_dns_stats["total_lookups"]
+            success_delta = (
+                dns_stats["successful_lookups"] - self._last_dns_stats["successful_lookups"]
+            )
+            failed_delta = dns_stats["failed_lookups"] - self._last_dns_stats["failed_lookups"]
+            cached_delta = dns_stats["cache_hits"] - self._last_dns_stats["cache_hits"]
+
+            # Increment counters by the delta using inc()
+            if total_delta > 0:
+                self.dns_lookups_total.inc(total_delta)
+            if success_delta > 0:
+                self.dns_lookups_successful.inc(success_delta)
+            if failed_delta > 0:
+                self.dns_lookups_failed.inc(failed_delta)
+            if cached_delta > 0:
+                self.dns_lookups_cached.inc(cached_delta)
+        else:
+            # First run - set initial values by incrementing from 0
+            if dns_stats["total_lookups"] > 0:
+                self.dns_lookups_total.inc(dns_stats["total_lookups"])
+            if dns_stats["successful_lookups"] > 0:
+                self.dns_lookups_successful.inc(dns_stats["successful_lookups"])
+            if dns_stats["failed_lookups"] > 0:
+                self.dns_lookups_failed.inc(dns_stats["failed_lookups"])
+            if dns_stats["cache_hits"] > 0:
+                self.dns_lookups_cached.inc(dns_stats["cache_hits"])
+
+        # Store current stats for next update
+        self._last_dns_stats = dns_stats.copy()
+
+        # Get client store statistics
+        store_stats = self.client_store.get_statistics()
+
+        # Update client store metrics
+        self.client_store_total.set(store_stats["total_clients"])
+        self.client_store_networks.set(store_stats["total_networks"])
+
+        logger.debug(
+            "Updated cache metrics",
+            dns_cache_total=dns_stats["total_entries"],
+            dns_cache_valid=dns_stats["valid_entries"],
+            dns_cache_expired=dns_stats["expired_entries"],
+            dns_lookups_total=dns_stats["total_lookups"],
+            dns_lookups_successful=dns_stats["successful_lookups"],
+            dns_lookups_failed=dns_stats["failed_lookups"],
+            dns_lookups_cached=dns_stats["cache_hits"],
+            client_store_total=store_stats["total_clients"],
+            client_store_networks=store_stats["total_networks"],
+        )

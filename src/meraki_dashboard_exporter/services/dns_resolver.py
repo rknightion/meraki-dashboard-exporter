@@ -48,6 +48,14 @@ class DNSResolver:
         self._retry = AsyncRetry(max_attempts=3, base_delay=1.0, max_delay=5.0)
         self._configure_resolver()
 
+        # Statistics tracking
+        self._stats = {
+            "total_lookups": 0,
+            "successful_lookups": 0,
+            "failed_lookups": 0,
+            "cache_hits": 0,
+        }
+
     def _configure_resolver(self) -> None:
         """Configure DNS resolver with custom server if provided."""
         if self.dns_server:
@@ -136,6 +144,8 @@ class DNSResolver:
         if not ip:
             return None
 
+        self._stats["total_lookups"] += 1
+
         # Check cache first
         if ip in self._cache:
             entry = self._cache[ip]
@@ -146,6 +156,7 @@ class DNSResolver:
                     hostname=entry.hostname,
                     age=int(time.time() - entry.timestamp),
                 )
+                self._stats["cache_hits"] += 1
                 return entry.hostname
             else:
                 logger.debug("Cache entry expired", ip=ip, age=int(time.time() - entry.timestamp))
@@ -157,6 +168,7 @@ class DNSResolver:
         except ValueError:
             logger.debug("Invalid IP address format", ip=ip)
             self._cache[ip] = CacheEntry(hostname=None, timestamp=time.time(), client_id=client_id)
+            self._stats["failed_lookups"] += 1
             return None
 
         # Perform reverse DNS lookup with retry
@@ -165,9 +177,13 @@ class DNSResolver:
             operation=f"DNS lookup for {ip}",
         )
 
-        # Extract short hostname (remove domain)
+        # Track success/failure
         if hostname:
+            self._stats["successful_lookups"] += 1
+            # Extract short hostname (remove domain)
             hostname = hostname.split(".")[0]
+        else:
+            self._stats["failed_lookups"] += 1
 
         # Cache the result
         self._cache[ip] = CacheEntry(
@@ -351,6 +367,13 @@ class DNSResolver:
         old_size = len(self._cache)
         self._cache.clear()
         self._client_tracking.clear()
+        # Reset statistics
+        self._stats = {
+            "total_lookups": 0,
+            "successful_lookups": 0,
+            "failed_lookups": 0,
+            "cache_hits": 0,
+        }
         logger.info("DNS cache cleared", entries_cleared=old_size)
 
     @property
@@ -384,4 +407,19 @@ class DNSResolver:
             "expired_entries": expired,
             "tracked_clients": len(self._client_tracking),
             "cache_ttl_seconds": self.cache_ttl,
+            "total_lookups": self._stats["total_lookups"],
+            "successful_lookups": self._stats["successful_lookups"],
+            "failed_lookups": self._stats["failed_lookups"],
+            "cache_hits": self._stats["cache_hits"],
         }
+
+    def get_lookup_stats(self) -> dict[str, int]:
+        """Get DNS lookup statistics.
+
+        Returns
+        -------
+        dict[str, int]
+            DNS lookup statistics.
+
+        """
+        return self._stats.copy()
