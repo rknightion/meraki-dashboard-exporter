@@ -557,6 +557,29 @@ class DeviceCollector(MetricCollector):
             except Exception:
                 logger.exception("Failed to collect MR SSID status metrics")
 
+            # Collect MR SSID usage metrics
+            try:
+                # Get organization name for metrics
+                org_name = None
+                if self.settings.meraki.org_id:
+                    # When using specific org_id, we don't have org name from getOrganizations
+                    # but we can use a placeholder
+                    org_name = f"org_{org_id}"
+                else:
+                    # Find org name from our organizations list
+                    organizations = await self._fetch_organizations()
+                    for org in organizations or []:
+                        if org["id"] == org_id:
+                            org_name = org.get("name", f"org_{org_id}")
+                            break
+
+                if not org_name:
+                    org_name = f"org_{org_id}"
+
+                await self.mr_collector.collect_ssid_usage(org_id, org_name)
+            except Exception:
+                logger.exception("Failed to collect MR SSID usage metrics")
+
         except Exception:
             logger.exception(
                 "Failed to collect MR-specific metrics",

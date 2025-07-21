@@ -286,9 +286,7 @@ class TestAlertsCollector(BaseCollectorTest):
                     "frequency": 0,
                     "humidity": 1,
                     "indoorAirQuality": 0,
-                    "noise": {
-                        "ambient": 3
-                    },
+                    "noise": {"ambient": 3},
                     "pm25": 0,
                     "powerFactor": 0,
                     "realPower": 0,
@@ -296,8 +294,8 @@ class TestAlertsCollector(BaseCollectorTest):
                     "tvoc": 0,
                     "upstreamPower": 0,
                     "voltage": 0,
-                    "water": 1
-                }
+                    "water": 1,
+                },
             }
         ]
 
@@ -313,9 +311,7 @@ class TestAlertsCollector(BaseCollectorTest):
                     "frequency": 0,
                     "humidity": 0,
                     "indoorAirQuality": 0,
-                    "noise": {
-                        "ambient": 0
-                    },
+                    "noise": {"ambient": 0},
                     "pm25": 0,
                     "powerFactor": 0,
                     "realPower": 3,
@@ -323,8 +319,8 @@ class TestAlertsCollector(BaseCollectorTest):
                     "tvoc": 0,
                     "upstreamPower": 0,
                     "voltage": 1,
-                    "water": 0
-                }
+                    "water": 0,
+                },
             }
         ]
 
@@ -335,7 +331,7 @@ class TestAlertsCollector(BaseCollectorTest):
             .with_custom_response("getOrganizationNetworks", networks)
             .build()
         )
-        
+
         # Set up network-specific responses with side effects based on the network_id parameter
         def get_sensor_alerts(network_id, **kwargs):
             if network_id == "N_123":
@@ -344,7 +340,7 @@ class TestAlertsCollector(BaseCollectorTest):
                 return sensor_alert_response_2
             else:
                 return []
-        
+
         api.sensor.getNetworkSensorAlertsOverviewByMetric = MagicMock(side_effect=get_sensor_alerts)
         collector.api = api
 
