@@ -159,6 +159,179 @@ class TestDeviceCollector(BaseCollectorTest):
             total_pages="all",
         )
 
+    async def test_ssid_usage_collection(self, collector, mock_api_builder, metrics):
+        """Test SSID usage metric collection."""
+        # Set up test data
+        org = OrganizationFactory.create(org_id="123456", name="Test Organization")
+
+        # Create SSID usage response
+        ssid_usage_response = [
+            {
+                "name": "The Cubhouse",
+                "usage": {
+                    "total": 54878.025390625,
+                    "downstream": 10818.2802734375,
+                    "upstream": 44059.7451171875,
+                    "percentage": 56.01148842015454,
+                },
+                "clients": {"counts": {"total": 16}},
+            },
+            {
+                "name": "Cubhouse Video",
+                "usage": {
+                    "total": 42764.8857421875,
+                    "downstream": 1053.818359375,
+                    "upstream": 41711.0673828125,
+                    "percentage": 43.64816127197916,
+                },
+                "clients": {"counts": {"total": 2}},
+            },
+            {
+                "name": "Cubhouse IOT",
+                "usage": {
+                    "total": 333.462890625,
+                    "downstream": 196.2119140625,
+                    "upstream": 137.2509765625,
+                    "percentage": 0.3403503078662927,
+                },
+                "clients": {"counts": {"total": 21}},
+            },
+        ]
+
+        # Configure mock API
+        api = mock_api_builder.with_organizations([org]).build()
+
+        # Mock the SSID usage API call
+        api.organizations.getOrganizationSummaryTopSsidsByUsage = MagicMock(
+            return_value=ssid_usage_response
+        )
+
+        collector.api = api
+        collector.mr_collector.api = api
+
+        # Run the SSID usage collection
+        await collector.mr_collector.collect_ssid_usage(org["id"], org["name"])
+
+        # Verify metrics were set correctly
+        # First SSID - The Cubhouse
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_usage_total_mb",
+            54878.025390625,
+            org_id="123456",
+            org_name="Test Organization",
+            ssid="The Cubhouse",
+        )
+
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_usage_downstream_mb",
+            10818.2802734375,
+            org_id="123456",
+            org_name="Test Organization",
+            ssid="The Cubhouse",
+        )
+
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_usage_upstream_mb",
+            44059.7451171875,
+            org_id="123456",
+            org_name="Test Organization",
+            ssid="The Cubhouse",
+        )
+
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_usage_percentage",
+            56.01148842015454,
+            org_id="123456",
+            org_name="Test Organization",
+            ssid="The Cubhouse",
+        )
+
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_client_count",
+            16,
+            org_id="123456",
+            org_name="Test Organization",
+            ssid="The Cubhouse",
+        )
+
+        # Second SSID - Cubhouse Video
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_usage_total_mb",
+            42764.8857421875,
+            org_id="123456",
+            org_name="Test Organization",
+            ssid="Cubhouse Video",
+        )
+
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_client_count",
+            2,
+            org_id="123456",
+            org_name="Test Organization",
+            ssid="Cubhouse Video",
+        )
+
+        # Third SSID - Cubhouse IOT
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_usage_total_mb",
+            333.462890625,
+            org_id="123456",
+            org_name="Test Organization",
+            ssid="Cubhouse IOT",
+        )
+
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_usage_percentage",
+            0.3403503078662927,
+            org_id="123456",
+            org_name="Test Organization",
+            ssid="Cubhouse IOT",
+        )
+
+        metrics.assert_gauge_value(
+            "meraki_mr_ssid_client_count",
+            21,
+            org_id="123456",
+            org_name="Test Organization",
+            ssid="Cubhouse IOT",
+        )
+
+    async def test_ssid_usage_collection_empty_response(self, collector, mock_api_builder, metrics):
+        """Test SSID usage metric collection with empty response."""
+        # Set up test data
+        org = OrganizationFactory.create(org_id="123456", name="Test Organization")
+
+        # Configure mock API with empty response
+        api = mock_api_builder.with_organizations([org]).build()
+        api.organizations.getOrganizationSummaryTopSsidsByUsage = MagicMock(return_value=[])
+
+        collector.api = api
+        collector.mr_collector.api = api
+
+        # Run the SSID usage collection - should not raise an exception
+        await collector.mr_collector.collect_ssid_usage(org["id"], org["name"])
+
+        # No metrics should be set for empty response
+
+    async def test_ssid_usage_collection_api_error(self, collector, mock_api_builder, metrics):
+        """Test SSID usage metric collection handles API errors gracefully."""
+        # Set up test data
+        org = OrganizationFactory.create(org_id="123456", name="Test Organization")
+
+        # Configure mock API to raise an exception
+        api = mock_api_builder.with_organizations([org]).build()
+        api.organizations.getOrganizationSummaryTopSsidsByUsage = MagicMock(
+            side_effect=Exception("API Error")
+        )
+
+        collector.api = api
+        collector.mr_collector.api = api
+
+        # Run the SSID usage collection - should not raise an exception
+        await collector.mr_collector.collect_ssid_usage(org["id"], org["name"])
+
+        # No metrics should be set when API errors occur
+
     async def test_device_name_lookup(self, collector, mock_api_builder, metrics):
         """Test that device names are correctly looked up from cache."""
         # Set up test data

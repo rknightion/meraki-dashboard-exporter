@@ -8,15 +8,15 @@ The exporter provides metrics across several categories:
 
 | Collector | Metrics | Description |
 |-----------|---------|-------------|
-| AlertsCollector | 3 | Active alerts by severity, type, and category |
+| AlertsCollector | 4 | Active alerts by severity, type, and category |
 | ClientsCollector | 21 | Detailed client-level metrics including usage and status |
 | ConfigCollector | 14 | Organization security settings and configuration tracking |
 | DeviceCollector | 10 | Device status, performance, and uptime metrics |
-| MRCollector | 33 | Access point metrics including clients, power, and performance |
+| MRCollector | 38 | Access point metrics including clients, power, and performance |
 | MSCollector | 7 | Switch-specific metrics including port status, power, and PoE |
 | MTSensorCollector | 18 | Environmental monitoring from MT sensors |
 | NetworkHealthCollector | 8 | Network-wide wireless health and performance |
-| OrganizationCollector | 13 | Organization-level metrics including API usage and licenses |
+| OrganizationCollector | 19 | Organization-level metrics including API usage and licenses |
 
 ## Metrics by Collector
 
@@ -34,7 +34,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `AlertMetricName.ALERTS_ACTIVE`
 
-**Variable:** `self._alerts_active` (line 31)
+**Variable:** `self._alerts_active` (line 32)
 
 #### `meraki_alerts_total_by_network`
 
@@ -46,7 +46,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `AlertMetricName.ALERTS_TOTAL_BY_NETWORK`
 
-**Variable:** `self._alerts_by_network` (line 54)
+**Variable:** `self._alerts_by_network` (line 55)
 
 #### `meraki_alerts_total_by_severity`
 
@@ -58,7 +58,19 @@ The exporter provides metrics across several categories:
 
 **Constant:** `AlertMetricName.ALERTS_TOTAL_BY_SEVERITY`
 
-**Variable:** `self._alerts_by_severity` (line 47)
+**Variable:** `self._alerts_by_severity` (line 48)
+
+#### `meraki_sensor_alerts_total`
+
+**Description:** Total number of sensor alerts in the last hour by metric type
+
+**Type:** gauge
+
+**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.METRIC`
+
+**Constant:** `AlertMetricName.SENSOR_ALERTS_TOTAL`
+
+**Variable:** `self._sensor_alerts_total` (line 67)
 
 ### ClientsCollector
 
@@ -962,6 +974,66 @@ The exporter provides metrics across several categories:
 
 **Variable:** `self._mr_radio_power` (line 337)
 
+#### `meraki_mr_ssid_client_count`
+
+**Description:** Number of clients connected to SSID over the last day
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.SSID`
+
+**Constant:** `MRMetricName.MR_SSID_CLIENT_COUNT`
+
+**Variable:** `self._ssid_client_count` (line 375)
+
+#### `meraki_mr_ssid_usage_downstream_mb`
+
+**Description:** Downstream data usage in MB by SSID over the last day
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.SSID`
+
+**Constant:** `MRMetricName.MR_SSID_USAGE_DOWNSTREAM_MB`
+
+**Variable:** `self._ssid_usage_downstream_mb` (line 357)
+
+#### `meraki_mr_ssid_usage_percentage`
+
+**Description:** Percentage of total organization data usage by SSID over the last day
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.SSID`
+
+**Constant:** `MRMetricName.MR_SSID_USAGE_PERCENTAGE`
+
+**Variable:** `self._ssid_usage_percentage` (line 369)
+
+#### `meraki_mr_ssid_usage_total_mb`
+
+**Description:** Total data usage in MB by SSID over the last day
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.SSID`
+
+**Constant:** `MRMetricName.MR_SSID_USAGE_TOTAL_MB`
+
+**Variable:** `self._ssid_usage_total_mb` (line 351)
+
+#### `meraki_mr_ssid_usage_upstream_mb`
+
+**Description:** Upstream data usage in MB by SSID over the last day
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.SSID`
+
+**Constant:** `MRMetricName.MR_SSID_USAGE_UPSTREAM_MB`
+
+**Variable:** `self._ssid_usage_upstream_mb` (line 363)
+
 ### MSCollector
 
 **Source:** `src/meraki_dashboard_exporter/collectors/devices/ms.py`
@@ -1410,6 +1482,54 @@ The exporter provides metrics across several categories:
 
 **Variable:** `self._api_requests_total` (line 59)
 
+#### `meraki_org_application_usage_downstream_mb`
+
+**Description:** Downstream application usage in MB by category
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.CATEGORY`
+
+**Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_MB`
+
+**Variable:** `self._application_usage_downstream_mb` (line 167)
+
+#### `meraki_org_application_usage_percentage`
+
+**Description:** Application usage percentage by category
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.CATEGORY`
+
+**Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_PERCENTAGE`
+
+**Variable:** `self._application_usage_percentage` (line 179)
+
+#### `meraki_org_application_usage_total_mb`
+
+**Description:** Total application usage in MB by category
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.CATEGORY`
+
+**Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_MB`
+
+**Variable:** `self._application_usage_total_mb` (line 161)
+
+#### `meraki_org_application_usage_upstream_mb`
+
+**Description:** Upstream application usage in MB by category
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.CATEGORY`
+
+**Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_MB`
+
+**Variable:** `self._application_usage_upstream_mb` (line 173)
+
 #### `meraki_org_clients_total`
 
 **Description:** Total number of active clients in the organization (1-hour window)
@@ -1493,6 +1613,30 @@ The exporter provides metrics across several categories:
 **Constant:** `OrgMetricName.ORG_NETWORKS_TOTAL`
 
 **Variable:** `self._networks_total` (line 72)
+
+#### `meraki_org_packetcaptures_remaining`
+
+**Description:** Number of remaining packet captures to process
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+
+**Constant:** `OrgMetricName.ORG_PACKETCAPTURES_REMAINING`
+
+**Variable:** `self._packetcaptures_remaining` (line 154)
+
+#### `meraki_org_packetcaptures_total`
+
+**Description:** Total number of packet captures in the organization
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+
+**Constant:** `OrgMetricName.ORG_PACKETCAPTURES_TOTAL`
+
+**Variable:** `self._packetcaptures_total` (line 148)
 
 #### `meraki_org_usage_downstream_kb`
 
@@ -1605,6 +1749,11 @@ All metrics in alphabetical order:
 | `meraki_mr_radio_channel` | gauge | MRCollector | Access point radio channel number |
 | `meraki_mr_radio_channel_width_mhz` | gauge | MRCollector | Access point radio channel width in MHz |
 | `meraki_mr_radio_power_dbm` | gauge | MRCollector | Access point radio transmit power in dBm |
+| `meraki_mr_ssid_client_count` | gauge | MRCollector | Number of clients connected to SSID over the last day |
+| `meraki_mr_ssid_usage_downstream_mb` | gauge | MRCollector | Downstream data usage in MB by SSID over the last day |
+| `meraki_mr_ssid_usage_percentage` | gauge | MRCollector | Percentage of total organization data usage by SSID over the last day |
+| `meraki_mr_ssid_usage_total_mb` | gauge | MRCollector | Total data usage in MB by SSID over the last day |
+| `meraki_mr_ssid_usage_upstream_mb` | gauge | MRCollector | Upstream data usage in MB by SSID over the last day |
 | `meraki_ms_poe_budget_watts` | gauge | MSCollector | Total POE power budget for switch in watts |
 | `meraki_ms_poe_network_total_watthours` | gauge | MSCollector | Total POE power consumption for all switches in network in watt-hours (Wh) |
 | `meraki_ms_poe_port_power_watthours` | gauge | MSCollector | Per-port POE power consumption in watt-hours (Wh) |
@@ -1643,6 +1792,10 @@ All metrics in alphabetical order:
 | `meraki_org` | info | OrganizationCollector | Organization information |
 | `meraki_org_api_requests_by_status` | gauge | OrganizationCollector | API requests by HTTP status code in the last hour |
 | `meraki_org_api_requests_total` | gauge | OrganizationCollector | Total API requests made by the organization in the last hour |
+| `meraki_org_application_usage_downstream_mb` | gauge | OrganizationCollector | Downstream application usage in MB by category |
+| `meraki_org_application_usage_percentage` | gauge | OrganizationCollector | Application usage percentage by category |
+| `meraki_org_application_usage_total_mb` | gauge | OrganizationCollector | Total application usage in MB by category |
+| `meraki_org_application_usage_upstream_mb` | gauge | OrganizationCollector | Upstream application usage in MB by category |
 | `meraki_org_clients_total` | gauge | OrganizationCollector | Total number of active clients in the organization (1-hour window) |
 | `meraki_org_configuration_changes_total` | gauge | ConfigCollector | Total number of configuration changes in the last 24 hours |
 | `meraki_org_devices_availability_total` | gauge | OrganizationCollector | Total number of devices by availability status and product type |
@@ -1657,9 +1810,12 @@ All metrics in alphabetical order:
 | `meraki_org_login_security_minimum_password_length` | gauge | ConfigCollector | Minimum password length required |
 | `meraki_org_login_security_two_factor_enabled` | gauge | ConfigCollector | Whether two-factor authentication is enforced (1=enabled, 0=disabled) |
 | `meraki_org_networks_total` | gauge | OrganizationCollector | Total number of networks in the organization |
+| `meraki_org_packetcaptures_remaining` | gauge | OrganizationCollector | Number of remaining packet captures to process |
+| `meraki_org_packetcaptures_total` | gauge | OrganizationCollector | Total number of packet captures in the organization |
 | `meraki_org_usage_downstream_kb` | gauge | OrganizationCollector | Downstream data usage in KB for the 1-hour window |
 | `meraki_org_usage_total_kb` | gauge | OrganizationCollector | Total data usage in KB for the 1-hour window |
 | `meraki_org_usage_upstream_kb` | gauge | OrganizationCollector | Upstream data usage in KB for the 1-hour window |
+| `meraki_sensor_alerts_total` | gauge | AlertsCollector | Total number of sensor alerts in the last hour by metric type |
 | `meraki_wireless_client_capabilities_count` | gauge | ClientsCollector | Count of wireless clients by capability |
 | `meraki_wireless_client_rssi` | gauge | ClientsCollector | Wireless client RSSI (Received Signal Strength Indicator) in dBm |
 | `meraki_wireless_client_snr` | gauge | ClientsCollector | Wireless client SNR (Signal-to-Noise Ratio) in dB |

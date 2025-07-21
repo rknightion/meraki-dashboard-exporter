@@ -347,6 +347,37 @@ class MRCollector(BaseDeviceCollector):
             ],
         )
 
+        # SSID usage metrics
+        self._ssid_usage_total_mb = self.parent._create_gauge(
+            MRMetricName.MR_SSID_USAGE_TOTAL_MB,
+            "Total data usage in MB by SSID over the last day",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.SSID],
+        )
+
+        self._ssid_usage_downstream_mb = self.parent._create_gauge(
+            MRMetricName.MR_SSID_USAGE_DOWNSTREAM_MB,
+            "Downstream data usage in MB by SSID over the last day",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.SSID],
+        )
+
+        self._ssid_usage_upstream_mb = self.parent._create_gauge(
+            MRMetricName.MR_SSID_USAGE_UPSTREAM_MB,
+            "Upstream data usage in MB by SSID over the last day",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.SSID],
+        )
+
+        self._ssid_usage_percentage = self.parent._create_gauge(
+            MRMetricName.MR_SSID_USAGE_PERCENTAGE,
+            "Percentage of total organization data usage by SSID over the last day",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.SSID],
+        )
+
+        self._ssid_client_count = self.parent._create_gauge(
+            MRMetricName.MR_SSID_CLIENT_COUNT,
+            "Number of clients connected to SSID over the last day",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.SSID],
+        )
+
     @log_api_call("getDeviceWirelessStatus")
     @with_error_handling(
         operation="Collect MR device metrics",
@@ -1413,3 +1444,87 @@ class MRCollector(BaseDeviceCollector):
                     labels=labels,
                     value=value,
                 )
+
+    @log_api_call("getOrganizationSummaryTopSsidsByUsage")
+    @with_error_handling(
+        operation="Collect SSID usage metrics",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def collect_ssid_usage(self, org_id: str, org_name: str) -> None:
+        """Collect SSID usage metrics for the organization.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        try:
+            with LogContext(org_id=org_id, org_name=org_name):
+                # Get top SSIDs by usage with default 1 day timespan
+                ssid_usage = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationSummaryTopSsidsByUsage,
+                    org_id,
+                    # No timespan parameter - use default 1 day
+                )
+
+            # Process each SSID's usage data
+            for ssid_data in ssid_usage:
+                ssid_name = ssid_data.get("name", "Unknown")
+                usage = ssid_data.get("usage", {})
+                clients = ssid_data.get("clients", {})
+
+                # Usage metrics (already in MB)
+                total_mb = usage.get("total", 0)
+                downstream_mb = usage.get("downstream", 0)
+                upstream_mb = usage.get("upstream", 0)
+                percentage = usage.get("percentage", 0)
+
+                # Client count
+                client_count = clients.get("counts", {}).get("total", 0)
+
+                # Set metrics
+                self._ssid_usage_total_mb.labels(
+                    org_id=org_id,
+                    org_name=org_name,
+                    ssid=ssid_name,
+                ).set(total_mb)
+
+                self._ssid_usage_downstream_mb.labels(
+                    org_id=org_id,
+                    org_name=org_name,
+                    ssid=ssid_name,
+                ).set(downstream_mb)
+
+                self._ssid_usage_upstream_mb.labels(
+                    org_id=org_id,
+                    org_name=org_name,
+                    ssid=ssid_name,
+                ).set(upstream_mb)
+
+                self._ssid_usage_percentage.labels(
+                    org_id=org_id,
+                    org_name=org_name,
+                    ssid=ssid_name,
+                ).set(percentage)
+
+                self._ssid_client_count.labels(
+                    org_id=org_id,
+                    org_name=org_name,
+                    ssid=ssid_name,
+                ).set(client_count)
+
+            logger.debug(
+                "Collected SSID usage metrics",
+                org_id=org_id,
+                ssid_count=len(ssid_usage),
+            )
+
+        except Exception:
+            logger.exception(
+                "Failed to collect SSID usage metrics",
+                org_id=org_id,
+            )

@@ -16,7 +16,6 @@ from ..core.metrics import LabelName
 from ..core.registry import register_collector
 
 if TYPE_CHECKING:
-
     pass
 
 logger = get_logger(__name__)
@@ -118,11 +117,13 @@ class AlertsCollector(MetricCollector):
             # Collect sensor alerts for each network
             if networks:
                 sensor_tasks = [
-                    self._collect_network_sensor_alerts(network["id"], network.get("name", "unknown"))
+                    self._collect_network_sensor_alerts(
+                        network["id"], network.get("name", "unknown")
+                    )
                     for network in networks
                 ]
                 sensor_results = await asyncio.gather(*sensor_tasks, return_exceptions=True)
-                
+
                 # Count successful sensor alert collections
                 for result in sensor_results:
                     if not isinstance(result, Exception):
@@ -380,7 +381,7 @@ class AlertsCollector(MetricCollector):
                 timespan=3600,
                 interval=3600,
             )
-            
+
             overview = validate_response_format(
                 overview, expected_type=list, operation="getNetworkSensorAlertsOverviewByMetric"
             )
@@ -393,7 +394,7 @@ class AlertsCollector(MetricCollector):
             if overview and len(overview) > 0:
                 latest_interval = overview[0]
                 counts = latest_interval.get("counts", {})
-                
+
                 # Process each metric type
                 for metric_type, value in counts.items():
                     # Handle nested noise structure
@@ -419,7 +420,7 @@ class AlertsCollector(MetricCollector):
                             metric_type=metric_type,
                             value_type=type(value).__name__,
                         )
-                
+
                 logger.debug(
                     "Collected sensor alert metrics",
                     network_id=network_id,

@@ -34,7 +34,7 @@ class OrgMetricName(StrEnum):
     # Packet capture metrics
     ORG_PACKETCAPTURES_TOTAL = "meraki_org_packetcaptures_total"
     ORG_PACKETCAPTURES_REMAINING = "meraki_org_packetcaptures_remaining"
-    
+
     # Application usage metrics
     ORG_APPLICATION_USAGE_TOTAL_MB = "meraki_org_application_usage_total_mb"
     ORG_APPLICATION_USAGE_DOWNSTREAM_MB = "meraki_org_application_usage_downstream_mb"
@@ -164,6 +164,13 @@ class MRMetricName(StrEnum):
     MR_RADIO_CHANNEL = "meraki_mr_radio_channel"
     MR_RADIO_CHANNEL_WIDTH_MHZ = "meraki_mr_radio_channel_width_mhz"
     MR_RADIO_POWER_DBM = "meraki_mr_radio_power_dbm"
+
+    # SSID usage metrics
+    MR_SSID_USAGE_TOTAL_MB = "meraki_mr_ssid_usage_total_mb"
+    MR_SSID_USAGE_DOWNSTREAM_MB = "meraki_mr_ssid_usage_downstream_mb"
+    MR_SSID_USAGE_UPSTREAM_MB = "meraki_mr_ssid_usage_upstream_mb"
+    MR_SSID_USAGE_PERCENTAGE = "meraki_mr_ssid_usage_percentage"
+    MR_SSID_CLIENT_COUNT = "meraki_mr_ssid_client_count"
 
 
 class MVMetricName(StrEnum):
