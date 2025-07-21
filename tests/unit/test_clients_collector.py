@@ -39,10 +39,12 @@ class TestClientsCollector(BaseCollectorTest):
     async def test_collect_when_disabled(self, mock_api, settings, isolated_registry):
         """Test that collector skips collection when disabled."""
         settings.clients.enabled = False
-        collector = self.collector_class(api=mock_api, settings=settings, registry=isolated_registry)
-        
+        collector = self.collector_class(
+            api=mock_api, settings=settings, registry=isolated_registry
+        )
+
         await collector._collect_impl()
-        
+
         # Should not make any API calls when disabled
         mock_api.organizations.getOrganizations.assert_not_called()
 
@@ -50,9 +52,7 @@ class TestClientsCollector(BaseCollectorTest):
         """Test collection when no clients exist."""
         # Set up test data
         org = OrganizationFactory.create(org_id="123", name="Test Org")
-        network = NetworkFactory.create(
-            network_id="N_123", name="Test Network", org_id=org["id"]
-        )
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
 
         # Configure mock API
         api = (
@@ -74,10 +74,8 @@ class TestClientsCollector(BaseCollectorTest):
         """Test collection of basic client metrics."""
         # Set up test data
         org = OrganizationFactory.create(org_id="123", name="Test Org")
-        network = NetworkFactory.create(
-            network_id="N_123", name="Test Network", org_id=org["id"]
-        )
-        
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+
         clients = [
             ClientFactory.create(
                 client_id="c1",
@@ -116,18 +114,14 @@ class TestClientsCollector(BaseCollectorTest):
                 "10.0.0.1": "client1.example.com",
                 "10.0.0.2": "client2.example.com",
             }
-            
+
             # Run collection
             await self.run_collector(collector)
 
         # Verify basic client metrics
-        metrics.assert_gauge_value(
-            "meraki_client_status", 1, client_id="c1", ssid="Corporate"
-        )
-        metrics.assert_gauge_value(
-            "meraki_client_status", 0, client_id="c2", ssid="Guest"
-        )
-        
+        metrics.assert_gauge_value("meraki_client_status", 1, client_id="c1", ssid="Corporate")
+        metrics.assert_gauge_value("meraki_client_status", 0, client_id="c2", ssid="Guest")
+
         # Verify usage metrics
         metrics.assert_gauge_value("meraki_client_usage_sent_kb", 1000, client_id="c1")
         metrics.assert_gauge_value("meraki_client_usage_recv_kb", 2000, client_id="c1")
@@ -137,10 +131,8 @@ class TestClientsCollector(BaseCollectorTest):
         """Test collection of aggregated metrics (capabilities, SSID, VLAN counts)."""
         # Set up test data
         org = OrganizationFactory.create(org_id="123", name="Test Org")
-        network = NetworkFactory.create(
-            network_id="N_123", name="Test Network", org_id=org["id"]
-        )
-        
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+
         clients = [
             # Wireless clients with capabilities
             ClientFactory.create(
@@ -185,7 +177,7 @@ class TestClientsCollector(BaseCollectorTest):
         # Mock DNS resolution
         with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
             mock_resolve.return_value = {}
-            
+
             # Run collection
             await self.run_collector(collector)
 
@@ -202,7 +194,7 @@ class TestClientsCollector(BaseCollectorTest):
             type="802_11n_2_4_ghz",
             network_id="N_123",
         )
-        
+
         # Verify SSID counts
         metrics.assert_gauge_value(
             "meraki_clients_per_ssid_count", 2, ssid="Corporate", network_id="N_123"
@@ -213,7 +205,7 @@ class TestClientsCollector(BaseCollectorTest):
         metrics.assert_gauge_value(
             "meraki_clients_per_ssid_count", 1, ssid="Wired", network_id="N_123"
         )
-        
+
         # Verify VLAN counts
         metrics.assert_gauge_value(
             "meraki_clients_per_vlan_count", 2, vlan="100", network_id="N_123"
@@ -229,15 +221,13 @@ class TestClientsCollector(BaseCollectorTest):
         """Test collection of application usage metrics."""
         # Set up test data
         org = OrganizationFactory.create(org_id="123", name="Test Org")
-        network = NetworkFactory.create(
-            network_id="N_123", name="Test Network", org_id=org["id"]
-        )
-        
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+
         clients = [
             ClientFactory.create(client_id="c1", mac="aa:bb:cc:dd:ee:01"),
             ClientFactory.create(client_id="c2", mac="aa:bb:cc:dd:ee:02"),
         ]
-        
+
         app_usage_data = [
             {
                 "clientId": "c1",
@@ -273,7 +263,7 @@ class TestClientsCollector(BaseCollectorTest):
         # Mock DNS resolution
         with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
             mock_resolve.return_value = {}
-            
+
             # Run collection
             await self.run_collector(collector)
 
@@ -296,7 +286,7 @@ class TestClientsCollector(BaseCollectorTest):
             client_id="c1",
             type="google_https",
         )
-        
+
         # Verify sanitization of application names
         metrics.assert_gauge_value(
             "meraki_client_application_usage_sent_kb",
@@ -304,7 +294,7 @@ class TestClientsCollector(BaseCollectorTest):
             client_id="c1",
             type="non_web_tcp",
         )
-        
+
         # Verify client 2 metrics
         metrics.assert_gauge_value(
             "meraki_client_application_usage_sent_kb",
@@ -323,10 +313,8 @@ class TestClientsCollector(BaseCollectorTest):
         """Test collection of wireless signal quality metrics."""
         # Set up test data
         org = OrganizationFactory.create(org_id="123", name="Test Org")
-        network = NetworkFactory.create(
-            network_id="N_123", name="Test Network", org_id=org["id"]
-        )
-        
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+
         clients = [
             ClientFactory.create(
                 client_id="c1",
@@ -346,7 +334,7 @@ class TestClientsCollector(BaseCollectorTest):
                 recentDeviceConnection="Wired",  # Should be skipped
             ),
         ]
-        
+
         # Signal quality data
         signal_data_c1 = [
             {
@@ -356,7 +344,7 @@ class TestClientsCollector(BaseCollectorTest):
                 "rssi": -47,
             }
         ]
-        
+
         signal_data_c2 = [
             {
                 "startTs": "2025-07-21T17:25:00Z",
@@ -373,7 +361,7 @@ class TestClientsCollector(BaseCollectorTest):
             .with_custom_response("getNetworkClients", clients)
             .build()
         )
-        
+
         # Mock the wireless signal quality endpoint
         def signal_quality_handler(network_id, clientId=None, **kwargs):  # noqa: N803
             if clientId == "c1":
@@ -381,7 +369,7 @@ class TestClientsCollector(BaseCollectorTest):
             elif clientId == "c2":
                 return signal_data_c2
             return []
-        
+
         api.wireless.getNetworkWirelessSignalQualityHistory = MagicMock(
             side_effect=signal_quality_handler
         )
@@ -390,7 +378,7 @@ class TestClientsCollector(BaseCollectorTest):
         # Mock DNS resolution
         with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
             mock_resolve.return_value = {}
-            
+
             # Run collection
             await self.run_collector(collector)
 
@@ -401,14 +389,10 @@ class TestClientsCollector(BaseCollectorTest):
         metrics.assert_gauge_value(
             "meraki_wireless_client_snr", 50, client_id="c1", ssid="Corporate"
         )
-        
-        metrics.assert_gauge_value(
-            "meraki_wireless_client_rssi", -62, client_id="c2", ssid="Guest"
-        )
-        metrics.assert_gauge_value(
-            "meraki_wireless_client_snr", 35, client_id="c2", ssid="Guest"
-        )
-        
+
+        metrics.assert_gauge_value("meraki_wireless_client_rssi", -62, client_id="c2", ssid="Guest")
+        metrics.assert_gauge_value("meraki_wireless_client_snr", 35, client_id="c2", ssid="Guest")
+
         # Verify API was called with correct parameters
         api.wireless.getNetworkWirelessSignalQualityHistory.assert_any_call(
             "N_123", clientId="c1", timespan=300, resolution=300
@@ -416,7 +400,7 @@ class TestClientsCollector(BaseCollectorTest):
         api.wireless.getNetworkWirelessSignalQualityHistory.assert_any_call(
             "N_123", clientId="c2", timespan=300, resolution=300
         )
-        
+
         # Verify wired client was skipped (should have 2 calls, not 3)
         assert api.wireless.getNetworkWirelessSignalQualityHistory.call_count == 2
 
@@ -430,13 +414,13 @@ class TestClientsCollector(BaseCollectorTest):
             ("Some/Slash\\Name", "some_slash_name"),
             ("Name.With.Dots", "name_with_dots"),
             ("Name:With;Colons", "name_with_colons"),
-            ("Name's \"quoted\"", "names_quoted"),
+            ('Name\'s "quoted"', "names_quoted"),
             ("Multiple   Spaces", "multiple_spaces"),
             ("--Leading-Dashes--", "leading_dashes"),
             ("", "unknown"),
             (None, "unknown"),
         ]
-        
+
         for input_name, expected_output in test_cases:
             result = collector._sanitize_application_name(input_name)
             assert result == expected_output, f"Failed for input: {input_name}"
@@ -450,7 +434,7 @@ class TestClientsCollector(BaseCollectorTest):
             ("", "unknown"),
             (None, "unknown"),
         ]
-        
+
         for input_cap, expected_output in test_cases:
             result = collector._sanitize_capability_for_metric(input_cap)
             assert result == expected_output, f"Failed for input: {input_cap}"
@@ -469,7 +453,7 @@ class TestClientsCollector(BaseCollectorTest):
             .with_custom_response("getNetworkClients", clients)
             .build()
         )
-        
+
         # Make application usage API fail
         api.networks.getNetworkClientsApplicationUsage = MagicMock(
             side_effect=Exception("API Error")
@@ -479,7 +463,7 @@ class TestClientsCollector(BaseCollectorTest):
         # Mock DNS resolution
         with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
             mock_resolve.return_value = {}
-            
+
             # Run collection - should not raise exception
             await self.run_collector(collector)
 
@@ -509,7 +493,7 @@ class TestClientsCollector(BaseCollectorTest):
             .with_custom_response("getNetworkClients", clients)
             .build()
         )
-        
+
         # Make signal quality API fail
         api.wireless.getNetworkWirelessSignalQualityHistory = MagicMock(
             side_effect=Exception("API Error")
@@ -519,7 +503,7 @@ class TestClientsCollector(BaseCollectorTest):
         # Mock DNS resolution
         with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
             mock_resolve.return_value = {}
-            
+
             # Run collection - should not raise exception
             await self.run_collector(collector)
 
@@ -536,18 +520,16 @@ class TestClientsCollector(BaseCollectorTest):
         # Set up test data
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
-        
+
         # Create 2500 clients to test batching (batch size is 1000)
         clients = [ClientFactory.create(client_id=f"c{i}") for i in range(2500)]
-        
+
         # Create application usage data for all clients
         app_usage_data = []
         for i in range(2500):
             app_usage_data.append({
                 "clientId": f"c{i}",
-                "applicationUsage": [
-                    {"application": "Test App", "received": 100, "sent": 200}
-                ],
+                "applicationUsage": [{"application": "Test App", "received": 100, "sent": 200}],
             })
 
         # Configure mock API
@@ -557,7 +539,7 @@ class TestClientsCollector(BaseCollectorTest):
             .with_custom_response("getNetworkClients", clients)
             .build()
         )
-        
+
         # Track API calls
         call_count = 0
 
@@ -567,22 +549,20 @@ class TestClientsCollector(BaseCollectorTest):
             client_ids = clients.split(",") if clients else []
             # Return data for requested clients
             return [d for d in app_usage_data if d["clientId"] in client_ids]
-        
-        api.networks.getNetworkClientsApplicationUsage = MagicMock(
-            side_effect=app_usage_handler
-        )
+
+        api.networks.getNetworkClientsApplicationUsage = MagicMock(side_effect=app_usage_handler)
         self._update_collector_api(collector, api)
 
         # Mock DNS resolution
         with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
             mock_resolve.return_value = {}
-            
+
             # Run collection
             await self.run_collector(collector)
 
         # Verify batching worked correctly (should be 3 calls: 1000, 1000, 500)
         assert call_count == 3
-        
+
         # Verify some metrics were set
         metrics.assert_gauge_value(
             "meraki_client_application_usage_sent_kb", 200, client_id="c0", type="test_app"
