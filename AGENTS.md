@@ -17,7 +17,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 <file_map>
 ## KEY FILES & DIRECTORIES
 - `src/meraki_dashboard_exporter/core/` - Core infrastructure (logging, config, models, metrics)
-- `src/meraki_dashboard_exporter/collectors/` - Main collector implementations  
+- `src/meraki_dashboard_exporter/collectors/` - Main collector implementations
 - `src/meraki_dashboard_exporter/collectors/devices/` - Device-specific collectors (MR, MS, MX, MT, MG, MV)
 - `src/meraki_dashboard_exporter/api/client.py` - Meraki API wrapper
 - `src/meraki_dashboard_exporter/app.py` - Main FastAPI application
@@ -239,12 +239,12 @@ async def test_collector_metrics(self, collector, mock_api_builder, metrics):
     # Setup test data
     org = OrganizationFactory.create()
     devices = DeviceFactory.create_many(3, network_id="net_123")
-    
+
     mock_api_builder.with_organizations([org]).with_devices(devices)
-    
+
     # Run collector
     await self.run_collector(collector)
-    
+
     # Assert metrics
     metrics.assert_gauge_value("meraki_device_up", 1, serial=devices[0]["serial"])
 ```
@@ -269,4 +269,4 @@ When the paved path doesn't fit:
 - **Error Recovery**: Implement fallback strategies for failed API calls
 - **Performance Tuning**: Adjust update intervals based on data importance
 - **Manual Override**: Environment variables for debugging specific collectors
-</hatch> 
+</hatch>

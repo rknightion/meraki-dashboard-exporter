@@ -179,6 +179,44 @@ class ClientsCollector(MetricCollector):
             "Total number of networks with clients",
         )
 
+        # Client capability metrics
+        self.client_capabilities_count = self._create_gauge(
+            ClientMetricName.WIRELESS_CLIENT_CAPABILITIES_COUNT,
+            "Count of wireless clients by capability",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.TYPE,  # For the capability type
+            ],
+        )
+
+        # Client distribution metrics
+        self.clients_per_ssid = self._create_gauge(
+            ClientMetricName.CLIENTS_PER_SSID_COUNT,
+            "Count of clients per SSID",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SSID,
+            ],
+        )
+
+        self.clients_per_vlan = self._create_gauge(
+            ClientMetricName.CLIENTS_PER_VLAN_COUNT,
+            "Count of clients per VLAN",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.VLAN,
+            ],
+        )
+
     async def _collect_impl(self) -> None:
         """Collect client metrics from all organizations and networks."""
         if not self._enabled:
@@ -362,6 +400,52 @@ class ClientsCollector(MetricCollector):
 
         return sanitized
 
+    def _sanitize_capability_for_metric(self, capability: str | None) -> str:
+        """Sanitize wireless capability string for use as a metric label.
+
+        Converts capability strings like "802.11ac - 2.4 and 5 GHz" to
+        a more metric-friendly format like "802_11ac_2_4_and_5_ghz".
+
+        Parameters
+        ----------
+        capability : str | None
+            Wireless capability string.
+
+        Returns
+        -------
+        str
+            Sanitized capability string suitable for metric labels.
+
+        """
+        if not capability:
+            return "unknown"
+
+        # Convert to lowercase and replace common patterns
+        sanitized = capability.lower()
+
+        # Replace dots with underscores (802.11 -> 802_11)
+        sanitized = sanitized.replace(".", "_")
+
+        # Replace spaces and hyphens with underscores
+        sanitized = sanitized.replace(" - ", "_")
+        sanitized = sanitized.replace(" ", "_")
+        sanitized = sanitized.replace("-", "_")
+
+        # Remove any remaining non-alphanumeric characters except underscores
+        result = ""
+        for char in sanitized:
+            if char.isalnum() or char == "_":
+                result += char
+
+        # Clean up multiple consecutive underscores
+        while "__" in result:
+            result = result.replace("__", "_")
+
+        # Remove leading/trailing underscores
+        result = result.strip("_")
+
+        return result if result else "unknown"
+
     def _determine_hostname(
         self,
         client: NetworkClient,
@@ -437,6 +521,11 @@ class ClientsCollector(MetricCollector):
             Total items (for logging).
 
         """
+        # Track counts for aggregated metrics
+        capabilities_count: dict[str, int] = {}
+        ssid_count: dict[str, int] = {}
+        vlan_count: dict[str, int] = {}
+
         for client in clients:
             # Get resolved hostname from DNS
             resolved_hostname = hostnames.get(client.ip) if client.ip else None
@@ -450,6 +539,20 @@ class ClientsCollector(MetricCollector):
 
             # Determine effective SSID
             ssid = client.ssid if client.recentDeviceConnection == "Wireless" else "Wired"
+
+            # Track aggregated counts
+            # 1. Wireless capabilities (only for wireless clients)
+            if client.recentDeviceConnection == "Wireless" and client.wirelessCapabilities:
+                cap_key = self._sanitize_capability_for_metric(client.wirelessCapabilities)
+                capabilities_count[cap_key] = capabilities_count.get(cap_key, 0) + 1
+
+            # 2. SSID counts
+            ssid_key = ssid or "Unknown"
+            ssid_count[ssid_key] = ssid_count.get(ssid_key, 0) + 1
+
+            # 3. VLAN counts
+            vlan_key = str(client.vlan) if client.vlan else "untagged"
+            vlan_count[vlan_key] = vlan_count.get(vlan_key, 0) + 1
 
             # Common labels
             labels = {
@@ -487,6 +590,55 @@ class ClientsCollector(MetricCollector):
                 hostname=hostname,
                 status=client.status,
                 ssid=ssid,
+            )
+
+        # Update aggregated metrics after processing all clients
+        # 1. Wireless capabilities metrics
+        for capability, count in capabilities_count.items():
+            self.client_capabilities_count.labels(**{
+                str(LabelName.ORG_ID): org_id,
+                str(LabelName.ORG_NAME): org_name,
+                str(LabelName.NETWORK_ID): network_id,
+                str(LabelName.NETWORK_NAME): network_name,
+                str(LabelName.TYPE): capability,
+            }).set(count)
+            logger.debug(
+                "Set wireless capability count",
+                capability=capability,
+                count=count,
+                network_id=network_id,
+            )
+
+        # 2. SSID metrics
+        for ssid_name, count in ssid_count.items():
+            self.clients_per_ssid.labels(**{
+                str(LabelName.ORG_ID): org_id,
+                str(LabelName.ORG_NAME): org_name,
+                str(LabelName.NETWORK_ID): network_id,
+                str(LabelName.NETWORK_NAME): network_name,
+                str(LabelName.SSID): ssid_name,
+            }).set(count)
+            logger.debug(
+                "Set SSID client count",
+                ssid=ssid_name,
+                count=count,
+                network_id=network_id,
+            )
+
+        # 3. VLAN metrics
+        for vlan_id, count in vlan_count.items():
+            self.clients_per_vlan.labels(**{
+                str(LabelName.ORG_ID): org_id,
+                str(LabelName.ORG_NAME): org_name,
+                str(LabelName.NETWORK_ID): network_id,
+                str(LabelName.NETWORK_NAME): network_name,
+                str(LabelName.VLAN): vlan_id,
+            }).set(count)
+            logger.debug(
+                "Set VLAN client count",
+                vlan=vlan_id,
+                count=count,
+                network_id=network_id,
             )
 
     def _update_cache_metrics(self) -> None:

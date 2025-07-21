@@ -89,6 +89,10 @@ class LabelName(StrEnum):
     FIRST_SEEN = "first_seen"
     LAST_SEEN = "last_seen"
 
+    # Switch port specific
+    MEDIA = "media"  # rj45, sfp
+    LINK_SPEED = "link_speed"  # 10, 100, 1000, etc in Mbps
+
 
 MetricType = Literal["gauge", "counter", "histogram", "info"]
 
