@@ -144,6 +144,44 @@ class OrganizationCollector(MetricCollector):
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
+        # Packet capture metrics
+        self._packetcaptures_total = self._create_gauge(
+            OrgMetricName.ORG_PACKETCAPTURES_TOTAL,
+            "Total number of packet captures in the organization",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+        )
+
+        self._packetcaptures_remaining = self._create_gauge(
+            OrgMetricName.ORG_PACKETCAPTURES_REMAINING,
+            "Number of remaining packet captures to process",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+        )
+
+        # Application usage metrics
+        self._application_usage_total_mb = self._create_gauge(
+            OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_MB,
+            "Total application usage in MB by category",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
+        )
+
+        self._application_usage_downstream_mb = self._create_gauge(
+            OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_MB,
+            "Downstream application usage in MB by category",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
+        )
+
+        self._application_usage_upstream_mb = self._create_gauge(
+            OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_MB,
+            "Upstream application usage in MB by category",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
+        )
+
+        self._application_usage_percentage = self._create_gauge(
+            OrgMetricName.ORG_APPLICATION_USAGE_PERCENTAGE,
+            "Application usage percentage by category",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
+        )
+
     async def _collect_impl(self) -> None:
         """Collect organization metrics."""
         start_time = asyncio.get_event_loop().time()
@@ -234,6 +272,8 @@ class OrganizationCollector(MetricCollector):
                 await self._collect_device_availability_metrics(org_id, org_name)
                 await self._collect_license_metrics(org_id, org_name)
                 await self._collect_client_overview(org_id, org_name)
+                await self._collect_packet_capture_metrics(org_id, org_name)
+                await self._collect_application_usage_metrics(org_id, org_name)
 
         except Exception:
             logger.exception(
@@ -467,3 +507,201 @@ class OrganizationCollector(MetricCollector):
 
         """
         await self.client_overview_collector.collect(org_id, org_name)
+
+    @log_api_call("getOrganizationDevicesPacketCaptureCaptures")
+    @with_error_handling(
+        operation="Collect packet capture metrics",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _collect_packet_capture_metrics(self, org_id: str, org_name: str) -> None:
+        """Collect packet capture metrics.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        try:
+            with LogContext(org_id=org_id, org_name=org_name):
+                # Use perPage=3 to minimize data transfer while still getting the meta counts
+                response = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationDevicesPacketCaptureCaptures,
+                    org_id,
+                    perPage=3,
+                )
+
+            # Extract meta counts
+            if isinstance(response, dict) and "meta" in response and "counts" in response["meta"]:
+                counts = response["meta"]["counts"].get("items", {})
+                total = counts.get("total", 0)
+                remaining = counts.get("remaining", 0)
+
+                # Set metrics
+                if self._packetcaptures_total:
+                    self._packetcaptures_total.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                    ).set(total)
+                else:
+                    logger.error("_packetcaptures_total metric not initialized")
+
+                if self._packetcaptures_remaining:
+                    self._packetcaptures_remaining.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                    ).set(remaining)
+                else:
+                    logger.error("_packetcaptures_remaining metric not initialized")
+
+                logger.debug(
+                    "Collected packet capture metrics",
+                    org_id=org_id,
+                    total=total,
+                    remaining=remaining,
+                )
+            else:
+                logger.warning(
+                    "Unexpected response format for packet captures",
+                    org_id=org_id,
+                    response_type=type(response).__name__,
+                )
+
+        except Exception:
+            logger.exception(
+                "Failed to collect packet capture metrics",
+                org_id=org_id,
+                org_name=org_name,
+            )
+
+    def _sanitize_category_name(self, category: str) -> str:
+        """Sanitize category name for use as a Prometheus label.
+
+        Parameters
+        ----------
+        category : str
+            Raw category name from API.
+
+        Returns
+        -------
+        str
+            Sanitized category name.
+
+        """
+        if not category:
+            return "unknown"
+
+        # Convert to lowercase and replace problematic characters
+        sanitized = category.lower()
+        sanitized = sanitized.replace(" & ", "_and_")
+        sanitized = sanitized.replace("&", "_and_")
+        sanitized = sanitized.replace(" - ", "_")
+        sanitized = sanitized.replace("-", "_")
+        sanitized = sanitized.replace(" ", "_")
+        sanitized = sanitized.replace("/", "_")
+        sanitized = sanitized.replace("\\", "_")
+        sanitized = sanitized.replace(".", "")
+        sanitized = sanitized.replace(",", "")
+        sanitized = sanitized.replace(":", "")
+        sanitized = sanitized.replace(";", "")
+        sanitized = sanitized.replace("(", "")
+        sanitized = sanitized.replace(")", "")
+        sanitized = sanitized.replace("'", "")
+        sanitized = sanitized.replace('"', "")
+
+        # Remove any remaining non-alphanumeric characters except underscore
+        result = ""
+        for char in sanitized:
+            if char.isalnum() or char == "_":
+                result += char
+
+        # Remove multiple underscores
+        while "__" in result:
+            result = result.replace("__", "_")
+
+        # Strip leading/trailing underscores
+        result = result.strip("_")
+
+        return result if result else "unknown"
+
+    @log_api_call("getOrganizationSummaryTopApplicationsCategoriesByUsage")
+    @with_error_handling(
+        operation="Collect application usage metrics",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _collect_application_usage_metrics(self, org_id: str, org_name: str) -> None:
+        """Collect application usage metrics by category.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        try:
+            with LogContext(org_id=org_id, org_name=org_name):
+                # Call API with quantity=1000 and no timespan
+                response = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationSummaryTopApplicationsCategoriesByUsage,
+                    org_id,
+                    quantity=1000,
+                )
+
+            # Process each category
+            for category_data in response:
+                category = category_data.get("category", "Unknown")
+                sanitized_category = self._sanitize_category_name(category)
+
+                # Convert MB to MB (values are already in MB based on the example)
+                total_mb = category_data.get("total", 0)
+                downstream_mb = category_data.get("downstream", 0)
+                upstream_mb = category_data.get("upstream", 0)
+                percentage = category_data.get("percentage", 0)
+
+                # Set metrics
+                if self._application_usage_total_mb:
+                    self._application_usage_total_mb.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                        category=sanitized_category,
+                    ).set(total_mb)
+
+                if self._application_usage_downstream_mb:
+                    self._application_usage_downstream_mb.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                        category=sanitized_category,
+                    ).set(downstream_mb)
+
+                if self._application_usage_upstream_mb:
+                    self._application_usage_upstream_mb.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                        category=sanitized_category,
+                    ).set(upstream_mb)
+
+                if self._application_usage_percentage:
+                    self._application_usage_percentage.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                        category=sanitized_category,
+                    ).set(percentage)
+
+            logger.debug(
+                "Collected application usage metrics",
+                org_id=org_id,
+                categories_count=len(response),
+            )
+
+        except Exception:
+            logger.exception(
+                "Failed to collect application usage metrics",
+                org_id=org_id,
+                org_name=org_name,
+            )

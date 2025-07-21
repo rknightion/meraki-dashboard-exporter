@@ -30,6 +30,16 @@ class OrgMetricName(StrEnum):
     # Configuration and security metrics
     ORG_CONFIGURATION_CHANGES_TOTAL = "meraki_org_configuration_changes_total"
     ORG_LOGIN_SECURITY_ENABLED = "meraki_org_login_security_enabled"
+
+    # Packet capture metrics
+    ORG_PACKETCAPTURES_TOTAL = "meraki_org_packetcaptures_total"
+    ORG_PACKETCAPTURES_REMAINING = "meraki_org_packetcaptures_remaining"
+    
+    # Application usage metrics
+    ORG_APPLICATION_USAGE_TOTAL_MB = "meraki_org_application_usage_total_mb"
+    ORG_APPLICATION_USAGE_DOWNSTREAM_MB = "meraki_org_application_usage_downstream_mb"
+    ORG_APPLICATION_USAGE_UPSTREAM_MB = "meraki_org_application_usage_upstream_mb"
+    ORG_APPLICATION_USAGE_PERCENTAGE = "meraki_org_application_usage_percentage"
     ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED = (
         "meraki_org_login_security_strong_passwords_enabled"
     )
@@ -196,6 +206,7 @@ class AlertMetricName(StrEnum):
     ALERTS_ACTIVE = "meraki_alerts_active"
     ALERTS_TOTAL_BY_SEVERITY = "meraki_alerts_total_by_severity"
     ALERTS_TOTAL_BY_NETWORK = "meraki_alerts_total_by_network"
+    SENSOR_ALERTS_TOTAL = "meraki_sensor_alerts_total"
 
 
 class ConfigMetricName(StrEnum):
