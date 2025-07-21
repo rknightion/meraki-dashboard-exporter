@@ -34,7 +34,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `AlertMetricName.ALERTS_ACTIVE`
 
-**Variable:** `self._alerts_active` (line 32)
+**Variable:** `self._alerts_active` (line 31)
 
 #### `meraki_alerts_total_by_network`
 
@@ -46,7 +46,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `AlertMetricName.ALERTS_TOTAL_BY_NETWORK`
 
-**Variable:** `self._alerts_by_network` (line 55)
+**Variable:** `self._alerts_by_network` (line 54)
 
 #### `meraki_alerts_total_by_severity`
 
@@ -58,7 +58,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `AlertMetricName.ALERTS_TOTAL_BY_SEVERITY`
 
-**Variable:** `self._alerts_by_severity` (line 48)
+**Variable:** `self._alerts_by_severity` (line 47)
 
 #### `meraki_sensor_alerts_total`
 
@@ -70,7 +70,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `AlertMetricName.SENSOR_ALERTS_TOTAL`
 
-**Variable:** `self._sensor_alerts_total` (line 67)
+**Variable:** `self._sensor_alerts_total` (line 66)
 
 ### ClientsCollector
 
@@ -1838,3 +1838,4 @@ All metrics in alphabetical order:
     ```
 
 For more information on using these metrics, see the [Overview](overview.md) page.
+
