@@ -283,7 +283,7 @@ class DeviceStatusFactory:
         status_data = {
             "serial": serial or DataFactory.generate_serial(),
             "status": status or DeviceStatus.ONLINE,
-            "lastReportedAt": datetime.utcnow().isoformat() + "Z",
+            "lastReportedAt": datetime.now(UTC).isoformat() + "Z",
             "publicIp": DataFactory.generate_ip(),
             "gateway": DataFactory.generate_ip(),
             "ipType": "dhcp",
@@ -305,7 +305,7 @@ class DeviceStatusFactory:
             "serial": serial or DataFactory.generate_serial(),
             "status": status or DeviceStatus.ONLINE,
             "productType": product_type or ProductType.WIRELESS,
-            "lastReportedAt": datetime.utcnow().isoformat() + "Z",
+            "lastReportedAt": datetime.now(UTC).isoformat() + "Z",
         }
         avail_data.update(kwargs)
         return avail_data
@@ -533,7 +533,7 @@ class TimeSeriesFactory:
 
         """
         points = []
-        current_time = datetime.utcnow() - timedelta(seconds=interval * count)
+        current_time = datetime.now(UTC) - timedelta(seconds=interval * count)
 
         for i in range(count):
             value = base_value + (trend * i) + random.uniform(-variance, variance)
@@ -551,7 +551,7 @@ class TimeSeriesFactory:
     ) -> list[dict[str, Any]]:
         """Create memory usage history data."""
         usage_data = []
-        base_time = datetime.utcnow() - timedelta(minutes=count * 5)
+        base_time = datetime.now(UTC) - timedelta(minutes=count * 5)
 
         for i in range(count):
             timestamp = base_time + timedelta(minutes=i * 5)
@@ -641,3 +641,138 @@ class ResponseFactory:
         return {
             "errors": errors or [message or default_messages.get(status_code, "Error")],
         }
+
+
+class ClientFactory:
+    """Factory for creating client data."""
+
+    @staticmethod
+    def create(
+        client_id: str | None = None,
+        mac: str | None = None,
+        ip: str | None = None,
+        description: str | None = None,
+        status: str | None = None,
+        ssid: str | None = None,
+        vlan: int | None = None,
+        usage: dict[str, int] | None = None,
+        recentDeviceConnection: str | None = None,  # noqa: N803
+        wirelessCapabilities: str | None = None,  # noqa: N803
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Create client data.
+
+        Parameters
+        ----------
+        client_id : str, optional
+            Client ID
+        mac : str, optional
+            MAC address
+        ip : str, optional
+            IP address
+        description : str, optional
+            Client description/name
+        status : str, optional
+            Client status (Online/Offline)
+        ssid : str, optional
+            SSID for wireless clients
+        vlan : int, optional
+            VLAN ID
+        usage : dict[str, int], optional
+            Usage data with sent/recv/total
+        recentDeviceConnection : str, optional
+            Connection type (Wireless/Wired)
+        wirelessCapabilities : str, optional
+            Wireless capabilities string
+        **kwargs : Any
+            Additional fields
+
+        Returns
+        -------
+        dict[str, Any]
+            Client data
+
+        """
+        client_data = {
+            "id": client_id or DataFactory.generate_id("c_"),
+            "mac": mac or DataFactory.generate_mac(),
+            "ip": ip or DataFactory.generate_ip(),
+            "description": description or f"Client {random.randint(1, 100)}",
+            "status": status or "Online",
+            "lastSeen": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "firstSeen": (datetime.now(UTC) - timedelta(days=random.randint(1, 30)))
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "manufacturer": random.choice(["Apple", "Samsung", "Dell", "HP", "Cisco"]),
+            "os": random.choice(["Mac OS X", "Windows 10", "iOS", "Android", "Linux"]),
+            "recentDeviceSerial": DataFactory.generate_serial(),
+            "recentDeviceName": f"Device {random.randint(1, 10)}",
+            "recentDeviceConnection": recentDeviceConnection or "Wireless",
+            "ssid": ssid,
+            "vlan": vlan,
+            "usage": usage
+            or {
+                "sent": random.randint(100, 10000),
+                "recv": random.randint(100, 10000),
+                "total": random.randint(200, 20000),
+            },
+        }
+
+        # Add wireless capabilities only for wireless clients
+        if client_data["recentDeviceConnection"] == "Wireless" and wirelessCapabilities:
+            client_data["wirelessCapabilities"] = wirelessCapabilities
+        elif client_data["recentDeviceConnection"] == "Wireless":
+            client_data["wirelessCapabilities"] = random.choice([
+                "802.11ac - 2.4 and 5 GHz",
+                "802.11n - 2.4 GHz",
+                "802.11n - 2.4 and 5 GHz",
+                "802.11ax - 5 GHz",
+            ])
+
+        client_data.update(kwargs)
+        return client_data
+
+    @staticmethod
+    def create_many(
+        count: int = 5,
+        network_id: str | None = None,
+        mix_wired_wireless: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Create multiple clients.
+
+        Parameters
+        ----------
+        count : int
+            Number of clients to create
+        network_id : str, optional
+            Network ID for all clients
+        mix_wired_wireless : bool
+            Whether to create a mix of wired and wireless clients
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of client data
+
+        """
+        clients = []
+        for i in range(count):
+            if mix_wired_wireless and i % 4 == 0:  # 25% wired
+                client = ClientFactory.create(
+                    recentDeviceConnection="Wired",
+                    ssid=None,
+                    vlan=random.choice([None, 100, 200]),
+                )
+            else:
+                client = ClientFactory.create(
+                    recentDeviceConnection="Wireless",
+                    ssid=random.choice(["Corporate", "Guest", "IoT"]),
+                    vlan=random.choice([100, 200, 300]),
+                )
+
+            if network_id:
+                client["networkId"] = network_id
+
+            clients.append(client)
+
+        return clients

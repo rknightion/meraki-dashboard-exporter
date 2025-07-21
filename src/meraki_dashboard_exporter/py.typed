@@ -1,0 +1,2 @@
+# This file indicates that this package has type annotations.
+# It is required for mypy to recognize the package as typed.
