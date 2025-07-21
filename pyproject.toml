@@ -83,6 +83,7 @@ ignore = [
     "PLR0915",  # too many statements
     "PLR0917",  # too many positional arguments
     "PERF401",  # use list comprehension
+    "PLR1702",
     "E501",  # line too long (handled by formatter)
 ]
 

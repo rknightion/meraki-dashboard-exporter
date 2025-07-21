@@ -9,11 +9,11 @@ The exporter provides metrics across several categories:
 | Collector | Metrics | Description |
 |-----------|---------|-------------|
 | AlertsCollector | 3 | Active alerts by severity, type, and category |
-| ClientsCollector | 13 | Detailed client-level metrics including usage and status |
+| ClientsCollector | 16 | Detailed client-level metrics including usage and status |
 | ConfigCollector | 14 | Organization security settings and configuration tracking |
-| DeviceCollector | 6 | Device status, performance, and uptime metrics |
+| DeviceCollector | 10 | Device status, performance, and uptime metrics |
 | MRCollector | 33 | Access point metrics including clients, power, and performance |
-| MSCollector | 8 | Switch-specific metrics including port status, power, and PoE |
+| MSCollector | 7 | Switch-specific metrics including port status, power, and PoE |
 | MTSensorCollector | 18 | Environmental monitoring from MT sensors |
 | NetworkHealthCollector | 8 | Network-wide wireless health and performance |
 | OrganizationCollector | 13 | Organization-level metrics including API usage and licenses |
@@ -112,6 +112,30 @@ The exporter provides metrics across several categories:
 
 **Variable:** `self.client_usage_total` (line 119)
 
+#### `meraki_clients_per_ssid_count`
+
+**Description:** Count of clients per SSID
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.SSID`
+
+**Constant:** `ClientMetricName.CLIENTS_PER_SSID_COUNT`
+
+**Variable:** `self.clients_per_ssid` (line 196)
+
+#### `meraki_clients_per_vlan_count`
+
+**Description:** Count of clients per VLAN
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.VLAN`
+
+**Constant:** `ClientMetricName.CLIENTS_PER_VLAN_COUNT`
+
+**Variable:** `self.clients_per_vlan` (line 208)
+
 #### `meraki_exporter_client_dns_cache_expired`
 
 **Description:** Number of expired entries in DNS cache
@@ -183,6 +207,18 @@ The exporter provides metrics across several categories:
 **Type:** gauge
 
 **Variable:** `self.client_store_total` (line 172)
+
+#### `meraki_wireless_client_capabilities_count`
+
+**Description:** Count of wireless clients by capability
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.TYPE`
+
+**Constant:** `ClientMetricName.WIRELESS_CLIENT_CAPABILITIES_COUNT`
+
+**Variable:** `self.client_capabilities_count` (line 183)
 
 ### ConfigCollector
 
@@ -356,7 +392,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `DeviceMetricName.DEVICE_MEMORY_FREE_BYTES`
 
-**Variable:** `self._device_memory_free_bytes` (line 166)
+**Variable:** `self._device_memory_free_bytes` (line 208)
 
 #### `meraki_device_memory_total_bytes`
 
@@ -368,7 +404,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `DeviceMetricName.DEVICE_MEMORY_TOTAL_BYTES`
 
-**Variable:** `self._device_memory_total_bytes` (line 179)
+**Variable:** `self._device_memory_total_bytes` (line 221)
 
 #### `meraki_device_memory_usage_percent`
 
@@ -380,7 +416,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `DeviceMetricName.DEVICE_MEMORY_USAGE_PERCENT`
 
-**Variable:** `self._device_memory_usage_percent` (line 191)
+**Variable:** `self._device_memory_usage_percent` (line 233)
 
 #### `meraki_device_memory_used_bytes`
 
@@ -392,7 +428,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `DeviceMetricName.DEVICE_MEMORY_USED_BYTES`
 
-**Variable:** `self._device_memory_used_bytes` (line 153)
+**Variable:** `self._device_memory_used_bytes` (line 195)
 
 #### `meraki_device_status_info`
 
@@ -404,7 +440,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `DeviceMetricName.DEVICE_STATUS_INFO`
 
-**Variable:** `self._device_status_info` (line 139)
+**Variable:** `self._device_status_info` (line 181)
 
 #### `meraki_device_up`
 
@@ -416,7 +452,55 @@ The exporter provides metrics across several categories:
 
 **Constant:** `DeviceMetricName.DEVICE_UP`
 
-**Variable:** `self._device_up` (line 127)
+**Variable:** `self._device_up` (line 169)
+
+#### `meraki_ms_ports_active_total`
+
+**Description:** Total number of active switch ports
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+
+**Constant:** `MSMetricName.MS_PORTS_ACTIVE_TOTAL`
+
+**Variable:** `self._ms_ports_active_total` (line 126)
+
+#### `meraki_ms_ports_by_link_speed_total`
+
+**Description:** Total number of active switch ports by link speed
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.MEDIA`, `LabelName.LINK_SPEED`
+
+**Constant:** `MSMetricName.MS_PORTS_BY_LINK_SPEED_TOTAL`
+
+**Variable:** `self._ms_ports_by_link_speed_total` (line 155)
+
+#### `meraki_ms_ports_by_media_total`
+
+**Description:** Total number of switch ports by media type
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.MEDIA`, `LabelName.STATUS`
+
+**Constant:** `MSMetricName.MS_PORTS_BY_MEDIA_TOTAL`
+
+**Variable:** `self._ms_ports_by_media_total` (line 144)
+
+#### `meraki_ms_ports_inactive_total`
+
+**Description:** Total number of inactive switch ports
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+
+**Constant:** `MSMetricName.MS_PORTS_INACTIVE_TOTAL`
+
+**Variable:** `self._ms_ports_inactive_total` (line 135)
 
 ### MRCollector
 
@@ -832,7 +916,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `MSMetricName.MS_POE_BUDGET_WATTS`
 
-**Variable:** `self._switch_poe_budget` (line 78)
+**Variable:** `self._switch_poe_budget` (line 66)
 
 #### `meraki_ms_poe_network_total_watthours`
 
@@ -844,7 +928,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `MSMetricName.MS_POE_NETWORK_TOTAL_WATTS`
 
-**Variable:** `self._switch_poe_network_total` (line 84)
+**Variable:** `self._switch_poe_network_total` (line 72)
 
 #### `meraki_ms_poe_port_power_watthours`
 
@@ -856,7 +940,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `MSMetricName.MS_POE_PORT_POWER_WATTS`
 
-**Variable:** `self._switch_poe_port_power` (line 66)
+**Variable:** `self._switch_poe_port_power` (line 54)
 
 #### `meraki_ms_poe_total_power_watthours`
 
@@ -868,19 +952,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `MSMetricName.MS_POE_TOTAL_POWER_WATTS`
 
-**Variable:** `self._switch_poe_total_power` (line 72)
-
-#### `meraki_ms_port_errors_total`
-
-**Description:** Switch port error count
-
-**Type:** gauge
-
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.PORT_ID`, `LabelName.PORT_NAME`, `LabelName.ERROR_TYPE`
-
-**Constant:** `MSMetricName.MS_PORT_ERRORS_TOTAL`
-
-**Variable:** `self._switch_port_errors` (line 46)
+**Variable:** `self._switch_poe_total_power` (line 60)
 
 #### `meraki_ms_port_status`
 
@@ -916,7 +988,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `MSMetricName.MS_POWER_USAGE_WATTS`
 
-**Variable:** `self._switch_power` (line 59)
+**Variable:** `self._switch_power` (line 47)
 
 ### MTSensorCollector
 
@@ -1420,6 +1492,8 @@ All metrics in alphabetical order:
 | `meraki_client_usage_recv_kb` | gauge | ClientsCollector | Kilobytes received by client in the last hour |
 | `meraki_client_usage_sent_kb` | gauge | ClientsCollector | Kilobytes sent by client in the last hour |
 | `meraki_client_usage_total_kb` | gauge | ClientsCollector | Total kilobytes transferred by client in the last hour |
+| `meraki_clients_per_ssid_count` | gauge | ClientsCollector | Count of clients per SSID |
+| `meraki_clients_per_vlan_count` | gauge | ClientsCollector | Count of clients per VLAN |
 | `meraki_device_memory_free_bytes` | gauge | DeviceCollector | Device memory free in bytes |
 | `meraki_device_memory_total_bytes` | gauge | DeviceCollector | Device memory total provisioned in bytes |
 | `meraki_device_memory_usage_percent` | gauge | DeviceCollector | Device memory usage percentage (maximum from most recent interval) |
@@ -1472,9 +1546,12 @@ All metrics in alphabetical order:
 | `meraki_ms_poe_network_total_watthours` | gauge | MSCollector | Total POE power consumption for all switches in network in watt-hours (Wh) |
 | `meraki_ms_poe_port_power_watthours` | gauge | MSCollector | Per-port POE power consumption in watt-hours (Wh) |
 | `meraki_ms_poe_total_power_watthours` | gauge | MSCollector | Total POE power consumption for switch in watt-hours (Wh) |
-| `meraki_ms_port_errors_total` | gauge | MSCollector | Switch port error count |
 | `meraki_ms_port_status` | gauge | MSCollector | Switch port status (1 = connected, 0 = disconnected) |
 | `meraki_ms_port_traffic_bytes` | gauge | MSCollector | Switch port traffic in bytes |
+| `meraki_ms_ports_active_total` | gauge | DeviceCollector | Total number of active switch ports |
+| `meraki_ms_ports_by_link_speed_total` | gauge | DeviceCollector | Total number of active switch ports by link speed |
+| `meraki_ms_ports_by_media_total` | gauge | DeviceCollector | Total number of switch ports by media type |
+| `meraki_ms_ports_inactive_total` | gauge | DeviceCollector | Total number of inactive switch ports |
 | `meraki_ms_power_usage_watts` | gauge | MSCollector | Switch power usage in watts |
 | `meraki_mt_apparent_power_va` | gauge | MTSensorCollector | Apparent power in volt-amperes |
 | `meraki_mt_battery_percentage` | gauge | MTSensorCollector | Battery level percentage |
@@ -1520,6 +1597,7 @@ All metrics in alphabetical order:
 | `meraki_org_usage_downstream_kb` | gauge | OrganizationCollector | Downstream data usage in KB for the 1-hour window |
 | `meraki_org_usage_total_kb` | gauge | OrganizationCollector | Total data usage in KB for the 1-hour window |
 | `meraki_org_usage_upstream_kb` | gauge | OrganizationCollector | Upstream data usage in KB for the 1-hour window |
+| `meraki_wireless_client_capabilities_count` | gauge | ClientsCollector | Count of wireless clients by capability |
 
 ## Notes
 

@@ -12,6 +12,7 @@ from ..core.constants import (
     DeviceMetricName,
     DeviceStatus,
     DeviceType,
+    MSMetricName,
     UpdateTier,
 )
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -120,6 +121,47 @@ class DeviceCollector(MetricCollector):
 
         # Initialize sub-collector metrics (only for collectors without their own __init__)
         self.ms_collector._initialize_metrics()
+
+        # Initialize port overview metrics here since they're org-level
+        self._ms_ports_active_total = self._create_gauge(
+            MSMetricName.MS_PORTS_ACTIVE_TOTAL,
+            "Total number of active switch ports",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+            ],
+        )
+
+        self._ms_ports_inactive_total = self._create_gauge(
+            MSMetricName.MS_PORTS_INACTIVE_TOTAL,
+            "Total number of inactive switch ports",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+            ],
+        )
+
+        self._ms_ports_by_media_total = self._create_gauge(
+            MSMetricName.MS_PORTS_BY_MEDIA_TOTAL,
+            "Total number of switch ports by media type",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.MEDIA,
+                LabelName.STATUS,  # active or inactive
+            ],
+        )
+
+        self._ms_ports_by_link_speed_total = self._create_gauge(
+            MSMetricName.MS_PORTS_BY_LINK_SPEED_TOTAL,
+            "Total number of active switch ports by link speed",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.MEDIA,
+                LabelName.LINK_SPEED,  # speed in Mbps
+            ],
+        )
 
     def _initialize_metrics(self) -> None:
         """Initialize device metrics."""
@@ -400,6 +442,12 @@ class DeviceCollector(MetricCollector):
             except Exception:
                 logger.exception("Failed to aggregate POE metrics")
 
+            # Collect switch port overview metrics
+            try:
+                await self._collect_switch_port_overview(org_id)
+            except Exception:
+                logger.exception("Failed to collect switch port overview")
+
             # Collect memory metrics for all devices
             try:
                 # Use base collector's memory collection
@@ -641,17 +689,26 @@ class DeviceCollector(MetricCollector):
 
             # Calculate total POE per network
             for network_id, switch_serials in network_switches.items():
-                total_poe = 0
+                total_poe = 0.0
                 for serial in switch_serials:
                     # Get the current value from the metric
                     try:
-                        # Find the switch in devices list
-                        switch = next(d for d in devices if d["serial"] == serial)
-                        # Skip making additional API calls for now
-                        # We'll aggregate from already collected metrics instead
-                        _ = switch  # Keep switch for future POE aggregation
+                        # Find the switch in devices list to verify it exists
+                        _ = next(d for d in devices if d["serial"] == serial)
+
+                        # Get the POE value from the already collected metric
+                        # The metric is indexed by serial, name, model, and network_id
+                        for metric_sample in self.ms_collector._switch_poe_total_power._samples():
+                            labels = metric_sample[1]
+                            if (
+                                labels.get("serial") == serial
+                                and labels.get("network_id") == network_id
+                            ):
+                                total_poe += metric_sample[2]  # Add the value
+                                break
 
                     except StopIteration:
+                        logger.debug("Switch not found in devices list", serial=serial)
                         continue
                     except Exception:
                         logger.debug(
@@ -667,11 +724,125 @@ class DeviceCollector(MetricCollector):
                     network_name=network_name,
                 ).set(total_poe)
 
+                logger.debug(
+                    "Set network POE total",
+                    network_id=network_id,
+                    network_name=network_name,
+                    total_poe=total_poe,
+                    switch_count=len(switch_serials),
+                )
+
         except Exception:
             logger.exception(
                 "Failed to aggregate network POE metrics",
                 org_id=org_id,
             )
+
+    @log_api_call("getOrganizationSwitchPortsOverview")
+    @with_error_handling(
+        operation="Collect switch port overview",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _collect_switch_port_overview(self, org_id: str) -> None:
+        """Collect switch port overview metrics for an organization.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        """
+        # Get organization name
+        org_name = org_id  # Default to ID
+        if not self.settings.meraki.org_id:
+            # If we have multiple orgs, fetch the name
+            orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
+            for org in orgs:
+                if org["id"] == org_id:
+                    org_name = org["name"]
+                    break
+
+        # Call the API with required timespan
+        overview = await asyncio.to_thread(
+            self.api.switch.getOrganizationSwitchPortsOverview,
+            org_id,
+            timespan=43200,  # 12 hours as required
+        )
+
+        # Parse the counts structure
+        counts = overview.get("counts", {})
+
+        # Set total active/inactive counts
+        active_count = counts.get("byStatus", {}).get("active", {}).get("total", 0)
+        inactive_count = counts.get("byStatus", {}).get("inactive", {}).get("total", 0)
+
+        self._ms_ports_active_total.labels(
+            org_id=org_id,
+            org_name=org_name,
+        ).set(active_count)
+
+        self._ms_ports_inactive_total.labels(
+            org_id=org_id,
+            org_name=org_name,
+        ).set(inactive_count)
+
+        logger.debug(
+            "Set port overview totals",
+            org_id=org_id,
+            active_count=active_count,
+            inactive_count=inactive_count,
+        )
+
+        # Process active ports by media and link speed
+        active_data = counts.get("byStatus", {}).get("active", {})
+        by_media_speed = active_data.get("byMediaAndLinkSpeed", {})
+
+        for media_type, media_data in by_media_speed.items():
+            # Set total for this media type (active)
+            media_total = media_data.get("total", 0)
+            self._ms_ports_by_media_total.labels(
+                org_id=org_id,
+                org_name=org_name,
+                media=media_type,
+                status="active",
+            ).set(media_total)
+
+            # Set breakdown by link speed
+            for speed, count in media_data.items():
+                if speed != "total" and isinstance(count, (int, float)):
+                    self._ms_ports_by_link_speed_total.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                        media=media_type,
+                        link_speed=str(speed),  # Speed in Mbps
+                    ).set(count)
+
+                    logger.debug(
+                        "Set port link speed count",
+                        org_id=org_id,
+                        media=media_type,
+                        speed=speed,
+                        count=count,
+                    )
+
+        # Process inactive ports by media
+        inactive_data = counts.get("byStatus", {}).get("inactive", {})
+        by_media = inactive_data.get("byMedia", {})
+
+        for media_type, media_data in by_media.items():
+            media_total = media_data.get("total", 0)
+            self._ms_ports_by_media_total.labels(
+                org_id=org_id,
+                org_name=org_name,
+                media=media_type,
+                status="inactive",
+            ).set(media_total)
+
+        logger.debug(
+            "Completed switch port overview collection",
+            org_id=org_id,
+        )
 
     @log_api_call("getOrganizationDevices")
     @with_error_handling(

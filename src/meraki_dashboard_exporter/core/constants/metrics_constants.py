@@ -85,12 +85,17 @@ class MSMetricName(StrEnum):
 
     MS_PORT_STATUS = "meraki_ms_port_status"
     MS_PORT_TRAFFIC_BYTES = "meraki_ms_port_traffic_bytes"
-    MS_PORT_ERRORS_TOTAL = "meraki_ms_port_errors_total"
     MS_POWER_USAGE_WATTS = "meraki_ms_power_usage_watts"
     MS_POE_PORT_POWER_WATTS = "meraki_ms_poe_port_power_watthours"  # Actually Wh not W
     MS_POE_TOTAL_POWER_WATTS = "meraki_ms_poe_total_power_watthours"  # Actually Wh not W
     MS_POE_BUDGET_WATTS = "meraki_ms_poe_budget_watts"
     MS_POE_NETWORK_TOTAL_WATTS = "meraki_ms_poe_network_total_watthours"  # Actually Wh not W
+
+    # Port overview metrics
+    MS_PORTS_ACTIVE_TOTAL = "meraki_ms_ports_active_total"
+    MS_PORTS_INACTIVE_TOTAL = "meraki_ms_ports_inactive_total"
+    MS_PORTS_BY_MEDIA_TOTAL = "meraki_ms_ports_by_media_total"
+    MS_PORTS_BY_LINK_SPEED_TOTAL = "meraki_ms_ports_by_link_speed_total"
 
 
 class MRMetricName(StrEnum):
@@ -227,3 +232,10 @@ class ClientMetricName(StrEnum):
     CLIENT_USAGE_SENT_KB = "meraki_client_usage_sent_kb"
     CLIENT_USAGE_RECV_KB = "meraki_client_usage_recv_kb"
     CLIENT_USAGE_TOTAL_KB = "meraki_client_usage_total_kb"
+
+    # Wireless client capability metrics
+    WIRELESS_CLIENT_CAPABILITIES_COUNT = "meraki_wireless_client_capabilities_count"
+
+    # Client distribution metrics
+    CLIENTS_PER_SSID_COUNT = "meraki_clients_per_ssid_count"
+    CLIENTS_PER_VLAN_COUNT = "meraki_clients_per_vlan_count"

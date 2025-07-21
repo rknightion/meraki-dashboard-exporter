@@ -43,18 +43,6 @@ class MSCollector(BaseDeviceCollector):
             ],
         )
 
-        self._switch_port_errors = self.parent._create_gauge(
-            MSMetricName.MS_PORT_ERRORS_TOTAL,
-            "Switch port error count",
-            labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
-                LabelName.PORT_ID,
-                LabelName.PORT_NAME,
-                LabelName.ERROR_TYPE,
-            ],
-        )
-
         # Switch power metrics
         self._switch_power = self.parent._create_gauge(
             MSMetricName.MS_POWER_USAGE_WATTS,
@@ -151,17 +139,6 @@ class MSCollector(BaseDeviceCollector):
                             port_name=port_name,
                             direction="tx",
                         ).set(traffic_counters["sent"] * 1000 / 8)  # Convert to bytes
-
-                # Error counters
-                if "errors" in port and isinstance(port["errors"], dict):
-                    for error_type, count in port["errors"].items():
-                        self._switch_port_errors.labels(
-                            serial=serial,
-                            name=name,
-                            port_id=port_id,
-                            port_name=port_name,
-                            error_type=error_type,
-                        ).set(count)
 
             # Extract POE data from port statuses (POE data is included in port status)
             total_poe_consumption = 0
