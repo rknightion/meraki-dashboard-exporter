@@ -9,7 +9,7 @@ The exporter provides metrics across several categories:
 | Collector | Metrics | Description |
 |-----------|---------|-------------|
 | AlertsCollector | 3 | Active alerts by severity, type, and category |
-| ClientsCollector | 16 | Detailed client-level metrics including usage and status |
+| ClientsCollector | 19 | Detailed client-level metrics including usage and status |
 | ConfigCollector | 14 | Organization security settings and configuration tracking |
 | DeviceCollector | 10 | Device status, performance, and uptime metrics |
 | MRCollector | 33 | Access point metrics including clients, power, and performance |
@@ -63,6 +63,42 @@ The exporter provides metrics across several categories:
 ### ClientsCollector
 
 **Source:** `src/meraki_dashboard_exporter/collectors/clients.py`
+
+#### `meraki_client_application_usage_recv_kb`
+
+**Description:** Kilobytes received by client per application in the last hour
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.TYPE`
+
+**Constant:** `ClientMetricName.CLIENT_APPLICATION_USAGE_RECV_KB`
+
+**Variable:** `self.client_app_usage_recv` (line 237)
+
+#### `meraki_client_application_usage_sent_kb`
+
+**Description:** Kilobytes sent by client per application in the last hour
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.TYPE`
+
+**Constant:** `ClientMetricName.CLIENT_APPLICATION_USAGE_SENT_KB`
+
+**Variable:** `self.client_app_usage_sent` (line 221)
+
+#### `meraki_client_application_usage_total_kb`
+
+**Description:** Total kilobytes transferred by client per application in the last hour
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.TYPE`
+
+**Constant:** `ClientMetricName.CLIENT_APPLICATION_USAGE_TOTAL_KB`
+
+**Variable:** `self.client_app_usage_total` (line 253)
 
 #### `meraki_client_status`
 
@@ -1488,6 +1524,9 @@ All metrics in alphabetical order:
 | `meraki_alerts_total_by_severity` | gauge | AlertsCollector | Total number of active alerts by severity |
 | `meraki_ap_channel_utilization_2_4ghz_percent` | gauge | NetworkHealthCollector | 2.4GHz channel utilization percentage per AP |
 | `meraki_ap_channel_utilization_5ghz_percent` | gauge | NetworkHealthCollector | 5GHz channel utilization percentage per AP |
+| `meraki_client_application_usage_recv_kb` | gauge | ClientsCollector | Kilobytes received by client per application in the last hour |
+| `meraki_client_application_usage_sent_kb` | gauge | ClientsCollector | Kilobytes sent by client per application in the last hour |
+| `meraki_client_application_usage_total_kb` | gauge | ClientsCollector | Total kilobytes transferred by client per application in the last hour |
 | `meraki_client_status` | gauge | ClientsCollector | Client online status (1 = online, 0 = offline) |
 | `meraki_client_usage_recv_kb` | gauge | ClientsCollector | Kilobytes received by client in the last hour |
 | `meraki_client_usage_sent_kb` | gauge | ClientsCollector | Kilobytes sent by client in the last hour |
@@ -1617,4 +1656,3 @@ All metrics in alphabetical order:
     ```
 
 For more information on using these metrics, see the [Overview](overview.md) page.
-

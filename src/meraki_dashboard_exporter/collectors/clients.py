@@ -217,6 +217,55 @@ class ClientsCollector(MetricCollector):
             ],
         )
 
+        # Client application usage metrics
+        self.client_app_usage_sent = self._create_gauge(
+            ClientMetricName.CLIENT_APPLICATION_USAGE_SENT_KB,
+            "Kilobytes sent by client per application in the last hour",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.CLIENT_ID,
+                LabelName.MAC,
+                LabelName.DESCRIPTION,
+                LabelName.HOSTNAME,
+                LabelName.TYPE,  # For the application type
+            ],
+        )
+
+        self.client_app_usage_recv = self._create_gauge(
+            ClientMetricName.CLIENT_APPLICATION_USAGE_RECV_KB,
+            "Kilobytes received by client per application in the last hour",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.CLIENT_ID,
+                LabelName.MAC,
+                LabelName.DESCRIPTION,
+                LabelName.HOSTNAME,
+                LabelName.TYPE,  # For the application type
+            ],
+        )
+
+        self.client_app_usage_total = self._create_gauge(
+            ClientMetricName.CLIENT_APPLICATION_USAGE_TOTAL_KB,
+            "Total kilobytes transferred by client per application in the last hour",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.CLIENT_ID,
+                LabelName.MAC,
+                LabelName.DESCRIPTION,
+                LabelName.HOSTNAME,
+                LabelName.TYPE,  # For the application type
+            ],
+        )
+
     async def _collect_impl(self) -> None:
         """Collect client metrics from all organizations and networks."""
         if not self._enabled:
@@ -366,6 +415,11 @@ class ClientsCollector(MetricCollector):
         # Update metrics
         await self._update_metrics(org_id, org_name, network_id, network_name, clients, hostnames)
 
+        # Collect application usage data
+        await self._collect_application_usage(
+            org_id, org_name, network_id, network_name, clients, hostnames
+        )
+
     def _sanitize_label_value(self, value: str | None, max_length: int = 2048) -> str:
         """Sanitize a label value for Prometheus.
 
@@ -430,6 +484,59 @@ class ClientsCollector(MetricCollector):
         sanitized = sanitized.replace(" - ", "_")
         sanitized = sanitized.replace(" ", "_")
         sanitized = sanitized.replace("-", "_")
+
+        # Remove any remaining non-alphanumeric characters except underscores
+        result = ""
+        for char in sanitized:
+            if char.isalnum() or char == "_":
+                result += char
+
+        # Clean up multiple consecutive underscores
+        while "__" in result:
+            result = result.replace("__", "_")
+
+        # Remove leading/trailing underscores
+        result = result.strip("_")
+
+        return result if result else "unknown"
+
+    def _sanitize_application_name(self, app_name: str | None) -> str:
+        """Sanitize application name for use as a metric label.
+
+        Converts application names like "Google HTTPS" to a more
+        metric-friendly format like "google_https".
+
+        Parameters
+        ----------
+        app_name : str | None
+            Application name from Meraki API.
+
+        Returns
+        -------
+        str
+            Sanitized application name suitable for metric labels.
+
+        """
+        if not app_name:
+            return "unknown"
+
+        # Convert to lowercase
+        sanitized = app_name.lower()
+
+        # Replace common patterns
+        sanitized = sanitized.replace(" - ", "_")
+        sanitized = sanitized.replace(" ", "_")
+        sanitized = sanitized.replace("-", "_")
+        sanitized = sanitized.replace("(", "_")
+        sanitized = sanitized.replace(")", "_")
+        sanitized = sanitized.replace("/", "_")
+        sanitized = sanitized.replace("\\", "_")
+        sanitized = sanitized.replace(".", "_")
+        sanitized = sanitized.replace(",", "_")
+        sanitized = sanitized.replace(":", "_")
+        sanitized = sanitized.replace(";", "_")
+        sanitized = sanitized.replace("'", "")
+        sanitized = sanitized.replace('"', "")
 
         # Remove any remaining non-alphanumeric characters except underscores
         result = ""
@@ -640,6 +747,140 @@ class ClientsCollector(MetricCollector):
                 count=count,
                 network_id=network_id,
             )
+
+    @with_error_handling(
+        operation="Collect application usage",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    @log_api_call("getNetworkClientsApplicationUsage")
+    async def _collect_application_usage(
+        self,
+        org_id: str,
+        org_name: str,
+        network_id: str,
+        network_name: str,
+        clients: list[NetworkClient],
+        hostnames: dict[str, str | None],
+    ) -> None:
+        """Collect application usage data for clients.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        network_id : str
+            Network ID.
+        network_name : str
+            Network name.
+        clients : list[NetworkClient]
+            List of clients.
+        hostnames : dict[str, str | None]
+            Resolved hostnames by IP.
+
+        """
+        if not clients:
+            return
+
+        # Extract client IDs
+        client_ids = [client.id for client in clients]
+
+        # Create a lookup map for client data
+        client_map = {client.id: client for client in clients}
+
+        logger.debug(
+            "Fetching application usage data",
+            network_id=network_id,
+            client_count=len(client_ids),
+        )
+
+        # Batch client IDs for API calls (using 1000 per batch as per API limit)
+        batch_size = 1000
+        for i in range(0, len(client_ids), batch_size):
+            batch_ids = client_ids[i : i + batch_size]
+
+            try:
+                self._track_api_call("getNetworkClientsApplicationUsage")
+                usage_data = await asyncio.to_thread(
+                    self.api.networks.getNetworkClientsApplicationUsage,
+                    network_id,
+                    clients=",".join(batch_ids),
+                    timespan=3600,  # 1 hour as requested
+                    perPage=1000,
+                    total_pages="all",
+                )
+
+                # Process usage data for each client
+                for client_usage in usage_data:
+                    client_id = client_usage.get("clientId")
+                    if not client_id or client_id not in client_map:
+                        continue
+
+                    client = client_map[client_id]
+
+                    # Get resolved hostname
+                    resolved_hostname = hostnames.get(client.ip) if client.ip else None
+                    hostname = self._determine_hostname(client, resolved_hostname)
+
+                    # Sanitize label values
+                    sanitized_hostname = self._sanitize_label_value(hostname)
+                    sanitized_description = self._sanitize_label_value(client.description)
+
+                    # Process each application's usage
+                    for app_usage in client_usage.get("applicationUsage", []):
+                        app_name = app_usage.get("application", "unknown")
+                        sanitized_app = self._sanitize_application_name(app_name)
+
+                        received_kb = app_usage.get("received", 0)
+                        sent_kb = app_usage.get("sent", 0)
+                        total_kb = received_kb + sent_kb
+
+                        # Common labels for this client and application
+                        labels = {
+                            str(LabelName.ORG_ID): org_id,
+                            str(LabelName.ORG_NAME): org_name,
+                            str(LabelName.NETWORK_ID): network_id,
+                            str(LabelName.NETWORK_NAME): network_name,
+                            str(LabelName.CLIENT_ID): client_id,
+                            str(LabelName.MAC): client.mac,
+                            str(LabelName.DESCRIPTION): sanitized_description,
+                            str(LabelName.HOSTNAME): sanitized_hostname,
+                            str(LabelName.TYPE): sanitized_app,
+                        }
+
+                        # Set metrics
+                        self.client_app_usage_sent.labels(**labels).set(float(sent_kb))
+                        self.client_app_usage_recv.labels(**labels).set(float(received_kb))
+                        self.client_app_usage_total.labels(**labels).set(float(total_kb))
+
+                        logger.debug(
+                            "Set application usage metrics",
+                            client_id=client_id,
+                            application=app_name,
+                            sanitized_app=sanitized_app,
+                            sent_kb=sent_kb,
+                            received_kb=received_kb,
+                        )
+
+            except Exception as e:
+                logger.error(
+                    "Failed to fetch application usage data",
+                    network_id=network_id,
+                    batch_start=i,
+                    batch_size=len(batch_ids),
+                    error=str(e),
+                )
+                self._track_error(ErrorCategory.API_CLIENT_ERROR)
+                # Continue with next batch
+                continue
+
+        logger.info(
+            "Completed application usage collection",
+            network_id=network_id,
+            client_count=len(client_ids),
+        )
 
     def _update_cache_metrics(self) -> None:
         """Update DNS cache and client store metrics."""
