@@ -16,6 +16,7 @@ from ..core.metrics import LabelName
 from ..core.registry import register_collector
 
 if TYPE_CHECKING:
+
     pass
 
 logger = get_logger(__name__)
@@ -62,6 +63,13 @@ class AlertsCollector(MetricCollector):
             ],
         )
 
+        # Sensor alerts by metric type
+        self._sensor_alerts_total = self._create_gauge(
+            AlertMetricName.SENSOR_ALERTS_TOTAL,
+            "Total number of sensor alerts in the last hour by metric type",
+            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.METRIC],
+        )
+
     async def _collect_impl(self) -> None:
         """Collect alert metrics."""
         start_time = time.time()
@@ -97,6 +105,28 @@ class AlertsCollector(MetricCollector):
             for result in results:
                 if not isinstance(result, Exception):
                     api_calls_made += 1
+
+            # Collect sensor alerts for all networks
+            # First get all networks for all orgs
+            networks = []
+            for org_id in org_ids:
+                org_networks = await self._fetch_networks(org_id)
+                if org_networks:
+                    networks.extend(org_networks)
+                    api_calls_made += 1
+
+            # Collect sensor alerts for each network
+            if networks:
+                sensor_tasks = [
+                    self._collect_network_sensor_alerts(network["id"], network.get("name", "unknown"))
+                    for network in networks
+                ]
+                sensor_results = await asyncio.gather(*sensor_tasks, return_exceptions=True)
+                
+                # Count successful sensor alert collections
+                for result in sensor_results:
+                    if not isinstance(result, Exception):
+                        api_calls_made += 1
 
             # Log collection summary
             duration = time.time() - start_time
@@ -294,3 +324,105 @@ class AlertsCollector(MetricCollector):
         # This is a simplified approach - in production you might want
         # to track and clear specific label combinations
         logger.debug("Clearing previous alert metrics", org_id=org_id)
+
+    @log_api_call("getOrganizationNetworks")
+    @with_error_handling(
+        operation="Fetch networks",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _fetch_networks(self, org_id: str) -> list[dict[str, Any]] | None:
+        """Fetch networks for sensor alerts collection.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]] | None
+            List of networks or None on error.
+
+        """
+        networks = await asyncio.to_thread(
+            self.api.organizations.getOrganizationNetworks,
+            org_id,
+            total_pages="all",
+        )
+        networks = validate_response_format(
+            networks, expected_type=list, operation="getOrganizationNetworks"
+        )
+        return cast(list[dict[str, Any]], networks)
+
+    @log_api_call("getNetworkSensorAlertsOverviewByMetric")
+    @with_error_handling(
+        operation="Collect network sensor alerts",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_NOT_AVAILABLE,
+    )
+    async def _collect_network_sensor_alerts(self, network_id: str, network_name: str) -> None:
+        """Collect sensor alerts for a specific network.
+
+        Parameters
+        ----------
+        network_id : str
+            Network ID.
+        network_name : str
+            Network name.
+
+        """
+        with LogContext(network_id=network_id, network_name=network_name):
+            # Get sensor alerts for the last hour
+            overview = await asyncio.to_thread(
+                self.api.sensor.getNetworkSensorAlertsOverviewByMetric,
+                network_id,
+                timespan=3600,
+                interval=3600,
+            )
+            
+            overview = validate_response_format(
+                overview, expected_type=list, operation="getNetworkSensorAlertsOverviewByMetric"
+            )
+
+            if not overview:
+                logger.debug("No sensor alert data", network_id=network_id)
+                return
+
+            # Process the first (and should be only) interval
+            if overview and len(overview) > 0:
+                latest_interval = overview[0]
+                counts = latest_interval.get("counts", {})
+                
+                # Process each metric type
+                for metric_type, value in counts.items():
+                    # Handle nested noise structure
+                    if metric_type == "noise" and isinstance(value, dict):
+                        # Process nested ambient noise
+                        ambient_value = value.get("ambient", 0)
+                        self._sensor_alerts_total.labels(
+                            network_id=network_id,
+                            network_name=network_name,
+                            metric="noise_ambient",
+                        ).set(ambient_value)
+                    elif isinstance(value, (int, float)):
+                        # Process regular numeric values
+                        self._sensor_alerts_total.labels(
+                            network_id=network_id,
+                            network_name=network_name,
+                            metric=metric_type,
+                        ).set(value)
+                    else:
+                        logger.warning(
+                            "Unexpected sensor alert count format",
+                            network_id=network_id,
+                            metric_type=metric_type,
+                            value_type=type(value).__name__,
+                        )
+                
+                logger.debug(
+                    "Collected sensor alert metrics",
+                    network_id=network_id,
+                    network_name=network_name,
+                    metric_count=len(counts),
+                )
