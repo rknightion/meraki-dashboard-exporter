@@ -244,3 +244,7 @@ class ClientMetricName(StrEnum):
     CLIENT_APPLICATION_USAGE_SENT_KB = "meraki_client_application_usage_sent_kb"
     CLIENT_APPLICATION_USAGE_RECV_KB = "meraki_client_application_usage_recv_kb"
     CLIENT_APPLICATION_USAGE_TOTAL_KB = "meraki_client_application_usage_total_kb"
+
+    # Wireless client signal quality metrics
+    WIRELESS_CLIENT_RSSI = "meraki_wireless_client_rssi"
+    WIRELESS_CLIENT_SNR = "meraki_wireless_client_snr"

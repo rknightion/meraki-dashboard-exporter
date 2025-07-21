@@ -266,6 +266,39 @@ class ClientsCollector(MetricCollector):
             ],
         )
 
+        # Wireless client signal quality metrics
+        self.wireless_client_rssi = self._create_gauge(
+            ClientMetricName.WIRELESS_CLIENT_RSSI,
+            "Wireless client RSSI (Received Signal Strength Indicator) in dBm",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.CLIENT_ID,
+                LabelName.MAC,
+                LabelName.DESCRIPTION,
+                LabelName.HOSTNAME,
+                LabelName.SSID,
+            ],
+        )
+
+        self.wireless_client_snr = self._create_gauge(
+            ClientMetricName.WIRELESS_CLIENT_SNR,
+            "Wireless client SNR (Signal-to-Noise Ratio) in dB",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.CLIENT_ID,
+                LabelName.MAC,
+                LabelName.DESCRIPTION,
+                LabelName.HOSTNAME,
+                LabelName.SSID,
+            ],
+        )
+
     async def _collect_impl(self) -> None:
         """Collect client metrics from all organizations and networks."""
         if not self._enabled:
@@ -417,6 +450,11 @@ class ClientsCollector(MetricCollector):
 
         # Collect application usage data
         await self._collect_application_usage(
+            org_id, org_name, network_id, network_name, clients, hostnames
+        )
+
+        # Collect wireless signal quality data
+        await self._collect_wireless_signal_quality(
             org_id, org_name, network_id, network_name, clients, hostnames
         )
 
@@ -880,6 +918,144 @@ class ClientsCollector(MetricCollector):
             "Completed application usage collection",
             network_id=network_id,
             client_count=len(client_ids),
+        )
+
+    @with_error_handling(
+        operation="Collect wireless signal quality",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    @log_api_call("getNetworkWirelessSignalQualityHistory")
+    async def _collect_wireless_signal_quality(
+        self,
+        org_id: str,
+        org_name: str,
+        network_id: str,
+        network_name: str,
+        clients: list[NetworkClient],
+        hostnames: dict[str, str | None],
+    ) -> None:
+        """Collect wireless signal quality data for clients.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        network_id : str
+            Network ID.
+        network_name : str
+            Network name.
+        clients : list[NetworkClient]
+            List of clients.
+        hostnames : dict[str, str | None]
+            Resolved hostnames by IP.
+
+        """
+        # Filter to only wireless clients
+        wireless_clients = [
+            client for client in clients if client.recentDeviceConnection == "Wireless"
+        ]
+
+        if not wireless_clients:
+            logger.debug("No wireless clients found in network", network_id=network_id)
+            return
+
+        logger.debug(
+            "Fetching wireless signal quality data",
+            network_id=network_id,
+            wireless_client_count=len(wireless_clients),
+        )
+
+        # Process each wireless client individually
+        for client in wireless_clients:
+            try:
+                self._track_api_call("getNetworkWirelessSignalQualityHistory")
+                signal_data = await asyncio.to_thread(
+                    self.api.wireless.getNetworkWirelessSignalQualityHistory,
+                    network_id,
+                    clientId=client.id,
+                    timespan=300,  # 5 minutes as required
+                    resolution=300,  # 5 minutes as required
+                )
+
+                if not signal_data:
+                    logger.debug(
+                        "No signal quality data returned",
+                        client_id=client.id,
+                        network_id=network_id,
+                    )
+                    continue
+
+                # Get the most recent data point
+                latest_data = signal_data[-1] if signal_data else None
+
+                if not latest_data:
+                    continue
+
+                # Extract signal quality values
+                rssi = latest_data.get("rssi")
+                snr = latest_data.get("snr")
+
+                if rssi is None and snr is None:
+                    logger.debug(
+                        "No RSSI or SNR data in response",
+                        client_id=client.id,
+                    )
+                    continue
+
+                # Get resolved hostname
+                resolved_hostname = hostnames.get(client.ip) if client.ip else None
+                hostname = self._determine_hostname(client, resolved_hostname)
+
+                # Sanitize label values
+                sanitized_hostname = self._sanitize_label_value(hostname)
+                sanitized_description = self._sanitize_label_value(client.description)
+
+                # Common labels
+                labels = {
+                    str(LabelName.ORG_ID): org_id,
+                    str(LabelName.ORG_NAME): org_name,
+                    str(LabelName.NETWORK_ID): network_id,
+                    str(LabelName.NETWORK_NAME): network_name,
+                    str(LabelName.CLIENT_ID): client.id,
+                    str(LabelName.MAC): client.mac,
+                    str(LabelName.DESCRIPTION): sanitized_description,
+                    str(LabelName.HOSTNAME): sanitized_hostname,
+                    str(LabelName.SSID): client.ssid or "Unknown",
+                }
+
+                # Set metrics
+                if rssi is not None:
+                    self.wireless_client_rssi.labels(**labels).set(float(rssi))
+
+                if snr is not None:
+                    self.wireless_client_snr.labels(**labels).set(float(snr))
+
+                logger.debug(
+                    "Set wireless signal quality metrics",
+                    client_id=client.id,
+                    rssi=rssi,
+                    snr=snr,
+                    ssid=client.ssid,
+                )
+
+            except Exception as e:
+                logger.error(
+                    "Failed to fetch signal quality for client",
+                    client_id=client.id,
+                    network_id=network_id,
+                    error=str(e),
+                )
+                self._track_error(ErrorCategory.API_CLIENT_ERROR)
+                # Continue with next client
+                continue
+
+        logger.info(
+            "Completed wireless signal quality collection",
+            network_id=network_id,
+            wireless_client_count=len(wireless_clients),
         )
 
     def _update_cache_metrics(self) -> None:
