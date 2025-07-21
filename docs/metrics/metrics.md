@@ -9,7 +9,7 @@ The exporter provides metrics across several categories:
 | Collector | Metrics | Description |
 |-----------|---------|-------------|
 | AlertsCollector | 3 | Active alerts by severity, type, and category |
-| ClientsCollector | 19 | Detailed client-level metrics including usage and status |
+| ClientsCollector | 21 | Detailed client-level metrics including usage and status |
 | ConfigCollector | 14 | Organization security settings and configuration tracking |
 | DeviceCollector | 10 | Device status, performance, and uptime metrics |
 | MRCollector | 33 | Access point metrics including clients, power, and performance |
@@ -255,6 +255,30 @@ The exporter provides metrics across several categories:
 **Constant:** `ClientMetricName.WIRELESS_CLIENT_CAPABILITIES_COUNT`
 
 **Variable:** `self.client_capabilities_count` (line 183)
+
+#### `meraki_wireless_client_rssi`
+
+**Description:** Wireless client RSSI (Received Signal Strength Indicator) in dBm
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.SSID`
+
+**Constant:** `ClientMetricName.WIRELESS_CLIENT_RSSI`
+
+**Variable:** `self.wireless_client_rssi` (line 270)
+
+#### `meraki_wireless_client_snr`
+
+**Description:** Wireless client SNR (Signal-to-Noise Ratio) in dB
+
+**Type:** gauge
+
+**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.SSID`
+
+**Constant:** `ClientMetricName.WIRELESS_CLIENT_SNR`
+
+**Variable:** `self.wireless_client_snr` (line 286)
 
 ### ConfigCollector
 
@@ -1637,6 +1661,8 @@ All metrics in alphabetical order:
 | `meraki_org_usage_total_kb` | gauge | OrganizationCollector | Total data usage in KB for the 1-hour window |
 | `meraki_org_usage_upstream_kb` | gauge | OrganizationCollector | Upstream data usage in KB for the 1-hour window |
 | `meraki_wireless_client_capabilities_count` | gauge | ClientsCollector | Count of wireless clients by capability |
+| `meraki_wireless_client_rssi` | gauge | ClientsCollector | Wireless client RSSI (Received Signal Strength Indicator) in dBm |
+| `meraki_wireless_client_snr` | gauge | ClientsCollector | Wireless client SNR (Signal-to-Noise Ratio) in dB |
 
 ## Notes
 
@@ -1656,3 +1682,4 @@ All metrics in alphabetical order:
     ```
 
 For more information on using these metrics, see the [Overview](overview.md) page.
+
