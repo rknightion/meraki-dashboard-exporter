@@ -239,3 +239,8 @@ class ClientMetricName(StrEnum):
     # Client distribution metrics
     CLIENTS_PER_SSID_COUNT = "meraki_clients_per_ssid_count"
     CLIENTS_PER_VLAN_COUNT = "meraki_clients_per_vlan_count"
+
+    # Client application usage metrics
+    CLIENT_APPLICATION_USAGE_SENT_KB = "meraki_client_application_usage_sent_kb"
+    CLIENT_APPLICATION_USAGE_RECV_KB = "meraki_client_application_usage_recv_kb"
+    CLIENT_APPLICATION_USAGE_TOTAL_KB = "meraki_client_application_usage_total_kb"
