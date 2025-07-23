@@ -113,7 +113,7 @@ class MSMetricName(StrEnum):
     # Additional port metrics
     MS_PORT_USAGE_BYTES = "meraki_ms_port_usage_bytes"
     MS_PORT_CLIENT_COUNT = "meraki_ms_port_client_count"
-    
+
     # Packet metrics (with 5-minute window)
     MS_PORT_PACKETS_TOTAL = "meraki_ms_port_packets_total"
     MS_PORT_PACKETS_BROADCAST = "meraki_ms_port_packets_broadcast"
@@ -122,7 +122,7 @@ class MSMetricName(StrEnum):
     MS_PORT_PACKETS_FRAGMENTS = "meraki_ms_port_packets_fragments"
     MS_PORT_PACKETS_COLLISIONS = "meraki_ms_port_packets_collisions"
     MS_PORT_PACKETS_TOPOLOGYCHANGES = "meraki_ms_port_packets_topologychanges"
-    
+
     # Packet rate metrics (packets per second)
     MS_PORT_PACKETS_RATE_TOTAL = "meraki_ms_port_packets_rate_total"
     MS_PORT_PACKETS_RATE_BROADCAST = "meraki_ms_port_packets_rate_broadcast"

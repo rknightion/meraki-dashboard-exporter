@@ -231,25 +231,16 @@ class TestMSCollector:
             "net1": {
                 "rstpEnabled": True,
                 "stpBridgePriority": [
-                    {
-                        "switches": ["Q2MW-42Z2-JE5T"],
-                        "stpPriority": 8192
-                    },
-                    {
-                        "switches": ["Q2BX-Q43Y-RR5C"],
-                        "stpPriority": 32768
-                    }
-                ]
+                    {"switches": ["Q2MW-42Z2-JE5T"], "stpPriority": 8192},
+                    {"switches": ["Q2BX-Q43Y-RR5C"], "stpPriority": 32768},
+                ],
             },
             "net2": {
                 "rstpEnabled": True,
                 "stpBridgePriority": [
-                    {
-                        "switches": ["Q2HP-F6VX-M24J", "Q2HP-K4VW-87YT"],
-                        "stpPriority": 32768
-                    }
-                ]
-            }
+                    {"switches": ["Q2HP-F6VX-M24J", "Q2HP-K4VW-87YT"], "stpPriority": 32768}
+                ],
+            },
         }
 
         def get_network_stp(network_id):
@@ -288,9 +279,7 @@ class TestMSCollector:
         )
 
         # Make STP API call fail
-        mock_api.switch.getNetworkSwitchStp = MagicMock(
-            side_effect=Exception("API Error")
-        )
+        mock_api.switch.getNetworkSwitchStp = MagicMock(side_effect=Exception("API Error"))
 
         # Should not raise due to error handling
         await ms_collector.collect_stp_priorities("org123", {})
@@ -322,7 +311,7 @@ class TestMSCollector:
                     "clientCount": 10,
                     "usageInKb": {
                         "recv": 1000000,  # 1GB
-                        "sent": 500000,   # 500MB
+                        "sent": 500000,  # 500MB
                         "total": 1500000,  # 1.5GB
                     },
                     "trafficInKbps": {
@@ -359,7 +348,7 @@ class TestMSCollector:
         # - Usage bytes metric is set with correct values
         # - Client count metric is set correctly
         # - All metrics have network_id and network_name labels
-    
+
     async def test_packet_statistics_collection(
         self,
         ms_collector: MSCollector,
@@ -374,7 +363,7 @@ class TestMSCollector:
             "networkId": "net1",
             "networkName": "Test Network",
         }
-        
+
         # Mock packet statistics response
         mock_api.switch.getDeviceSwitchPortsStatusesPackets = MagicMock(
             return_value=[
@@ -479,18 +468,18 @@ class TestMSCollector:
                 },
             ]
         )
-        
+
         # Mock getDeviceSwitchPortsStatuses to succeed
         mock_api.switch.getDeviceSwitchPortsStatuses = MagicMock(return_value=[])
-        
+
         # Run collection
         await ms_collector.collect(device)
-        
+
         # Verify packet API was called with correct timespan
         mock_api.switch.getDeviceSwitchPortsStatusesPackets.assert_called_once_with(
             "Q123-456-789", timespan=300
         )
-    
+
     async def test_packet_statistics_handles_missing_data(
         self,
         ms_collector: MSCollector,
@@ -505,7 +494,7 @@ class TestMSCollector:
             "networkId": "net1",
             "networkName": "Test Network",
         }
-        
+
         # Mock response with missing fields
         mock_api.switch.getDeviceSwitchPortsStatusesPackets = MagicMock(
             return_value=[
@@ -532,13 +521,13 @@ class TestMSCollector:
                 },
             ]
         )
-        
+
         # Mock getDeviceSwitchPortsStatuses to succeed
         mock_api.switch.getDeviceSwitchPortsStatuses = MagicMock(return_value=[])
-        
+
         # Should not raise errors
         await ms_collector.collect(device)
-    
+
     async def test_packet_statistics_api_error(
         self,
         ms_collector: MSCollector,
@@ -553,18 +542,18 @@ class TestMSCollector:
             "networkId": "net1",
             "networkName": "Test Network",
         }
-        
+
         # Mock getDeviceSwitchPortsStatuses to succeed
         mock_api.switch.getDeviceSwitchPortsStatuses = MagicMock(return_value=[])
-        
+
         # Make packet API call fail
         mock_api.switch.getDeviceSwitchPortsStatusesPackets = MagicMock(
             side_effect=Exception("API Error")
         )
-        
+
         # Should not raise due to error handling decorator
         await ms_collector.collect(device)
-        
+
         # Verify the packet API was attempted
         mock_api.switch.getDeviceSwitchPortsStatusesPackets.assert_called_once_with(
             "Q111", timespan=300

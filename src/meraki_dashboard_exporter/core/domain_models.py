@@ -147,7 +147,7 @@ class STPConfiguration(BaseModel):
     rstpEnabled: bool = True
     stpBridgePriority: list[dict[str, Any]] = Field(default_factory=list)
 
-    @computed_field  # type: ignore[misc]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def switch_priorities(self) -> dict[str, int]:
         """Get a mapping of switch serial to STP priority."""
