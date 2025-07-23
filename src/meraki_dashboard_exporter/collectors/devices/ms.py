@@ -126,7 +126,7 @@ class MSCollector(BaseDeviceCollector):
             "Switch STP (Spanning Tree Protocol) priority",
             labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID],
         )
-        
+
         # Packet count metrics (5-minute window)
         packet_labels = [
             LabelName.SERIAL.value,
@@ -137,86 +137,86 @@ class MSCollector(BaseDeviceCollector):
             LabelName.PORT_NAME.value,
             LabelName.DIRECTION.value,
         ]
-        
+
         self._switch_port_packets_total = self.parent._create_gauge(
             MSMetricName.MS_PORT_PACKETS_TOTAL,
             "Total packets on switch port (5-minute window)",
             labelnames=packet_labels,
         )
-        
+
         self._switch_port_packets_broadcast = self.parent._create_gauge(
             MSMetricName.MS_PORT_PACKETS_BROADCAST,
             "Broadcast packets on switch port (5-minute window)",
             labelnames=packet_labels,
         )
-        
+
         self._switch_port_packets_multicast = self.parent._create_gauge(
             MSMetricName.MS_PORT_PACKETS_MULTICAST,
             "Multicast packets on switch port (5-minute window)",
             labelnames=packet_labels,
         )
-        
+
         self._switch_port_packets_crcerrors = self.parent._create_gauge(
             MSMetricName.MS_PORT_PACKETS_CRCERRORS,
             "CRC align error packets on switch port (5-minute window)",
             labelnames=packet_labels,
         )
-        
+
         self._switch_port_packets_fragments = self.parent._create_gauge(
             MSMetricName.MS_PORT_PACKETS_FRAGMENTS,
             "Fragment packets on switch port (5-minute window)",
             labelnames=packet_labels,
         )
-        
+
         self._switch_port_packets_collisions = self.parent._create_gauge(
             MSMetricName.MS_PORT_PACKETS_COLLISIONS,
             "Collision packets on switch port (5-minute window)",
             labelnames=packet_labels,
         )
-        
+
         self._switch_port_packets_topologychanges = self.parent._create_gauge(
             MSMetricName.MS_PORT_PACKETS_TOPOLOGYCHANGES,
             "Topology change packets on switch port (5-minute window)",
             labelnames=packet_labels,
         )
-        
+
         # Packet rate metrics (packets per second)
         self._switch_port_packets_rate_total = self.parent._create_gauge(
             MSMetricName.MS_PORT_PACKETS_RATE_TOTAL,
             "Total packet rate on switch port (packets per second, 5-minute average)",
             labelnames=packet_labels,
         )
-        
+
         self._switch_port_packets_rate_broadcast = self.parent._create_gauge(
             MSMetricName.MS_PORT_PACKETS_RATE_BROADCAST,
             "Broadcast packet rate on switch port (packets per second, 5-minute average)",
             labelnames=packet_labels,
         )
-        
+
         self._switch_port_packets_rate_multicast = self.parent._create_gauge(
             MSMetricName.MS_PORT_PACKETS_RATE_MULTICAST,
             "Multicast packet rate on switch port (packets per second, 5-minute average)",
             labelnames=packet_labels,
         )
-        
+
         self._switch_port_packets_rate_crcerrors = self.parent._create_gauge(
             MSMetricName.MS_PORT_PACKETS_RATE_CRCERRORS,
             "CRC align error packet rate on switch port (packets per second, 5-minute average)",
             labelnames=packet_labels,
         )
-        
+
         self._switch_port_packets_rate_fragments = self.parent._create_gauge(
             MSMetricName.MS_PORT_PACKETS_RATE_FRAGMENTS,
             "Fragment packet rate on switch port (packets per second, 5-minute average)",
             labelnames=packet_labels,
         )
-        
+
         self._switch_port_packets_rate_collisions = self.parent._create_gauge(
             MSMetricName.MS_PORT_PACKETS_RATE_COLLISIONS,
             "Collision packet rate on switch port (packets per second, 5-minute average)",
             labelnames=packet_labels,
         )
-        
+
         self._switch_port_packets_rate_topologychanges = self.parent._create_gauge(
             MSMetricName.MS_PORT_PACKETS_RATE_TOPOLOGYCHANGES,
             "Topology change packet rate on switch port (packets per second, 5-minute average)",
@@ -263,7 +263,7 @@ class MSCollector(BaseDeviceCollector):
                 is_connected = 1 if port.get("status") == "Connected" else 0
                 speed = port.get("speed", "")  # e.g., "1 Gbps", "100 Mbps"
                 duplex = port.get("duplex", "")  # e.g., "full", "half"
-                
+
                 self._switch_port_status.labels(
                     serial=serial,
                     name=name,
@@ -400,7 +400,7 @@ class MSCollector(BaseDeviceCollector):
             ).set(total_poe_consumption)
 
             # Note: POE budget is not available via API, would need a lookup table by model
-            
+
             # Collect packet statistics
             await self._collect_packet_statistics(device)
 
@@ -440,9 +440,7 @@ class MSCollector(BaseDeviceCollector):
                 )
 
             # Filter to only networks with switches
-            switch_networks = [
-                n for n in networks if "switch" in n.get("productTypes", [])
-            ]
+            switch_networks = [n for n in networks if "switch" in n.get("productTypes", [])]
 
             logger.debug(
                 "Found switch networks for STP collection",
@@ -457,7 +455,7 @@ class MSCollector(BaseDeviceCollector):
             # Collect STP data for each network
             for network in switch_networks:
                 network_id = network["id"]
-                
+
                 try:
                     # Fetch STP configuration for the network
                     with LogContext(network_id=network_id):
@@ -501,7 +499,7 @@ class MSCollector(BaseDeviceCollector):
                 "Failed to collect STP priorities",
                 org_id=org_id,
             )
-    
+
     @log_api_call("getDeviceSwitchPortsStatusesPackets")
     @with_error_handling(
         operation="Collect MS packet statistics",
@@ -509,18 +507,18 @@ class MSCollector(BaseDeviceCollector):
     )
     async def _collect_packet_statistics(self, device: dict[str, Any]) -> None:
         """Collect packet statistics for a switch.
-        
+
         Parameters
         ----------
         device : dict[str, Any]
             Switch device data.
-            
+
         """
         serial = device["serial"]
         name = device.get("name", serial)
         network_id = device.get("networkId", "")
         network_name = device.get("networkName", network_id)
-        
+
         try:
             # Get packet statistics with 5-minute timespan
             with LogContext(serial=serial, name=name):
@@ -530,38 +528,58 @@ class MSCollector(BaseDeviceCollector):
                     timespan=300,  # 5-minute window
                 )
                 packet_stats = validate_response_format(
-                    packet_stats, expected_type=list, operation="getDeviceSwitchPortsStatusesPackets"
+                    packet_stats,
+                    expected_type=list,
+                    operation="getDeviceSwitchPortsStatusesPackets",
                 )
-            
+
             # Mapping of API descriptions to metric types
             metric_map = {
                 "Total": (self._switch_port_packets_total, self._switch_port_packets_rate_total),
-                "Broadcast": (self._switch_port_packets_broadcast, self._switch_port_packets_rate_broadcast),
-                "Multicast": (self._switch_port_packets_multicast, self._switch_port_packets_rate_multicast),
-                "CRC align errors": (self._switch_port_packets_crcerrors, self._switch_port_packets_rate_crcerrors),
-                "Fragments": (self._switch_port_packets_fragments, self._switch_port_packets_rate_fragments),
-                "Collisions": (self._switch_port_packets_collisions, self._switch_port_packets_rate_collisions),
-                "Topology changes": (self._switch_port_packets_topologychanges, self._switch_port_packets_rate_topologychanges),
+                "Broadcast": (
+                    self._switch_port_packets_broadcast,
+                    self._switch_port_packets_rate_broadcast,
+                ),
+                "Multicast": (
+                    self._switch_port_packets_multicast,
+                    self._switch_port_packets_rate_multicast,
+                ),
+                "CRC align errors": (
+                    self._switch_port_packets_crcerrors,
+                    self._switch_port_packets_rate_crcerrors,
+                ),
+                "Fragments": (
+                    self._switch_port_packets_fragments,
+                    self._switch_port_packets_rate_fragments,
+                ),
+                "Collisions": (
+                    self._switch_port_packets_collisions,
+                    self._switch_port_packets_rate_collisions,
+                ),
+                "Topology changes": (
+                    self._switch_port_packets_topologychanges,
+                    self._switch_port_packets_rate_topologychanges,
+                ),
             }
-            
+
             for port_data in packet_stats:
                 port_id = str(port_data.get("portId", ""))
                 # Use the port name from the port status call if available
                 port_name = f"Port {port_id}"
-                
+
                 packets = port_data.get("packets", [])
-                
+
                 for packet_type in packets:
                     desc = packet_type.get("desc", "")
-                    
+
                     if desc in metric_map:
                         count_metric, rate_metric = metric_map[desc]
-                        
+
                         # Total counts
                         total = packet_type.get("total", 0)
                         sent = packet_type.get("sent", 0)
                         recv = packet_type.get("recv", 0)
-                        
+
                         # Set count metrics
                         count_metric.labels(
                             serial=serial,
@@ -572,7 +590,7 @@ class MSCollector(BaseDeviceCollector):
                             port_name=port_name,
                             direction="total",
                         ).set(total)
-                        
+
                         count_metric.labels(
                             serial=serial,
                             name=name,
@@ -582,7 +600,7 @@ class MSCollector(BaseDeviceCollector):
                             port_name=port_name,
                             direction="sent",
                         ).set(sent)
-                        
+
                         count_metric.labels(
                             serial=serial,
                             name=name,
@@ -592,13 +610,13 @@ class MSCollector(BaseDeviceCollector):
                             port_name=port_name,
                             direction="recv",
                         ).set(recv)
-                        
+
                         # Rate per second
                         rate_data = packet_type.get("ratePerSec", {})
                         rate_total = rate_data.get("total", 0)
                         rate_sent = rate_data.get("sent", 0)
                         rate_recv = rate_data.get("recv", 0)
-                        
+
                         # Set rate metrics
                         rate_metric.labels(
                             serial=serial,
@@ -609,7 +627,7 @@ class MSCollector(BaseDeviceCollector):
                             port_name=port_name,
                             direction="total",
                         ).set(rate_total)
-                        
+
                         rate_metric.labels(
                             serial=serial,
                             name=name,
@@ -619,7 +637,7 @@ class MSCollector(BaseDeviceCollector):
                             port_name=port_name,
                             direction="sent",
                         ).set(rate_sent)
-                        
+
                         rate_metric.labels(
                             serial=serial,
                             name=name,
@@ -629,14 +647,14 @@ class MSCollector(BaseDeviceCollector):
                             port_name=port_name,
                             direction="recv",
                         ).set(rate_recv)
-            
+
             logger.debug(
                 "Collected packet statistics",
                 serial=serial,
                 name=name,
                 port_count=len(packet_stats),
             )
-            
+
         except Exception:
             logger.exception(
                 "Failed to collect packet statistics",
