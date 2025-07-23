@@ -341,7 +341,9 @@ class DeviceCollector(MetricCollector):
                 a["serial"]: a.get("status", DEFAULT_DEVICE_STATUS) for a in availabilities
             }
 
-            # Track network POE usage (removed for now - not implemented)
+            # Fetch network information for adding network names to devices
+            networks = await self._fetch_networks_for_poe(org_id)
+            network_map = {n["id"]: n["name"] for n in networks}
 
             # Group devices by type for batch processing
             devices_by_type: dict[DeviceType, list[dict[str, Any]]] = {}
@@ -351,10 +353,12 @@ class DeviceCollector(MetricCollector):
 
                 # Add to device lookup map
                 serial = device["serial"]
+                network_id = device.get("networkId", "")
                 self._device_lookup[serial] = {
                     "name": device.get("name", serial),
                     "model": device.get("model", "Unknown"),
-                    "network_id": device.get("networkId", ""),
+                    "network_id": network_id,
+                    "network_name": network_map.get(network_id, network_id),
                     "device_type": device_type_str,
                 }
 
@@ -375,6 +379,10 @@ class DeviceCollector(MetricCollector):
                 device["availability_status"] = availability_map.get(
                     device["serial"], DEFAULT_DEVICE_STATUS
                 )
+
+                # Add network name to device data
+                network_id = device.get("networkId", "")
+                device["networkName"] = network_map.get(network_id, network_id)
 
                 # Collect common metrics
                 self._collect_common_metrics(device)
@@ -459,6 +467,11 @@ class DeviceCollector(MetricCollector):
             if any(d for d in devices if d.get("model", "").startswith(DeviceType.MR)):
                 # Use MR collector for all MR-specific metrics
                 await self._collect_mr_specific_metrics(org_id, devices)
+
+            # Collect MS-specific metrics
+            if any(d for d in devices if d.get("model", "").startswith(DeviceType.MS)):
+                # Use MS collector for all MS-specific metrics
+                await self._collect_ms_specific_metrics(org_id, devices)
 
         except Exception as e:
             logger.exception(
@@ -583,6 +596,31 @@ class DeviceCollector(MetricCollector):
         except Exception:
             logger.exception(
                 "Failed to collect MR-specific metrics",
+                org_id=org_id,
+            )
+
+    async def _collect_ms_specific_metrics(
+        self, org_id: str, devices: list[dict[str, Any]]
+    ) -> None:
+        """Collect MS-specific organization-wide metrics.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        devices : list[dict[str, Any]]
+            All devices in the organization.
+
+        """
+        try:
+            # Collect STP metrics
+            try:
+                await self.ms_collector.collect_stp_priorities(org_id, self._device_lookup)
+            except Exception:
+                logger.exception("Failed to collect STP priorities")
+        except Exception:
+            logger.exception(
+                "Failed to collect MS-specific metrics",
                 org_id=org_id,
             )
 
