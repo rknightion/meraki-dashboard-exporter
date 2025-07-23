@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
@@ -53,22 +54,28 @@ class BluetoothCollector(BaseNetworkHealthCollector):
         """
         network_id = network["id"]
         network_name = network.get("name", network_id)
+        org_id = network.get("orgId", "")
+        org_name = network.get("orgName", org_id)
 
         try:
-            with LogContext(network_id=network_id, network_name=network_name):
+            with LogContext(network_id=network_id, network_name=network_name, org_id=org_id):
                 # Get Bluetooth clients for the last 5 minutes with page size 1000
                 bluetooth_clients = await self._fetch_bluetooth_clients(network_id)
 
             # Count the total number of Bluetooth clients
             client_count = len(bluetooth_clients) if bluetooth_clients else 0
 
+            # Create network labels using helper
+            labels = create_network_labels(
+                network,
+                org_id=org_id,
+                org_name=org_name,
+            )
+
             # Set the metric
             self._set_metric_value(
                 "_network_bluetooth_clients_total",
-                {
-                    "network_id": network_id,
-                    "network_name": network_name,
-                },
+                labels,
                 client_count,
             )
 
@@ -82,13 +89,17 @@ class BluetoothCollector(BaseNetworkHealthCollector):
                     network_name=network_name,
                     error=error_str,
                 )
+                # Create network labels using helper
+                labels = create_network_labels(
+                    network,
+                    org_id=org_id,
+                    org_name=org_name,
+                )
+
                 # Set metric to 0 when API is not available
                 self._set_metric_value(
                     "_network_bluetooth_clients_total",
-                    {
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    labels,
                     0,
                 )
             else:

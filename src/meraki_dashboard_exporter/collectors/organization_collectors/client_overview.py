@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
@@ -122,40 +123,32 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                     upstream_kb=upstream_kb,
                 )
 
+                # Create org labels using helper
+                org_data = {"id": org_id, "name": org_name}
+                org_labels = create_org_labels(org_data)
+
                 # Set metrics
                 self._set_metric_value(
                     "_clients_total",
-                    {
-                        "org_id": org_id,
-                        "org_name": org_name,
-                    },
+                    org_labels,
                     total_clients,
                 )
 
                 self._set_metric_value(
                     "_usage_total_kb",
-                    {
-                        "org_id": org_id,
-                        "org_name": org_name,
-                    },
+                    org_labels,
                     total_kb,
                 )
 
                 self._set_metric_value(
                     "_usage_downstream_kb",
-                    {
-                        "org_id": org_id,
-                        "org_name": org_name,
-                    },
+                    org_labels,
                     downstream_kb,
                 )
 
                 self._set_metric_value(
                     "_usage_upstream_kb",
-                    {
-                        "org_id": org_id,
-                        "org_name": org_name,
-                    },
+                    org_labels,
                     upstream_kb,
                 )
 

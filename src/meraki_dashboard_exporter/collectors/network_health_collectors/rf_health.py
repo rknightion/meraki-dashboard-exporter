@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from ...core.constants import DeviceType, ProductType
 from ...core.domain_models import RFHealthData
+from ...core.label_helpers import create_device_labels, create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
@@ -80,7 +81,8 @@ class RFHealthCollector(BaseNetworkHealthCollector):
         """
         network_id = network["id"]
         network_name = network.get("name", network_id)
-        org_id = network.get("organizationId")
+        org_id = network.get("orgId") or network.get("organizationId", "")
+        org_name = network.get("orgName", org_id)
 
         try:
             with LogContext(network_id=network_id, network_name=network_name):
@@ -133,45 +135,43 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                         wifi_util = latest_2_4.get("wifi", 0)
                         non_wifi_util = latest_2_4.get("nonWifi", 0)
 
+                        # Create device labels using helper
+                        device_data = {
+                            "serial": serial,
+                            "name": name,
+                            "model": model,
+                            "networkId": network_id,
+                            "networkName": network_name,
+                        }
+
+                        # Create base labels including device_type
+                        base_labels = create_device_labels(
+                            device_data,
+                            org_id=org_id,
+                            org_name=org_name,
+                        )
+
                         # Set per-AP metrics for total utilization
+                        labels = {**base_labels, "utilization_type": "total"}
                         self._set_metric_value(
                             "_ap_utilization_2_4ghz",
-                            {
-                                "network_id": network_id,
-                                "network_name": network_name,
-                                "serial": serial,
-                                "name": name,
-                                "model": model,
-                                "type": "total",
-                            },
+                            labels,
                             total_util,
                         )
 
                         # Set per-AP metrics for WiFi utilization
+                        labels = {**base_labels, "utilization_type": "wifi"}
                         self._set_metric_value(
                             "_ap_utilization_2_4ghz",
-                            {
-                                "network_id": network_id,
-                                "network_name": network_name,
-                                "serial": serial,
-                                "name": name,
-                                "model": model,
-                                "type": "wifi",
-                            },
+                            labels,
                             wifi_util,
                         )
 
                         # Set per-AP metrics for non-WiFi utilization
+                        labels = {**base_labels, "utilization_type": "non_wifi"}
                         self._set_metric_value(
                             "_ap_utilization_2_4ghz",
-                            {
-                                "network_id": network_id,
-                                "network_name": network_name,
-                                "serial": serial,
-                                "name": name,
-                                "model": model,
-                                "type": "non_wifi",
-                            },
+                            labels,
                             non_wifi_util,
                         )
 
@@ -188,45 +188,28 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                         wifi_util = latest_5.get("wifi", 0)
                         non_wifi_util = latest_5.get("nonWifi", 0)
 
+                        # Use same base labels as 2.4GHz
                         # Set per-AP metrics for total utilization
+                        labels = {**base_labels, "utilization_type": "total"}
                         self._set_metric_value(
                             "_ap_utilization_5ghz",
-                            {
-                                "network_id": network_id,
-                                "network_name": network_name,
-                                "serial": serial,
-                                "name": name,
-                                "model": model,
-                                "type": "total",
-                            },
+                            labels,
                             total_util,
                         )
 
                         # Set per-AP metrics for WiFi utilization
+                        labels = {**base_labels, "utilization_type": "wifi"}
                         self._set_metric_value(
                             "_ap_utilization_5ghz",
-                            {
-                                "network_id": network_id,
-                                "network_name": network_name,
-                                "serial": serial,
-                                "name": name,
-                                "model": model,
-                                "type": "wifi",
-                            },
+                            labels,
                             wifi_util,
                         )
 
                         # Set per-AP metrics for non-WiFi utilization
+                        labels = {**base_labels, "utilization_type": "non_wifi"}
                         self._set_metric_value(
                             "_ap_utilization_5ghz",
-                            {
-                                "network_id": network_id,
-                                "network_name": network_name,
-                                "serial": serial,
-                                "name": name,
-                                "model": model,
-                                "type": "non_wifi",
-                            },
+                            labels,
                             non_wifi_util,
                         )
 
@@ -244,33 +227,40 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                         network_2_4ghz_total["non_wifi"] / network_2_4ghz_total["count"]
                     )
 
+                    # Create network labels using helper
+                    labels = create_network_labels(
+                        network,
+                        org_id=org_id,
+                        org_name=org_name,
+                        utilization_type="total",
+                    )
                     self._set_metric_value(
                         "_network_utilization_2_4ghz",
-                        {
-                            "network_id": network_id,
-                            "network_name": network_name,
-                            "type": "total",
-                        },
+                        labels,
                         avg_total_2_4,
                     )
 
+                    labels = create_network_labels(
+                        network,
+                        org_id=org_id,
+                        org_name=org_name,
+                        utilization_type="wifi",
+                    )
                     self._set_metric_value(
                         "_network_utilization_2_4ghz",
-                        {
-                            "network_id": network_id,
-                            "network_name": network_name,
-                            "type": "wifi",
-                        },
+                        labels,
                         avg_wifi_2_4,
                     )
 
+                    labels = create_network_labels(
+                        network,
+                        org_id=org_id,
+                        org_name=org_name,
+                        utilization_type="non_wifi",
+                    )
                     self._set_metric_value(
                         "_network_utilization_2_4ghz",
-                        {
-                            "network_id": network_id,
-                            "network_name": network_name,
-                            "type": "non_wifi",
-                        },
+                        labels,
                         avg_non_wifi_2_4,
                     )
 
@@ -279,33 +269,39 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                     avg_wifi_5 = network_5ghz_total["wifi"] / network_5ghz_total["count"]
                     avg_non_wifi_5 = network_5ghz_total["non_wifi"] / network_5ghz_total["count"]
 
+                    labels = create_network_labels(
+                        network,
+                        org_id=org_id,
+                        org_name=org_name,
+                        utilization_type="total",
+                    )
                     self._set_metric_value(
                         "_network_utilization_5ghz",
-                        {
-                            "network_id": network_id,
-                            "network_name": network_name,
-                            "type": "total",
-                        },
+                        labels,
                         avg_total_5,
                     )
 
+                    labels = create_network_labels(
+                        network,
+                        org_id=org_id,
+                        org_name=org_name,
+                        utilization_type="wifi",
+                    )
                     self._set_metric_value(
                         "_network_utilization_5ghz",
-                        {
-                            "network_id": network_id,
-                            "network_name": network_name,
-                            "type": "wifi",
-                        },
+                        labels,
                         avg_wifi_5,
                     )
 
+                    labels = create_network_labels(
+                        network,
+                        org_id=org_id,
+                        org_name=org_name,
+                        utilization_type="non_wifi",
+                    )
                     self._set_metric_value(
                         "_network_utilization_5ghz",
-                        {
-                            "network_id": network_id,
-                            "network_name": network_name,
-                            "type": "non_wifi",
-                        },
+                        labels,
                         avg_non_wifi_5,
                     )
 

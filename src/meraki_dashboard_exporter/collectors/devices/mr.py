@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ...core.constants import MRMetricName
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ...core.label_helpers import create_device_labels, create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
@@ -43,17 +44,30 @@ class MRCollector(BaseDeviceCollector):
         self._ap_clients = self.parent._create_gauge(
             MRMetricName.MR_CLIENTS_CONNECTED,
             "Number of clients connected to access point",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._ap_connection_stats = self.parent._create_gauge(
             MRMetricName.MR_CONNECTION_STATS,
             "Wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)",
             labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.NAME,
                 LabelName.MODEL,
-                LabelName.NETWORK_ID,
+                LabelName.DEVICE_TYPE,
                 LabelName.STAT_TYPE,
             ],
         )
@@ -62,28 +76,61 @@ class MRCollector(BaseDeviceCollector):
         self._mr_power_info = self.parent._create_gauge(
             MRMetricName.MR_POWER_INFO,
             "Access point power information",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID, LabelName.MODE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+                LabelName.MODE,
+            ],
         )
 
         self._mr_power_ac_connected = self.parent._create_gauge(
             MRMetricName.MR_POWER_AC_CONNECTED,
             "Access point AC power connection status (1 = connected, 0 = not connected)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._mr_power_poe_connected = self.parent._create_gauge(
             MRMetricName.MR_POWER_POE_CONNECTED,
             "Access point PoE power connection status (1 = connected, 0 = not connected)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._mr_port_poe_info = self.parent._create_gauge(
             MRMetricName.MR_PORT_POE_INFO,
             "Access point port PoE information",
             labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.NAME,
-                LabelName.NETWORK_ID,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
                 LabelName.PORT_NAME,
                 LabelName.STANDARD,
             ],
@@ -93,9 +140,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_PORT_LINK_NEGOTIATION_INFO,
             "Access point port link negotiation information",
             labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.NAME,
-                LabelName.NETWORK_ID,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
                 LabelName.PORT_NAME,
                 LabelName.DUPLEX,
             ],
@@ -105,9 +157,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_PORT_LINK_NEGOTIATION_SPEED_MBPS,
             "Access point port link negotiation speed in Mbps",
             labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.NAME,
-                LabelName.NETWORK_ID,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
                 LabelName.PORT_NAME,
             ],
         )
@@ -115,13 +172,31 @@ class MRCollector(BaseDeviceCollector):
         self._mr_aggregation_enabled = self.parent._create_gauge(
             MRMetricName.MR_AGGREGATION_ENABLED,
             "Access point port aggregation enabled status (1 = enabled, 0 = disabled)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._mr_aggregation_speed = self.parent._create_gauge(
             MRMetricName.MR_AGGREGATION_SPEED_MBPS,
             "Access point total aggregated port speed in Mbps",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         # MR packet loss metrics (per device, 5-minute window)
@@ -129,10 +204,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_PACKETS_DOWNSTREAM_TOTAL,
             "Total downstream packets transmitted by access point (5-minute window)",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
             ],
         )
 
@@ -140,10 +219,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_PACKETS_DOWNSTREAM_LOST,
             "Downstream packets lost by access point (5-minute window)",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
             ],
         )
 
@@ -151,10 +234,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_PACKET_LOSS_DOWNSTREAM_PERCENT,
             "Downstream packet loss percentage for access point (5-minute window)",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
             ],
         )
 
@@ -162,10 +249,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_PACKETS_UPSTREAM_TOTAL,
             "Total upstream packets received by access point (5-minute window)",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
             ],
         )
 
@@ -173,10 +264,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_PACKETS_UPSTREAM_LOST,
             "Upstream packets lost by access point (5-minute window)",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
             ],
         )
 
@@ -184,10 +279,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_PACKET_LOSS_UPSTREAM_PERCENT,
             "Upstream packet loss percentage for access point (5-minute window)",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
             ],
         )
 
@@ -196,10 +295,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_PACKETS_TOTAL,
             "Total packets (upstream + downstream) for access point (5-minute window)",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
             ],
         )
 
@@ -207,10 +310,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_PACKETS_LOST_TOTAL,
             "Total packets lost (upstream + downstream) for access point (5-minute window)",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
             ],
         )
 
@@ -218,10 +325,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_PACKET_LOSS_TOTAL_PERCENT,
             "Total packet loss percentage (upstream + downstream) for access point (5-minute window)",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
             ],
         )
 
@@ -229,56 +340,101 @@ class MRCollector(BaseDeviceCollector):
         self._mr_network_packets_downstream_total = self.parent._create_gauge(
             MRMetricName.MR_NETWORK_PACKETS_DOWNSTREAM_TOTAL,
             "Total downstream packets for all access points in network (5-minute window)",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._mr_network_packets_downstream_lost = self.parent._create_gauge(
             MRMetricName.MR_NETWORK_PACKETS_DOWNSTREAM_LOST,
             "Downstream packets lost for all access points in network (5-minute window)",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._mr_network_packet_loss_downstream_percent = self.parent._create_gauge(
             MRMetricName.MR_NETWORK_PACKET_LOSS_DOWNSTREAM_PERCENT,
             "Downstream packet loss percentage for all access points in network (5-minute window)",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._mr_network_packets_upstream_total = self.parent._create_gauge(
             MRMetricName.MR_NETWORK_PACKETS_UPSTREAM_TOTAL,
             "Total upstream packets for all access points in network (5-minute window)",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._mr_network_packets_upstream_lost = self.parent._create_gauge(
             MRMetricName.MR_NETWORK_PACKETS_UPSTREAM_LOST,
             "Upstream packets lost for all access points in network (5-minute window)",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._mr_network_packet_loss_upstream_percent = self.parent._create_gauge(
             MRMetricName.MR_NETWORK_PACKET_LOSS_UPSTREAM_PERCENT,
             "Upstream packet loss percentage for all access points in network (5-minute window)",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         # Combined network-wide packet metrics (calculated)
         self._mr_network_packets_total = self.parent._create_gauge(
             MRMetricName.MR_NETWORK_PACKETS_TOTAL,
             "Total packets (upstream + downstream) for all access points in network (5-minute window)",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._mr_network_packets_lost_total = self.parent._create_gauge(
             MRMetricName.MR_NETWORK_PACKETS_LOST_TOTAL,
             "Total packets lost (upstream + downstream) for all access points in network (5-minute window)",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._mr_network_packet_loss_total_percent = self.parent._create_gauge(
             MRMetricName.MR_NETWORK_PACKET_LOSS_TOTAL_PERCENT,
             "Total packet loss percentage (upstream + downstream) for all access points in network (5-minute window)",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         # MR CPU metrics
@@ -286,11 +442,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_CPU_LOAD_5MIN,
             "Access point CPU load average over 5 minutes (normalized to 0-100 per core)",
             labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.NAME,
                 LabelName.MODEL,
-                LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
+                LabelName.DEVICE_TYPE,
             ],
         )
 
@@ -299,10 +458,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_RADIO_BROADCASTING,
             "Access point radio broadcasting status (1 = broadcasting, 0 = not broadcasting)",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
                 LabelName.BAND,
                 LabelName.RADIO_INDEX,
             ],
@@ -312,10 +475,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_RADIO_CHANNEL,
             "Access point radio channel number",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
                 LabelName.BAND,
                 LabelName.RADIO_INDEX,
             ],
@@ -325,10 +492,14 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_RADIO_CHANNEL_WIDTH_MHZ,
             "Access point radio channel width in MHz",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
                 LabelName.BAND,
                 LabelName.RADIO_INDEX,
             ],
@@ -338,44 +509,78 @@ class MRCollector(BaseDeviceCollector):
             MRMetricName.MR_RADIO_POWER_DBM,
             "Access point radio transmit power in dBm",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
                 LabelName.BAND,
                 LabelName.RADIO_INDEX,
             ],
         )
 
-        # SSID usage metrics
+        # SSID usage metrics (now with network labels)
         self._ssid_usage_total_mb = self.parent._create_gauge(
             MRMetricName.MR_SSID_USAGE_TOTAL_MB,
             "Total data usage in MB by SSID over the last day",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.SSID],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SSID,
+            ],
         )
 
         self._ssid_usage_downstream_mb = self.parent._create_gauge(
             MRMetricName.MR_SSID_USAGE_DOWNSTREAM_MB,
             "Downstream data usage in MB by SSID over the last day",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.SSID],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SSID,
+            ],
         )
 
         self._ssid_usage_upstream_mb = self.parent._create_gauge(
             MRMetricName.MR_SSID_USAGE_UPSTREAM_MB,
             "Upstream data usage in MB by SSID over the last day",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.SSID],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SSID,
+            ],
         )
 
         self._ssid_usage_percentage = self.parent._create_gauge(
             MRMetricName.MR_SSID_USAGE_PERCENTAGE,
             "Percentage of total organization data usage by SSID over the last day",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.SSID],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SSID,
+            ],
         )
 
         self._ssid_client_count = self.parent._create_gauge(
             MRMetricName.MR_SSID_CLIENT_COUNT,
             "Number of clients connected to SSID over the last day",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.SSID],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SSID,
+            ],
         )
 
     @log_api_call("getDeviceWirelessStatus")
@@ -392,17 +597,19 @@ class MRCollector(BaseDeviceCollector):
             Wireless device data.
 
         """
-        serial = device["serial"]
-        name = device.get("name", serial)
-        model = device.get("model", "Unknown")
-        network_id = device.get("networkId", "")
+        # Extract org info from device data
+        org_id = device.get("orgId", "")
+        org_name = device.get("orgName", org_id)
+
+        # Create standard device labels
+        device_labels = create_device_labels(device, org_id=org_id, org_name=org_name)
 
         try:
             # Get wireless status with timeout
-            with LogContext(serial=serial, name=name):
+            with LogContext(serial=device_labels["serial"], name=device_labels["name"]):
                 status = await asyncio.to_thread(
                     self.api.wireless.getDeviceWirelessStatus,
-                    serial,
+                    device_labels["serial"],
                 )
                 status = validate_response_format(
                     status, expected_type=dict, operation="getDeviceWirelessStatus"
@@ -410,20 +617,15 @@ class MRCollector(BaseDeviceCollector):
 
             # Client count
             if "clientCount" in status:
-                self._ap_clients.labels(
-                    serial=serial,
-                    name=name,
-                    model=model,
-                    network_id=network_id,
-                ).set(status["clientCount"])
+                self._ap_clients.labels(**device_labels).set(status["clientCount"])
 
             # Get connection stats (30 minute window)
-            await self._collect_connection_stats(serial, name, model, network_id)
+            await self._collect_connection_stats(device)
 
         except Exception:
             logger.exception(
                 "Failed to collect wireless metrics",
-                serial=serial,
+                serial=device_labels["serial"],
             )
 
     @log_api_call("getDeviceWirelessConnectionStats")
@@ -432,29 +634,28 @@ class MRCollector(BaseDeviceCollector):
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def _collect_connection_stats(
-        self, serial: str, name: str, model: str, network_id: str
-    ) -> None:
+    async def _collect_connection_stats(self, device: dict[str, Any]) -> None:
         """Collect wireless connection statistics for the device.
 
         Parameters
         ----------
-        serial : str
-            Device serial number.
-        name : str
-            Device name.
-        model : str
-            Device model.
-        network_id : str
-            Network ID.
+        device : dict[str, Any]
+            Device data.
 
         """
+        # Extract org info from device data
+        org_id = device.get("orgId", "")
+        org_name = device.get("orgName", org_id)
+
+        # Create standard device labels
+        device_labels = create_device_labels(device, org_id=org_id, org_name=org_name)
+
         try:
             # Use 30 minute (1800 second) timespan as minimum
-            with LogContext(serial=serial, name=name):
+            with LogContext(serial=device_labels["serial"], name=device_labels["name"]):
                 connection_stats = await asyncio.to_thread(
                     self.api.wireless.getDeviceWirelessConnectionStats,
-                    serial,
+                    device_labels["serial"],
                     timespan=1800,  # 30 minutes
                 )
 
@@ -462,18 +663,16 @@ class MRCollector(BaseDeviceCollector):
             if not connection_stats or "connectionStats" not in connection_stats:
                 logger.debug(
                     "No connection stats data available",
-                    serial=serial,
+                    serial=device_labels["serial"],
                     timespan="30m",
                 )
                 # Set all stats to 0 when no data
                 for stat_type in ("assoc", "auth", "dhcp", "dns", "success"):
-                    self._ap_connection_stats.labels(
-                        serial=serial,
-                        name=name,
-                        model=model,
-                        network_id=network_id,
-                        stat_type=stat_type,
-                    ).set(0)
+                    # Create labels with stat_type
+                    labels = create_device_labels(
+                        device, org_id=org_id, org_name=org_name, stat_type=stat_type
+                    )
+                    self._ap_connection_stats.labels(**labels).set(0)
                 return
 
             stats = connection_stats.get("connectionStats", {})
@@ -481,18 +680,16 @@ class MRCollector(BaseDeviceCollector):
             # Set metrics for each connection stat type
             for stat_type, value in stats.items():
                 if stat_type in {"assoc", "auth", "dhcp", "dns", "success"}:
-                    self._ap_connection_stats.labels(
-                        serial=serial,
-                        name=name,
-                        model=model,
-                        network_id=network_id,
-                        stat_type=stat_type,
-                    ).set(value)
+                    # Create labels with stat_type
+                    labels = create_device_labels(
+                        device, org_id=org_id, org_name=org_name, stat_type=stat_type
+                    )
+                    self._ap_connection_stats.labels(**labels).set(value)
 
         except Exception:
             logger.exception(
                 "Failed to collect connection stats",
-                serial=serial,
+                serial=device_labels["serial"],
             )
 
     @log_api_call("getOrganizationWirelessClientsOverviewByDevice")
@@ -502,7 +699,7 @@ class MRCollector(BaseDeviceCollector):
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
     async def collect_wireless_clients(
-        self, org_id: str, device_lookup: dict[str, dict[str, Any]]
+        self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
     ) -> None:
         """Collect wireless client counts for MR devices.
 
@@ -510,6 +707,8 @@ class MRCollector(BaseDeviceCollector):
         ----------
         org_id : str
             Organization ID.
+        org_name : str
+            Organization name.
         device_lookup : dict[str, dict[str, Any]]
             Device lookup table for device info.
 
@@ -543,7 +742,9 @@ class MRCollector(BaseDeviceCollector):
             # Process each device's client data
             for device_data in client_data:
                 serial = device_data.get("serial", "")
-                network_id = device_data.get("network", {}).get("id", "")
+                network = device_data.get("network", {})
+                network_id = network.get("id", "")
+                network_name = network.get("name", network_id)
 
                 # Get online client count
                 counts = device_data.get("counts", {})
@@ -551,16 +752,16 @@ class MRCollector(BaseDeviceCollector):
                 online_clients = by_status.get("online", 0)
 
                 # Look up device info from our cache
-                device_info = device_lookup.get(serial, {})
-                device_name = device_info.get("name", serial)
-                device_model = device_info.get("model", "MR")
+                device_info = device_lookup.get(serial, {"serial": serial})
+                device_info["networkId"] = network_id
+                device_info["networkName"] = network_name
+                device_info["orgId"] = org_id
+                device_info["orgName"] = org_name
 
-                self._ap_clients.labels(
-                    serial=serial,
-                    name=device_name,
-                    model=device_model,
-                    network_id=network_id,
-                ).set(online_clients)
+                # Create standard device labels
+                labels = create_device_labels(device_info, org_id=org_id, org_name=org_name)
+
+                self._ap_clients.labels(**labels).set(online_clients)
 
         except Exception:
             logger.exception(
@@ -575,7 +776,7 @@ class MRCollector(BaseDeviceCollector):
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
     async def collect_ethernet_status(
-        self, org_id: str, device_lookup: dict[str, dict[str, Any]]
+        self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
     ) -> None:
         """Collect ethernet status for MR devices.
 
@@ -583,6 +784,8 @@ class MRCollector(BaseDeviceCollector):
         ----------
         org_id : str
             Organization ID.
+        org_name : str
+            Organization name.
         device_lookup : dict[str, dict[str, Any]]
             Device lookup table for device info.
 
@@ -616,40 +819,37 @@ class MRCollector(BaseDeviceCollector):
             # Process each device's ethernet status
             for device_status in ethernet_data:
                 serial = device_status.get("serial", "")
-                device_info = device_lookup.get(serial, {})
-                # Use device name from API response if not in lookup, fallback to serial
-                device_name = device_info.get("name") or device_status.get("name", serial)
-                # Get network_id from the API response itself, not device_lookup
+                device_info = device_lookup.get(serial, {"serial": serial})
+
+                # Get device data from API response and merge with lookup
                 network_info = device_status.get("network", {})
-                network_id = network_info.get("id", "")
+                device_info["networkId"] = network_info.get("id", "")
+                device_info["networkName"] = network_info.get("name", device_info["networkId"])
+                device_info["name"] = device_info.get("name") or device_status.get("name", serial)
+                device_info["orgId"] = org_id
+                device_info["orgName"] = org_name
+
+                # Create standard device labels
+                device_labels = create_device_labels(device_info, org_id=org_id, org_name=org_name)
 
                 # Power mode information
                 power_mode = device_status.get("power", {}).get("mode")
                 if power_mode:
-                    self._mr_power_info.labels(
-                        serial=serial,
-                        name=device_name,
-                        network_id=network_id,
-                        mode=power_mode,
-                    ).set(1)
+                    # Create labels with mode
+                    power_labels = create_device_labels(
+                        device_info, org_id=org_id, org_name=org_name, mode=power_mode
+                    )
+                    self._mr_power_info.labels(**power_labels).set(1)
 
                 # AC power status
                 ac_info = device_status.get("power", {}).get("ac", {})
                 ac_connected = ac_info.get("isConnected", False)
-                self._mr_power_ac_connected.labels(
-                    serial=serial,
-                    name=device_name,
-                    network_id=network_id,
-                ).set(1 if ac_connected else 0)
+                self._mr_power_ac_connected.labels(**device_labels).set(1 if ac_connected else 0)
 
                 # PoE power status
                 poe_info = device_status.get("power", {}).get("poe", {})
                 poe_connected = poe_info.get("isConnected", False)
-                self._mr_power_poe_connected.labels(
-                    serial=serial,
-                    name=device_name,
-                    network_id=network_id,
-                ).set(1 if poe_connected else 0)
+                self._mr_power_poe_connected.labels(**device_labels).set(1 if poe_connected else 0)
 
                 # Process port information
                 ports = device_status.get("ports", [])
@@ -662,13 +862,15 @@ class MRCollector(BaseDeviceCollector):
                     # PoE information
                     poe_standard = port.get("poe", {}).get("standard")
                     if poe_standard:
-                        self._mr_port_poe_info.labels(
-                            serial=serial,
-                            name=device_name,
-                            network_id=network_id,
+                        # Create port labels with standard
+                        poe_labels = create_device_labels(
+                            device_info,
+                            org_id=org_id,
+                            org_name=org_name,
                             port_name=port_name,
                             standard=poe_standard,
-                        ).set(1)
+                        )
+                        self._mr_port_poe_info.labels(**poe_labels).set(1)
 
                     # Link negotiation information
                     link_negotiation = port.get("linkNegotiation", {})
@@ -676,21 +878,23 @@ class MRCollector(BaseDeviceCollector):
                     speed = link_negotiation.get("speed")
 
                     if duplex:
-                        self._mr_port_link_negotiation_info.labels(
-                            serial=serial,
-                            name=device_name,
-                            network_id=network_id,
+                        # Create port labels with duplex
+                        duplex_labels = create_device_labels(
+                            device_info,
+                            org_id=org_id,
+                            org_name=org_name,
                             port_name=port_name,
                             duplex=duplex,
-                        ).set(1)
+                        )
+                        self._mr_port_link_negotiation_info.labels(**duplex_labels).set(1)
 
                     # Set speed metric
-                    self._mr_port_link_negotiation_speed.labels(
-                        serial=serial,
-                        name=device_name,
-                        network_id=network_id,
-                        port_name=port_name,
-                    ).set(speed if speed is not None else 0)
+                    speed_labels = create_device_labels(
+                        device_info, org_id=org_id, org_name=org_name, port_name=port_name
+                    )
+                    self._mr_port_link_negotiation_speed.labels(**speed_labels).set(
+                        speed if speed is not None else 0
+                    )
 
                     # Check for aggregation - Note: ports don't have isAggregated field
                     # but we can get aggregation info from the device level
@@ -703,17 +907,10 @@ class MRCollector(BaseDeviceCollector):
                 # Use aggregation speed from device level if available, otherwise use total from ports
                 agg_speed = aggregation_info.get("speed", total_speed)
 
-                self._mr_aggregation_enabled.labels(
-                    serial=serial,
-                    name=device_name,
-                    network_id=network_id,
-                ).set(1 if aggregation_enabled else 0)
-
-                self._mr_aggregation_speed.labels(
-                    serial=serial,
-                    name=device_name,
-                    network_id=network_id,
-                ).set(agg_speed)
+                self._mr_aggregation_enabled.labels(**device_labels).set(
+                    1 if aggregation_enabled else 0
+                )
+                self._mr_aggregation_speed.labels(**device_labels).set(agg_speed)
 
         except Exception:
             logger.exception(
@@ -743,7 +940,7 @@ class MRCollector(BaseDeviceCollector):
 
     @log_api_call("getOrganizationWirelessDevicesPacketLossByDevice")
     async def collect_packet_loss(
-        self, org_id: str, device_lookup: dict[str, dict[str, Any]]
+        self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
     ) -> None:
         """Collect packet loss metrics for MR devices and networks.
 
@@ -751,6 +948,8 @@ class MRCollector(BaseDeviceCollector):
         ----------
         org_id : str
             Organization ID.
+        org_name : str
+            Organization name.
         device_lookup : dict[str, dict[str, Any]]
             Device lookup table for device info.
 
@@ -785,16 +984,19 @@ class MRCollector(BaseDeviceCollector):
                 device_info_api = device_data.get("device", {})
                 serial = device_info_api.get("serial", "")
 
-                # Try to get device name from API response first, then fallback to lookup
-                device_name = device_info_api.get("name", "")
-                if not device_name:
-                    device_info = device_lookup.get(serial, {})
-                    device_name = device_info.get("name", serial)
+                # Get device info from lookup and merge with API data
+                device_info = device_lookup.get(serial, {"serial": serial})
+                device_info["name"] = device_info_api.get("name") or device_info.get("name", serial)
 
                 # Extract network info
                 network_info = device_data.get("network", {})
-                network_id = network_info.get("id", "")
-                network_name = network_info.get("name", "")
+                device_info["networkId"] = network_info.get("id", "")
+                device_info["networkName"] = network_info.get("name", device_info["networkId"])
+                device_info["orgId"] = org_id
+                device_info["orgName"] = org_name
+
+                # Create standard device labels
+                device_labels = create_device_labels(device_info, org_id=org_id, org_name=org_name)
 
                 # Get packet loss data directly from top level (not nested under "packetLoss")
                 # Downstream metrics
@@ -805,34 +1007,19 @@ class MRCollector(BaseDeviceCollector):
 
                 self._set_packet_metric_value(
                     "_mr_packets_downstream_total",
-                    {
-                        "serial": serial,
-                        "name": device_name,
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    device_labels,
                     downstream_total,
                 )
 
                 self._set_packet_metric_value(
                     "_mr_packets_downstream_lost",
-                    {
-                        "serial": serial,
-                        "name": device_name,
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    device_labels,
                     downstream_lost,
                 )
 
                 self._set_packet_metric_value(
                     "_mr_packet_loss_downstream_percent",
-                    {
-                        "serial": serial,
-                        "name": device_name,
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    device_labels,
                     downstream_percent,
                 )
 
@@ -844,34 +1031,19 @@ class MRCollector(BaseDeviceCollector):
 
                 self._set_packet_metric_value(
                     "_mr_packets_upstream_total",
-                    {
-                        "serial": serial,
-                        "name": device_name,
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    device_labels,
                     upstream_total,
                 )
 
                 self._set_packet_metric_value(
                     "_mr_packets_upstream_lost",
-                    {
-                        "serial": serial,
-                        "name": device_name,
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    device_labels,
                     upstream_lost,
                 )
 
                 self._set_packet_metric_value(
                     "_mr_packet_loss_upstream_percent",
-                    {
-                        "serial": serial,
-                        "name": device_name,
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    device_labels,
                     upstream_percent,
                 )
 
@@ -882,34 +1054,19 @@ class MRCollector(BaseDeviceCollector):
 
                 self._set_packet_metric_value(
                     "_mr_packets_total",
-                    {
-                        "serial": serial,
-                        "name": device_name,
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    device_labels,
                     total_packets,
                 )
 
                 self._set_packet_metric_value(
                     "_mr_packets_lost_total",
-                    {
-                        "serial": serial,
-                        "name": device_name,
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    device_labels,
                     total_lost,
                 )
 
                 self._set_packet_metric_value(
                     "_mr_packet_loss_total_percent",
-                    {
-                        "serial": serial,
-                        "name": device_name,
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    device_labels,
                     total_percent,
                 )
 
@@ -937,8 +1094,12 @@ class MRCollector(BaseDeviceCollector):
 
             # Process each network's aggregated packet loss
             for network_data in networks_data:
-                network_id = network_data.get("network", {}).get("id", "")
-                network_name = network_data.get("network", {}).get("name", "")
+                network_info = network_data.get("network", {})
+
+                # Create network labels with org info
+                network_labels = create_network_labels(
+                    network_info, org_id=org_id, org_name=org_name
+                )
 
                 # Get packet loss data directly from top level (no "packetLoss" wrapper)
                 # Downstream metrics
@@ -949,28 +1110,19 @@ class MRCollector(BaseDeviceCollector):
 
                 self._set_packet_metric_value(
                     "_mr_network_packets_downstream_total",
-                    {
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    network_labels,
                     downstream_total,
                 )
 
                 self._set_packet_metric_value(
                     "_mr_network_packets_downstream_lost",
-                    {
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    network_labels,
                     downstream_lost,
                 )
 
                 self._set_packet_metric_value(
                     "_mr_network_packet_loss_downstream_percent",
-                    {
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    network_labels,
                     downstream_percent,
                 )
 
@@ -982,28 +1134,19 @@ class MRCollector(BaseDeviceCollector):
 
                 self._set_packet_metric_value(
                     "_mr_network_packets_upstream_total",
-                    {
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    network_labels,
                     upstream_total,
                 )
 
                 self._set_packet_metric_value(
                     "_mr_network_packets_upstream_lost",
-                    {
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    network_labels,
                     upstream_lost,
                 )
 
                 self._set_packet_metric_value(
                     "_mr_network_packet_loss_upstream_percent",
-                    {
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    network_labels,
                     upstream_percent,
                 )
 
@@ -1014,28 +1157,19 @@ class MRCollector(BaseDeviceCollector):
 
                 self._set_packet_metric_value(
                     "_mr_network_packets_total",
-                    {
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    network_labels,
                     total_packets,
                 )
 
                 self._set_packet_metric_value(
                     "_mr_network_packets_lost_total",
-                    {
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    network_labels,
                     total_lost,
                 )
 
                 self._set_packet_metric_value(
                     "_mr_network_packet_loss_total_percent",
-                    {
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    network_labels,
                     total_percent,
                 )
 
@@ -1045,13 +1179,17 @@ class MRCollector(BaseDeviceCollector):
                 org_id=org_id,
             )
 
-    async def collect_cpu_load(self, org_id: str, devices: list[dict[str, Any]]) -> None:
+    async def collect_cpu_load(
+        self, org_id: str, org_name: str, devices: list[dict[str, Any]]
+    ) -> None:
         """Collect CPU load metrics for MR devices.
 
         Parameters
         ----------
         org_id : str
             Organization ID.
+        org_name : str
+            Organization name.
         devices : list[dict[str, Any]]
             List of all devices in the organization.
 
@@ -1073,7 +1211,7 @@ class MRCollector(BaseDeviceCollector):
             batch_size = 100
             for i in range(0, len(mr_devices), batch_size):
                 batch = mr_devices[i : i + batch_size]
-                await self._process_cpu_load_batch(org_id, batch, i // batch_size)
+                await self._process_cpu_load_batch(org_id, org_name, batch, i // batch_size)
 
         except Exception:
             logger.exception(
@@ -1082,7 +1220,7 @@ class MRCollector(BaseDeviceCollector):
             )
 
     async def _process_cpu_load_batch(
-        self, org_id: str, batch: list[dict[str, Any]], batch_index: int
+        self, org_id: str, org_name: str, batch: list[dict[str, Any]], batch_index: int
     ) -> None:
         """Process a batch of devices for CPU load collection.
 
@@ -1090,6 +1228,8 @@ class MRCollector(BaseDeviceCollector):
         ----------
         org_id : str
             Organization ID.
+        org_name : str
+            Organization name.
         batch : list[dict[str, Any]]
             Batch of devices to process.
         batch_index : int
@@ -1123,7 +1263,7 @@ class MRCollector(BaseDeviceCollector):
 
             # Process CPU data for each device
             for device_cpu in cpu_data:
-                self._process_device_cpu_data(device_cpu, batch)
+                self._process_device_cpu_data(device_cpu, batch, org_id, org_name)
 
         except Exception:
             logger.exception(
@@ -1167,7 +1307,7 @@ class MRCollector(BaseDeviceCollector):
             return []
 
     def _process_device_cpu_data(
-        self, device_cpu: dict[str, Any], batch: list[dict[str, Any]]
+        self, device_cpu: dict[str, Any], batch: list[dict[str, Any]], org_id: str, org_name: str
     ) -> None:
         """Process CPU data for a single device.
 
@@ -1177,17 +1317,24 @@ class MRCollector(BaseDeviceCollector):
             CPU data for a device.
         batch : list[dict[str, Any]]
             Batch of devices for lookup.
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
 
         """
         serial = device_cpu.get("serial", "")
-        device_info = next((d for d in batch if d["serial"] == serial), {})
-        device_name = device_info.get("name", serial)
-        device_model = device_info.get("model", "MR")
-        network_id = device_info.get("networkId", "")
+        device_info = next((d for d in batch if d["serial"] == serial), {"serial": serial})
 
-        # Get the network name from API response, not device lookup
+        # Get the network info from API response and merge with device
         network_info = device_cpu.get("network", {})
-        network_name = network_info.get("name", "")
+        device_info["networkId"] = network_info.get("id", device_info.get("networkId", ""))
+        device_info["networkName"] = network_info.get("name", device_info["networkId"])
+        device_info["orgId"] = org_id
+        device_info["orgName"] = org_name
+
+        # Create standard device labels
+        device_labels = create_device_labels(device_info, org_id=org_id, org_name=org_name)
 
         # Get the most recent CPU load data - API returns "series" not "usageHistory"
         series_data = device_cpu.get("series", [])
@@ -1208,22 +1355,18 @@ class MRCollector(BaseDeviceCollector):
         # Convert from hundredths of percent to percentage
         avg_5min = cpu_load_raw / 100.0
 
-        self._mr_cpu_load_5min.labels(
-            serial=serial,
-            name=device_name,
-            model=device_model,
-            network_id=network_id,
-            network_name=network_name,
-        ).set(avg_5min)
+        self._mr_cpu_load_5min.labels(**device_labels).set(avg_5min)
 
     @log_api_call("getOrganizationWirelessSsidsStatusesByDevice")
-    async def collect_ssid_status(self, org_id: str) -> None:
+    async def collect_ssid_status(self, org_id: str, org_name: str) -> None:
         """Collect SSID and radio status for MR devices.
 
         Parameters
         ----------
         org_id : str
             Organization ID.
+        org_name : str
+            Organization name.
 
         """
         try:
@@ -1250,11 +1393,22 @@ class MRCollector(BaseDeviceCollector):
 
             # Process each device's SSID and radio status
             for device_data in devices_data:
-                serial = device_data.get("serial", "")
-                name = device_data.get("name", serial)
+                # Create device info dict from API data
+                device_info = {
+                    "serial": device_data.get("serial", ""),
+                    "name": device_data.get("name", device_data.get("serial", "")),
+                    "model": "MR",  # SSID status is only for MR devices
+                    "orgId": org_id,
+                    "orgName": org_name,
+                }
+
+                # Extract network info
                 network = device_data.get("network", {})
-                network_id = network.get("id", "")
-                network_name = network.get("name", "")
+                device_info["networkId"] = network.get("id", "")
+                device_info["networkName"] = network.get("name", device_info["networkId"])
+
+                # Create standard device labels
+                device_labels = create_device_labels(device_info, org_id=org_id, org_name=org_name)
 
                 # Process radio status
                 basic_service_sets = device_data.get("basicServiceSets", [])
@@ -1278,56 +1432,39 @@ class MRCollector(BaseDeviceCollector):
 
                 # Set metrics for each radio
                 for (band, index), radio in radio_info.items():
-                    # Broadcasting status
-                    is_broadcasting = radio.get("isBroadcasting", False)
-                    self._mr_radio_broadcasting.labels(
-                        serial=serial,
-                        name=name,
-                        network_id=network_id,
-                        network_name=network_name,
+                    # Create radio labels
+                    radio_labels = create_device_labels(
+                        device_info,
+                        org_id=org_id,
+                        org_name=org_name,
                         band=band,
                         radio_index=str(index),
-                    ).set(1 if is_broadcasting else 0)
+                    )
+
+                    # Broadcasting status
+                    is_broadcasting = radio.get("isBroadcasting", False)
+                    self._mr_radio_broadcasting.labels(**radio_labels).set(
+                        1 if is_broadcasting else 0
+                    )
 
                     # Channel
                     channel = radio.get("channel")
                     if channel is not None:
-                        self._mr_radio_channel.labels(
-                            serial=serial,
-                            name=name,
-                            network_id=network_id,
-                            network_name=network_name,
-                            band=band,
-                            radio_index=str(index),
-                        ).set(channel)
+                        self._mr_radio_channel.labels(**radio_labels).set(channel)
 
                     # Channel width
                     channel_width = radio.get("channelWidth")
                     if channel_width is not None:
-                        self._mr_radio_channel_width.labels(
-                            serial=serial,
-                            name=name,
-                            network_id=network_id,
-                            network_name=network_name,
-                            band=band,
-                            radio_index=str(index),
-                        ).set(channel_width)
+                        self._mr_radio_channel_width.labels(**radio_labels).set(channel_width)
 
                     # Transmit power
                     power = radio.get("power")
                     if power is not None:
-                        self._mr_radio_power.labels(
-                            serial=serial,
-                            name=name,
-                            network_id=network_id,
-                            network_name=network_name,
-                            band=band,
-                            radio_index=str(index),
-                        ).set(power)
+                        self._mr_radio_power.labels(**radio_labels).set(power)
 
                     logger.debug(
                         "Set radio metrics",
-                        serial=serial,
+                        serial=device_labels["serial"],
                         band=band,
                         index=index,
                         broadcasting=is_broadcasting,
@@ -1445,6 +1582,72 @@ class MRCollector(BaseDeviceCollector):
                     value=value,
                 )
 
+    async def _build_ssid_to_network_mapping(self, org_id: str) -> dict[str, list[dict[str, str]]]:
+        """Build a mapping of SSID names to their networks.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        dict[str, list[dict[str, str]]]
+            Mapping of SSID name to list of networks (can be in multiple networks).
+
+        """
+        ssid_to_networks: dict[str, list[dict[str, str]]] = {}
+
+        try:
+            # Get all networks for the organization
+            networks = await asyncio.to_thread(
+                self.api.organizations.getOrganizationNetworks,
+                org_id,
+                total_pages="all",
+            )
+
+            # For each network, get its SSIDs
+            for network in networks:
+                network_id = network.get("id")
+                network_name = network.get("name", network_id)
+
+                # Only process networks with wireless
+                if "wireless" in network.get("productTypes", []):
+                    try:
+                        # Get SSIDs for this network
+                        ssids = await asyncio.to_thread(
+                            self.api.wireless.getNetworkWirelessSsids,
+                            network_id,
+                        )
+
+                        # Map each enabled SSID to this network
+                        for ssid in ssids:
+                            if ssid.get("enabled", False):
+                                ssid_name = ssid.get("name")
+                                if ssid_name:
+                                    if ssid_name not in ssid_to_networks:
+                                        ssid_to_networks[ssid_name] = []
+                                    ssid_to_networks[ssid_name].append({
+                                        "network_id": network_id,
+                                        "network_name": network_name,
+                                    })
+                    except Exception as e:
+                        # Skip networks where we can't get SSID info
+                        logger.debug(
+                            "Failed to get SSIDs for network",
+                            network_id=network_id,
+                            error=str(e),
+                        )
+                        continue
+
+        except Exception:
+            logger.exception(
+                "Failed to build SSID to network mapping",
+                org_id=org_id,
+            )
+
+        return ssid_to_networks
+
     @log_api_call("getOrganizationSummaryTopSsidsByUsage")
     @with_error_handling(
         operation="Collect SSID usage metrics",
@@ -1463,6 +1666,9 @@ class MRCollector(BaseDeviceCollector):
 
         """
         try:
+            # First build SSID to network mapping
+            ssid_to_networks = await self._build_ssid_to_network_mapping(org_id)
+
             with LogContext(org_id=org_id, org_name=org_name):
                 # Get top SSIDs by usage with default 1 day timespan
                 ssid_usage = await asyncio.to_thread(
@@ -1486,34 +1692,60 @@ class MRCollector(BaseDeviceCollector):
                 # Client count
                 client_count = clients.get("counts", {}).get("total", 0)
 
-                # Set metrics
+                # Look up networks for this SSID
+                networks_for_ssid = ssid_to_networks.get(ssid_name, [])
+
+                if len(networks_for_ssid) == 0:
+                    # SSID not found in mapping (maybe disabled or mapping failed)
+                    network_id = "unknown"
+                    network_name = "unknown"
+                elif len(networks_for_ssid) == 1:
+                    # SSID exists in only one network
+                    network_id = networks_for_ssid[0]["network_id"]
+                    network_name = networks_for_ssid[0]["network_name"]
+                else:
+                    # SSID exists in multiple networks - usage is aggregated
+                    network_id = "multiple"
+                    network_name = f"multiple_({len(networks_for_ssid)}_networks)"
+
+                # Set metrics with network labels
                 self._ssid_usage_total_mb.labels(
                     org_id=org_id,
                     org_name=org_name,
+                    network_id=network_id,
+                    network_name=network_name,
                     ssid=ssid_name,
                 ).set(total_mb)
 
                 self._ssid_usage_downstream_mb.labels(
                     org_id=org_id,
                     org_name=org_name,
+                    network_id=network_id,
+                    network_name=network_name,
                     ssid=ssid_name,
                 ).set(downstream_mb)
 
                 self._ssid_usage_upstream_mb.labels(
                     org_id=org_id,
                     org_name=org_name,
+                    network_id=network_id,
+                    network_name=network_name,
                     ssid=ssid_name,
                 ).set(upstream_mb)
 
                 self._ssid_usage_percentage.labels(
                     org_id=org_id,
                     org_name=org_name,
+                    network_id=network_id,
+                    network_name=network_name,
                     ssid=ssid_name,
                 ).set(percentage)
 
                 self._ssid_client_count.labels(
                     org_id=org_id,
                     org_name=org_name,
+                    network_id=network_id,
+                    network_name=network_name,
                     ssid=ssid_name,
                 ).set(client_count)
 
@@ -1521,6 +1753,7 @@ class MRCollector(BaseDeviceCollector):
                 "Collected SSID usage metrics",
                 org_id=org_id,
                 ssid_count=len(ssid_usage),
+                mapped_ssids=len(ssid_to_networks),
             )
 
         except Exception:

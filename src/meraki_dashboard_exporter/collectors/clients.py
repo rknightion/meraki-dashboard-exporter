@@ -12,6 +12,7 @@ from ..core.api_models import NetworkClient
 from ..core.collector import MetricCollector
 from ..core.constants import ClientMetricName, UpdateTier
 from ..core.error_handling import ErrorCategory, with_error_handling
+from ..core.label_helpers import create_client_labels, create_network_labels
 from ..core.logging_decorators import log_api_call, log_collection_progress
 from ..core.metrics import LabelName
 from ..core.registry import register_collector
@@ -699,18 +700,21 @@ class ClientsCollector(MetricCollector):
             vlan_key = str(client.vlan) if client.vlan else "untagged"
             vlan_count[vlan_key] = vlan_count.get(vlan_key, 0) + 1
 
-            # Common labels
-            labels = {
-                str(LabelName.ORG_ID): org_id,
-                str(LabelName.ORG_NAME): org_name,
-                str(LabelName.NETWORK_ID): network_id,
-                str(LabelName.NETWORK_NAME): network_name,
-                str(LabelName.CLIENT_ID): client.id,
-                str(LabelName.MAC): client.mac,
-                str(LabelName.DESCRIPTION): sanitized_description,
-                str(LabelName.HOSTNAME): sanitized_hostname,
-                str(LabelName.SSID): ssid or "Unknown",
+            # Create client labels using helper
+            client_data = {
+                "id": client.id,
+                "mac": client.mac,
+                "description": sanitized_description,
+                "hostname": sanitized_hostname,
             }
+            labels = create_client_labels(
+                client_data,
+                org_id=org_id,
+                org_name=org_name,
+                network_id=network_id,
+                network_name=network_name,
+                ssid=ssid or "Unknown",
+            )
 
             # Set client status
             status_value = 1 if client.status == "Online" else 0
@@ -740,13 +744,15 @@ class ClientsCollector(MetricCollector):
         # Update aggregated metrics after processing all clients
         # 1. Wireless capabilities metrics
         for capability, count in capabilities_count.items():
-            self.client_capabilities_count.labels(**{
-                str(LabelName.ORG_ID): org_id,
-                str(LabelName.ORG_NAME): org_name,
-                str(LabelName.NETWORK_ID): network_id,
-                str(LabelName.NETWORK_NAME): network_name,
-                str(LabelName.TYPE): capability,
-            }).set(count)
+            # Use create_network_labels for network-level metrics
+            network_data = {"id": network_id, "name": network_name}
+            cap_labels = create_network_labels(
+                network_data,
+                org_id=org_id,
+                org_name=org_name,
+                type=capability,
+            )
+            self.client_capabilities_count.labels(**cap_labels).set(count)
             logger.debug(
                 "Set wireless capability count",
                 capability=capability,
@@ -756,13 +762,15 @@ class ClientsCollector(MetricCollector):
 
         # 2. SSID metrics
         for ssid_name, count in ssid_count.items():
-            self.clients_per_ssid.labels(**{
-                str(LabelName.ORG_ID): org_id,
-                str(LabelName.ORG_NAME): org_name,
-                str(LabelName.NETWORK_ID): network_id,
-                str(LabelName.NETWORK_NAME): network_name,
-                str(LabelName.SSID): ssid_name,
-            }).set(count)
+            # Use create_network_labels for network-level metrics
+            network_data = {"id": network_id, "name": network_name}
+            ssid_labels = create_network_labels(
+                network_data,
+                org_id=org_id,
+                org_name=org_name,
+                ssid=ssid_name,
+            )
+            self.clients_per_ssid.labels(**ssid_labels).set(count)
             logger.debug(
                 "Set SSID client count",
                 ssid=ssid_name,
@@ -772,13 +780,15 @@ class ClientsCollector(MetricCollector):
 
         # 3. VLAN metrics
         for vlan_id, count in vlan_count.items():
-            self.clients_per_vlan.labels(**{
-                str(LabelName.ORG_ID): org_id,
-                str(LabelName.ORG_NAME): org_name,
-                str(LabelName.NETWORK_ID): network_id,
-                str(LabelName.NETWORK_NAME): network_name,
-                str(LabelName.VLAN): vlan_id,
-            }).set(count)
+            # Use create_network_labels for network-level metrics
+            network_data = {"id": network_id, "name": network_name}
+            vlan_labels = create_network_labels(
+                network_data,
+                org_id=org_id,
+                org_name=org_name,
+                vlan=vlan_id,
+            )
+            self.clients_per_vlan.labels(**vlan_labels).set(count)
             logger.debug(
                 "Set VLAN client count",
                 vlan=vlan_id,
@@ -875,18 +885,21 @@ class ClientsCollector(MetricCollector):
                         sent_kb = app_usage.get("sent", 0)
                         total_kb = received_kb + sent_kb
 
-                        # Common labels for this client and application
-                        labels = {
-                            str(LabelName.ORG_ID): org_id,
-                            str(LabelName.ORG_NAME): org_name,
-                            str(LabelName.NETWORK_ID): network_id,
-                            str(LabelName.NETWORK_NAME): network_name,
-                            str(LabelName.CLIENT_ID): client_id,
-                            str(LabelName.MAC): client.mac,
-                            str(LabelName.DESCRIPTION): sanitized_description,
-                            str(LabelName.HOSTNAME): sanitized_hostname,
-                            str(LabelName.TYPE): sanitized_app,
+                        # Create client labels using helper
+                        client_data = {
+                            "id": client_id,
+                            "mac": client.mac,
+                            "description": sanitized_description,
+                            "hostname": sanitized_hostname,
                         }
+                        labels = create_client_labels(
+                            client_data,
+                            org_id=org_id,
+                            org_name=org_name,
+                            network_id=network_id,
+                            network_name=network_name,
+                            type=sanitized_app,
+                        )
 
                         # Set metrics
                         self.client_app_usage_sent.labels(**labels).set(float(sent_kb))
@@ -1013,18 +1026,21 @@ class ClientsCollector(MetricCollector):
                 sanitized_hostname = self._sanitize_label_value(hostname)
                 sanitized_description = self._sanitize_label_value(client.description)
 
-                # Common labels
-                labels = {
-                    str(LabelName.ORG_ID): org_id,
-                    str(LabelName.ORG_NAME): org_name,
-                    str(LabelName.NETWORK_ID): network_id,
-                    str(LabelName.NETWORK_NAME): network_name,
-                    str(LabelName.CLIENT_ID): client.id,
-                    str(LabelName.MAC): client.mac,
-                    str(LabelName.DESCRIPTION): sanitized_description,
-                    str(LabelName.HOSTNAME): sanitized_hostname,
-                    str(LabelName.SSID): client.ssid or "Unknown",
+                # Create client labels using helper
+                client_data = {
+                    "id": client.id,
+                    "mac": client.mac,
+                    "description": sanitized_description,
+                    "hostname": sanitized_hostname,
                 }
+                labels = create_client_labels(
+                    client_data,
+                    org_id=org_id,
+                    org_name=org_name,
+                    network_id=network_id,
+                    network_name=network_name,
+                    ssid=client.ssid or "Unknown",
+                )
 
                 # Set metrics
                 if rssi is not None:

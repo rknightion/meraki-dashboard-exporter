@@ -53,12 +53,15 @@ class NetworkHealthCollector(MetricCollector):
             NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_2_4GHZ_PERCENT,
             "2.4GHz channel utilization percentage per AP",
             labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.NAME,
                 LabelName.MODEL,
-                LabelName.TYPE,
+                LabelName.DEVICE_TYPE,
+                LabelName.UTILIZATION_TYPE,
             ],
         )
 
@@ -66,12 +69,15 @@ class NetworkHealthCollector(MetricCollector):
             NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_5GHZ_PERCENT,
             "5GHz channel utilization percentage per AP",
             labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.NAME,
                 LabelName.MODEL,
-                LabelName.TYPE,
+                LabelName.DEVICE_TYPE,
+                LabelName.UTILIZATION_TYPE,
             ],
         )
 
@@ -79,40 +85,73 @@ class NetworkHealthCollector(MetricCollector):
         self._network_utilization_2_4ghz = self._create_gauge(
             NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_2_4GHZ_PERCENT,
             "Network-wide average 2.4GHz channel utilization percentage",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.UTILIZATION_TYPE,
+            ],
         )
 
         self._network_utilization_5ghz = self._create_gauge(
             NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_5GHZ_PERCENT,
             "Network-wide average 5GHz channel utilization percentage",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.UTILIZATION_TYPE,
+            ],
         )
 
         # Network-wide wireless connection statistics
         self._network_connection_stats = self._create_gauge(
             NetworkMetricName.NETWORK_WIRELESS_CONNECTION_STATS,
             "Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.STAT_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.STAT_TYPE,
+            ],
         )
 
         # Network-wide wireless data rate metrics
         self._network_wireless_download_kbps = self._create_gauge(
             NetworkHealthMetricName.NETWORK_WIRELESS_DOWNLOAD_KBPS,
             "Network-wide wireless download bandwidth in kilobits per second",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         self._network_wireless_upload_kbps = self._create_gauge(
             NetworkHealthMetricName.NETWORK_WIRELESS_UPLOAD_KBPS,
             "Network-wide wireless upload bandwidth in kilobits per second",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         # Bluetooth clients detected by MR devices
         self._network_bluetooth_clients_total = self._create_gauge(
             NetworkHealthMetricName.NETWORK_BLUETOOTH_CLIENTS_TOTAL,
             "Total number of Bluetooth clients detected by MR devices in the last 5 minutes",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
     async def _collect_impl(self) -> None:
@@ -131,9 +170,10 @@ class NetworkHealthCollector(MetricCollector):
             api_calls_made += 1
 
             # Collect network health for each organization
-            org_ids = [org["id"] for org in organizations]
-            for org_id in org_ids:
-                await self._collect_org_network_health(org_id)
+            for org in organizations:
+                org_id = org["id"]
+                org_name = org.get("name", org_id)
+                await self._collect_org_network_health(org_id, org_name)
                 organizations_processed += 1
                 # Each org makes multiple API calls for network health
                 api_calls_made += 5  # Approximate
@@ -180,18 +220,25 @@ class NetworkHealthCollector(MetricCollector):
         operation="Collect organization network health",
         continue_on_error=True,
     )
-    async def _collect_org_network_health(self, org_id: str) -> None:
+    async def _collect_org_network_health(self, org_id: str, org_name: str | None = None) -> None:
         """Collect network health metrics for an organization.
 
         Parameters
         ----------
         org_id : str
             Organization ID.
+        org_name : str | None
+            Organization name.
 
         """
         try:
             # Get all networks
             networks = await self._fetch_networks_for_health(org_id)
+
+            # Add org info to each network
+            for network in networks:
+                network["orgId"] = org_id
+                network["orgName"] = org_name or org_id
 
             # Collect health metrics for each network in batches
             # to avoid overwhelming the API connection pool

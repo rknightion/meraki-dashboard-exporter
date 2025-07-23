@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from ...core.constants import MSMetricName
 from ...core.error_handling import validate_response_format, with_error_handling
+from ...core.label_helpers import create_device_labels, create_port_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
@@ -29,10 +30,14 @@ class MSCollector(BaseDeviceCollector):
             MSMetricName.MS_PORT_STATUS,
             "Switch port status (1 = connected, 0 = disconnected)",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
                 LabelName.PORT_ID,
                 LabelName.PORT_NAME,
                 LabelName.LINK_SPEED,
@@ -44,10 +49,14 @@ class MSCollector(BaseDeviceCollector):
             MSMetricName.MS_PORT_TRAFFIC_BYTES,
             "Switch port traffic rate in bytes per second (averaged over 1 hour)",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
                 LabelName.PORT_ID,
                 LabelName.PORT_NAME,
                 LabelName.DIRECTION,
@@ -58,10 +67,14 @@ class MSCollector(BaseDeviceCollector):
             MSMetricName.MS_PORT_USAGE_BYTES,
             "Switch port data usage in bytes over the last 1 hour",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
                 LabelName.PORT_ID,
                 LabelName.PORT_NAME,
                 LabelName.DIRECTION,
@@ -72,10 +85,14 @@ class MSCollector(BaseDeviceCollector):
             MSMetricName.MS_PORT_CLIENT_COUNT,
             "Number of clients connected to switch port",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
                 LabelName.PORT_ID,
                 LabelName.PORT_NAME,
             ],
@@ -85,7 +102,16 @@ class MSCollector(BaseDeviceCollector):
         self._switch_power = self.parent._create_gauge(
             MSMetricName.MS_POWER_USAGE_WATTS,
             "Switch power usage in watts",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         # POE metrics
@@ -93,10 +119,14 @@ class MSCollector(BaseDeviceCollector):
             MSMetricName.MS_POE_PORT_POWER_WATTS,
             "Per-port POE power consumption in watt-hours (Wh) over the last 1 hour",
             labelnames=[
-                LabelName.SERIAL,
-                LabelName.NAME,
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
                 LabelName.PORT_ID,
                 LabelName.PORT_NAME,
             ],
@@ -105,34 +135,70 @@ class MSCollector(BaseDeviceCollector):
         self._switch_poe_total_power = self.parent._create_gauge(
             MSMetricName.MS_POE_TOTAL_POWER_WATTS,
             "Total POE power consumption for switch in watt-hours (Wh)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._switch_poe_budget = self.parent._create_gauge(
             MSMetricName.MS_POE_BUDGET_WATTS,
             "Total POE power budget for switch in watts",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._switch_poe_network_total = self.parent._create_gauge(
             MSMetricName.MS_POE_NETWORK_TOTAL_WATTS,
             "Total POE power consumption for all switches in network in watt-hours (Wh)",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+            ],
         )
 
         # STP metrics
         self._switch_stp_priority = self.parent._create_gauge(
             MSMetricName.MS_STP_PRIORITY,
             "Switch STP (Spanning Tree Protocol) priority",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.NETWORK_ID],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         # Packet count metrics (5-minute window)
         packet_labels = [
-            LabelName.SERIAL.value,
-            LabelName.NAME.value,
+            LabelName.ORG_ID.value,
+            LabelName.ORG_NAME.value,
             LabelName.NETWORK_ID.value,
             LabelName.NETWORK_NAME.value,
+            LabelName.SERIAL.value,
+            LabelName.NAME.value,
+            LabelName.MODEL.value,
+            LabelName.DEVICE_TYPE.value,
             LabelName.PORT_ID.value,
             LabelName.PORT_NAME.value,
             LabelName.DIRECTION.value,
@@ -237,18 +303,19 @@ class MSCollector(BaseDeviceCollector):
             Switch device data.
 
         """
-        serial = device["serial"]
-        name = device.get("name", serial)
-        model = device.get("model", "")
-        network_id = device.get("networkId", "")
-        network_name = device.get("networkName", network_id)  # Get network name if available
+        # Extract org info from device data
+        org_id = device.get("orgId", "")
+        org_name = device.get("orgName", org_id)
+
+        # Create standard device labels
+        device_labels = create_device_labels(device, org_id=org_id, org_name=org_name)
 
         try:
             # Get port statuses with 1-hour timespan
-            with LogContext(serial=serial, name=name):
+            with LogContext(serial=device_labels["serial"], name=device_labels["name"]):
                 port_statuses = await asyncio.to_thread(
                     self.api.switch.getDeviceSwitchPortsStatuses,
-                    serial,
+                    device_labels["serial"],
                     timespan=3600,  # 1 hour timespan for better accuracy
                 )
                 port_statuses = validate_response_format(
@@ -256,148 +323,97 @@ class MSCollector(BaseDeviceCollector):
                 )
 
             for port in port_statuses:
-                port_id = str(port.get("portId", ""))
-                port_name = port.get("name", f"Port {port_id}")
+                # Create port labels with additional attributes
+                speed = port.get("speed", "")  # e.g., "1 Gbps", "100 Mbps"
+                duplex = port.get("duplex", "")  # e.g., "full", "half"
+                port_labels = create_port_labels(
+                    device, port, org_id=org_id, org_name=org_name, link_speed=speed, duplex=duplex
+                )
 
                 # Port status with speed and duplex
                 is_connected = 1 if port.get("status") == "Connected" else 0
-                speed = port.get("speed", "")  # e.g., "1 Gbps", "100 Mbps"
-                duplex = port.get("duplex", "")  # e.g., "full", "half"
-
-                self._switch_port_status.labels(
-                    serial=serial,
-                    name=name,
-                    network_id=network_id,
-                    network_name=network_name,
-                    port_id=port_id,
-                    port_name=port_name,
-                    link_speed=speed,
-                    duplex=duplex,
-                ).set(is_connected)
+                self._switch_port_status.labels(**port_labels).set(is_connected)
 
                 # Traffic counters (rate in bytes per second)
                 if "trafficInKbps" in port:
                     traffic_counters = port["trafficInKbps"]
 
                     if "recv" in traffic_counters:
-                        self._switch_port_traffic.labels(
-                            serial=serial,
-                            name=name,
-                            network_id=network_id,
-                            network_name=network_name,
-                            port_id=port_id,
-                            port_name=port_name,
-                            direction="rx",
-                        ).set(traffic_counters["recv"] * 1000 / 8)  # Convert kbps to bytes/sec
+                        rx_labels = create_port_labels(
+                            device, port, org_id=org_id, org_name=org_name, direction="rx"
+                        )
+                        self._switch_port_traffic.labels(**rx_labels).set(
+                            traffic_counters["recv"] * 1000 / 8  # Convert kbps to bytes/sec
+                        )
 
                     if "sent" in traffic_counters:
-                        self._switch_port_traffic.labels(
-                            serial=serial,
-                            name=name,
-                            network_id=network_id,
-                            network_name=network_name,
-                            port_id=port_id,
-                            port_name=port_name,
-                            direction="tx",
-                        ).set(traffic_counters["sent"] * 1000 / 8)  # Convert kbps to bytes/sec
+                        tx_labels = create_port_labels(
+                            device, port, org_id=org_id, org_name=org_name, direction="tx"
+                        )
+                        self._switch_port_traffic.labels(**tx_labels).set(
+                            traffic_counters["sent"] * 1000 / 8  # Convert kbps to bytes/sec
+                        )
 
                 # Usage counters (total bytes over timespan)
                 if "usageInKb" in port:
                     usage_counters = port["usageInKb"]
 
                     if "recv" in usage_counters:
-                        self._switch_port_usage.labels(
-                            serial=serial,
-                            name=name,
-                            network_id=network_id,
-                            network_name=network_name,
-                            port_id=port_id,
-                            port_name=port_name,
-                            direction="rx",
-                        ).set(usage_counters["recv"] * 1024)  # Convert KB to bytes
+                        rx_labels = create_port_labels(
+                            device, port, org_id=org_id, org_name=org_name, direction="rx"
+                        )
+                        self._switch_port_usage.labels(**rx_labels).set(
+                            usage_counters["recv"] * 1024  # Convert KB to bytes
+                        )
 
                     if "sent" in usage_counters:
-                        self._switch_port_usage.labels(
-                            serial=serial,
-                            name=name,
-                            network_id=network_id,
-                            network_name=network_name,
-                            port_id=port_id,
-                            port_name=port_name,
-                            direction="tx",
-                        ).set(usage_counters["sent"] * 1024)  # Convert KB to bytes
+                        tx_labels = create_port_labels(
+                            device, port, org_id=org_id, org_name=org_name, direction="tx"
+                        )
+                        self._switch_port_usage.labels(**tx_labels).set(
+                            usage_counters["sent"] * 1024  # Convert KB to bytes
+                        )
 
                     if "total" in usage_counters:
-                        self._switch_port_usage.labels(
-                            serial=serial,
-                            name=name,
-                            network_id=network_id,
-                            network_name=network_name,
-                            port_id=port_id,
-                            port_name=port_name,
-                            direction="total",
-                        ).set(usage_counters["total"] * 1024)  # Convert KB to bytes
+                        total_labels = create_port_labels(
+                            device, port, org_id=org_id, org_name=org_name, direction="total"
+                        )
+                        self._switch_port_usage.labels(**total_labels).set(
+                            usage_counters["total"] * 1024  # Convert KB to bytes
+                        )
 
                 # Client count
                 client_count = port.get("clientCount", 0)
-                self._switch_port_client_count.labels(
-                    serial=serial,
-                    name=name,
-                    network_id=network_id,
-                    network_name=network_name,
-                    port_id=port_id,
-                    port_name=port_name,
-                ).set(client_count)
+                # Use base port labels without direction for client count
+                port_labels_no_extra = create_port_labels(
+                    device, port, org_id=org_id, org_name=org_name
+                )
+                self._switch_port_client_count.labels(**port_labels_no_extra).set(client_count)
 
             # Extract POE data from port statuses (POE data is included in port status)
             total_poe_consumption = 0
 
             for port in port_statuses:
-                port_id = str(port.get("portId", ""))
-                port_name = port.get("name", f"Port {port_id}")
+                # Create port labels for POE metrics
+                port_labels = create_port_labels(device, port, org_id=org_id, org_name=org_name)
 
                 # Check if port has POE data
                 poe_info = port.get("poe", {})
                 if poe_info.get("isAllocated", False):
                     # Port is drawing POE power
                     power_used = port.get("powerUsageInWh", 0)
-
-                    self._switch_poe_port_power.labels(
-                        serial=serial,
-                        name=name,
-                        network_id=network_id,
-                        network_name=network_name,
-                        port_id=port_id,
-                        port_name=port_name,
-                    ).set(power_used)
-
+                    self._switch_poe_port_power.labels(**port_labels).set(power_used)
                     total_poe_consumption += power_used
                 else:
                     # Port is not drawing POE power
-                    self._switch_poe_port_power.labels(
-                        serial=serial,
-                        name=name,
-                        network_id=network_id,
-                        network_name=network_name,
-                        port_id=port_id,
-                        port_name=port_name,
-                    ).set(0)
+                    self._switch_poe_port_power.labels(**port_labels).set(0)
 
             # Set switch-level POE total
-            self._switch_poe_total_power.labels(
-                serial=serial,
-                name=name,
-                model=model,
-                network_id=network_id,
-            ).set(total_poe_consumption)
+            self._switch_poe_total_power.labels(**device_labels).set(total_poe_consumption)
 
             # Set total switch power usage (POE consumption is the main power draw)
             # This is an approximation - actual switch base power consumption varies by model
-            self._switch_power.labels(
-                serial=serial,
-                name=name,
-                model=model,
-            ).set(total_poe_consumption)
+            self._switch_power.labels(**device_labels).set(total_poe_consumption)
 
             # Note: POE budget is not available via API, would need a lookup table by model
 
@@ -407,7 +423,7 @@ class MSCollector(BaseDeviceCollector):
         except Exception:
             logger.exception(
                 "Failed to collect switch metrics",
-                serial=serial,
+                serial=device_labels["serial"],
             )
 
     @log_api_call("getOrganizationNetworks")
@@ -416,7 +432,7 @@ class MSCollector(BaseDeviceCollector):
         continue_on_error=True,
     )
     async def collect_stp_priorities(
-        self, org_id: str, device_lookup: dict[str, dict[str, Any]] | None = None
+        self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]] | None = None
     ) -> None:
         """Collect STP priorities for all switches in an organization.
 
@@ -424,6 +440,8 @@ class MSCollector(BaseDeviceCollector):
         ----------
         org_id : str
             Organization ID.
+        org_name : str
+            Organization name.
         device_lookup : dict[str, dict[str, Any]] | None
             Device lookup table. If not provided, uses parent's _device_lookup.
 
@@ -469,21 +487,25 @@ class MSCollector(BaseDeviceCollector):
 
                     # Set metrics for each switch in the network
                     switch_priorities = stp_config.switch_priorities
+                    network_name = network.get("name", network_id)
+
                     for switch_serial, priority in switch_priorities.items():
                         # Get switch details from device lookup
-                        device_info = devices.get(switch_serial, {})
-                        switch_name = device_info.get("name", switch_serial)
+                        device_info = devices.get(switch_serial, {"serial": switch_serial})
+                        device_info["networkId"] = network_id
+                        device_info["networkName"] = network_name
+                        device_info["orgId"] = org_id
+                        device_info["orgName"] = org_name
 
-                        self._switch_stp_priority.labels(
-                            serial=switch_serial,
-                            name=switch_name,
-                            network_id=network_id,
-                        ).set(priority)
+                        # Create standard device labels
+                        labels = create_device_labels(device_info, org_id=org_id, org_name=org_name)
+
+                        self._switch_stp_priority.labels(**labels).set(priority)
 
                         logger.debug(
                             "Set STP priority",
                             serial=switch_serial,
-                            name=switch_name,
+                            name=labels["name"],
                             network_id=network_id,
                             priority=priority,
                         )
@@ -514,17 +536,19 @@ class MSCollector(BaseDeviceCollector):
             Switch device data.
 
         """
-        serial = device["serial"]
-        name = device.get("name", serial)
-        network_id = device.get("networkId", "")
-        network_name = device.get("networkName", network_id)
+        # Extract org info from device data
+        org_id = device.get("orgId", "")
+        org_name = device.get("orgName", org_id)
+
+        # Create standard device labels
+        device_labels = create_device_labels(device, org_id=org_id, org_name=org_name)
 
         try:
             # Get packet statistics with 5-minute timespan
-            with LogContext(serial=serial, name=name):
+            with LogContext(serial=device_labels["serial"], name=device_labels["name"]):
                 packet_stats = await asyncio.to_thread(
                     self.api.switch.getDeviceSwitchPortsStatusesPackets,
-                    serial,
+                    device_labels["serial"],
                     timespan=300,  # 5-minute window
                 )
                 packet_stats = validate_response_format(
@@ -563,10 +587,6 @@ class MSCollector(BaseDeviceCollector):
             }
 
             for port_data in packet_stats:
-                port_id = str(port_data.get("portId", ""))
-                # Use the port name from the port status call if available
-                port_name = f"Port {port_id}"
-
                 packets = port_data.get("packets", [])
 
                 for packet_type in packets:
@@ -580,36 +600,21 @@ class MSCollector(BaseDeviceCollector):
                         sent = packet_type.get("sent", 0)
                         recv = packet_type.get("recv", 0)
 
+                        # Create port labels for each direction
+                        total_labels = create_port_labels(
+                            device, port_data, org_id=org_id, org_name=org_name, direction="total"
+                        )
+                        sent_labels = create_port_labels(
+                            device, port_data, org_id=org_id, org_name=org_name, direction="sent"
+                        )
+                        recv_labels = create_port_labels(
+                            device, port_data, org_id=org_id, org_name=org_name, direction="recv"
+                        )
+
                         # Set count metrics
-                        count_metric.labels(
-                            serial=serial,
-                            name=name,
-                            network_id=network_id,
-                            network_name=network_name,
-                            port_id=port_id,
-                            port_name=port_name,
-                            direction="total",
-                        ).set(total)
-
-                        count_metric.labels(
-                            serial=serial,
-                            name=name,
-                            network_id=network_id,
-                            network_name=network_name,
-                            port_id=port_id,
-                            port_name=port_name,
-                            direction="sent",
-                        ).set(sent)
-
-                        count_metric.labels(
-                            serial=serial,
-                            name=name,
-                            network_id=network_id,
-                            network_name=network_name,
-                            port_id=port_id,
-                            port_name=port_name,
-                            direction="recv",
-                        ).set(recv)
+                        count_metric.labels(**total_labels).set(total)
+                        count_metric.labels(**sent_labels).set(sent)
+                        count_metric.labels(**recv_labels).set(recv)
 
                         # Rate per second
                         rate_data = packet_type.get("ratePerSec", {})
@@ -618,45 +623,19 @@ class MSCollector(BaseDeviceCollector):
                         rate_recv = rate_data.get("recv", 0)
 
                         # Set rate metrics
-                        rate_metric.labels(
-                            serial=serial,
-                            name=name,
-                            network_id=network_id,
-                            network_name=network_name,
-                            port_id=port_id,
-                            port_name=port_name,
-                            direction="total",
-                        ).set(rate_total)
-
-                        rate_metric.labels(
-                            serial=serial,
-                            name=name,
-                            network_id=network_id,
-                            network_name=network_name,
-                            port_id=port_id,
-                            port_name=port_name,
-                            direction="sent",
-                        ).set(rate_sent)
-
-                        rate_metric.labels(
-                            serial=serial,
-                            name=name,
-                            network_id=network_id,
-                            network_name=network_name,
-                            port_id=port_id,
-                            port_name=port_name,
-                            direction="recv",
-                        ).set(rate_recv)
+                        rate_metric.labels(**total_labels).set(rate_total)
+                        rate_metric.labels(**sent_labels).set(rate_sent)
+                        rate_metric.labels(**recv_labels).set(rate_recv)
 
             logger.debug(
                 "Collected packet statistics",
-                serial=serial,
-                name=name,
+                serial=device_labels["serial"],
+                name=device_labels["name"],
                 port_count=len(packet_stats),
             )
 
         except Exception:
             logger.exception(
                 "Failed to collect packet statistics",
-                serial=serial,
+                serial=device_labels["serial"],
             )

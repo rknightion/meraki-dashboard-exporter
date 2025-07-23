@@ -215,11 +215,31 @@ def resolve_metric_names(metrics: list[dict[str, Any]], constants_dir: Path) -> 
 
 
 def generate_markdown(metrics: list[dict[str, Any]]) -> str:
-    """Generate markdown documentation for metrics in mkdocs style."""
+    """Generate enhanced markdown documentation for metrics in mkdocs style."""
     lines = ["# Metrics Reference", ""]
     lines.append(
         "This page provides a comprehensive reference of all Prometheus metrics exposed by the Meraki Dashboard Exporter."
     )
+    lines.append("")
+
+    # Add statistics summary
+    total_metrics = len(metrics)
+    metric_types = {}
+    collector_counts = {}
+
+    for metric in metrics:
+        metric_type = metric["type"]
+        collector = metric["class"] or "Unknown"
+
+        metric_types[metric_type] = metric_types.get(metric_type, 0) + 1
+        collector_counts[collector] = collector_counts.get(collector, 0) + 1
+
+    lines.append('!!! summary "Metrics Summary"')
+    lines.append(f"    📊 **Total Metrics:** {total_metrics}")
+    lines.append(f"    🏗️ **Collectors:** {len(collector_counts)}")
+    lines.append(f"    📈 **Gauges:** {metric_types.get('gauge', 0)}")
+    lines.append(f"    📊 **Counters:** {metric_types.get('counter', 0)}")
+    lines.append(f"    ℹ️ **Info Metrics:** {metric_types.get('info', 0)}")
     lines.append("")
 
     # Add table of contents
@@ -228,44 +248,147 @@ def generate_markdown(metrics: list[dict[str, Any]]) -> str:
     lines.append("The exporter provides metrics across several categories:")
     lines.append("")
 
-    # Count metrics by collector
-    collector_counts: dict[str, int] = {}
-    for metric in metrics:
-        collector = metric["class"] or "Unknown"
-        collector_counts[collector] = collector_counts.get(collector, 0) + 1
-
     lines.append("| Collector | Metrics | Description |")
     lines.append("|-----------|---------|-------------|")
 
     collector_descriptions = {
-        "AlertsCollector": "Active alerts by severity, type, and category",
-        "ClientsCollector": "Detailed client-level metrics including usage and status",
-        "ConfigCollector": "Organization security settings and configuration tracking",
-        "DeviceCollector": "Device status, performance, and uptime metrics",
-        "MSCollector": "Switch-specific metrics including port status, power, and PoE",
-        "MRCollector": "Access point metrics including clients, power, and performance",
-        "MTCollector": "Environmental sensor metrics from MT devices",
-        "MTSensorCollector": "Environmental monitoring from MT sensors",
-        "NetworkHealthCollector": "Network-wide wireless health and performance",
-        "OrganizationCollector": "Organization-level metrics including API usage and licenses",
-        "RFHealthCollector": "RF health and channel utilization metrics",
-        "ConnectionStatsCollector": "Wireless connection statistics",
-        "DataRatesCollector": "Network throughput and data rate metrics",
-        "BluetoothCollector": "Bluetooth client detection metrics",
-        "APIUsageCollector": "API request tracking and rate limit metrics",
-        "LicenseCollector": "License usage and expiration tracking",
-        "ClientOverviewCollector": "Client count and usage overview metrics",
+        "AlertsCollector": "🚨 Active alerts by severity, type, and category",
+        "ClientsCollector": "👥 Detailed client-level metrics including usage and status",
+        "ConfigCollector": "⚙️ Organization security settings and configuration tracking",
+        "DeviceCollector": "📱 Device status, performance, and uptime metrics",
+        "MSCollector": "🔀 Switch-specific metrics including port status, power, and PoE",
+        "MRCollector": "📡 Access point metrics including clients, power, and performance",
+        "MTCollector": "🌡️ Environmental sensor metrics from MT devices",
+        "MTSensorCollector": "📊 Environmental monitoring from MT sensors",
+        "NetworkHealthCollector": "🏥 Network-wide wireless health and performance",
+        "OrganizationCollector": "🏢 Organization-level metrics including API usage and licenses",
+        "RFHealthCollector": "📶 RF health and channel utilization metrics",
+        "ConnectionStatsCollector": "🔗 Wireless connection statistics",
+        "DataRatesCollector": "⚡ Network throughput and data rate metrics",
+        "BluetoothCollector": "📲 Bluetooth client detection metrics",
+        "APIUsageCollector": "🔄 API request tracking and rate limit metrics",
+        "LicenseCollector": "📄 License usage and expiration tracking",
+        "ClientOverviewCollector": "👁️ Client count and usage overview metrics",
     }
 
     for collector in sorted(collector_counts.keys()):
         count = collector_counts[collector]
         description = collector_descriptions.get(collector, "Various metrics")
-        lines.append(f"| {collector} | {count} | {description} |")
+        anchor = collector.lower().replace("collector", "")
+        lines.append(f"| [{collector}](#{anchor}) | {count} | {description} |")
 
     lines.append("")
 
-    # Add metrics by collector
-    lines.append("## Metrics by Collector")
+    # Add Quick Navigation section
+    lines.append("## 🧭 Quick Navigation")
+    lines.append("")
+
+    # Navigation by metric type
+    lines.append("### By Metric Type")
+    lines.append("")
+
+    # Group metrics by type for navigation
+    metrics_by_type = {}
+    for metric in metrics:
+        metric_type = metric["type"]
+        if metric_type not in metrics_by_type:
+            metrics_by_type[metric_type] = []
+        metrics_by_type[metric_type].append(metric)
+
+    type_descriptions = {
+        "gauge": "📈 **Gauges** - Values that can increase or decrease (current state)",
+        "counter": "📊 **Counters** - Cumulative values that only increase",
+        "info": "ℹ️ **Info Metrics** - Metadata and configuration information",
+    }
+
+    for metric_type in sorted(metrics_by_type.keys()):
+        metrics_list = metrics_by_type[metric_type]
+        description = type_descriptions.get(metric_type, f"**{metric_type.title()}** metrics")
+
+        lines.append(f'??? abstract "{description} ({len(metrics_list)} metrics)"')
+        lines.append("")
+
+        # Sort metrics alphabetically within type
+        sorted_metrics = sorted(metrics_list, key=lambda m: m.get("actual_name", m.get("name", "")))
+
+        # Group into columns for better readability
+        for i, metric in enumerate(sorted_metrics):
+            metric_name = metric.get("actual_name", metric.get("name", "Unknown"))
+            collector = metric["class"] or "Unknown"
+            anchor = metric_name.lower().replace("_", "-").replace(".", "-")
+
+            if i % 3 == 0:
+                if i > 0:
+                    lines.append("    ")
+                lines.append('    <div class="grid cards" markdown>')
+                lines.append("")
+
+            lines.append(f"    - [`{metric_name}`](#{anchor})")
+            lines.append("      ---")
+            lines.append(f"      {collector}")
+            lines.append("")
+
+            if (i + 1) % 3 == 0 or i == len(sorted_metrics) - 1:
+                lines.append("    </div>")
+
+        lines.append("")
+
+    # Navigation by collector
+    lines.append("### By Collector")
+    lines.append("")
+
+    lines.append('=== "Device & Infrastructure"')
+    lines.append("")
+    device_collectors = [
+        "DeviceCollector",
+        "MSCollector",
+        "MRCollector",
+        "MTCollector",
+        "MTSensorCollector",
+    ]
+    for collector in sorted(device_collectors):
+        if collector in collector_counts:
+            count = collector_counts[collector]
+            anchor = collector.lower().replace("collector", "")
+            lines.append(f"    - [{collector}](#{anchor}) ({count} metrics)")
+    lines.append("")
+
+    lines.append('=== "Network & Health"')
+    lines.append("")
+    network_collectors = [
+        "NetworkHealthCollector",
+        "RFHealthCollector",
+        "ConnectionStatsCollector",
+        "DataRatesCollector",
+        "BluetoothCollector",
+    ]
+    for collector in sorted(network_collectors):
+        if collector in collector_counts:
+            count = collector_counts[collector]
+            anchor = collector.lower().replace("collector", "")
+            lines.append(f"    - [{collector}](#{anchor}) ({count} metrics)")
+    lines.append("")
+
+    lines.append('=== "Organization & Management"')
+    lines.append("")
+    org_collectors = [
+        "OrganizationCollector",
+        "APIUsageCollector",
+        "LicenseCollector",
+        "ClientOverviewCollector",
+        "AlertsCollector",
+        "ClientsCollector",
+        "ConfigCollector",
+    ]
+    for collector in sorted(org_collectors):
+        if collector in collector_counts:
+            count = collector_counts[collector]
+            anchor = collector.lower().replace("collector", "")
+            lines.append(f"    - [{collector}](#{anchor}) ({count} metrics)")
+    lines.append("")
+
+    # Enhanced Metrics by Collector section
+    lines.append("## 📋 Metrics by Collector")
     lines.append("")
 
     # Group metrics by collector class
@@ -276,55 +399,82 @@ def generate_markdown(metrics: list[dict[str, Any]]) -> str:
             by_collector[collector] = []
         by_collector[collector].append(metric)
 
-    # Sort collectors
+    # Sort collectors and add enhanced formatting
     for collector in sorted(by_collector.keys()):
         collector_metrics = by_collector[collector]
-        lines.append(f"### {collector}")
+        anchor = collector.lower().replace("collector", "")
+
+        lines.append(f"### {collector} {{ #{anchor} }}")
         lines.append("")
 
-        # Find the file for this collector
+        # Add collector info box
+        description = collector_descriptions.get(collector, "Various metrics")
         if collector_metrics:
             file_path = collector_metrics[0]["file"]
-            lines.append(f"**Source:** `{file_path}`")
+
+            lines.append('!!! info "Collector Information"')
+            lines.append(f"    **Description:** {description}")
+            lines.append(f"    **Source File:** `{file_path}`")
+            lines.append(f"    **Metrics Count:** {len(collector_metrics)}")
             lines.append("")
 
         # Sort metrics by name
         collector_metrics.sort(key=lambda m: m.get("actual_name", m.get("name", "")))
 
-        for metric in collector_metrics:
+        for i, metric in enumerate(collector_metrics):
             metric_name = metric.get("actual_name", metric.get("name", "Unknown"))
-            lines.append(f"#### `{metric_name}`")
+            anchor = metric_name.lower().replace("_", "-").replace(".", "-")
+
+            # Create metric card
+            lines.append(f"#### `{metric_name}` {{ #{anchor} }}")
+            lines.append("")
+
+            # Metric type badge
+            type_badge = {"gauge": "🔢 Gauge", "counter": "📈 Counter", "info": "ℹ️ Info"}
+            badge = type_badge.get(metric["type"], metric["type"])
+            lines.append(f"**Type:** {badge}")
             lines.append("")
 
             if "description" in metric:
                 lines.append(f"**Description:** {metric['description']}")
                 lines.append("")
 
-            lines.append(f"**Type:** {metric['type']}")
-            lines.append("")
-
-            if "labels" in metric:
-                labels_list = ", ".join(f"`{label}`" for label in metric["labels"])
-                lines.append(f"**Labels:** {labels_list}")
+            if "labels" in metric and metric["labels"]:
+                lines.append("**Labels:**")
+                lines.append("")
+                for label in metric["labels"]:
+                    lines.append(f"- `{label}`")
                 lines.append("")
 
+            # Technical details in collapsible section
+            lines.append('??? example "Technical Details"')
+            lines.append("")
             if "constant_name" in metric:
-                lines.append(f"**Constant:** `{metric['constant_name']}`")
+                lines.append(f"    **Constant:** `{metric['constant_name']}`")
                 lines.append("")
-
-            lines.append(f"**Variable:** `self.{metric['variable']}` (line {metric['line']})")
+            lines.append(f"    **Variable:** `self.{metric['variable']}`")
+            lines.append(f"    **Source Line:** {metric['line']}")
             lines.append("")
 
-    lines.append("## Complete Metrics Index")
+            # Add separator between metrics (except for last one)
+            if i < len(collector_metrics) - 1:
+                lines.append("---")
+                lines.append("")
+
+        lines.append("")
+
+    # Enhanced Complete Metrics Index
+    lines.append("## 📖 Complete Metrics Index")
     lines.append("")
-    lines.append("All metrics in alphabetical order:")
+    lines.append("All metrics in alphabetical order with quick access:")
     lines.append("")
 
     # Sort all metrics by name
     all_sorted = sorted(metrics, key=lambda m: m.get("actual_name", m.get("name", "")))
 
-    lines.append("| Metric Name | Type | Collector | Description |")
-    lines.append("|-------------|------|-----------|-------------|")
+    # Create searchable table
+    lines.append("| Metric Name | Type | Collector | Labels | Description |")
+    lines.append("|-------------|------|-----------|--------|-------------|")
 
     for metric in all_sorted:
         name = metric.get("actual_name", metric.get("name", "Unknown"))
@@ -332,19 +482,39 @@ def generate_markdown(metrics: list[dict[str, Any]]) -> str:
         collector = metric["class"] or "Unknown"
         description = metric.get("description", "").replace("|", "\\|")
 
-        lines.append(f"| `{name}` | {metric_type} | {collector} | {description} |")
+        # Create anchor link
+        anchor = name.lower().replace("_", "-").replace(".", "-")
+
+        # Format labels
+        label_count = len(metric.get("labels", []))
+        labels_text = f"{label_count} labels" if label_count > 0 else "No labels"
+
+        # Add type emoji
+        type_emoji = {"gauge": "🔢", "counter": "📈", "info": "ℹ️"}.get(metric_type, "")
+
+        lines.append(
+            f"| [`{name}`](#{anchor}) | {type_emoji} {metric_type} | {collector} | {labels_text} | {description} |"
+        )
 
     lines.append("")
 
-    # Add notes section
-    lines.append("## Notes")
+    # Enhanced notes section
+    lines.append("## 📚 Usage Guide")
     lines.append("")
-    lines.append('!!! info "Metric Types"')
-    lines.append("    - **Gauge**: Current value that can go up or down")
-    lines.append("    - **Counter**: Cumulative value that only increases")
-    lines.append("    - **Info**: Metadata with labels but value always 1")
+
+    lines.append('!!! info "Metric Types Explained"')
+    lines.append(
+        "    - 🔢 **Gauge**: Current value that can go up or down (e.g., current temperature, active connections)"
+    )
+    lines.append(
+        "    - 📈 **Counter**: Cumulative value that only increases (e.g., total requests, total bytes)"
+    )
+    lines.append(
+        "    - ℹ️ **Info**: Metadata with labels but value always 1 (e.g., device information, configuration)"
+    )
     lines.append("")
-    lines.append('!!! tip "Label Usage"')
+
+    lines.append('!!! tip "Querying with Labels"')
     lines.append(
         "    All metrics include relevant labels for filtering and aggregation. Use label selectors in your queries:"
     )
@@ -354,8 +524,31 @@ def generate_markdown(metrics: list[dict[str, Any]]) -> str:
     lines.append("")
     lines.append("    # Filter by device type")
     lines.append('    meraki_device_up{device_model=~"MS.*"}')
+    lines.append("")
+    lines.append("    # Aggregate across multiple labels")
+    lines.append("    sum(meraki_device_up) by (org_name, device_model)")
     lines.append("    ```")
     lines.append("")
+
+    lines.append('!!! example "Common Query Patterns"')
+    lines.append("    ```promql")
+    lines.append("    # Device health overview")
+    lines.append("    avg(meraki_device_up) by (org_name)")
+    lines.append("")
+    lines.append("    # Network utilization")
+    lines.append("    rate(meraki_network_traffic_bytes_total[5m])")
+    lines.append("")
+    lines.append("    # Alert summary")
+    lines.append("    sum(meraki_alerts_total) by (severity, type)")
+    lines.append("    ```")
+    lines.append("")
+
+    lines.append('!!! warning "Performance Considerations"')
+    lines.append("    - Use appropriate time ranges for rate() and increase() functions")
+    lines.append("    - Consider cardinality when using high-cardinality labels")
+    lines.append("    - Monitor query performance in production environments")
+    lines.append("")
+
     lines.append(
         "For more information on using these metrics, see the [Overview](overview.md) page."
     )

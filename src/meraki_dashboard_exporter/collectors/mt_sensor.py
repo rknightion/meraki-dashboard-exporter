@@ -53,109 +53,271 @@ class MTSensorCollector(MetricCollector):
         self._sensor_temperature = self._create_gauge(
             MTMetricName.MT_TEMPERATURE_CELSIUS,
             "Temperature reading in Celsius",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_humidity = self._create_gauge(
             MTMetricName.MT_HUMIDITY_PERCENT,
             "Humidity percentage",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_door = self._create_gauge(
             MTMetricName.MT_DOOR_STATUS,
             "Door sensor status (1 = open, 0 = closed)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_water = self._create_gauge(
             MTMetricName.MT_WATER_DETECTED,
             "Water detection status (1 = detected, 0 = not detected)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_co2 = self._create_gauge(
             MTMetricName.MT_CO2_PPM,
             "CO2 level in parts per million",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_tvoc = self._create_gauge(
             MTMetricName.MT_TVOC_PPB,
             "Total volatile organic compounds in parts per billion",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_pm25 = self._create_gauge(
             MTMetricName.MT_PM25_UG_M3,
             "PM2.5 particulate matter in micrograms per cubic meter",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_noise = self._create_gauge(
             MTMetricName.MT_NOISE_DB,
             "Noise level in decibels",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_battery = self._create_gauge(
             MTMetricName.MT_BATTERY_PERCENTAGE,
             "Battery level percentage",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_air_quality = self._create_gauge(
             MTMetricName.MT_INDOOR_AIR_QUALITY_SCORE,
             "Indoor air quality score (0-100)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_voltage = self._create_gauge(
             MTMetricName.MT_VOLTAGE_VOLTS,
             "Voltage in volts",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_current = self._create_gauge(
             MTMetricName.MT_CURRENT_AMPS,
             "Current in amperes",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_real_power = self._create_gauge(
             MTMetricName.MT_REAL_POWER_WATTS,
             "Real power in watts",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_apparent_power = self._create_gauge(
             MTMetricName.MT_APPARENT_POWER_VA,
             "Apparent power in volt-amperes",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_power_factor = self._create_gauge(
             MTMetricName.MT_POWER_FACTOR_PERCENT,
             "Power factor percentage",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_frequency = self._create_gauge(
             MTMetricName.MT_FREQUENCY_HZ,
             "Frequency in hertz",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_downstream_power = self._create_gauge(
             MTMetricName.MT_DOWNSTREAM_POWER_ENABLED,
             "Downstream power status (1 = enabled, 0 = disabled)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
         self._sensor_remote_lockout = self._create_gauge(
             MTMetricName.MT_REMOTE_LOCKOUT_STATUS,
             "Remote lockout switch status (1 = locked, 0 = unlocked)",
-            labelnames=[LabelName.SERIAL, LabelName.NAME, LabelName.SENSOR_TYPE],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
         )
 
     @with_error_handling(

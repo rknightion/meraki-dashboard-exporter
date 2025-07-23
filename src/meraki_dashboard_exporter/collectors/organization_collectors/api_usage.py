@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
@@ -72,14 +73,16 @@ class APIUsageCollector(BaseOrganizationCollector):
                 for status_code, count in response_codes.items():
                     if count > 0:
                         total_requests += count
+                        # Create org labels using helper
+                        org_data = {"id": org_id, "name": org_name}
+                        labels = create_org_labels(
+                            org_data,
+                            status_code=status_code,
+                        )
                         # Set metric for this status code
                         self._set_metric_value(
                             "_api_requests_by_status",
-                            {
-                                "org_id": org_id,
-                                "org_name": org_name,
-                                "status_code": status_code,
-                            },
+                            labels,
                             count,
                         )
                         logger.debug(
@@ -89,13 +92,14 @@ class APIUsageCollector(BaseOrganizationCollector):
                             count=count,
                         )
 
+                # Create org labels using helper
+                org_data = {"id": org_id, "name": org_name}
+                org_labels = create_org_labels(org_data)
+
                 # Also set total requests metric
                 self._set_metric_value(
                     "_api_requests_total",
-                    {
-                        "org_id": org_id,
-                        "org_name": org_name,
-                    },
+                    org_labels,
                     total_requests,
                 )
 

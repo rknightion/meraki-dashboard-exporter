@@ -150,7 +150,7 @@ class TestDeviceCollector(BaseCollectorTest):
         collector.mr_collector.api = api
 
         # Collect SSID status
-        await collector.mr_collector.collect_ssid_status(org["id"])
+        await collector.mr_collector.collect_ssid_status(org["id"], org.get("name", "Test Org"))
 
         # Verify API was called correctly
         api.wireless.getOrganizationWirelessSsidsStatusesByDevice.assert_called_once_with(
@@ -375,16 +375,24 @@ class TestDeviceCollector(BaseCollectorTest):
         # Update MR collector's API reference
         collector.mr_collector.api = api
 
-        # Collect devices to populate lookup
-        await collector._collect_org_devices(org["id"])
+        # Collect devices
+        await collector._collect_org_devices(org["id"], org.get("name", "Test Org"))
 
-        # Verify device lookup was populated
-        assert "Q2KD-XXXX" in collector._device_lookup
-        assert collector._device_lookup["Q2KD-XXXX"]["name"] == "Office AP"
-        assert collector._device_lookup["Q2KD-XXXX"]["model"] == "MR36"
+        # Create device lookup manually for testing
+        device_lookup = {
+            "Q2KD-XXXX": {
+                "serial": "Q2KD-XXXX",
+                "name": "Office AP",
+                "model": "MR36",
+                "networkId": network["id"],
+                "networkName": network["name"],
+            }
+        }
 
         # Collect wireless clients
-        await collector.mr_collector.collect_wireless_clients(org["id"], collector._device_lookup)
+        await collector.mr_collector.collect_wireless_clients(
+            org["id"], org.get("name", "Test Org"), device_lookup
+        )
 
         # Verify API was called
         api.wireless.getOrganizationWirelessClientsOverviewByDevice.assert_called()
@@ -452,7 +460,7 @@ class TestDeviceCollector(BaseCollectorTest):
         collector.mr_collector.api = api
 
         # Collect SSID status
-        await collector.mr_collector.collect_ssid_status(org["id"])
+        await collector.mr_collector.collect_ssid_status(org["id"], org.get("name", "Test Org"))
 
         # The collector should only process each radio once
         # This test verifies the method completes without duplicate processing

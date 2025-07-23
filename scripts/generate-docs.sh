@@ -28,6 +28,17 @@ else
 fi
 
 echo ""
+
+# Generate collector documentation
+echo "🏗️  Generating collector documentation..."
+if uv run python src/meraki_dashboard_exporter/tools/generate_collector_docs.py; then
+    echo "   ✅ Collector documentation generated: docs/collectors.md"
+else
+    echo "   ❌ Failed to generate collector documentation"
+    exit 1
+fi
+
+echo ""
 echo "✅ Documentation generation completed successfully!"
 
 # Check if there are any git changes

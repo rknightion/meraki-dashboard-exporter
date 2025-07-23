@@ -9,6 +9,7 @@ from ..core.api_helpers import create_api_helper
 from ..core.collector import MetricCollector
 from ..core.constants import OrgMetricName, UpdateTier
 from ..core.error_handling import ErrorCategory, with_error_handling
+from ..core.label_helpers import create_org_labels
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call, log_batch_operation
 from ..core.logging_helpers import LogContext, log_metric_collection_summary
@@ -250,12 +251,12 @@ class OrganizationCollector(MetricCollector):
 
         try:
             with LogContext(org_id=org_id, org_name=org_name):
+                # Create org labels using helper
+                org_labels = create_org_labels(org)
+
                 # Set organization info
                 if self._org_info:
-                    self._org_info.labels(
-                        org_id=org_id,
-                        org_name=org_name,
-                    ).info({
+                    self._org_info.labels(**org_labels).info({
                         "url": org.get("url", ""),
                         "api_enabled": str(org.get("api", {}).get("enabled", False)),
                     })
@@ -319,11 +320,12 @@ class OrganizationCollector(MetricCollector):
 
             # Count total networks
             total_networks = len(networks)
+            # Create org labels using helper
+            org_data = {"id": org_id, "name": org_name}
+            org_labels = create_org_labels(org_data)
+
             if self._networks_total:
-                self._networks_total.labels(
-                    org_id=org_id,
-                    org_name=org_name,
-                ).set(total_networks)
+                self._networks_total.labels(**org_labels).set(total_networks)
             else:
                 logger.error("_networks_total metric not initialized")
 
@@ -364,13 +366,16 @@ class OrganizationCollector(MetricCollector):
                 device_counts[device_type] = device_counts.get(device_type, 0) + 1
 
             # Set metrics for each device type
+            # Create org labels using helper
+            org_data = {"id": org_id, "name": org_name}
+
             if self._devices_total:
                 for device_type, count in device_counts.items():
-                    self._devices_total.labels(
-                        org_id=org_id,
-                        org_name=org_name,
+                    labels = create_org_labels(
+                        org_data,
                         device_type=device_type,
-                    ).set(count)
+                    )
+                    self._devices_total.labels(**labels).set(count)
             else:
                 logger.error("_devices_total metric not initialized")
 
@@ -416,15 +421,18 @@ class OrganizationCollector(MetricCollector):
 
             # Process counts
             if "counts" in locals():
+                # Create org labels using helper
+                org_data = {"id": org_id, "name": org_name}
+
                 if self._devices_by_model_total:
                     for model_data in counts:
                         model = model_data.get("model", "Unknown")
                         count = model_data.get("total", 0)
-                        self._devices_by_model_total.labels(
-                            org_id=org_id,
-                            org_name=org_name,
+                        labels = create_org_labels(
+                            org_data,
                             model=model,
-                        ).set(count)
+                        )
+                        self._devices_by_model_total.labels(**labels).set(count)
                 else:
                     logger.error("_devices_by_model_total metric not initialized")
 
@@ -477,14 +485,17 @@ class OrganizationCollector(MetricCollector):
                 availability_counts[key] = availability_counts.get(key, 0) + 1
 
             # Set metrics for each combination
+            # Create org labels using helper
+            org_data = {"id": org_id, "name": org_name}
+
             if self._devices_availability_total:
                 for (status, product_type), count in availability_counts.items():
-                    self._devices_availability_total.labels(
-                        org_id=org_id,
-                        org_name=org_name,
+                    labels = create_org_labels(
+                        org_data,
                         status=status,
                         product_type=product_type,
-                    ).set(count)
+                    )
+                    self._devices_availability_total.labels(**labels).set(count)
             else:
                 logger.error("_devices_availability_total metric not initialized")
 
@@ -541,19 +552,17 @@ class OrganizationCollector(MetricCollector):
                 remaining = counts.get("remaining", 0)
 
                 # Set metrics
+                # Create org labels using helper
+                org_data = {"id": org_id, "name": org_name}
+                org_labels = create_org_labels(org_data)
+
                 if self._packetcaptures_total:
-                    self._packetcaptures_total.labels(
-                        org_id=org_id,
-                        org_name=org_name,
-                    ).set(total)
+                    self._packetcaptures_total.labels(**org_labels).set(total)
                 else:
                     logger.error("_packetcaptures_total metric not initialized")
 
                 if self._packetcaptures_remaining:
-                    self._packetcaptures_remaining.labels(
-                        org_id=org_id,
-                        org_name=org_name,
-                    ).set(remaining)
+                    self._packetcaptures_remaining.labels(**org_labels).set(remaining)
                 else:
                     logger.error("_packetcaptures_remaining metric not initialized")
 
@@ -665,33 +674,24 @@ class OrganizationCollector(MetricCollector):
                 percentage = category_data.get("percentage", 0)
 
                 # Set metrics
+                # Create org labels using helper
+                org_data = {"id": org_id, "name": org_name}
+                labels = create_org_labels(
+                    org_data,
+                    category=sanitized_category,
+                )
+
                 if self._application_usage_total_mb:
-                    self._application_usage_total_mb.labels(
-                        org_id=org_id,
-                        org_name=org_name,
-                        category=sanitized_category,
-                    ).set(total_mb)
+                    self._application_usage_total_mb.labels(**labels).set(total_mb)
 
                 if self._application_usage_downstream_mb:
-                    self._application_usage_downstream_mb.labels(
-                        org_id=org_id,
-                        org_name=org_name,
-                        category=sanitized_category,
-                    ).set(downstream_mb)
+                    self._application_usage_downstream_mb.labels(**labels).set(downstream_mb)
 
                 if self._application_usage_upstream_mb:
-                    self._application_usage_upstream_mb.labels(
-                        org_id=org_id,
-                        org_name=org_name,
-                        category=sanitized_category,
-                    ).set(upstream_mb)
+                    self._application_usage_upstream_mb.labels(**labels).set(upstream_mb)
 
                 if self._application_usage_percentage:
-                    self._application_usage_percentage.labels(
-                        org_id=org_id,
-                        org_name=org_name,
-                        category=sanitized_category,
-                    ).set(percentage)
+                    self._application_usage_percentage.labels(**labels).set(percentage)
 
             logger.debug(
                 "Collected application usage metrics",

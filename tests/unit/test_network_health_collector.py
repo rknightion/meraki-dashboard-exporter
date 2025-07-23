@@ -108,16 +108,19 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             collector, metrics, "getNetworkNetworkHealthChannelUtilization"
         )
 
-        # Verify metrics were set
+        # Verify metrics were set (includes org labels and device_type)
         metrics.assert_gauge_value(
             "meraki_ap_channel_utilization_2_4ghz_percent",
             45,
+            org_id=org["id"],
+            org_name=org["name"],
             serial="Q2KD-XXXX",
             name="AP1",
             model="MR36",
+            device_type="MR",
             network_id=network["id"],
             network_name=network["name"],
-            type="total",  # Channel utilization metrics include a type label
+            utilization_type="total",  # Changed from 'type' to 'utilization_type'
         )
 
     async def test_collect_connection_stats(self, collector, mock_api_builder, metrics):

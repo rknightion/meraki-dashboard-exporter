@@ -178,6 +178,7 @@ nav:
     - metrics/index.md
     - Overview: metrics/overview.md
     - Complete Reference: metrics/metrics.md
+  - Collector Reference: collectors.md
   - Development:
     - Extending Collectors: extending-collectors.md
     - Architecture Decisions:
