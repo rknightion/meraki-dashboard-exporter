@@ -13,7 +13,7 @@ The exporter provides metrics across several categories:
 | ConfigCollector | 14 | Organization security settings and configuration tracking |
 | DeviceCollector | 10 | Device status, performance, and uptime metrics |
 | MRCollector | 38 | Access point metrics including clients, power, and performance |
-| MSCollector | 8 | Switch-specific metrics including port status, power, PoE, and STP |
+| MSCollector | 24 | Switch-specific metrics including port status, power, and PoE |
 | MTSensorCollector | 18 | Environmental monitoring from MT sensors |
 | NetworkHealthCollector | 8 | Network-wide wireless health and performance |
 | OrganizationCollector | 19 | Organization-level metrics including API usage and licenses |
@@ -1048,7 +1048,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `MSMetricName.MS_POE_BUDGET_WATTS`
 
-**Variable:** `self._switch_poe_budget` (line 66)
+**Variable:** `self._switch_poe_budget` (line 111)
 
 #### `meraki_ms_poe_network_total_watthours`
 
@@ -1060,19 +1060,19 @@ The exporter provides metrics across several categories:
 
 **Constant:** `MSMetricName.MS_POE_NETWORK_TOTAL_WATTS`
 
-**Variable:** `self._switch_poe_network_total` (line 72)
+**Variable:** `self._switch_poe_network_total` (line 117)
 
 #### `meraki_ms_poe_port_power_watthours`
 
-**Description:** Per-port POE power consumption in watt-hours (Wh)
+**Description:** Per-port POE power consumption in watt-hours (Wh) over the last 1 hour
 
 **Type:** gauge
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.PORT_ID`, `LabelName.PORT_NAME`
+**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.PORT_ID`, `LabelName.PORT_NAME`
 
 **Constant:** `MSMetricName.MS_POE_PORT_POWER_WATTS`
 
-**Variable:** `self._switch_poe_port_power` (line 54)
+**Variable:** `self._switch_poe_port_power` (line 92)
 
 #### `meraki_ms_poe_total_power_watthours`
 
@@ -1084,7 +1084,159 @@ The exporter provides metrics across several categories:
 
 **Constant:** `MSMetricName.MS_POE_TOTAL_POWER_WATTS`
 
-**Variable:** `self._switch_poe_total_power` (line 60)
+**Variable:** `self._switch_poe_total_power` (line 105)
+
+#### `meraki_ms_port_client_count`
+
+**Description:** Number of clients connected to switch port
+
+**Type:** gauge
+
+**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.PORT_ID`, `LabelName.PORT_NAME`
+
+**Constant:** `MSMetricName.MS_PORT_CLIENT_COUNT`
+
+**Variable:** `self._switch_port_client_count` (line 71)
+
+#### `meraki_ms_port_packets_broadcast`
+
+**Description:** Broadcast packets on switch port (5-minute window)
+
+**Type:** gauge
+
+**Constant:** `MSMetricName.MS_PORT_PACKETS_BROADCAST`
+
+**Variable:** `self._switch_port_packets_broadcast` (line 147)
+
+#### `meraki_ms_port_packets_collisions`
+
+**Description:** Collision packets on switch port (5-minute window)
+
+**Type:** gauge
+
+**Constant:** `MSMetricName.MS_PORT_PACKETS_COLLISIONS`
+
+**Variable:** `self._switch_port_packets_collisions` (line 171)
+
+#### `meraki_ms_port_packets_crcerrors`
+
+**Description:** CRC align error packets on switch port (5-minute window)
+
+**Type:** gauge
+
+**Constant:** `MSMetricName.MS_PORT_PACKETS_CRCERRORS`
+
+**Variable:** `self._switch_port_packets_crcerrors` (line 159)
+
+#### `meraki_ms_port_packets_fragments`
+
+**Description:** Fragment packets on switch port (5-minute window)
+
+**Type:** gauge
+
+**Constant:** `MSMetricName.MS_PORT_PACKETS_FRAGMENTS`
+
+**Variable:** `self._switch_port_packets_fragments` (line 165)
+
+#### `meraki_ms_port_packets_multicast`
+
+**Description:** Multicast packets on switch port (5-minute window)
+
+**Type:** gauge
+
+**Constant:** `MSMetricName.MS_PORT_PACKETS_MULTICAST`
+
+**Variable:** `self._switch_port_packets_multicast` (line 153)
+
+#### `meraki_ms_port_packets_rate_broadcast`
+
+**Description:** Broadcast packet rate on switch port (packets per second, 5-minute average)
+
+**Type:** gauge
+
+**Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_BROADCAST`
+
+**Variable:** `self._switch_port_packets_rate_broadcast` (line 190)
+
+#### `meraki_ms_port_packets_rate_collisions`
+
+**Description:** Collision packet rate on switch port (packets per second, 5-minute average)
+
+**Type:** gauge
+
+**Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_COLLISIONS`
+
+**Variable:** `self._switch_port_packets_rate_collisions` (line 214)
+
+#### `meraki_ms_port_packets_rate_crcerrors`
+
+**Description:** CRC align error packet rate on switch port (packets per second, 5-minute average)
+
+**Type:** gauge
+
+**Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_CRCERRORS`
+
+**Variable:** `self._switch_port_packets_rate_crcerrors` (line 202)
+
+#### `meraki_ms_port_packets_rate_fragments`
+
+**Description:** Fragment packet rate on switch port (packets per second, 5-minute average)
+
+**Type:** gauge
+
+**Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_FRAGMENTS`
+
+**Variable:** `self._switch_port_packets_rate_fragments` (line 208)
+
+#### `meraki_ms_port_packets_rate_multicast`
+
+**Description:** Multicast packet rate on switch port (packets per second, 5-minute average)
+
+**Type:** gauge
+
+**Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_MULTICAST`
+
+**Variable:** `self._switch_port_packets_rate_multicast` (line 196)
+
+#### `meraki_ms_port_packets_rate_topologychanges`
+
+**Description:** Topology change packet rate on switch port (packets per second, 5-minute average)
+
+**Type:** gauge
+
+**Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_TOPOLOGYCHANGES`
+
+**Variable:** `self._switch_port_packets_rate_topologychanges` (line 220)
+
+#### `meraki_ms_port_packets_rate_total`
+
+**Description:** Total packet rate on switch port (packets per second, 5-minute average)
+
+**Type:** gauge
+
+**Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_TOTAL`
+
+**Variable:** `self._switch_port_packets_rate_total` (line 184)
+
+#### `meraki_ms_port_packets_topologychanges`
+
+**Description:** Topology change packets on switch port (5-minute window)
+
+**Type:** gauge
+
+**Constant:** `MSMetricName.MS_PORT_PACKETS_TOPOLOGYCHANGES`
+
+**Variable:** `self._switch_port_packets_topologychanges` (line 177)
+
+#### `meraki_ms_port_packets_total`
+
+**Description:** Total packets on switch port (5-minute window)
+
+**Type:** gauge
+
+**Constant:** `MSMetricName.MS_PORT_PACKETS_TOTAL`
+
+**Variable:** `self._switch_port_packets_total` (line 141)
 
 #### `meraki_ms_port_status`
 
@@ -1092,7 +1244,7 @@ The exporter provides metrics across several categories:
 
 **Type:** gauge
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.PORT_ID`, `LabelName.PORT_NAME`
+**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.PORT_ID`, `LabelName.PORT_NAME`, `LabelName.LINK_SPEED`, `LabelName.DUPLEX`
 
 **Constant:** `MSMetricName.MS_PORT_STATUS`
 
@@ -1100,15 +1252,27 @@ The exporter provides metrics across several categories:
 
 #### `meraki_ms_port_traffic_bytes`
 
-**Description:** Switch port traffic in bytes
+**Description:** Switch port traffic rate in bytes per second (averaged over 1 hour)
 
 **Type:** gauge
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.PORT_ID`, `LabelName.PORT_NAME`, `LabelName.DIRECTION`
+**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.PORT_ID`, `LabelName.PORT_NAME`, `LabelName.DIRECTION`
 
 **Constant:** `MSMetricName.MS_PORT_TRAFFIC_BYTES`
 
-**Variable:** `self._switch_port_traffic` (line 34)
+**Variable:** `self._switch_port_traffic` (line 43)
+
+#### `meraki_ms_port_usage_bytes`
+
+**Description:** Switch port data usage in bytes over the last 1 hour
+
+**Type:** gauge
+
+**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.PORT_ID`, `LabelName.PORT_NAME`, `LabelName.DIRECTION`
+
+**Constant:** `MSMetricName.MS_PORT_USAGE_BYTES`
+
+**Variable:** `self._switch_port_usage` (line 57)
 
 #### `meraki_ms_power_usage_watts`
 
@@ -1120,7 +1284,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `MSMetricName.MS_POWER_USAGE_WATTS`
 
-**Variable:** `self._switch_power` (line 47)
+**Variable:** `self._switch_power` (line 85)
 
 #### `meraki_ms_stp_priority`
 
@@ -1132,7 +1296,7 @@ The exporter provides metrics across several categories:
 
 **Constant:** `MSMetricName.MS_STP_PRIORITY`
 
-**Variable:** `self._switch_stp_priority` (line 79)
+**Variable:** `self._switch_stp_priority` (line 124)
 
 ### MTSensorCollector
 
@@ -1768,10 +1932,26 @@ All metrics in alphabetical order:
 | `meraki_mr_ssid_usage_upstream_mb` | gauge | MRCollector | Upstream data usage in MB by SSID over the last day |
 | `meraki_ms_poe_budget_watts` | gauge | MSCollector | Total POE power budget for switch in watts |
 | `meraki_ms_poe_network_total_watthours` | gauge | MSCollector | Total POE power consumption for all switches in network in watt-hours (Wh) |
-| `meraki_ms_poe_port_power_watthours` | gauge | MSCollector | Per-port POE power consumption in watt-hours (Wh) |
+| `meraki_ms_poe_port_power_watthours` | gauge | MSCollector | Per-port POE power consumption in watt-hours (Wh) over the last 1 hour |
 | `meraki_ms_poe_total_power_watthours` | gauge | MSCollector | Total POE power consumption for switch in watt-hours (Wh) |
+| `meraki_ms_port_client_count` | gauge | MSCollector | Number of clients connected to switch port |
+| `meraki_ms_port_packets_broadcast` | gauge | MSCollector | Broadcast packets on switch port (5-minute window) |
+| `meraki_ms_port_packets_collisions` | gauge | MSCollector | Collision packets on switch port (5-minute window) |
+| `meraki_ms_port_packets_crcerrors` | gauge | MSCollector | CRC align error packets on switch port (5-minute window) |
+| `meraki_ms_port_packets_fragments` | gauge | MSCollector | Fragment packets on switch port (5-minute window) |
+| `meraki_ms_port_packets_multicast` | gauge | MSCollector | Multicast packets on switch port (5-minute window) |
+| `meraki_ms_port_packets_rate_broadcast` | gauge | MSCollector | Broadcast packet rate on switch port (packets per second, 5-minute average) |
+| `meraki_ms_port_packets_rate_collisions` | gauge | MSCollector | Collision packet rate on switch port (packets per second, 5-minute average) |
+| `meraki_ms_port_packets_rate_crcerrors` | gauge | MSCollector | CRC align error packet rate on switch port (packets per second, 5-minute average) |
+| `meraki_ms_port_packets_rate_fragments` | gauge | MSCollector | Fragment packet rate on switch port (packets per second, 5-minute average) |
+| `meraki_ms_port_packets_rate_multicast` | gauge | MSCollector | Multicast packet rate on switch port (packets per second, 5-minute average) |
+| `meraki_ms_port_packets_rate_topologychanges` | gauge | MSCollector | Topology change packet rate on switch port (packets per second, 5-minute average) |
+| `meraki_ms_port_packets_rate_total` | gauge | MSCollector | Total packet rate on switch port (packets per second, 5-minute average) |
+| `meraki_ms_port_packets_topologychanges` | gauge | MSCollector | Topology change packets on switch port (5-minute window) |
+| `meraki_ms_port_packets_total` | gauge | MSCollector | Total packets on switch port (5-minute window) |
 | `meraki_ms_port_status` | gauge | MSCollector | Switch port status (1 = connected, 0 = disconnected) |
-| `meraki_ms_port_traffic_bytes` | gauge | MSCollector | Switch port traffic in bytes |
+| `meraki_ms_port_traffic_bytes` | gauge | MSCollector | Switch port traffic rate in bytes per second (averaged over 1 hour) |
+| `meraki_ms_port_usage_bytes` | gauge | MSCollector | Switch port data usage in bytes over the last 1 hour |
 | `meraki_ms_ports_active_total` | gauge | DeviceCollector | Total number of active switch ports |
 | `meraki_ms_ports_by_link_speed_total` | gauge | DeviceCollector | Total number of active switch ports by link speed |
 | `meraki_ms_ports_by_media_total` | gauge | DeviceCollector | Total number of switch ports by media type |
@@ -1851,3 +2031,4 @@ All metrics in alphabetical order:
     ```
 
 For more information on using these metrics, see the [Overview](overview.md) page.
+
