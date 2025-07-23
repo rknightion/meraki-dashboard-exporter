@@ -13,7 +13,7 @@ The exporter provides metrics across several categories:
 | ConfigCollector | 14 | Organization security settings and configuration tracking |
 | DeviceCollector | 10 | Device status, performance, and uptime metrics |
 | MRCollector | 38 | Access point metrics including clients, power, and performance |
-| MSCollector | 7 | Switch-specific metrics including port status, power, and PoE |
+| MSCollector | 8 | Switch-specific metrics including port status, power, PoE, and STP |
 | MTSensorCollector | 18 | Environmental monitoring from MT sensors |
 | NetworkHealthCollector | 8 | Network-wide wireless health and performance |
 | OrganizationCollector | 19 | Organization-level metrics including API usage and licenses |
@@ -1122,6 +1122,18 @@ The exporter provides metrics across several categories:
 
 **Variable:** `self._switch_power` (line 47)
 
+#### `meraki_ms_stp_priority`
+
+**Description:** Switch STP (Spanning Tree Protocol) priority
+
+**Type:** gauge
+
+**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`
+
+**Constant:** `MSMetricName.MS_STP_PRIORITY`
+
+**Variable:** `self._switch_stp_priority` (line 79)
+
 ### MTSensorCollector
 
 **Source:** `src/meraki_dashboard_exporter/collectors/mt_sensor.py`
@@ -1765,6 +1777,7 @@ All metrics in alphabetical order:
 | `meraki_ms_ports_by_media_total` | gauge | DeviceCollector | Total number of switch ports by media type |
 | `meraki_ms_ports_inactive_total` | gauge | DeviceCollector | Total number of inactive switch ports |
 | `meraki_ms_power_usage_watts` | gauge | MSCollector | Switch power usage in watts |
+| `meraki_ms_stp_priority` | gauge | MSCollector | Switch STP (Spanning Tree Protocol) priority |
 | `meraki_mt_apparent_power_va` | gauge | MTSensorCollector | Apparent power in volt-amperes |
 | `meraki_mt_battery_percentage` | gauge | MTSensorCollector | Battery level percentage |
 | `meraki_mt_co2_ppm` | gauge | MTSensorCollector | CO2 level in parts per million |

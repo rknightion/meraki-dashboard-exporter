@@ -141,6 +141,27 @@ class SwitchPortPOE(BaseModel):
         return min(100.0, (self.drawInWatts / self.allocatedInWatts) * 100)
 
 
+class STPConfiguration(BaseModel):
+    """Spanning Tree Protocol configuration for switches."""
+
+    rstpEnabled: bool = True
+    stpBridgePriority: list[dict[str, Any]] = Field(default_factory=list)
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def switch_priorities(self) -> dict[str, int]:
+        """Get a mapping of switch serial to STP priority."""
+        result = {}
+        for priority_group in self.stpBridgePriority:
+            priority = priority_group.get("stpPriority", 32768)  # Default STP priority
+            switches = priority_group.get("switches", [])
+            for switch_serial in switches:
+                result[switch_serial] = priority
+        return result
+
+    model_config = ConfigDict(extra="allow")
+
+
 class MRDeviceStats(BaseModel):
     """MR (Access Point) specific statistics."""
 

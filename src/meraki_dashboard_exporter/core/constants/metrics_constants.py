@@ -107,6 +107,31 @@ class MSMetricName(StrEnum):
     MS_PORTS_BY_MEDIA_TOTAL = "meraki_ms_ports_by_media_total"
     MS_PORTS_BY_LINK_SPEED_TOTAL = "meraki_ms_ports_by_link_speed_total"
 
+    # STP metrics
+    MS_STP_PRIORITY = "meraki_ms_stp_priority"
+
+    # Additional port metrics
+    MS_PORT_USAGE_BYTES = "meraki_ms_port_usage_bytes"
+    MS_PORT_CLIENT_COUNT = "meraki_ms_port_client_count"
+    
+    # Packet metrics (with 5-minute window)
+    MS_PORT_PACKETS_TOTAL = "meraki_ms_port_packets_total"
+    MS_PORT_PACKETS_BROADCAST = "meraki_ms_port_packets_broadcast"
+    MS_PORT_PACKETS_MULTICAST = "meraki_ms_port_packets_multicast"
+    MS_PORT_PACKETS_CRCERRORS = "meraki_ms_port_packets_crcerrors"
+    MS_PORT_PACKETS_FRAGMENTS = "meraki_ms_port_packets_fragments"
+    MS_PORT_PACKETS_COLLISIONS = "meraki_ms_port_packets_collisions"
+    MS_PORT_PACKETS_TOPOLOGYCHANGES = "meraki_ms_port_packets_topologychanges"
+    
+    # Packet rate metrics (packets per second)
+    MS_PORT_PACKETS_RATE_TOTAL = "meraki_ms_port_packets_rate_total"
+    MS_PORT_PACKETS_RATE_BROADCAST = "meraki_ms_port_packets_rate_broadcast"
+    MS_PORT_PACKETS_RATE_MULTICAST = "meraki_ms_port_packets_rate_multicast"
+    MS_PORT_PACKETS_RATE_CRCERRORS = "meraki_ms_port_packets_rate_crcerrors"
+    MS_PORT_PACKETS_RATE_FRAGMENTS = "meraki_ms_port_packets_rate_fragments"
+    MS_PORT_PACKETS_RATE_COLLISIONS = "meraki_ms_port_packets_rate_collisions"
+    MS_PORT_PACKETS_RATE_TOPOLOGYCHANGES = "meraki_ms_port_packets_rate_topologychanges"
+
 
 class MRMetricName(StrEnum):
     """MR (Access Point) specific metric names."""
