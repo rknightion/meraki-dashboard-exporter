@@ -27,9 +27,16 @@ class TestClientOverviewCollector:
     @pytest.fixture
     def settings(self):
         """Create test settings."""
-        from meraki_dashboard_exporter.core.config import Settings
+        from pydantic import SecretStr
 
-        return Settings()
+        from meraki_dashboard_exporter.core.config import Settings
+        from meraki_dashboard_exporter.core.config_models import MerakiSettings
+
+        return Settings(
+            meraki=MerakiSettings(
+                api_key=SecretStr("6bec40cf957de430a6f1f2baa056b367d6172e1e"), org_id="test-org-id"
+            )
+        )
 
     @pytest.fixture
     def isolated_registry(self, monkeypatch):
