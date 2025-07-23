@@ -89,6 +89,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "src/meraki_dashboard_exporter/tools/*.py" = ["PTH123", "PLW1514", "C414", "PLR6201", "PLR0916"]
+"tests/**/*.py" = ["PLR0904"]  # Allow more than 20 public methods in test classes
 
 [dependency-groups]
 dev = [
@@ -122,6 +123,7 @@ pretty = true
 plugins = ["pydantic.mypy"]
 exclude = [
     "docs/.*\\.md$",
+    "tests/",
 ]
 
 [tool.pydantic-mypy]
@@ -132,10 +134,6 @@ warn_required_dynamic_aliases = true
 [[tool.mypy.overrides]]
 module = ["meraki.*", "prometheus_client.*", "opentelemetry.*"]
 ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["tests.*"]
-disable_error_code = ["no-untyped-def", "var-annotated"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
