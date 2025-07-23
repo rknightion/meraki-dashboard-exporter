@@ -2,2025 +2,4637 @@
 
 This page provides a comprehensive reference of all Prometheus metrics exposed by the Meraki Dashboard Exporter.
 
+!!! summary "Metrics Summary"
+    📊 **Total Metrics:** 156
+    🏗️ **Collectors:** 9
+    📈 **Gauges:** 151
+    📊 **Counters:** 4
+    ℹ️ **Info Metrics:** 1
+
 ## Overview
 
 The exporter provides metrics across several categories:
 
 | Collector | Metrics | Description |
 |-----------|---------|-------------|
-| AlertsCollector | 4 | Active alerts by severity, type, and category |
-| ClientsCollector | 21 | Detailed client-level metrics including usage and status |
-| ConfigCollector | 14 | Organization security settings and configuration tracking |
-| DeviceCollector | 10 | Device status, performance, and uptime metrics |
-| MRCollector | 38 | Access point metrics including clients, power, and performance |
-| MSCollector | 24 | Switch-specific metrics including port status, power, and PoE |
-| MTSensorCollector | 18 | Environmental monitoring from MT sensors |
-| NetworkHealthCollector | 8 | Network-wide wireless health and performance |
-| OrganizationCollector | 19 | Organization-level metrics including API usage and licenses |
+| [AlertsCollector](#alerts) | 4 | 🚨 Active alerts by severity, type, and category |
+| [ClientsCollector](#clients) | 21 | 👥 Detailed client-level metrics including usage and status |
+| [ConfigCollector](#config) | 14 | ⚙️ Organization security settings and configuration tracking |
+| [DeviceCollector](#device) | 10 | 📱 Device status, performance, and uptime metrics |
+| [MRCollector](#mr) | 38 | 📡 Access point metrics including clients, power, and performance |
+| [MSCollector](#ms) | 24 | 🔀 Switch-specific metrics including port status, power, and PoE |
+| [MTSensorCollector](#mtsensor) | 18 | 📊 Environmental monitoring from MT sensors |
+| [NetworkHealthCollector](#networkhealth) | 8 | 🏥 Network-wide wireless health and performance |
+| [OrganizationCollector](#organization) | 19 | 🏢 Organization-level metrics including API usage and licenses |
 
-## Metrics by Collector
+## 🧭 Quick Navigation
 
-### AlertsCollector
+### By Metric Type
 
-**Source:** `src/meraki_dashboard_exporter/collectors/alerts.py`
+??? abstract "📊 **Counters** - Cumulative values that only increase (4 metrics)"
 
-#### `meraki_alerts_active`
+    <div class="grid cards" markdown>
+
+    - [`meraki_exporter_client_dns_lookups_cached_total`](#meraki-exporter-client-dns-lookups-cached-total)
+      ---
+      ClientsCollector
+
+    - [`meraki_exporter_client_dns_lookups_failed_total`](#meraki-exporter-client-dns-lookups-failed-total)
+      ---
+      ClientsCollector
+
+    - [`meraki_exporter_client_dns_lookups_successful_total`](#meraki-exporter-client-dns-lookups-successful-total)
+      ---
+      ClientsCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_exporter_client_dns_lookups_total`](#meraki-exporter-client-dns-lookups-total)
+      ---
+      ClientsCollector
+
+    </div>
+
+??? abstract "📈 **Gauges** - Values that can increase or decrease (current state) (151 metrics)"
+
+    <div class="grid cards" markdown>
+
+    - [`OrgMetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ATTEMPTS`](#orgmetricname-org-login-security-account-lockout-attempts)
+      ---
+      ConfigCollector
+
+    - [`OrgMetricName.ORG_LOGIN_SECURITY_API_IP_RESTRICTIONS_ENABLED`](#orgmetricname-org-login-security-api-ip-restrictions-enabled)
+      ---
+      ConfigCollector
+
+    - [`OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_COUNT`](#orgmetricname-org-login-security-different-passwords-count)
+      ---
+      ConfigCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_ENABLED`](#orgmetricname-org-login-security-different-passwords-enabled)
+      ---
+      ConfigCollector
+
+    - [`OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_DAYS`](#orgmetricname-org-login-security-password-expiration-days)
+      ---
+      ConfigCollector
+
+    - [`OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_ENABLED`](#orgmetricname-org-login-security-password-expiration-enabled)
+      ---
+      ConfigCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`OrgMetricName.ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED`](#orgmetricname-org-login-security-strong-passwords-enabled)
+      ---
+      ConfigCollector
+
+    - [`meraki_alerts_active`](#meraki-alerts-active)
+      ---
+      AlertsCollector
+
+    - [`meraki_alerts_total_by_network`](#meraki-alerts-total-by-network)
+      ---
+      AlertsCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_alerts_total_by_severity`](#meraki-alerts-total-by-severity)
+      ---
+      AlertsCollector
+
+    - [`meraki_ap_channel_utilization_2_4ghz_percent`](#meraki-ap-channel-utilization-2-4ghz-percent)
+      ---
+      NetworkHealthCollector
+
+    - [`meraki_ap_channel_utilization_5ghz_percent`](#meraki-ap-channel-utilization-5ghz-percent)
+      ---
+      NetworkHealthCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_client_application_usage_recv_kb`](#meraki-client-application-usage-recv-kb)
+      ---
+      ClientsCollector
+
+    - [`meraki_client_application_usage_sent_kb`](#meraki-client-application-usage-sent-kb)
+      ---
+      ClientsCollector
+
+    - [`meraki_client_application_usage_total_kb`](#meraki-client-application-usage-total-kb)
+      ---
+      ClientsCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_client_status`](#meraki-client-status)
+      ---
+      ClientsCollector
+
+    - [`meraki_client_usage_recv_kb`](#meraki-client-usage-recv-kb)
+      ---
+      ClientsCollector
+
+    - [`meraki_client_usage_sent_kb`](#meraki-client-usage-sent-kb)
+      ---
+      ClientsCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_client_usage_total_kb`](#meraki-client-usage-total-kb)
+      ---
+      ClientsCollector
+
+    - [`meraki_clients_per_ssid_count`](#meraki-clients-per-ssid-count)
+      ---
+      ClientsCollector
+
+    - [`meraki_clients_per_vlan_count`](#meraki-clients-per-vlan-count)
+      ---
+      ClientsCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_device_memory_free_bytes`](#meraki-device-memory-free-bytes)
+      ---
+      DeviceCollector
+
+    - [`meraki_device_memory_total_bytes`](#meraki-device-memory-total-bytes)
+      ---
+      DeviceCollector
+
+    - [`meraki_device_memory_usage_percent`](#meraki-device-memory-usage-percent)
+      ---
+      DeviceCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_device_memory_used_bytes`](#meraki-device-memory-used-bytes)
+      ---
+      DeviceCollector
+
+    - [`meraki_device_status_info`](#meraki-device-status-info)
+      ---
+      DeviceCollector
+
+    - [`meraki_device_up`](#meraki-device-up)
+      ---
+      DeviceCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_exporter_client_dns_cache_expired`](#meraki-exporter-client-dns-cache-expired)
+      ---
+      ClientsCollector
+
+    - [`meraki_exporter_client_dns_cache_total`](#meraki-exporter-client-dns-cache-total)
+      ---
+      ClientsCollector
+
+    - [`meraki_exporter_client_dns_cache_valid`](#meraki-exporter-client-dns-cache-valid)
+      ---
+      ClientsCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_exporter_client_store_networks`](#meraki-exporter-client-store-networks)
+      ---
+      ClientsCollector
+
+    - [`meraki_exporter_client_store_total`](#meraki-exporter-client-store-total)
+      ---
+      ClientsCollector
+
+    - [`meraki_mr_aggregation_enabled`](#meraki-mr-aggregation-enabled)
+      ---
+      MRCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mr_aggregation_speed_mbps`](#meraki-mr-aggregation-speed-mbps)
+      ---
+      MRCollector
+
+    - [`meraki_mr_clients_connected`](#meraki-mr-clients-connected)
+      ---
+      MRCollector
+
+    - [`meraki_mr_connection_stats_total`](#meraki-mr-connection-stats-total)
+      ---
+      MRCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mr_cpu_load_5min`](#meraki-mr-cpu-load-5min)
+      ---
+      MRCollector
+
+    - [`meraki_mr_network_packet_loss_downstream_percent`](#meraki-mr-network-packet-loss-downstream-percent)
+      ---
+      MRCollector
+
+    - [`meraki_mr_network_packet_loss_total_percent`](#meraki-mr-network-packet-loss-total-percent)
+      ---
+      MRCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mr_network_packet_loss_upstream_percent`](#meraki-mr-network-packet-loss-upstream-percent)
+      ---
+      MRCollector
+
+    - [`meraki_mr_network_packets_downstream_lost`](#meraki-mr-network-packets-downstream-lost)
+      ---
+      MRCollector
+
+    - [`meraki_mr_network_packets_downstream_total`](#meraki-mr-network-packets-downstream-total)
+      ---
+      MRCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mr_network_packets_lost_total`](#meraki-mr-network-packets-lost-total)
+      ---
+      MRCollector
+
+    - [`meraki_mr_network_packets_total`](#meraki-mr-network-packets-total)
+      ---
+      MRCollector
+
+    - [`meraki_mr_network_packets_upstream_lost`](#meraki-mr-network-packets-upstream-lost)
+      ---
+      MRCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mr_network_packets_upstream_total`](#meraki-mr-network-packets-upstream-total)
+      ---
+      MRCollector
+
+    - [`meraki_mr_packet_loss_downstream_percent`](#meraki-mr-packet-loss-downstream-percent)
+      ---
+      MRCollector
+
+    - [`meraki_mr_packet_loss_total_percent`](#meraki-mr-packet-loss-total-percent)
+      ---
+      MRCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mr_packet_loss_upstream_percent`](#meraki-mr-packet-loss-upstream-percent)
+      ---
+      MRCollector
+
+    - [`meraki_mr_packets_downstream_lost`](#meraki-mr-packets-downstream-lost)
+      ---
+      MRCollector
+
+    - [`meraki_mr_packets_downstream_total`](#meraki-mr-packets-downstream-total)
+      ---
+      MRCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mr_packets_lost_total`](#meraki-mr-packets-lost-total)
+      ---
+      MRCollector
+
+    - [`meraki_mr_packets_total`](#meraki-mr-packets-total)
+      ---
+      MRCollector
+
+    - [`meraki_mr_packets_upstream_lost`](#meraki-mr-packets-upstream-lost)
+      ---
+      MRCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mr_packets_upstream_total`](#meraki-mr-packets-upstream-total)
+      ---
+      MRCollector
+
+    - [`meraki_mr_port_link_negotiation_info`](#meraki-mr-port-link-negotiation-info)
+      ---
+      MRCollector
+
+    - [`meraki_mr_port_link_negotiation_speed_mbps`](#meraki-mr-port-link-negotiation-speed-mbps)
+      ---
+      MRCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mr_port_poe_info`](#meraki-mr-port-poe-info)
+      ---
+      MRCollector
+
+    - [`meraki_mr_power_ac_connected`](#meraki-mr-power-ac-connected)
+      ---
+      MRCollector
+
+    - [`meraki_mr_power_info`](#meraki-mr-power-info)
+      ---
+      MRCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mr_power_poe_connected`](#meraki-mr-power-poe-connected)
+      ---
+      MRCollector
+
+    - [`meraki_mr_radio_broadcasting`](#meraki-mr-radio-broadcasting)
+      ---
+      MRCollector
+
+    - [`meraki_mr_radio_channel`](#meraki-mr-radio-channel)
+      ---
+      MRCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mr_radio_channel_width_mhz`](#meraki-mr-radio-channel-width-mhz)
+      ---
+      MRCollector
+
+    - [`meraki_mr_radio_power_dbm`](#meraki-mr-radio-power-dbm)
+      ---
+      MRCollector
+
+    - [`meraki_mr_ssid_client_count`](#meraki-mr-ssid-client-count)
+      ---
+      MRCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mr_ssid_usage_downstream_mb`](#meraki-mr-ssid-usage-downstream-mb)
+      ---
+      MRCollector
+
+    - [`meraki_mr_ssid_usage_percentage`](#meraki-mr-ssid-usage-percentage)
+      ---
+      MRCollector
+
+    - [`meraki_mr_ssid_usage_total_mb`](#meraki-mr-ssid-usage-total-mb)
+      ---
+      MRCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mr_ssid_usage_upstream_mb`](#meraki-mr-ssid-usage-upstream-mb)
+      ---
+      MRCollector
+
+    - [`meraki_ms_poe_budget_watts`](#meraki-ms-poe-budget-watts)
+      ---
+      MSCollector
+
+    - [`meraki_ms_poe_network_total_watthours`](#meraki-ms-poe-network-total-watthours)
+      ---
+      MSCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_ms_poe_port_power_watthours`](#meraki-ms-poe-port-power-watthours)
+      ---
+      MSCollector
+
+    - [`meraki_ms_poe_total_power_watthours`](#meraki-ms-poe-total-power-watthours)
+      ---
+      MSCollector
+
+    - [`meraki_ms_port_client_count`](#meraki-ms-port-client-count)
+      ---
+      MSCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_ms_port_packets_broadcast`](#meraki-ms-port-packets-broadcast)
+      ---
+      MSCollector
+
+    - [`meraki_ms_port_packets_collisions`](#meraki-ms-port-packets-collisions)
+      ---
+      MSCollector
+
+    - [`meraki_ms_port_packets_crcerrors`](#meraki-ms-port-packets-crcerrors)
+      ---
+      MSCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_ms_port_packets_fragments`](#meraki-ms-port-packets-fragments)
+      ---
+      MSCollector
+
+    - [`meraki_ms_port_packets_multicast`](#meraki-ms-port-packets-multicast)
+      ---
+      MSCollector
+
+    - [`meraki_ms_port_packets_rate_broadcast`](#meraki-ms-port-packets-rate-broadcast)
+      ---
+      MSCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_ms_port_packets_rate_collisions`](#meraki-ms-port-packets-rate-collisions)
+      ---
+      MSCollector
+
+    - [`meraki_ms_port_packets_rate_crcerrors`](#meraki-ms-port-packets-rate-crcerrors)
+      ---
+      MSCollector
+
+    - [`meraki_ms_port_packets_rate_fragments`](#meraki-ms-port-packets-rate-fragments)
+      ---
+      MSCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_ms_port_packets_rate_multicast`](#meraki-ms-port-packets-rate-multicast)
+      ---
+      MSCollector
+
+    - [`meraki_ms_port_packets_rate_topologychanges`](#meraki-ms-port-packets-rate-topologychanges)
+      ---
+      MSCollector
+
+    - [`meraki_ms_port_packets_rate_total`](#meraki-ms-port-packets-rate-total)
+      ---
+      MSCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_ms_port_packets_topologychanges`](#meraki-ms-port-packets-topologychanges)
+      ---
+      MSCollector
+
+    - [`meraki_ms_port_packets_total`](#meraki-ms-port-packets-total)
+      ---
+      MSCollector
+
+    - [`meraki_ms_port_status`](#meraki-ms-port-status)
+      ---
+      MSCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_ms_port_traffic_bytes`](#meraki-ms-port-traffic-bytes)
+      ---
+      MSCollector
+
+    - [`meraki_ms_port_usage_bytes`](#meraki-ms-port-usage-bytes)
+      ---
+      MSCollector
+
+    - [`meraki_ms_ports_active_total`](#meraki-ms-ports-active-total)
+      ---
+      DeviceCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_ms_ports_by_link_speed_total`](#meraki-ms-ports-by-link-speed-total)
+      ---
+      DeviceCollector
+
+    - [`meraki_ms_ports_by_media_total`](#meraki-ms-ports-by-media-total)
+      ---
+      DeviceCollector
+
+    - [`meraki_ms_ports_inactive_total`](#meraki-ms-ports-inactive-total)
+      ---
+      DeviceCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_ms_power_usage_watts`](#meraki-ms-power-usage-watts)
+      ---
+      MSCollector
+
+    - [`meraki_ms_stp_priority`](#meraki-ms-stp-priority)
+      ---
+      MSCollector
+
+    - [`meraki_mt_apparent_power_va`](#meraki-mt-apparent-power-va)
+      ---
+      MTSensorCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mt_battery_percentage`](#meraki-mt-battery-percentage)
+      ---
+      MTSensorCollector
+
+    - [`meraki_mt_co2_ppm`](#meraki-mt-co2-ppm)
+      ---
+      MTSensorCollector
+
+    - [`meraki_mt_current_amps`](#meraki-mt-current-amps)
+      ---
+      MTSensorCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mt_door_status`](#meraki-mt-door-status)
+      ---
+      MTSensorCollector
+
+    - [`meraki_mt_downstream_power_enabled`](#meraki-mt-downstream-power-enabled)
+      ---
+      MTSensorCollector
+
+    - [`meraki_mt_frequency_hz`](#meraki-mt-frequency-hz)
+      ---
+      MTSensorCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mt_humidity_percent`](#meraki-mt-humidity-percent)
+      ---
+      MTSensorCollector
+
+    - [`meraki_mt_indoor_air_quality_score`](#meraki-mt-indoor-air-quality-score)
+      ---
+      MTSensorCollector
+
+    - [`meraki_mt_noise_db`](#meraki-mt-noise-db)
+      ---
+      MTSensorCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mt_pm25_ug_m3`](#meraki-mt-pm25-ug-m3)
+      ---
+      MTSensorCollector
+
+    - [`meraki_mt_power_factor_percent`](#meraki-mt-power-factor-percent)
+      ---
+      MTSensorCollector
+
+    - [`meraki_mt_real_power_watts`](#meraki-mt-real-power-watts)
+      ---
+      MTSensorCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mt_remote_lockout_status`](#meraki-mt-remote-lockout-status)
+      ---
+      MTSensorCollector
+
+    - [`meraki_mt_temperature_celsius`](#meraki-mt-temperature-celsius)
+      ---
+      MTSensorCollector
+
+    - [`meraki_mt_tvoc_ppb`](#meraki-mt-tvoc-ppb)
+      ---
+      MTSensorCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_mt_voltage_volts`](#meraki-mt-voltage-volts)
+      ---
+      MTSensorCollector
+
+    - [`meraki_mt_water_detected`](#meraki-mt-water-detected)
+      ---
+      MTSensorCollector
+
+    - [`meraki_network_bluetooth_clients_total`](#meraki-network-bluetooth-clients-total)
+      ---
+      NetworkHealthCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_network_channel_utilization_2_4ghz_percent`](#meraki-network-channel-utilization-2-4ghz-percent)
+      ---
+      NetworkHealthCollector
+
+    - [`meraki_network_channel_utilization_5ghz_percent`](#meraki-network-channel-utilization-5ghz-percent)
+      ---
+      NetworkHealthCollector
+
+    - [`meraki_network_wireless_connection_stats_total`](#meraki-network-wireless-connection-stats-total)
+      ---
+      NetworkHealthCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_network_wireless_download_kbps`](#meraki-network-wireless-download-kbps)
+      ---
+      NetworkHealthCollector
+
+    - [`meraki_network_wireless_upload_kbps`](#meraki-network-wireless-upload-kbps)
+      ---
+      NetworkHealthCollector
+
+    - [`meraki_org_api_requests_by_status`](#meraki-org-api-requests-by-status)
+      ---
+      OrganizationCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_org_api_requests_total`](#meraki-org-api-requests-total)
+      ---
+      OrganizationCollector
+
+    - [`meraki_org_application_usage_downstream_mb`](#meraki-org-application-usage-downstream-mb)
+      ---
+      OrganizationCollector
+
+    - [`meraki_org_application_usage_percentage`](#meraki-org-application-usage-percentage)
+      ---
+      OrganizationCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_org_application_usage_total_mb`](#meraki-org-application-usage-total-mb)
+      ---
+      OrganizationCollector
+
+    - [`meraki_org_application_usage_upstream_mb`](#meraki-org-application-usage-upstream-mb)
+      ---
+      OrganizationCollector
+
+    - [`meraki_org_clients_total`](#meraki-org-clients-total)
+      ---
+      OrganizationCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_org_configuration_changes_total`](#meraki-org-configuration-changes-total)
+      ---
+      ConfigCollector
+
+    - [`meraki_org_devices_availability_total`](#meraki-org-devices-availability-total)
+      ---
+      OrganizationCollector
+
+    - [`meraki_org_devices_by_model_total`](#meraki-org-devices-by-model-total)
+      ---
+      OrganizationCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_org_devices_total`](#meraki-org-devices-total)
+      ---
+      OrganizationCollector
+
+    - [`meraki_org_licenses_expiring`](#meraki-org-licenses-expiring)
+      ---
+      OrganizationCollector
+
+    - [`meraki_org_licenses_total`](#meraki-org-licenses-total)
+      ---
+      OrganizationCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_org_login_security_account_lockout_enabled`](#meraki-org-login-security-account-lockout-enabled)
+      ---
+      ConfigCollector
+
+    - [`meraki_org_login_security_idle_timeout_enabled`](#meraki-org-login-security-idle-timeout-enabled)
+      ---
+      ConfigCollector
+
+    - [`meraki_org_login_security_idle_timeout_minutes`](#meraki-org-login-security-idle-timeout-minutes)
+      ---
+      ConfigCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_org_login_security_ip_ranges_enabled`](#meraki-org-login-security-ip-ranges-enabled)
+      ---
+      ConfigCollector
+
+    - [`meraki_org_login_security_minimum_password_length`](#meraki-org-login-security-minimum-password-length)
+      ---
+      ConfigCollector
+
+    - [`meraki_org_login_security_two_factor_enabled`](#meraki-org-login-security-two-factor-enabled)
+      ---
+      ConfigCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_org_networks_total`](#meraki-org-networks-total)
+      ---
+      OrganizationCollector
+
+    - [`meraki_org_packetcaptures_remaining`](#meraki-org-packetcaptures-remaining)
+      ---
+      OrganizationCollector
+
+    - [`meraki_org_packetcaptures_total`](#meraki-org-packetcaptures-total)
+      ---
+      OrganizationCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_org_usage_downstream_kb`](#meraki-org-usage-downstream-kb)
+      ---
+      OrganizationCollector
+
+    - [`meraki_org_usage_total_kb`](#meraki-org-usage-total-kb)
+      ---
+      OrganizationCollector
+
+    - [`meraki_org_usage_upstream_kb`](#meraki-org-usage-upstream-kb)
+      ---
+      OrganizationCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_sensor_alerts_total`](#meraki-sensor-alerts-total)
+      ---
+      AlertsCollector
+
+    - [`meraki_wireless_client_capabilities_count`](#meraki-wireless-client-capabilities-count)
+      ---
+      ClientsCollector
+
+    - [`meraki_wireless_client_rssi`](#meraki-wireless-client-rssi)
+      ---
+      ClientsCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
+    - [`meraki_wireless_client_snr`](#meraki-wireless-client-snr)
+      ---
+      ClientsCollector
+
+    </div>
+
+??? abstract "ℹ️ **Info Metrics** - Metadata and configuration information (1 metrics)"
+
+    <div class="grid cards" markdown>
+
+    - [`meraki_org`](#meraki-org)
+      ---
+      OrganizationCollector
+
+    </div>
+
+### By Collector
+
+=== "Device & Infrastructure"
+
+    - [DeviceCollector](#device) (10 metrics)
+    - [MRCollector](#mr) (38 metrics)
+    - [MSCollector](#ms) (24 metrics)
+    - [MTSensorCollector](#mtsensor) (18 metrics)
+
+=== "Network & Health"
+
+    - [NetworkHealthCollector](#networkhealth) (8 metrics)
+
+=== "Organization & Management"
+
+    - [AlertsCollector](#alerts) (4 metrics)
+    - [ClientsCollector](#clients) (21 metrics)
+    - [ConfigCollector](#config) (14 metrics)
+    - [OrganizationCollector](#organization) (19 metrics)
+
+## 📋 Metrics by Collector
+
+### AlertsCollector { #alerts }
+
+!!! info "Collector Information"
+    **Description:** 🚨 Active alerts by severity, type, and category
+    **Source File:** `src/meraki_dashboard_exporter/collectors/alerts.py`
+    **Metrics Count:** 4
+
+#### `meraki_alerts_active` { #meraki-alerts-active }
+
+**Type:** 🔢 Gauge
 
 **Description:** Number of active Meraki assurance alerts
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.ALERT_TYPE`, `LabelName.CATEGORY_TYPE`, `LabelName.SEVERITY`, `LabelName.DEVICE_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.ALERT_TYPE`
+- `LabelName.CATEGORY_TYPE`
+- `LabelName.SEVERITY`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `AlertMetricName.ALERTS_ACTIVE`
+??? example "Technical Details"
 
-**Variable:** `self._alerts_active` (line 31)
+    **Constant:** `AlertMetricName.ALERTS_ACTIVE`
 
-#### `meraki_alerts_total_by_network`
+    **Variable:** `self._alerts_active`
+    **Source Line:** 32
+
+---
+
+#### `meraki_alerts_total_by_network` { #meraki-alerts-total-by-network }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of active alerts per network
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
 
-**Constant:** `AlertMetricName.ALERTS_TOTAL_BY_NETWORK`
+??? example "Technical Details"
 
-**Variable:** `self._alerts_by_network` (line 54)
+    **Constant:** `AlertMetricName.ALERTS_TOTAL_BY_NETWORK`
 
-#### `meraki_alerts_total_by_severity`
+    **Variable:** `self._alerts_by_network`
+    **Source Line:** 55
+
+---
+
+#### `meraki_alerts_total_by_severity` { #meraki-alerts-total-by-severity }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of active alerts by severity
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.SEVERITY`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.SEVERITY`
 
-**Constant:** `AlertMetricName.ALERTS_TOTAL_BY_SEVERITY`
+??? example "Technical Details"
 
-**Variable:** `self._alerts_by_severity` (line 47)
+    **Constant:** `AlertMetricName.ALERTS_TOTAL_BY_SEVERITY`
 
-#### `meraki_sensor_alerts_total`
+    **Variable:** `self._alerts_by_severity`
+    **Source Line:** 48
+
+---
+
+#### `meraki_sensor_alerts_total` { #meraki-sensor-alerts-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of sensor alerts in the last hour by metric type
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.METRIC`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.METRIC`
 
-**Constant:** `AlertMetricName.SENSOR_ALERTS_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_alerts_total` (line 66)
+    **Constant:** `AlertMetricName.SENSOR_ALERTS_TOTAL`
 
-### ClientsCollector
+    **Variable:** `self._sensor_alerts_total`
+    **Source Line:** 67
 
-**Source:** `src/meraki_dashboard_exporter/collectors/clients.py`
 
-#### `meraki_client_application_usage_recv_kb`
+### ClientsCollector { #clients }
+
+!!! info "Collector Information"
+    **Description:** 👥 Detailed client-level metrics including usage and status
+    **Source File:** `src/meraki_dashboard_exporter/collectors/clients.py`
+    **Metrics Count:** 21
+
+#### `meraki_client_application_usage_recv_kb` { #meraki-client-application-usage-recv-kb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Kilobytes received by client per application in the last hour
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.CLIENT_ID`
+- `LabelName.MAC`
+- `LabelName.DESCRIPTION`
+- `LabelName.HOSTNAME`
+- `LabelName.TYPE`
 
-**Constant:** `ClientMetricName.CLIENT_APPLICATION_USAGE_RECV_KB`
+??? example "Technical Details"
 
-**Variable:** `self.client_app_usage_recv` (line 237)
+    **Constant:** `ClientMetricName.CLIENT_APPLICATION_USAGE_RECV_KB`
 
-#### `meraki_client_application_usage_sent_kb`
+    **Variable:** `self.client_app_usage_recv`
+    **Source Line:** 238
+
+---
+
+#### `meraki_client_application_usage_sent_kb` { #meraki-client-application-usage-sent-kb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Kilobytes sent by client per application in the last hour
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.CLIENT_ID`
+- `LabelName.MAC`
+- `LabelName.DESCRIPTION`
+- `LabelName.HOSTNAME`
+- `LabelName.TYPE`
 
-**Constant:** `ClientMetricName.CLIENT_APPLICATION_USAGE_SENT_KB`
+??? example "Technical Details"
 
-**Variable:** `self.client_app_usage_sent` (line 221)
+    **Constant:** `ClientMetricName.CLIENT_APPLICATION_USAGE_SENT_KB`
 
-#### `meraki_client_application_usage_total_kb`
+    **Variable:** `self.client_app_usage_sent`
+    **Source Line:** 222
+
+---
+
+#### `meraki_client_application_usage_total_kb` { #meraki-client-application-usage-total-kb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total kilobytes transferred by client per application in the last hour
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.CLIENT_ID`
+- `LabelName.MAC`
+- `LabelName.DESCRIPTION`
+- `LabelName.HOSTNAME`
+- `LabelName.TYPE`
 
-**Constant:** `ClientMetricName.CLIENT_APPLICATION_USAGE_TOTAL_KB`
+??? example "Technical Details"
 
-**Variable:** `self.client_app_usage_total` (line 253)
+    **Constant:** `ClientMetricName.CLIENT_APPLICATION_USAGE_TOTAL_KB`
 
-#### `meraki_client_status`
+    **Variable:** `self.client_app_usage_total`
+    **Source Line:** 254
+
+---
+
+#### `meraki_client_status` { #meraki-client-status }
+
+**Type:** 🔢 Gauge
 
 **Description:** Client online status (1 = online, 0 = offline)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.SSID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.CLIENT_ID`
+- `LabelName.MAC`
+- `LabelName.DESCRIPTION`
+- `LabelName.HOSTNAME`
+- `LabelName.SSID`
 
-**Constant:** `ClientMetricName.CLIENT_STATUS`
+??? example "Technical Details"
 
-**Variable:** `self.client_status` (line 69)
+    **Constant:** `ClientMetricName.CLIENT_STATUS`
 
-#### `meraki_client_usage_recv_kb`
+    **Variable:** `self.client_status`
+    **Source Line:** 70
+
+---
+
+#### `meraki_client_usage_recv_kb` { #meraki-client-usage-recv-kb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Kilobytes received by client in the last hour
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.SSID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.CLIENT_ID`
+- `LabelName.MAC`
+- `LabelName.DESCRIPTION`
+- `LabelName.HOSTNAME`
+- `LabelName.SSID`
 
-**Constant:** `ClientMetricName.CLIENT_USAGE_RECV_KB`
+??? example "Technical Details"
 
-**Variable:** `self.client_usage_recv` (line 103)
+    **Constant:** `ClientMetricName.CLIENT_USAGE_RECV_KB`
 
-#### `meraki_client_usage_sent_kb`
+    **Variable:** `self.client_usage_recv`
+    **Source Line:** 104
+
+---
+
+#### `meraki_client_usage_sent_kb` { #meraki-client-usage-sent-kb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Kilobytes sent by client in the last hour
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.SSID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.CLIENT_ID`
+- `LabelName.MAC`
+- `LabelName.DESCRIPTION`
+- `LabelName.HOSTNAME`
+- `LabelName.SSID`
 
-**Constant:** `ClientMetricName.CLIENT_USAGE_SENT_KB`
+??? example "Technical Details"
 
-**Variable:** `self.client_usage_sent` (line 87)
+    **Constant:** `ClientMetricName.CLIENT_USAGE_SENT_KB`
 
-#### `meraki_client_usage_total_kb`
+    **Variable:** `self.client_usage_sent`
+    **Source Line:** 88
+
+---
+
+#### `meraki_client_usage_total_kb` { #meraki-client-usage-total-kb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total kilobytes transferred by client in the last hour
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.SSID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.CLIENT_ID`
+- `LabelName.MAC`
+- `LabelName.DESCRIPTION`
+- `LabelName.HOSTNAME`
+- `LabelName.SSID`
 
-**Constant:** `ClientMetricName.CLIENT_USAGE_TOTAL_KB`
+??? example "Technical Details"
 
-**Variable:** `self.client_usage_total` (line 119)
+    **Constant:** `ClientMetricName.CLIENT_USAGE_TOTAL_KB`
 
-#### `meraki_clients_per_ssid_count`
+    **Variable:** `self.client_usage_total`
+    **Source Line:** 120
+
+---
+
+#### `meraki_clients_per_ssid_count` { #meraki-clients-per-ssid-count }
+
+**Type:** 🔢 Gauge
 
 **Description:** Count of clients per SSID
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.SSID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SSID`
 
-**Constant:** `ClientMetricName.CLIENTS_PER_SSID_COUNT`
+??? example "Technical Details"
 
-**Variable:** `self.clients_per_ssid` (line 196)
+    **Constant:** `ClientMetricName.CLIENTS_PER_SSID_COUNT`
 
-#### `meraki_clients_per_vlan_count`
+    **Variable:** `self.clients_per_ssid`
+    **Source Line:** 197
+
+---
+
+#### `meraki_clients_per_vlan_count` { #meraki-clients-per-vlan-count }
+
+**Type:** 🔢 Gauge
 
 **Description:** Count of clients per VLAN
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.VLAN`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.VLAN`
 
-**Constant:** `ClientMetricName.CLIENTS_PER_VLAN_COUNT`
+??? example "Technical Details"
 
-**Variable:** `self.clients_per_vlan` (line 208)
+    **Constant:** `ClientMetricName.CLIENTS_PER_VLAN_COUNT`
 
-#### `meraki_exporter_client_dns_cache_expired`
+    **Variable:** `self.clients_per_vlan`
+    **Source Line:** 209
+
+---
+
+#### `meraki_exporter_client_dns_cache_expired` { #meraki-exporter-client-dns-cache-expired }
+
+**Type:** 🔢 Gauge
 
 **Description:** Number of expired entries in DNS cache
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Variable:** `self.dns_cache_expired` (line 146)
+    **Variable:** `self.dns_cache_expired`
+    **Source Line:** 147
 
-#### `meraki_exporter_client_dns_cache_total`
+---
+
+#### `meraki_exporter_client_dns_cache_total` { #meraki-exporter-client-dns-cache-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of entries in DNS cache
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Variable:** `self.dns_cache_total` (line 136)
+    **Variable:** `self.dns_cache_total`
+    **Source Line:** 137
 
-#### `meraki_exporter_client_dns_cache_valid`
+---
+
+#### `meraki_exporter_client_dns_cache_valid` { #meraki-exporter-client-dns-cache-valid }
+
+**Type:** 🔢 Gauge
 
 **Description:** Number of valid entries in DNS cache
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Variable:** `self.dns_cache_valid` (line 141)
+    **Variable:** `self.dns_cache_valid`
+    **Source Line:** 142
 
-#### `meraki_exporter_client_dns_lookups_cached_total`
+---
+
+#### `meraki_exporter_client_dns_lookups_cached_total` { #meraki-exporter-client-dns-lookups-cached-total }
+
+**Type:** 📈 Counter
 
 **Description:** Total number of DNS lookups served from cache
 
-**Type:** counter
+??? example "Technical Details"
 
-**Variable:** `self.dns_lookups_cached` (line 166)
+    **Variable:** `self.dns_lookups_cached`
+    **Source Line:** 167
 
-#### `meraki_exporter_client_dns_lookups_failed_total`
+---
+
+#### `meraki_exporter_client_dns_lookups_failed_total` { #meraki-exporter-client-dns-lookups-failed-total }
+
+**Type:** 📈 Counter
 
 **Description:** Total number of failed DNS lookups
 
-**Type:** counter
+??? example "Technical Details"
 
-**Variable:** `self.dns_lookups_failed` (line 161)
+    **Variable:** `self.dns_lookups_failed`
+    **Source Line:** 162
 
-#### `meraki_exporter_client_dns_lookups_successful_total`
+---
+
+#### `meraki_exporter_client_dns_lookups_successful_total` { #meraki-exporter-client-dns-lookups-successful-total }
+
+**Type:** 📈 Counter
 
 **Description:** Total number of successful DNS lookups
 
-**Type:** counter
+??? example "Technical Details"
 
-**Variable:** `self.dns_lookups_successful` (line 156)
+    **Variable:** `self.dns_lookups_successful`
+    **Source Line:** 157
 
-#### `meraki_exporter_client_dns_lookups_total`
+---
+
+#### `meraki_exporter_client_dns_lookups_total` { #meraki-exporter-client-dns-lookups-total }
+
+**Type:** 📈 Counter
 
 **Description:** Total number of DNS lookups performed
 
-**Type:** counter
+??? example "Technical Details"
 
-**Variable:** `self.dns_lookups_total` (line 151)
+    **Variable:** `self.dns_lookups_total`
+    **Source Line:** 152
 
-#### `meraki_exporter_client_store_networks`
+---
+
+#### `meraki_exporter_client_store_networks` { #meraki-exporter-client-store-networks }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of networks with clients
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Variable:** `self.client_store_networks` (line 177)
+    **Variable:** `self.client_store_networks`
+    **Source Line:** 178
 
-#### `meraki_exporter_client_store_total`
+---
+
+#### `meraki_exporter_client_store_total` { #meraki-exporter-client-store-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of clients in the store
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Variable:** `self.client_store_total` (line 172)
+    **Variable:** `self.client_store_total`
+    **Source Line:** 173
 
-#### `meraki_wireless_client_capabilities_count`
+---
+
+#### `meraki_wireless_client_capabilities_count` { #meraki-wireless-client-capabilities-count }
+
+**Type:** 🔢 Gauge
 
 **Description:** Count of wireless clients by capability
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.TYPE`
 
-**Constant:** `ClientMetricName.WIRELESS_CLIENT_CAPABILITIES_COUNT`
+??? example "Technical Details"
 
-**Variable:** `self.client_capabilities_count` (line 183)
+    **Constant:** `ClientMetricName.WIRELESS_CLIENT_CAPABILITIES_COUNT`
 
-#### `meraki_wireless_client_rssi`
+    **Variable:** `self.client_capabilities_count`
+    **Source Line:** 184
+
+---
+
+#### `meraki_wireless_client_rssi` { #meraki-wireless-client-rssi }
+
+**Type:** 🔢 Gauge
 
 **Description:** Wireless client RSSI (Received Signal Strength Indicator) in dBm
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.SSID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.CLIENT_ID`
+- `LabelName.MAC`
+- `LabelName.DESCRIPTION`
+- `LabelName.HOSTNAME`
+- `LabelName.SSID`
 
-**Constant:** `ClientMetricName.WIRELESS_CLIENT_RSSI`
+??? example "Technical Details"
 
-**Variable:** `self.wireless_client_rssi` (line 270)
+    **Constant:** `ClientMetricName.WIRELESS_CLIENT_RSSI`
 
-#### `meraki_wireless_client_snr`
+    **Variable:** `self.wireless_client_rssi`
+    **Source Line:** 271
+
+---
+
+#### `meraki_wireless_client_snr` { #meraki-wireless-client-snr }
+
+**Type:** 🔢 Gauge
 
 **Description:** Wireless client SNR (Signal-to-Noise Ratio) in dB
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.CLIENT_ID`, `LabelName.MAC`, `LabelName.DESCRIPTION`, `LabelName.HOSTNAME`, `LabelName.SSID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.CLIENT_ID`
+- `LabelName.MAC`
+- `LabelName.DESCRIPTION`
+- `LabelName.HOSTNAME`
+- `LabelName.SSID`
 
-**Constant:** `ClientMetricName.WIRELESS_CLIENT_SNR`
+??? example "Technical Details"
 
-**Variable:** `self.wireless_client_snr` (line 286)
+    **Constant:** `ClientMetricName.WIRELESS_CLIENT_SNR`
 
-### ConfigCollector
+    **Variable:** `self.wireless_client_snr`
+    **Source Line:** 287
 
-**Source:** `src/meraki_dashboard_exporter/collectors/config.py`
 
-#### `OrgMetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ATTEMPTS`
+### ConfigCollector { #config }
+
+!!! info "Collector Information"
+    **Description:** ⚙️ Organization security settings and configuration tracking
+    **Source File:** `src/meraki_dashboard_exporter/collectors/config.py`
+    **Metrics Count:** 14
+
+#### `OrgMetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ATTEMPTS` { #orgmetricname-org-login-security-account-lockout-attempts }
+
+**Type:** 🔢 Gauge
 
 **Description:** Number of failed login attempts before lockout (0 if not set)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Variable:** `self._login_security_account_lockout_attempts` (line 74)
+??? example "Technical Details"
 
-#### `OrgMetricName.ORG_LOGIN_SECURITY_API_IP_RESTRICTIONS_ENABLED`
+    **Variable:** `self._login_security_account_lockout_attempts`
+    **Source Line:** 74
+
+---
+
+#### `OrgMetricName.ORG_LOGIN_SECURITY_API_IP_RESTRICTIONS_ENABLED` { #orgmetricname-org-login-security-api-ip-restrictions-enabled }
+
+**Type:** 🔢 Gauge
 
 **Description:** Whether API key IP restrictions are enabled (1=enabled, 0=disabled)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Variable:** `self._login_security_api_ip_restrictions_enabled` (line 104)
+??? example "Technical Details"
 
-#### `OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_COUNT`
+    **Variable:** `self._login_security_api_ip_restrictions_enabled`
+    **Source Line:** 104
+
+---
+
+#### `OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_COUNT` { #orgmetricname-org-login-security-different-passwords-count }
+
+**Type:** 🔢 Gauge
 
 **Description:** Number of different passwords required (0 if not set)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Variable:** `self._login_security_different_passwords_count` (line 50)
+??? example "Technical Details"
 
-#### `OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_ENABLED`
+    **Variable:** `self._login_security_different_passwords_count`
+    **Source Line:** 50
+
+---
+
+#### `OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_ENABLED` { #orgmetricname-org-login-security-different-passwords-enabled }
+
+**Type:** 🔢 Gauge
 
 **Description:** Whether different passwords are enforced (1=enabled, 0=disabled)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Variable:** `self._login_security_different_passwords_enabled` (line 44)
+??? example "Technical Details"
 
-#### `OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_DAYS`
+    **Variable:** `self._login_security_different_passwords_enabled`
+    **Source Line:** 44
+
+---
+
+#### `OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_DAYS` { #orgmetricname-org-login-security-password-expiration-days }
+
+**Type:** 🔢 Gauge
 
 **Description:** Number of days before password expires (0 if not set)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Variable:** `self._login_security_password_expiration_days` (line 38)
+??? example "Technical Details"
 
-#### `OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_ENABLED`
+    **Variable:** `self._login_security_password_expiration_days`
+    **Source Line:** 38
+
+---
+
+#### `OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_ENABLED` { #orgmetricname-org-login-security-password-expiration-enabled }
+
+**Type:** 🔢 Gauge
 
 **Description:** Whether password expiration is enforced (1=enabled, 0=disabled)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Variable:** `self._login_security_password_expiration_enabled` (line 32)
+??? example "Technical Details"
 
-#### `OrgMetricName.ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED`
+    **Variable:** `self._login_security_password_expiration_enabled`
+    **Source Line:** 32
+
+---
+
+#### `OrgMetricName.ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED` { #orgmetricname-org-login-security-strong-passwords-enabled }
+
+**Type:** 🔢 Gauge
 
 **Description:** Whether strong passwords are enforced (1=enabled, 0=disabled)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Variable:** `self._login_security_strong_passwords_enabled` (line 56)
+??? example "Technical Details"
 
-#### `meraki_org_configuration_changes_total`
+    **Variable:** `self._login_security_strong_passwords_enabled`
+    **Source Line:** 56
+
+---
+
+#### `meraki_org_configuration_changes_total` { #meraki-org-configuration-changes-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of configuration changes in the last 24 hours
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_CONFIGURATION_CHANGES_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._configuration_changes_total` (line 111)
+    **Constant:** `OrgMetricName.ORG_CONFIGURATION_CHANGES_TOTAL`
 
-#### `meraki_org_login_security_account_lockout_enabled`
+    **Variable:** `self._configuration_changes_total`
+    **Source Line:** 111
+
+---
+
+#### `meraki_org_login_security_account_lockout_enabled` { #meraki-org-login-security-account-lockout-enabled }
+
+**Type:** 🔢 Gauge
 
 **Description:** Whether account lockout is enforced (1=enabled, 0=disabled)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ENABLED`
+??? example "Technical Details"
 
-**Variable:** `self._login_security_account_lockout_enabled` (line 68)
+    **Constant:** `OrgMetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ENABLED`
 
-#### `meraki_org_login_security_idle_timeout_enabled`
+    **Variable:** `self._login_security_account_lockout_enabled`
+    **Source Line:** 68
+
+---
+
+#### `meraki_org_login_security_idle_timeout_enabled` { #meraki-org-login-security-idle-timeout-enabled }
+
+**Type:** 🔢 Gauge
 
 **Description:** Whether idle timeout is enforced (1=enabled, 0=disabled)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_ENABLED`
+??? example "Technical Details"
 
-**Variable:** `self._login_security_idle_timeout_enabled` (line 80)
+    **Constant:** `OrgMetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_ENABLED`
 
-#### `meraki_org_login_security_idle_timeout_minutes`
+    **Variable:** `self._login_security_idle_timeout_enabled`
+    **Source Line:** 80
+
+---
+
+#### `meraki_org_login_security_idle_timeout_minutes` { #meraki-org-login-security-idle-timeout-minutes }
+
+**Type:** 🔢 Gauge
 
 **Description:** Minutes before idle timeout (0 if not set)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_MINUTES`
+??? example "Technical Details"
 
-**Variable:** `self._login_security_idle_timeout_minutes` (line 86)
+    **Constant:** `OrgMetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_MINUTES`
 
-#### `meraki_org_login_security_ip_ranges_enabled`
+    **Variable:** `self._login_security_idle_timeout_minutes`
+    **Source Line:** 86
+
+---
+
+#### `meraki_org_login_security_ip_ranges_enabled` { #meraki-org-login-security-ip-ranges-enabled }
+
+**Type:** 🔢 Gauge
 
 **Description:** Whether login IP ranges are enforced (1=enabled, 0=disabled)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_LOGIN_SECURITY_IP_RANGES_ENABLED`
+??? example "Technical Details"
 
-**Variable:** `self._login_security_ip_ranges_enabled` (line 98)
+    **Constant:** `OrgMetricName.ORG_LOGIN_SECURITY_IP_RANGES_ENABLED`
 
-#### `meraki_org_login_security_minimum_password_length`
+    **Variable:** `self._login_security_ip_ranges_enabled`
+    **Source Line:** 98
+
+---
+
+#### `meraki_org_login_security_minimum_password_length` { #meraki-org-login-security-minimum-password-length }
+
+**Type:** 🔢 Gauge
 
 **Description:** Minimum password length required
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_LOGIN_SECURITY_MINIMUM_PASSWORD_LENGTH`
+??? example "Technical Details"
 
-**Variable:** `self._login_security_minimum_password_length` (line 62)
+    **Constant:** `OrgMetricName.ORG_LOGIN_SECURITY_MINIMUM_PASSWORD_LENGTH`
 
-#### `meraki_org_login_security_two_factor_enabled`
+    **Variable:** `self._login_security_minimum_password_length`
+    **Source Line:** 62
+
+---
+
+#### `meraki_org_login_security_two_factor_enabled` { #meraki-org-login-security-two-factor-enabled }
+
+**Type:** 🔢 Gauge
 
 **Description:** Whether two-factor authentication is enforced (1=enabled, 0=disabled)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_LOGIN_SECURITY_TWO_FACTOR_ENABLED`
+??? example "Technical Details"
 
-**Variable:** `self._login_security_two_factor_enabled` (line 92)
+    **Constant:** `OrgMetricName.ORG_LOGIN_SECURITY_TWO_FACTOR_ENABLED`
 
-### DeviceCollector
+    **Variable:** `self._login_security_two_factor_enabled`
+    **Source Line:** 92
 
-**Source:** `src/meraki_dashboard_exporter/collectors/device.py`
 
-#### `meraki_device_memory_free_bytes`
+### DeviceCollector { #device }
+
+!!! info "Collector Information"
+    **Description:** 📱 Device status, performance, and uptime metrics
+    **Source File:** `src/meraki_dashboard_exporter/collectors/device.py`
+    **Metrics Count:** 10
+
+#### `meraki_device_memory_free_bytes` { #meraki-device-memory-free-bytes }
+
+**Type:** 🔢 Gauge
 
 **Description:** Device memory free in bytes
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.MODEL`, `LabelName.NETWORK_ID`, `LabelName.DEVICE_TYPE`, `LabelName.STAT`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.STAT`
 
-**Constant:** `DeviceMetricName.DEVICE_MEMORY_FREE_BYTES`
+??? example "Technical Details"
 
-**Variable:** `self._device_memory_free_bytes` (line 208)
+    **Constant:** `DeviceMetricName.DEVICE_MEMORY_FREE_BYTES`
 
-#### `meraki_device_memory_total_bytes`
+    **Variable:** `self._device_memory_free_bytes`
+    **Source Line:** 218
+
+---
+
+#### `meraki_device_memory_total_bytes` { #meraki-device-memory-total-bytes }
+
+**Type:** 🔢 Gauge
 
 **Description:** Device memory total provisioned in bytes
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.MODEL`, `LabelName.NETWORK_ID`, `LabelName.DEVICE_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `DeviceMetricName.DEVICE_MEMORY_TOTAL_BYTES`
+??? example "Technical Details"
 
-**Variable:** `self._device_memory_total_bytes` (line 221)
+    **Constant:** `DeviceMetricName.DEVICE_MEMORY_TOTAL_BYTES`
 
-#### `meraki_device_memory_usage_percent`
+    **Variable:** `self._device_memory_total_bytes`
+    **Source Line:** 234
+
+---
+
+#### `meraki_device_memory_usage_percent` { #meraki-device-memory-usage-percent }
+
+**Type:** 🔢 Gauge
 
 **Description:** Device memory usage percentage (maximum from most recent interval)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.MODEL`, `LabelName.NETWORK_ID`, `LabelName.DEVICE_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `DeviceMetricName.DEVICE_MEMORY_USAGE_PERCENT`
+??? example "Technical Details"
 
-**Variable:** `self._device_memory_usage_percent` (line 233)
+    **Constant:** `DeviceMetricName.DEVICE_MEMORY_USAGE_PERCENT`
 
-#### `meraki_device_memory_used_bytes`
+    **Variable:** `self._device_memory_usage_percent`
+    **Source Line:** 249
+
+---
+
+#### `meraki_device_memory_used_bytes` { #meraki-device-memory-used-bytes }
+
+**Type:** 🔢 Gauge
 
 **Description:** Device memory used in bytes
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.MODEL`, `LabelName.NETWORK_ID`, `LabelName.DEVICE_TYPE`, `LabelName.STAT`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.STAT`
 
-**Constant:** `DeviceMetricName.DEVICE_MEMORY_USED_BYTES`
+??? example "Technical Details"
 
-**Variable:** `self._device_memory_used_bytes` (line 195)
+    **Constant:** `DeviceMetricName.DEVICE_MEMORY_USED_BYTES`
 
-#### `meraki_device_status_info`
+    **Variable:** `self._device_memory_used_bytes`
+    **Source Line:** 202
+
+---
+
+#### `meraki_device_status_info` { #meraki-device-status-info }
+
+**Type:** 🔢 Gauge
 
 **Description:** Device status information
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.MODEL`, `LabelName.NETWORK_ID`, `LabelName.DEVICE_TYPE`, `LabelName.STATUS`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.STATUS`
 
-**Constant:** `DeviceMetricName.DEVICE_STATUS_INFO`
+??? example "Technical Details"
 
-**Variable:** `self._device_status_info` (line 181)
+    **Constant:** `DeviceMetricName.DEVICE_STATUS_INFO`
 
-#### `meraki_device_up`
+    **Variable:** `self._device_status_info`
+    **Source Line:** 185
+
+---
+
+#### `meraki_device_up` { #meraki-device-up }
+
+**Type:** 🔢 Gauge
 
 **Description:** Device online status (1 = online, 0 = offline)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.MODEL`, `LabelName.NETWORK_ID`, `LabelName.DEVICE_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `DeviceMetricName.DEVICE_UP`
+??? example "Technical Details"
 
-**Variable:** `self._device_up` (line 169)
+    **Constant:** `DeviceMetricName.DEVICE_UP`
 
-#### `meraki_ms_ports_active_total`
+    **Variable:** `self._device_up`
+    **Source Line:** 170
+
+---
+
+#### `meraki_ms_ports_active_total` { #meraki-ms-ports-active-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of active switch ports
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `MSMetricName.MS_PORTS_ACTIVE_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._ms_ports_active_total` (line 126)
+    **Constant:** `MSMetricName.MS_PORTS_ACTIVE_TOTAL`
 
-#### `meraki_ms_ports_by_link_speed_total`
+    **Variable:** `self._ms_ports_active_total`
+    **Source Line:** 127
+
+---
+
+#### `meraki_ms_ports_by_link_speed_total` { #meraki-ms-ports-by-link-speed-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of active switch ports by link speed
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.MEDIA`, `LabelName.LINK_SPEED`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.MEDIA`
+- `LabelName.LINK_SPEED`
 
-**Constant:** `MSMetricName.MS_PORTS_BY_LINK_SPEED_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._ms_ports_by_link_speed_total` (line 155)
+    **Constant:** `MSMetricName.MS_PORTS_BY_LINK_SPEED_TOTAL`
 
-#### `meraki_ms_ports_by_media_total`
+    **Variable:** `self._ms_ports_by_link_speed_total`
+    **Source Line:** 156
+
+---
+
+#### `meraki_ms_ports_by_media_total` { #meraki-ms-ports-by-media-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of switch ports by media type
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.MEDIA`, `LabelName.STATUS`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.MEDIA`
+- `LabelName.STATUS`
 
-**Constant:** `MSMetricName.MS_PORTS_BY_MEDIA_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._ms_ports_by_media_total` (line 144)
+    **Constant:** `MSMetricName.MS_PORTS_BY_MEDIA_TOTAL`
 
-#### `meraki_ms_ports_inactive_total`
+    **Variable:** `self._ms_ports_by_media_total`
+    **Source Line:** 145
+
+---
+
+#### `meraki_ms_ports_inactive_total` { #meraki-ms-ports-inactive-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of inactive switch ports
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `MSMetricName.MS_PORTS_INACTIVE_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._ms_ports_inactive_total` (line 135)
+    **Constant:** `MSMetricName.MS_PORTS_INACTIVE_TOTAL`
 
-### MRCollector
+    **Variable:** `self._ms_ports_inactive_total`
+    **Source Line:** 136
 
-**Source:** `src/meraki_dashboard_exporter/collectors/devices/mr.py`
 
-#### `meraki_mr_aggregation_enabled`
+### MRCollector { #mr }
+
+!!! info "Collector Information"
+    **Description:** 📡 Access point metrics including clients, power, and performance
+    **Source File:** `src/meraki_dashboard_exporter/collectors/devices/mr.py`
+    **Metrics Count:** 38
+
+#### `meraki_mr_aggregation_enabled` { #meraki-mr-aggregation-enabled }
+
+**Type:** 🔢 Gauge
 
 **Description:** Access point port aggregation enabled status (1 = enabled, 0 = disabled)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_AGGREGATION_ENABLED`
+??? example "Technical Details"
 
-**Variable:** `self._mr_aggregation_enabled` (line 115)
+    **Constant:** `MRMetricName.MR_AGGREGATION_ENABLED`
 
-#### `meraki_mr_aggregation_speed_mbps`
+    **Variable:** `self._mr_aggregation_enabled`
+    **Source Line:** 172
+
+---
+
+#### `meraki_mr_aggregation_speed_mbps` { #meraki-mr-aggregation-speed-mbps }
+
+**Type:** 🔢 Gauge
 
 **Description:** Access point total aggregated port speed in Mbps
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_AGGREGATION_SPEED_MBPS`
+??? example "Technical Details"
 
-**Variable:** `self._mr_aggregation_speed` (line 121)
+    **Constant:** `MRMetricName.MR_AGGREGATION_SPEED_MBPS`
 
-#### `meraki_mr_clients_connected`
+    **Variable:** `self._mr_aggregation_speed`
+    **Source Line:** 187
+
+---
+
+#### `meraki_mr_clients_connected` { #meraki-mr-clients-connected }
+
+**Type:** 🔢 Gauge
 
 **Description:** Number of clients connected to access point
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.MODEL`, `LabelName.NETWORK_ID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_CLIENTS_CONNECTED`
+??? example "Technical Details"
 
-**Variable:** `self._ap_clients` (line 43)
+    **Constant:** `MRMetricName.MR_CLIENTS_CONNECTED`
 
-#### `meraki_mr_connection_stats_total`
+    **Variable:** `self._ap_clients`
+    **Source Line:** 44
+
+---
+
+#### `meraki_mr_connection_stats_total` { #meraki-mr-connection-stats-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.MODEL`, `LabelName.NETWORK_ID`, `LabelName.STAT_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.STAT_TYPE`
 
-**Constant:** `MRMetricName.MR_CONNECTION_STATS`
+??? example "Technical Details"
 
-**Variable:** `self._ap_connection_stats` (line 49)
+    **Constant:** `MRMetricName.MR_CONNECTION_STATS`
 
-#### `meraki_mr_cpu_load_5min`
+    **Variable:** `self._ap_connection_stats`
+    **Source Line:** 59
+
+---
+
+#### `meraki_mr_cpu_load_5min` { #meraki-mr-cpu-load-5min }
+
+**Type:** 🔢 Gauge
 
 **Description:** Access point CPU load average over 5 minutes (normalized to 0-100 per core)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.MODEL`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_CPU_LOAD_5MIN`
+??? example "Technical Details"
 
-**Variable:** `self._mr_cpu_load_5min` (line 285)
+    **Constant:** `MRMetricName.MR_CPU_LOAD_5MIN`
 
-#### `meraki_mr_network_packet_loss_downstream_percent`
+    **Variable:** `self._mr_cpu_load_5min`
+    **Source Line:** 441
+
+---
+
+#### `meraki_mr_network_packet_loss_downstream_percent` { #meraki-mr-network-packet-loss-downstream-percent }
+
+**Type:** 🔢 Gauge
 
 **Description:** Downstream packet loss percentage for all access points in network (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
 
-**Constant:** `MRMetricName.MR_NETWORK_PACKET_LOSS_DOWNSTREAM_PERCENT`
+??? example "Technical Details"
 
-**Variable:** `self._mr_network_packet_loss_downstream_percent` (line 241)
+    **Constant:** `MRMetricName.MR_NETWORK_PACKET_LOSS_DOWNSTREAM_PERCENT`
 
-#### `meraki_mr_network_packet_loss_total_percent`
+    **Variable:** `self._mr_network_packet_loss_downstream_percent`
+    **Source Line:** 362
+
+---
+
+#### `meraki_mr_network_packet_loss_total_percent` { #meraki-mr-network-packet-loss-total-percent }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total packet loss percentage (upstream + downstream) for all access points in network (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
 
-**Constant:** `MRMetricName.MR_NETWORK_PACKET_LOSS_TOTAL_PERCENT`
+??? example "Technical Details"
 
-**Variable:** `self._mr_network_packet_loss_total_percent` (line 278)
+    **Constant:** `MRMetricName.MR_NETWORK_PACKET_LOSS_TOTAL_PERCENT`
 
-#### `meraki_mr_network_packet_loss_upstream_percent`
+    **Variable:** `self._mr_network_packet_loss_total_percent`
+    **Source Line:** 429
+
+---
+
+#### `meraki_mr_network_packet_loss_upstream_percent` { #meraki-mr-network-packet-loss-upstream-percent }
+
+**Type:** 🔢 Gauge
 
 **Description:** Upstream packet loss percentage for all access points in network (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
 
-**Constant:** `MRMetricName.MR_NETWORK_PACKET_LOSS_UPSTREAM_PERCENT`
+??? example "Technical Details"
 
-**Variable:** `self._mr_network_packet_loss_upstream_percent` (line 259)
+    **Constant:** `MRMetricName.MR_NETWORK_PACKET_LOSS_UPSTREAM_PERCENT`
 
-#### `meraki_mr_network_packets_downstream_lost`
+    **Variable:** `self._mr_network_packet_loss_upstream_percent`
+    **Source Line:** 395
+
+---
+
+#### `meraki_mr_network_packets_downstream_lost` { #meraki-mr-network-packets-downstream-lost }
+
+**Type:** 🔢 Gauge
 
 **Description:** Downstream packets lost for all access points in network (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
 
-**Constant:** `MRMetricName.MR_NETWORK_PACKETS_DOWNSTREAM_LOST`
+??? example "Technical Details"
 
-**Variable:** `self._mr_network_packets_downstream_lost` (line 235)
+    **Constant:** `MRMetricName.MR_NETWORK_PACKETS_DOWNSTREAM_LOST`
 
-#### `meraki_mr_network_packets_downstream_total`
+    **Variable:** `self._mr_network_packets_downstream_lost`
+    **Source Line:** 351
+
+---
+
+#### `meraki_mr_network_packets_downstream_total` { #meraki-mr-network-packets-downstream-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total downstream packets for all access points in network (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
 
-**Constant:** `MRMetricName.MR_NETWORK_PACKETS_DOWNSTREAM_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._mr_network_packets_downstream_total` (line 229)
+    **Constant:** `MRMetricName.MR_NETWORK_PACKETS_DOWNSTREAM_TOTAL`
 
-#### `meraki_mr_network_packets_lost_total`
+    **Variable:** `self._mr_network_packets_downstream_total`
+    **Source Line:** 340
+
+---
+
+#### `meraki_mr_network_packets_lost_total` { #meraki-mr-network-packets-lost-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total packets lost (upstream + downstream) for all access points in network (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
 
-**Constant:** `MRMetricName.MR_NETWORK_PACKETS_LOST_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._mr_network_packets_lost_total` (line 272)
+    **Constant:** `MRMetricName.MR_NETWORK_PACKETS_LOST_TOTAL`
 
-#### `meraki_mr_network_packets_total`
+    **Variable:** `self._mr_network_packets_lost_total`
+    **Source Line:** 418
+
+---
+
+#### `meraki_mr_network_packets_total` { #meraki-mr-network-packets-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total packets (upstream + downstream) for all access points in network (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
 
-**Constant:** `MRMetricName.MR_NETWORK_PACKETS_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._mr_network_packets_total` (line 266)
+    **Constant:** `MRMetricName.MR_NETWORK_PACKETS_TOTAL`
 
-#### `meraki_mr_network_packets_upstream_lost`
+    **Variable:** `self._mr_network_packets_total`
+    **Source Line:** 407
+
+---
+
+#### `meraki_mr_network_packets_upstream_lost` { #meraki-mr-network-packets-upstream-lost }
+
+**Type:** 🔢 Gauge
 
 **Description:** Upstream packets lost for all access points in network (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
 
-**Constant:** `MRMetricName.MR_NETWORK_PACKETS_UPSTREAM_LOST`
+??? example "Technical Details"
 
-**Variable:** `self._mr_network_packets_upstream_lost` (line 253)
+    **Constant:** `MRMetricName.MR_NETWORK_PACKETS_UPSTREAM_LOST`
 
-#### `meraki_mr_network_packets_upstream_total`
+    **Variable:** `self._mr_network_packets_upstream_lost`
+    **Source Line:** 384
+
+---
+
+#### `meraki_mr_network_packets_upstream_total` { #meraki-mr-network-packets-upstream-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total upstream packets for all access points in network (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
 
-**Constant:** `MRMetricName.MR_NETWORK_PACKETS_UPSTREAM_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._mr_network_packets_upstream_total` (line 247)
+    **Constant:** `MRMetricName.MR_NETWORK_PACKETS_UPSTREAM_TOTAL`
 
-#### `meraki_mr_packet_loss_downstream_percent`
+    **Variable:** `self._mr_network_packets_upstream_total`
+    **Source Line:** 373
+
+---
+
+#### `meraki_mr_packet_loss_downstream_percent` { #meraki-mr-packet-loss-downstream-percent }
+
+**Type:** 🔢 Gauge
 
 **Description:** Downstream packet loss percentage for access point (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_PACKET_LOSS_DOWNSTREAM_PERCENT`
+??? example "Technical Details"
 
-**Variable:** `self._mr_packet_loss_downstream_percent` (line 150)
+    **Constant:** `MRMetricName.MR_PACKET_LOSS_DOWNSTREAM_PERCENT`
 
-#### `meraki_mr_packet_loss_total_percent`
+    **Variable:** `self._mr_packet_loss_downstream_percent`
+    **Source Line:** 233
+
+---
+
+#### `meraki_mr_packet_loss_total_percent` { #meraki-mr-packet-loss-total-percent }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total packet loss percentage (upstream + downstream) for access point (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_PACKET_LOSS_TOTAL_PERCENT`
+??? example "Technical Details"
 
-**Variable:** `self._mr_packet_loss_total_percent` (line 217)
+    **Constant:** `MRMetricName.MR_PACKET_LOSS_TOTAL_PERCENT`
 
-#### `meraki_mr_packet_loss_upstream_percent`
+    **Variable:** `self._mr_packet_loss_total_percent`
+    **Source Line:** 324
+
+---
+
+#### `meraki_mr_packet_loss_upstream_percent` { #meraki-mr-packet-loss-upstream-percent }
+
+**Type:** 🔢 Gauge
 
 **Description:** Upstream packet loss percentage for access point (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_PACKET_LOSS_UPSTREAM_PERCENT`
+??? example "Technical Details"
 
-**Variable:** `self._mr_packet_loss_upstream_percent` (line 183)
+    **Constant:** `MRMetricName.MR_PACKET_LOSS_UPSTREAM_PERCENT`
 
-#### `meraki_mr_packets_downstream_lost`
+    **Variable:** `self._mr_packet_loss_upstream_percent`
+    **Source Line:** 278
+
+---
+
+#### `meraki_mr_packets_downstream_lost` { #meraki-mr-packets-downstream-lost }
+
+**Type:** 🔢 Gauge
 
 **Description:** Downstream packets lost by access point (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_PACKETS_DOWNSTREAM_LOST`
+??? example "Technical Details"
 
-**Variable:** `self._mr_packets_downstream_lost` (line 139)
+    **Constant:** `MRMetricName.MR_PACKETS_DOWNSTREAM_LOST`
 
-#### `meraki_mr_packets_downstream_total`
+    **Variable:** `self._mr_packets_downstream_lost`
+    **Source Line:** 218
+
+---
+
+#### `meraki_mr_packets_downstream_total` { #meraki-mr-packets-downstream-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total downstream packets transmitted by access point (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_PACKETS_DOWNSTREAM_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._mr_packets_downstream_total` (line 128)
+    **Constant:** `MRMetricName.MR_PACKETS_DOWNSTREAM_TOTAL`
 
-#### `meraki_mr_packets_lost_total`
+    **Variable:** `self._mr_packets_downstream_total`
+    **Source Line:** 203
+
+---
+
+#### `meraki_mr_packets_lost_total` { #meraki-mr-packets-lost-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total packets lost (upstream + downstream) for access point (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_PACKETS_LOST_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._mr_packets_lost_total` (line 206)
+    **Constant:** `MRMetricName.MR_PACKETS_LOST_TOTAL`
 
-#### `meraki_mr_packets_total`
+    **Variable:** `self._mr_packets_lost_total`
+    **Source Line:** 309
+
+---
+
+#### `meraki_mr_packets_total` { #meraki-mr-packets-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total packets (upstream + downstream) for access point (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_PACKETS_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._mr_packets_total` (line 195)
+    **Constant:** `MRMetricName.MR_PACKETS_TOTAL`
 
-#### `meraki_mr_packets_upstream_lost`
+    **Variable:** `self._mr_packets_total`
+    **Source Line:** 294
+
+---
+
+#### `meraki_mr_packets_upstream_lost` { #meraki-mr-packets-upstream-lost }
+
+**Type:** 🔢 Gauge
 
 **Description:** Upstream packets lost by access point (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_PACKETS_UPSTREAM_LOST`
+??? example "Technical Details"
 
-**Variable:** `self._mr_packets_upstream_lost` (line 172)
+    **Constant:** `MRMetricName.MR_PACKETS_UPSTREAM_LOST`
 
-#### `meraki_mr_packets_upstream_total`
+    **Variable:** `self._mr_packets_upstream_lost`
+    **Source Line:** 263
+
+---
+
+#### `meraki_mr_packets_upstream_total` { #meraki-mr-packets-upstream-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total upstream packets received by access point (5-minute window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_PACKETS_UPSTREAM_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._mr_packets_upstream_total` (line 161)
+    **Constant:** `MRMetricName.MR_PACKETS_UPSTREAM_TOTAL`
 
-#### `meraki_mr_port_link_negotiation_info`
+    **Variable:** `self._mr_packets_upstream_total`
+    **Source Line:** 248
+
+---
+
+#### `meraki_mr_port_link_negotiation_info` { #meraki-mr-port-link-negotiation-info }
+
+**Type:** 🔢 Gauge
 
 **Description:** Access point port link negotiation information
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.PORT_NAME`, `LabelName.DUPLEX`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.PORT_NAME`
+- `LabelName.DUPLEX`
 
-**Constant:** `MRMetricName.MR_PORT_LINK_NEGOTIATION_INFO`
+??? example "Technical Details"
 
-**Variable:** `self._mr_port_link_negotiation_info` (line 92)
+    **Constant:** `MRMetricName.MR_PORT_LINK_NEGOTIATION_INFO`
 
-#### `meraki_mr_port_link_negotiation_speed_mbps`
+    **Variable:** `self._mr_port_link_negotiation_info`
+    **Source Line:** 139
+
+---
+
+#### `meraki_mr_port_link_negotiation_speed_mbps` { #meraki-mr-port-link-negotiation-speed-mbps }
+
+**Type:** 🔢 Gauge
 
 **Description:** Access point port link negotiation speed in Mbps
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.PORT_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.PORT_NAME`
 
-**Constant:** `MRMetricName.MR_PORT_LINK_NEGOTIATION_SPEED_MBPS`
+??? example "Technical Details"
 
-**Variable:** `self._mr_port_link_negotiation_speed` (line 104)
+    **Constant:** `MRMetricName.MR_PORT_LINK_NEGOTIATION_SPEED_MBPS`
 
-#### `meraki_mr_port_poe_info`
+    **Variable:** `self._mr_port_link_negotiation_speed`
+    **Source Line:** 156
+
+---
+
+#### `meraki_mr_port_poe_info` { #meraki-mr-port-poe-info }
+
+**Type:** 🔢 Gauge
 
 **Description:** Access point port PoE information
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.PORT_NAME`, `LabelName.STANDARD`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.PORT_NAME`
+- `LabelName.STANDARD`
 
-**Constant:** `MRMetricName.MR_PORT_POE_INFO`
+??? example "Technical Details"
 
-**Variable:** `self._mr_port_poe_info` (line 80)
+    **Constant:** `MRMetricName.MR_PORT_POE_INFO`
 
-#### `meraki_mr_power_ac_connected`
+    **Variable:** `self._mr_port_poe_info`
+    **Source Line:** 122
+
+---
+
+#### `meraki_mr_power_ac_connected` { #meraki-mr-power-ac-connected }
+
+**Type:** 🔢 Gauge
 
 **Description:** Access point AC power connection status (1 = connected, 0 = not connected)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_POWER_AC_CONNECTED`
+??? example "Technical Details"
 
-**Variable:** `self._mr_power_ac_connected` (line 68)
+    **Constant:** `MRMetricName.MR_POWER_AC_CONNECTED`
 
-#### `meraki_mr_power_info`
+    **Variable:** `self._mr_power_ac_connected`
+    **Source Line:** 92
+
+---
+
+#### `meraki_mr_power_info` { #meraki-mr-power-info }
+
+**Type:** 🔢 Gauge
 
 **Description:** Access point power information
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.MODE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.MODE`
 
-**Constant:** `MRMetricName.MR_POWER_INFO`
+??? example "Technical Details"
 
-**Variable:** `self._mr_power_info` (line 62)
+    **Constant:** `MRMetricName.MR_POWER_INFO`
 
-#### `meraki_mr_power_poe_connected`
+    **Variable:** `self._mr_power_info`
+    **Source Line:** 76
+
+---
+
+#### `meraki_mr_power_poe_connected` { #meraki-mr-power-poe-connected }
+
+**Type:** 🔢 Gauge
 
 **Description:** Access point PoE power connection status (1 = connected, 0 = not connected)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MRMetricName.MR_POWER_POE_CONNECTED`
+??? example "Technical Details"
 
-**Variable:** `self._mr_power_poe_connected` (line 74)
+    **Constant:** `MRMetricName.MR_POWER_POE_CONNECTED`
 
-#### `meraki_mr_radio_broadcasting`
+    **Variable:** `self._mr_power_poe_connected`
+    **Source Line:** 107
+
+---
+
+#### `meraki_mr_radio_broadcasting` { #meraki-mr-radio-broadcasting }
+
+**Type:** 🔢 Gauge
 
 **Description:** Access point radio broadcasting status (1 = broadcasting, 0 = not broadcasting)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.BAND`, `LabelName.RADIO_INDEX`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.BAND`
+- `LabelName.RADIO_INDEX`
 
-**Constant:** `MRMetricName.MR_RADIO_BROADCASTING`
+??? example "Technical Details"
 
-**Variable:** `self._mr_radio_broadcasting` (line 298)
+    **Constant:** `MRMetricName.MR_RADIO_BROADCASTING`
 
-#### `meraki_mr_radio_channel`
+    **Variable:** `self._mr_radio_broadcasting`
+    **Source Line:** 457
+
+---
+
+#### `meraki_mr_radio_channel` { #meraki-mr-radio-channel }
+
+**Type:** 🔢 Gauge
 
 **Description:** Access point radio channel number
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.BAND`, `LabelName.RADIO_INDEX`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.BAND`
+- `LabelName.RADIO_INDEX`
 
-**Constant:** `MRMetricName.MR_RADIO_CHANNEL`
+??? example "Technical Details"
 
-**Variable:** `self._mr_radio_channel` (line 311)
+    **Constant:** `MRMetricName.MR_RADIO_CHANNEL`
 
-#### `meraki_mr_radio_channel_width_mhz`
+    **Variable:** `self._mr_radio_channel`
+    **Source Line:** 474
+
+---
+
+#### `meraki_mr_radio_channel_width_mhz` { #meraki-mr-radio-channel-width-mhz }
+
+**Type:** 🔢 Gauge
 
 **Description:** Access point radio channel width in MHz
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.BAND`, `LabelName.RADIO_INDEX`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.BAND`
+- `LabelName.RADIO_INDEX`
 
-**Constant:** `MRMetricName.MR_RADIO_CHANNEL_WIDTH_MHZ`
+??? example "Technical Details"
 
-**Variable:** `self._mr_radio_channel_width` (line 324)
+    **Constant:** `MRMetricName.MR_RADIO_CHANNEL_WIDTH_MHZ`
 
-#### `meraki_mr_radio_power_dbm`
+    **Variable:** `self._mr_radio_channel_width`
+    **Source Line:** 491
+
+---
+
+#### `meraki_mr_radio_power_dbm` { #meraki-mr-radio-power-dbm }
+
+**Type:** 🔢 Gauge
 
 **Description:** Access point radio transmit power in dBm
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.BAND`, `LabelName.RADIO_INDEX`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.BAND`
+- `LabelName.RADIO_INDEX`
 
-**Constant:** `MRMetricName.MR_RADIO_POWER_DBM`
+??? example "Technical Details"
 
-**Variable:** `self._mr_radio_power` (line 337)
+    **Constant:** `MRMetricName.MR_RADIO_POWER_DBM`
 
-#### `meraki_mr_ssid_client_count`
+    **Variable:** `self._mr_radio_power`
+    **Source Line:** 508
+
+---
+
+#### `meraki_mr_ssid_client_count` { #meraki-mr-ssid-client-count }
+
+**Type:** 🔢 Gauge
 
 **Description:** Number of clients connected to SSID over the last day
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.SSID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SSID`
 
-**Constant:** `MRMetricName.MR_SSID_CLIENT_COUNT`
+??? example "Technical Details"
 
-**Variable:** `self._ssid_client_count` (line 375)
+    **Constant:** `MRMetricName.MR_SSID_CLIENT_COUNT`
 
-#### `meraki_mr_ssid_usage_downstream_mb`
+    **Variable:** `self._ssid_client_count`
+    **Source Line:** 574
+
+---
+
+#### `meraki_mr_ssid_usage_downstream_mb` { #meraki-mr-ssid-usage-downstream-mb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Downstream data usage in MB by SSID over the last day
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.SSID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SSID`
 
-**Constant:** `MRMetricName.MR_SSID_USAGE_DOWNSTREAM_MB`
+??? example "Technical Details"
 
-**Variable:** `self._ssid_usage_downstream_mb` (line 357)
+    **Constant:** `MRMetricName.MR_SSID_USAGE_DOWNSTREAM_MB`
 
-#### `meraki_mr_ssid_usage_percentage`
+    **Variable:** `self._ssid_usage_downstream_mb`
+    **Source Line:** 538
+
+---
+
+#### `meraki_mr_ssid_usage_percentage` { #meraki-mr-ssid-usage-percentage }
+
+**Type:** 🔢 Gauge
 
 **Description:** Percentage of total organization data usage by SSID over the last day
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.SSID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SSID`
 
-**Constant:** `MRMetricName.MR_SSID_USAGE_PERCENTAGE`
+??? example "Technical Details"
 
-**Variable:** `self._ssid_usage_percentage` (line 369)
+    **Constant:** `MRMetricName.MR_SSID_USAGE_PERCENTAGE`
 
-#### `meraki_mr_ssid_usage_total_mb`
+    **Variable:** `self._ssid_usage_percentage`
+    **Source Line:** 562
+
+---
+
+#### `meraki_mr_ssid_usage_total_mb` { #meraki-mr-ssid-usage-total-mb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total data usage in MB by SSID over the last day
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.SSID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SSID`
 
-**Constant:** `MRMetricName.MR_SSID_USAGE_TOTAL_MB`
+??? example "Technical Details"
 
-**Variable:** `self._ssid_usage_total_mb` (line 351)
+    **Constant:** `MRMetricName.MR_SSID_USAGE_TOTAL_MB`
 
-#### `meraki_mr_ssid_usage_upstream_mb`
+    **Variable:** `self._ssid_usage_total_mb`
+    **Source Line:** 526
+
+---
+
+#### `meraki_mr_ssid_usage_upstream_mb` { #meraki-mr-ssid-usage-upstream-mb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Upstream data usage in MB by SSID over the last day
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.SSID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SSID`
 
-**Constant:** `MRMetricName.MR_SSID_USAGE_UPSTREAM_MB`
+??? example "Technical Details"
 
-**Variable:** `self._ssid_usage_upstream_mb` (line 363)
+    **Constant:** `MRMetricName.MR_SSID_USAGE_UPSTREAM_MB`
 
-### MSCollector
+    **Variable:** `self._ssid_usage_upstream_mb`
+    **Source Line:** 550
 
-**Source:** `src/meraki_dashboard_exporter/collectors/devices/ms.py`
 
-#### `meraki_ms_poe_budget_watts`
+### MSCollector { #ms }
+
+!!! info "Collector Information"
+    **Description:** 🔀 Switch-specific metrics including port status, power, and PoE
+    **Source File:** `src/meraki_dashboard_exporter/collectors/devices/ms.py`
+    **Metrics Count:** 24
+
+#### `meraki_ms_poe_budget_watts` { #meraki-ms-poe-budget-watts }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total POE power budget for switch in watts
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.MODEL`, `LabelName.NETWORK_ID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MSMetricName.MS_POE_BUDGET_WATTS`
+??? example "Technical Details"
 
-**Variable:** `self._switch_poe_budget` (line 111)
+    **Constant:** `MSMetricName.MS_POE_BUDGET_WATTS`
 
-#### `meraki_ms_poe_network_total_watthours`
+    **Variable:** `self._switch_poe_budget`
+    **Source Line:** 150
+
+---
+
+#### `meraki_ms_poe_network_total_watthours` { #meraki-ms-poe-network-total-watthours }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total POE power consumption for all switches in network in watt-hours (Wh)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
 
-**Constant:** `MSMetricName.MS_POE_NETWORK_TOTAL_WATTS`
+??? example "Technical Details"
 
-**Variable:** `self._switch_poe_network_total` (line 117)
+    **Constant:** `MSMetricName.MS_POE_NETWORK_TOTAL_WATTS`
 
-#### `meraki_ms_poe_port_power_watthours`
+    **Variable:** `self._switch_poe_network_total`
+    **Source Line:** 165
+
+---
+
+#### `meraki_ms_poe_port_power_watthours` { #meraki-ms-poe-port-power-watthours }
+
+**Type:** 🔢 Gauge
 
 **Description:** Per-port POE power consumption in watt-hours (Wh) over the last 1 hour
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.PORT_ID`, `LabelName.PORT_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.PORT_ID`
+- `LabelName.PORT_NAME`
 
-**Constant:** `MSMetricName.MS_POE_PORT_POWER_WATTS`
+??? example "Technical Details"
 
-**Variable:** `self._switch_poe_port_power` (line 92)
+    **Constant:** `MSMetricName.MS_POE_PORT_POWER_WATTS`
 
-#### `meraki_ms_poe_total_power_watthours`
+    **Variable:** `self._switch_poe_port_power`
+    **Source Line:** 118
+
+---
+
+#### `meraki_ms_poe_total_power_watthours` { #meraki-ms-poe-total-power-watthours }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total POE power consumption for switch in watt-hours (Wh)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.MODEL`, `LabelName.NETWORK_ID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MSMetricName.MS_POE_TOTAL_POWER_WATTS`
+??? example "Technical Details"
 
-**Variable:** `self._switch_poe_total_power` (line 105)
+    **Constant:** `MSMetricName.MS_POE_TOTAL_POWER_WATTS`
 
-#### `meraki_ms_port_client_count`
+    **Variable:** `self._switch_poe_total_power`
+    **Source Line:** 135
+
+---
+
+#### `meraki_ms_port_client_count` { #meraki-ms-port-client-count }
+
+**Type:** 🔢 Gauge
 
 **Description:** Number of clients connected to switch port
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.PORT_ID`, `LabelName.PORT_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.PORT_ID`
+- `LabelName.PORT_NAME`
 
-**Constant:** `MSMetricName.MS_PORT_CLIENT_COUNT`
+??? example "Technical Details"
 
-**Variable:** `self._switch_port_client_count` (line 71)
+    **Constant:** `MSMetricName.MS_PORT_CLIENT_COUNT`
 
-#### `meraki_ms_port_packets_broadcast`
+    **Variable:** `self._switch_port_client_count`
+    **Source Line:** 84
+
+---
+
+#### `meraki_ms_port_packets_broadcast` { #meraki-ms-port-packets-broadcast }
+
+**Type:** 🔢 Gauge
 
 **Description:** Broadcast packets on switch port (5-minute window)
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Constant:** `MSMetricName.MS_PORT_PACKETS_BROADCAST`
+    **Constant:** `MSMetricName.MS_PORT_PACKETS_BROADCAST`
 
-**Variable:** `self._switch_port_packets_broadcast` (line 147)
+    **Variable:** `self._switch_port_packets_broadcast`
+    **Source Line:** 213
 
-#### `meraki_ms_port_packets_collisions`
+---
+
+#### `meraki_ms_port_packets_collisions` { #meraki-ms-port-packets-collisions }
+
+**Type:** 🔢 Gauge
 
 **Description:** Collision packets on switch port (5-minute window)
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Constant:** `MSMetricName.MS_PORT_PACKETS_COLLISIONS`
+    **Constant:** `MSMetricName.MS_PORT_PACKETS_COLLISIONS`
 
-**Variable:** `self._switch_port_packets_collisions` (line 171)
+    **Variable:** `self._switch_port_packets_collisions`
+    **Source Line:** 237
 
-#### `meraki_ms_port_packets_crcerrors`
+---
+
+#### `meraki_ms_port_packets_crcerrors` { #meraki-ms-port-packets-crcerrors }
+
+**Type:** 🔢 Gauge
 
 **Description:** CRC align error packets on switch port (5-minute window)
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Constant:** `MSMetricName.MS_PORT_PACKETS_CRCERRORS`
+    **Constant:** `MSMetricName.MS_PORT_PACKETS_CRCERRORS`
 
-**Variable:** `self._switch_port_packets_crcerrors` (line 159)
+    **Variable:** `self._switch_port_packets_crcerrors`
+    **Source Line:** 225
 
-#### `meraki_ms_port_packets_fragments`
+---
+
+#### `meraki_ms_port_packets_fragments` { #meraki-ms-port-packets-fragments }
+
+**Type:** 🔢 Gauge
 
 **Description:** Fragment packets on switch port (5-minute window)
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Constant:** `MSMetricName.MS_PORT_PACKETS_FRAGMENTS`
+    **Constant:** `MSMetricName.MS_PORT_PACKETS_FRAGMENTS`
 
-**Variable:** `self._switch_port_packets_fragments` (line 165)
+    **Variable:** `self._switch_port_packets_fragments`
+    **Source Line:** 231
 
-#### `meraki_ms_port_packets_multicast`
+---
+
+#### `meraki_ms_port_packets_multicast` { #meraki-ms-port-packets-multicast }
+
+**Type:** 🔢 Gauge
 
 **Description:** Multicast packets on switch port (5-minute window)
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Constant:** `MSMetricName.MS_PORT_PACKETS_MULTICAST`
+    **Constant:** `MSMetricName.MS_PORT_PACKETS_MULTICAST`
 
-**Variable:** `self._switch_port_packets_multicast` (line 153)
+    **Variable:** `self._switch_port_packets_multicast`
+    **Source Line:** 219
 
-#### `meraki_ms_port_packets_rate_broadcast`
+---
+
+#### `meraki_ms_port_packets_rate_broadcast` { #meraki-ms-port-packets-rate-broadcast }
+
+**Type:** 🔢 Gauge
 
 **Description:** Broadcast packet rate on switch port (packets per second, 5-minute average)
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_BROADCAST`
+    **Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_BROADCAST`
 
-**Variable:** `self._switch_port_packets_rate_broadcast` (line 190)
+    **Variable:** `self._switch_port_packets_rate_broadcast`
+    **Source Line:** 256
 
-#### `meraki_ms_port_packets_rate_collisions`
+---
+
+#### `meraki_ms_port_packets_rate_collisions` { #meraki-ms-port-packets-rate-collisions }
+
+**Type:** 🔢 Gauge
 
 **Description:** Collision packet rate on switch port (packets per second, 5-minute average)
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_COLLISIONS`
+    **Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_COLLISIONS`
 
-**Variable:** `self._switch_port_packets_rate_collisions` (line 214)
+    **Variable:** `self._switch_port_packets_rate_collisions`
+    **Source Line:** 280
 
-#### `meraki_ms_port_packets_rate_crcerrors`
+---
+
+#### `meraki_ms_port_packets_rate_crcerrors` { #meraki-ms-port-packets-rate-crcerrors }
+
+**Type:** 🔢 Gauge
 
 **Description:** CRC align error packet rate on switch port (packets per second, 5-minute average)
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_CRCERRORS`
+    **Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_CRCERRORS`
 
-**Variable:** `self._switch_port_packets_rate_crcerrors` (line 202)
+    **Variable:** `self._switch_port_packets_rate_crcerrors`
+    **Source Line:** 268
 
-#### `meraki_ms_port_packets_rate_fragments`
+---
+
+#### `meraki_ms_port_packets_rate_fragments` { #meraki-ms-port-packets-rate-fragments }
+
+**Type:** 🔢 Gauge
 
 **Description:** Fragment packet rate on switch port (packets per second, 5-minute average)
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_FRAGMENTS`
+    **Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_FRAGMENTS`
 
-**Variable:** `self._switch_port_packets_rate_fragments` (line 208)
+    **Variable:** `self._switch_port_packets_rate_fragments`
+    **Source Line:** 274
 
-#### `meraki_ms_port_packets_rate_multicast`
+---
+
+#### `meraki_ms_port_packets_rate_multicast` { #meraki-ms-port-packets-rate-multicast }
+
+**Type:** 🔢 Gauge
 
 **Description:** Multicast packet rate on switch port (packets per second, 5-minute average)
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_MULTICAST`
+    **Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_MULTICAST`
 
-**Variable:** `self._switch_port_packets_rate_multicast` (line 196)
+    **Variable:** `self._switch_port_packets_rate_multicast`
+    **Source Line:** 262
 
-#### `meraki_ms_port_packets_rate_topologychanges`
+---
+
+#### `meraki_ms_port_packets_rate_topologychanges` { #meraki-ms-port-packets-rate-topologychanges }
+
+**Type:** 🔢 Gauge
 
 **Description:** Topology change packet rate on switch port (packets per second, 5-minute average)
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_TOPOLOGYCHANGES`
+    **Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_TOPOLOGYCHANGES`
 
-**Variable:** `self._switch_port_packets_rate_topologychanges` (line 220)
+    **Variable:** `self._switch_port_packets_rate_topologychanges`
+    **Source Line:** 286
 
-#### `meraki_ms_port_packets_rate_total`
+---
+
+#### `meraki_ms_port_packets_rate_total` { #meraki-ms-port-packets-rate-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total packet rate on switch port (packets per second, 5-minute average)
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_TOTAL`
+    **Constant:** `MSMetricName.MS_PORT_PACKETS_RATE_TOTAL`
 
-**Variable:** `self._switch_port_packets_rate_total` (line 184)
+    **Variable:** `self._switch_port_packets_rate_total`
+    **Source Line:** 250
 
-#### `meraki_ms_port_packets_topologychanges`
+---
+
+#### `meraki_ms_port_packets_topologychanges` { #meraki-ms-port-packets-topologychanges }
+
+**Type:** 🔢 Gauge
 
 **Description:** Topology change packets on switch port (5-minute window)
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Constant:** `MSMetricName.MS_PORT_PACKETS_TOPOLOGYCHANGES`
+    **Constant:** `MSMetricName.MS_PORT_PACKETS_TOPOLOGYCHANGES`
 
-**Variable:** `self._switch_port_packets_topologychanges` (line 177)
+    **Variable:** `self._switch_port_packets_topologychanges`
+    **Source Line:** 243
 
-#### `meraki_ms_port_packets_total`
+---
+
+#### `meraki_ms_port_packets_total` { #meraki-ms-port-packets-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total packets on switch port (5-minute window)
 
-**Type:** gauge
+??? example "Technical Details"
 
-**Constant:** `MSMetricName.MS_PORT_PACKETS_TOTAL`
+    **Constant:** `MSMetricName.MS_PORT_PACKETS_TOTAL`
 
-**Variable:** `self._switch_port_packets_total` (line 141)
+    **Variable:** `self._switch_port_packets_total`
+    **Source Line:** 207
 
-#### `meraki_ms_port_status`
+---
+
+#### `meraki_ms_port_status` { #meraki-ms-port-status }
+
+**Type:** 🔢 Gauge
 
 **Description:** Switch port status (1 = connected, 0 = disconnected)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.PORT_ID`, `LabelName.PORT_NAME`, `LabelName.LINK_SPEED`, `LabelName.DUPLEX`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.PORT_ID`
+- `LabelName.PORT_NAME`
+- `LabelName.LINK_SPEED`
+- `LabelName.DUPLEX`
 
-**Constant:** `MSMetricName.MS_PORT_STATUS`
+??? example "Technical Details"
 
-**Variable:** `self._switch_port_status` (line 28)
+    **Constant:** `MSMetricName.MS_PORT_STATUS`
 
-#### `meraki_ms_port_traffic_bytes`
+    **Variable:** `self._switch_port_status`
+    **Source Line:** 29
+
+---
+
+#### `meraki_ms_port_traffic_bytes` { #meraki-ms-port-traffic-bytes }
+
+**Type:** 🔢 Gauge
 
 **Description:** Switch port traffic rate in bytes per second (averaged over 1 hour)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.PORT_ID`, `LabelName.PORT_NAME`, `LabelName.DIRECTION`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.PORT_ID`
+- `LabelName.PORT_NAME`
+- `LabelName.DIRECTION`
 
-**Constant:** `MSMetricName.MS_PORT_TRAFFIC_BYTES`
+??? example "Technical Details"
 
-**Variable:** `self._switch_port_traffic` (line 43)
+    **Constant:** `MSMetricName.MS_PORT_TRAFFIC_BYTES`
 
-#### `meraki_ms_port_usage_bytes`
+    **Variable:** `self._switch_port_traffic`
+    **Source Line:** 48
+
+---
+
+#### `meraki_ms_port_usage_bytes` { #meraki-ms-port-usage-bytes }
+
+**Type:** 🔢 Gauge
 
 **Description:** Switch port data usage in bytes over the last 1 hour
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.PORT_ID`, `LabelName.PORT_NAME`, `LabelName.DIRECTION`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.PORT_ID`
+- `LabelName.PORT_NAME`
+- `LabelName.DIRECTION`
 
-**Constant:** `MSMetricName.MS_PORT_USAGE_BYTES`
+??? example "Technical Details"
 
-**Variable:** `self._switch_port_usage` (line 57)
+    **Constant:** `MSMetricName.MS_PORT_USAGE_BYTES`
 
-#### `meraki_ms_power_usage_watts`
+    **Variable:** `self._switch_port_usage`
+    **Source Line:** 66
+
+---
+
+#### `meraki_ms_power_usage_watts` { #meraki-ms-power-usage-watts }
+
+**Type:** 🔢 Gauge
 
 **Description:** Switch power usage in watts
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.MODEL`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MSMetricName.MS_POWER_USAGE_WATTS`
+??? example "Technical Details"
 
-**Variable:** `self._switch_power` (line 85)
+    **Constant:** `MSMetricName.MS_POWER_USAGE_WATTS`
 
-#### `meraki_ms_stp_priority`
+    **Variable:** `self._switch_power`
+    **Source Line:** 102
+
+---
+
+#### `meraki_ms_stp_priority` { #meraki-ms-stp-priority }
+
+**Type:** 🔢 Gauge
 
 **Description:** Switch STP (Spanning Tree Protocol) priority
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.NETWORK_ID`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MSMetricName.MS_STP_PRIORITY`
+??? example "Technical Details"
 
-**Variable:** `self._switch_stp_priority` (line 124)
+    **Constant:** `MSMetricName.MS_STP_PRIORITY`
 
-### MTSensorCollector
+    **Variable:** `self._switch_stp_priority`
+    **Source Line:** 177
 
-**Source:** `src/meraki_dashboard_exporter/collectors/mt_sensor.py`
 
-#### `meraki_mt_apparent_power_va`
+### MTSensorCollector { #mtsensor }
+
+!!! info "Collector Information"
+    **Description:** 📊 Environmental monitoring from MT sensors
+    **Source File:** `src/meraki_dashboard_exporter/collectors/mt_sensor.py`
+    **Metrics Count:** 18
+
+#### `meraki_mt_apparent_power_va` { #meraki-mt-apparent-power-va }
+
+**Type:** 🔢 Gauge
 
 **Description:** Apparent power in volt-amperes
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_APPARENT_POWER_VA`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_apparent_power` (line 131)
+    **Constant:** `MTMetricName.MT_APPARENT_POWER_VA`
 
-#### `meraki_mt_battery_percentage`
+    **Variable:** `self._sensor_apparent_power`
+    **Source Line:** 248
+
+---
+
+#### `meraki_mt_battery_percentage` { #meraki-mt-battery-percentage }
+
+**Type:** 🔢 Gauge
 
 **Description:** Battery level percentage
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_BATTERY_PERCENTAGE`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_battery` (line 101)
+    **Constant:** `MTMetricName.MT_BATTERY_PERCENTAGE`
 
-#### `meraki_mt_co2_ppm`
+    **Variable:** `self._sensor_battery`
+    **Source Line:** 173
+
+---
+
+#### `meraki_mt_co2_ppm` { #meraki-mt-co2-ppm }
+
+**Type:** 🔢 Gauge
 
 **Description:** CO2 level in parts per million
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_CO2_PPM`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_co2` (line 77)
+    **Constant:** `MTMetricName.MT_CO2_PPM`
 
-#### `meraki_mt_current_amps`
+    **Variable:** `self._sensor_co2`
+    **Source Line:** 113
+
+---
+
+#### `meraki_mt_current_amps` { #meraki-mt-current-amps }
+
+**Type:** 🔢 Gauge
 
 **Description:** Current in amperes
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_CURRENT_AMPS`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_current` (line 119)
+    **Constant:** `MTMetricName.MT_CURRENT_AMPS`
 
-#### `meraki_mt_door_status`
+    **Variable:** `self._sensor_current`
+    **Source Line:** 218
+
+---
+
+#### `meraki_mt_door_status` { #meraki-mt-door-status }
+
+**Type:** 🔢 Gauge
 
 **Description:** Door sensor status (1 = open, 0 = closed)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_DOOR_STATUS`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_door` (line 65)
+    **Constant:** `MTMetricName.MT_DOOR_STATUS`
 
-#### `meraki_mt_downstream_power_enabled`
+    **Variable:** `self._sensor_door`
+    **Source Line:** 83
+
+---
+
+#### `meraki_mt_downstream_power_enabled` { #meraki-mt-downstream-power-enabled }
+
+**Type:** 🔢 Gauge
 
 **Description:** Downstream power status (1 = enabled, 0 = disabled)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_DOWNSTREAM_POWER_ENABLED`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_downstream_power` (line 149)
+    **Constant:** `MTMetricName.MT_DOWNSTREAM_POWER_ENABLED`
 
-#### `meraki_mt_frequency_hz`
+    **Variable:** `self._sensor_downstream_power`
+    **Source Line:** 293
+
+---
+
+#### `meraki_mt_frequency_hz` { #meraki-mt-frequency-hz }
+
+**Type:** 🔢 Gauge
 
 **Description:** Frequency in hertz
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_FREQUENCY_HZ`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_frequency` (line 143)
+    **Constant:** `MTMetricName.MT_FREQUENCY_HZ`
 
-#### `meraki_mt_humidity_percent`
+    **Variable:** `self._sensor_frequency`
+    **Source Line:** 278
+
+---
+
+#### `meraki_mt_humidity_percent` { #meraki-mt-humidity-percent }
+
+**Type:** 🔢 Gauge
 
 **Description:** Humidity percentage
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_HUMIDITY_PERCENT`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_humidity` (line 59)
+    **Constant:** `MTMetricName.MT_HUMIDITY_PERCENT`
 
-#### `meraki_mt_indoor_air_quality_score`
+    **Variable:** `self._sensor_humidity`
+    **Source Line:** 68
+
+---
+
+#### `meraki_mt_indoor_air_quality_score` { #meraki-mt-indoor-air-quality-score }
+
+**Type:** 🔢 Gauge
 
 **Description:** Indoor air quality score (0-100)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_INDOOR_AIR_QUALITY_SCORE`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_air_quality` (line 107)
+    **Constant:** `MTMetricName.MT_INDOOR_AIR_QUALITY_SCORE`
 
-#### `meraki_mt_noise_db`
+    **Variable:** `self._sensor_air_quality`
+    **Source Line:** 188
+
+---
+
+#### `meraki_mt_noise_db` { #meraki-mt-noise-db }
+
+**Type:** 🔢 Gauge
 
 **Description:** Noise level in decibels
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_NOISE_DB`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_noise` (line 95)
+    **Constant:** `MTMetricName.MT_NOISE_DB`
 
-#### `meraki_mt_pm25_ug_m3`
+    **Variable:** `self._sensor_noise`
+    **Source Line:** 158
+
+---
+
+#### `meraki_mt_pm25_ug_m3` { #meraki-mt-pm25-ug-m3 }
+
+**Type:** 🔢 Gauge
 
 **Description:** PM2.5 particulate matter in micrograms per cubic meter
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_PM25_UG_M3`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_pm25` (line 89)
+    **Constant:** `MTMetricName.MT_PM25_UG_M3`
 
-#### `meraki_mt_power_factor_percent`
+    **Variable:** `self._sensor_pm25`
+    **Source Line:** 143
+
+---
+
+#### `meraki_mt_power_factor_percent` { #meraki-mt-power-factor-percent }
+
+**Type:** 🔢 Gauge
 
 **Description:** Power factor percentage
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_POWER_FACTOR_PERCENT`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_power_factor` (line 137)
+    **Constant:** `MTMetricName.MT_POWER_FACTOR_PERCENT`
 
-#### `meraki_mt_real_power_watts`
+    **Variable:** `self._sensor_power_factor`
+    **Source Line:** 263
+
+---
+
+#### `meraki_mt_real_power_watts` { #meraki-mt-real-power-watts }
+
+**Type:** 🔢 Gauge
 
 **Description:** Real power in watts
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_REAL_POWER_WATTS`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_real_power` (line 125)
+    **Constant:** `MTMetricName.MT_REAL_POWER_WATTS`
 
-#### `meraki_mt_remote_lockout_status`
+    **Variable:** `self._sensor_real_power`
+    **Source Line:** 233
+
+---
+
+#### `meraki_mt_remote_lockout_status` { #meraki-mt-remote-lockout-status }
+
+**Type:** 🔢 Gauge
 
 **Description:** Remote lockout switch status (1 = locked, 0 = unlocked)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_REMOTE_LOCKOUT_STATUS`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_remote_lockout` (line 155)
+    **Constant:** `MTMetricName.MT_REMOTE_LOCKOUT_STATUS`
 
-#### `meraki_mt_temperature_celsius`
+    **Variable:** `self._sensor_remote_lockout`
+    **Source Line:** 308
+
+---
+
+#### `meraki_mt_temperature_celsius` { #meraki-mt-temperature-celsius }
+
+**Type:** 🔢 Gauge
 
 **Description:** Temperature reading in Celsius
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_TEMPERATURE_CELSIUS`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_temperature` (line 53)
+    **Constant:** `MTMetricName.MT_TEMPERATURE_CELSIUS`
 
-#### `meraki_mt_tvoc_ppb`
+    **Variable:** `self._sensor_temperature`
+    **Source Line:** 53
+
+---
+
+#### `meraki_mt_tvoc_ppb` { #meraki-mt-tvoc-ppb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total volatile organic compounds in parts per billion
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_TVOC_PPB`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_tvoc` (line 83)
+    **Constant:** `MTMetricName.MT_TVOC_PPB`
 
-#### `meraki_mt_voltage_volts`
+    **Variable:** `self._sensor_tvoc`
+    **Source Line:** 128
+
+---
+
+#### `meraki_mt_voltage_volts` { #meraki-mt-voltage-volts }
+
+**Type:** 🔢 Gauge
 
 **Description:** Voltage in volts
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_VOLTAGE_VOLTS`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_voltage` (line 113)
+    **Constant:** `MTMetricName.MT_VOLTAGE_VOLTS`
 
-#### `meraki_mt_water_detected`
+    **Variable:** `self._sensor_voltage`
+    **Source Line:** 203
+
+---
+
+#### `meraki_mt_water_detected` { #meraki-mt-water-detected }
+
+**Type:** 🔢 Gauge
 
 **Description:** Water detection status (1 = detected, 0 = not detected)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.SENSOR_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `MTMetricName.MT_WATER_DETECTED`
+??? example "Technical Details"
 
-**Variable:** `self._sensor_water` (line 71)
+    **Constant:** `MTMetricName.MT_WATER_DETECTED`
 
-### NetworkHealthCollector
+    **Variable:** `self._sensor_water`
+    **Source Line:** 98
 
-**Source:** `src/meraki_dashboard_exporter/collectors/network_health.py`
 
-#### `meraki_ap_channel_utilization_2_4ghz_percent`
+### NetworkHealthCollector { #networkhealth }
+
+!!! info "Collector Information"
+    **Description:** 🏥 Network-wide wireless health and performance
+    **Source File:** `src/meraki_dashboard_exporter/collectors/network_health.py`
+    **Metrics Count:** 8
+
+#### `meraki_ap_channel_utilization_2_4ghz_percent` { #meraki-ap-channel-utilization-2-4ghz-percent }
+
+**Type:** 🔢 Gauge
 
 **Description:** 2.4GHz channel utilization percentage per AP
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.MODEL`, `LabelName.TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.UTILIZATION_TYPE`
 
-**Constant:** `NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_2_4GHZ_PERCENT`
+??? example "Technical Details"
 
-**Variable:** `self._ap_utilization_2_4ghz` (line 52)
+    **Constant:** `NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_2_4GHZ_PERCENT`
 
-#### `meraki_ap_channel_utilization_5ghz_percent`
+    **Variable:** `self._ap_utilization_2_4ghz`
+    **Source Line:** 52
+
+---
+
+#### `meraki_ap_channel_utilization_5ghz_percent` { #meraki-ap-channel-utilization-5ghz-percent }
+
+**Type:** 🔢 Gauge
 
 **Description:** 5GHz channel utilization percentage per AP
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.SERIAL`, `LabelName.NAME`, `LabelName.MODEL`, `LabelName.TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+- `LabelName.UTILIZATION_TYPE`
 
-**Constant:** `NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_5GHZ_PERCENT`
+??? example "Technical Details"
 
-**Variable:** `self._ap_utilization_5ghz` (line 65)
+    **Constant:** `NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_5GHZ_PERCENT`
 
-#### `meraki_network_bluetooth_clients_total`
+    **Variable:** `self._ap_utilization_5ghz`
+    **Source Line:** 68
+
+---
+
+#### `meraki_network_bluetooth_clients_total` { #meraki-network-bluetooth-clients-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of Bluetooth clients detected by MR devices in the last 5 minutes
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
 
-**Constant:** `NetworkHealthMetricName.NETWORK_BLUETOOTH_CLIENTS_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._network_bluetooth_clients_total` (line 112)
+    **Constant:** `NetworkHealthMetricName.NETWORK_BLUETOOTH_CLIENTS_TOTAL`
 
-#### `meraki_network_channel_utilization_2_4ghz_percent`
+    **Variable:** `self._network_bluetooth_clients_total`
+    **Source Line:** 146
+
+---
+
+#### `meraki_network_channel_utilization_2_4ghz_percent` { #meraki-network-channel-utilization-2-4ghz-percent }
+
+**Type:** 🔢 Gauge
 
 **Description:** Network-wide average 2.4GHz channel utilization percentage
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.UTILIZATION_TYPE`
 
-**Constant:** `NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_2_4GHZ_PERCENT`
+??? example "Technical Details"
 
-**Variable:** `self._network_utilization_2_4ghz` (line 79)
+    **Constant:** `NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_2_4GHZ_PERCENT`
 
-#### `meraki_network_channel_utilization_5ghz_percent`
+    **Variable:** `self._network_utilization_2_4ghz`
+    **Source Line:** 85
+
+---
+
+#### `meraki_network_channel_utilization_5ghz_percent` { #meraki-network-channel-utilization-5ghz-percent }
+
+**Type:** 🔢 Gauge
 
 **Description:** Network-wide average 5GHz channel utilization percentage
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.UTILIZATION_TYPE`
 
-**Constant:** `NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_5GHZ_PERCENT`
+??? example "Technical Details"
 
-**Variable:** `self._network_utilization_5ghz` (line 85)
+    **Constant:** `NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_5GHZ_PERCENT`
 
-#### `meraki_network_wireless_connection_stats_total`
+    **Variable:** `self._network_utilization_5ghz`
+    **Source Line:** 97
+
+---
+
+#### `meraki_network_wireless_connection_stats_total` { #meraki-network-wireless-connection-stats-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`, `LabelName.STAT_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.STAT_TYPE`
 
-**Constant:** `NetworkMetricName.NETWORK_WIRELESS_CONNECTION_STATS`
+??? example "Technical Details"
 
-**Variable:** `self._network_connection_stats` (line 92)
+    **Constant:** `NetworkMetricName.NETWORK_WIRELESS_CONNECTION_STATS`
 
-#### `meraki_network_wireless_download_kbps`
+    **Variable:** `self._network_connection_stats`
+    **Source Line:** 110
+
+---
+
+#### `meraki_network_wireless_download_kbps` { #meraki-network-wireless-download-kbps }
+
+**Type:** 🔢 Gauge
 
 **Description:** Network-wide wireless download bandwidth in kilobits per second
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
 
-**Constant:** `NetworkHealthMetricName.NETWORK_WIRELESS_DOWNLOAD_KBPS`
+??? example "Technical Details"
 
-**Variable:** `self._network_wireless_download_kbps` (line 99)
+    **Constant:** `NetworkHealthMetricName.NETWORK_WIRELESS_DOWNLOAD_KBPS`
 
-#### `meraki_network_wireless_upload_kbps`
+    **Variable:** `self._network_wireless_download_kbps`
+    **Source Line:** 123
+
+---
+
+#### `meraki_network_wireless_upload_kbps` { #meraki-network-wireless-upload-kbps }
+
+**Type:** 🔢 Gauge
 
 **Description:** Network-wide wireless upload bandwidth in kilobits per second
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.NETWORK_ID`, `LabelName.NETWORK_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
 
-**Constant:** `NetworkHealthMetricName.NETWORK_WIRELESS_UPLOAD_KBPS`
+??? example "Technical Details"
 
-**Variable:** `self._network_wireless_upload_kbps` (line 105)
+    **Constant:** `NetworkHealthMetricName.NETWORK_WIRELESS_UPLOAD_KBPS`
 
-### OrganizationCollector
+    **Variable:** `self._network_wireless_upload_kbps`
+    **Source Line:** 134
 
-**Source:** `src/meraki_dashboard_exporter/collectors/organization.py`
 
-#### `meraki_org`
+### OrganizationCollector { #organization }
+
+!!! info "Collector Information"
+    **Description:** 🏢 Organization-level metrics including API usage and licenses
+    **Source File:** `src/meraki_dashboard_exporter/collectors/organization.py`
+    **Metrics Count:** 19
+
+#### `meraki_org` { #meraki-org }
+
+**Type:** ℹ️ Info
 
 **Description:** Organization information
 
-**Type:** info
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_INFO`
+??? example "Technical Details"
 
-**Variable:** `self._org_info` (line 52)
+    **Constant:** `OrgMetricName.ORG_INFO`
 
-#### `meraki_org_api_requests_by_status`
+    **Variable:** `self._org_info`
+    **Source Line:** 53
+
+---
+
+#### `meraki_org_api_requests_by_status` { #meraki-org-api-requests-by-status }
+
+**Type:** 🔢 Gauge
 
 **Description:** API requests by HTTP status code in the last hour
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.STATUS_CODE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.STATUS_CODE`
 
-**Constant:** `OrgMetricName.ORG_API_REQUESTS_BY_STATUS`
+??? example "Technical Details"
 
-**Variable:** `self._api_requests_by_status` (line 65)
+    **Constant:** `OrgMetricName.ORG_API_REQUESTS_BY_STATUS`
 
-#### `meraki_org_api_requests_total`
+    **Variable:** `self._api_requests_by_status`
+    **Source Line:** 66
+
+---
+
+#### `meraki_org_api_requests_total` { #meraki-org-api-requests-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total API requests made by the organization in the last hour
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_API_REQUESTS_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._api_requests_total` (line 59)
+    **Constant:** `OrgMetricName.ORG_API_REQUESTS_TOTAL`
 
-#### `meraki_org_application_usage_downstream_mb`
+    **Variable:** `self._api_requests_total`
+    **Source Line:** 60
+
+---
+
+#### `meraki_org_application_usage_downstream_mb` { #meraki-org-application-usage-downstream-mb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Downstream application usage in MB by category
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.CATEGORY`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.CATEGORY`
 
-**Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_MB`
+??? example "Technical Details"
 
-**Variable:** `self._application_usage_downstream_mb` (line 167)
+    **Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_MB`
 
-#### `meraki_org_application_usage_percentage`
+    **Variable:** `self._application_usage_downstream_mb`
+    **Source Line:** 168
+
+---
+
+#### `meraki_org_application_usage_percentage` { #meraki-org-application-usage-percentage }
+
+**Type:** 🔢 Gauge
 
 **Description:** Application usage percentage by category
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.CATEGORY`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.CATEGORY`
 
-**Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_PERCENTAGE`
+??? example "Technical Details"
 
-**Variable:** `self._application_usage_percentage` (line 179)
+    **Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_PERCENTAGE`
 
-#### `meraki_org_application_usage_total_mb`
+    **Variable:** `self._application_usage_percentage`
+    **Source Line:** 180
+
+---
+
+#### `meraki_org_application_usage_total_mb` { #meraki-org-application-usage-total-mb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total application usage in MB by category
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.CATEGORY`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.CATEGORY`
 
-**Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_MB`
+??? example "Technical Details"
 
-**Variable:** `self._application_usage_total_mb` (line 161)
+    **Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_MB`
 
-#### `meraki_org_application_usage_upstream_mb`
+    **Variable:** `self._application_usage_total_mb`
+    **Source Line:** 162
+
+---
+
+#### `meraki_org_application_usage_upstream_mb` { #meraki-org-application-usage-upstream-mb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Upstream application usage in MB by category
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.CATEGORY`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.CATEGORY`
 
-**Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_MB`
+??? example "Technical Details"
 
-**Variable:** `self._application_usage_upstream_mb` (line 173)
+    **Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_MB`
 
-#### `meraki_org_clients_total`
+    **Variable:** `self._application_usage_upstream_mb`
+    **Source Line:** 174
+
+---
+
+#### `meraki_org_clients_total` { #meraki-org-clients-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of active clients in the organization (1-hour window)
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_CLIENTS_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._clients_total` (line 122)
+    **Constant:** `OrgMetricName.ORG_CLIENTS_TOTAL`
 
-#### `meraki_org_devices_availability_total`
+    **Variable:** `self._clients_total`
+    **Source Line:** 123
+
+---
+
+#### `meraki_org_devices_availability_total` { #meraki-org-devices-availability-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of devices by availability status and product type
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.STATUS`, `LabelName.PRODUCT_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.STATUS`
+- `LabelName.PRODUCT_TYPE`
 
-**Constant:** `OrgMetricName.ORG_DEVICES_AVAILABILITY_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._devices_availability_total` (line 92)
+    **Constant:** `OrgMetricName.ORG_DEVICES_AVAILABILITY_TOTAL`
 
-#### `meraki_org_devices_by_model_total`
+    **Variable:** `self._devices_availability_total`
+    **Source Line:** 93
+
+---
+
+#### `meraki_org_devices_by_model_total` { #meraki-org-devices-by-model-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of devices by specific model
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.MODEL`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.MODEL`
 
-**Constant:** `OrgMetricName.ORG_DEVICES_BY_MODEL_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._devices_by_model_total` (line 85)
+    **Constant:** `OrgMetricName.ORG_DEVICES_BY_MODEL_TOTAL`
 
-#### `meraki_org_devices_total`
+    **Variable:** `self._devices_by_model_total`
+    **Source Line:** 86
+
+---
+
+#### `meraki_org_devices_total` { #meraki-org-devices-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of devices in the organization
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.DEVICE_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.DEVICE_TYPE`
 
-**Constant:** `OrgMetricName.ORG_DEVICES_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._devices_total` (line 79)
+    **Constant:** `OrgMetricName.ORG_DEVICES_TOTAL`
 
-#### `meraki_org_licenses_expiring`
+    **Variable:** `self._devices_total`
+    **Source Line:** 80
+
+---
+
+#### `meraki_org_licenses_expiring` { #meraki-org-licenses-expiring }
+
+**Type:** 🔢 Gauge
 
 **Description:** Number of licenses expiring within 30 days
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.LICENSE_TYPE`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.LICENSE_TYPE`
 
-**Constant:** `OrgMetricName.ORG_LICENSES_EXPIRING`
+??? example "Technical Details"
 
-**Variable:** `self._licenses_expiring` (line 115)
+    **Constant:** `OrgMetricName.ORG_LICENSES_EXPIRING`
 
-#### `meraki_org_licenses_total`
+    **Variable:** `self._licenses_expiring`
+    **Source Line:** 116
+
+---
+
+#### `meraki_org_licenses_total` { #meraki-org-licenses-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of licenses
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`, `LabelName.LICENSE_TYPE`, `LabelName.STATUS`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.LICENSE_TYPE`
+- `LabelName.STATUS`
 
-**Constant:** `OrgMetricName.ORG_LICENSES_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._licenses_total` (line 104)
+    **Constant:** `OrgMetricName.ORG_LICENSES_TOTAL`
 
-#### `meraki_org_networks_total`
+    **Variable:** `self._licenses_total`
+    **Source Line:** 105
+
+---
+
+#### `meraki_org_networks_total` { #meraki-org-networks-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of networks in the organization
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_NETWORKS_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._networks_total` (line 72)
+    **Constant:** `OrgMetricName.ORG_NETWORKS_TOTAL`
 
-#### `meraki_org_packetcaptures_remaining`
+    **Variable:** `self._networks_total`
+    **Source Line:** 73
+
+---
+
+#### `meraki_org_packetcaptures_remaining` { #meraki-org-packetcaptures-remaining }
+
+**Type:** 🔢 Gauge
 
 **Description:** Number of remaining packet captures to process
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_PACKETCAPTURES_REMAINING`
+??? example "Technical Details"
 
-**Variable:** `self._packetcaptures_remaining` (line 154)
+    **Constant:** `OrgMetricName.ORG_PACKETCAPTURES_REMAINING`
 
-#### `meraki_org_packetcaptures_total`
+    **Variable:** `self._packetcaptures_remaining`
+    **Source Line:** 155
+
+---
+
+#### `meraki_org_packetcaptures_total` { #meraki-org-packetcaptures-total }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total number of packet captures in the organization
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_PACKETCAPTURES_TOTAL`
+??? example "Technical Details"
 
-**Variable:** `self._packetcaptures_total` (line 148)
+    **Constant:** `OrgMetricName.ORG_PACKETCAPTURES_TOTAL`
 
-#### `meraki_org_usage_downstream_kb`
+    **Variable:** `self._packetcaptures_total`
+    **Source Line:** 149
+
+---
+
+#### `meraki_org_usage_downstream_kb` { #meraki-org-usage-downstream-kb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Downstream data usage in KB for the 1-hour window
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_USAGE_DOWNSTREAM_KB`
+??? example "Technical Details"
 
-**Variable:** `self._usage_downstream_kb` (line 135)
+    **Constant:** `OrgMetricName.ORG_USAGE_DOWNSTREAM_KB`
 
-#### `meraki_org_usage_total_kb`
+    **Variable:** `self._usage_downstream_kb`
+    **Source Line:** 136
+
+---
+
+#### `meraki_org_usage_total_kb` { #meraki-org-usage-total-kb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Total data usage in KB for the 1-hour window
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_USAGE_TOTAL_KB`
+??? example "Technical Details"
 
-**Variable:** `self._usage_total_kb` (line 129)
+    **Constant:** `OrgMetricName.ORG_USAGE_TOTAL_KB`
 
-#### `meraki_org_usage_upstream_kb`
+    **Variable:** `self._usage_total_kb`
+    **Source Line:** 130
+
+---
+
+#### `meraki_org_usage_upstream_kb` { #meraki-org-usage-upstream-kb }
+
+**Type:** 🔢 Gauge
 
 **Description:** Upstream data usage in KB for the 1-hour window
 
-**Type:** gauge
+**Labels:**
 
-**Labels:** `LabelName.ORG_ID`, `LabelName.ORG_NAME`
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
 
-**Constant:** `OrgMetricName.ORG_USAGE_UPSTREAM_KB`
+??? example "Technical Details"
 
-**Variable:** `self._usage_upstream_kb` (line 141)
+    **Constant:** `OrgMetricName.ORG_USAGE_UPSTREAM_KB`
 
-## Complete Metrics Index
+    **Variable:** `self._usage_upstream_kb`
+    **Source Line:** 142
 
-All metrics in alphabetical order:
 
-| Metric Name | Type | Collector | Description |
-|-------------|------|-----------|-------------|
-| `OrgMetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ATTEMPTS` | gauge | ConfigCollector | Number of failed login attempts before lockout (0 if not set) |
-| `OrgMetricName.ORG_LOGIN_SECURITY_API_IP_RESTRICTIONS_ENABLED` | gauge | ConfigCollector | Whether API key IP restrictions are enabled (1=enabled, 0=disabled) |
-| `OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_COUNT` | gauge | ConfigCollector | Number of different passwords required (0 if not set) |
-| `OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_ENABLED` | gauge | ConfigCollector | Whether different passwords are enforced (1=enabled, 0=disabled) |
-| `OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_DAYS` | gauge | ConfigCollector | Number of days before password expires (0 if not set) |
-| `OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_ENABLED` | gauge | ConfigCollector | Whether password expiration is enforced (1=enabled, 0=disabled) |
-| `OrgMetricName.ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED` | gauge | ConfigCollector | Whether strong passwords are enforced (1=enabled, 0=disabled) |
-| `meraki_alerts_active` | gauge | AlertsCollector | Number of active Meraki assurance alerts |
-| `meraki_alerts_total_by_network` | gauge | AlertsCollector | Total number of active alerts per network |
-| `meraki_alerts_total_by_severity` | gauge | AlertsCollector | Total number of active alerts by severity |
-| `meraki_ap_channel_utilization_2_4ghz_percent` | gauge | NetworkHealthCollector | 2.4GHz channel utilization percentage per AP |
-| `meraki_ap_channel_utilization_5ghz_percent` | gauge | NetworkHealthCollector | 5GHz channel utilization percentage per AP |
-| `meraki_client_application_usage_recv_kb` | gauge | ClientsCollector | Kilobytes received by client per application in the last hour |
-| `meraki_client_application_usage_sent_kb` | gauge | ClientsCollector | Kilobytes sent by client per application in the last hour |
-| `meraki_client_application_usage_total_kb` | gauge | ClientsCollector | Total kilobytes transferred by client per application in the last hour |
-| `meraki_client_status` | gauge | ClientsCollector | Client online status (1 = online, 0 = offline) |
-| `meraki_client_usage_recv_kb` | gauge | ClientsCollector | Kilobytes received by client in the last hour |
-| `meraki_client_usage_sent_kb` | gauge | ClientsCollector | Kilobytes sent by client in the last hour |
-| `meraki_client_usage_total_kb` | gauge | ClientsCollector | Total kilobytes transferred by client in the last hour |
-| `meraki_clients_per_ssid_count` | gauge | ClientsCollector | Count of clients per SSID |
-| `meraki_clients_per_vlan_count` | gauge | ClientsCollector | Count of clients per VLAN |
-| `meraki_device_memory_free_bytes` | gauge | DeviceCollector | Device memory free in bytes |
-| `meraki_device_memory_total_bytes` | gauge | DeviceCollector | Device memory total provisioned in bytes |
-| `meraki_device_memory_usage_percent` | gauge | DeviceCollector | Device memory usage percentage (maximum from most recent interval) |
-| `meraki_device_memory_used_bytes` | gauge | DeviceCollector | Device memory used in bytes |
-| `meraki_device_status_info` | gauge | DeviceCollector | Device status information |
-| `meraki_device_up` | gauge | DeviceCollector | Device online status (1 = online, 0 = offline) |
-| `meraki_exporter_client_dns_cache_expired` | gauge | ClientsCollector | Number of expired entries in DNS cache |
-| `meraki_exporter_client_dns_cache_total` | gauge | ClientsCollector | Total number of entries in DNS cache |
-| `meraki_exporter_client_dns_cache_valid` | gauge | ClientsCollector | Number of valid entries in DNS cache |
-| `meraki_exporter_client_dns_lookups_cached_total` | counter | ClientsCollector | Total number of DNS lookups served from cache |
-| `meraki_exporter_client_dns_lookups_failed_total` | counter | ClientsCollector | Total number of failed DNS lookups |
-| `meraki_exporter_client_dns_lookups_successful_total` | counter | ClientsCollector | Total number of successful DNS lookups |
-| `meraki_exporter_client_dns_lookups_total` | counter | ClientsCollector | Total number of DNS lookups performed |
-| `meraki_exporter_client_store_networks` | gauge | ClientsCollector | Total number of networks with clients |
-| `meraki_exporter_client_store_total` | gauge | ClientsCollector | Total number of clients in the store |
-| `meraki_mr_aggregation_enabled` | gauge | MRCollector | Access point port aggregation enabled status (1 = enabled, 0 = disabled) |
-| `meraki_mr_aggregation_speed_mbps` | gauge | MRCollector | Access point total aggregated port speed in Mbps |
-| `meraki_mr_clients_connected` | gauge | MRCollector | Number of clients connected to access point |
-| `meraki_mr_connection_stats_total` | gauge | MRCollector | Wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success) |
-| `meraki_mr_cpu_load_5min` | gauge | MRCollector | Access point CPU load average over 5 minutes (normalized to 0-100 per core) |
-| `meraki_mr_network_packet_loss_downstream_percent` | gauge | MRCollector | Downstream packet loss percentage for all access points in network (5-minute window) |
-| `meraki_mr_network_packet_loss_total_percent` | gauge | MRCollector | Total packet loss percentage (upstream + downstream) for all access points in network (5-minute window) |
-| `meraki_mr_network_packet_loss_upstream_percent` | gauge | MRCollector | Upstream packet loss percentage for all access points in network (5-minute window) |
-| `meraki_mr_network_packets_downstream_lost` | gauge | MRCollector | Downstream packets lost for all access points in network (5-minute window) |
-| `meraki_mr_network_packets_downstream_total` | gauge | MRCollector | Total downstream packets for all access points in network (5-minute window) |
-| `meraki_mr_network_packets_lost_total` | gauge | MRCollector | Total packets lost (upstream + downstream) for all access points in network (5-minute window) |
-| `meraki_mr_network_packets_total` | gauge | MRCollector | Total packets (upstream + downstream) for all access points in network (5-minute window) |
-| `meraki_mr_network_packets_upstream_lost` | gauge | MRCollector | Upstream packets lost for all access points in network (5-minute window) |
-| `meraki_mr_network_packets_upstream_total` | gauge | MRCollector | Total upstream packets for all access points in network (5-minute window) |
-| `meraki_mr_packet_loss_downstream_percent` | gauge | MRCollector | Downstream packet loss percentage for access point (5-minute window) |
-| `meraki_mr_packet_loss_total_percent` | gauge | MRCollector | Total packet loss percentage (upstream + downstream) for access point (5-minute window) |
-| `meraki_mr_packet_loss_upstream_percent` | gauge | MRCollector | Upstream packet loss percentage for access point (5-minute window) |
-| `meraki_mr_packets_downstream_lost` | gauge | MRCollector | Downstream packets lost by access point (5-minute window) |
-| `meraki_mr_packets_downstream_total` | gauge | MRCollector | Total downstream packets transmitted by access point (5-minute window) |
-| `meraki_mr_packets_lost_total` | gauge | MRCollector | Total packets lost (upstream + downstream) for access point (5-minute window) |
-| `meraki_mr_packets_total` | gauge | MRCollector | Total packets (upstream + downstream) for access point (5-minute window) |
-| `meraki_mr_packets_upstream_lost` | gauge | MRCollector | Upstream packets lost by access point (5-minute window) |
-| `meraki_mr_packets_upstream_total` | gauge | MRCollector | Total upstream packets received by access point (5-minute window) |
-| `meraki_mr_port_link_negotiation_info` | gauge | MRCollector | Access point port link negotiation information |
-| `meraki_mr_port_link_negotiation_speed_mbps` | gauge | MRCollector | Access point port link negotiation speed in Mbps |
-| `meraki_mr_port_poe_info` | gauge | MRCollector | Access point port PoE information |
-| `meraki_mr_power_ac_connected` | gauge | MRCollector | Access point AC power connection status (1 = connected, 0 = not connected) |
-| `meraki_mr_power_info` | gauge | MRCollector | Access point power information |
-| `meraki_mr_power_poe_connected` | gauge | MRCollector | Access point PoE power connection status (1 = connected, 0 = not connected) |
-| `meraki_mr_radio_broadcasting` | gauge | MRCollector | Access point radio broadcasting status (1 = broadcasting, 0 = not broadcasting) |
-| `meraki_mr_radio_channel` | gauge | MRCollector | Access point radio channel number |
-| `meraki_mr_radio_channel_width_mhz` | gauge | MRCollector | Access point radio channel width in MHz |
-| `meraki_mr_radio_power_dbm` | gauge | MRCollector | Access point radio transmit power in dBm |
-| `meraki_mr_ssid_client_count` | gauge | MRCollector | Number of clients connected to SSID over the last day |
-| `meraki_mr_ssid_usage_downstream_mb` | gauge | MRCollector | Downstream data usage in MB by SSID over the last day |
-| `meraki_mr_ssid_usage_percentage` | gauge | MRCollector | Percentage of total organization data usage by SSID over the last day |
-| `meraki_mr_ssid_usage_total_mb` | gauge | MRCollector | Total data usage in MB by SSID over the last day |
-| `meraki_mr_ssid_usage_upstream_mb` | gauge | MRCollector | Upstream data usage in MB by SSID over the last day |
-| `meraki_ms_poe_budget_watts` | gauge | MSCollector | Total POE power budget for switch in watts |
-| `meraki_ms_poe_network_total_watthours` | gauge | MSCollector | Total POE power consumption for all switches in network in watt-hours (Wh) |
-| `meraki_ms_poe_port_power_watthours` | gauge | MSCollector | Per-port POE power consumption in watt-hours (Wh) over the last 1 hour |
-| `meraki_ms_poe_total_power_watthours` | gauge | MSCollector | Total POE power consumption for switch in watt-hours (Wh) |
-| `meraki_ms_port_client_count` | gauge | MSCollector | Number of clients connected to switch port |
-| `meraki_ms_port_packets_broadcast` | gauge | MSCollector | Broadcast packets on switch port (5-minute window) |
-| `meraki_ms_port_packets_collisions` | gauge | MSCollector | Collision packets on switch port (5-minute window) |
-| `meraki_ms_port_packets_crcerrors` | gauge | MSCollector | CRC align error packets on switch port (5-minute window) |
-| `meraki_ms_port_packets_fragments` | gauge | MSCollector | Fragment packets on switch port (5-minute window) |
-| `meraki_ms_port_packets_multicast` | gauge | MSCollector | Multicast packets on switch port (5-minute window) |
-| `meraki_ms_port_packets_rate_broadcast` | gauge | MSCollector | Broadcast packet rate on switch port (packets per second, 5-minute average) |
-| `meraki_ms_port_packets_rate_collisions` | gauge | MSCollector | Collision packet rate on switch port (packets per second, 5-minute average) |
-| `meraki_ms_port_packets_rate_crcerrors` | gauge | MSCollector | CRC align error packet rate on switch port (packets per second, 5-minute average) |
-| `meraki_ms_port_packets_rate_fragments` | gauge | MSCollector | Fragment packet rate on switch port (packets per second, 5-minute average) |
-| `meraki_ms_port_packets_rate_multicast` | gauge | MSCollector | Multicast packet rate on switch port (packets per second, 5-minute average) |
-| `meraki_ms_port_packets_rate_topologychanges` | gauge | MSCollector | Topology change packet rate on switch port (packets per second, 5-minute average) |
-| `meraki_ms_port_packets_rate_total` | gauge | MSCollector | Total packet rate on switch port (packets per second, 5-minute average) |
-| `meraki_ms_port_packets_topologychanges` | gauge | MSCollector | Topology change packets on switch port (5-minute window) |
-| `meraki_ms_port_packets_total` | gauge | MSCollector | Total packets on switch port (5-minute window) |
-| `meraki_ms_port_status` | gauge | MSCollector | Switch port status (1 = connected, 0 = disconnected) |
-| `meraki_ms_port_traffic_bytes` | gauge | MSCollector | Switch port traffic rate in bytes per second (averaged over 1 hour) |
-| `meraki_ms_port_usage_bytes` | gauge | MSCollector | Switch port data usage in bytes over the last 1 hour |
-| `meraki_ms_ports_active_total` | gauge | DeviceCollector | Total number of active switch ports |
-| `meraki_ms_ports_by_link_speed_total` | gauge | DeviceCollector | Total number of active switch ports by link speed |
-| `meraki_ms_ports_by_media_total` | gauge | DeviceCollector | Total number of switch ports by media type |
-| `meraki_ms_ports_inactive_total` | gauge | DeviceCollector | Total number of inactive switch ports |
-| `meraki_ms_power_usage_watts` | gauge | MSCollector | Switch power usage in watts |
-| `meraki_ms_stp_priority` | gauge | MSCollector | Switch STP (Spanning Tree Protocol) priority |
-| `meraki_mt_apparent_power_va` | gauge | MTSensorCollector | Apparent power in volt-amperes |
-| `meraki_mt_battery_percentage` | gauge | MTSensorCollector | Battery level percentage |
-| `meraki_mt_co2_ppm` | gauge | MTSensorCollector | CO2 level in parts per million |
-| `meraki_mt_current_amps` | gauge | MTSensorCollector | Current in amperes |
-| `meraki_mt_door_status` | gauge | MTSensorCollector | Door sensor status (1 = open, 0 = closed) |
-| `meraki_mt_downstream_power_enabled` | gauge | MTSensorCollector | Downstream power status (1 = enabled, 0 = disabled) |
-| `meraki_mt_frequency_hz` | gauge | MTSensorCollector | Frequency in hertz |
-| `meraki_mt_humidity_percent` | gauge | MTSensorCollector | Humidity percentage |
-| `meraki_mt_indoor_air_quality_score` | gauge | MTSensorCollector | Indoor air quality score (0-100) |
-| `meraki_mt_noise_db` | gauge | MTSensorCollector | Noise level in decibels |
-| `meraki_mt_pm25_ug_m3` | gauge | MTSensorCollector | PM2.5 particulate matter in micrograms per cubic meter |
-| `meraki_mt_power_factor_percent` | gauge | MTSensorCollector | Power factor percentage |
-| `meraki_mt_real_power_watts` | gauge | MTSensorCollector | Real power in watts |
-| `meraki_mt_remote_lockout_status` | gauge | MTSensorCollector | Remote lockout switch status (1 = locked, 0 = unlocked) |
-| `meraki_mt_temperature_celsius` | gauge | MTSensorCollector | Temperature reading in Celsius |
-| `meraki_mt_tvoc_ppb` | gauge | MTSensorCollector | Total volatile organic compounds in parts per billion |
-| `meraki_mt_voltage_volts` | gauge | MTSensorCollector | Voltage in volts |
-| `meraki_mt_water_detected` | gauge | MTSensorCollector | Water detection status (1 = detected, 0 = not detected) |
-| `meraki_network_bluetooth_clients_total` | gauge | NetworkHealthCollector | Total number of Bluetooth clients detected by MR devices in the last 5 minutes |
-| `meraki_network_channel_utilization_2_4ghz_percent` | gauge | NetworkHealthCollector | Network-wide average 2.4GHz channel utilization percentage |
-| `meraki_network_channel_utilization_5ghz_percent` | gauge | NetworkHealthCollector | Network-wide average 5GHz channel utilization percentage |
-| `meraki_network_wireless_connection_stats_total` | gauge | NetworkHealthCollector | Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success) |
-| `meraki_network_wireless_download_kbps` | gauge | NetworkHealthCollector | Network-wide wireless download bandwidth in kilobits per second |
-| `meraki_network_wireless_upload_kbps` | gauge | NetworkHealthCollector | Network-wide wireless upload bandwidth in kilobits per second |
-| `meraki_org` | info | OrganizationCollector | Organization information |
-| `meraki_org_api_requests_by_status` | gauge | OrganizationCollector | API requests by HTTP status code in the last hour |
-| `meraki_org_api_requests_total` | gauge | OrganizationCollector | Total API requests made by the organization in the last hour |
-| `meraki_org_application_usage_downstream_mb` | gauge | OrganizationCollector | Downstream application usage in MB by category |
-| `meraki_org_application_usage_percentage` | gauge | OrganizationCollector | Application usage percentage by category |
-| `meraki_org_application_usage_total_mb` | gauge | OrganizationCollector | Total application usage in MB by category |
-| `meraki_org_application_usage_upstream_mb` | gauge | OrganizationCollector | Upstream application usage in MB by category |
-| `meraki_org_clients_total` | gauge | OrganizationCollector | Total number of active clients in the organization (1-hour window) |
-| `meraki_org_configuration_changes_total` | gauge | ConfigCollector | Total number of configuration changes in the last 24 hours |
-| `meraki_org_devices_availability_total` | gauge | OrganizationCollector | Total number of devices by availability status and product type |
-| `meraki_org_devices_by_model_total` | gauge | OrganizationCollector | Total number of devices by specific model |
-| `meraki_org_devices_total` | gauge | OrganizationCollector | Total number of devices in the organization |
-| `meraki_org_licenses_expiring` | gauge | OrganizationCollector | Number of licenses expiring within 30 days |
-| `meraki_org_licenses_total` | gauge | OrganizationCollector | Total number of licenses |
-| `meraki_org_login_security_account_lockout_enabled` | gauge | ConfigCollector | Whether account lockout is enforced (1=enabled, 0=disabled) |
-| `meraki_org_login_security_idle_timeout_enabled` | gauge | ConfigCollector | Whether idle timeout is enforced (1=enabled, 0=disabled) |
-| `meraki_org_login_security_idle_timeout_minutes` | gauge | ConfigCollector | Minutes before idle timeout (0 if not set) |
-| `meraki_org_login_security_ip_ranges_enabled` | gauge | ConfigCollector | Whether login IP ranges are enforced (1=enabled, 0=disabled) |
-| `meraki_org_login_security_minimum_password_length` | gauge | ConfigCollector | Minimum password length required |
-| `meraki_org_login_security_two_factor_enabled` | gauge | ConfigCollector | Whether two-factor authentication is enforced (1=enabled, 0=disabled) |
-| `meraki_org_networks_total` | gauge | OrganizationCollector | Total number of networks in the organization |
-| `meraki_org_packetcaptures_remaining` | gauge | OrganizationCollector | Number of remaining packet captures to process |
-| `meraki_org_packetcaptures_total` | gauge | OrganizationCollector | Total number of packet captures in the organization |
-| `meraki_org_usage_downstream_kb` | gauge | OrganizationCollector | Downstream data usage in KB for the 1-hour window |
-| `meraki_org_usage_total_kb` | gauge | OrganizationCollector | Total data usage in KB for the 1-hour window |
-| `meraki_org_usage_upstream_kb` | gauge | OrganizationCollector | Upstream data usage in KB for the 1-hour window |
-| `meraki_sensor_alerts_total` | gauge | AlertsCollector | Total number of sensor alerts in the last hour by metric type |
-| `meraki_wireless_client_capabilities_count` | gauge | ClientsCollector | Count of wireless clients by capability |
-| `meraki_wireless_client_rssi` | gauge | ClientsCollector | Wireless client RSSI (Received Signal Strength Indicator) in dBm |
-| `meraki_wireless_client_snr` | gauge | ClientsCollector | Wireless client SNR (Signal-to-Noise Ratio) in dB |
+## 📖 Complete Metrics Index
 
-## Notes
+All metrics in alphabetical order with quick access:
 
-!!! info "Metric Types"
-    - **Gauge**: Current value that can go up or down
-    - **Counter**: Cumulative value that only increases
-    - **Info**: Metadata with labels but value always 1
+| Metric Name | Type | Collector | Labels | Description |
+|-------------|------|-----------|--------|-------------|
+| [`OrgMetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ATTEMPTS`](#orgmetricname-org-login-security-account-lockout-attempts) | 🔢 gauge | ConfigCollector | 2 labels | Number of failed login attempts before lockout (0 if not set) |
+| [`OrgMetricName.ORG_LOGIN_SECURITY_API_IP_RESTRICTIONS_ENABLED`](#orgmetricname-org-login-security-api-ip-restrictions-enabled) | 🔢 gauge | ConfigCollector | 2 labels | Whether API key IP restrictions are enabled (1=enabled, 0=disabled) |
+| [`OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_COUNT`](#orgmetricname-org-login-security-different-passwords-count) | 🔢 gauge | ConfigCollector | 2 labels | Number of different passwords required (0 if not set) |
+| [`OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_ENABLED`](#orgmetricname-org-login-security-different-passwords-enabled) | 🔢 gauge | ConfigCollector | 2 labels | Whether different passwords are enforced (1=enabled, 0=disabled) |
+| [`OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_DAYS`](#orgmetricname-org-login-security-password-expiration-days) | 🔢 gauge | ConfigCollector | 2 labels | Number of days before password expires (0 if not set) |
+| [`OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_ENABLED`](#orgmetricname-org-login-security-password-expiration-enabled) | 🔢 gauge | ConfigCollector | 2 labels | Whether password expiration is enforced (1=enabled, 0=disabled) |
+| [`OrgMetricName.ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED`](#orgmetricname-org-login-security-strong-passwords-enabled) | 🔢 gauge | ConfigCollector | 2 labels | Whether strong passwords are enforced (1=enabled, 0=disabled) |
+| [`meraki_alerts_active`](#meraki-alerts-active) | 🔢 gauge | AlertsCollector | 8 labels | Number of active Meraki assurance alerts |
+| [`meraki_alerts_total_by_network`](#meraki-alerts-total-by-network) | 🔢 gauge | AlertsCollector | 4 labels | Total number of active alerts per network |
+| [`meraki_alerts_total_by_severity`](#meraki-alerts-total-by-severity) | 🔢 gauge | AlertsCollector | 3 labels | Total number of active alerts by severity |
+| [`meraki_ap_channel_utilization_2_4ghz_percent`](#meraki-ap-channel-utilization-2-4ghz-percent) | 🔢 gauge | NetworkHealthCollector | 9 labels | 2.4GHz channel utilization percentage per AP |
+| [`meraki_ap_channel_utilization_5ghz_percent`](#meraki-ap-channel-utilization-5ghz-percent) | 🔢 gauge | NetworkHealthCollector | 9 labels | 5GHz channel utilization percentage per AP |
+| [`meraki_client_application_usage_recv_kb`](#meraki-client-application-usage-recv-kb) | 🔢 gauge | ClientsCollector | 9 labels | Kilobytes received by client per application in the last hour |
+| [`meraki_client_application_usage_sent_kb`](#meraki-client-application-usage-sent-kb) | 🔢 gauge | ClientsCollector | 9 labels | Kilobytes sent by client per application in the last hour |
+| [`meraki_client_application_usage_total_kb`](#meraki-client-application-usage-total-kb) | 🔢 gauge | ClientsCollector | 9 labels | Total kilobytes transferred by client per application in the last hour |
+| [`meraki_client_status`](#meraki-client-status) | 🔢 gauge | ClientsCollector | 9 labels | Client online status (1 = online, 0 = offline) |
+| [`meraki_client_usage_recv_kb`](#meraki-client-usage-recv-kb) | 🔢 gauge | ClientsCollector | 9 labels | Kilobytes received by client in the last hour |
+| [`meraki_client_usage_sent_kb`](#meraki-client-usage-sent-kb) | 🔢 gauge | ClientsCollector | 9 labels | Kilobytes sent by client in the last hour |
+| [`meraki_client_usage_total_kb`](#meraki-client-usage-total-kb) | 🔢 gauge | ClientsCollector | 9 labels | Total kilobytes transferred by client in the last hour |
+| [`meraki_clients_per_ssid_count`](#meraki-clients-per-ssid-count) | 🔢 gauge | ClientsCollector | 5 labels | Count of clients per SSID |
+| [`meraki_clients_per_vlan_count`](#meraki-clients-per-vlan-count) | 🔢 gauge | ClientsCollector | 5 labels | Count of clients per VLAN |
+| [`meraki_device_memory_free_bytes`](#meraki-device-memory-free-bytes) | 🔢 gauge | DeviceCollector | 9 labels | Device memory free in bytes |
+| [`meraki_device_memory_total_bytes`](#meraki-device-memory-total-bytes) | 🔢 gauge | DeviceCollector | 8 labels | Device memory total provisioned in bytes |
+| [`meraki_device_memory_usage_percent`](#meraki-device-memory-usage-percent) | 🔢 gauge | DeviceCollector | 8 labels | Device memory usage percentage (maximum from most recent interval) |
+| [`meraki_device_memory_used_bytes`](#meraki-device-memory-used-bytes) | 🔢 gauge | DeviceCollector | 9 labels | Device memory used in bytes |
+| [`meraki_device_status_info`](#meraki-device-status-info) | 🔢 gauge | DeviceCollector | 9 labels | Device status information |
+| [`meraki_device_up`](#meraki-device-up) | 🔢 gauge | DeviceCollector | 8 labels | Device online status (1 = online, 0 = offline) |
+| [`meraki_exporter_client_dns_cache_expired`](#meraki-exporter-client-dns-cache-expired) | 🔢 gauge | ClientsCollector | No labels | Number of expired entries in DNS cache |
+| [`meraki_exporter_client_dns_cache_total`](#meraki-exporter-client-dns-cache-total) | 🔢 gauge | ClientsCollector | No labels | Total number of entries in DNS cache |
+| [`meraki_exporter_client_dns_cache_valid`](#meraki-exporter-client-dns-cache-valid) | 🔢 gauge | ClientsCollector | No labels | Number of valid entries in DNS cache |
+| [`meraki_exporter_client_dns_lookups_cached_total`](#meraki-exporter-client-dns-lookups-cached-total) | 📈 counter | ClientsCollector | No labels | Total number of DNS lookups served from cache |
+| [`meraki_exporter_client_dns_lookups_failed_total`](#meraki-exporter-client-dns-lookups-failed-total) | 📈 counter | ClientsCollector | No labels | Total number of failed DNS lookups |
+| [`meraki_exporter_client_dns_lookups_successful_total`](#meraki-exporter-client-dns-lookups-successful-total) | 📈 counter | ClientsCollector | No labels | Total number of successful DNS lookups |
+| [`meraki_exporter_client_dns_lookups_total`](#meraki-exporter-client-dns-lookups-total) | 📈 counter | ClientsCollector | No labels | Total number of DNS lookups performed |
+| [`meraki_exporter_client_store_networks`](#meraki-exporter-client-store-networks) | 🔢 gauge | ClientsCollector | No labels | Total number of networks with clients |
+| [`meraki_exporter_client_store_total`](#meraki-exporter-client-store-total) | 🔢 gauge | ClientsCollector | No labels | Total number of clients in the store |
+| [`meraki_mr_aggregation_enabled`](#meraki-mr-aggregation-enabled) | 🔢 gauge | MRCollector | 8 labels | Access point port aggregation enabled status (1 = enabled, 0 = disabled) |
+| [`meraki_mr_aggregation_speed_mbps`](#meraki-mr-aggregation-speed-mbps) | 🔢 gauge | MRCollector | 8 labels | Access point total aggregated port speed in Mbps |
+| [`meraki_mr_clients_connected`](#meraki-mr-clients-connected) | 🔢 gauge | MRCollector | 8 labels | Number of clients connected to access point |
+| [`meraki_mr_connection_stats_total`](#meraki-mr-connection-stats-total) | 🔢 gauge | MRCollector | 9 labels | Wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success) |
+| [`meraki_mr_cpu_load_5min`](#meraki-mr-cpu-load-5min) | 🔢 gauge | MRCollector | 8 labels | Access point CPU load average over 5 minutes (normalized to 0-100 per core) |
+| [`meraki_mr_network_packet_loss_downstream_percent`](#meraki-mr-network-packet-loss-downstream-percent) | 🔢 gauge | MRCollector | 4 labels | Downstream packet loss percentage for all access points in network (5-minute window) |
+| [`meraki_mr_network_packet_loss_total_percent`](#meraki-mr-network-packet-loss-total-percent) | 🔢 gauge | MRCollector | 4 labels | Total packet loss percentage (upstream + downstream) for all access points in network (5-minute window) |
+| [`meraki_mr_network_packet_loss_upstream_percent`](#meraki-mr-network-packet-loss-upstream-percent) | 🔢 gauge | MRCollector | 4 labels | Upstream packet loss percentage for all access points in network (5-minute window) |
+| [`meraki_mr_network_packets_downstream_lost`](#meraki-mr-network-packets-downstream-lost) | 🔢 gauge | MRCollector | 4 labels | Downstream packets lost for all access points in network (5-minute window) |
+| [`meraki_mr_network_packets_downstream_total`](#meraki-mr-network-packets-downstream-total) | 🔢 gauge | MRCollector | 4 labels | Total downstream packets for all access points in network (5-minute window) |
+| [`meraki_mr_network_packets_lost_total`](#meraki-mr-network-packets-lost-total) | 🔢 gauge | MRCollector | 4 labels | Total packets lost (upstream + downstream) for all access points in network (5-minute window) |
+| [`meraki_mr_network_packets_total`](#meraki-mr-network-packets-total) | 🔢 gauge | MRCollector | 4 labels | Total packets (upstream + downstream) for all access points in network (5-minute window) |
+| [`meraki_mr_network_packets_upstream_lost`](#meraki-mr-network-packets-upstream-lost) | 🔢 gauge | MRCollector | 4 labels | Upstream packets lost for all access points in network (5-minute window) |
+| [`meraki_mr_network_packets_upstream_total`](#meraki-mr-network-packets-upstream-total) | 🔢 gauge | MRCollector | 4 labels | Total upstream packets for all access points in network (5-minute window) |
+| [`meraki_mr_packet_loss_downstream_percent`](#meraki-mr-packet-loss-downstream-percent) | 🔢 gauge | MRCollector | 8 labels | Downstream packet loss percentage for access point (5-minute window) |
+| [`meraki_mr_packet_loss_total_percent`](#meraki-mr-packet-loss-total-percent) | 🔢 gauge | MRCollector | 8 labels | Total packet loss percentage (upstream + downstream) for access point (5-minute window) |
+| [`meraki_mr_packet_loss_upstream_percent`](#meraki-mr-packet-loss-upstream-percent) | 🔢 gauge | MRCollector | 8 labels | Upstream packet loss percentage for access point (5-minute window) |
+| [`meraki_mr_packets_downstream_lost`](#meraki-mr-packets-downstream-lost) | 🔢 gauge | MRCollector | 8 labels | Downstream packets lost by access point (5-minute window) |
+| [`meraki_mr_packets_downstream_total`](#meraki-mr-packets-downstream-total) | 🔢 gauge | MRCollector | 8 labels | Total downstream packets transmitted by access point (5-minute window) |
+| [`meraki_mr_packets_lost_total`](#meraki-mr-packets-lost-total) | 🔢 gauge | MRCollector | 8 labels | Total packets lost (upstream + downstream) for access point (5-minute window) |
+| [`meraki_mr_packets_total`](#meraki-mr-packets-total) | 🔢 gauge | MRCollector | 8 labels | Total packets (upstream + downstream) for access point (5-minute window) |
+| [`meraki_mr_packets_upstream_lost`](#meraki-mr-packets-upstream-lost) | 🔢 gauge | MRCollector | 8 labels | Upstream packets lost by access point (5-minute window) |
+| [`meraki_mr_packets_upstream_total`](#meraki-mr-packets-upstream-total) | 🔢 gauge | MRCollector | 8 labels | Total upstream packets received by access point (5-minute window) |
+| [`meraki_mr_port_link_negotiation_info`](#meraki-mr-port-link-negotiation-info) | 🔢 gauge | MRCollector | 10 labels | Access point port link negotiation information |
+| [`meraki_mr_port_link_negotiation_speed_mbps`](#meraki-mr-port-link-negotiation-speed-mbps) | 🔢 gauge | MRCollector | 9 labels | Access point port link negotiation speed in Mbps |
+| [`meraki_mr_port_poe_info`](#meraki-mr-port-poe-info) | 🔢 gauge | MRCollector | 10 labels | Access point port PoE information |
+| [`meraki_mr_power_ac_connected`](#meraki-mr-power-ac-connected) | 🔢 gauge | MRCollector | 8 labels | Access point AC power connection status (1 = connected, 0 = not connected) |
+| [`meraki_mr_power_info`](#meraki-mr-power-info) | 🔢 gauge | MRCollector | 9 labels | Access point power information |
+| [`meraki_mr_power_poe_connected`](#meraki-mr-power-poe-connected) | 🔢 gauge | MRCollector | 8 labels | Access point PoE power connection status (1 = connected, 0 = not connected) |
+| [`meraki_mr_radio_broadcasting`](#meraki-mr-radio-broadcasting) | 🔢 gauge | MRCollector | 10 labels | Access point radio broadcasting status (1 = broadcasting, 0 = not broadcasting) |
+| [`meraki_mr_radio_channel`](#meraki-mr-radio-channel) | 🔢 gauge | MRCollector | 10 labels | Access point radio channel number |
+| [`meraki_mr_radio_channel_width_mhz`](#meraki-mr-radio-channel-width-mhz) | 🔢 gauge | MRCollector | 10 labels | Access point radio channel width in MHz |
+| [`meraki_mr_radio_power_dbm`](#meraki-mr-radio-power-dbm) | 🔢 gauge | MRCollector | 10 labels | Access point radio transmit power in dBm |
+| [`meraki_mr_ssid_client_count`](#meraki-mr-ssid-client-count) | 🔢 gauge | MRCollector | 5 labels | Number of clients connected to SSID over the last day |
+| [`meraki_mr_ssid_usage_downstream_mb`](#meraki-mr-ssid-usage-downstream-mb) | 🔢 gauge | MRCollector | 5 labels | Downstream data usage in MB by SSID over the last day |
+| [`meraki_mr_ssid_usage_percentage`](#meraki-mr-ssid-usage-percentage) | 🔢 gauge | MRCollector | 5 labels | Percentage of total organization data usage by SSID over the last day |
+| [`meraki_mr_ssid_usage_total_mb`](#meraki-mr-ssid-usage-total-mb) | 🔢 gauge | MRCollector | 5 labels | Total data usage in MB by SSID over the last day |
+| [`meraki_mr_ssid_usage_upstream_mb`](#meraki-mr-ssid-usage-upstream-mb) | 🔢 gauge | MRCollector | 5 labels | Upstream data usage in MB by SSID over the last day |
+| [`meraki_ms_poe_budget_watts`](#meraki-ms-poe-budget-watts) | 🔢 gauge | MSCollector | 8 labels | Total POE power budget for switch in watts |
+| [`meraki_ms_poe_network_total_watthours`](#meraki-ms-poe-network-total-watthours) | 🔢 gauge | MSCollector | 4 labels | Total POE power consumption for all switches in network in watt-hours (Wh) |
+| [`meraki_ms_poe_port_power_watthours`](#meraki-ms-poe-port-power-watthours) | 🔢 gauge | MSCollector | 10 labels | Per-port POE power consumption in watt-hours (Wh) over the last 1 hour |
+| [`meraki_ms_poe_total_power_watthours`](#meraki-ms-poe-total-power-watthours) | 🔢 gauge | MSCollector | 8 labels | Total POE power consumption for switch in watt-hours (Wh) |
+| [`meraki_ms_port_client_count`](#meraki-ms-port-client-count) | 🔢 gauge | MSCollector | 10 labels | Number of clients connected to switch port |
+| [`meraki_ms_port_packets_broadcast`](#meraki-ms-port-packets-broadcast) | 🔢 gauge | MSCollector | No labels | Broadcast packets on switch port (5-minute window) |
+| [`meraki_ms_port_packets_collisions`](#meraki-ms-port-packets-collisions) | 🔢 gauge | MSCollector | No labels | Collision packets on switch port (5-minute window) |
+| [`meraki_ms_port_packets_crcerrors`](#meraki-ms-port-packets-crcerrors) | 🔢 gauge | MSCollector | No labels | CRC align error packets on switch port (5-minute window) |
+| [`meraki_ms_port_packets_fragments`](#meraki-ms-port-packets-fragments) | 🔢 gauge | MSCollector | No labels | Fragment packets on switch port (5-minute window) |
+| [`meraki_ms_port_packets_multicast`](#meraki-ms-port-packets-multicast) | 🔢 gauge | MSCollector | No labels | Multicast packets on switch port (5-minute window) |
+| [`meraki_ms_port_packets_rate_broadcast`](#meraki-ms-port-packets-rate-broadcast) | 🔢 gauge | MSCollector | No labels | Broadcast packet rate on switch port (packets per second, 5-minute average) |
+| [`meraki_ms_port_packets_rate_collisions`](#meraki-ms-port-packets-rate-collisions) | 🔢 gauge | MSCollector | No labels | Collision packet rate on switch port (packets per second, 5-minute average) |
+| [`meraki_ms_port_packets_rate_crcerrors`](#meraki-ms-port-packets-rate-crcerrors) | 🔢 gauge | MSCollector | No labels | CRC align error packet rate on switch port (packets per second, 5-minute average) |
+| [`meraki_ms_port_packets_rate_fragments`](#meraki-ms-port-packets-rate-fragments) | 🔢 gauge | MSCollector | No labels | Fragment packet rate on switch port (packets per second, 5-minute average) |
+| [`meraki_ms_port_packets_rate_multicast`](#meraki-ms-port-packets-rate-multicast) | 🔢 gauge | MSCollector | No labels | Multicast packet rate on switch port (packets per second, 5-minute average) |
+| [`meraki_ms_port_packets_rate_topologychanges`](#meraki-ms-port-packets-rate-topologychanges) | 🔢 gauge | MSCollector | No labels | Topology change packet rate on switch port (packets per second, 5-minute average) |
+| [`meraki_ms_port_packets_rate_total`](#meraki-ms-port-packets-rate-total) | 🔢 gauge | MSCollector | No labels | Total packet rate on switch port (packets per second, 5-minute average) |
+| [`meraki_ms_port_packets_topologychanges`](#meraki-ms-port-packets-topologychanges) | 🔢 gauge | MSCollector | No labels | Topology change packets on switch port (5-minute window) |
+| [`meraki_ms_port_packets_total`](#meraki-ms-port-packets-total) | 🔢 gauge | MSCollector | No labels | Total packets on switch port (5-minute window) |
+| [`meraki_ms_port_status`](#meraki-ms-port-status) | 🔢 gauge | MSCollector | 12 labels | Switch port status (1 = connected, 0 = disconnected) |
+| [`meraki_ms_port_traffic_bytes`](#meraki-ms-port-traffic-bytes) | 🔢 gauge | MSCollector | 11 labels | Switch port traffic rate in bytes per second (averaged over 1 hour) |
+| [`meraki_ms_port_usage_bytes`](#meraki-ms-port-usage-bytes) | 🔢 gauge | MSCollector | 11 labels | Switch port data usage in bytes over the last 1 hour |
+| [`meraki_ms_ports_active_total`](#meraki-ms-ports-active-total) | 🔢 gauge | DeviceCollector | 2 labels | Total number of active switch ports |
+| [`meraki_ms_ports_by_link_speed_total`](#meraki-ms-ports-by-link-speed-total) | 🔢 gauge | DeviceCollector | 4 labels | Total number of active switch ports by link speed |
+| [`meraki_ms_ports_by_media_total`](#meraki-ms-ports-by-media-total) | 🔢 gauge | DeviceCollector | 4 labels | Total number of switch ports by media type |
+| [`meraki_ms_ports_inactive_total`](#meraki-ms-ports-inactive-total) | 🔢 gauge | DeviceCollector | 2 labels | Total number of inactive switch ports |
+| [`meraki_ms_power_usage_watts`](#meraki-ms-power-usage-watts) | 🔢 gauge | MSCollector | 8 labels | Switch power usage in watts |
+| [`meraki_ms_stp_priority`](#meraki-ms-stp-priority) | 🔢 gauge | MSCollector | 8 labels | Switch STP (Spanning Tree Protocol) priority |
+| [`meraki_mt_apparent_power_va`](#meraki-mt-apparent-power-va) | 🔢 gauge | MTSensorCollector | 8 labels | Apparent power in volt-amperes |
+| [`meraki_mt_battery_percentage`](#meraki-mt-battery-percentage) | 🔢 gauge | MTSensorCollector | 8 labels | Battery level percentage |
+| [`meraki_mt_co2_ppm`](#meraki-mt-co2-ppm) | 🔢 gauge | MTSensorCollector | 8 labels | CO2 level in parts per million |
+| [`meraki_mt_current_amps`](#meraki-mt-current-amps) | 🔢 gauge | MTSensorCollector | 8 labels | Current in amperes |
+| [`meraki_mt_door_status`](#meraki-mt-door-status) | 🔢 gauge | MTSensorCollector | 8 labels | Door sensor status (1 = open, 0 = closed) |
+| [`meraki_mt_downstream_power_enabled`](#meraki-mt-downstream-power-enabled) | 🔢 gauge | MTSensorCollector | 8 labels | Downstream power status (1 = enabled, 0 = disabled) |
+| [`meraki_mt_frequency_hz`](#meraki-mt-frequency-hz) | 🔢 gauge | MTSensorCollector | 8 labels | Frequency in hertz |
+| [`meraki_mt_humidity_percent`](#meraki-mt-humidity-percent) | 🔢 gauge | MTSensorCollector | 8 labels | Humidity percentage |
+| [`meraki_mt_indoor_air_quality_score`](#meraki-mt-indoor-air-quality-score) | 🔢 gauge | MTSensorCollector | 8 labels | Indoor air quality score (0-100) |
+| [`meraki_mt_noise_db`](#meraki-mt-noise-db) | 🔢 gauge | MTSensorCollector | 8 labels | Noise level in decibels |
+| [`meraki_mt_pm25_ug_m3`](#meraki-mt-pm25-ug-m3) | 🔢 gauge | MTSensorCollector | 8 labels | PM2.5 particulate matter in micrograms per cubic meter |
+| [`meraki_mt_power_factor_percent`](#meraki-mt-power-factor-percent) | 🔢 gauge | MTSensorCollector | 8 labels | Power factor percentage |
+| [`meraki_mt_real_power_watts`](#meraki-mt-real-power-watts) | 🔢 gauge | MTSensorCollector | 8 labels | Real power in watts |
+| [`meraki_mt_remote_lockout_status`](#meraki-mt-remote-lockout-status) | 🔢 gauge | MTSensorCollector | 8 labels | Remote lockout switch status (1 = locked, 0 = unlocked) |
+| [`meraki_mt_temperature_celsius`](#meraki-mt-temperature-celsius) | 🔢 gauge | MTSensorCollector | 8 labels | Temperature reading in Celsius |
+| [`meraki_mt_tvoc_ppb`](#meraki-mt-tvoc-ppb) | 🔢 gauge | MTSensorCollector | 8 labels | Total volatile organic compounds in parts per billion |
+| [`meraki_mt_voltage_volts`](#meraki-mt-voltage-volts) | 🔢 gauge | MTSensorCollector | 8 labels | Voltage in volts |
+| [`meraki_mt_water_detected`](#meraki-mt-water-detected) | 🔢 gauge | MTSensorCollector | 8 labels | Water detection status (1 = detected, 0 = not detected) |
+| [`meraki_network_bluetooth_clients_total`](#meraki-network-bluetooth-clients-total) | 🔢 gauge | NetworkHealthCollector | 4 labels | Total number of Bluetooth clients detected by MR devices in the last 5 minutes |
+| [`meraki_network_channel_utilization_2_4ghz_percent`](#meraki-network-channel-utilization-2-4ghz-percent) | 🔢 gauge | NetworkHealthCollector | 5 labels | Network-wide average 2.4GHz channel utilization percentage |
+| [`meraki_network_channel_utilization_5ghz_percent`](#meraki-network-channel-utilization-5ghz-percent) | 🔢 gauge | NetworkHealthCollector | 5 labels | Network-wide average 5GHz channel utilization percentage |
+| [`meraki_network_wireless_connection_stats_total`](#meraki-network-wireless-connection-stats-total) | 🔢 gauge | NetworkHealthCollector | 5 labels | Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success) |
+| [`meraki_network_wireless_download_kbps`](#meraki-network-wireless-download-kbps) | 🔢 gauge | NetworkHealthCollector | 4 labels | Network-wide wireless download bandwidth in kilobits per second |
+| [`meraki_network_wireless_upload_kbps`](#meraki-network-wireless-upload-kbps) | 🔢 gauge | NetworkHealthCollector | 4 labels | Network-wide wireless upload bandwidth in kilobits per second |
+| [`meraki_org`](#meraki-org) | ℹ️ info | OrganizationCollector | 2 labels | Organization information |
+| [`meraki_org_api_requests_by_status`](#meraki-org-api-requests-by-status) | 🔢 gauge | OrganizationCollector | 3 labels | API requests by HTTP status code in the last hour |
+| [`meraki_org_api_requests_total`](#meraki-org-api-requests-total) | 🔢 gauge | OrganizationCollector | 2 labels | Total API requests made by the organization in the last hour |
+| [`meraki_org_application_usage_downstream_mb`](#meraki-org-application-usage-downstream-mb) | 🔢 gauge | OrganizationCollector | 3 labels | Downstream application usage in MB by category |
+| [`meraki_org_application_usage_percentage`](#meraki-org-application-usage-percentage) | 🔢 gauge | OrganizationCollector | 3 labels | Application usage percentage by category |
+| [`meraki_org_application_usage_total_mb`](#meraki-org-application-usage-total-mb) | 🔢 gauge | OrganizationCollector | 3 labels | Total application usage in MB by category |
+| [`meraki_org_application_usage_upstream_mb`](#meraki-org-application-usage-upstream-mb) | 🔢 gauge | OrganizationCollector | 3 labels | Upstream application usage in MB by category |
+| [`meraki_org_clients_total`](#meraki-org-clients-total) | 🔢 gauge | OrganizationCollector | 2 labels | Total number of active clients in the organization (1-hour window) |
+| [`meraki_org_configuration_changes_total`](#meraki-org-configuration-changes-total) | 🔢 gauge | ConfigCollector | 2 labels | Total number of configuration changes in the last 24 hours |
+| [`meraki_org_devices_availability_total`](#meraki-org-devices-availability-total) | 🔢 gauge | OrganizationCollector | 4 labels | Total number of devices by availability status and product type |
+| [`meraki_org_devices_by_model_total`](#meraki-org-devices-by-model-total) | 🔢 gauge | OrganizationCollector | 3 labels | Total number of devices by specific model |
+| [`meraki_org_devices_total`](#meraki-org-devices-total) | 🔢 gauge | OrganizationCollector | 3 labels | Total number of devices in the organization |
+| [`meraki_org_licenses_expiring`](#meraki-org-licenses-expiring) | 🔢 gauge | OrganizationCollector | 3 labels | Number of licenses expiring within 30 days |
+| [`meraki_org_licenses_total`](#meraki-org-licenses-total) | 🔢 gauge | OrganizationCollector | 4 labels | Total number of licenses |
+| [`meraki_org_login_security_account_lockout_enabled`](#meraki-org-login-security-account-lockout-enabled) | 🔢 gauge | ConfigCollector | 2 labels | Whether account lockout is enforced (1=enabled, 0=disabled) |
+| [`meraki_org_login_security_idle_timeout_enabled`](#meraki-org-login-security-idle-timeout-enabled) | 🔢 gauge | ConfigCollector | 2 labels | Whether idle timeout is enforced (1=enabled, 0=disabled) |
+| [`meraki_org_login_security_idle_timeout_minutes`](#meraki-org-login-security-idle-timeout-minutes) | 🔢 gauge | ConfigCollector | 2 labels | Minutes before idle timeout (0 if not set) |
+| [`meraki_org_login_security_ip_ranges_enabled`](#meraki-org-login-security-ip-ranges-enabled) | 🔢 gauge | ConfigCollector | 2 labels | Whether login IP ranges are enforced (1=enabled, 0=disabled) |
+| [`meraki_org_login_security_minimum_password_length`](#meraki-org-login-security-minimum-password-length) | 🔢 gauge | ConfigCollector | 2 labels | Minimum password length required |
+| [`meraki_org_login_security_two_factor_enabled`](#meraki-org-login-security-two-factor-enabled) | 🔢 gauge | ConfigCollector | 2 labels | Whether two-factor authentication is enforced (1=enabled, 0=disabled) |
+| [`meraki_org_networks_total`](#meraki-org-networks-total) | 🔢 gauge | OrganizationCollector | 2 labels | Total number of networks in the organization |
+| [`meraki_org_packetcaptures_remaining`](#meraki-org-packetcaptures-remaining) | 🔢 gauge | OrganizationCollector | 2 labels | Number of remaining packet captures to process |
+| [`meraki_org_packetcaptures_total`](#meraki-org-packetcaptures-total) | 🔢 gauge | OrganizationCollector | 2 labels | Total number of packet captures in the organization |
+| [`meraki_org_usage_downstream_kb`](#meraki-org-usage-downstream-kb) | 🔢 gauge | OrganizationCollector | 2 labels | Downstream data usage in KB for the 1-hour window |
+| [`meraki_org_usage_total_kb`](#meraki-org-usage-total-kb) | 🔢 gauge | OrganizationCollector | 2 labels | Total data usage in KB for the 1-hour window |
+| [`meraki_org_usage_upstream_kb`](#meraki-org-usage-upstream-kb) | 🔢 gauge | OrganizationCollector | 2 labels | Upstream data usage in KB for the 1-hour window |
+| [`meraki_sensor_alerts_total`](#meraki-sensor-alerts-total) | 🔢 gauge | AlertsCollector | 5 labels | Total number of sensor alerts in the last hour by metric type |
+| [`meraki_wireless_client_capabilities_count`](#meraki-wireless-client-capabilities-count) | 🔢 gauge | ClientsCollector | 5 labels | Count of wireless clients by capability |
+| [`meraki_wireless_client_rssi`](#meraki-wireless-client-rssi) | 🔢 gauge | ClientsCollector | 9 labels | Wireless client RSSI (Received Signal Strength Indicator) in dBm |
+| [`meraki_wireless_client_snr`](#meraki-wireless-client-snr) | 🔢 gauge | ClientsCollector | 9 labels | Wireless client SNR (Signal-to-Noise Ratio) in dB |
 
-!!! tip "Label Usage"
+## 📚 Usage Guide
+
+!!! info "Metric Types Explained"
+    - 🔢 **Gauge**: Current value that can go up or down (e.g., current temperature, active connections)
+    - 📈 **Counter**: Cumulative value that only increases (e.g., total requests, total bytes)
+    - ℹ️ **Info**: Metadata with labels but value always 1 (e.g., device information, configuration)
+
+!!! tip "Querying with Labels"
     All metrics include relevant labels for filtering and aggregation. Use label selectors in your queries:
     ```promql
     # Filter by organization
@@ -2028,7 +4640,27 @@ All metrics in alphabetical order:
 
     # Filter by device type
     meraki_device_up{device_model=~"MS.*"}
+
+    # Aggregate across multiple labels
+    sum(meraki_device_up) by (org_name, device_model)
     ```
+
+!!! example "Common Query Patterns"
+    ```promql
+    # Device health overview
+    avg(meraki_device_up) by (org_name)
+
+    # Network utilization
+    rate(meraki_network_traffic_bytes_total[5m])
+
+    # Alert summary
+    sum(meraki_alerts_total) by (severity, type)
+    ```
+
+!!! warning "Performance Considerations"
+    - Use appropriate time ranges for rate() and increase() functions
+    - Consider cardinality when using high-cardinality labels
+    - Monitor query performance in production environments
 
 For more information on using these metrics, see the [Overview](overview.md) page.
 

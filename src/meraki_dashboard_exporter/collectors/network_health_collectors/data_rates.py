@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
@@ -52,9 +53,11 @@ class DataRatesCollector(BaseNetworkHealthCollector):
         """
         network_id = network["id"]
         network_name = network.get("name", network_id)
+        org_id = network.get("orgId", "")
+        org_name = network.get("orgName", org_id)
 
         try:
-            with LogContext(network_id=network_id, network_name=network_name):
+            with LogContext(network_id=network_id, network_name=network_name, org_id=org_id):
                 # Use 300 second (5 minute) resolution with recent timespan
                 # Using timespan of 300 seconds to get the most recent 5-minute data block
                 data_rate_history = await self._fetch_data_rate_history(network_id)
@@ -79,22 +82,23 @@ class DataRatesCollector(BaseNetworkHealthCollector):
                 download_kbps = latest_data.get("downloadKbps", 0)
                 upload_kbps = latest_data.get("uploadKbps", 0)
 
+                # Create network labels using helper
+                labels = create_network_labels(
+                    network,
+                    org_id=org_id,
+                    org_name=org_name,
+                )
+
                 # Set the metrics
                 self._set_metric_value(
                     "_network_wireless_download_kbps",
-                    {
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    labels,
                     download_kbps,
                 )
 
                 self._set_metric_value(
                     "_network_wireless_upload_kbps",
-                    {
-                        "network_id": network_id,
-                        "network_name": network_name,
-                    },
+                    labels,
                     upload_kbps,
                 )
 

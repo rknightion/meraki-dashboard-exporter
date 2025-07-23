@@ -16,6 +16,7 @@ from ..core.constants import (
     UpdateTier,
 )
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ..core.label_helpers import create_device_labels
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call, log_batch_operation
 from ..core.logging_helpers import LogContext, log_metric_collection_summary
@@ -170,10 +171,13 @@ class DeviceCollector(MetricCollector):
             DeviceMetricName.DEVICE_UP,
             "Device online status (1 = online, 0 = offline)",
             labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.NAME,
                 LabelName.MODEL,
-                LabelName.NETWORK_ID,
                 LabelName.DEVICE_TYPE,
             ],
         )
@@ -182,10 +186,13 @@ class DeviceCollector(MetricCollector):
             DeviceMetricName.DEVICE_STATUS_INFO,
             "Device status information",
             labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.NAME,
                 LabelName.MODEL,
-                LabelName.NETWORK_ID,
                 LabelName.DEVICE_TYPE,
                 LabelName.STATUS,
             ],
@@ -196,10 +203,13 @@ class DeviceCollector(MetricCollector):
             DeviceMetricName.DEVICE_MEMORY_USED_BYTES,
             "Device memory used in bytes",
             labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.NAME,
                 LabelName.MODEL,
-                LabelName.NETWORK_ID,
                 LabelName.DEVICE_TYPE,
                 LabelName.STAT,
             ],
@@ -209,10 +219,13 @@ class DeviceCollector(MetricCollector):
             DeviceMetricName.DEVICE_MEMORY_FREE_BYTES,
             "Device memory free in bytes",
             labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.NAME,
                 LabelName.MODEL,
-                LabelName.NETWORK_ID,
                 LabelName.DEVICE_TYPE,
                 LabelName.STAT,
             ],
@@ -222,10 +235,13 @@ class DeviceCollector(MetricCollector):
             DeviceMetricName.DEVICE_MEMORY_TOTAL_BYTES,
             "Device memory total provisioned in bytes",
             labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.NAME,
                 LabelName.MODEL,
-                LabelName.NETWORK_ID,
                 LabelName.DEVICE_TYPE,
             ],
         )
@@ -234,10 +250,13 @@ class DeviceCollector(MetricCollector):
             DeviceMetricName.DEVICE_MEMORY_USAGE_PERCENT,
             "Device memory usage percentage (maximum from most recent interval)",
             labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.NAME,
                 LabelName.MODEL,
-                LabelName.NETWORK_ID,
                 LabelName.DEVICE_TYPE,
             ],
         )
@@ -258,9 +277,8 @@ class DeviceCollector(MetricCollector):
             api_calls_made += 1
 
             # Collect devices for each organization
-            org_ids = [org["id"] for org in organizations]
-            for org_id in org_ids:
-                await self._collect_org_devices(org_id)
+            for org in organizations:
+                await self._collect_org_devices(org["id"], org.get("name", org["id"]))
                 organizations_processed += 1
                 # Each org makes multiple API calls
                 api_calls_made += 10  # Approximate
@@ -307,13 +325,15 @@ class DeviceCollector(MetricCollector):
         operation="Collect organization devices",
         continue_on_error=True,
     )
-    async def _collect_org_devices(self, org_id: str) -> None:
+    async def _collect_org_devices(self, org_id: str, org_name: str) -> None:
         """Collect device metrics for an organization.
 
         Parameters
         ----------
         org_id : str
             Organization ID.
+        org_name : str
+            Organization name.
 
         """
         try:
@@ -384,8 +404,12 @@ class DeviceCollector(MetricCollector):
                 network_id = device.get("networkId", "")
                 device["networkName"] = network_map.get(network_id, network_id)
 
+                # Add organization info to device data
+                device["orgId"] = org_id
+                device["orgName"] = org_name
+
                 # Collect common metrics
-                self._collect_common_metrics(device)
+                self._collect_common_metrics(device, org_id, org_name)
 
                 # Group devices by type for batch processing
                 if device_type not in devices_by_type:
@@ -446,32 +470,34 @@ class DeviceCollector(MetricCollector):
 
             # Aggregate network-wide POE metrics after all switches are collected
             try:
-                await self._aggregate_network_poe(org_id, devices)
+                await self._aggregate_network_poe(org_id, org_name, devices)
             except Exception:
                 logger.exception("Failed to aggregate POE metrics")
 
             # Collect switch port overview metrics
             try:
-                await self._collect_switch_port_overview(org_id)
+                await self._collect_switch_port_overview(org_id, org_name)
             except Exception:
                 logger.exception("Failed to collect switch port overview")
 
             # Collect memory metrics for all devices
             try:
                 # Use base collector's memory collection
-                await self.ms_collector.collect_memory_metrics(org_id, self._device_lookup)
+                await self.ms_collector.collect_memory_metrics(
+                    org_id, org_name, self._device_lookup
+                )
             except Exception:
                 logger.exception("Failed to collect memory metrics")
 
             # Collect MR-specific metrics
             if any(d for d in devices if d.get("model", "").startswith(DeviceType.MR)):
                 # Use MR collector for all MR-specific metrics
-                await self._collect_mr_specific_metrics(org_id, devices)
+                await self._collect_mr_specific_metrics(org_id, org_name, devices)
 
             # Collect MS-specific metrics
             if any(d for d in devices if d.get("model", "").startswith(DeviceType.MS)):
                 # Use MS collector for all MS-specific metrics
-                await self._collect_ms_specific_metrics(org_id, devices)
+                await self._collect_ms_specific_metrics(org_id, org_name, devices)
 
         except Exception as e:
             logger.exception(
@@ -527,7 +553,7 @@ class DeviceCollector(MetricCollector):
         await self.mr_collector.collect(device)
 
     async def _collect_mr_specific_metrics(
-        self, org_id: str, devices: list[dict[str, Any]]
+        self, org_id: str, org_name: str, devices: list[dict[str, Any]]
     ) -> None:
         """Collect MR-specific organization-wide metrics.
 
@@ -535,6 +561,8 @@ class DeviceCollector(MetricCollector):
         ----------
         org_id : str
             Organization ID.
+        org_name : str
+            Organization name.
         devices : list[dict[str, Any]]
             All devices in the organization.
 
@@ -542,53 +570,40 @@ class DeviceCollector(MetricCollector):
         try:
             # Collect wireless client counts
             try:
-                await self.mr_collector.collect_wireless_clients(org_id, self._device_lookup)
+                await self.mr_collector.collect_wireless_clients(
+                    org_id, org_name, self._device_lookup
+                )
             except Exception:
                 logger.exception("Failed to collect wireless client counts")
 
             # Collect MR ethernet status
             try:
-                await self.mr_collector.collect_ethernet_status(org_id, self._device_lookup)
+                await self.mr_collector.collect_ethernet_status(
+                    org_id, org_name, self._device_lookup
+                )
             except Exception:
                 logger.exception("Failed to collect MR ethernet status")
 
             # Collect MR packet loss metrics
             try:
-                await self.mr_collector.collect_packet_loss(org_id, self._device_lookup)
+                await self.mr_collector.collect_packet_loss(org_id, org_name, self._device_lookup)
             except Exception:
                 logger.exception("Failed to collect MR packet loss metrics")
 
             # Collect MR CPU load metrics
             try:
-                await self.mr_collector.collect_cpu_load(org_id, devices)
+                await self.mr_collector.collect_cpu_load(org_id, org_name, devices)
             except Exception:
                 logger.exception("Failed to collect MR CPU load metrics")
 
             # Collect MR SSID status metrics
             try:
-                await self.mr_collector.collect_ssid_status(org_id)
+                await self.mr_collector.collect_ssid_status(org_id, org_name)
             except Exception:
                 logger.exception("Failed to collect MR SSID status metrics")
 
             # Collect MR SSID usage metrics
             try:
-                # Get organization name for metrics
-                org_name = None
-                if self.settings.meraki.org_id:
-                    # When using specific org_id, we don't have org name from getOrganizations
-                    # but we can use a placeholder
-                    org_name = f"org_{org_id}"
-                else:
-                    # Find org name from our organizations list
-                    organizations = await self._fetch_organizations()
-                    for org in organizations or []:
-                        if org["id"] == org_id:
-                            org_name = org.get("name", f"org_{org_id}")
-                            break
-
-                if not org_name:
-                    org_name = f"org_{org_id}"
-
                 await self.mr_collector.collect_ssid_usage(org_id, org_name)
             except Exception:
                 logger.exception("Failed to collect MR SSID usage metrics")
@@ -600,7 +615,7 @@ class DeviceCollector(MetricCollector):
             )
 
     async def _collect_ms_specific_metrics(
-        self, org_id: str, devices: list[dict[str, Any]]
+        self, org_id: str, org_name: str, devices: list[dict[str, Any]]
     ) -> None:
         """Collect MS-specific organization-wide metrics.
 
@@ -608,6 +623,8 @@ class DeviceCollector(MetricCollector):
         ----------
         org_id : str
             Organization ID.
+        org_name : str
+            Organization name.
         devices : list[dict[str, Any]]
             All devices in the organization.
 
@@ -615,7 +632,9 @@ class DeviceCollector(MetricCollector):
         try:
             # Collect STP metrics
             try:
-                await self.ms_collector.collect_stp_priorities(org_id, self._device_lookup)
+                await self.ms_collector.collect_stp_priorities(
+                    org_id, org_name, self._device_lookup
+                )
             except Exception:
                 logger.exception("Failed to collect STP priorities")
         except Exception:
@@ -641,47 +660,39 @@ class DeviceCollector(MetricCollector):
         model = device.get("model", "")
         return model[:2] if len(model) >= 2 else "Unknown"
 
-    def _collect_common_metrics(self, device: dict[str, Any]) -> None:
+    def _collect_common_metrics(self, device: dict[str, Any], org_id: str, org_name: str) -> None:
         """Collect common device metrics.
 
         Parameters
         ----------
         device : dict[str, Any]
             Device data with status_info added.
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
 
         """
-        serial = device["serial"]
-        name = device.get("name", serial)
-        model = device.get("model", "Unknown")
-        network_id = device.get("networkId", "")
-        device_type = self._get_device_type(device)
         availability_status = device.get("availability_status", DEFAULT_DEVICE_STATUS)
+
+        # Create standard device labels
+        labels = create_device_labels(device, org_id=org_id, org_name=org_name)
 
         # Device up/down status
         is_online = 1 if availability_status == DeviceStatus.ONLINE else 0
         self._set_metric_value(
             "_device_up",
-            {
-                "serial": serial,
-                "name": name,
-                "model": model,
-                "network_id": network_id,
-                "device_type": device_type,
-            },
+            labels,
             is_online,
         )
 
         # Device status info metric
+        status_labels = create_device_labels(
+            device, org_id=org_id, org_name=org_name, status=availability_status
+        )
         self._set_metric_value(
             "_device_status_info",
-            {
-                "serial": serial,
-                "name": name,
-                "model": model,
-                "network_id": network_id,
-                "device_type": device_type,
-                "status": availability_status,
-            },
+            status_labels,
             1,
         )
 
@@ -689,13 +700,7 @@ class DeviceCollector(MetricCollector):
         if "uptimeInSeconds" in device:
             self._set_metric_value(
                 "_device_uptime",
-                {
-                    "serial": serial,
-                    "name": name,
-                    "model": model,
-                    "network_id": network_id,
-                    "device_type": device_type,
-                },
+                labels,
                 device["uptimeInSeconds"],
             )
 
@@ -722,13 +727,17 @@ class DeviceCollector(MetricCollector):
             )
             return cast(list[dict[str, Any]], networks)
 
-    async def _aggregate_network_poe(self, org_id: str, devices: list[dict[str, Any]]) -> None:
+    async def _aggregate_network_poe(
+        self, org_id: str, org_name: str, devices: list[dict[str, Any]]
+    ) -> None:
         """Aggregate POE metrics at the network level.
 
         Parameters
         ----------
         org_id : str
             Organization ID.
+        org_name : str
+            Organization name.
         devices : list[dict[str, Any]]
             All devices in the organization.
 
@@ -781,6 +790,8 @@ class DeviceCollector(MetricCollector):
                 # Set network-wide POE metric
                 network_name = network_map.get(network_id, network_id)
                 self.ms_collector._switch_poe_network_total.labels(
+                    org_id=org_id,
+                    org_name=org_name,
                     network_id=network_id,
                     network_name=network_name,
                 ).set(total_poe)
@@ -805,25 +816,17 @@ class DeviceCollector(MetricCollector):
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def _collect_switch_port_overview(self, org_id: str) -> None:
+    async def _collect_switch_port_overview(self, org_id: str, org_name: str) -> None:
         """Collect switch port overview metrics for an organization.
 
         Parameters
         ----------
         org_id : str
             Organization ID.
+        org_name : str
+            Organization name.
 
         """
-        # Get organization name
-        org_name = org_id  # Default to ID
-        if not self.settings.meraki.org_id:
-            # If we have multiple orgs, fetch the name
-            orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
-            for org in orgs:
-                if org["id"] == org_id:
-                    org_name = org["name"]
-                    break
-
         # Call the API with required timespan
         overview = await asyncio.to_thread(
             self.api.switch.getOrganizationSwitchPortsOverview,

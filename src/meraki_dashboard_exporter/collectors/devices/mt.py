@@ -10,7 +10,6 @@ if TYPE_CHECKING:
 
 from ...api.client import AsyncMerakiClient
 from ...core.constants import (
-    DEFAULT_DEVICE_MODEL_MT,
     DeviceType,
     ProductType,
     SensorDataField,
@@ -18,6 +17,7 @@ from ...core.constants import (
     UpdateTier,
 )
 from ...core.domain_models import SensorMeasurement
+from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
@@ -90,7 +90,9 @@ class MTCollector(BaseDeviceCollector):
         # Their main metrics come from sensor readings
         pass
 
-    async def collect_sensor_metrics(self, org_id: str | None = None) -> None:
+    async def collect_sensor_metrics(
+        self, org_id: str | None = None, org_name: str | None = None
+    ) -> None:
         """Collect sensor metrics for all MT devices.
 
         This method handles the full sensor collection process including
@@ -100,6 +102,8 @@ class MTCollector(BaseDeviceCollector):
         ----------
         org_id : str | None
             Organization ID. If None, collects for all orgs.
+        org_name : str | None
+            Organization name. If None, will be determined based on org_id.
 
         """
         try:
@@ -118,7 +122,14 @@ class MTCollector(BaseDeviceCollector):
             # Collect sensors for each organization
             for organization_id in org_ids:
                 try:
-                    await self._collect_org_sensors(organization_id)
+                    # Get org name if not provided
+                    if org_name is None and organization_id == org_id:
+                        current_org_name = org_name
+                    else:
+                        # Try to get org name from API
+                        current_org_name = await self._get_org_name(organization_id)
+
+                    await self._collect_org_sensors(organization_id, current_org_name)
                 except Exception:
                     logger.exception(
                         "Failed to collect sensors for organization",
@@ -144,6 +155,29 @@ class MTCollector(BaseDeviceCollector):
         # Access the API - self.api should already be the DashboardAPI
         return await asyncio.to_thread(self.api.organizations.getOrganizations)
 
+    async def _get_org_name(self, org_id: str) -> str:
+        """Get organization name.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        str
+            Organization name or org_id if not found.
+
+        """
+        try:
+            if self.api is None:
+                return org_id
+            org = await asyncio.to_thread(self.api.organizations.getOrganization, org_id)
+            return str(org.get("name", org_id))
+        except Exception:
+            logger.debug("Failed to get org name", org_id=org_id)
+            return org_id
+
     @log_api_call("getOrganizationDevices")
     async def _fetch_sensor_devices(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch sensor devices for an organization.
@@ -168,13 +202,15 @@ class MTCollector(BaseDeviceCollector):
             productTypes=[ProductType.SENSOR],
         )
 
-    async def _collect_org_sensors(self, org_id: str) -> None:
+    async def _collect_org_sensors(self, org_id: str, org_name: str | None = None) -> None:
         """Collect sensor metrics for an organization.
 
         Parameters
         ----------
         org_id : str
             Organization ID.
+        org_name : str | None
+            Organization name.
 
         """
         try:
@@ -195,8 +231,12 @@ class MTCollector(BaseDeviceCollector):
             ]
 
             if sensor_serials:
-                # Create device lookup map
-                device_map = {d["serial"]: d for d in devices}
+                # Create device lookup map with org info
+                device_map = {}
+                for d in devices:
+                    d["orgId"] = org_id
+                    d["orgName"] = org_name or org_id
+                    device_map[d["serial"]] = d
 
                 # Use async client for batch sensor reading
                 client = AsyncMerakiClient(self.settings)
@@ -270,11 +310,13 @@ class MTCollector(BaseDeviceCollector):
                 continue
 
             device = device_map[serial]
-            name = device.get("name", serial)
-            model = device.get("model", DEFAULT_DEVICE_MODEL_MT)
+
+            # Get network info from sensor data and merge with device
             network_info = sensor_data.get("network", {})
-            network_id = network_info.get("id", "")
-            network_name = network_info.get("name", "")
+            device["networkId"] = network_info.get("id", device.get("networkId", ""))
+            device["networkName"] = network_info.get(
+                "name", device.get("networkName", device["networkId"])
+            )
 
             # Try to parse to domain model for validation
             try:
@@ -299,9 +341,7 @@ class MTCollector(BaseDeviceCollector):
                 if measurements:
                     # Process validated measurements
                     for measurement in measurements:
-                        self._process_validated_metric(
-                            serial, name, model, network_id, network_name, measurement
-                        )
+                        self._process_validated_metric(device, measurement)
             except Exception as e:
                 logger.debug(
                     "Failed to parse sensor data to domain model", serial=serial, error=str(e)
@@ -318,11 +358,7 @@ class MTCollector(BaseDeviceCollector):
                         continue
 
                     self._process_metric(
-                        serial=serial,
-                        name=name,
-                        model=model,
-                        network_id=network_id,
-                        network_name=network_name,
+                        device=device,
                         metric_type=metric_type,
                         metric_data=metric_data,
                     )
@@ -385,27 +421,15 @@ class MTCollector(BaseDeviceCollector):
 
     def _process_validated_metric(
         self,
-        serial: str,
-        name: str,
-        model: str,
-        network_id: str,
-        network_name: str,
+        device: dict[str, Any],
         measurement: SensorMeasurement,
     ) -> None:
         """Process a validated sensor measurement.
 
         Parameters
         ----------
-        serial : str
-            Device serial number.
-        name : str
-            Device name.
-        model : str
-            Device model.
-        network_id : str
-            Network ID.
-        network_name : str
-            Network name.
+        device : dict[str, Any]
+            Device data with org/network info.
         measurement : SensorMeasurement
             Validated sensor measurement.
 
@@ -433,19 +457,22 @@ class MTCollector(BaseDeviceCollector):
 
         metric_attr = metric_map.get(measurement.metric)
         if metric_attr:
+            # Extract org info from device data
+            org_id = device.get("orgId", "")
+            org_name = device.get("orgName", org_id)
+
+            # Create standard device labels
+            labels = create_device_labels(device, org_id=org_id, org_name=org_name)
+
             self._set_metric_value(
                 metric_attr,
-                {"serial": serial, "name": name, "sensor_type": model},
+                labels,
                 measurement.value,
             )
 
     def _process_metric(
         self,
-        serial: str,
-        name: str,
-        model: str,
-        network_id: str,
-        network_name: str,
+        device: dict[str, Any],
         metric_type: str,
         metric_data: dict[str, Any],
     ) -> None:
@@ -453,16 +480,8 @@ class MTCollector(BaseDeviceCollector):
 
         Parameters
         ----------
-        serial : str
-            Device serial number.
-        name : str
-            Device name.
-        model : str
-            Device model.
-        network_id : str
-            Network ID.
-        network_name : str
-            Network name.
+        device : dict[str, Any]
+            Device data with org/network info.
         metric_type : str
             Type of metric (temperature, humidity, etc.).
         metric_data : dict[str, Any]
@@ -474,6 +493,13 @@ class MTCollector(BaseDeviceCollector):
             logger.error("Parent collector not set for MTCollector")
             return
 
+        # Extract org info from device data
+        org_id = device.get("orgId", "")
+        org_name = device.get("orgName", org_id)
+
+        # Create standard device labels
+        labels = create_device_labels(device, org_id=org_id, org_name=org_name)
+
         try:
             # Skip undocumented rawTemperature to avoid duplicate processing
             if metric_type == "rawTemperature":
@@ -484,7 +510,7 @@ class MTCollector(BaseDeviceCollector):
                 if celsius is not None:
                     self._set_metric_value(
                         "_sensor_temperature",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         celsius,
                     )
 
@@ -493,7 +519,7 @@ class MTCollector(BaseDeviceCollector):
                 if humidity is not None:
                     self._set_metric_value(
                         "_sensor_humidity",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         humidity,
                     )
 
@@ -502,7 +528,7 @@ class MTCollector(BaseDeviceCollector):
                 if is_open is not None:
                     self._set_metric_value(
                         "_sensor_door",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         1 if is_open else 0,
                     )
 
@@ -511,7 +537,7 @@ class MTCollector(BaseDeviceCollector):
                 is_present = metric_data.get(SensorDataField.PRESENT, False)
                 self._set_metric_value(
                     "_sensor_water",
-                    {"serial": serial, "name": name, "sensor_type": model},
+                    labels,
                     1 if is_present else 0,
                 )
 
@@ -520,7 +546,7 @@ class MTCollector(BaseDeviceCollector):
                 if concentration is not None:
                     self._set_metric_value(
                         "_sensor_co2",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         concentration,
                     )
 
@@ -529,7 +555,7 @@ class MTCollector(BaseDeviceCollector):
                 if concentration is not None:
                     self._set_metric_value(
                         "_sensor_tvoc",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         concentration,
                     )
 
@@ -538,7 +564,7 @@ class MTCollector(BaseDeviceCollector):
                 if concentration is not None:
                     self._set_metric_value(
                         "_sensor_pm25",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         concentration,
                     )
 
@@ -548,7 +574,7 @@ class MTCollector(BaseDeviceCollector):
                 if level is not None:
                     self._set_metric_value(
                         "_sensor_noise",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         level,
                     )
 
@@ -557,7 +583,7 @@ class MTCollector(BaseDeviceCollector):
                 if percentage is not None:
                     self._set_metric_value(
                         "_sensor_battery",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         percentage,
                     )
 
@@ -566,7 +592,7 @@ class MTCollector(BaseDeviceCollector):
                 if score is not None:
                     self._set_metric_value(
                         "_sensor_air_quality",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         score,
                     )
 
@@ -575,7 +601,7 @@ class MTCollector(BaseDeviceCollector):
                 if level is not None:
                     self._set_metric_value(
                         "_sensor_voltage",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         level,
                     )
 
@@ -584,7 +610,7 @@ class MTCollector(BaseDeviceCollector):
                 if draw is not None:
                     self._set_metric_value(
                         "_sensor_current",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         draw,
                     )
 
@@ -593,7 +619,7 @@ class MTCollector(BaseDeviceCollector):
                 if draw is not None:
                     self._set_metric_value(
                         "_sensor_real_power",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         draw,
                     )
 
@@ -602,7 +628,7 @@ class MTCollector(BaseDeviceCollector):
                 if draw is not None:
                     self._set_metric_value(
                         "_sensor_apparent_power",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         draw,
                     )
 
@@ -611,7 +637,7 @@ class MTCollector(BaseDeviceCollector):
                 if percentage is not None:
                     self._set_metric_value(
                         "_sensor_power_factor",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         percentage,
                     )
 
@@ -620,7 +646,7 @@ class MTCollector(BaseDeviceCollector):
                 if level is not None:
                     self._set_metric_value(
                         "_sensor_frequency",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         level,
                     )
 
@@ -629,7 +655,7 @@ class MTCollector(BaseDeviceCollector):
                 if enabled is not None:
                     self._set_metric_value(
                         "_sensor_downstream_power",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         1 if enabled else 0,
                     )
 
@@ -638,14 +664,14 @@ class MTCollector(BaseDeviceCollector):
                 if locked is not None:
                     self._set_metric_value(
                         "_sensor_remote_lockout",
-                        {"serial": serial, "name": name, "sensor_type": model},
+                        labels,
                         1 if locked else 0,
                     )
 
             else:
                 logger.debug(
                     "Unknown sensor metric type",
-                    serial=serial,
+                    serial=device.get("serial", ""),
                     metric_type=metric_type,
                     metric_data=metric_data,
                 )
@@ -653,6 +679,6 @@ class MTCollector(BaseDeviceCollector):
         except Exception:
             logger.exception(
                 "Failed to process sensor metric",
-                serial=serial,
+                serial=device.get("serial", ""),
                 metric_type=metric_type,
             )

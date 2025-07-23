@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 from ..core.collector import MetricCollector
 from ..core.constants import AlertMetricName, UpdateTier
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ..core.label_helpers import create_network_labels
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call, log_batch_operation
 from ..core.logging_helpers import LogContext, log_metric_collection_summary
@@ -66,7 +67,13 @@ class AlertsCollector(MetricCollector):
         self._sensor_alerts_total = self._create_gauge(
             AlertMetricName.SENSOR_ALERTS_TOTAL,
             "Total number of sensor alerts in the last hour by metric type",
-            labelnames=[LabelName.NETWORK_ID, LabelName.NETWORK_NAME, LabelName.METRIC],
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.METRIC,
+            ],
         )
 
     async def _collect_impl(self) -> None:
@@ -116,11 +123,14 @@ class AlertsCollector(MetricCollector):
 
             # Collect sensor alerts for each network
             if networks:
+                # Add org info to each network
+                for network in networks:
+                    org_id = network.get("organizationId", "")
+                    network["orgId"] = org_id
+                    network["orgName"] = org_names.get(org_id, org_id)
+
                 sensor_tasks = [
-                    self._collect_network_sensor_alerts(
-                        network["id"], network.get("name", "unknown")
-                    )
-                    for network in networks
+                    self._collect_network_sensor_alerts(network) for network in networks
                 ]
                 sensor_results = await asyncio.gather(*sensor_tasks, return_exceptions=True)
 
@@ -362,18 +372,21 @@ class AlertsCollector(MetricCollector):
         continue_on_error=True,
         error_category=ErrorCategory.API_NOT_AVAILABLE,
     )
-    async def _collect_network_sensor_alerts(self, network_id: str, network_name: str) -> None:
+    async def _collect_network_sensor_alerts(self, network: dict[str, Any]) -> None:
         """Collect sensor alerts for a specific network.
 
         Parameters
         ----------
-        network_id : str
-            Network ID.
-        network_name : str
-            Network name.
+        network : dict[str, Any]
+            Network data with org info.
 
         """
-        with LogContext(network_id=network_id, network_name=network_name):
+        network_id = network["id"]
+        network_name = network.get("name", network_id)
+        org_id = network.get("orgId", "")
+        org_name = network.get("orgName", org_id)
+
+        with LogContext(network_id=network_id, network_name=network_name, org_id=org_id):
             # Get sensor alerts for the last hour
             overview = await asyncio.to_thread(
                 self.api.sensor.getNetworkSensorAlertsOverviewByMetric,
@@ -395,24 +408,25 @@ class AlertsCollector(MetricCollector):
                 latest_interval = overview[0]
                 counts = latest_interval.get("counts", {})
 
+                # Create network labels using helper
+                labels = create_network_labels(
+                    network,
+                    org_id=org_id,
+                    org_name=org_name,
+                )
+
                 # Process each metric type
                 for metric_type, value in counts.items():
                     # Handle nested noise structure
                     if metric_type == "noise" and isinstance(value, dict):
                         # Process nested ambient noise
                         ambient_value = value.get("ambient", 0)
-                        self._sensor_alerts_total.labels(
-                            network_id=network_id,
-                            network_name=network_name,
-                            metric="noise_ambient",
-                        ).set(ambient_value)
+                        metric_labels = {**labels, "metric": "noise_ambient"}
+                        self._sensor_alerts_total.labels(**metric_labels).set(ambient_value)
                     elif isinstance(value, (int, float)):
                         # Process regular numeric values
-                        self._sensor_alerts_total.labels(
-                            network_id=network_id,
-                            network_name=network_name,
-                            metric=metric_type,
-                        ).set(value)
+                        metric_labels = {**labels, "metric": metric_type}
+                        self._sensor_alerts_total.labels(**metric_labels).set(value)
                     else:
                         logger.warning(
                             "Unexpected sensor alert count format",

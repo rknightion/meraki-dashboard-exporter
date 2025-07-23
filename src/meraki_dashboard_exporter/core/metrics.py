@@ -75,6 +75,7 @@ class LabelName(StrEnum):
     STANDARD = "standard"  # Port standard
     RADIO_INDEX = "radio_index"  # Radio index for MR devices
     PRODUCT_TYPE = "product_type"  # Product type from device availability API
+    UTILIZATION_TYPE = "utilization_type"  # Type of utilization (total/wifi/non_wifi)
 
     # Client specific labels
     CLIENT_ID = "client_id"
@@ -131,14 +132,7 @@ class MetricDefinition:
 
 
 class MetricFactory:
-    """Factory for creating standardized metrics."""
-
-    # Common label sets for reuse
-    ORG_LABELS = [LabelName.ORG_ID, LabelName.ORG_NAME]
-    NETWORK_LABELS = [LabelName.NETWORK_ID, LabelName.NETWORK_NAME]
-    DEVICE_LABELS = [LabelName.SERIAL, LabelName.NAME, LabelName.MODEL, LabelName.NETWORK_ID]
-    DEVICE_TYPE_LABELS = DEVICE_LABELS + [LabelName.DEVICE_TYPE]
-    PORT_LABELS = [LabelName.SERIAL, LabelName.NAME, LabelName.PORT_ID, LabelName.PORT_NAME]
+    """Factory for creating standardized metrics with consistent labeling."""
 
     @staticmethod
     def organization_metric(
@@ -148,11 +142,11 @@ class MetricFactory:
         extra_labels: list[str] | None = None,
         unit: str | None = None,
     ) -> MetricDefinition:
-        """Create a metric definition for organization-level metrics."""
-        labels = [str(label) for label in MetricFactory.ORG_LABELS]
-        if extra_labels:
-            labels.extend(extra_labels)
+        """Create a metric definition for organization-level metrics.
 
+        Includes: org_id, org_name
+        """
+        labels = LabelSet.get_labels_list(LabelSet.ORG_METRIC, extra_labels)
         return MetricDefinition(
             name=name,
             description=description,
@@ -169,11 +163,11 @@ class MetricFactory:
         extra_labels: list[str] | None = None,
         unit: str | None = None,
     ) -> MetricDefinition:
-        """Create a metric definition for network-level metrics."""
-        labels = [str(label) for label in MetricFactory.NETWORK_LABELS]
-        if extra_labels:
-            labels.extend(extra_labels)
+        """Create a metric definition for network-level metrics.
 
+        Includes: org_id, org_name, network_id, network_name
+        """
+        labels = LabelSet.get_labels_list(LabelSet.NETWORK_METRIC, extra_labels)
         return MetricDefinition(
             name=name,
             description=description,
@@ -191,19 +185,19 @@ class MetricFactory:
         extra_labels: list[str] | None = None,
         unit: str | None = None,
     ) -> MetricDefinition:
-        """Create a metric definition for device-level metrics."""
-        base_labels = (
-            MetricFactory.DEVICE_TYPE_LABELS if include_device_type else MetricFactory.DEVICE_LABELS
-        )
-        labels = [str(label) for label in base_labels]
-        if extra_labels:
-            labels.extend(extra_labels)
+        """Create a metric definition for device-level metrics.
 
+        Includes: org_id, org_name, network_id, network_name, serial, name, model
+        Optional: device_type
+        """
+        labels = LabelSet.get_labels_list(LabelSet.DEVICE_METRIC, extra_labels)
+        if include_device_type:
+            labels.append(LabelName.DEVICE_TYPE.value)
         return MetricDefinition(
             name=name,
             description=description,
             metric_type=metric_type,
-            labels=labels,
+            labels=sorted(set(labels)),  # Ensure unique and sorted
             unit=unit,
         )
 
@@ -215,11 +209,32 @@ class MetricFactory:
         extra_labels: list[str] | None = None,
         unit: str | None = None,
     ) -> MetricDefinition:
-        """Create a metric definition for port-level metrics."""
-        labels = [str(label) for label in MetricFactory.PORT_LABELS]
-        if extra_labels:
-            labels.extend(extra_labels)
+        """Create a metric definition for port-level metrics.
 
+        Includes: org_id, org_name, network_id, network_name, serial, name, model, port_id, port_name
+        """
+        labels = LabelSet.get_labels_list(LabelSet.PORT_METRIC, extra_labels)
+        return MetricDefinition(
+            name=name,
+            description=description,
+            metric_type=metric_type,
+            labels=labels,
+            unit=unit,
+        )
+
+    @staticmethod
+    def client_metric(
+        name: str,
+        description: str,
+        metric_type: MetricType = "gauge",
+        extra_labels: list[str] | None = None,
+        unit: str | None = None,
+    ) -> MetricDefinition:
+        """Create a metric definition for client-level metrics.
+
+        Includes: org_id, org_name, network_id, network_name, client_id, mac, description, hostname
+        """
+        labels = LabelSet.get_labels_list(LabelSet.CLIENT_METRIC, extra_labels)
         return MetricDefinition(
             name=name,
             description=description,
@@ -290,3 +305,91 @@ def create_info_labels(data: dict[str, str | int | float | bool]) -> dict[str, s
 
     """
     return {k: str(v) for k, v in data.items()}
+
+
+def create_labels(**kwargs: str | None) -> dict[str, str]:
+    """Create a label dictionary with validation.
+
+    This function ensures that all label keys are valid LabelName enum values
+    and filters out None values.
+
+    Parameters
+    ----------
+    **kwargs : str | None
+        Label key-value pairs. Keys must match LabelName enum values.
+
+    Returns
+    -------
+    dict[str, str]
+        Validated label dictionary with None values filtered out.
+
+    Raises
+    ------
+    ValueError
+        If any key is not a valid LabelName enum value.
+
+    Examples
+    --------
+    >>> create_labels(org_id="123", org_name="Test Org", network_id=None)
+    {"org_id": "123", "org_name": "Test Org"}
+
+    """
+    valid_keys = {label.value for label in LabelName}
+    result = {}
+
+    for key, value in kwargs.items():
+        if key not in valid_keys:
+            raise ValueError(
+                f"Invalid label key: '{key}'. Must be one of: {', '.join(sorted(valid_keys))}"
+            )
+        if value is not None:
+            result[key] = str(value)
+
+    return result
+
+
+class LabelSet:
+    """Predefined sets of labels for consistent metric labeling."""
+
+    # Base label sets
+    ORG = {LabelName.ORG_ID.value, LabelName.ORG_NAME.value}
+    NETWORK = {LabelName.NETWORK_ID.value, LabelName.NETWORK_NAME.value}
+    DEVICE = {LabelName.SERIAL.value, LabelName.NAME.value, LabelName.MODEL.value}
+    PORT = {LabelName.PORT_ID.value, LabelName.PORT_NAME.value}
+    CLIENT = {
+        LabelName.CLIENT_ID.value,
+        LabelName.MAC.value,
+        LabelName.DESCRIPTION.value,
+        LabelName.HOSTNAME.value,
+    }
+
+    # Combined label sets for different metric types
+    ORG_METRIC = ORG
+    NETWORK_METRIC = ORG | NETWORK
+    DEVICE_METRIC = ORG | NETWORK | DEVICE
+    PORT_METRIC = ORG | NETWORK | DEVICE | PORT
+    CLIENT_METRIC = ORG | NETWORK | CLIENT
+
+    @classmethod
+    def get_labels_list(
+        cls, label_set: set[str], extra_labels: list[str] | None = None
+    ) -> list[str]:
+        """Convert a label set to a sorted list with optional extra labels.
+
+        Parameters
+        ----------
+        label_set : set[str]
+            Base set of labels.
+        extra_labels : list[str] | None
+            Additional labels to include.
+
+        Returns
+        -------
+        list[str]
+            Sorted list of all labels.
+
+        """
+        labels = list(label_set)
+        if extra_labels:
+            labels.extend(extra_labels)
+        return sorted(set(labels))  # Sort for consistent ordering

@@ -119,7 +119,7 @@ class TestMRCollector:
         )
 
         # Run collection
-        await mr_collector.collect_wireless_clients(org_id, device_lookup)
+        await mr_collector.collect_wireless_clients(org_id, "Test Org", device_lookup)
 
         # Verify API call
         mock_api.wireless.getOrganizationWirelessClientsOverviewByDevice.assert_called_once_with(
@@ -155,7 +155,7 @@ class TestMRCollector:
         )
 
         # Run collection
-        await mr_collector.collect_wireless_clients(org_id, device_lookup)
+        await mr_collector.collect_wireless_clients(org_id, "Test Org", device_lookup)
 
         # Verify metrics were processed
         assert mr_collector._ap_clients is not None
@@ -267,7 +267,7 @@ class TestMRCollector:
         )
 
         # Run collection
-        await mr_collector.collect_ethernet_status(org_id, device_lookup)
+        await mr_collector.collect_ethernet_status(org_id, "Test Org", device_lookup)
 
         # Verify API was called
         mock_api.wireless.getOrganizationWirelessDevicesEthernetStatuses.assert_called_once_with(

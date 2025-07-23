@@ -6,6 +6,7 @@ import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
@@ -157,14 +158,16 @@ class LicenseCollector(BaseOrganizationCollector):
 
         # Set total license metrics
         for (license_type, status), count in license_counts.items():
+            # Create org labels using helper
+            org_data = {"id": org_id, "name": org_name}
+            labels = create_org_labels(
+                org_data,
+                license_type=license_type,
+                status=status,
+            )
             self._set_metric_value(
                 "_licenses_total",
-                {
-                    "org_id": org_id,
-                    "org_name": org_name,
-                    "license_type": license_type,
-                    "status": status,
-                },
+                labels,
                 count,
             )
 
@@ -173,13 +176,15 @@ class LicenseCollector(BaseOrganizationCollector):
         all_types = {lt for lt, _ in license_counts.keys()}
         for license_type in all_types:
             count = expiring_counts.get(license_type, 0)
+            # Create org labels using helper
+            org_data = {"id": org_id, "name": org_name}
+            labels = create_org_labels(
+                org_data,
+                license_type=license_type,
+            )
             self._set_metric_value(
                 "_licenses_expiring",
-                {
-                    "org_id": org_id,
-                    "org_name": org_name,
-                    "license_type": license_type,
-                },
+                labels,
                 count,
             )
 
@@ -254,14 +259,16 @@ class LicenseCollector(BaseOrganizationCollector):
         if licensed_device_counts:
             # Process each device type in the licensed device counts
             for device_type, count in licensed_device_counts.items():
+                # Create org labels using helper
+                org_data = {"id": org_id, "name": org_name}
+                labels = create_org_labels(
+                    org_data,
+                    license_type=device_type,
+                    status=status,
+                )
                 self._set_metric_value(
                     "_licenses_total",
-                    {
-                        "org_id": org_id,
-                        "org_name": org_name,
-                        "license_type": device_type,
-                        "status": status,
-                    },
+                    labels,
                     count,
                 )
         else:
@@ -283,23 +290,27 @@ class LicenseCollector(BaseOrganizationCollector):
                 if licensed_device_counts:
                     for device_type, count in licensed_device_counts.items():
                         if days_until_expiry <= 30:
+                            # Create org labels using helper
+                            org_data = {"id": org_id, "name": org_name}
+                            labels = create_org_labels(
+                                org_data,
+                                license_type=device_type,
+                            )
                             self._set_metric_value(
                                 "_licenses_expiring",
-                                {
-                                    "org_id": org_id,
-                                    "org_name": org_name,
-                                    "license_type": device_type,
-                                },
+                                labels,
                                 count,
                             )
                         else:
+                            # Create org labels using helper
+                            org_data = {"id": org_id, "name": org_name}
+                            labels = create_org_labels(
+                                org_data,
+                                license_type=device_type,
+                            )
                             self._set_metric_value(
                                 "_licenses_expiring",
-                                {
-                                    "org_id": org_id,
-                                    "org_name": org_name,
-                                    "license_type": device_type,
-                                },
+                                labels,
                                 0,
                             )
             else:

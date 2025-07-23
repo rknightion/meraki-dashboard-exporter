@@ -188,23 +188,26 @@ class TestMetricFactory:
 
     def test_common_label_sets(self) -> None:
         """Test pre-defined common label sets."""
-        assert MetricFactory.ORG_LABELS == [LabelName.ORG_ID, LabelName.ORG_NAME]
-        assert MetricFactory.NETWORK_LABELS == [LabelName.NETWORK_ID, LabelName.NETWORK_NAME]
-        assert MetricFactory.DEVICE_LABELS == [
-            LabelName.SERIAL,
-            LabelName.NAME,
-            LabelName.MODEL,
-            LabelName.NETWORK_ID,
-        ]
-        assert MetricFactory.DEVICE_TYPE_LABELS == MetricFactory.DEVICE_LABELS + [
-            LabelName.DEVICE_TYPE
-        ]
-        assert MetricFactory.PORT_LABELS == [
-            LabelName.SERIAL,
-            LabelName.NAME,
-            LabelName.PORT_ID,
-            LabelName.PORT_NAME,
-        ]
+        # Test the new LabelSet approach
+        from meraki_dashboard_exporter.core.metrics import LabelSet
+
+        assert LabelSet.ORG == {LabelName.ORG_ID.value, LabelName.ORG_NAME.value}
+        assert LabelSet.NETWORK == {LabelName.NETWORK_ID.value, LabelName.NETWORK_NAME.value}
+        assert LabelSet.DEVICE == {
+            LabelName.SERIAL.value,
+            LabelName.NAME.value,
+            LabelName.MODEL.value,
+        }
+        assert LabelSet.PORT == {
+            LabelName.PORT_ID.value,
+            LabelName.PORT_NAME.value,
+        }
+        assert LabelSet.CLIENT == {
+            LabelName.CLIENT_ID.value,
+            LabelName.MAC.value,
+            LabelName.DESCRIPTION.value,
+            LabelName.HOSTNAME.value,
+        }
 
     def test_organization_metric(self) -> None:
         """Test creating organization-level metrics."""
@@ -226,7 +229,8 @@ class TestMetricFactory:
             extra_labels=["license_type", "status"],
         )
 
-        assert metric.labels == ["org_id", "org_name", "license_type", "status"]
+        # Labels are sorted alphabetically by LabelSet.get_labels_list
+        assert sorted(metric.labels) == sorted(["org_id", "org_name", "license_type", "status"])
 
     def test_organization_metric_with_unit(self) -> None:
         """Test organization metric with unit."""
@@ -247,7 +251,8 @@ class TestMetricFactory:
         )
 
         assert metric.name == "meraki_network_clients"
-        assert metric.labels == ["network_id", "network_name"]
+        # Network metrics now include org labels
+        assert sorted(metric.labels) == sorted(["org_id", "org_name", "network_id", "network_name"])
 
     def test_network_metric_with_extra_labels(self) -> None:
         """Test network metric with extra labels."""
@@ -257,7 +262,15 @@ class TestMetricFactory:
             extra_labels=["severity", "alert_type"],
         )
 
-        assert metric.labels == ["network_id", "network_name", "severity", "alert_type"]
+        # Network metrics now include org labels, and labels are sorted
+        assert sorted(metric.labels) == sorted([
+            "org_id",
+            "org_name",
+            "network_id",
+            "network_name",
+            "severity",
+            "alert_type",
+        ])
 
     def test_device_metric_with_type(self) -> None:
         """Test creating device metric with device type."""
@@ -267,7 +280,17 @@ class TestMetricFactory:
             include_device_type=True,
         )
 
-        assert metric.labels == ["serial", "name", "model", "network_id", "device_type"]
+        # Device metrics now include org labels
+        assert sorted(metric.labels) == sorted([
+            "org_id",
+            "org_name",
+            "network_id",
+            "network_name",
+            "serial",
+            "name",
+            "model",
+            "device_type",
+        ])
 
     def test_device_metric_without_type(self) -> None:
         """Test creating device metric without device type."""
@@ -277,7 +300,16 @@ class TestMetricFactory:
             include_device_type=False,
         )
 
-        assert metric.labels == ["serial", "name", "model", "network_id"]
+        # Device metrics include org and network labels
+        assert sorted(metric.labels) == sorted([
+            "org_id",
+            "org_name",
+            "network_id",
+            "network_name",
+            "serial",
+            "name",
+            "model",
+        ])
 
     def test_device_metric_with_extra_labels(self) -> None:
         """Test device metric with extra labels."""
@@ -299,7 +331,18 @@ class TestMetricFactory:
         )
 
         assert metric.name == "meraki_port_traffic"
-        assert metric.labels == ["serial", "name", "port_id", "port_name"]
+        # Port metrics include org, network, and device labels
+        assert sorted(metric.labels) == sorted([
+            "org_id",
+            "org_name",
+            "network_id",
+            "network_name",
+            "serial",
+            "name",
+            "model",
+            "port_id",
+            "port_name",
+        ])
         assert metric.metric_type == "counter"
         assert metric.unit == "bytes"
 
@@ -311,8 +354,22 @@ class TestMetricFactory:
             extra_labels=["status", "duplex", "speed"],
         )
 
-        expected_labels = ["serial", "name", "port_id", "port_name", "status", "duplex", "speed"]
-        assert metric.labels == expected_labels
+        # Port metrics include org, network, device labels plus extra labels
+        expected_labels = [
+            "org_id",
+            "org_name",
+            "network_id",
+            "network_name",
+            "serial",
+            "name",
+            "model",
+            "port_id",
+            "port_name",
+            "status",
+            "duplex",
+            "speed",
+        ]
+        assert sorted(metric.labels) == sorted(expected_labels)
 
 
 class TestValidateMetricName:
@@ -469,15 +526,18 @@ class TestIntegrationScenarios:
         # Validate the metric name
         validate_metric_name(metric_def.full_name)
 
-        # Check all expected labels are present
+        # Check all expected labels are present (device metrics now include org labels)
         expected_labels = [
+            str(LabelName.ORG_ID),
+            str(LabelName.ORG_NAME),
+            str(LabelName.NETWORK_ID),
+            str(LabelName.NETWORK_NAME),
             str(LabelName.SERIAL),
             str(LabelName.NAME),
             str(LabelName.MODEL),
-            str(LabelName.NETWORK_ID),
             str(LabelName.DEVICE_TYPE),
         ]
-        assert metric_def.labels == expected_labels
+        assert sorted(metric_def.labels) == sorted(expected_labels)
 
     def test_create_api_usage_metric(self) -> None:
         """Test creating an API usage metric."""

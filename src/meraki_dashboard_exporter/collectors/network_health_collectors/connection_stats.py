@@ -6,6 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...core.domain_models import ConnectionStats, NetworkConnectionStats
+from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
@@ -52,9 +53,11 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
         """
         network_id = network["id"]
         network_name = network.get("name", network_id)
+        org_id = network.get("orgId", "")
+        org_name = network.get("orgName", org_id)
 
         try:
-            with LogContext(network_id=network_id, network_name=network_name):
+            with LogContext(network_id=network_id, network_name=network_name, org_id=org_id):
                 # Use 30 minute (1800 second) timespan as minimum
                 connection_stats = await self._fetch_connection_stats(network_id)
 
@@ -69,16 +72,21 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
             # Create full network stats model
             network_stats = NetworkConnectionStats(networkId=network_id, connectionStats=stats)
 
+            # Create network labels using helper
+            labels = create_network_labels(
+                network,
+                org_id=org_id,
+                org_name=org_name,
+            )
+
             # Set metrics for each connection stat type
             for stat_type in ("assoc", "auth", "dhcp", "dns", "success"):
                 value = getattr(network_stats.connectionStats, stat_type, 0)
+                # Add stat_type to labels
+                stat_labels = {**labels, "stat_type": stat_type}
                 self._set_metric_value(
                     "_network_connection_stats",
-                    {
-                        "network_id": network_id,
-                        "network_name": network_name,
-                        "stat_type": stat_type,
-                    },
+                    stat_labels,
                     value,
                 )
 
