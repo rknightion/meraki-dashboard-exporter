@@ -1,0 +1,189 @@
+# Meraki Dashboard API - Overlooked Granular Endpoints
+
+Based on research of the Meraki Dashboard API v1 documentation, here are specific, granular endpoints that could provide valuable monitoring metrics not currently collected:
+
+## 1. Device-Specific Configuration Status
+
+### Switch Port Configuration Details
+- `GET /devices/{serial}/switch/ports/{portId}` - Per-port configuration including:
+  - PoE enabled/disabled status
+  - VLAN configuration (access/trunk mode, allowed VLANs)
+  - Voice VLAN settings
+  - Port isolation status
+  - RSTP/STP guard settings
+  - Link negotiation settings
+  - UDLD status
+
+### SSID Configuration per Network
+- `GET /networks/{networkId}/wireless/ssids/{number}` - Per-SSID configuration:
+  - Authentication mode (PSK, 802.1X, etc.)
+  - VLAN tagging
+  - Client isolation settings
+  - Band selection
+  - Per-SSID bandwidth limits
+  - Splash page settings
+
+## 2. Bluetooth and BLE Beacon Endpoints
+- `GET /devices/{serial}/wireless/bluetooth/settings` - Bluetooth radio settings
+- `PUT /devices/{serial}/wireless/bluetooth/settings` - Configure Bluetooth
+- `GET /networks/{networkId}/wireless/bluetooth/clients` - BLE client tracking
+
+## 3. Systems Manager (SM) Device Management
+- `GET /networks/{networkId}/sm/devices` - Enrolled device inventory
+- `GET /networks/{networkId}/sm/devices/{deviceId}/performanceHistory` - Historical performance:
+  - CPU usage
+  - Memory usage
+  - Disk usage
+  - Battery percentage
+- `GET /networks/{networkId}/sm/devices/{deviceId}/deviceProfiles` - Configuration profiles
+- `GET /networks/{networkId}/sm/devices/{deviceId}/networkAdapters` - Network interface details
+- `GET /networks/{networkId}/sm/devices/{deviceId}/securityCenters` - Security status
+
+## 4. Location Analytics and Scanning API
+- `GET /networks/{networkId}/wireless/clients/connectionStats` - Client connection analytics
+- `GET /networks/{networkId}/camera/analytics/zones` - Camera zone analytics
+- `GET /devices/{serial}/camera/analytics/overview` - Camera analytics summary
+- `GET /devices/{serial}/camera/analytics/recent` - Recent motion events
+
+## 5. MV Camera Analytics Beyond Basic Motion
+- `GET /devices/{serial}/camera/analytics/zones/{zoneId}/history` - Zone-specific analytics:
+  - People counting
+  - Object detection
+  - Dwell time
+  - Queue length
+- `GET /devices/{serial}/camera/sense` - MV Sense API data
+- `GET /devices/{serial}/camera/qualityAndRetention` - Video quality settings
+
+## 6. Protocol Statistics (CDP, LLDP, etc.)
+- `GET /devices/{serial}/lldpCdp` - LLDP/CDP neighbor information
+- `GET /devices/{serial}/switch/ports/{portId}/packets` - Per-port packet statistics:
+  - Broadcast packets
+  - Multicast packets
+  - CRC errors
+  - Collision counts
+
+## 7. RF Spectrum Analysis and Channel Utilization
+- `GET /networks/{networkId}/wireless/channelUtilizationHistory` - Historical channel usage
+- `GET /networks/{networkId}/wireless/rfProfiles` - RF profile configurations
+- `GET /devices/{serial}/wireless/radio/settings` - Radio-specific settings:
+  - Channel width
+  - TX power
+  - RX-SOP (Receiver Start of Packet)
+
+## 8. DNS and DHCP Server Statistics
+- `GET /devices/{serial}/appliance/dhcp/subnets` - DHCP subnet details
+- `GET /devices/{serial}/switch/routing/interfaces/{interfaceId}/dhcp` - Interface DHCP stats
+- `GET /networks/{networkId}/appliance/firewall/l7FirewallRules` - DNS filtering rules
+
+## 9. NAT and Port Forwarding Usage
+- `GET /networks/{networkId}/appliance/firewall/portForwardingRules` - Active NAT rules
+- `GET /networks/{networkId}/appliance/firewall/oneToOneNatRules` - 1:1 NAT mappings
+- `GET /networks/{networkId}/appliance/firewall/oneToManyNatRules` - Port forwarding rules
+
+## 10. Content Filtering and Web Security Statistics
+- `GET /networks/{networkId}/appliance/contentFiltering` - Content filtering settings
+- `GET /networks/{networkId}/appliance/contentFiltering/categories` - Blocked categories
+- `GET /networks/{networkId}/appliance/security/malware` - Malware detection settings
+- `GET /networks/{networkId}/appliance/security/intrusion` - IDS/IPS settings
+
+## 11. Guest User Analytics and Session Data
+- `GET /networks/{networkId}/wireless/ssids/{number}/splash/guestSponsors` - Guest sponsors
+- `GET /networks/{networkId}/wireless/ssids/{number}/identityPsks` - Per-user PSKs
+- `GET /networks/{networkId}/merakiAuthUsers` - Guest user sessions
+
+## 12. Switch Port Mirroring and Packet Capture Stats
+- `GET /organizations/{organizationId}/packetCaptures` - Active captures
+- `GET /devices/{serial}/switch/ports/mirror` - Port mirroring configuration
+
+## 13. Voice VLAN and QoS Statistics
+- `GET /networks/{networkId}/switch/qosRules` - QoS rule definitions
+- `GET /devices/{serial}/switch/ports/{portId}/status` - Voice VLAN client count
+- `GET /networks/{networkId}/wireless/ssids/{number}/trafficShaping` - Per-SSID QoS
+
+## 14. 802.1X Authentication Statistics
+- `GET /networks/{networkId}/switch/accessPolicies` - 802.1X policies
+- `GET /devices/{serial}/switch/ports/{portId}/status` - Authentication status
+- `GET /networks/{networkId}/wireless/ssids/{number}/eapOverride` - EAP settings
+
+## 15. IPv6-Specific Metrics
+- `GET /devices/{serial}/appliance/prefixes/delegated` - IPv6 prefix delegation
+- `GET /devices/{serial}/appliance/prefixes/delegated/vlanAssignments` - IPv6 VLAN assignments
+- `GET /networks/{networkId}/appliance/firewall/l3FirewallRules` - IPv6 firewall rules
+
+## 16. Multicast Routing and IGMP Snooping
+- `GET /networks/{networkId}/switch/routing/multicast` - Multicast settings
+- `PUT /networks/{networkId}/appliance/firewall/multicastForwarding` - IGMP proxy settings
+- `GET /networks/{networkId}/switch/routing/ospf` - OSPF multicast settings
+
+## 17. Switch Power Budget and PoE Allocation
+- `GET /devices/{serial}/switch/ports/statuses` - Per-port PoE allocation
+- `GET /organizations/{organizationId}/switch/ports/bySwitch` - Org-wide PoE usage
+- Power warnings: "PoE overload", "PoE port was denied power"
+
+## 18. Air Marshal Security Classifications
+- `GET /networks/{networkId}/wireless/airMarshal` - Rogue AP detection
+- `GET /networks/{networkId}/wireless/airMarshal/rules` - Custom security rules
+- `GET /networks/{networkId}/wireless/airMarshal/settings` - Security policy
+
+## 19. Client Fingerprinting and Device Profiling
+- `GET /networks/{networkId}/clients/{clientId}` - Detailed client info including:
+  - Device type classification
+  - OS detection
+  - Manufacturer identification
+- `GET /networks/{networkId}/policies/byClient` - Per-client policies
+
+## 20. Meraki Health Scores and Recommendations
+- `GET /devices/{serial}/healthScores` - Device health scores
+- `GET /networks/{networkId}/wireless/clientHealthScores` - Client health metrics
+- `GET /devices/{serial}/wireless/healthScores` - Wireless-specific health
+- `GET /organizations/{organizationId}/assurance/alerts` - Health recommendations
+
+## Additional Valuable Endpoints
+
+### Performance and Latency Metrics
+- `GET /devices/{serial}/lossAndLatencyHistory` - WAN performance metrics
+- `GET /networks/{networkId}/wireless/latencyHistory` - Wireless latency stats
+- `GET /devices/{serial}/clients/{clientId}/latencyHistory` - Per-client latency
+
+### Traffic Analysis
+- `GET /networks/{networkId}/traffic/analysis` - DPI traffic classification
+- `GET /networks/{networkId}/appliance/trafficShaping/applicationCategories` - App categories
+- `GET /devices/{serial}/switch/ports/{portId}/usage` - Detailed port usage
+
+### Environmental and Physical Security
+- `GET /devices/{serial}/sensor/readings/latest` - Latest sensor readings
+- `GET /devices/{serial}/sensor/readings/history` - Historical sensor data
+- `GET /devices/{serial}/camera/snapshot` - Camera snapshots
+
+### Advanced Wireless Features
+- `GET /networks/{networkId}/wireless/rfProfiles/{rfProfileId}` - RF profile details
+- `GET /networks/{networkId}/wireless/alternateManagementInterface` - Management VLAN
+- `GET /devices/{serial}/wireless/alternateManagementInterface` - Per-AP management
+
+### Security and Compliance
+- `GET /organizations/{organizationId}/loginSecurity` - Security policy details
+- `GET /networks/{networkId}/syslogServers` - Syslog configuration
+- `GET /networks/{networkId}/snmp` - SNMP settings
+
+## Implementation Priority
+
+High Priority (immediate monitoring value):
+1. Health scores and recommendations
+2. Per-port PoE allocation and power budget
+3. 802.1X authentication statistics
+4. RF channel utilization history
+5. Client fingerprinting data
+
+Medium Priority (enhanced visibility):
+6. Protocol statistics (CDP/LLDP)
+7. Voice VLAN and QoS metrics
+8. Air Marshal security data
+9. DNS/DHCP server statistics
+10. Content filtering statistics
+
+Low Priority (specialized use cases):
+11. Systems Manager device metrics
+12. Camera analytics zones
+13. IPv6-specific metrics
+14. Multicast/IGMP statistics
+15. NAT/port forwarding usage

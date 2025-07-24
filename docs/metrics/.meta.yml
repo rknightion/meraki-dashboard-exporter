@@ -1,0 +1,13 @@
+title: Metrics Reference - Meraki Dashboard Exporter
+description: Complete reference of all Prometheus metrics collected by the Meraki Dashboard Exporter, including device metrics, network health, environmental sensors, and alerts
+
+tags:
+  - metrics
+  - prometheus
+  - telemetry
+  - observability
+  - monitoring
+  - cisco-meraki
+
+# Additional keywords for this section
+keywords: prometheus metrics, meraki telemetry, network monitoring metrics, device metrics, environmental sensors, wireless metrics 
