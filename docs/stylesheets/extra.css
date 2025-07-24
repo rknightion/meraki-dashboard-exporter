@@ -177,6 +177,113 @@
   }
 }
 
+/* Error page enhancements */
+.error-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.error-code {
+  font-family: var(--md-code-font);
+  text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.quick-link {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.quick-link:hover {
+  box-shadow: var(--md-shadow-z2);
+  border-color: var(--md-primary-fg-color);
+}
+
+.action-button {
+  font-family: var(--md-text-font);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: var(--md-shadow-z1);
+}
+
+.action-button:hover {
+  box-shadow: var(--md-shadow-z2);
+}
+
+/* Dark theme adjustments for error pages */
+[data-md-color-scheme="slate"] .quick-link {
+  background: var(--md-code-bg-color);
+  border-color: var(--md-default-fg-color--lightest);
+}
+
+[data-md-color-scheme="slate"] .quick-link:hover {
+  background: var(--md-default-bg-color);
+  border-color: var(--md-primary-fg-color);
+}
+
+[data-md-color-scheme="slate"] .search-suggestion,
+[data-md-color-scheme="slate"] .status-info {
+  background: var(--md-code-bg-color);
+  border-left-color: var(--md-primary-fg-color);
+}
+
+/* Accessibility improvements */
+.error-container [role="button"],
+.error-container button,
+.error-container .action-button {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Focus states */
+.action-button:focus,
+.quick-link:focus {
+  outline: 2px solid var(--md-primary-fg-color);
+  outline-offset: 2px;
+}
+
+/* Error page animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.error-container > * {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.error-container > *:nth-child(2) { animation-delay: 0.1s; }
+.error-container > *:nth-child(3) { animation-delay: 0.2s; }
+.error-container > *:nth-child(4) { animation-delay: 0.3s; }
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .quick-link,
+  .action-button {
+    border-width: 2px;
+  }
+  
+  .error-code {
+    text-shadow: none;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .error-container > *,
+  .quick-link,
+  .action-button {
+    animation: none;
+    transition: none;
+  }
+}
+
 /* Print styles */
 @media print {
   .hero {
@@ -189,5 +296,11 @@
   .md-typeset .grid.cards > .card-item {
     break-inside: avoid;
     border: 1px solid #ccc;
+  }
+  
+  /* Hide interactive elements on error pages when printing */
+  .error-actions,
+  .action-button {
+    display: none;
   }
 }

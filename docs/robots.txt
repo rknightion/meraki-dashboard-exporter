@@ -1,0 +1,27 @@
+User-agent: *
+Allow: /
+
+# Encourage indexing of documentation
+Allow: /getting-started/
+Allow: /config/
+Allow: /deployment-operations/
+Allow: /integration-dashboards/
+Allow: /metrics/
+Allow: /collectors/
+Allow: /extending-collectors/
+Allow: /adr/
+Allow: /patterns/
+
+# Static assets
+Allow: /assets/
+Allow: /stylesheets/
+Allow: /javascripts/
+
+# Crawl delay (be nice to servers)
+Crawl-delay: 1
+
+# Sitemap location (MkDocs generates this automatically)
+Sitemap: https://rknightion.github.io/meraki-dashboard-exporter/sitemap.xml
+
+# Additional sitemaps for better discovery
+Sitemap: https://rknightion.github.io/meraki-dashboard-exporter/sitemap.xml.gz 

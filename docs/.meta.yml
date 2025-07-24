@@ -1,0 +1,21 @@
+title: Meraki Dashboard Exporter Documentation
+description: High-performance Prometheus exporter for Cisco Meraki Dashboard API metrics with comprehensive monitoring capabilities and OpenTelemetry support
+
+# Global meta tags for all pages
+tags:
+  - prometheus
+  - monitoring
+  - cisco-meraki
+  - network-monitoring
+  - observability
+
+# Social media defaults
+image: assets/og-image.png
+twitter:
+  creator: "@rknightion"
+  site: "@rknightion"
+
+# SEO defaults
+robots: index,follow
+language: en
+canonical_base: https://rknightion.github.io/meraki-dashboard-exporter/ 

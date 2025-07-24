@@ -1,0 +1,61 @@
+# Meraki Dashboard Exporter Documentation
+
+## About
+This documentation site covers the Meraki Dashboard Exporter, a high-performance Prometheus exporter for Cisco Meraki Dashboard API metrics with comprehensive monitoring capabilities and OpenTelemetry support.
+
+## Site Structure
+
+### Main Documentation
+- `/` - Project overview and quick start guide
+- `/getting-started/` - Installation and setup instructions
+- `/config/` - Complete configuration reference with environment variables
+- `/deployment-operations/` - Production deployment and operations guide
+- `/integration-dashboards/` - Prometheus and Grafana integration examples
+
+### Metrics Documentation
+- `/metrics/` - Metrics reference index
+- `/metrics/overview/` - High-level metrics overview and categories
+- `/metrics/metrics/` - Complete detailed metrics reference
+
+### Collector System
+- `/collectors/` - Comprehensive collector reference with 27+ collectors
+- `/extending-collectors/` - Guide for adding new metric collectors
+
+### Architecture & Development
+- `/adr/` - Architecture Decision Records
+- `/adr/001-collector-architecture/` - Collector hierarchy and update tiers
+- `/adr/002-error-handling-strategy/` - Error handling patterns
+- `/patterns/` - Development patterns and best practices
+
+## Key Features
+- **Multi-tier collection system**: Fast (60s), Medium (300s), Slow (900s) update intervals
+- **27+ specialized collectors**: Device-specific collectors for MR, MS, MX, MT, MG, MV devices
+- **Comprehensive metrics**: Organization, device, network health, environmental sensors, alerts
+- **OpenTelemetry support**: Full observability with traces, metrics, and logs
+- **Production-ready**: Docker container, health checks, error handling, rate limiting
+
+## API Reference
+The exporter collects metrics from:
+- Organization-level APIs (licenses, API usage, client overview)
+- Device-specific APIs (MR wireless, MS switches, MX appliances, MT sensors, MG gateways, MV cameras)
+- Network health APIs (RF health, connection stats, channel utilization)
+- Alert and configuration APIs
+
+## Configuration
+All configuration via environment variables with format: `MERAKI_EXPORTER_{SECTION}__{SETTING}`
+
+## Technology Stack
+- **Language**: Python 3.11+ with asyncio
+- **Metrics**: Prometheus metrics with OpenTelemetry export
+- **API**: Cisco Meraki Dashboard API v1
+- **Deployment**: Docker containers, Kubernetes support
+- **Documentation**: MkDocs with Material theme
+
+## Target Audience
+- DevOps engineers implementing Meraki monitoring
+- Network administrators managing Cisco Meraki infrastructure  
+- Site reliability engineers building observability systems
+- Developers extending the collector system
+
+## License
+Open source project with comprehensive documentation for production deployment and extension. 

@@ -65,8 +65,14 @@ theme:
   favicon: assets/favicon.png
 
 plugins:
+  - privacy
+  - social
   - search:
       separator: '[\s\u200b\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+      lang: en
+  - meta:
+      meta_file: '**/.meta.yml'
+  - tags
   - minify:
       minify_html: true
       minify_js: true
@@ -228,6 +234,7 @@ extra_javascript:
   - https://polyfill.io/v3/polyfill.min.js?features=es6
   - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
   - javascripts/extra.js
+  - javascripts/seo.js
 
 copyright: |
   &copy; 2024 <a href="https://github.com/rknightion"  target="_blank" rel="noopener">Rob Knighton</a> &nbsp;
