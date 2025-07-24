@@ -9,7 +9,6 @@ update tiers, and relationships.
 from __future__ import annotations
 
 import ast
-import re
 from pathlib import Path
 from typing import Any
 
@@ -177,7 +176,9 @@ class CollectorVisitor(ast.NodeVisitor):
                                     if isinstance(stmt.value.args[0].value, ast.Name):
                                         metric_name = f"{stmt.value.args[0].value.id}.{stmt.value.args[0].attr}"
 
-                            if len(stmt.value.args) > 1 and isinstance(stmt.value.args[1], ast.Constant):
+                            if len(stmt.value.args) > 1 and isinstance(
+                                stmt.value.args[1], ast.Constant
+                            ):
                                 description = stmt.value.args[1].value
 
                         self.current_class_info["metrics"].append({
@@ -221,9 +222,12 @@ class CollectorVisitor(ast.NodeVisitor):
                         controller = parts[-3]
                         method = parts[0]
                         endpoint = f"{controller}.{method}"
-                        
+
                         # Avoid duplicates
-                        if not any(call["endpoint"] == endpoint for call in self.current_class_info["api_calls"]):
+                        if not any(
+                            call["endpoint"] == endpoint
+                            for call in self.current_class_info["api_calls"]
+                        ):
                             self.current_class_info["api_calls"].append({
                                 "endpoint": endpoint,
                                 "method": node.name,
@@ -272,7 +276,9 @@ def scan_for_collectors(root_path: Path) -> list[dict[str, Any]]:
             visitor.visit(tree)
 
             if visitor.collectors:
-                print(f"  Found {len(visitor.collectors)} collectors in {py_file.relative_to(root_path)}")
+                print(
+                    f"  Found {len(visitor.collectors)} collectors in {py_file.relative_to(root_path)}"
+                )
 
             all_collectors.extend(visitor.collectors)
         except Exception as e:
@@ -285,7 +291,7 @@ def resolve_update_tiers(collectors: list[dict[str, Any]]) -> None:
     """Resolve UpdateTier references to actual values."""
     tier_map = {
         "UpdateTier.FAST": "FAST (60s)",
-        "UpdateTier.MEDIUM": "MEDIUM (300s)", 
+        "UpdateTier.MEDIUM": "MEDIUM (300s)",
         "UpdateTier.SLOW": "SLOW (900s)",
     }
 
@@ -306,9 +312,11 @@ def generate_markdown(collectors: list[dict[str, Any]]) -> str:
 
     # Add statistics summary
     total_collectors = len(collectors)
-    registered_collectors = sum(1 for c in collectors if any(d["name"] == "register_collector" for d in c["decorators"]))
+    registered_collectors = sum(
+        1 for c in collectors if any(d["name"] == "register_collector" for d in c["decorators"])
+    )
     sub_collectors = sum(1 for c in collectors if c["sub_collectors"])
-    
+
     lines.append('!!! summary "Collector Overview"')
     lines.append(f"    🏗️ **Total Collectors:** {total_collectors}")
     lines.append(f"    📋 **Registered Collectors:** {registered_collectors}")
@@ -326,16 +334,24 @@ def generate_markdown(collectors: list[dict[str, Any]]) -> str:
     lines.append("")
     lines.append("| Tier | Interval | Purpose | Examples |")
     lines.append("|------|----------|---------|----------|")
-    lines.append("| 🚀 **FAST** | 60s | Real-time status, critical metrics | Device status, alerts, sensor readings |")
-    lines.append("| ⚡ **MEDIUM** | 300s | Regular metrics, performance data | Device metrics, network health, client data |")
-    lines.append("| 🐌 **SLOW** | 900s | Infrequent data, configuration | License usage, organization summaries |")
+    lines.append(
+        "| 🚀 **FAST** | 60s | Real-time status, critical metrics | Device status, alerts, sensor readings |"
+    )
+    lines.append(
+        "| ⚡ **MEDIUM** | 300s | Regular metrics, performance data | Device metrics, network health, client data |"
+    )
+    lines.append(
+        "| 🐌 **SLOW** | 900s | Infrequent data, configuration | License usage, organization summaries |"
+    )
     lines.append("")
 
     lines.append("### Collector Types")
     lines.append("")
     lines.append("| Type | Description | Registration |")
     lines.append("|------|-------------|--------------|")
-    lines.append("| **Main Collectors** | Top-level collectors with `@register_collector` | Automatic |")
+    lines.append(
+        "| **Main Collectors** | Top-level collectors with `@register_collector` | Automatic |"
+    )
     lines.append("| **Coordinator Collectors** | Manage multiple sub-collectors | Automatic |")
     lines.append("| **Sub-collectors** | Specialized collectors for specific metrics | Manual |")
     lines.append("| **Device Collectors** | Device-type specific (MR, MS, MX, etc.) | Manual |")
@@ -346,7 +362,12 @@ def generate_markdown(collectors: list[dict[str, Any]]) -> str:
     lines.append("")
 
     # Group by update tier
-    by_tier: dict[str, list[dict[str, Any]]] = {"FAST": [], "MEDIUM": [], "SLOW": [], "Not specified": []}
+    by_tier: dict[str, list[dict[str, Any]]] = {
+        "FAST": [],
+        "MEDIUM": [],
+        "SLOW": [],
+        "Not specified": [],
+    }
     for collector in collectors:
         tier = collector.get("resolved_tier", "Not specified")
         if "FAST" in tier:
@@ -364,14 +385,20 @@ def generate_markdown(collectors: list[dict[str, Any]]) -> str:
     for tier_name, tier_collectors in by_tier.items():
         if not tier_collectors:
             continue
-            
+
         tier_emoji = {"FAST": "🚀", "MEDIUM": "⚡", "SLOW": "🐌", "Not specified": "❓"}[tier_name]
-        lines.append(f"??? abstract \"{tier_emoji} {tier_name} Tier ({len(tier_collectors)} collectors)\"")
+        lines.append(
+            f'??? abstract "{tier_emoji} {tier_name} Tier ({len(tier_collectors)} collectors)"'
+        )
         lines.append("")
-        
+
         for collector in sorted(tier_collectors, key=lambda c: c["name"]):
             name = collector["name"]
-            description = collector.get("docstring", "").split("\n")[0] if collector.get("docstring") else "No description"
+            description = (
+                collector.get("docstring", "").split("\n")[0]
+                if collector.get("docstring")
+                else "No description"
+            )
             if len(description) > 80:
                 description = description[:77] + "..."
             anchor = name.lower().replace("collector", "")
@@ -383,11 +410,20 @@ def generate_markdown(collectors: list[dict[str, Any]]) -> str:
     lines.append("")
 
     # Categorize collectors
-    main_collectors = [c for c in collectors if any(d["name"] == "register_collector" for d in c["decorators"])]
-    device_collectors = [c for c in collectors if any("BaseDeviceCollector" in base for base in c["base_classes"])]
-    sub_collectors_list = [c for c in collectors if not any(d["name"] == "register_collector" for d in c["decorators"]) and not any("BaseDeviceCollector" in base for base in c["base_classes"])]
+    main_collectors = [
+        c for c in collectors if any(d["name"] == "register_collector" for d in c["decorators"])
+    ]
+    device_collectors = [
+        c for c in collectors if any("BaseDeviceCollector" in base for base in c["base_classes"])
+    ]
+    sub_collectors_list = [
+        c
+        for c in collectors
+        if not any(d["name"] == "register_collector" for d in c["decorators"])
+        and not any("BaseDeviceCollector" in base for base in c["base_classes"])
+    ]
 
-    lines.append("=== \"Main Collectors\"")
+    lines.append('=== "Main Collectors"')
     lines.append("")
     lines.append("    Auto-registered collectors that run on scheduled intervals:")
     lines.append("")
@@ -397,23 +433,27 @@ def generate_markdown(collectors: list[dict[str, Any]]) -> str:
         lines.append(f"    - [`{collector['name']}`](#{anchor}) - {tier}")
     lines.append("")
 
-    lines.append("=== \"Device Collectors\"")
+    lines.append('=== "Device Collectors"')
     lines.append("")
     lines.append("    Device-type specific collectors (MR, MS, MX, MT, MG, MV):")
     lines.append("")
     for collector in sorted(device_collectors, key=lambda c: c["name"]):
         anchor = collector["name"].lower().replace("collector", "")
-        description = collector.get("docstring", "").split("\n")[0] if collector.get("docstring") else ""
+        description = (
+            collector.get("docstring", "").split("\n")[0] if collector.get("docstring") else ""
+        )
         lines.append(f"    - [`{collector['name']}`](#{anchor}): {description}")
     lines.append("")
 
-    lines.append("=== \"Sub-collectors\"")
+    lines.append('=== "Sub-collectors"')
     lines.append("")
     lines.append("    Specialized collectors managed by coordinator collectors:")
     lines.append("")
     for collector in sorted(sub_collectors_list, key=lambda c: c["name"]):
         anchor = collector["name"].lower().replace("collector", "")
-        description = collector.get("docstring", "").split("\n")[0] if collector.get("docstring") else ""
+        description = (
+            collector.get("docstring", "").split("\n")[0] if collector.get("docstring") else ""
+        )
         lines.append(f"    - [`{collector['name']}`](#{anchor}): {description}")
     lines.append("")
 
@@ -425,7 +465,7 @@ def generate_markdown(collectors: list[dict[str, Any]]) -> str:
     for collector in sorted(collectors, key=lambda c: c["name"]):
         name = collector["name"]
         anchor = name.lower().replace("collector", "")
-        
+
         lines.append(f"### {name} {{ #{anchor} }}")
         lines.append("")
 
@@ -451,7 +491,9 @@ def generate_markdown(collectors: list[dict[str, Any]]) -> str:
             for metric in collector["metrics"]:
                 name = metric.get("name", "Unknown")
                 description = metric.get("description", "").replace("|", "\\|")
-                lines.append(f"| `{metric['variable']}` | {metric['type']} | `{name}` | {description} |")
+                lines.append(
+                    f"| `{metric['variable']}` | {metric['type']} | `{name}` | {description} |"
+                )
             lines.append("")
 
         # API calls section
@@ -463,7 +505,7 @@ def generate_markdown(collectors: list[dict[str, Any]]) -> str:
                 endpoint = call["endpoint"]
                 if endpoint not in unique_endpoints:
                     unique_endpoints[endpoint] = call["method"]
-            
+
             lines.append("| Endpoint | Used In Method |")
             lines.append("|----------|----------------|")
             for endpoint, method in sorted(unique_endpoints.items()):
@@ -482,7 +524,7 @@ def generate_markdown(collectors: list[dict[str, Any]]) -> str:
             lines.append("")
 
         # Technical details
-        lines.append("??? example \"Technical Details\"")
+        lines.append('??? example "Technical Details"')
         lines.append("")
         if collector["decorators"]:
             lines.append("    **Decorators:**")
@@ -493,12 +535,12 @@ def generate_markdown(collectors: list[dict[str, Any]]) -> str:
                 else:
                     lines.append(f"    - `@{decorator['name']}`")
             lines.append("")
-        
+
         lines.append(f"    **Defined at:** Line {collector['line']}")
         if collector["metrics"]:
             lines.append(f"    **Metrics Count:** {len(collector['metrics'])}")
         if collector["api_calls"]:
-            unique_apis = len(set(call["endpoint"] for call in collector["api_calls"]))
+            unique_apis = len({call["endpoint"] for call in collector["api_calls"]})
             lines.append(f"    **API Endpoints:** {unique_apis}")
         lines.append("")
 
@@ -508,20 +550,32 @@ def generate_markdown(collectors: list[dict[str, Any]]) -> str:
     # Add usage guide
     lines.append("## 📚 Usage Guide")
     lines.append("")
-    
+
     lines.append('!!! tip "Understanding Collector Hierarchy"')
-    lines.append("    - **Main Collectors** are registered with `@register_collector()` and run automatically")
-    lines.append("    - **Coordinator Collectors** manage multiple sub-collectors for related metrics")
+    lines.append(
+        "    - **Main Collectors** are registered with `@register_collector()` and run automatically"
+    )
+    lines.append(
+        "    - **Coordinator Collectors** manage multiple sub-collectors for related metrics"
+    )
     lines.append("    - **Device Collectors** are specific to device types (MR, MS, MX, etc.)")
-    lines.append("    - **Sub-collectors** are manually registered and called by their parent coordinators")
+    lines.append(
+        "    - **Sub-collectors** are manually registered and called by their parent coordinators"
+    )
     lines.append("")
-    
+
     lines.append('!!! info "Update Tier Strategy"')
-    lines.append("    - **FAST (60s):** Critical metrics that change frequently (device status, alerts)")
-    lines.append("    - **MEDIUM (300s):** Regular metrics with moderate change frequency (performance data)")
-    lines.append("    - **SLOW (900s):** Stable metrics that change infrequently (configuration, licenses)")
+    lines.append(
+        "    - **FAST (60s):** Critical metrics that change frequently (device status, alerts)"
+    )
+    lines.append(
+        "    - **MEDIUM (300s):** Regular metrics with moderate change frequency (performance data)"
+    )
+    lines.append(
+        "    - **SLOW (900s):** Stable metrics that change infrequently (configuration, licenses)"
+    )
     lines.append("")
-    
+
     lines.append('!!! example "Adding a New Collector"')
     lines.append("    ```python")
     lines.append("    from ..core.collector import register_collector, MetricCollector, UpdateTier")
@@ -587,4 +641,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main() 
+    main()
