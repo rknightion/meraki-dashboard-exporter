@@ -17,11 +17,5 @@ Allow: /assets/
 Allow: /stylesheets/
 Allow: /javascripts/
 
-# Crawl delay (be nice to servers)
-Crawl-delay: 1
-
-# Sitemap location (MkDocs generates this automatically)
-Sitemap: https://rknightion.github.io/meraki-dashboard-exporter/sitemap.xml
-
-# Additional sitemaps for better discovery
-Sitemap: https://rknightion.github.io/meraki-dashboard-exporter/sitemap.xml.gz 
+Sitemap: https://meraki.exporters.m7kni.com/sitemap.xml
+Sitemap: https://meraki.exporters.m7kni.com/sitemap.xml.gz 
