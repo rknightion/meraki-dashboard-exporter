@@ -124,7 +124,7 @@ plugins = ["pydantic.mypy"]
 exclude = [
     "docs/.*\\.md$",
     "tests/",
-    "src/meraki_dashboard_exporter/tools/.*\\.py$",
+    "src/meraki_dashboard_exporter/tools/.*\\.py",
 ]
 
 [tool.pydantic-mypy]
