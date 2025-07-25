@@ -240,7 +240,7 @@ Collectors are organized into three update tiers based on data volatility:
 
 ??? example "Technical Details"
 
-    **Defined at:** Line 43
+    **Defined at:** Line 56
 
 ---
 
@@ -352,7 +352,7 @@ Collectors are organized into three update tiers based on data volatility:
 
 ??? example "Technical Details"
 
-    **Defined at:** Line 29
+    **Defined at:** Line 43
     **Metrics Count:** 7
 
 ---
@@ -592,7 +592,7 @@ This coordinator manages the following sub-collectors:
 
 ??? example "Technical Details"
 
-    **Defined at:** Line 25
+    **Defined at:** Line 34
     **Metrics Count:** 2
 
 ---
@@ -656,11 +656,12 @@ This coordinator manages the following sub-collectors:
 | `snmp_up_metric` | gauge | `meraki_snmp_ms_up` | Whether MS device SNMP is responding (1=up, 0=down) |
 | `uptime_metric` | gauge | `meraki_snmp_ms_uptime_seconds` | Device uptime in seconds from SNMP |
 | `mac_table_size_metric` | gauge | `meraki_snmp_ms_mac_table_size` | Number of MAC addresses in forwarding table |
+| `bridge_num_ports_metric` | gauge | `meraki_snmp_ms_bridge_num_ports` | Number of bridge ports from SNMP |
 
 ??? example "Technical Details"
 
-    **Defined at:** Line 110
-    **Metrics Count:** 3
+    **Defined at:** Line 125
+    **Metrics Count:** 4
 
 ---
 
@@ -884,7 +885,7 @@ This coordinator manages the following sub-collectors:
     **Decorators:**
     - `@register_collector`
 
-    **Defined at:** Line 532
+    **Defined at:** Line 829
 
 ---
 
@@ -901,7 +902,7 @@ This coordinator manages the following sub-collectors:
     **Decorators:**
     - `@register_collector`
 
-    **Defined at:** Line 560
+    **Defined at:** Line 891
 
 ---
 
@@ -918,7 +919,7 @@ This coordinator manages the following sub-collectors:
     **Decorators:**
     - `@register_collector`
 
-    **Defined at:** Line 586
+    **Defined at:** Line 910
 
 ---
 
@@ -958,3 +959,4 @@ This coordinator manages the following sub-collectors:
     ```
 
 For more information on metrics, see the [Metrics Reference](metrics/metrics.md).
+
