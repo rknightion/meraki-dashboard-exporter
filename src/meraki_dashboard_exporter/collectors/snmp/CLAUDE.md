@@ -77,7 +77,7 @@ class MyDeviceSNMPCollector(BaseSNMPCollector):
   - Priv protocols: AES128 (default), DES
   - Passwords must be provided via environment variables
 
-### Device SNMP  
+### Device SNMP
 - Uses network SNMP settings from `getNetworkSnmp` API
 - Access modes: 'none', 'community' (v2c), 'users' (v3)
 - Direct device IP access required
@@ -104,8 +104,12 @@ for oid, value in result:
 ## METRIC NAMING CONVENTION
 All SNMP metrics MUST follow this pattern:
 - `meraki_snmp_organization_*` - Cloud controller metrics
-- `meraki_snmp_mr_*` - MR device metrics
-- `meraki_snmp_ms_*` - MS device metrics
+- `meraki_snmp_mr_*` - MR (wireless) device metrics
+- `meraki_snmp_ms_*` - MS (switch) device metrics
+
+For device-specific metrics, include the device type in the metric name:
+- `meraki_snmp_mr_bridge_topology_changes_total` - MR-specific metric
+- `meraki_snmp_ms_bridge_topology_changes_total` - MS-specific metric
 </patterns>
 
 <examples>
@@ -224,26 +228,66 @@ CUSTOM_OIDS = {
 - Trade-off: Complexity vs readability
 </hatch>
 
-# Update Frequency
-SNMP collectors are organized into three update tiers, each running at different frequencies:
+# Update Frequency Policy
+
+SNMP collectors are organized into three update tiers, each running at different frequencies. Currently, all SNMP collectors are initialized in both FAST and MEDIUM tiers to ensure metrics are collected regardless of which tier is active.
 
 ## FAST Tier (60s default)
 - **Coordinator**: `SNMPFastCoordinator`
-- **Use for**: Real-time interface counters, critical status, frequently changing metrics
-- **Examples**: Interface packet/byte counters, error counters, CPU utilization
+- **Use for**: Real-time metrics that change frequently
+- **Current collectors**: CloudControllerSNMP, MRDeviceSNMP, MSDeviceSNMP
+- **Examples**: Interface counters, error rates, active client counts
 - **Frequency**: `MERAKI_EXPORTER_UPDATE_INTERVALS__FAST`
 
 ## MEDIUM Tier (300s default)
 - **Coordinator**: `SNMPMediumCoordinator`
-- **Use for**: Device status, health metrics, standard operational data
-- **Examples**: Device up/down status, client counts, uptime, MAC table size
+- **Use for**: Standard operational metrics
+- **Current collectors**: CloudControllerSNMP, MRDeviceSNMP, MSDeviceSNMP (same as FAST)
+- **Examples**: Device status, topology changes, uptime
 - **Frequency**: `MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM`
-- **Current collectors**: CloudControllerSNMP, MRDeviceSNMP, MSDeviceSNMP
 
 ## SLOW Tier (900s default)
 - **Coordinator**: `SNMPSlowCoordinator`
-- **Use for**: System information, hardware inventory, configuration data
-- **Examples**: sysDescr, hardware serial numbers, firmware versions
+- **Use for**: Static or rarely changing information
+- **Examples**: Hardware inventory, firmware versions (when implemented)
 - **Frequency**: `MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW`
+- **Current collectors**: None
 
 Device SNMP queries are performed concurrently with configurable limits to prevent overwhelming network devices.
+
+# SNMP OID Testing Tool
+
+When adding new SNMP metrics or troubleshooting OID issues, use the test tool:
+
+```bash
+# Test a specific OID
+uv run python src/meraki_dashboard_exporter/tools/test_snmp_oids.py get 10.0.100.10 1.3.6.1.2.1.1.1.0
+
+# Walk an OID tree
+uv run python src/meraki_dashboard_exporter/tools/test_snmp_oids.py walk 10.0.100.10 1.3.6.1.2.1.17
+
+# Test common OIDs to see what's available
+uv run python src/meraki_dashboard_exporter/tools/test_snmp_oids.py common 10.0.100.10
+
+# Search for OIDs by pattern
+uv run python src/meraki_dashboard_exporter/tools/test_snmp_oids.py search 10.0.100.10 1.3.6.1 "port"
+
+# Explore available OID trees
+uv run python src/meraki_dashboard_exporter/tools/test_snmp_oids.py explore 10.0.100.10
+```
+
+## Test Devices
+- **MS (Switch)**: 10.0.100.10
+- **MR (Wireless)**: 10.0.100.17
+- **Community**: knight (v2c)
+
+## Known Limitations
+- Meraki devices don't implement all standard MIBs
+- No STP OIDs (1.3.6.1.2.1.17.2.*) on MS/MR devices
+- Enterprise OIDs (1.3.6.1.4.1.29671) only available via cloud SNMP
+
+## Adding New Metrics Workflow
+1. Use the test tool to verify OID exists on target devices
+2. Test on both MS and MR to see which support the OID
+3. Add metric only for device types that support it
+4. Include proper error handling for missing OIDs
