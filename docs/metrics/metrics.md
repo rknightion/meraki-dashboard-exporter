@@ -3,10 +3,10 @@
 This page provides a comprehensive reference of all Prometheus metrics exposed by the Meraki Dashboard Exporter.
 
 !!! summary "Metrics Summary"
-    📊 **Total Metrics:** 169
-    🏗️ **Collectors:** 12
-    📈 **Gauges:** 160
-    📊 **Counters:** 8
+    📊 **Total Metrics:** 156
+    🏗️ **Collectors:** 9
+    📈 **Gauges:** 151
+    📊 **Counters:** 4
     ℹ️ **Info Metrics:** 1
 
 ## Overview
@@ -17,13 +17,10 @@ The exporter provides metrics across several categories:
 |-----------|---------|-------------|
 | [AlertsCollector](#alerts) | 4 | 🚨 Active alerts by severity, type, and category |
 | [ClientsCollector](#clients) | 21 | 👥 Detailed client-level metrics including usage and status |
-| [CloudControllerSNMPCollector](#cloudcontrollersnmp) | 7 | Various metrics |
 | [ConfigCollector](#config) | 14 | ⚙️ Organization security settings and configuration tracking |
 | [DeviceCollector](#device) | 10 | 📱 Device status, performance, and uptime metrics |
 | [MRCollector](#mr) | 38 | 📡 Access point metrics including clients, power, and performance |
-| [MRDeviceSNMPCollector](#mrdevicesnmp) | 2 | Various metrics |
 | [MSCollector](#ms) | 24 | 🔀 Switch-specific metrics including port status, power, and PoE |
-| [MSDeviceSNMPCollector](#msdevicesnmp) | 4 | Various metrics |
 | [MTSensorCollector](#mtsensor) | 18 | 📊 Environmental monitoring from MT sensors |
 | [NetworkHealthCollector](#networkhealth) | 8 | 🏥 Network-wide wireless health and performance |
 | [OrganizationCollector](#organization) | 19 | 🏢 Organization-level metrics including API usage and licenses |
@@ -32,7 +29,7 @@ The exporter provides metrics across several categories:
 
 ### By Metric Type
 
-??? abstract "📊 **Counters** - Cumulative values that only increase (8 metrics)"
+??? abstract "📊 **Counters** - Cumulative values that only increase (4 metrics)"
 
     <div class="grid cards" markdown>
 
@@ -56,29 +53,9 @@ The exporter provides metrics across several categories:
       ---
       ClientsCollector
 
-    - [`meraki_snmp_organization_interface_bytes_received_total`](#meraki-snmp-organization-interface-bytes-received-total)
-      ---
-      CloudControllerSNMPCollector
-
-    - [`meraki_snmp_organization_interface_bytes_sent_total`](#meraki-snmp-organization-interface-bytes-sent-total)
-      ---
-      CloudControllerSNMPCollector
-
-    </div>
-    
-    <div class="grid cards" markdown>
-
-    - [`meraki_snmp_organization_interface_packets_received_total`](#meraki-snmp-organization-interface-packets-received-total)
-      ---
-      CloudControllerSNMPCollector
-
-    - [`meraki_snmp_organization_interface_packets_sent_total`](#meraki-snmp-organization-interface-packets-sent-total)
-      ---
-      CloudControllerSNMPCollector
-
     </div>
 
-??? abstract "📈 **Gauges** - Values that can increase or decrease (current state) (160 metrics)"
+??? abstract "📈 **Gauges** - Values that can increase or decrease (current state) (151 metrics)"
 
     <div class="grid cards" markdown>
 
@@ -870,54 +847,6 @@ The exporter provides metrics across several categories:
       ---
       AlertsCollector
 
-    - [`meraki_snmp_mr_up`](#meraki-snmp-mr-up)
-      ---
-      MRDeviceSNMPCollector
-
-    - [`meraki_snmp_mr_uptime_seconds`](#meraki-snmp-mr-uptime-seconds)
-      ---
-      MRDeviceSNMPCollector
-
-    </div>
-    
-    <div class="grid cards" markdown>
-
-    - [`meraki_snmp_ms_bridge_num_ports`](#meraki-snmp-ms-bridge-num-ports)
-      ---
-      MSDeviceSNMPCollector
-
-    - [`meraki_snmp_ms_mac_table_size`](#meraki-snmp-ms-mac-table-size)
-      ---
-      MSDeviceSNMPCollector
-
-    - [`meraki_snmp_ms_up`](#meraki-snmp-ms-up)
-      ---
-      MSDeviceSNMPCollector
-
-    </div>
-    
-    <div class="grid cards" markdown>
-
-    - [`meraki_snmp_ms_uptime_seconds`](#meraki-snmp-ms-uptime-seconds)
-      ---
-      MSDeviceSNMPCollector
-
-    - [`meraki_snmp_organization_device_client_count`](#meraki-snmp-organization-device-client-count)
-      ---
-      CloudControllerSNMPCollector
-
-    - [`meraki_snmp_organization_device_status`](#meraki-snmp-organization-device-status)
-      ---
-      CloudControllerSNMPCollector
-
-    </div>
-    
-    <div class="grid cards" markdown>
-
-    - [`meraki_snmp_organization_up`](#meraki-snmp-organization-up)
-      ---
-      CloudControllerSNMPCollector
-
     - [`meraki_wireless_client_capabilities_count`](#meraki-wireless-client-capabilities-count)
       ---
       ClientsCollector
@@ -1499,103 +1428,6 @@ The exporter provides metrics across several categories:
 
     **Variable:** `self.wireless_client_snr`
     **Source Line:** 287
-
-
-### CloudControllerSNMPCollector { #cloudcontrollersnmp }
-
-!!! info "Collector Information"
-    **Description:** Various metrics
-    **Source File:** `src/meraki_dashboard_exporter/collectors/snmp/cloud_controller.py`
-    **Metrics Count:** 7
-
-#### `meraki_snmp_organization_device_client_count` { #meraki-snmp-organization-device-client-count }
-
-**Type:** 🔢 Gauge
-
-**Description:** Number of clients connected to device from cloud SNMP
-
-??? example "Technical Details"
-
-    **Variable:** `self.client_count_metric`
-    **Source Line:** 64
-
----
-
-#### `meraki_snmp_organization_device_status` { #meraki-snmp-organization-device-status }
-
-**Type:** 🔢 Gauge
-
-**Description:** Device online/offline status from cloud SNMP (1=online, 0=offline)
-
-??? example "Technical Details"
-
-    **Variable:** `self.device_status_metric`
-    **Source Line:** 49
-
----
-
-#### `meraki_snmp_organization_interface_bytes_received_total` { #meraki-snmp-organization-interface-bytes-received-total }
-
-**Type:** 📈 Counter
-
-**Description:** Total bytes received on interface from cloud SNMP
-
-??? example "Technical Details"
-
-    **Variable:** `self.interface_bytes_received`
-    **Source Line:** 125
-
----
-
-#### `meraki_snmp_organization_interface_bytes_sent_total` { #meraki-snmp-organization-interface-bytes-sent-total }
-
-**Type:** 📈 Counter
-
-**Description:** Total bytes sent on interface from cloud SNMP
-
-??? example "Technical Details"
-
-    **Variable:** `self.interface_bytes_sent`
-    **Source Line:** 110
-
----
-
-#### `meraki_snmp_organization_interface_packets_received_total` { #meraki-snmp-organization-interface-packets-received-total }
-
-**Type:** 📈 Counter
-
-**Description:** Total packets received on interface from cloud SNMP
-
-??? example "Technical Details"
-
-    **Variable:** `self.interface_packets_received`
-    **Source Line:** 94
-
----
-
-#### `meraki_snmp_organization_interface_packets_sent_total` { #meraki-snmp-organization-interface-packets-sent-total }
-
-**Type:** 📈 Counter
-
-**Description:** Total packets sent on interface from cloud SNMP
-
-??? example "Technical Details"
-
-    **Variable:** `self.interface_packets_sent`
-    **Source Line:** 79
-
----
-
-#### `meraki_snmp_organization_up` { #meraki-snmp-organization-up }
-
-**Type:** 🔢 Gauge
-
-**Description:** Whether cloud controller SNMP is responding (1=up, 0=down)
-
-??? example "Technical Details"
-
-    **Variable:** `self.snmp_up_metric`
-    **Source Line:** 141
 
 
 ### ConfigCollector { #config }
@@ -3077,38 +2909,6 @@ The exporter provides metrics across several categories:
     **Source Line:** 550
 
 
-### MRDeviceSNMPCollector { #mrdevicesnmp }
-
-!!! info "Collector Information"
-    **Description:** Various metrics
-    **Source File:** `src/meraki_dashboard_exporter/collectors/snmp/device_snmp.py`
-    **Metrics Count:** 2
-
-#### `meraki_snmp_mr_up` { #meraki-snmp-mr-up }
-
-**Type:** 🔢 Gauge
-
-**Description:** Whether MR device SNMP is responding (1=up, 0=down)
-
-??? example "Technical Details"
-
-    **Variable:** `self.snmp_up_metric`
-    **Source Line:** 40
-
----
-
-#### `meraki_snmp_mr_uptime_seconds` { #meraki-snmp-mr-uptime-seconds }
-
-**Type:** 🔢 Gauge
-
-**Description:** Device uptime in seconds from SNMP
-
-??? example "Technical Details"
-
-    **Variable:** `self.uptime_metric`
-    **Source Line:** 55
-
-
 ### MSCollector { #ms }
 
 !!! info "Collector Information"
@@ -3593,64 +3393,6 @@ The exporter provides metrics across several categories:
 
     **Variable:** `self._switch_stp_priority`
     **Source Line:** 177
-
-
-### MSDeviceSNMPCollector { #msdevicesnmp }
-
-!!! info "Collector Information"
-    **Description:** Various metrics
-    **Source File:** `src/meraki_dashboard_exporter/collectors/snmp/device_snmp.py`
-    **Metrics Count:** 4
-
-#### `meraki_snmp_ms_bridge_num_ports` { #meraki-snmp-ms-bridge-num-ports }
-
-**Type:** 🔢 Gauge
-
-**Description:** Number of bridge ports from SNMP
-
-??? example "Technical Details"
-
-    **Variable:** `self.bridge_num_ports_metric`
-    **Source Line:** 176
-
----
-
-#### `meraki_snmp_ms_mac_table_size` { #meraki-snmp-ms-mac-table-size }
-
-**Type:** 🔢 Gauge
-
-**Description:** Number of MAC addresses in forwarding table
-
-??? example "Technical Details"
-
-    **Variable:** `self.mac_table_size_metric`
-    **Source Line:** 161
-
----
-
-#### `meraki_snmp_ms_up` { #meraki-snmp-ms-up }
-
-**Type:** 🔢 Gauge
-
-**Description:** Whether MS device SNMP is responding (1=up, 0=down)
-
-??? example "Technical Details"
-
-    **Variable:** `self.snmp_up_metric`
-    **Source Line:** 131
-
----
-
-#### `meraki_snmp_ms_uptime_seconds` { #meraki-snmp-ms-uptime-seconds }
-
-**Type:** 🔢 Gauge
-
-**Description:** Device uptime in seconds from SNMP
-
-??? example "Technical Details"
-
-    **Variable:** `self.uptime_metric`
-    **Source Line:** 146
 
 
 ### MTSensorCollector { #mtsensor }
@@ -4879,19 +4621,6 @@ All metrics in alphabetical order with quick access:
 | [`meraki_org_usage_total_kb`](#meraki-org-usage-total-kb) | 🔢 gauge | OrganizationCollector | 2 labels | Total data usage in KB for the 1-hour window |
 | [`meraki_org_usage_upstream_kb`](#meraki-org-usage-upstream-kb) | 🔢 gauge | OrganizationCollector | 2 labels | Upstream data usage in KB for the 1-hour window |
 | [`meraki_sensor_alerts_total`](#meraki-sensor-alerts-total) | 🔢 gauge | AlertsCollector | 5 labels | Total number of sensor alerts in the last hour by metric type |
-| [`meraki_snmp_mr_up`](#meraki-snmp-mr-up) | 🔢 gauge | MRDeviceSNMPCollector | No labels | Whether MR device SNMP is responding (1=up, 0=down) |
-| [`meraki_snmp_mr_uptime_seconds`](#meraki-snmp-mr-uptime-seconds) | 🔢 gauge | MRDeviceSNMPCollector | No labels | Device uptime in seconds from SNMP |
-| [`meraki_snmp_ms_bridge_num_ports`](#meraki-snmp-ms-bridge-num-ports) | 🔢 gauge | MSDeviceSNMPCollector | No labels | Number of bridge ports from SNMP |
-| [`meraki_snmp_ms_mac_table_size`](#meraki-snmp-ms-mac-table-size) | 🔢 gauge | MSDeviceSNMPCollector | No labels | Number of MAC addresses in forwarding table |
-| [`meraki_snmp_ms_up`](#meraki-snmp-ms-up) | 🔢 gauge | MSDeviceSNMPCollector | No labels | Whether MS device SNMP is responding (1=up, 0=down) |
-| [`meraki_snmp_ms_uptime_seconds`](#meraki-snmp-ms-uptime-seconds) | 🔢 gauge | MSDeviceSNMPCollector | No labels | Device uptime in seconds from SNMP |
-| [`meraki_snmp_organization_device_client_count`](#meraki-snmp-organization-device-client-count) | 🔢 gauge | CloudControllerSNMPCollector | No labels | Number of clients connected to device from cloud SNMP |
-| [`meraki_snmp_organization_device_status`](#meraki-snmp-organization-device-status) | 🔢 gauge | CloudControllerSNMPCollector | No labels | Device online/offline status from cloud SNMP (1=online, 0=offline) |
-| [`meraki_snmp_organization_interface_bytes_received_total`](#meraki-snmp-organization-interface-bytes-received-total) | 📈 counter | CloudControllerSNMPCollector | No labels | Total bytes received on interface from cloud SNMP |
-| [`meraki_snmp_organization_interface_bytes_sent_total`](#meraki-snmp-organization-interface-bytes-sent-total) | 📈 counter | CloudControllerSNMPCollector | No labels | Total bytes sent on interface from cloud SNMP |
-| [`meraki_snmp_organization_interface_packets_received_total`](#meraki-snmp-organization-interface-packets-received-total) | 📈 counter | CloudControllerSNMPCollector | No labels | Total packets received on interface from cloud SNMP |
-| [`meraki_snmp_organization_interface_packets_sent_total`](#meraki-snmp-organization-interface-packets-sent-total) | 📈 counter | CloudControllerSNMPCollector | No labels | Total packets sent on interface from cloud SNMP |
-| [`meraki_snmp_organization_up`](#meraki-snmp-organization-up) | 🔢 gauge | CloudControllerSNMPCollector | No labels | Whether cloud controller SNMP is responding (1=up, 0=down) |
 | [`meraki_wireless_client_capabilities_count`](#meraki-wireless-client-capabilities-count) | 🔢 gauge | ClientsCollector | 5 labels | Count of wireless clients by capability |
 | [`meraki_wireless_client_rssi`](#meraki-wireless-client-rssi) | 🔢 gauge | ClientsCollector | 9 labels | Wireless client RSSI (Received Signal Strength Indicator) in dBm |
 | [`meraki_wireless_client_snr`](#meraki-wireless-client-snr) | 🔢 gauge | ClientsCollector | 9 labels | Wireless client SNR (Signal-to-Noise Ratio) in dB |

@@ -126,17 +126,3 @@ Client data collection and DNS resolution settings
 | `MERAKI_EXPORTER_CLIENTS__CACHE_TTL` | `int` | `3600` | Client cache TTL in seconds (for ID/hostname mappings, not metrics) |
 | `MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_PER_NETWORK` | `int` | `10000` | Maximum clients to track per network |
 
-## SNMP Settings
-
-SNMP collector configuration for device and cloud controller metrics
-
-| Environment Variable | Type | Default | Description |
-|---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_SNMP__ENABLED` | `bool` | `False` | Enable SNMP metric collection |
-| `MERAKI_EXPORTER_SNMP__TIMEOUT` | `float` | `5.0` | SNMP request timeout in seconds |
-| `MERAKI_EXPORTER_SNMP__RETRIES` | `int` | `3` | SNMP request retry count |
-| `MERAKI_EXPORTER_SNMP__BULK_MAX_REPETITIONS` | `int` | `25` | Maximum repetitions for SNMP BULK operations |
-| `MERAKI_EXPORTER_SNMP__CONCURRENT_DEVICE_LIMIT` | `int` | `10` | Maximum concurrent SNMP device queries |
-| `MERAKI_EXPORTER_SNMP__ORG_V3_AUTH_PASSWORD` | `pydantic.types.SecretStr | None` | `_(none)_` | SNMPv3 authentication password for organization/cloud controller SNMP |
-| `MERAKI_EXPORTER_SNMP__ORG_V3_PRIV_PASSWORD` | `pydantic.types.SecretStr | None` | `_(none)_` | SNMPv3 privacy password for organization/cloud controller SNMP |
-
