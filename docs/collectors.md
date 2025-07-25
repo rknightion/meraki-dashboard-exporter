@@ -3,8 +3,8 @@
 This page provides a comprehensive reference of all metric collectors in the Meraki Dashboard Exporter.
 
 !!! summary "Collector Overview"
-    🏗️ **Total Collectors:** 27
-    📋 **Registered Collectors:** 7
+    🏗️ **Total Collectors:** 35
+    📋 **Registered Collectors:** 10
     🔗 **Coordinators with Sub-collectors:** 4
 
 ## 🏛️ Architecture Overview
@@ -50,15 +50,18 @@ Collectors are organized into three update tiers based on data volatility:
 
     - [`ConfigCollector`](#config): Collector for configuration and security settings.
 
-??? abstract "❓ Not specified Tier (20 collectors)"
+??? abstract "❓ Not specified Tier (28 collectors)"
 
     - [`APINotAvailableError`](#apinotavailableerror): Raised when an API endpoint is not available (404).
     - [`APIUsageCollector`](#apiusage): Collector for organization API usage metrics.
     - [`BaseDeviceCollector`](#basedevice): Base class for device-specific collectors.
     - [`BaseNetworkHealthCollector`](#basenetworkhealth): Base class for network health sub-collectors.
     - [`BaseOrganizationCollector`](#baseorganization): Base class for organization sub-collectors.
+    - [`BaseSNMPCollector`](#basesnmp): Base class for SNMP collectors.
+    - [`BaseSNMPCoordinator`](#basesnmpcoordinator): Base coordinator for SNMP collectors.
     - [`BluetoothCollector`](#bluetooth): Collector for Bluetooth clients detected by MR devices in a network.
     - [`ClientOverviewCollector`](#clientoverview): Collector for organization client overview metrics.
+    - [`CloudControllerSNMPCollector`](#cloudcontrollersnmp): Collector for Meraki Cloud Controller SNMP metrics.
     - [`ConnectionStatsCollector`](#connectionstats): Collector for network-wide wireless connection statistics.
     - [`DataRatesCollector`](#datarates): Collector for network-wide wireless data rate metrics.
     - [`DataValidationError`](#datavalidationerror): Raised when API response data doesn't match expected format.
@@ -66,12 +69,17 @@ Collectors are organized into three update tiers based on data volatility:
     - [`LicenseCollector`](#license): Collector for organization license metrics.
     - [`MGCollector`](#mg): Collector for MG cellular gateway metrics.
     - [`MRCollector`](#mr): Collector for Meraki MR (Wireless AP) devices.
+    - [`MRDeviceSNMPCollector`](#mrdevicesnmp): SNMP collector for Meraki MR (wireless) devices.
     - [`MSCollector`](#ms): Collector for Meraki MS (Switch) devices.
+    - [`MSDeviceSNMPCollector`](#msdevicesnmp): SNMP collector for Meraki MS (switch) devices.
     - [`MTCollector`](#mt): Collector for Meraki MT (Sensor) devices.
     - [`MVCollector`](#mv): Collector for MV security camera metrics.
     - [`MXCollector`](#mx): Collector for MX security appliance metrics.
     - [`MetricCollector`](#metric): Abstract base class for metric collectors.
     - [`RFHealthCollector`](#rfhealth): Collector for wireless RF health metrics including channel utilization.
+    - [`SNMPFastCoordinator`](#snmpfastcoordinator): SNMP coordinator for fast-updating metrics (60s default).
+    - [`SNMPMediumCoordinator`](#snmpmediumcoordinator): SNMP coordinator for medium-updating metrics (300s default).
+    - [`SNMPSlowCoordinator`](#snmpslowcoordinator): SNMP coordinator for slow-updating metrics (900s default).
 
 ### By Type
 
@@ -86,6 +94,9 @@ Collectors are organized into three update tiers based on data volatility:
     - [`MTSensorCollector`](#mtsensor) - FAST (60s)
     - [`NetworkHealthCollector`](#networkhealth) - MEDIUM (300s)
     - [`OrganizationCollector`](#organization) - MEDIUM (300s)
+    - [`SNMPFastCoordinator`](#snmpfastcoordinator) - Not specified
+    - [`SNMPMediumCoordinator`](#snmpmediumcoordinator) - Not specified
+    - [`SNMPSlowCoordinator`](#snmpslowcoordinator) - Not specified
 
 === "Device Collectors"
 
@@ -107,13 +118,18 @@ Collectors are organized into three update tiers based on data volatility:
     - [`BaseDeviceCollector`](#basedevice): Base class for device-specific collectors.
     - [`BaseNetworkHealthCollector`](#basenetworkhealth): Base class for network health sub-collectors.
     - [`BaseOrganizationCollector`](#baseorganization): Base class for organization sub-collectors.
+    - [`BaseSNMPCollector`](#basesnmp): Base class for SNMP collectors.
+    - [`BaseSNMPCoordinator`](#basesnmpcoordinator): Base coordinator for SNMP collectors.
     - [`BluetoothCollector`](#bluetooth): Collector for Bluetooth clients detected by MR devices in a network.
     - [`ClientOverviewCollector`](#clientoverview): Collector for organization client overview metrics.
+    - [`CloudControllerSNMPCollector`](#cloudcontrollersnmp): Collector for Meraki Cloud Controller SNMP metrics.
     - [`ConnectionStatsCollector`](#connectionstats): Collector for network-wide wireless connection statistics.
     - [`DataRatesCollector`](#datarates): Collector for network-wide wireless data rate metrics.
     - [`DataValidationError`](#datavalidationerror): Raised when API response data doesn't match expected format.
     - [`ExemplarCollector`](#exemplar): Collects exemplars for metrics during collection cycles.
     - [`LicenseCollector`](#license): Collector for organization license metrics.
+    - [`MRDeviceSNMPCollector`](#mrdevicesnmp): SNMP collector for Meraki MR (wireless) devices.
+    - [`MSDeviceSNMPCollector`](#msdevicesnmp): SNMP collector for Meraki MS (switch) devices.
     - [`MetricCollector`](#metric): Abstract base class for metric collectors.
     - [`RFHealthCollector`](#rfhealth): Collector for wireless RF health metrics including channel utilization.
 
@@ -214,6 +230,34 @@ Collectors are organized into three update tiers based on data volatility:
 
 ---
 
+### BaseSNMPCollector { #basesnmp }
+
+!!! info "Collector Information"
+    **Purpose:** Base class for SNMP collectors.
+    **Source File:** `src/meraki_dashboard_exporter/collectors/snmp/base.py`
+    **Update Tier:** Not specified
+    **Inherits From:** ABC
+
+??? example "Technical Details"
+
+    **Defined at:** Line 43
+
+---
+
+### BaseSNMPCoordinator { #basesnmpcoordinator }
+
+!!! info "Collector Information"
+    **Purpose:** Base coordinator for SNMP collectors.
+    **Source File:** `src/meraki_dashboard_exporter/collectors/snmp/snmp_coordinator.py`
+    **Update Tier:** Not specified
+    **Inherits From:** MetricCollector
+
+??? example "Technical Details"
+
+    **Defined at:** Line 36
+
+---
+
 ### BluetoothCollector { #bluetooth }
 
 !!! info "Collector Information"
@@ -283,6 +327,33 @@ Collectors are organized into three update tiers based on data volatility:
 
     **Defined at:** Line 26
     **Metrics Count:** 21
+
+---
+
+### CloudControllerSNMPCollector { #cloudcontrollersnmp }
+
+!!! info "Collector Information"
+    **Purpose:** Collector for Meraki Cloud Controller SNMP metrics.
+    **Source File:** `src/meraki_dashboard_exporter/collectors/snmp/cloud_controller.py`
+    **Update Tier:** Not specified
+    **Inherits From:** BaseSNMPCollector
+
+#### 📊 Metrics Collected
+
+| Metric Variable | Type | Name | Description |
+|-----------------|------|------|-------------|
+| `device_status_metric` | gauge | `meraki_snmp_organization_device_status` | Device online/offline status from cloud SNMP (1=online, 0=offline) |
+| `client_count_metric` | gauge | `meraki_snmp_organization_device_client_count` | Number of clients connected to device from cloud SNMP |
+| `interface_packets_sent` | counter | `meraki_snmp_organization_interface_packets_sent_total` | Total packets sent on interface from cloud SNMP |
+| `interface_packets_received` | counter | `meraki_snmp_organization_interface_packets_received_total` | Total packets received on interface from cloud SNMP |
+| `interface_bytes_sent` | counter | `meraki_snmp_organization_interface_bytes_sent_total` | Total bytes sent on interface from cloud SNMP |
+| `interface_bytes_received` | counter | `meraki_snmp_organization_interface_bytes_received_total` | Total bytes received on interface from cloud SNMP |
+| `snmp_up_metric` | gauge | `meraki_snmp_organization_up` | Whether cloud controller SNMP is responding (1=up, 0=down) |
+
+??? example "Technical Details"
+
+    **Defined at:** Line 29
+    **Metrics Count:** 7
 
 ---
 
@@ -504,6 +575,28 @@ This coordinator manages the following sub-collectors:
 
 ---
 
+### MRDeviceSNMPCollector { #mrdevicesnmp }
+
+!!! info "Collector Information"
+    **Purpose:** SNMP collector for Meraki MR (wireless) devices.
+    **Source File:** `src/meraki_dashboard_exporter/collectors/snmp/device_snmp.py`
+    **Update Tier:** Not specified
+    **Inherits From:** BaseSNMPCollector
+
+#### 📊 Metrics Collected
+
+| Metric Variable | Type | Name | Description |
+|-----------------|------|------|-------------|
+| `snmp_up_metric` | gauge | `meraki_snmp_mr_up` | Whether MR device SNMP is responding (1=up, 0=down) |
+| `uptime_metric` | gauge | `meraki_snmp_mr_uptime_seconds` | Device uptime in seconds from SNMP |
+
+??? example "Technical Details"
+
+    **Defined at:** Line 25
+    **Metrics Count:** 2
+
+---
+
 ### MSCollector { #ms }
 
 !!! info "Collector Information"
@@ -545,6 +638,29 @@ This coordinator manages the following sub-collectors:
 
     **Defined at:** Line 23
     **Metrics Count:** 24
+
+---
+
+### MSDeviceSNMPCollector { #msdevicesnmp }
+
+!!! info "Collector Information"
+    **Purpose:** SNMP collector for Meraki MS (switch) devices.
+    **Source File:** `src/meraki_dashboard_exporter/collectors/snmp/device_snmp.py`
+    **Update Tier:** Not specified
+    **Inherits From:** BaseSNMPCollector
+
+#### 📊 Metrics Collected
+
+| Metric Variable | Type | Name | Description |
+|-----------------|------|------|-------------|
+| `snmp_up_metric` | gauge | `meraki_snmp_ms_up` | Whether MS device SNMP is responding (1=up, 0=down) |
+| `uptime_metric` | gauge | `meraki_snmp_ms_uptime_seconds` | Device uptime in seconds from SNMP |
+| `mac_table_size_metric` | gauge | `meraki_snmp_ms_mac_table_size` | Number of MAC addresses in forwarding table |
+
+??? example "Technical Details"
+
+    **Defined at:** Line 110
+    **Metrics Count:** 3
 
 ---
 
@@ -755,6 +871,57 @@ This coordinator manages the following sub-collectors:
 
 ---
 
+### SNMPFastCoordinator { #snmpfastcoordinator }
+
+!!! info "Collector Information"
+    **Purpose:** SNMP coordinator for fast-updating metrics (60s default).
+    **Source File:** `src/meraki_dashboard_exporter/collectors/snmp/snmp_coordinator.py`
+    **Update Tier:** Not specified
+    **Inherits From:** BaseSNMPCoordinator
+
+??? example "Technical Details"
+
+    **Decorators:**
+    - `@register_collector`
+
+    **Defined at:** Line 532
+
+---
+
+### SNMPMediumCoordinator { #snmpmediumcoordinator }
+
+!!! info "Collector Information"
+    **Purpose:** SNMP coordinator for medium-updating metrics (300s default).
+    **Source File:** `src/meraki_dashboard_exporter/collectors/snmp/snmp_coordinator.py`
+    **Update Tier:** Not specified
+    **Inherits From:** BaseSNMPCoordinator
+
+??? example "Technical Details"
+
+    **Decorators:**
+    - `@register_collector`
+
+    **Defined at:** Line 560
+
+---
+
+### SNMPSlowCoordinator { #snmpslowcoordinator }
+
+!!! info "Collector Information"
+    **Purpose:** SNMP coordinator for slow-updating metrics (900s default).
+    **Source File:** `src/meraki_dashboard_exporter/collectors/snmp/snmp_coordinator.py`
+    **Update Tier:** Not specified
+    **Inherits From:** BaseSNMPCoordinator
+
+??? example "Technical Details"
+
+    **Decorators:**
+    - `@register_collector`
+
+    **Defined at:** Line 586
+
+---
+
 ## 📚 Usage Guide
 
 !!! tip "Understanding Collector Hierarchy"
@@ -791,3 +958,4 @@ This coordinator manages the following sub-collectors:
     ```
 
 For more information on metrics, see the [Metrics Reference](metrics/metrics.md).
+
