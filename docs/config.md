@@ -19,10 +19,10 @@ Configuration follows a hierarchical structure using environment variables:
     # Meraki API configuration
     export MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here
     export MERAKI_EXPORTER_MERAKI__ORG_ID=123456
-
+    
     # Logging configuration
     export MERAKI_EXPORTER_LOGGING__LEVEL=INFO
-
+    
     # API settings
     export MERAKI_EXPORTER_API__TIMEOUT=30
     export MERAKI_EXPORTER_API__CONCURRENCY_LIMIT=5
@@ -137,3 +137,6 @@ SNMP collector configuration for device and cloud controller metrics
 | `MERAKI_EXPORTER_SNMP__RETRIES` | `int` | `3` | SNMP request retry count |
 | `MERAKI_EXPORTER_SNMP__BULK_MAX_REPETITIONS` | `int` | `25` | Maximum repetitions for SNMP BULK operations |
 | `MERAKI_EXPORTER_SNMP__CONCURRENT_DEVICE_LIMIT` | `int` | `10` | Maximum concurrent SNMP device queries |
+| `MERAKI_EXPORTER_SNMP__ORG_V3_AUTH_PASSWORD` | `pydantic.types.SecretStr | None` | `_(none)_` | SNMPv3 authentication password for organization/cloud controller SNMP |
+| `MERAKI_EXPORTER_SNMP__ORG_V3_PRIV_PASSWORD` | `pydantic.types.SecretStr | None` | `_(none)_` | SNMPv3 privacy password for organization/cloud controller SNMP |
+

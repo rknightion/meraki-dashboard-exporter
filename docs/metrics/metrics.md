@@ -3,9 +3,9 @@
 This page provides a comprehensive reference of all Prometheus metrics exposed by the Meraki Dashboard Exporter.
 
 !!! summary "Metrics Summary"
-    📊 **Total Metrics:** 168
+    📊 **Total Metrics:** 169
     🏗️ **Collectors:** 12
-    📈 **Gauges:** 159
+    📈 **Gauges:** 160
     📊 **Counters:** 8
     ℹ️ **Info Metrics:** 1
 
@@ -23,7 +23,7 @@ The exporter provides metrics across several categories:
 | [MRCollector](#mr) | 38 | 📡 Access point metrics including clients, power, and performance |
 | [MRDeviceSNMPCollector](#mrdevicesnmp) | 2 | Various metrics |
 | [MSCollector](#ms) | 24 | 🔀 Switch-specific metrics including port status, power, and PoE |
-| [MSDeviceSNMPCollector](#msdevicesnmp) | 3 | Various metrics |
+| [MSDeviceSNMPCollector](#msdevicesnmp) | 4 | Various metrics |
 | [MTSensorCollector](#mtsensor) | 18 | 📊 Environmental monitoring from MT sensors |
 | [NetworkHealthCollector](#networkhealth) | 8 | 🏥 Network-wide wireless health and performance |
 | [OrganizationCollector](#organization) | 19 | 🏢 Organization-level metrics including API usage and licenses |
@@ -49,7 +49,7 @@ The exporter provides metrics across several categories:
       ClientsCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_exporter_client_dns_lookups_total`](#meraki-exporter-client-dns-lookups-total)
@@ -65,7 +65,7 @@ The exporter provides metrics across several categories:
       CloudControllerSNMPCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_snmp_organization_interface_packets_received_total`](#meraki-snmp-organization-interface-packets-received-total)
@@ -78,7 +78,7 @@ The exporter provides metrics across several categories:
 
     </div>
 
-??? abstract "📈 **Gauges** - Values that can increase or decrease (current state) (159 metrics)"
+??? abstract "📈 **Gauges** - Values that can increase or decrease (current state) (160 metrics)"
 
     <div class="grid cards" markdown>
 
@@ -95,7 +95,7 @@ The exporter provides metrics across several categories:
       ConfigCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_ENABLED`](#orgmetricname-org-login-security-different-passwords-enabled)
@@ -111,7 +111,7 @@ The exporter provides metrics across several categories:
       ConfigCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`OrgMetricName.ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED`](#orgmetricname-org-login-security-strong-passwords-enabled)
@@ -127,7 +127,7 @@ The exporter provides metrics across several categories:
       AlertsCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_alerts_total_by_severity`](#meraki-alerts-total-by-severity)
@@ -143,7 +143,7 @@ The exporter provides metrics across several categories:
       NetworkHealthCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_client_application_usage_recv_kb`](#meraki-client-application-usage-recv-kb)
@@ -159,7 +159,7 @@ The exporter provides metrics across several categories:
       ClientsCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_client_status`](#meraki-client-status)
@@ -175,7 +175,7 @@ The exporter provides metrics across several categories:
       ClientsCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_client_usage_total_kb`](#meraki-client-usage-total-kb)
@@ -191,7 +191,7 @@ The exporter provides metrics across several categories:
       ClientsCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_device_memory_free_bytes`](#meraki-device-memory-free-bytes)
@@ -207,7 +207,7 @@ The exporter provides metrics across several categories:
       DeviceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_device_memory_used_bytes`](#meraki-device-memory-used-bytes)
@@ -223,7 +223,7 @@ The exporter provides metrics across several categories:
       DeviceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_exporter_client_dns_cache_expired`](#meraki-exporter-client-dns-cache-expired)
@@ -239,7 +239,7 @@ The exporter provides metrics across several categories:
       ClientsCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_exporter_client_store_networks`](#meraki-exporter-client-store-networks)
@@ -255,7 +255,7 @@ The exporter provides metrics across several categories:
       MRCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_aggregation_speed_mbps`](#meraki-mr-aggregation-speed-mbps)
@@ -271,7 +271,7 @@ The exporter provides metrics across several categories:
       MRCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_cpu_load_5min`](#meraki-mr-cpu-load-5min)
@@ -287,7 +287,7 @@ The exporter provides metrics across several categories:
       MRCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_network_packet_loss_upstream_percent`](#meraki-mr-network-packet-loss-upstream-percent)
@@ -303,7 +303,7 @@ The exporter provides metrics across several categories:
       MRCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_network_packets_lost_total`](#meraki-mr-network-packets-lost-total)
@@ -319,7 +319,7 @@ The exporter provides metrics across several categories:
       MRCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_network_packets_upstream_total`](#meraki-mr-network-packets-upstream-total)
@@ -335,7 +335,7 @@ The exporter provides metrics across several categories:
       MRCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_packet_loss_upstream_percent`](#meraki-mr-packet-loss-upstream-percent)
@@ -351,7 +351,7 @@ The exporter provides metrics across several categories:
       MRCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_packets_lost_total`](#meraki-mr-packets-lost-total)
@@ -367,7 +367,7 @@ The exporter provides metrics across several categories:
       MRCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_packets_upstream_total`](#meraki-mr-packets-upstream-total)
@@ -383,7 +383,7 @@ The exporter provides metrics across several categories:
       MRCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_port_poe_info`](#meraki-mr-port-poe-info)
@@ -399,7 +399,7 @@ The exporter provides metrics across several categories:
       MRCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_power_poe_connected`](#meraki-mr-power-poe-connected)
@@ -415,7 +415,7 @@ The exporter provides metrics across several categories:
       MRCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_radio_channel_width_mhz`](#meraki-mr-radio-channel-width-mhz)
@@ -431,7 +431,7 @@ The exporter provides metrics across several categories:
       MRCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_ssid_usage_downstream_mb`](#meraki-mr-ssid-usage-downstream-mb)
@@ -447,7 +447,7 @@ The exporter provides metrics across several categories:
       MRCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_ssid_usage_upstream_mb`](#meraki-mr-ssid-usage-upstream-mb)
@@ -463,7 +463,7 @@ The exporter provides metrics across several categories:
       MSCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_poe_port_power_watthours`](#meraki-ms-poe-port-power-watthours)
@@ -479,7 +479,7 @@ The exporter provides metrics across several categories:
       MSCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_port_packets_broadcast`](#meraki-ms-port-packets-broadcast)
@@ -495,7 +495,7 @@ The exporter provides metrics across several categories:
       MSCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_port_packets_fragments`](#meraki-ms-port-packets-fragments)
@@ -511,7 +511,7 @@ The exporter provides metrics across several categories:
       MSCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_port_packets_rate_collisions`](#meraki-ms-port-packets-rate-collisions)
@@ -527,7 +527,7 @@ The exporter provides metrics across several categories:
       MSCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_port_packets_rate_multicast`](#meraki-ms-port-packets-rate-multicast)
@@ -543,7 +543,7 @@ The exporter provides metrics across several categories:
       MSCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_port_packets_topologychanges`](#meraki-ms-port-packets-topologychanges)
@@ -559,7 +559,7 @@ The exporter provides metrics across several categories:
       MSCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_port_traffic_bytes`](#meraki-ms-port-traffic-bytes)
@@ -575,7 +575,7 @@ The exporter provides metrics across several categories:
       DeviceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_ports_by_link_speed_total`](#meraki-ms-ports-by-link-speed-total)
@@ -591,7 +591,7 @@ The exporter provides metrics across several categories:
       DeviceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_power_usage_watts`](#meraki-ms-power-usage-watts)
@@ -607,7 +607,7 @@ The exporter provides metrics across several categories:
       MTSensorCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mt_battery_percentage`](#meraki-mt-battery-percentage)
@@ -623,7 +623,7 @@ The exporter provides metrics across several categories:
       MTSensorCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mt_door_status`](#meraki-mt-door-status)
@@ -639,7 +639,7 @@ The exporter provides metrics across several categories:
       MTSensorCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mt_humidity_percent`](#meraki-mt-humidity-percent)
@@ -655,7 +655,7 @@ The exporter provides metrics across several categories:
       MTSensorCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mt_pm25_ug_m3`](#meraki-mt-pm25-ug-m3)
@@ -671,7 +671,7 @@ The exporter provides metrics across several categories:
       MTSensorCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mt_remote_lockout_status`](#meraki-mt-remote-lockout-status)
@@ -687,7 +687,7 @@ The exporter provides metrics across several categories:
       MTSensorCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mt_voltage_volts`](#meraki-mt-voltage-volts)
@@ -703,7 +703,7 @@ The exporter provides metrics across several categories:
       NetworkHealthCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_network_channel_utilization_2_4ghz_percent`](#meraki-network-channel-utilization-2-4ghz-percent)
@@ -719,7 +719,7 @@ The exporter provides metrics across several categories:
       NetworkHealthCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_network_wireless_download_kbps`](#meraki-network-wireless-download-kbps)
@@ -735,7 +735,7 @@ The exporter provides metrics across several categories:
       OrganizationCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_org_api_requests_total`](#meraki-org-api-requests-total)
@@ -751,7 +751,7 @@ The exporter provides metrics across several categories:
       OrganizationCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_org_application_usage_total_mb`](#meraki-org-application-usage-total-mb)
@@ -767,7 +767,7 @@ The exporter provides metrics across several categories:
       OrganizationCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_org_configuration_changes_total`](#meraki-org-configuration-changes-total)
@@ -783,7 +783,7 @@ The exporter provides metrics across several categories:
       OrganizationCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_org_devices_total`](#meraki-org-devices-total)
@@ -799,7 +799,7 @@ The exporter provides metrics across several categories:
       OrganizationCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_org_login_security_account_lockout_enabled`](#meraki-org-login-security-account-lockout-enabled)
@@ -815,7 +815,7 @@ The exporter provides metrics across several categories:
       ConfigCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_org_login_security_ip_ranges_enabled`](#meraki-org-login-security-ip-ranges-enabled)
@@ -831,7 +831,7 @@ The exporter provides metrics across several categories:
       ConfigCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_org_networks_total`](#meraki-org-networks-total)
@@ -847,7 +847,7 @@ The exporter provides metrics across several categories:
       OrganizationCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_org_usage_downstream_kb`](#meraki-org-usage-downstream-kb)
@@ -863,7 +863,7 @@ The exporter provides metrics across several categories:
       OrganizationCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_sensor_alerts_total`](#meraki-sensor-alerts-total)
@@ -879,8 +879,12 @@ The exporter provides metrics across several categories:
       MRDeviceSNMPCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
+
+    - [`meraki_snmp_ms_bridge_num_ports`](#meraki-snmp-ms-bridge-num-ports)
+      ---
+      MSDeviceSNMPCollector
 
     - [`meraki_snmp_ms_mac_table_size`](#meraki-snmp-ms-mac-table-size)
       ---
@@ -890,13 +894,13 @@ The exporter provides metrics across several categories:
       ---
       MSDeviceSNMPCollector
 
+    </div>
+    
+    <div class="grid cards" markdown>
+
     - [`meraki_snmp_ms_uptime_seconds`](#meraki-snmp-ms-uptime-seconds)
       ---
       MSDeviceSNMPCollector
-
-    </div>
-
-    <div class="grid cards" markdown>
 
     - [`meraki_snmp_organization_device_client_count`](#meraki-snmp-organization-device-client-count)
       ---
@@ -906,13 +910,13 @@ The exporter provides metrics across several categories:
       ---
       CloudControllerSNMPCollector
 
+    </div>
+    
+    <div class="grid cards" markdown>
+
     - [`meraki_snmp_organization_up`](#meraki-snmp-organization-up)
       ---
       CloudControllerSNMPCollector
-
-    </div>
-
-    <div class="grid cards" markdown>
 
     - [`meraki_wireless_client_capabilities_count`](#meraki-wireless-client-capabilities-count)
       ---
@@ -921,6 +925,10 @@ The exporter provides metrics across several categories:
     - [`meraki_wireless_client_rssi`](#meraki-wireless-client-rssi)
       ---
       ClientsCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
 
     - [`meraki_wireless_client_snr`](#meraki-wireless-client-snr)
       ---
@@ -1509,7 +1517,7 @@ The exporter provides metrics across several categories:
 ??? example "Technical Details"
 
     **Variable:** `self.client_count_metric`
-    **Source Line:** 47
+    **Source Line:** 64
 
 ---
 
@@ -1522,7 +1530,7 @@ The exporter provides metrics across several categories:
 ??? example "Technical Details"
 
     **Variable:** `self.device_status_metric`
-    **Source Line:** 35
+    **Source Line:** 49
 
 ---
 
@@ -1535,7 +1543,7 @@ The exporter provides metrics across several categories:
 ??? example "Technical Details"
 
     **Variable:** `self.interface_bytes_received`
-    **Source Line:** 96
+    **Source Line:** 125
 
 ---
 
@@ -1548,7 +1556,7 @@ The exporter provides metrics across several categories:
 ??? example "Technical Details"
 
     **Variable:** `self.interface_bytes_sent`
-    **Source Line:** 84
+    **Source Line:** 110
 
 ---
 
@@ -1561,7 +1569,7 @@ The exporter provides metrics across several categories:
 ??? example "Technical Details"
 
     **Variable:** `self.interface_packets_received`
-    **Source Line:** 71
+    **Source Line:** 94
 
 ---
 
@@ -1574,7 +1582,7 @@ The exporter provides metrics across several categories:
 ??? example "Technical Details"
 
     **Variable:** `self.interface_packets_sent`
-    **Source Line:** 59
+    **Source Line:** 79
 
 ---
 
@@ -1587,7 +1595,7 @@ The exporter provides metrics across several categories:
 ??? example "Technical Details"
 
     **Variable:** `self.snmp_up_metric`
-    **Source Line:** 109
+    **Source Line:** 141
 
 
 ### ConfigCollector { #config }
@@ -3085,7 +3093,7 @@ The exporter provides metrics across several categories:
 ??? example "Technical Details"
 
     **Variable:** `self.snmp_up_metric`
-    **Source Line:** 31
+    **Source Line:** 40
 
 ---
 
@@ -3098,7 +3106,7 @@ The exporter provides metrics across several categories:
 ??? example "Technical Details"
 
     **Variable:** `self.uptime_metric`
-    **Source Line:** 46
+    **Source Line:** 55
 
 
 ### MSCollector { #ms }
@@ -3592,7 +3600,20 @@ The exporter provides metrics across several categories:
 !!! info "Collector Information"
     **Description:** Various metrics
     **Source File:** `src/meraki_dashboard_exporter/collectors/snmp/device_snmp.py`
-    **Metrics Count:** 3
+    **Metrics Count:** 4
+
+#### `meraki_snmp_ms_bridge_num_ports` { #meraki-snmp-ms-bridge-num-ports }
+
+**Type:** 🔢 Gauge
+
+**Description:** Number of bridge ports from SNMP
+
+??? example "Technical Details"
+
+    **Variable:** `self.bridge_num_ports_metric`
+    **Source Line:** 176
+
+---
 
 #### `meraki_snmp_ms_mac_table_size` { #meraki-snmp-ms-mac-table-size }
 
@@ -3603,7 +3624,7 @@ The exporter provides metrics across several categories:
 ??? example "Technical Details"
 
     **Variable:** `self.mac_table_size_metric`
-    **Source Line:** 146
+    **Source Line:** 161
 
 ---
 
@@ -3616,7 +3637,7 @@ The exporter provides metrics across several categories:
 ??? example "Technical Details"
 
     **Variable:** `self.snmp_up_metric`
-    **Source Line:** 116
+    **Source Line:** 131
 
 ---
 
@@ -3629,7 +3650,7 @@ The exporter provides metrics across several categories:
 ??? example "Technical Details"
 
     **Variable:** `self.uptime_metric`
-    **Source Line:** 131
+    **Source Line:** 146
 
 
 ### MTSensorCollector { #mtsensor }
@@ -4860,6 +4881,7 @@ All metrics in alphabetical order with quick access:
 | [`meraki_sensor_alerts_total`](#meraki-sensor-alerts-total) | 🔢 gauge | AlertsCollector | 5 labels | Total number of sensor alerts in the last hour by metric type |
 | [`meraki_snmp_mr_up`](#meraki-snmp-mr-up) | 🔢 gauge | MRDeviceSNMPCollector | No labels | Whether MR device SNMP is responding (1=up, 0=down) |
 | [`meraki_snmp_mr_uptime_seconds`](#meraki-snmp-mr-uptime-seconds) | 🔢 gauge | MRDeviceSNMPCollector | No labels | Device uptime in seconds from SNMP |
+| [`meraki_snmp_ms_bridge_num_ports`](#meraki-snmp-ms-bridge-num-ports) | 🔢 gauge | MSDeviceSNMPCollector | No labels | Number of bridge ports from SNMP |
 | [`meraki_snmp_ms_mac_table_size`](#meraki-snmp-ms-mac-table-size) | 🔢 gauge | MSDeviceSNMPCollector | No labels | Number of MAC addresses in forwarding table |
 | [`meraki_snmp_ms_up`](#meraki-snmp-ms-up) | 🔢 gauge | MSDeviceSNMPCollector | No labels | Whether MS device SNMP is responding (1=up, 0=down) |
 | [`meraki_snmp_ms_uptime_seconds`](#meraki-snmp-ms-uptime-seconds) | 🔢 gauge | MSDeviceSNMPCollector | No labels | Device uptime in seconds from SNMP |
@@ -4912,3 +4934,4 @@ All metrics in alphabetical order with quick access:
     - Monitor query performance in production environments
 
 For more information on using these metrics, see the [Overview](overview.md) page.
+
