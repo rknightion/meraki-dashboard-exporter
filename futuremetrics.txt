@@ -608,7 +608,7 @@ Source: DEVICE SNMP ONLY
 Description: Current number of learned MAC addresses in the forwarding database.
 Value: Real-time Layer 2 forwarding table size not available via API.
 
-meraki_bridge_topology_changes_total
+meraki_snmp_bridge_topology_changes_total
 SNMP OID: 1.3.6.1.2.1.17.2.2 (dot1dStpTopChanges)
 Source: DEVICE SNMP ONLY
 Description: Count of spanning tree topology changes since last reset.

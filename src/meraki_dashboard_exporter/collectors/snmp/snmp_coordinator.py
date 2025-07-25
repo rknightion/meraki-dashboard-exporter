@@ -60,6 +60,18 @@ class BaseSNMPCoordinator(MetricCollector):
         self.client = AsyncMerakiClient(settings)
         # Error handling done via decorators
 
+        # Log initialization
+        tier_value = "unknown"
+        if hasattr(self, "update_tier"):
+            tier_value = self.update_tier.value
+
+        with LogContext(
+            coordinator=self.__class__.__name__,
+            tier=tier_value,
+            snmp_enabled=settings.snmp.enabled,
+        ):
+            logger.info("Initializing SNMP coordinator")
+
         # Check if SNMP is enabled
         if not settings.snmp.enabled:
             with LogContext(snmp_enabled=False):
@@ -82,23 +94,24 @@ class BaseSNMPCoordinator(MetricCollector):
         # Cache for SNMP credentials and device info
         self._snmp_cache: dict[str, Any] = {}
         self._last_discovery_time = 0
-        
+
         # Connection state tracking to avoid retrying failed methods
         self._org_snmp_versions: dict[str, str] = {}  # org_id -> working version
         self._failed_org_v3: set[str] = set()  # org_ids where v3 failed
         self._device_connectivity_tested = False
-        
-        # Run startup connectivity tests
-        if self.enabled:
+
+        # Only run startup tests from FAST coordinator to avoid duplicates
+        # (since all our collectors are now in FAST tier by default)
+        if self.enabled and getattr(self, "update_tier", None) == UpdateTier.FAST:
             asyncio.create_task(self._run_startup_tests())
 
     async def _run_startup_tests(self) -> None:
         """Run SNMP connectivity tests on startup."""
         await asyncio.sleep(2)  # Small delay to let other components initialize
-        
+
         with LogContext(component="SNMP"):
             logger.info("Running SNMP connectivity tests...")
-            
+
         try:
             # Test organization SNMP
             orgs = await self._get_organizations()
@@ -107,20 +120,21 @@ class BaseSNMPCoordinator(MetricCollector):
                 org_snmp = await self._get_org_snmp_settings(org["id"])
                 if org_snmp and (org_snmp.get("v2cEnabled") or org_snmp.get("v3Enabled")):
                     await self._test_org_snmp_connectivity(org, org_snmp)
-                
+
                 # Test device SNMP (only if we're a tier that handles devices)
                 if hasattr(self, "collectors") and self.collectors:
                     from .device_snmp import MRDeviceSNMPCollector, MSDeviceSNMPCollector
+
                     has_device_collectors = any(
                         isinstance(c, (MRDeviceSNMPCollector, MSDeviceSNMPCollector))
                         for c in self.collectors
                     )
                     if has_device_collectors:
                         await self._test_device_snmp_connectivity(org)
-                        
+
         except Exception as e:
             logger.error(f"SNMP startup tests failed: {e}")
-    
+
     def _init_tier_collectors(self) -> None:
         """Initialize collectors for this tier. Override in subclasses."""
         # Subclasses should initialize their collectors
@@ -133,7 +147,18 @@ class BaseSNMPCoordinator(MetricCollector):
 
     async def _collect_impl(self) -> None:
         """Collect SNMP metrics from all sources."""
+        with LogContext(
+            coordinator=self.__class__.__name__,
+            tier=getattr(self, "update_tier", UpdateTier.FAST).value,
+        ):
+            logger.debug("SNMP collection starting")
+
         if not self.enabled:
+            with LogContext(
+                coordinator=self.__class__.__name__,
+                tier=getattr(self, "update_tier", UpdateTier.FAST).value,
+            ):
+                logger.debug("SNMP collection skipped - disabled")
             return
 
         try:
@@ -208,7 +233,7 @@ class BaseSNMPCoordinator(MetricCollector):
                     peer_ips=peer_ips,
                     peer_ip_count=len(peer_ips),
                 ):
-                    logger.info("Organization SNMP peer IPs configured")
+                    logger.debug("Organization SNMP peer IPs configured")
 
             # Collect metrics based on the tier's collectors
             await self._collect_tier_metrics(org, org_snmp)
@@ -305,7 +330,7 @@ class BaseSNMPCoordinator(MetricCollector):
             "org_id": org["id"],
             "org_name": org["name"],
         }
-        
+
         # Check if we already know which version works from startup tests
         org_id = org["id"]
         if org_id in self._org_snmp_versions:
@@ -349,18 +374,42 @@ class BaseSNMPCoordinator(MetricCollector):
             # Set v2c as fallback if available
             if org_snmp.get("v2cEnabled"):
                 v2_community = org_snmp.get("v2CommunityString", "")
-                target["v2c_fallback"] = {
-                    "version": "v2c",
-                    "community": v2_community or "public"
-                }
+                target["v2c_fallback"] = {"version": "v2c", "community": v2_community or "public"}
         elif org_snmp.get("v2cEnabled"):
             # Use SNMPv2c
             target["version"] = "v2c"
             target["community"] = org_snmp.get("v2CommunityString", "public")
 
-        # Get device information for cloud controller
+        # Get device information from API to enrich SNMP data
         devices = await self._get_org_devices(org["id"])
-        target["devices"] = devices
+
+        # Get all networks for the organization once
+        networks_cache = {}
+        try:
+            networks = await self.client.get_networks(org["id"])
+            for network in networks:
+                networks_cache[network["id"]] = network
+        except Exception as e:
+            with LogContext(org_id=org["id"], error=str(e)):
+                logger.warning("Failed to fetch networks for device enrichment")
+
+        # Create a device map for MAC -> device info lookup
+        device_map = {}
+
+        for device in devices:
+            mac = device.get("mac", "")
+            if mac:
+                # Normalize MAC address (remove colons, lowercase)
+                normalized_mac = mac.lower().replace(":", "")
+
+                # Get network info from cache
+                network_id = device.get("networkId")
+                network_info = networks_cache.get(network_id, {"id": network_id, "name": "Unknown"})
+
+                # Store device with network info
+                device_map[normalized_mac] = {"device": device, "network": network_info}
+
+        target["device_map"] = device_map
 
         # Collect metrics from the cloud controller collector in this tier
         from .cloud_controller import CloudControllerSNMPCollector
@@ -612,12 +661,14 @@ class BaseSNMPCoordinator(MetricCollector):
 
         wrapped_tasks = [run_with_semaphore(task) for task in tasks]
         await asyncio.gather(*wrapped_tasks, return_exceptions=True)
-    
-    async def _test_org_snmp_connectivity(self, org: dict[str, Any], org_snmp: dict[str, Any]) -> None:
+
+    async def _test_org_snmp_connectivity(
+        self, org: dict[str, Any], org_snmp: dict[str, Any]
+    ) -> None:
         """Test organization SNMP connectivity on startup."""
         org_id = org["id"]
         org_name = org["name"]
-        
+
         # Build test target
         target = {
             "host": org_snmp.get("hostname", "snmp.meraki.com"),
@@ -625,24 +676,45 @@ class BaseSNMPCoordinator(MetricCollector):
             "org_id": org_id,
             "org_name": org_name,
         }
-        
+
         # Try v3 first if enabled
         if org_snmp.get("v3Enabled") and org_id not in self._failed_org_v3:
             target["version"] = "v3"
             target["username"] = org_snmp.get("v3User", "")
             target["auth_protocol"] = org_snmp.get("v3AuthMode", "SHA")
             target["priv_protocol"] = org_snmp.get("v3PrivMode", "AES128")
-            
+
+            has_auth_key = False
+            has_priv_key = False
+
             if self.settings.snmp.org_v3_auth_password:
                 target["auth_key"] = self.settings.snmp.org_v3_auth_password.get_secret_value()
+                has_auth_key = True
             if self.settings.snmp.org_v3_priv_password:
                 target["priv_key"] = self.settings.snmp.org_v3_priv_password.get_secret_value()
-            
+                has_priv_key = True
+
+            # Warn if v3 is enabled but credentials are missing
+            if not has_auth_key or not has_priv_key:
+                with LogContext(
+                    org_id=org_id,
+                    org_name=org_name,
+                    has_auth_key=has_auth_key,
+                    has_priv_key=has_priv_key,
+                    v3_user=target["username"],
+                ):
+                    logger.warning(
+                        "Organization SNMPv3 is enabled but authentication credentials are missing. "
+                        "Set environment variables MERAKI_EXPORTER_SNMP__ORG_V3_AUTH_PASSWORD and "
+                        "MERAKI_EXPORTER_SNMP__ORG_V3_PRIV_PASSWORD"
+                    )
+
             # Test v3
             from .cloud_controller import CloudControllerSNMPCollector
+
             test_collector = CloudControllerSNMPCollector(self, self.settings)
             result = await test_collector.snmp_get(target, "1.3.6.1.2.1.1.1.0")  # sysDescr
-            
+
             if result:
                 self._org_snmp_versions[org_id] = "v3"
                 with LogContext(org_id=org_id, org_name=org_name):
@@ -653,7 +725,7 @@ class BaseSNMPCoordinator(MetricCollector):
                 if org_snmp.get("v2cEnabled"):
                     with LogContext(org_id=org_id, org_name=org_name):
                         logger.info("Organization SNMPv3 failed, will use v2c fallback")
-        
+
         # Try v2c if enabled
         if org_snmp.get("v2cEnabled"):
             target = {
@@ -664,11 +736,12 @@ class BaseSNMPCoordinator(MetricCollector):
                 "version": "v2c",
                 "community": org_snmp.get("v2CommunityString", "public"),
             }
-            
+
             from .cloud_controller import CloudControllerSNMPCollector
+
             test_collector = CloudControllerSNMPCollector(self, self.settings)
             result = await test_collector.snmp_get(target, "1.3.6.1.2.1.1.1.0")  # sysDescr
-            
+
             if result:
                 self._org_snmp_versions[org_id] = "v2c"
                 with LogContext(org_id=org_id, org_name=org_name):
@@ -676,54 +749,62 @@ class BaseSNMPCoordinator(MetricCollector):
             else:
                 with LogContext(org_id=org_id, org_name=org_name):
                     logger.warning("Organization SNMP connectivity test failed for both v3 and v2c")
-    
+
     async def _test_device_snmp_connectivity(self, org: dict[str, Any]) -> None:
         """Test device SNMP connectivity on startup."""
         if self._device_connectivity_tested:
             return
-            
+
         org_id = org["id"]
         networks = await self.client.get_networks(org_id)
-        
+
         tested_count = 0
         successful = False
-        
+
         for network in networks:
             if tested_count >= 3:
                 break
-                
+
             network_snmp = await self._get_network_snmp_settings(network["id"])
             if not network_snmp or network_snmp.get("access") == "none":
                 continue
-                
+
             devices = await self.client.get_network_devices(network["id"])
             test_devices = [d for d in devices if d.get("model", "").startswith(("MR", "MS"))]
-            
+
             if not test_devices:
                 continue
-                
+
             device = test_devices[0]
             tested_count += 1
-            
+
             # Build test target
             target = self._build_device_target(
-                device, network, org, network_snmp,
-                DeviceType.MR if device["model"].startswith("MR") else DeviceType.MS
+                device,
+                network,
+                org,
+                network_snmp,
+                DeviceType.MR if device["model"].startswith("MR") else DeviceType.MS,
             )
-            
+
             if target:
                 # Test connectivity
                 from .device_snmp import MRDeviceSNMPCollector, MSDeviceSNMPCollector
-                collector_class = MRDeviceSNMPCollector if device["model"].startswith("MR") else MSDeviceSNMPCollector
+
+                collector_class = (
+                    MRDeviceSNMPCollector
+                    if device["model"].startswith("MR")
+                    else MSDeviceSNMPCollector
+                )
                 test_collector = collector_class(self, self.settings)
                 result = await test_collector.snmp_get(target, "1.3.6.1.2.1.1.1.0")  # sysDescr
-                
+
                 if result:
                     successful = True
                     with LogContext(
                         device_name=device.get("name", "unknown"),
                         device_model=device["model"],
-                        network_name=network["name"]
+                        network_name=network["name"],
                     ):
                         logger.info("Device SNMP connectivity test passed")
                     break
@@ -731,12 +812,12 @@ class BaseSNMPCoordinator(MetricCollector):
                     with LogContext(
                         device_name=device.get("name", "unknown"),
                         device_model=device["model"],
-                        network_name=network["name"]
+                        network_name=network["name"],
                     ):
                         logger.warning("Device SNMP connectivity test failed")
-        
+
         self._device_connectivity_tested = True
-        
+
         if not successful and tested_count > 0:
             logger.warning(
                 f"Device SNMP connectivity tests failed for all {tested_count} devices tested. "
@@ -756,20 +837,54 @@ class SNMPFastCoordinator(BaseSNMPCoordinator):
 
     update_tier = UpdateTier.FAST
 
+    def __init__(self, api: DashboardAPI, settings: Settings) -> None:
+        """Initialize SNMP fast coordinator with startup trigger."""
+        super().__init__(api, settings)
+        # Trigger initial collection after a short delay
+        if self.enabled:
+            asyncio.create_task(self._trigger_initial_collection())
+
     def _init_tier_collectors(self) -> None:
-        """Initialize only fast-updating collectors."""
-        # For now, no collectors are assigned to FAST tier
-        # Add collectors here as metrics are identified for fast updates
-        self.collectors = []
+        """Initialize FAST tier collectors - all SNMP metrics default to FAST."""
+        # Import here to avoid circular imports
+        from .cloud_controller import CloudControllerSNMPCollector
+        from .device_snmp import MRDeviceSNMPCollector, MSDeviceSNMPCollector
+
+        # All SNMP collectors default to FAST tier for real-time monitoring
+        self.collectors = [
+            CloudControllerSNMPCollector(self, self.settings),
+            MRDeviceSNMPCollector(self, self.settings),
+            MSDeviceSNMPCollector(self, self.settings),
+        ]
+
+        with LogContext(
+            coordinator=self.__class__.__name__,
+            tier="fast",
+            collector_count=len(self.collectors),
+        ):
+            logger.info("Initialized FAST tier collectors")
+
+    async def _trigger_initial_collection(self) -> None:
+        """Trigger initial collection after startup."""
+        await asyncio.sleep(5)  # Wait for other components to initialize
+        with LogContext(tier="fast", component="SNMP"):
+            logger.info("Triggering initial FAST tier SNMP collection")
+        await self._collect_impl()
 
     async def _collect_impl(self) -> None:
         """Collect fast SNMP metrics."""
+        with LogContext(
+            coordinator=self.__class__.__name__,
+            tier="fast",
+            enabled=self.enabled,
+        ):
+            logger.debug("FAST tier SNMP collection called")
+
         if not self.enabled:
             return
 
-        # For now, no fast metrics implemented
-        # Will be expanded as fast metrics are identified
-        pass
+        # Run base implementation to collect from all registered collectors
+        await super()._collect_impl()
 
 
 @register_collector()
@@ -786,16 +901,9 @@ class SNMPMediumCoordinator(BaseSNMPCoordinator):
 
     def _init_tier_collectors(self) -> None:
         """Initialize medium-updating collectors."""
-        # Most SNMP metrics fall into medium tier
-        # Import here to avoid circular imports
-        from .cloud_controller import CloudControllerSNMPCollector
-        from .device_snmp import MRDeviceSNMPCollector, MSDeviceSNMPCollector
-
-        self.collectors = [
-            CloudControllerSNMPCollector(self, self.settings),
-            MRDeviceSNMPCollector(self, self.settings),
-            MSDeviceSNMPCollector(self, self.settings),
-        ]
+        # All SNMP collectors have moved to FAST tier by default
+        # Only add collectors here that specifically need slower updates
+        self.collectors = []
 
 
 @register_collector()
@@ -810,11 +918,25 @@ class SNMPSlowCoordinator(BaseSNMPCoordinator):
 
     update_tier = UpdateTier.SLOW
 
+    def __init__(self, api: DashboardAPI, settings: Settings) -> None:
+        """Initialize SNMP slow coordinator with startup trigger."""
+        super().__init__(api, settings)
+        # Trigger initial collection after a short delay
+        if self.enabled:
+            asyncio.create_task(self._trigger_initial_collection())
+
     def _init_tier_collectors(self) -> None:
         """Initialize only slow-updating collectors."""
         # For now, no collectors are assigned to SLOW tier
         # Add collectors here as metrics are identified for slow updates
         self.collectors = []
+
+    async def _trigger_initial_collection(self) -> None:
+        """Trigger initial collection after startup."""
+        await asyncio.sleep(10)  # Wait longer for other components
+        with LogContext(tier="slow", component="SNMP"):
+            logger.info("Triggering initial SLOW tier SNMP collection")
+        await self._collect_impl()
 
     async def _collect_impl(self) -> None:
         """Collect slow SNMP metrics."""
@@ -823,4 +945,6 @@ class SNMPSlowCoordinator(BaseSNMPCoordinator):
 
         # For now, no slow metrics implemented
         # Will be expanded as slow metrics are identified
+        with LogContext(tier="slow", component="SNMP"):
+            logger.debug("SLOW tier SNMP collection (no collectors configured yet)")
         pass

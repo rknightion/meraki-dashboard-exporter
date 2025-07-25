@@ -6,7 +6,7 @@ import asyncio
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
-from pysnmp.hlapi.v3arch.asyncio import (  # type: ignore[import-untyped]
+from pysnmp.hlapi.v3arch.asyncio import (
     CommunityData,
     ContextData,
     ObjectIdentity,
@@ -34,6 +34,7 @@ from pysnmp.hlapi.v3arch.asyncio import (  # type: ignore[import-untyped]
 from ...core.constants import UpdateTier
 from ...core.logging import get_logger
 from ...core.logging_helpers import LogContext
+from ...core.metrics import LabelName
 
 if TYPE_CHECKING:
     from typing import TypedDict
@@ -66,8 +67,9 @@ class BaseSNMPCollector(ABC):
 
     """
 
-    # Default to MEDIUM tier - subclasses should override as needed
-    update_tier: UpdateTier = UpdateTier.MEDIUM
+    # Default to FAST tier for real-time monitoring
+    # Only override if slower updates are explicitly needed
+    update_tier: UpdateTier = UpdateTier.FAST
 
     def __init__(self, parent: Any, config: Settings) -> None:
         """Initialize SNMP collector.
@@ -155,7 +157,11 @@ class BaseSNMPCollector(ABC):
                     version=target.get("version", "v2c"),
                     error=str(error_indication),
                     error_type=type(error_indication).__name__,
-                    username=target.get("username", "N/A") if target.get("version") == "v3" else "N/A",
+                    username=target.get("username", "N/A")
+                    if target.get("version") == "v3"
+                    else "N/A",
+                    collector=self.__class__.__name__,
+                    tier=getattr(self, "update_tier", UpdateTier.FAST).value,
                 ):
                     logger.warning("SNMP GET operation failed")
                 return None
@@ -165,6 +171,8 @@ class BaseSNMPCollector(ABC):
                     host=target.get("host", "unknown"),
                     error_status=error_status.prettyPrint(),
                     error_index=error_index,
+                    collector=self.__class__.__name__,
+                    tier=getattr(self, "update_tier", UpdateTier.FAST).value,
                 ):
                     logger.warning("SNMP GET error status")
                 return None
@@ -173,7 +181,7 @@ class BaseSNMPCollector(ABC):
             results = []
             for var_bind in var_binds:
                 oid_str = str(var_bind[0])
-                value = self._parse_value(var_bind[1])
+                value = self._parse_value(var_bind[1], {"oid": oid_str})
                 results.append((oid_str, value))
 
             return results
@@ -237,6 +245,8 @@ class BaseSNMPCollector(ABC):
                     host=target.get("host", "unknown"),
                     version=target.get("version", "v2c"),
                     error=str(error_indication),
+                    collector=self.__class__.__name__,
+                    tier=getattr(self, "update_tier", UpdateTier.FAST).value,
                 ):
                     logger.warning("SNMP BULK operation failed")
                 return None
@@ -245,6 +255,8 @@ class BaseSNMPCollector(ABC):
                 with LogContext(
                     host=target.get("host", "unknown"),
                     error_status=error_status.prettyPrint(),
+                    collector=self.__class__.__name__,
+                    tier=getattr(self, "update_tier", UpdateTier.FAST).value,
                 ):
                     logger.warning("SNMP BULK error status")
                 return None
@@ -253,7 +265,7 @@ class BaseSNMPCollector(ABC):
             results = []
             for var_bind in var_binds:
                 oid_str = str(var_bind[0])
-                value = self._parse_value(var_bind[1])
+                value = self._parse_value(var_bind[1], {"oid": oid_str})
                 results.append((oid_str, value))
 
             return results
@@ -353,7 +365,7 @@ class BaseSNMPCollector(ABC):
                 "SHA512": usmHMAC384SHA512AuthProtocol,
                 "none": usmNoAuthProtocol,
             }
-            
+
             priv_protocol_map = {
                 "DES": usmDESPrivProtocol,
                 "AES": usmAesCfb128Protocol,
@@ -362,7 +374,7 @@ class BaseSNMPCollector(ABC):
                 "AES256": usmAesCfb256Protocol,
                 "none": usmNoPrivProtocol,
             }
-            
+
             auth_protocol = auth_protocol_map.get(auth_protocol_str, usmHMACSHAAuthProtocol)
             priv_protocol = priv_protocol_map.get(priv_protocol_str, usmAesCfb128Protocol)
 
@@ -386,13 +398,15 @@ class BaseSNMPCollector(ABC):
                 privProtocol=priv_protocol,
             )
 
-    def _parse_value(self, value: Any) -> Any:
+    def _parse_value(self, value: Any, context: dict[str, Any] | None = None) -> Any:
         """Parse SNMP value to Python type.
 
         Parameters
         ----------
         value : Any
             SNMP value object.
+        context : dict[str, Any] | None
+            Optional context for logging (e.g., metric_name, oid).
 
         Returns
         -------
@@ -406,11 +420,28 @@ class BaseSNMPCollector(ABC):
         # Try to determine type and convert
         value_type = value.__class__.__name__
 
-        with LogContext(
-            snmp_value_type=value_type,
-            raw_value=str(value_str)[:100],  # Truncate for logging
-        ):
+        log_ctx = {
+            "snmp_value_type": value_type,
+            "raw_value": str(value_str)[:100],  # Truncate for logging
+            "collector": self.__class__.__name__,
+        }
+
+        # Add any provided context
+        if context:
+            log_ctx.update(context)
+
+        with LogContext(**log_ctx):
             logger.debug("Parsing SNMP value")
+
+        # Handle SNMP error types
+        if value_type in {"NoSuchObject", "NoSuchInstance", "EndOfMibView"}:
+            # These are SNMP error responses, not actual values
+            with LogContext(
+                snmp_error_type=value_type,
+                collector=self.__class__.__name__,
+            ):
+                logger.debug("SNMP error response received")
+            return None
 
         if value_type in {"Integer32", "Integer", "Unsigned32", "Gauge32", "Counter32"}:
             try:
@@ -441,6 +472,105 @@ class BaseSNMPCollector(ABC):
         else:
             # Default to string representation
             return value_str
+
+    async def _collect_single_metric(
+        self,
+        target: dict[str, Any],
+        metric_name: str,
+        oid: str,
+        labels: dict[str, str],
+        metric_obj: Any,
+        process_value: Any = None,
+    ) -> Any:
+        """Collect a single SNMP metric with standardized logging.
+
+        Parameters
+        ----------
+        target : dict[str, Any]
+            SNMP target configuration.
+        metric_name : str
+            Name of the metric being collected.
+        oid : str
+            OID to query.
+        labels : dict[str, str]
+            Metric labels.
+        metric_obj : Any
+            Prometheus metric object to set.
+        process_value : callable, optional
+            Function to process the value before setting the metric.
+
+        Returns
+        -------
+        Any
+            The collected value, or None if collection failed.
+
+        """
+        # Log collection attempt
+        with LogContext(
+            device_name=labels.get(LabelName.NAME.value, "unknown"),
+            device_serial=labels.get(LabelName.SERIAL.value, "unknown"),
+            metric_name=metric_name,
+            oid=oid,
+            collector=self.__class__.__name__,
+        ):
+            logger.debug("Collecting SNMP metric")
+
+        # Query the OID
+        result = await self.snmp_get(target, oid)
+
+        if not result:
+            with LogContext(
+                device_name=labels.get(LabelName.NAME.value, "unknown"),
+                metric_name=metric_name,
+                oid=oid,
+                collector=self.__class__.__name__,
+            ):
+                logger.debug("SNMP metric query returned no results")
+            return None
+
+        # Process the result
+        for _oid, value in result:
+            if value is None:
+                with LogContext(
+                    device_name=labels.get(LabelName.NAME.value, "unknown"),
+                    metric_name=metric_name,
+                    oid=oid,
+                    collector=self.__class__.__name__,
+                ):
+                    logger.debug("SNMP metric returned None/NoSuchObject")
+                return None
+
+            try:
+                # Process value if needed
+                processed_value = process_value(value) if process_value else value
+
+                # Set the metric
+                metric_obj.labels(**labels).set(processed_value)
+
+                # Log success
+                with LogContext(
+                    device_name=labels.get(LabelName.NAME.value, "unknown"),
+                    metric_name=metric_name,
+                    value=processed_value,
+                    collector=self.__class__.__name__,
+                ):
+                    logger.debug("Successfully set SNMP metric")
+
+                return processed_value
+
+            except (ValueError, TypeError) as e:
+                with LogContext(
+                    device_name=labels.get(LabelName.NAME.value, "unknown"),
+                    metric_name=metric_name,
+                    error=str(e),
+                    value_type=type(value).__name__,
+                    raw_value=str(value),
+                    collector=self.__class__.__name__,
+                ):
+                    logger.warning("Failed to set SNMP metric")
+                return None
+
+        return None
 
     async def _process_snmp_targets(
         self, targets: list[dict[str, Any]], concurrent_limit: int

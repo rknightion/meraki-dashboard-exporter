@@ -36,6 +36,7 @@ dependencies = [
     "mkdocs-include-markdown-plugin>=7.1.6",
     "mkdocs-material[imaging]>=9.6.15",
     "pysnmp>=7.1.21",
+    "cryptography>=45.0.5",
 ]
 
 [tool.ruff]
@@ -135,7 +136,7 @@ init_typed = true
 warn_required_dynamic_aliases = true
 
 [[tool.mypy.overrides]]
-module = ["meraki.*", "prometheus_client.*", "opentelemetry.*"]
+module = ["meraki.*", "prometheus_client.*", "opentelemetry.*", "pysnmp.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
