@@ -30,7 +30,6 @@ from meraki_dashboard_exporter.core.config_models import (
     MonitoringSettings,
     OTelSettings,
     ServerSettings,
-    SNMPSettings,
     UpdateIntervals,
 )
 
@@ -203,12 +202,6 @@ def generate_configuration_docs() -> str:
             ClientSettings,
             "MERAKI_EXPORTER_CLIENTS",
             "Client data collection and DNS resolution settings",
-        ),
-        (
-            "SNMP Settings",
-            SNMPSettings,
-            "MERAKI_EXPORTER_SNMP",
-            "SNMP collector configuration for device and cloud controller metrics",
         ),
     ]
 

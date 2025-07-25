@@ -16,7 +16,6 @@ from .config_models import (
     MonitoringSettings,
     OTelSettings,
     ServerSettings,
-    SNMPSettings,
     UpdateIntervals,
 )
 
@@ -69,10 +68,6 @@ class Settings(BaseSettings):
     clients: ClientSettings = Field(
         default_factory=ClientSettings,
         description="Client data collection settings",
-    )
-    snmp: SNMPSettings = Field(
-        default_factory=SNMPSettings,
-        description="SNMP collector settings",
     )
 
     @model_validator(mode="after")
@@ -130,10 +125,5 @@ class Settings(BaseSettings):
             "collectors": {
                 "active": sorted(self.collectors.active_collectors),
                 "timeout": self.collectors.collector_timeout,
-            },
-            "snmp": {
-                "enabled": self.snmp.enabled,
-                "timeout": self.snmp.timeout,
-                "retries": self.snmp.retries,
             },
         }
