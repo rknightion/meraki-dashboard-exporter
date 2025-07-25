@@ -791,4 +791,3 @@ This coordinator manages the following sub-collectors:
     ```
 
 For more information on metrics, see the [Metrics Reference](metrics/metrics.md).
-

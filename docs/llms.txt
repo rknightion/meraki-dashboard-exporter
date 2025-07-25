@@ -53,9 +53,9 @@ All configuration via environment variables with format: `MERAKI_EXPORTER_{SECTI
 
 ## Target Audience
 - DevOps engineers implementing Meraki monitoring
-- Network administrators managing Cisco Meraki infrastructure  
+- Network administrators managing Cisco Meraki infrastructure
 - Site reliability engineers building observability systems
 - Developers extending the collector system
 
 ## License
-Open source project with comprehensive documentation for production deployment and extension. 
+Open source project with comprehensive documentation for production deployment and extension.

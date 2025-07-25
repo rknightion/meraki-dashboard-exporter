@@ -273,6 +273,39 @@ class MerakiSettings(BaseModel):
         return v
 
 
+class SNMPSettings(BaseModel):
+    """SNMP collector configuration."""
+
+    enabled: bool = Field(
+        False,
+        description="Enable SNMP metric collection",
+    )
+    timeout: float = Field(
+        5.0,
+        ge=1.0,
+        le=30.0,
+        description="SNMP request timeout in seconds",
+    )
+    retries: int = Field(
+        3,
+        ge=1,
+        le=10,
+        description="SNMP request retry count",
+    )
+    bulk_max_repetitions: int = Field(
+        25,
+        ge=10,
+        le=100,
+        description="Maximum repetitions for SNMP BULK operations",
+    )
+    concurrent_device_limit: int = Field(
+        10,
+        ge=1,
+        le=50,
+        description="Maximum concurrent SNMP device queries",
+    )
+
+
 class LoggingSettings(BaseModel):
     """Logging configuration."""
 

@@ -15,7 +15,7 @@ Browse the documentation by topic. Tags help you find related content across dif
 The most commonly used tags across the documentation:
 
 - **prometheus** - Prometheus monitoring and metrics
-- **monitoring** - General monitoring and observability topics  
+- **monitoring** - General monitoring and observability topics
 - **cisco-meraki** - Cisco Meraki platform and devices
 - **configuration** - Setup and configuration guides
 - **deployment** - Production deployment topics
@@ -42,4 +42,4 @@ Documentation organized by Meraki device types:
 - **architecture** - System architecture and design
 - **troubleshooting** - Debugging and problem resolution
 
-[All tags are listed below] 
+[All tags are listed below]

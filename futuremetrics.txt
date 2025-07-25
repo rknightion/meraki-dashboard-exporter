@@ -594,3 +594,398 @@ ROUND 3 NOTES:
 - Camera and location analytics require privacy considerations
 - Live tools provide on-demand diagnostic data
 - Computed metrics require correlation across multiple endpoints
+
+
+=== ROUND 4: SNMP-EXCLUSIVE METRICS ===
+
+After analyzing SNMP MIBs (MERAKI-CLOUD-CONTROLLER-MIB and device-specific OIDs), here are metrics available via SNMP that provide unique value beyond the Dashboard API:
+
+=== LAYER 2 BRIDGE/SWITCHING METRICS ===
+
+meraki_bridge_mac_address_table_size
+SNMP OID: 1.3.6.1.2.1.17.4.3.1.1 (dot1dTpFdbAddress)
+Source: DEVICE SNMP ONLY
+Description: Current number of learned MAC addresses in the forwarding database.
+Value: Real-time Layer 2 forwarding table size not available via API.
+
+meraki_bridge_topology_changes_total
+SNMP OID: 1.3.6.1.2.1.17.2.2 (dot1dStpTopChanges)
+Source: DEVICE SNMP ONLY
+Description: Count of spanning tree topology changes since last reset.
+Value: STP stability indicator not exposed in API.
+
+meraki_bridge_unknown_unicast_frames_total
+SNMP OID: Switch-specific proprietary
+Source: DEVICE SNMP ONLY
+Description: Frames flooded due to unknown destination MAC.
+Value: Network efficiency metric not in API.
+
+meraki_stp_port_state_transitions_total
+SNMP OID: 1.3.6.1.2.1.17.2.15.1.4 (dot1dStpPortState)
+Source: DEVICE SNMP ONLY
+Description: Number of STP state transitions per port.
+Value: Port stability metric for troubleshooting loops.
+
+meraki_mac_address_flapping_events_total
+SNMP OID: Derived from MAC table changes
+Source: DEVICE SNMP ONLY
+Description: MAC addresses moving between ports (potential loop indicator).
+Value: Critical for detecting network loops not visible in API.
+
+=== DETAILED INTERFACE ERROR COUNTERS ===
+
+meraki_interface_crc_errors_total
+SNMP OID: 1.3.6.1.4.1.9.2.2.1.1.12 (locIfInCRC)
+Source: DEVICE SNMP ONLY
+Description: CRC errors indicating physical layer issues.
+Value: More granular than API's generic error counters.
+
+meraki_interface_alignment_errors_total
+SNMP OID: 1.3.6.1.2.1.2.2.1.14 (ifInErrors detail)
+Source: DEVICE SNMP ONLY
+Description: Ethernet alignment errors from damaged frames.
+Value: Specific error type not differentiated in API.
+
+meraki_interface_symbol_errors_total
+SNMP OID: 1.3.6.1.4.1.9.2.2.1.1.18 (locIfInSymbolErrors)
+Source: DEVICE SNMP ONLY
+Description: Physical layer symbol errors (bad cabling/interference).
+Value: Layer 1 troubleshooting data not in API.
+
+meraki_interface_collision_frames_total
+SNMP OID: 1.3.6.1.2.1.10.7.2.1.1 (dot3StatsSingleCollisionFrames)
+Source: DEVICE SNMP ONLY
+Description: Collision events on half-duplex links.
+Value: Legacy but important for some deployments.
+
+meraki_interface_jabber_frames_total
+SNMP OID: 1.3.6.1.2.1.10.7.2.1.3 (dot3StatsJabbers)
+Source: DEVICE SNMP ONLY
+Description: Oversized frames with bad CRC (faulty NIC indicator).
+Value: Specific fault condition not in API.
+
+meraki_interface_runt_frames_total
+SNMP OID: Switch-specific
+Source: DEVICE SNMP ONLY
+Description: Undersized frames indicating duplex mismatch.
+Value: Duplex troubleshooting metric.
+
+=== WIRELESS 802.11 DETAILED COUNTERS ===
+
+meraki_wifi_retry_count_total
+SNMP OID: 1.2.840.10036.2.2.1.1 (dot11RetryCount)
+Source: DEVICE SNMP ONLY (MR devices)
+Description: Transmitted frames requiring one or more retries.
+Value: RF quality indicator more granular than API metrics.
+
+meraki_wifi_multiple_retry_count_total
+SNMP OID: 1.2.840.10036.2.2.1.2 (dot11MultipleRetryCount)
+Source: DEVICE SNMP ONLY (MR devices)
+Description: Frames requiring multiple retries.
+Value: Severe RF interference indicator.
+
+meraki_wifi_frame_duplicate_count_total
+SNMP OID: 1.2.840.10036.2.2.1.3 (dot11FrameDuplicateCount)
+Source: DEVICE SNMP ONLY (MR devices)
+Description: Duplicate frames received.
+Value: Hidden node or interference indicator.
+
+meraki_wifi_ack_failure_count_total
+SNMP OID: 1.2.840.10036.2.2.1.5 (dot11ACKFailureCount)
+Source: DEVICE SNMP ONLY (MR devices)
+Description: Expected ACKs not received.
+Value: Client connectivity issue indicator.
+
+meraki_wifi_rts_failure_count_total
+SNMP OID: 1.2.840.10036.2.2.1.7 (dot11RTSFailureCount)
+Source: DEVICE SNMP ONLY (MR devices)
+Description: RTS failures indicating hidden nodes.
+Value: Specific RF issue not detailed in API.
+
+meraki_wifi_fcs_error_count_total
+SNMP OID: 1.2.840.10036.2.2.1.12 (dot11FCSErrorCount)
+Source: DEVICE SNMP ONLY (MR devices)
+Description: Frames with checksum errors.
+Value: RF interference metric at frame level.
+
+=== HARDWARE & ENVIRONMENTAL MONITORING ===
+
+meraki_entity_temperature_celsius
+SNMP OID: 1.3.6.1.4.1.9.9.13.1.3.1.3 (ciscoEnvMonTemperatureValue)
+Source: DEVICE SNMP ONLY
+Description: Component-level temperature readings.
+Value: More granular than API's device-level temperature.
+
+meraki_entity_fan_speed_rpm
+SNMP OID: 1.3.6.1.4.1.9.9.13.1.4.1.3 (ciscoEnvMonFanSpeed)
+Source: DEVICE SNMP ONLY
+Description: Individual fan RPM readings.
+Value: Predictive failure indicator not in API.
+
+meraki_power_supply_current_milliamps
+SNMP OID: 1.3.6.1.2.1.47.1.1.1.1.X (entPhysicalClass)
+Source: DEVICE SNMP ONLY
+Description: Current draw per power supply.
+Value: Power consumption details beyond API's basic status.
+
+meraki_power_supply_temperature_celsius
+SNMP OID: Vendor-specific
+Source: DEVICE SNMP ONLY
+Description: PSU internal temperature.
+Value: PSU health indicator for preventive maintenance.
+
+meraki_chassis_intake_temperature_celsius
+SNMP OID: Vendor-specific
+Source: DEVICE SNMP ONLY
+Description: Ambient temperature at device intake.
+Value: Environmental monitoring beyond API.
+
+=== MEMORY & PROCESS MONITORING ===
+
+meraki_memory_pool_used_bytes
+SNMP OID: 1.3.6.1.4.1.9.9.48.1.1.1.5 (ciscoMemoryPoolUsed)
+Source: DEVICE SNMP ONLY
+Description: Memory usage by pool type (processor, I/O, etc).
+Value: Detailed memory diagnostics not in API.
+
+meraki_memory_pool_free_bytes
+SNMP OID: 1.3.6.1.4.1.9.9.48.1.1.1.6 (ciscoMemoryPoolFree)
+Source: DEVICE SNMP ONLY
+Description: Available memory by pool type.
+Value: Memory exhaustion prediction.
+
+meraki_cpu_5sec_utilization_percent
+SNMP OID: 1.3.6.1.4.1.9.2.1.56 (avgBusy5)
+Source: DEVICE SNMP ONLY
+Description: 5-second CPU average.
+Value: Real-time CPU spikes not captured by API.
+
+meraki_cpu_interrupt_utilization_percent
+SNMP OID: Vendor-specific
+Source: DEVICE SNMP ONLY
+Description: CPU time spent in interrupt context.
+Value: Performance bottleneck indicator.
+
+meraki_process_memory_allocated_bytes
+SNMP OID: 1.3.6.1.4.1.9.9.109.1.2.1.1.X (cpmProcessTable)
+Source: DEVICE SNMP ONLY
+Description: Per-process memory allocation.
+Value: Memory leak detection capability.
+
+=== QUEUE & BUFFER STATISTICS ===
+
+meraki_interface_output_queue_drops_total
+SNMP OID: 1.3.6.1.4.1.9.2.2.1.1.26 (locIfOutputQueueDrops)
+Source: DEVICE SNMP ONLY
+Description: Packets dropped due to output queue overflow.
+Value: Congestion point identification.
+
+meraki_interface_input_queue_drops_total
+SNMP OID: 1.3.6.1.4.1.9.2.2.1.1.27 (locIfInputQueueDrops)
+Source: DEVICE SNMP ONLY
+Description: Packets dropped due to input queue overflow.
+Value: Processing bottleneck indicator.
+
+meraki_buffer_failures_total
+SNMP OID: 1.3.6.1.4.1.9.2.1.X (bufferFail)
+Source: DEVICE SNMP ONLY
+Description: Buffer allocation failures by pool.
+Value: Memory pressure indicator.
+
+meraki_buffer_create_failures_total
+SNMP OID: Vendor-specific
+Source: DEVICE SNMP ONLY
+Description: Failed attempts to create new buffers.
+Value: Severe memory exhaustion indicator.
+
+=== VLAN & TRUNK STATISTICS ===
+
+meraki_vlan_trunk_frames_transmitted_total
+SNMP OID: 1.3.6.1.4.1.9.9.46.1.3.1.1.X (vlanTrunkPortEntry)
+Source: DEVICE SNMP ONLY (MS devices)
+Description: Per-VLAN frame counts on trunk ports.
+Value: VLAN utilization not available in API.
+
+meraki_vtp_configuration_conflicts_total
+SNMP OID: 1.3.6.1.4.1.9.9.46.1.2.1.X (vtpStats)
+Source: DEVICE SNMP ONLY (MS devices)
+Description: VTP version mismatches and conflicts.
+Value: VLAN database consistency issues.
+
+meraki_dot1q_vlan_mismatches_total
+SNMP OID: Vendor-specific
+Source: DEVICE SNMP ONLY (MS devices)
+Description: Native VLAN mismatch detections.
+Value: Critical configuration error detection.
+
+=== MULTICAST DETAILED STATISTICS ===
+
+meraki_igmp_groups_joined_total
+SNMP OID: 1.3.6.1.2.1.85.1.2.1.X (igmpInterfaceTable)
+Source: DEVICE SNMP ONLY (MS/MX devices)
+Description: Active IGMP group memberships per interface.
+Value: More detailed than API's basic multicast info.
+
+meraki_igmp_v1_membership_reports_total
+SNMP OID: 1.3.6.1.2.1.85.1.2.1.7 (igmpInterfaceV1Reports)
+Source: DEVICE SNMP ONLY (MS/MX devices)
+Description: Legacy IGMP v1 clients detected.
+Value: Compatibility issue identification.
+
+meraki_multicast_router_ports_total
+SNMP OID: Bridge MIB extension
+Source: DEVICE SNMP ONLY (MS devices)
+Description: Ports with multicast routers detected.
+Value: Multicast topology awareness.
+
+=== POE DETAILED STATISTICS ===
+
+meraki_poe_voltage_millivolts
+SNMP OID: 1.3.6.1.2.1.105.1.3.1.1.X (pethPsePortTable)
+Source: DEVICE SNMP ONLY (MS PoE switches)
+Description: Actual voltage delivered per PoE port.
+Value: Power quality metric not in API.
+
+meraki_poe_current_milliamps
+SNMP OID: 1.3.6.1.2.1.105.1.3.1.1.X (pethPsePortTable)
+Source: DEVICE SNMP ONLY (MS PoE switches)
+Description: Current draw per PoE port.
+Value: Device power profiling capability.
+
+meraki_poe_power_denied_occurrences_total
+SNMP OID: Vendor-specific
+Source: DEVICE SNMP ONLY (MS PoE switches)
+Description: Count of power denials due to budget constraints.
+Value: PoE planning metric.
+
+meraki_poe_overload_counter_total
+SNMP OID: Vendor-specific
+Source: DEVICE SNMP ONLY (MS PoE switches)
+Description: PoE overload events per port.
+Value: Faulty device detection.
+
+=== CDP/LLDP DETAILED INFORMATION ===
+
+meraki_cdp_cache_entries_total
+SNMP OID: 1.3.6.1.4.1.9.9.23.1.3.1 (cdpCacheTable)
+Source: DEVICE SNMP ONLY
+Description: Number of CDP neighbors in cache.
+Value: Network topology awareness.
+
+meraki_lldp_statistics_frames_out_total
+SNMP OID: 1.0.8802.1.1.2.1.2.2.1.2 (lldpStatsTxPortFrames)
+Source: DEVICE SNMP ONLY
+Description: LLDP frames transmitted per port.
+Value: LLDP health monitoring.
+
+meraki_lldp_neighbor_age_seconds
+SNMP OID: 1.0.8802.1.1.2.1.4.1.1.X (lldpRemTable)
+Source: DEVICE SNMP ONLY
+Description: Age of LLDP neighbor information.
+Value: Topology stability metric.
+
+=== SNMP IMPLEMENTATION PRIORITIES ===
+
+**CRITICAL** (Unique troubleshooting value):
+1. Interface error counters (CRC, alignment, symbol errors)
+2. MAC address table metrics and flapping detection
+3. Memory pool statistics
+4. Queue drop counters
+
+**HIGH** (Performance monitoring):
+5. CPU utilization (5-second, interrupt)
+6. 802.11 retry and failure counters
+7. PoE voltage/current measurements
+8. Buffer statistics
+
+**MEDIUM** (Capacity planning):
+9. STP topology change counters
+10. VLAN trunk utilization
+11. Hardware sensor readings
+12. Process memory usage
+
+**LOW** (Nice to have):
+13. IGMP group membership details
+14. CDP/LLDP statistics
+15. VTP conflict counters
+
+=== CLOUD CONTROLLER SNMP METRICS ===
+
+The MERAKI-CLOUD-CONTROLLER-MIB provides organization and network-level visibility:
+
+meraki_device_status
+SNMP OID: 1.3.6.1.4.1.29671.1.1.4.1.3 (devStatus)
+Source: CLOUD CONTROLLER SNMP
+Description: Device online/offline status from cloud perspective.
+Value: Complements API device status with SNMP trap capability.
+
+meraki_device_client_count
+SNMP OID: 1.3.6.1.4.1.29671.1.1.4.1.5 (devClientCount)
+Source: CLOUD CONTROLLER SNMP
+Description: Number of clients per device.
+Value: Real-time client count via SNMP polling.
+
+meraki_device_last_contact
+SNMP OID: 1.3.6.1.4.1.29671.1.1.4.1.4 (devContactedAt)
+Source: CLOUD CONTROLLER SNMP
+Description: Last contact time with cloud controller.
+Value: Device connectivity monitoring.
+
+meraki_interface_packets_sent
+SNMP OID: 1.3.6.1.4.1.29671.1.1.5.1.4 (devInterfaceSentPkts)
+Source: CLOUD CONTROLLER SNMP
+Description: Packets sent per device interface.
+Value: Basic traffic counters when device SNMP unavailable.
+
+meraki_interface_packets_received
+SNMP OID: 1.3.6.1.4.1.29671.1.1.5.1.5 (devInterfaceRecvPkts)
+Source: CLOUD CONTROLLER SNMP
+Description: Packets received per device interface.
+Value: Basic traffic counters when device SNMP unavailable.
+
+NOTE: Cloud Controller SNMP is primarily valuable for:
+- SNMP trap reception (device up/down, security events)
+- Basic monitoring when direct device SNMP is not possible
+- Organization-wide device inventory via SNMP
+
+=== SNMP COLLECTION CONSIDERATIONS ===
+
+1. **Polling Frequency**:
+   - Error counters: 60 seconds (FAST) - DEVICE SNMP
+   - Memory/CPU: 60 seconds (FAST) - DEVICE SNMP
+   - MAC table size: 300 seconds (MEDIUM) - DEVICE SNMP
+   - Hardware sensors: 900 seconds (SLOW) - DEVICE SNMP
+   - Cloud status: 300 seconds (MEDIUM) - CLOUD SNMP
+
+2. **SNMP Version**:
+   - Prefer SNMPv3 for security
+   - Fall back to SNMPv2c if required
+   - Bulk operations for efficiency
+
+3. **Access Methods**:
+   - Cloud Controller SNMP: Organization-wide basic metrics and traps
+   - Direct Device SNMP: Granular performance and error counters
+   - Requires SNMP community/credentials configuration
+
+4. **Implementation Strategy**:
+   - Start with Cloud Controller SNMP for basic coverage
+   - Add Device SNMP for critical devices needing detailed monitoring
+   - Use Cloud SNMP traps for real-time alerting
+   - Device SNMP for troubleshooting and capacity planning
+
+5. **Unique Value Propositions**:
+   - Real-time error detection (Device SNMP)
+   - Memory leak identification (Device SNMP)
+   - Hardware failure prediction (Device SNMP)
+   - Layer 2 loop detection (Device SNMP)
+   - RF interference troubleshooting (Device SNMP)
+   - SNMP trap-based alerting (Cloud SNMP)
+
+=== SNMP-EXCLUSIVE INSIGHTS ===
+
+These SNMP metrics provide:
+- **Faster Detection**: 5-second CPU spikes, immediate error counts
+- **Root Cause Analysis**: Specific error types (CRC vs alignment vs symbol)
+- **Predictive Maintenance**: Fan RPM degradation, temperature trends
+- **Hidden Problems**: MAC flapping, multicast floods, buffer exhaustion
+- **Compliance**: Detailed PoE power measurements for safety audits
