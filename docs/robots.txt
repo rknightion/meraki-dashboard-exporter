@@ -18,4 +18,4 @@ Allow: /stylesheets/
 Allow: /javascripts/
 
 Sitemap: https://meraki.exporters.m7kni.com/sitemap.xml
-Sitemap: https://meraki.exporters.m7kni.com/sitemap.xml.gz 
+Sitemap: https://meraki.exporters.m7kni.com/sitemap.xml.gz

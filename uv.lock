@@ -629,6 +629,7 @@ dependencies = [
     { name = "psutil" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pysnmp" },
     { name = "structlog" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -675,6 +676,7 @@ requires-dist = [
     { name = "psutil", specifier = ">=5.9.0" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pydantic-settings", specifier = ">=2.6.0" },
+    { name = "pysnmp", specifier = ">=7.1.21" },
     { name = "structlog", specifier = ">=24.4.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
 ]
@@ -1352,6 +1354,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pyasn1"
+version = "0.6.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ba/e9/01f1a64245b89f039897cb0130016d79f77d52669aae6ee7b159a6c4c018/pyasn1-0.6.1.tar.gz", hash = "sha256:6f580d2bdd84365380830acf45550f2511469f673cb4a5ae3857a3170128b034", size = 145322, upload-time = "2024-09-10T22:41:42.55Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c8/f1/d6a797abb14f6283c0ddff96bbdd46937f64122b8c925cab503dd37f8214/pyasn1-0.6.1-py3-none-any.whl", hash = "sha256:0d632f46f2ba09143da3a8afe9e33fb6f92fa2320ab7e886e2d0f7672af84629", size = 83135, upload-time = "2024-09-11T16:00:36.122Z" },
+]
+
+[[package]]
 name = "pycparser"
 version = "2.22"
 source = { registry = "https://pypi.org/simple" }
@@ -1446,6 +1457,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e7/82/28175b2414effca1cdac8dc99f76d660e7a4fb0ceefa4b4ab8f5f6742925/pyproject_hooks-1.2.0.tar.gz", hash = "sha256:1e859bd5c40fae9448642dd871adf459e5e2084186e8d2c2a79a824c970da1f8", size = 19228, upload-time = "2024-09-29T09:24:13.293Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl", hash = "sha256:9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913", size = 10216, upload-time = "2024-09-29T09:24:11.978Z" },
+]
+
+[[package]]
+name = "pysnmp"
+version = "7.1.21"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyasn1" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/36/2a/0e0db03a063789dda76a8de0d2bda23f4642b52ebd051f444b696232840a/pysnmp-7.1.21.tar.gz", hash = "sha256:d5fa54cf2021af1c93a439eec66ce716fc8df425c55ecc7ed5bca9f35e8145b2", size = 259251, upload-time = "2025-06-19T06:22:44.065Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9d/85/9c735678617565b091c9d61e6d675e569eb0e2a675655cef89fc23250398/pysnmp-7.1.21-py3-none-any.whl", hash = "sha256:e3fed6eab479a4ec7baf8fa1583666ce46401cf1c3ce3c4e2b0be55e5d454c75", size = 343478, upload-time = "2025-06-19T06:22:42.441Z" },
 ]
 
 [[package]]

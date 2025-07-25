@@ -52,6 +52,7 @@ class CollectorManager:
             mt_sensor,
             network_health,
             organization,
+            snmp,
         )
 
         # Get all registered collectors

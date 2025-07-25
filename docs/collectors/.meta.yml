@@ -1,4 +1,4 @@
-title: Collector Reference - Meraki Dashboard Exporter 
+title: Collector Reference - Meraki Dashboard Exporter
 description: Comprehensive reference of all 27+ metric collectors in the Meraki Dashboard Exporter, including device-specific collectors and collection strategies
 
 tags:
@@ -9,5 +9,5 @@ tags:
   - monitoring
   - prometheus
 
-# Additional keywords for this section  
-keywords: data collectors, meraki api, metric collection, device collectors, network health collectors, sensor collectors 
+# Additional keywords for this section
+keywords: data collectors, meraki api, metric collection, device collectors, network health collectors, sensor collectors

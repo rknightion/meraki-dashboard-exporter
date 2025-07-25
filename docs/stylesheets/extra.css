@@ -268,7 +268,7 @@
   .action-button {
     border-width: 2px;
   }
-  
+
   .error-code {
     text-shadow: none;
   }
@@ -297,7 +297,7 @@
     break-inside: avoid;
     border: 1px solid #ccc;
   }
-  
+
   /* Hide interactive elements on error pages when printing */
   .error-actions,
   .action-button {

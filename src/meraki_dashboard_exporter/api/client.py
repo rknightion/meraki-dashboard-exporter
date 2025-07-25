@@ -332,6 +332,123 @@ class AsyncMerakiClient:
             )
             return result
 
+    async def get_organization_snmp(self, org_id: str) -> dict[str, Any]:
+        """Fetch SNMP settings for an organization.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        dict[str, Any]
+            Organization SNMP settings.
+
+        """
+        logger.debug("Fetching organization SNMP settings", org_id=org_id)
+        async with self._semaphore:
+            result = await asyncio.to_thread(
+                self.api.organizations.getOrganizationSnmp,
+                org_id,
+            )
+            logger.debug("Successfully fetched organization SNMP settings", org_id=org_id)
+            return result
+
+    async def get_network_snmp(self, network_id: str) -> dict[str, Any]:
+        """Fetch SNMP settings for a network.
+
+        Parameters
+        ----------
+        network_id : str
+            Network ID.
+
+        Returns
+        -------
+        dict[str, Any]
+            Network SNMP settings.
+
+        """
+        logger.debug("Fetching network SNMP settings", network_id=network_id)
+        async with self._semaphore:
+            result = await asyncio.to_thread(
+                self.api.networks.getNetworkSnmp,
+                network_id,
+            )
+            logger.debug("Successfully fetched network SNMP settings", network_id=network_id)
+            return result
+
+    async def get_organization_networks(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch networks for an organization.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of networks.
+
+        """
+        logger.debug("Fetching organization networks", org_id=org_id)
+        async with self._semaphore:
+            result = await asyncio.to_thread(
+                self.api.organizations.getOrganizationNetworks,
+                org_id,
+                total_pages="all",
+            )
+            logger.debug("Successfully fetched networks", org_id=org_id, count=len(result))
+            return result
+
+    async def get_network_devices(self, network_id: str) -> list[dict[str, Any]]:
+        """Fetch devices for a network.
+
+        Parameters
+        ----------
+        network_id : str
+            Network ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of devices.
+
+        """
+        logger.debug("Fetching network devices", network_id=network_id)
+        async with self._semaphore:
+            result = await asyncio.to_thread(
+                self.api.networks.getNetworkDevices,
+                network_id,
+            )
+            logger.debug("Successfully fetched devices", network_id=network_id, count=len(result))
+            return result
+
+    async def get_organization_devices(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch all devices for an organization.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of devices.
+
+        """
+        logger.debug("Fetching organization devices", org_id=org_id)
+        async with self._semaphore:
+            result = await asyncio.to_thread(
+                self.api.organizations.getOrganizationDevices,
+                org_id,
+                total_pages="all",
+            )
+            logger.debug("Successfully fetched devices", org_id=org_id, count=len(result))
+            return result
+
     async def close(self) -> None:
         """Close the API client."""
         # The Meraki client doesn't have an explicit close method

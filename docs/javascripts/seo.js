@@ -28,7 +28,7 @@ function addStructuredData() {
       "url": "https://github.com/rknightion"
     },
     "maintainer": {
-      "@type": "Person", 
+      "@type": "Person",
       "name": "Rob Knighton",
       "url": "https://github.com/rknightion"
     },
@@ -40,7 +40,7 @@ function addStructuredData() {
     ],
     "runtimePlatform": [
       "Docker",
-      "Kubernetes", 
+      "Kubernetes",
       "Linux"
     ],
     "applicationSubCategory": [
@@ -117,10 +117,10 @@ function enhanceMetaTags() {
 
   // Add language meta
   addMetaTag('name', 'language', 'en');
-  
+
   // Add content type
   addMetaTag('http-equiv', 'Content-Type', 'text/html; charset=utf-8');
-  
+
   // Add viewport if not present (should be handled by Material theme)
   if (!document.querySelector('meta[name="viewport"]')) {
     addMetaTag('name', 'viewport', 'width=device-width, initial-scale=1');
@@ -144,7 +144,7 @@ function enhanceMetaTags() {
 // Add Open Graph tags
 function addOpenGraphTags() {
   const title = document.title || 'Meraki Dashboard Exporter';
-  const description = document.querySelector('meta[name="description"]')?.content || 
+  const description = document.querySelector('meta[name="description"]')?.content ||
     'High-performance Prometheus exporter for Cisco Meraki Dashboard API metrics';
   const url = window.location.href;
   const siteName = 'Meraki Dashboard Exporter Documentation';
@@ -164,7 +164,7 @@ function addOpenGraphTags() {
 // Add Twitter Card tags
 function addTwitterCardTags() {
   const title = document.title || 'Meraki Dashboard Exporter';
-  const description = document.querySelector('meta[name="description"]')?.content || 
+  const description = document.querySelector('meta[name="description"]')?.content ||
     'High-performance Prometheus exporter for Cisco Meraki Dashboard API metrics';
 
   addMetaTag('name', 'twitter:card', 'summary_large_image');
@@ -210,16 +210,16 @@ function getPageKeywords() {
   const path = window.location.pathname;
   const title = document.title.toLowerCase();
   const content = document.body.textContent.toLowerCase();
-  
+
   let keywords = ['meraki', 'prometheus', 'exporter', 'monitoring', 'cisco'];
-  
+
   // Add path-specific keywords
   if (path.includes('/metrics/')) keywords.push('metrics', 'telemetry', 'observability');
   if (path.includes('/collectors/')) keywords.push('collectors', 'data collection', 'api');
   if (path.includes('/config/')) keywords.push('configuration', 'environment variables', 'setup');
   if (path.includes('/deployment/')) keywords.push('deployment', 'docker', 'kubernetes', 'production');
   if (path.includes('/getting-started/')) keywords.push('installation', 'quick start', 'tutorial');
-  
+
   // Add device type keywords if mentioned
   if (content.includes('wireless') || content.includes('access point')) keywords.push('wireless', 'access-points', 'mr');
   if (content.includes('switch')) keywords.push('switches', 'ms');
@@ -227,11 +227,11 @@ function getPageKeywords() {
   if (content.includes('sensor')) keywords.push('sensors', 'mt', 'environmental');
   if (content.includes('camera')) keywords.push('cameras', 'mv', 'security');
   if (content.includes('cellular')) keywords.push('cellular', 'mg', 'gateway');
-  
+
   return keywords.join(', ');
 }
 
 function isDocumentationPage() {
-  return !window.location.pathname.endsWith('/') || 
+  return !window.location.pathname.endsWith('/') ||
          window.location.pathname.includes('/docs/');
-} 
+}
