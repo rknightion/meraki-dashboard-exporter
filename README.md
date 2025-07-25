@@ -23,7 +23,7 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 1. Copy `.env.example` to `.env` and add your Meraki API key:
    ```bash
    cp .env.example .env
-   # Edit .env and add your MERAKI_API_KEY
+   # Edit .env and set: MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here
    ```
 
 2. Run with Docker Compose:

@@ -1,31 +1,31 @@
+# Meraki Dashboard Prometheus Exporter
+#
+# Quick Start:
+# 1. Copy .env.example to .env
+# 2. Update MERAKI_EXPORTER_MERAKI__API_KEY in .env
+# 3. Run: docker-compose up -d
+# 4. Access metrics at: http://localhost:9099/metrics
+
 services:
   meraki_dashboard_exporter:
     image: ghcr.io/rknightion/meraki-dashboard-exporter:latest
     container_name: meraki-dashboard-exporter
     restart: unless-stopped
     ports:
-      - "9099:9099"
-    environment:
-      # Required: Meraki API key
-      - MERAKI_EXPORTER_MERAKI__API_KEY=${MERAKI_EXPORTER_MERAKI__API_KEY}
-      # Optional: Specific organization ID
-      - MERAKI_EXPORTER_MERAKI__ORG_ID=${MERAKI_EXPORTER_MERAKI__ORG_ID:-}
-      # Optional: Log level (default INFO)
-      - MERAKI_EXPORTER_LOGGING__LEVEL=${MERAKI_EXPORTER_LOGGING__LEVEL:-INFO}
-      # Optional: OpenTelemetry settings
-      - MERAKI_EXPORTER_OTEL__ENABLED=${MERAKI_EXPORTER_OTEL__ENABLED:-false}
-      - MERAKI_EXPORTER_OTEL__ENDPOINT=${MERAKI_EXPORTER_OTEL__ENDPOINT:-}
-      - MERAKI_EXPORTER_OTEL__SERVICE_NAME=${MERAKI_EXPORTER_OTEL__SERVICE_NAME:-meraki-dashboard-exporter}
-
-    # Health check
+      - "${MERAKI_EXPORTER_SERVER__PORT:-9099}:${MERAKI_EXPORTER_SERVER__PORT:-9099}"
+    env_file:
+      - .env
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:9099/health').raise_for_status()"]
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:${MERAKI_EXPORTER_SERVER__PORT:-9099}/health').raise_for_status()"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    # Security options
     security_opt:
       - no-new-privileges:true
     read_only: true
     user: "1000:1000"
+
+networks:
+  default:
+    driver: bridge

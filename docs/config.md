@@ -19,10 +19,10 @@ Configuration follows a hierarchical structure using environment variables:
     # Meraki API configuration
     export MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here
     export MERAKI_EXPORTER_MERAKI__ORG_ID=123456
-    
+
     # Logging configuration
     export MERAKI_EXPORTER_LOGGING__LEVEL=INFO
-    
+
     # API settings
     export MERAKI_EXPORTER_API__TIMEOUT=30
     export MERAKI_EXPORTER_API__CONCURRENCY_LIMIT=5
@@ -126,3 +126,14 @@ Client data collection and DNS resolution settings
 | `MERAKI_EXPORTER_CLIENTS__CACHE_TTL` | `int` | `3600` | Client cache TTL in seconds (for ID/hostname mappings, not metrics) |
 | `MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_PER_NETWORK` | `int` | `10000` | Maximum clients to track per network |
 
+## SNMP Settings
+
+SNMP collector configuration for device and cloud controller metrics
+
+| Environment Variable | Type | Default | Description |
+|---------------------|------|---------|-------------|
+| `MERAKI_EXPORTER_SNMP__ENABLED` | `bool` | `False` | Enable SNMP metric collection |
+| `MERAKI_EXPORTER_SNMP__TIMEOUT` | `float` | `5.0` | SNMP request timeout in seconds |
+| `MERAKI_EXPORTER_SNMP__RETRIES` | `int` | `3` | SNMP request retry count |
+| `MERAKI_EXPORTER_SNMP__BULK_MAX_REPETITIONS` | `int` | `25` | Maximum repetitions for SNMP BULK operations |
+| `MERAKI_EXPORTER_SNMP__CONCURRENT_DEVICE_LIMIT` | `int` | `10` | Maximum concurrent SNMP device queries |
