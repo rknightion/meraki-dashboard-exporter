@@ -128,6 +128,31 @@ class CloudControllerSNMPCollector(BaseSNMPCollector):
         # Test SNMP connectivity with a simple query
         result = await self.snmp_get(target, CLOUD_CONTROLLER_OIDS["device_status"])
 
+        # If v3 failed and we have a v2c fallback, try that
+        if result is None and "v2c_fallback" in target:
+            with LogContext(org_id=org_id, org_name=org_name):
+                logger.info("SNMPv3 connection failed, falling back to v2c")
+            
+            # Mark v3 as failed for this org to avoid retrying in this session
+            if hasattr(self.parent, "_failed_org_v3"):
+                self.parent._failed_org_v3.add(org_id)
+            
+            # Update target with v2c settings
+            fallback = target["v2c_fallback"]
+            target["version"] = fallback["version"]
+            target["community"] = fallback["community"]
+            
+            # Remove v3-specific settings
+            for key in ["username", "auth_key", "priv_key", "auth_protocol", "priv_protocol"]:
+                target.pop(key, None)
+            
+            # Retry with v2c
+            result = await self.snmp_get(target, CLOUD_CONTROLLER_OIDS["device_status"])
+            
+            # If v2c works, cache it as the working version
+            if result and hasattr(self.parent, "_org_snmp_versions"):
+                self.parent._org_snmp_versions[org_id] = "v2c"
+
         if result is None:
             # SNMP is down
             self.snmp_up_metric.labels(**{
@@ -143,6 +168,13 @@ class CloudControllerSNMPCollector(BaseSNMPCollector):
             LabelName.ORG_ID.value: org_id,
             LabelName.ORG_NAME.value: org_name,
         }).set(1)
+
+        with LogContext(
+            org_id=org_id,
+            org_name=org_name,
+            snmp_version=target.get("version", "unknown")
+        ):
+            logger.info("Cloud controller SNMP connection established")
 
         # Collect device-specific metrics
         for device in devices:

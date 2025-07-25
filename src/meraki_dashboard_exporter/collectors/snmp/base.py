@@ -6,7 +6,7 @@ import asyncio
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
-from pysnmp.hlapi.v3arch.asyncio import (  # type: ignore[import-not-found]
+from pysnmp.hlapi.v3arch.asyncio import (  # type: ignore[import-untyped]
     CommunityData,
     ContextData,
     ObjectIdentity,
@@ -17,6 +17,18 @@ from pysnmp.hlapi.v3arch.asyncio import (  # type: ignore[import-not-found]
     UsmUserData,
     bulk_cmd,
     get_cmd,
+    usmAesCfb128Protocol,
+    usmAesCfb192Protocol,
+    usmAesCfb256Protocol,
+    usmDESPrivProtocol,
+    usmHMAC128SHA224AuthProtocol,
+    usmHMAC192SHA256AuthProtocol,
+    usmHMAC256SHA384AuthProtocol,
+    usmHMAC384SHA512AuthProtocol,
+    usmHMACMD5AuthProtocol,
+    usmHMACSHAAuthProtocol,
+    usmNoAuthProtocol,
+    usmNoPrivProtocol,
 )
 
 from ...core.constants import UpdateTier
@@ -139,8 +151,11 @@ class BaseSNMPCollector(ABC):
             if error_indication:
                 with LogContext(
                     host=target.get("host", "unknown"),
+                    port=target.get("port", 161),
                     version=target.get("version", "v2c"),
                     error=str(error_indication),
+                    error_type=type(error_indication).__name__,
+                    username=target.get("username", "N/A") if target.get("version") == "v3" else "N/A",
                 ):
                     logger.warning("SNMP GET operation failed")
                 return None
@@ -312,14 +327,56 @@ class BaseSNMPCollector(ABC):
         if version == "v2c":
             # SNMPv2c only
             community = target.get("community", "public")
+            with LogContext(
+                snmp_version="v2c",
+                host=target.get("host", "unknown"),
+                port=target.get("port", 161),
+                has_community=bool(community),
+            ):
+                logger.debug("Creating SNMPv2c authentication")
             return CommunityData(community, mpModel=1)
         else:
             # SNMPv3
             username = target.get("username", "")
             auth_key = target.get("auth_key")
             priv_key = target.get("priv_key")
-            auth_protocol = target.get("auth_protocol", "SHA")
-            priv_protocol = target.get("priv_protocol", "AES128")
+            auth_protocol_str = target.get("auth_protocol", "SHA")
+            priv_protocol_str = target.get("priv_protocol", "AES128")
+
+            # Map protocol strings to pysnmp protocol objects
+            auth_protocol_map = {
+                "MD5": usmHMACMD5AuthProtocol,
+                "SHA": usmHMACSHAAuthProtocol,
+                "SHA224": usmHMAC128SHA224AuthProtocol,
+                "SHA256": usmHMAC192SHA256AuthProtocol,
+                "SHA384": usmHMAC256SHA384AuthProtocol,
+                "SHA512": usmHMAC384SHA512AuthProtocol,
+                "none": usmNoAuthProtocol,
+            }
+            
+            priv_protocol_map = {
+                "DES": usmDESPrivProtocol,
+                "AES": usmAesCfb128Protocol,
+                "AES128": usmAesCfb128Protocol,
+                "AES192": usmAesCfb192Protocol,
+                "AES256": usmAesCfb256Protocol,
+                "none": usmNoPrivProtocol,
+            }
+            
+            auth_protocol = auth_protocol_map.get(auth_protocol_str, usmHMACSHAAuthProtocol)
+            priv_protocol = priv_protocol_map.get(priv_protocol_str, usmAesCfb128Protocol)
+
+            with LogContext(
+                snmp_version="v3",
+                host=target.get("host", "unknown"),
+                port=target.get("port", 161),
+                username=username,
+                has_auth_key=bool(auth_key),
+                has_priv_key=bool(priv_key),
+                auth_protocol=auth_protocol_str,
+                priv_protocol=priv_protocol_str,
+            ):
+                logger.debug("Creating SNMPv3 authentication")
 
             return UsmUserData(
                 username,

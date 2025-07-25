@@ -304,6 +304,14 @@ class SNMPSettings(BaseModel):
         le=50,
         description="Maximum concurrent SNMP device queries",
     )
+    org_v3_auth_password: SecretStr | None = Field(
+        None,
+        description="SNMPv3 authentication password for organization/cloud controller SNMP",
+    )
+    org_v3_priv_password: SecretStr | None = Field(
+        None,
+        description="SNMPv3 privacy password for organization/cloud controller SNMP",
+    )
 
 
 class LoggingSettings(BaseModel):

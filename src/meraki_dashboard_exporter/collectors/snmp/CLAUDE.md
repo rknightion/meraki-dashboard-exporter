@@ -31,6 +31,10 @@ export MERAKI_EXPORTER_SNMP__TIMEOUT=5.0
 export MERAKI_EXPORTER_SNMP__RETRIES=3
 export MERAKI_EXPORTER_SNMP__CONCURRENT_DEVICE_LIMIT=10
 
+# For Organization/Cloud Controller SNMPv3 (required if using v3)
+export MERAKI_EXPORTER_SNMP__ORG_V3_AUTH_PASSWORD="your-auth-password"
+export MERAKI_EXPORTER_SNMP__ORG_V3_PRIV_PASSWORD="your-priv-password"
+
 # SNMP collection runs at MEDIUM update tier frequency
 # Controlled by existing update interval configuration:
 export MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM=300  # Default: 300s
@@ -61,19 +65,27 @@ class MyDeviceSNMPCollector(BaseSNMPCollector):
 <patterns>
 ## SNMP AUTHENTICATION PATTERNS
 
-### Cloud Controller SNMP
-- Uses organization SNMP settings from API
+### Cloud Controller SNMP (Organization)
+- Uses organization SNMP settings from `getOrganizationSnmp` API
 - Supports SNMPv2c and SNMPv3
 - Hostname: `snmp.meraki.com` (or regional variant)
 - Port: 16100 (or as configured)
 - Requires whitelisted peer IPs
+- **v2c**: Uses `v2CommunityString` from API response
+- **v3**: Uses `v3User` from API, auth/priv passwords from env vars
+  - Auth protocols: SHA (default), MD5
+  - Priv protocols: AES128 (default), DES
+  - Passwords must be provided via environment variables
 
-### Device SNMP
-- Uses network SNMP settings from API
-- Access modes: 'none', 'community' (v2c only), 'users' (v3)
+### Device SNMP  
+- Uses network SNMP settings from `getNetworkSnmp` API
+- Access modes: 'none', 'community' (v2c), 'users' (v3)
 - Direct device IP access required
 - Standard port 161
-- SNMPv1 is NOT supported
+- **v2c**: Uses `communityString` from API response
+- **v3**: Uses `username` and `passphrase` from `users` array
+  - The passphrase is used as both auth and priv key
+  - Default protocols: SHA/AES128
 
 ## ERROR HANDLING
 ```python

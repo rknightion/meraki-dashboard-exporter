@@ -82,7 +82,45 @@ class BaseSNMPCoordinator(MetricCollector):
         # Cache for SNMP credentials and device info
         self._snmp_cache: dict[str, Any] = {}
         self._last_discovery_time = 0
+        
+        # Connection state tracking to avoid retrying failed methods
+        self._org_snmp_versions: dict[str, str] = {}  # org_id -> working version
+        self._failed_org_v3: set[str] = set()  # org_ids where v3 failed
+        self._device_connectivity_tested = False
+        
+        # Run startup connectivity tests
+        if self.enabled:
+            asyncio.create_task(self._run_startup_tests())
 
+    async def _run_startup_tests(self) -> None:
+        """Run SNMP connectivity tests on startup."""
+        await asyncio.sleep(2)  # Small delay to let other components initialize
+        
+        with LogContext(component="SNMP"):
+            logger.info("Running SNMP connectivity tests...")
+            
+        try:
+            # Test organization SNMP
+            orgs = await self._get_organizations()
+            if orgs:
+                org = orgs[0]  # Test with first org
+                org_snmp = await self._get_org_snmp_settings(org["id"])
+                if org_snmp and (org_snmp.get("v2cEnabled") or org_snmp.get("v3Enabled")):
+                    await self._test_org_snmp_connectivity(org, org_snmp)
+                
+                # Test device SNMP (only if we're a tier that handles devices)
+                if hasattr(self, "collectors") and self.collectors:
+                    from .device_snmp import MRDeviceSNMPCollector, MSDeviceSNMPCollector
+                    has_device_collectors = any(
+                        isinstance(c, (MRDeviceSNMPCollector, MSDeviceSNMPCollector))
+                        for c in self.collectors
+                    )
+                    if has_device_collectors:
+                        await self._test_device_snmp_connectivity(org)
+                        
+        except Exception as e:
+            logger.error(f"SNMP startup tests failed: {e}")
+    
     def _init_tier_collectors(self) -> None:
         """Initialize collectors for this tier. Override in subclasses."""
         # Subclasses should initialize their collectors
@@ -251,9 +289,13 @@ class BaseSNMPCoordinator(MetricCollector):
             Organization SNMP settings.
 
         """
+        # Check if SNMP is enabled at all
         if not org_snmp.get("v2cEnabled") and not org_snmp.get("v3Enabled"):
             with LogContext(org_id=org["id"], org_name=org["name"]):
-                logger.debug("SNMP not enabled for organization")
+                logger.warning(
+                    "Organization SNMP is disabled. Please enable SNMP in Meraki Dashboard: "
+                    "Organization > Settings > SNMP"
+                )
             return
 
         # Build SNMP target configuration
@@ -263,16 +305,54 @@ class BaseSNMPCoordinator(MetricCollector):
             "org_id": org["id"],
             "org_name": org["name"],
         }
-
-        # Add authentication based on enabled version
-        if org_snmp.get("v3Enabled"):
+        
+        # Check if we already know which version works from startup tests
+        org_id = org["id"]
+        if org_id in self._org_snmp_versions:
+            working_version = self._org_snmp_versions[org_id]
+            if working_version == "v3":
+                target["version"] = "v3"
+                target["username"] = org_snmp.get("v3User", "")
+                target["auth_protocol"] = org_snmp.get("v3AuthMode", "SHA")
+                target["priv_protocol"] = org_snmp.get("v3PrivMode", "AES128")
+                if self.settings.snmp.org_v3_auth_password:
+                    target["auth_key"] = self.settings.snmp.org_v3_auth_password.get_secret_value()
+                if self.settings.snmp.org_v3_priv_password:
+                    target["priv_key"] = self.settings.snmp.org_v3_priv_password.get_secret_value()
+            else:  # v2c
+                target["version"] = "v2c"
+                target["community"] = org_snmp.get("v2CommunityString", "public")
+        # No cached version, determine which to use
+        # Skip v3 if we know it failed before
+        elif org_snmp.get("v3Enabled") and org_id not in self._failed_org_v3:
             # Use SNMPv3
             target["version"] = "v3"
             target["username"] = org_snmp.get("v3User", "")
-            # Note: We don't have auth/priv keys from the API
-            # In a real implementation, these would need to be configured separately
             target["auth_protocol"] = org_snmp.get("v3AuthMode", "SHA")
             target["priv_protocol"] = org_snmp.get("v3PrivMode", "AES128")
+
+            # Get auth/priv passwords from environment variables
+            if self.settings.snmp.org_v3_auth_password:
+                target["auth_key"] = self.settings.snmp.org_v3_auth_password.get_secret_value()
+            if self.settings.snmp.org_v3_priv_password:
+                target["priv_key"] = self.settings.snmp.org_v3_priv_password.get_secret_value()
+
+            # Log warning if passwords not configured
+            if not target.get("auth_key") or not target.get("priv_key"):
+                with LogContext(org_id=org["id"], org_name=org["name"]):
+                    logger.warning(
+                        "SNMPv3 passwords not configured. Set environment variables: "
+                        "MERAKI_EXPORTER_SNMP__ORG_V3_AUTH_PASSWORD and "
+                        "MERAKI_EXPORTER_SNMP__ORG_V3_PRIV_PASSWORD"
+                    )
+
+            # Set v2c as fallback if available
+            if org_snmp.get("v2cEnabled"):
+                v2_community = org_snmp.get("v2CommunityString", "")
+                target["v2c_fallback"] = {
+                    "version": "v2c",
+                    "community": v2_community or "public"
+                }
         elif org_snmp.get("v2cEnabled"):
             # Use SNMPv2c
             target["version"] = "v2c"
@@ -475,10 +555,16 @@ class BaseSNMPCoordinator(MetricCollector):
                 # Use first configured user
                 user = users[0]
                 target["username"] = user.get("username", "")
-                target["passphrase"] = user.get("passphrase", "")
-                # Note: Auth/priv protocols would need to be configured
+                # For network devices, the passphrase is used as both auth and priv key
+                passphrase = user.get("passphrase", "")
+                if passphrase:
+                    target["auth_key"] = passphrase
+                    target["priv_key"] = passphrase
+                # Default protocols for network devices (not specified in API)
+                target["auth_protocol"] = "SHA"
+                target["priv_protocol"] = "AES128"
         else:
-            # SNMPv1/v2c
+            # SNMPv2c (access == "community")
             target["version"] = "v2c"
             target["community"] = network_snmp.get("communityString", "public")
 
@@ -526,6 +612,136 @@ class BaseSNMPCoordinator(MetricCollector):
 
         wrapped_tasks = [run_with_semaphore(task) for task in tasks]
         await asyncio.gather(*wrapped_tasks, return_exceptions=True)
+    
+    async def _test_org_snmp_connectivity(self, org: dict[str, Any], org_snmp: dict[str, Any]) -> None:
+        """Test organization SNMP connectivity on startup."""
+        org_id = org["id"]
+        org_name = org["name"]
+        
+        # Build test target
+        target = {
+            "host": org_snmp.get("hostname", "snmp.meraki.com"),
+            "port": org_snmp.get("port", 16100),
+            "org_id": org_id,
+            "org_name": org_name,
+        }
+        
+        # Try v3 first if enabled
+        if org_snmp.get("v3Enabled") and org_id not in self._failed_org_v3:
+            target["version"] = "v3"
+            target["username"] = org_snmp.get("v3User", "")
+            target["auth_protocol"] = org_snmp.get("v3AuthMode", "SHA")
+            target["priv_protocol"] = org_snmp.get("v3PrivMode", "AES128")
+            
+            if self.settings.snmp.org_v3_auth_password:
+                target["auth_key"] = self.settings.snmp.org_v3_auth_password.get_secret_value()
+            if self.settings.snmp.org_v3_priv_password:
+                target["priv_key"] = self.settings.snmp.org_v3_priv_password.get_secret_value()
+            
+            # Test v3
+            from .cloud_controller import CloudControllerSNMPCollector
+            test_collector = CloudControllerSNMPCollector(self, self.settings)
+            result = await test_collector.snmp_get(target, "1.3.6.1.2.1.1.1.0")  # sysDescr
+            
+            if result:
+                self._org_snmp_versions[org_id] = "v3"
+                with LogContext(org_id=org_id, org_name=org_name):
+                    logger.info("Organization SNMP connectivity test passed (v3)")
+                return
+            else:
+                self._failed_org_v3.add(org_id)
+                if org_snmp.get("v2cEnabled"):
+                    with LogContext(org_id=org_id, org_name=org_name):
+                        logger.info("Organization SNMPv3 failed, will use v2c fallback")
+        
+        # Try v2c if enabled
+        if org_snmp.get("v2cEnabled"):
+            target = {
+                "host": org_snmp.get("hostname", "snmp.meraki.com"),
+                "port": org_snmp.get("port", 16100),
+                "org_id": org_id,
+                "org_name": org_name,
+                "version": "v2c",
+                "community": org_snmp.get("v2CommunityString", "public"),
+            }
+            
+            from .cloud_controller import CloudControllerSNMPCollector
+            test_collector = CloudControllerSNMPCollector(self, self.settings)
+            result = await test_collector.snmp_get(target, "1.3.6.1.2.1.1.1.0")  # sysDescr
+            
+            if result:
+                self._org_snmp_versions[org_id] = "v2c"
+                with LogContext(org_id=org_id, org_name=org_name):
+                    logger.info("Organization SNMP connectivity test passed (v2c)")
+            else:
+                with LogContext(org_id=org_id, org_name=org_name):
+                    logger.warning("Organization SNMP connectivity test failed for both v3 and v2c")
+    
+    async def _test_device_snmp_connectivity(self, org: dict[str, Any]) -> None:
+        """Test device SNMP connectivity on startup."""
+        if self._device_connectivity_tested:
+            return
+            
+        org_id = org["id"]
+        networks = await self.client.get_networks(org_id)
+        
+        tested_count = 0
+        successful = False
+        
+        for network in networks:
+            if tested_count >= 3:
+                break
+                
+            network_snmp = await self._get_network_snmp_settings(network["id"])
+            if not network_snmp or network_snmp.get("access") == "none":
+                continue
+                
+            devices = await self.client.get_network_devices(network["id"])
+            test_devices = [d for d in devices if d.get("model", "").startswith(("MR", "MS"))]
+            
+            if not test_devices:
+                continue
+                
+            device = test_devices[0]
+            tested_count += 1
+            
+            # Build test target
+            target = self._build_device_target(
+                device, network, org, network_snmp,
+                DeviceType.MR if device["model"].startswith("MR") else DeviceType.MS
+            )
+            
+            if target:
+                # Test connectivity
+                from .device_snmp import MRDeviceSNMPCollector, MSDeviceSNMPCollector
+                collector_class = MRDeviceSNMPCollector if device["model"].startswith("MR") else MSDeviceSNMPCollector
+                test_collector = collector_class(self, self.settings)
+                result = await test_collector.snmp_get(target, "1.3.6.1.2.1.1.1.0")  # sysDescr
+                
+                if result:
+                    successful = True
+                    with LogContext(
+                        device_name=device.get("name", "unknown"),
+                        device_model=device["model"],
+                        network_name=network["name"]
+                    ):
+                        logger.info("Device SNMP connectivity test passed")
+                    break
+                else:
+                    with LogContext(
+                        device_name=device.get("name", "unknown"),
+                        device_model=device["model"],
+                        network_name=network["name"]
+                    ):
+                        logger.warning("Device SNMP connectivity test failed")
+        
+        self._device_connectivity_tested = True
+        
+        if not successful and tested_count > 0:
+            logger.warning(
+                f"Device SNMP connectivity tests failed for all {tested_count} devices tested. "
+                "Check network SNMP settings and device accessibility."
+            )
 
 
 @register_collector()
