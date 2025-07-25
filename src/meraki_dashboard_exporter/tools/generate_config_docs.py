@@ -9,13 +9,19 @@ types, defaults, and validation constraints.
 from __future__ import annotations
 
 import json
+
+# Fix imports when running as a script
+import sys
 from pathlib import Path
 from typing import Any, get_args, get_origin
 
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
-from ..core.config_models import (
+# Add the parent directory to the path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+
+from meraki_dashboard_exporter.core.config_models import (
     APISettings,
     ClientSettings,
     CollectorSettings,
@@ -24,6 +30,7 @@ from ..core.config_models import (
     MonitoringSettings,
     OTelSettings,
     ServerSettings,
+    SNMPSettings,
     UpdateIntervals,
 )
 
@@ -196,6 +203,12 @@ def generate_configuration_docs() -> str:
             ClientSettings,
             "MERAKI_EXPORTER_CLIENTS",
             "Client data collection and DNS resolution settings",
+        ),
+        (
+            "SNMP Settings",
+            SNMPSettings,
+            "MERAKI_EXPORTER_SNMP",
+            "SNMP collector configuration for device and cloud controller metrics",
         ),
     ]
 

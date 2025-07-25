@@ -6,7 +6,7 @@ import asyncio
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
-from pysnmp.hlapi.v3arch.asyncio import (  # type: ignore[import-untyped]
+from pysnmp.hlapi.v3arch.asyncio import (  # type: ignore[import-not-found]
     CommunityData,
     ContextData,
     ObjectIdentity,
