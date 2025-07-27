@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 <system_context>
 Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects metrics from Cisco Meraki Dashboard API and exposes them for monitoring. Supports OpenTelemetry mirroring and includes comprehensive collectors for devices, networks, organizations, and sensor data.

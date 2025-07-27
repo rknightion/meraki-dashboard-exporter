@@ -13,6 +13,12 @@ repos:
         args: [--fix]
     -   id: ruff-format
 
+-   repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.11.0
+    hooks:
+    -   id: zizmor
+        args: [--fix=all]
+
   # Type checking
 -   repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.17.0
@@ -22,11 +28,10 @@ repos:
         -   pydantic>=2.10.0
         -   pydantic-settings>=2.6.0
         -   types-requests
-        -   types-PyYAML
         -   pytest>=8.3.0
         -   structlog>=24.4.0
         -   fastapi>=0.115.0
-        -   uvicorn>=0.32.0
+        -   uvicorn[standard]>=0.32.0
         -   meraki>=2.0.3
         -   prometheus-client>=0.22.1
         -   httpx>=0.27.0
@@ -35,6 +40,13 @@ repos:
         -   opentelemetry-sdk>=1.29.0
         -   opentelemetry-exporter-otlp>=1.29.0
         -   opentelemetry-instrumentation-fastapi>=0.50b0
+        -   opentelemetry-instrumentation-requests>=0.50b0
+        -   opentelemetry-instrumentation-httpx>=0.50b0
+        -   opentelemetry-instrumentation-logging>=0.50b0
+        -   opentelemetry-instrumentation-threading>=0.50b0
+        -   psutil>=5.9.0
+        -   jinja2>=3.1.0
+        -   cryptography>=45.0.5
         args: [--config-file=pyproject.toml, .]
         pass_filenames: false
 
@@ -98,8 +110,6 @@ repos:
         always_run: true
         stages: [pre-commit]
 
-
-
   # Python docstring checking
 -   repo: https://github.com/PyCQA/pydocstyle
     rev: 6.3.0
@@ -107,24 +117,12 @@ repos:
     -   id: pydocstyle
         additional_dependencies: [tomli]
 
-  # Check for common security issues (removed - requires Poetry)
-  # - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
-  #   rev: v1.4.2
-  #   hooks:
-  #   -   id: python-safety-dependencies-check
-  #       files: pyproject.toml
 
-  # License header checking (optional - uncomment if needed)
-  # - repo: https://github.com/Lucas-C/pre-commit-hooks
-  #   rev: v1.5.5
-  #   hooks:
-  #     - id: insert-license
-  #       files: \.py$
-  #       args:
-  #         - --license-filepath
-  #         - LICENSE
-  #         - --comment-style
-  #         - "#"
+  # Format pyproject.toml consistently
+-   repo: https://github.com/tox-dev/pyproject-fmt
+    rev: v2.6.0
+    hooks:
+    -   id: pyproject-fmt
 
 # Configuration
 default_language_version:

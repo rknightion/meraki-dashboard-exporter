@@ -1,116 +1,123 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = [ "hatchling" ]
+
 [project]
 name = "meraki-dashboard-exporter"
 version = "0.25.0"
 description = "Prometheus exporter for Cisco Meraki Dashboard API metrics"
 readme = "README.md"
 authors = [
-    { name = "Rob Knight", email = "12484127+rknightion@users.noreply.github.com" }
+  { name = "Rob Knight", email = "12484127+rknightion@users.noreply.github.com" },
 ]
 requires-python = ">=3.13"
+classifiers = [ "Programming Language :: Python :: 3 :: Only", "Programming Language :: Python :: 3.13" ]
 dependencies = [
-    "meraki>=2.0.3",
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
-    "prometheus-client>=0.22.1",
-    "structlog>=24.4.0",
-    "httpx>=0.27.0",
-    "anyio>=4.6.0",
-    "pydantic>=2.10.0",
-    "pydantic-settings>=2.6.0",
-    "opentelemetry-api>=1.29.0",
-    "opentelemetry-sdk>=1.29.0",
-    "opentelemetry-exporter-otlp>=1.29.0",
-    "opentelemetry-instrumentation-fastapi>=0.50b0",
-    "opentelemetry-instrumentation-requests>=0.50b0",
-    "opentelemetry-instrumentation-httpx>=0.50b0",
-    "opentelemetry-instrumentation-logging>=0.50b0",
-    "opentelemetry-instrumentation-threading>=0.50b0",
-    "psutil>=5.9.0",
-    "jinja2>=3.1.0",
-    "mkdocs-minify-plugin>=0.8.0",
-    "mkdocs-git-revision-date-localized-plugin>=1.4.7",
-    "mkdocs-git-committers-plugin-2>=2.5.0",
-    "mkdocs-git-authors-plugin>=0.10.0",
-    "mkdocs-glightbox>=0.4.0",
-    "mkdocs-macros-plugin>=1.3.7",
-    "mkdocs-include-markdown-plugin>=7.1.6",
-    "mkdocs-material[imaging]>=9.6.15",
-    "cryptography>=45.0.5",
+  "anyio>=4.6",
+  "cryptography>=45.0.5",
+  "fastapi>=0.115",
+  "httpx>=0.27",
+  "jinja2>=3.1",
+  "meraki>=2.0.3",
+  "mkdocs-git-authors-plugin>=0.10",
+  "mkdocs-git-committers-plugin-2>=2.5",
+  "mkdocs-git-revision-date-localized-plugin>=1.4.7",
+  "mkdocs-glightbox>=0.4",
+  "mkdocs-include-markdown-plugin>=7.1.6",
+  "mkdocs-macros-plugin>=1.3.7",
+  "mkdocs-material[imaging]>=9.6.15",
+  "mkdocs-minify-plugin>=0.8",
+  "opentelemetry-api>=1.29",
+  "opentelemetry-exporter-otlp>=1.29",
+  "opentelemetry-instrumentation-fastapi>=0.50b0",
+  "opentelemetry-instrumentation-httpx>=0.50b0",
+  "opentelemetry-instrumentation-logging>=0.50b0",
+  "opentelemetry-instrumentation-requests>=0.50b0",
+  "opentelemetry-instrumentation-threading>=0.50b0",
+  "opentelemetry-sdk>=1.29",
+  "prometheus-client>=0.22.1",
+  "psutil>=5.9",
+  "pydantic>=2.10",
+  "pydantic-settings>=2.6",
+  "safety>=3.2.9",
+  "structlog>=24.4",
+  "uvicorn[standard]>=0.32",
+]
+
+[dependency-groups]
+dev = [
+  "httpx>=0.27",
+  "mkdocs>=1.6.1",
+  "mkdocs-material>=9.6.15",
+  "mkdocstrings>=0.29.1",
+  "mypy>=1.13",
+  "pymdown-extensions>=10.16",
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "pytest-cov>=6",
+  "ruff>=0.12.2",
+  "ty>=0.0.1a13",
 ]
 
 [tool.ruff]
 target-version = "py313"
-line-length    = 100
+line-length = 100
+indent-width = 4
+extend-exclude = [ "docs/*.md" ]
+
 preview = true
-indent-width   = 4
-extend-exclude = ["docs/*.md"]
-
-[tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "C",   # flake8-comprehensions
-    "B",   # flake8-bugbear
-    "UP",  # pyupgrade
-    "D",   # pydocstyle
-    "N",  # pep8-naming
-    "Q",  # flake8-quotes
+lint.select = [
+  "B",  # flake8-bugbear
+  "C",  # flake8-comprehensions
+  "D",  # pydocstyle
+  "E",  # pycodestyle errors
+  "F",  # pyflakes
+  "I",  # isort
+  "N",  # pep8-naming
+  "Q",  # flake8-quotes
+  "UP", # pyupgrade
+  "W",  # pycodestyle warnings
 ]
-extend-select = [
-  "PL",     # pylint rules
-  "PTH",    # pathlib recommendations
-  "PERF",   # performance tweaks
-  "NPY",    # NumPy-specific hints
+lint.extend-select = [
+  "NPY",  # NumPy-specific hints
+  "PERF", # performance tweaks
+  "PL",   # pylint rules
+  "PTH",  # pathlib recommendations
 ]
-ignore = [
-    "D202",  # no blank lines after function docstring
-    "D203",  # one blank line before class
-    "D212",  # multi-line-summary-first-line
-    "D213",  # multi-line docstring summary should start at the second line
-    "D401",  # first line of docstring should be in imperative mood
-    "D403",  # First word capitalization - needed for proper nouns like OpenTelemetry
-    "PLR2004",  # magic value used in comparison
-    "PLR6301",  # method could be function/class method/static method
-    "PLW0603",  # using global statement
-    "PLC0415",  # import should be at top-level of file
-    "C901",  # function is too complex
-    "PLR0911",  # too many return statements
-    "N815",  # mixed case variable names - needed for API compatibility
-    "W293",  # blank line contains whitespace
-    "PLR0912",  # too many branches
-    "PLR0913",  # too many arguments in function definition
-    "PLR0914",  # too many local variables
-    "PLR0915",  # too many statements
-    "PLR0917",  # too many positional arguments
-    "PERF401",  # use list comprehension
-    "PLR1702",
-    "E501",  # line too long (handled by formatter)
+lint.ignore = [
+  "C901",    # function is too complex
+  "D202",    # no blank lines after function docstring
+  "D203",    # one blank line before class
+  "D212",    # multi-line-summary-first-line
+  "D213",    # multi-line docstring summary should start at the second line
+  "D401",    # first line of docstring should be in imperative mood
+  "D403",    # First word capitalization - needed for proper nouns like OpenTelemetry
+  "E501",    # line too long (handled by formatter)
+  "N815",    # mixed case variable names - needed for API compatibility
+  "PERF401", # use list comprehension
+  "PLC0415", # import should be at top-level of file
+  "PLR0911", # too many return statements
+  "PLR0912", # too many branches
+  "PLR0913", # too many arguments in function definition
+  "PLR0914", # too many local variables
+  "PLR0915", # too many statements
+  "PLR0917", # too many positional arguments
+  "PLR1702",
+  "PLR2004", # magic value used in comparison
+  "PLR6301", # method could be function/class method/static method
+  "PLW0603", # using global statement
+  "W293",    # blank line contains whitespace
 ]
+lint.per-file-ignores."src/meraki_dashboard_exporter/tools/*.py" = [ "C414", "PLR0916", "PLR6201", "PLW1514", "PTH123" ]
+lint.per-file-ignores."tests/**/*.py" = [ "PLR0904" ] # Allow more than 20 public methods in test classes
 
-[tool.ruff.lint.per-file-ignores]
-"src/meraki_dashboard_exporter/tools/*.py" = ["PTH123", "PLW1514", "C414", "PLR6201", "PLR0916"]
-"tests/**/*.py" = ["PLR0904"]  # Allow more than 20 public methods in test classes
-
-[dependency-groups]
-dev = [
-    "ruff>=0.12.2",
-    "ty>=0.0.1a13",
-    "pytest>=8.3.0",
-    "pytest-asyncio>=0.24.0",
-    "pytest-cov>=6.0.0",
-    "mypy>=1.13.0",
-    "httpx>=0.27.0",
-    "mkdocs>=1.6.1",
-    "mkdocs-material>=9.6.15",
-    "mkdocstrings>=0.29.1",
-    "pymdown-extensions>=10.16",
-]
-
-[tool.pydocstyle]
-convention = "numpy"
-add-ignore = ["D103", "D104", "D202", "D203", "D212", "D213", "D401", "D403"]
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = [ "tests" ]
+python_files = [ "test_*.py", "*_test.py" ]
+python_classes = [ "Test*" ]
+python_functions = [ "test_*" ]
 
 [tool.mypy]
 python_version = "3.13"
@@ -122,34 +129,26 @@ namespace_packages = true
 show_error_codes = true
 show_column_numbers = true
 pretty = true
-plugins = ["pydantic.mypy"]
+plugins = [ "pydantic.mypy" ]
 exclude = [
-    "docs/.*\\.md$",
-    "tests/",
-    "src/meraki_dashboard_exporter/tools/.*\\.py",
+  "docs/.*\\.md$",
+  "tests/",
+  "src/meraki_dashboard_exporter/tools/.*\\.py",
 ]
+
+[[tool.mypy.overrides]]
+module = [ "meraki.*", "prometheus_client.*", "opentelemetry.*" ]
+ignore_missing_imports = true
+
+[tool.pydocstyle]
+convention = "numpy"
+add-ignore = [ "D103", "D104", "D202", "D203", "D212", "D213", "D401", "D403" ]
 
 [tool.pydantic-mypy]
 init_forbid_extra = true
 init_typed = true
 warn_required_dynamic_aliases = true
 
-[[tool.mypy.overrides]]
-module = ["meraki.*", "prometheus_client.*", "opentelemetry.*"]
-ignore_missing_imports = true
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
-testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-
 [tool.bandit]
-exclude_dirs = ["tests", "scripts"]
-skips = ["B101", "B601", "B602", "B603", "B604", "B605", "B606", "B607", "B608", "B609", "B105"]
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+exclude_dirs = [ "tests", "scripts" ]
+skips = [ "B101", "B601", "B602", "B603", "B604", "B605", "B606", "B607", "B608", "B609", "B105" ]
