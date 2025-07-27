@@ -6,7 +6,9 @@ requires = [ "hatchling" ]
 name = "meraki-dashboard-exporter"
 version = "0.25.0"
 description = "Prometheus exporter for Cisco Meraki Dashboard API metrics"
+license = {text = "Apache-2.0"}
 readme = "README.md"
+keywords = ["meraki", "cisco", "iot", "sensors"]
 authors = [
   { name = "Rob Knight", email = "12484127+rknightion@users.noreply.github.com" },
 ]
