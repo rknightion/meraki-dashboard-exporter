@@ -23,6 +23,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Run AI inference
         id: inference
@@ -35,8 +37,9 @@ jobs:
 
       - name: Comment with AI summary
         run: |
-          gh issue comment $ISSUE_NUMBER --body '${{ steps.inference.outputs.response }}'
+          gh issue comment $ISSUE_NUMBER --body '${STEPS_INFERENCE_OUTPUTS_RESPONSE}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           RESPONSE: ${{ steps.inference.outputs.response }}
+          STEPS_INFERENCE_OUTPUTS_RESPONSE: ${{ steps.inference.outputs.response }}
