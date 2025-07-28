@@ -1,6 +1,6 @@
 site_name: Meraki Dashboard Exporter
 site_description: A high-performance Prometheus exporter for Cisco Meraki Dashboard API metrics with comprehensive monitoring capabilities and OpenTelemetry support
-site_url: https://meraki.exporters.m7kni.com
+site_url: https://m7kni.io/meraki-dashboard-exporter
 repo_name: rknightion/meraki-dashboard-exporter
 repo_url: https://github.com/rknightion/meraki-dashboard-exporter
 edit_uri: edit/main/docs/
