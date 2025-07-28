@@ -1,0 +1,21 @@
+name: Trigger Documentation Sync
+
+on:
+  push:
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'wrangler.toml'
+  workflow_dispatch:
+
+jobs:
+  trigger-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger documentation sync in parent repo
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.DOCS_SYNC_PAT }}
+          repository: rknightion/m7kni-net-site
+          event-type: docs-update
+          client-payload: '{"repository": "meraki-dashboard-exporter"}'
