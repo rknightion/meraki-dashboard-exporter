@@ -1,7 +1,8 @@
 name = "meraki-dashboard-exporter"
 compatibility_date = "2025-04-01"
 routes = [
-  { pattern = "m7kni.io/meraki-dashboard-exporter/*", zone_id = "040860c93967852c90bb3ecb9865f006" }
+  { pattern = "m7kni.io/meraki-dashboard-exporter/*", zone_id = "040860c93967852c90bb3ecb9865f006" },
+  { pattern = "m7kni.io/meraki-dashboard-exporter", zone_id = "040860c93967852c90bb3ecb9865f006" }
 ]
 
 [assets]
