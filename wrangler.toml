@@ -1,7 +1,7 @@
-name = "meraki-exporter-docs"
+name = "meraki-exporter"
 compatibility_date = "2025-04-01"
 routes = [
-  { pattern = "meraki.exporters.m7kni.com", custom_domain = true }
+  { pattern = "m7kni.io/meraki-exporter/*", custom_domain = true }
 ]
 
 [assets]
