@@ -175,7 +175,6 @@ markdown_extensions:
 nav:
   - Home:
     - index.md
-    - Tags: tags.md
   - Getting Started: getting-started.md
   - Configuration: config.md
   - Deployment & Operations: deployment-operations.md
