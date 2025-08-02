@@ -2,9 +2,9 @@
 name = "meraki-dashboard-exporter"
 version = "0.25.0"
 description = "Prometheus exporter for Cisco Meraki Dashboard API metrics"
-license = {text = "Apache-2.0"}
 readme = "README.md"
-keywords = ["meraki", "cisco", "iot", "sensors"]
+keywords = [ "cisco", "iot", "meraki", "sensors" ]
+license = { text = "Apache-2.0" }
 authors = [
   { name = "Rob Knight", email = "12484127+rknightion@users.noreply.github.com" },
 ]
@@ -38,7 +38,15 @@ dependencies = [
 dev = [
   "httpx>=0.27",
   "mkdocs>=1.6.1",
+  "mkdocs-git-authors-plugin>=0.10",
+  "mkdocs-git-committers-plugin-2>=2.5",
+  "mkdocs-git-revision-date-localized-plugin>=1.4.7",
+  "mkdocs-glightbox>=0.4",
+  "mkdocs-include-markdown-plugin>=7.1.6",
+  "mkdocs-macros-plugin>=1.3.7",
   "mkdocs-material>=9.6.15",
+  "mkdocs-material[imaging]>=9.6.15",
+  "mkdocs-minify-plugin>=0.8",
   "mkdocstrings>=0.29.1",
   "mypy>=1.13",
   "pymdown-extensions>=10.16",
@@ -47,14 +55,6 @@ dev = [
   "pytest-cov>=6",
   "ruff>=0.12.2",
   "ty>=0.0.1a13",
-  "mkdocs-git-authors-plugin>=0.10",
-  "mkdocs-git-committers-plugin-2>=2.5",
-  "mkdocs-git-revision-date-localized-plugin>=1.4.7",
-  "mkdocs-glightbox>=0.4",
-  "mkdocs-include-markdown-plugin>=7.1.6",
-  "mkdocs-macros-plugin>=1.3.7",
-  "mkdocs-material[imaging]>=9.6.15",
-  "mkdocs-minify-plugin>=0.8",
 ]
 
 [tool.ruff]
