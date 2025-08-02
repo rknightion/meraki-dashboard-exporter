@@ -72,7 +72,7 @@ jobs:
 
       - name: Run tests
         env:
-          PYTHONPATH: .
+          PYTHONPATH: src
         run: uv run pytest --cov=meraki_dashboard_exporter --cov-report=xml
 
       - name: Upload coverage
