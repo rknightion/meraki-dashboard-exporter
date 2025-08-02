@@ -17,5 +17,5 @@ Allow: /assets/
 Allow: /stylesheets/
 Allow: /javascripts/
 
-Sitemap: https://meraki.exporters.m7kni.com/sitemap.xml
-Sitemap: https://meraki.exporters.m7kni.com/sitemap.xml.gz
+Sitemap: https://m7kni.io/meraki-dashboard-exporter/sitemap.xml
+Sitemap: https://m7kni.io/meraki-dashboard-exporter/sitemap.xml.gz
