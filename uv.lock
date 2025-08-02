@@ -722,7 +722,7 @@ wheels = [
 [[package]]
 name = "meraki-dashboard-exporter"
 version = "0.25.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "anyio" },
     { name = "cryptography" },
