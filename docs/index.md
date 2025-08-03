@@ -9,14 +9,16 @@ A lightweight Prometheus exporter for the Cisco Meraki Dashboard API. It collect
 
 ## Quick start
 
-### Docker
 1. Copy `.env.example` to `.env` and set `MERAKI_API_KEY`.
 2. Run `docker compose up -d` using the [provided compose file](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/docker-compose.yml).
 
-### Python
-1. `uv pip install meraki-dashboard-exporter`
-2. Set `MERAKI_API_KEY`
-3. `python -m meraki_dashboard_exporter`
+Or run directly with Docker:
+```bash
+docker run -d \
+  -e MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here \
+  -p 9099:9099 \
+  ghcr.io/rknightion/meraki-dashboard-exporter:latest
+```
 
 ## Learn more
 - [Getting Started](getting-started.md)

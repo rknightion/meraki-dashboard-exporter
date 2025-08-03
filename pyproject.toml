@@ -3,11 +3,6 @@ name = "meraki-dashboard-exporter"
 version = "0.26.0"
 description = "Prometheus exporter for Cisco Meraki Dashboard API metrics"
 readme = "README.md"
-keywords = [ "cisco", "iot", "meraki", "sensors" ]
-license = { text = "Apache-2.0" }
-authors = [
-  { name = "Rob Knight", email = "12484127+rknightion@users.noreply.github.com" },
-]
 requires-python = ">=3.13"
 classifiers = [ "Programming Language :: Python :: 3 :: Only", "Programming Language :: Python :: 3.13" ]
 dependencies = [
