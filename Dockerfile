@@ -24,18 +24,15 @@ RUN uv --version
 WORKDIR /app
 
 # Copy dependency files
-COPY pyproject.toml uv.lock README.md ./
+COPY pyproject.toml uv.lock ./
 
 # Create virtual environment and install dependencies using uv
 # uv will create .venv in the current directory
 ENV UV_PROJECT_ENVIRONMENT=/app/.venv
 RUN uv sync --frozen --no-install-project
 
-# Copy application source code
-COPY src ./src
-
-# Install the project itself (without deps, as they're already installed)
-RUN uv sync --frozen --no-dev
+# Copy application source code directly (not as a package)
+COPY src/meraki_dashboard_exporter ./meraki_dashboard_exporter
 
 # --------------------------------------------------------------------------- #
 # Runtime stage - minimal Debian-based Python image
@@ -60,13 +57,15 @@ COPY --from=builder --chown=exporter:exporter /app/.venv /app/.venv
 # Environment setup - use the venv Python
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH="/app"
+    PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
 
 # Copy application code from builder
-COPY --from=builder --chown=exporter:exporter /app/src/meraki_dashboard_exporter ./meraki_dashboard_exporter
+COPY --from=builder --chown=exporter:exporter /app/meraki_dashboard_exporter ./meraki_dashboard_exporter
+
+# Copy entrypoint script
+COPY --chown=exporter:exporter docker-entrypoint.py ./
 
 # Switch to non-root user
 USER exporter
@@ -79,4 +78,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD ["python", "-c", "import httpx; httpx.get('http://localhost:9099/health').raise_for_status()"]
 
 # Use ENTRYPOINT for the main command
-ENTRYPOINT ["python", "-m", "meraki_dashboard_exporter"]
+ENTRYPOINT ["python", "docker-entrypoint.py"]

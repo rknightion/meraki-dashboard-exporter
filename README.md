@@ -18,7 +18,7 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 
 ## Quick Start
 
-### Using Docker
+### Using Docker (Recommended)
 
 1. Copy `.env.example` to `.env` and add your Meraki API key:
    ```bash
@@ -33,22 +33,20 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 
 3. Access metrics at http://localhost:9099/metrics
 
-### Using Python
+### Building from Source
 
-1. Install dependencies:
-   ```bash
-   uv pip install -e .
-   ```
+If you need to build the Docker image from source:
 
-2. Set environment variables:
-   ```bash
-   export MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here
-   ```
+```bash
+# Build the image
+docker build -t meraki-dashboard-exporter .
 
-3. Run the exporter:
-   ```bash
-   python -m meraki_dashboard_exporter
-   ```
+# Run the container
+docker run -d \
+  -e MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here \
+  -p 9099:9099 \
+  meraki-dashboard-exporter
+```
 
 ## OpenTelemetry Support
 

@@ -8,7 +8,7 @@ description: Install and run the exporter
 This section shows the quickest way to run the exporter.
 
 ## Requirements
-- Docker or Python 3.11+
+- Docker
 - Meraki Dashboard API access and key
 
 ## Setup
@@ -16,11 +16,12 @@ This section shows the quickest way to run the exporter.
 1. Copy `.env.example` to `.env` and set `MERAKI_API_KEY`.
 2. Start the container with `docker compose up -d`. You can review the [docker-compose.yml](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/docker-compose.yml) for optional settings.
 
-Alternatively install with Python:
+Alternatively, run directly with Docker:
 ```bash
-uv pip install meraki-dashboard-exporter
-export MERAKI_API_KEY=your_key
-python -m meraki_dashboard_exporter
+docker run -d \
+  -e MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here \
+  -p 9099:9099 \
+  ghcr.io/rknightion/meraki-dashboard-exporter:latest
 ```
 
 ## Verify

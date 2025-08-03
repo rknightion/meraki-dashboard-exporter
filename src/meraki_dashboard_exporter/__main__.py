@@ -67,16 +67,19 @@ def main() -> None:
         print("\nPlease check your configuration and try again.\n", file=sys.stderr)
         sys.exit(1)
 
+    # Import the app creation function directly
+    from .app import create_app
+
+    # Create the app instance
+    app = create_app()
+
     # Run uvicorn directly with proper signal handling
     uvicorn.run(
-        "meraki_dashboard_exporter.app:create_app",
-        factory=True,
+        app,
         host=settings.server.host,
         port=settings.server.port,
         log_config=None,  # We handle logging ourselves
         loop="asyncio",
-        reload=False,
-        workers=1,
     )
 
 
