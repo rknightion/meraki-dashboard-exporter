@@ -7,21 +7,21 @@ repos:
 
   # Python code formatting and linting
 -   repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.12.7
+    rev: v0.14.3
     hooks:
     -   id: ruff-check
         args: [--fix]
     -   id: ruff-format
 
 -   repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.11.0
+    rev: v1.16.2
     hooks:
     -   id: zizmor
         args: [--fix=all]
 
   # Type checking
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.17.1
+    rev: v1.18.2
     hooks:
     -   id: mypy
         additional_dependencies:
@@ -74,7 +74,7 @@ repos:
 
   # YAML/JSON/TOML validation
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
     -   id: check-yaml
         args: [--unsafe]
@@ -93,7 +93,7 @@ repos:
 
   # Dockerfile linting
 -   repo: https://github.com/hadolint/hadolint
-    rev: v2.12.0
+    rev: v2.14.0
     hooks:
     -   id: hadolint
         args: ["--ignore", "DL3008"]
@@ -120,7 +120,7 @@ repos:
 
   # Format pyproject.toml consistently
 -   repo: https://github.com/tox-dev/pyproject-fmt
-    rev: v2.6.0
+    rev: v2.11.0
     hooks:
     -   id: pyproject-fmt
 

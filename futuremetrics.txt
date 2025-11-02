@@ -680,3 +680,349 @@ These SNMP metrics provide:
 - **Predictive Maintenance**: Fan RPM degradation, temperature trends
 - **Hidden Problems**: MAC flapping, multicast floods, buffer exhaustion
 - **Compliance**: Detailed PoE power measurements for safety audits
+
+---
+
+=== EXPORTER PERFORMANCE & OPERATIONAL METRICS ===
+
+After analyzing the codebase (v0.26.0) and identifying performance optimization opportunities,
+here are additional metrics to track the exporter's own health and efficiency:
+
+=== COLLECTOR PERFORMANCE METRICS (Already Implemented) ===
+
+meraki_collector_duration_seconds
+Status: IMPLEMENTED
+Description: Histogram of collection duration per collector and tier.
+Labels: collector, tier
+
+meraki_collector_errors_total
+Status: IMPLEMENTED
+Description: Counter of collector errors by type.
+Labels: collector, tier, error_type
+
+meraki_collector_last_success_timestamp_seconds
+Status: IMPLEMENTED
+Description: Unix timestamp of last successful collection.
+Labels: collector, tier
+
+meraki_collector_api_calls_total
+Status: IMPLEMENTED
+Description: Counter of API calls made by collectors.
+Labels: collector, tier, endpoint
+
+=== PROPOSED: PARALLEL COLLECTION METRICS ===
+
+meraki_parallel_collections_active
+API: Internal exporter metric
+Description: Gauge of currently active parallel collection operations.
+Labels: collector, tier
+Priority: HIGH (needed for P1.1 refactor)
+
+meraki_org_collection_wait_time_seconds
+API: Internal exporter metric
+Description: Histogram of semaphore wait times for organization-level concurrency control.
+Labels: collector
+Priority: HIGH (needed for P1.1 refactor)
+
+meraki_parallel_collection_errors_total
+API: Internal exporter metric
+Description: Errors occurring in parallel collection tasks.
+Labels: collector, tier, error_type
+Priority: MEDIUM
+
+=== PROPOSED: API CLIENT EFFICIENCY METRICS ===
+
+meraki_api_call_duration_seconds
+API: Internal exporter metric
+Description: Histogram of API call response times by endpoint.
+Labels: endpoint, org_id, status_code
+Priority: HIGH (needed for P1.5 refactor)
+Buckets: 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0
+
+meraki_api_rate_limit_remaining
+API: X-Rate-Limit-Remaining header
+Description: Gauge of remaining API rate limit quota per endpoint.
+Labels: endpoint, org_id
+Priority: HIGH (prevent rate limiting)
+
+meraki_api_rate_limit_total
+API: X-Rate-Limit-Total header
+Description: Gauge of total API rate limit quota per endpoint.
+Labels: endpoint, org_id
+Priority: MEDIUM
+
+meraki_api_rate_limit_reset_timestamp
+API: X-Rate-Limit-Reset header
+Description: Gauge of when rate limit resets (Unix timestamp).
+Labels: endpoint, org_id
+Priority: MEDIUM
+
+meraki_api_request_retries_total
+API: Internal exporter metric
+Description: Counter of API request retries due to rate limits or errors.
+Labels: endpoint, retry_reason
+Priority: MEDIUM
+
+=== PROPOSED: CACHING METRICS ===
+
+meraki_cache_hits_total
+API: Internal exporter metric
+Description: Counter of cache hits by cache type.
+Labels: cache_type (org, network, device, metadata)
+Priority: HIGH (needed for P1.4 refactor)
+
+meraki_cache_misses_total
+API: Internal exporter metric
+Description: Counter of cache misses by cache type.
+Labels: cache_type
+Priority: HIGH (needed for P1.4 refactor)
+
+meraki_cache_size_bytes
+API: Internal exporter metric
+Description: Gauge of cache memory usage in bytes.
+Labels: cache_type
+Priority: MEDIUM
+
+meraki_cache_entries_total
+API: Internal exporter metric
+Description: Gauge of total cached entries.
+Labels: cache_type
+Priority: MEDIUM
+
+meraki_cache_evictions_total
+API: Internal exporter metric
+Description: Counter of cache entry evictions (LRU or TTL expiration).
+Labels: cache_type, eviction_reason
+Priority: LOW
+
+meraki_cache_hit_ratio
+API: Derived from hits/(hits+misses)
+Description: Gauge of cache hit ratio (0.0-1.0) for monitoring cache effectiveness.
+Labels: cache_type
+Priority: MEDIUM
+
+=== PROPOSED: METRIC LIFECYCLE METRICS ===
+
+meraki_metrics_cleaned_total
+API: Internal exporter metric
+Description: Counter of removed/cleaned metric series (for stale devices/networks).
+Labels: collector, metric_name
+Priority: HIGH (needed for P1.3 refactor)
+
+meraki_active_metric_series
+API: Internal exporter metric
+Description: Gauge of currently active metric series per metric name.
+Labels: metric_name
+Priority: HIGH (cardinality monitoring)
+
+meraki_metric_series_created_total
+API: Internal exporter metric
+Description: Counter of new metric series created.
+Labels: collector, metric_name
+Priority: LOW
+
+meraki_stale_devices_detected_total
+API: Internal exporter metric
+Description: Counter of devices detected as removed from organization.
+Labels: org_id, device_type
+Priority: MEDIUM
+
+=== PROPOSED: BATCH PROCESSING METRICS ===
+
+meraki_batch_processing_duration_seconds
+API: Internal exporter metric
+Description: Histogram of batch processing duration.
+Labels: collector, batch_size_range
+Priority: MEDIUM
+Buckets: 0.5, 1.0, 2.0, 5.0, 10.0, 30.0
+
+meraki_batch_items_processed_total
+API: Internal exporter metric
+Description: Counter of items processed in batches.
+Labels: collector, item_type (device, network, client)
+Priority: LOW
+
+meraki_batch_size_actual
+API: Internal exporter metric
+Description: Histogram of actual batch sizes used.
+Labels: collector
+Priority: LOW (useful for tuning)
+
+=== PROPOSED: MEMORY & RESOURCE METRICS ===
+
+meraki_exporter_memory_usage_bytes
+API: psutil.Process().memory_info().rss
+Description: Gauge of exporter process memory usage in bytes.
+Priority: HIGH (scalability monitoring)
+
+meraki_exporter_cpu_usage_percent
+API: psutil.Process().cpu_percent()
+Description: Gauge of exporter process CPU usage percentage.
+Priority: MEDIUM
+
+meraki_prometheus_registry_size_bytes
+API: Internal metric from registry
+Description: Gauge of Prometheus registry memory footprint.
+Priority: HIGH (cardinality tracking)
+
+meraki_active_devices_total
+API: Derived from collected devices
+Description: Gauge of total active devices being monitored.
+Labels: org_id, device_type
+Priority: HIGH (operational visibility)
+
+meraki_active_networks_total
+API: Derived from collected networks
+Description: Gauge of total active networks being monitored.
+Labels: org_id
+Priority: MEDIUM
+
+meraki_active_clients_total
+API: Derived from client collector
+Description: Gauge of total active clients being tracked.
+Labels: org_id
+Priority: MEDIUM
+
+=== PROPOSED: COLLECTION TIERING METRICS ===
+
+meraki_tier_cycle_duration_seconds
+API: Internal exporter metric
+Description: Histogram of full collection cycle duration per tier.
+Labels: tier (fast, medium, slow)
+Priority: MEDIUM
+
+meraki_tier_collections_skipped_total
+API: Internal exporter metric
+Description: Counter of skipped collections due to previous cycle still running.
+Labels: tier, reason
+Priority: HIGH (detect performance issues)
+
+meraki_tier_next_collection_timestamp
+API: Internal exporter metric
+Description: Gauge of when next collection for tier will run (Unix timestamp).
+Labels: tier
+Priority: LOW
+
+=== PROPOSED: OPENTELEMETRY BRIDGE METRICS ===
+
+meraki_otel_metrics_exported_total
+API: Internal exporter metric
+Description: Counter of metrics exported to OpenTelemetry.
+Labels: metric_type (gauge, counter, histogram)
+Priority: LOW
+
+meraki_otel_export_duration_seconds
+API: Internal exporter metric
+Description: Histogram of OTEL export operation duration.
+Priority: LOW
+
+meraki_otel_export_errors_total
+API: Internal exporter metric
+Description: Counter of OTEL export errors.
+Labels: error_type
+Priority: MEDIUM
+
+=== PROPOSED: DNS RESOLUTION METRICS (for ClientsCollector) ===
+
+meraki_dns_resolution_duration_seconds
+API: Internal exporter metric
+Description: Histogram of DNS lookup duration for client enrichment.
+Priority: MEDIUM
+
+meraki_dns_resolution_failures_total
+API: Internal exporter metric
+Description: Counter of failed DNS lookups.
+Labels: failure_reason
+Priority: MEDIUM
+
+meraki_dns_cache_hit_ratio
+API: Internal DNS cache metric
+Description: Gauge of DNS cache hit ratio.
+Priority: LOW
+
+=== PROPOSED: WEBHOOK METRICS (if P4.1 is implemented) ===
+
+meraki_webhook_events_received_total
+API: Webhook receiver endpoint
+Description: Counter of webhook events received from Meraki.
+Labels: event_type, org_id
+Priority: HIGH (if webhooks enabled)
+
+meraki_webhook_processing_duration_seconds
+API: Internal exporter metric
+Description: Histogram of webhook event processing time.
+Labels: event_type
+Priority: MEDIUM
+
+meraki_webhook_processing_errors_total
+API: Internal exporter metric
+Description: Counter of webhook processing errors.
+Labels: event_type, error_type
+Priority: HIGH
+
+meraki_webhook_signature_validation_failures_total
+API: Internal exporter metric
+Description: Counter of failed webhook signature validations (security).
+Priority: HIGH
+
+---
+
+=== IMPLEMENTATION NOTES FOR NEW METRICS ===
+
+**Performance Metrics (P1.1-P1.5)**
+- Critical for monitoring refactor effectiveness
+- Track before/after refactor to measure improvements
+- Use for alerting on performance degradation
+
+**Caching Metrics (P1.4)**
+- Essential for tuning cache TTLs
+- Monitor hit ratios to optimize cache strategy
+- Alert on low hit ratios (<50%)
+
+**Metric Lifecycle (P1.3)**
+- Prevent cardinality explosion
+- Monitor stale metric cleanup
+- Alert on unbounded growth
+
+**Resource Metrics**
+- Critical for capacity planning
+- Monitor memory growth trends
+- Alert on high memory usage (>80% of limit)
+
+**Collection Tiering**
+- Detect stuck collectors
+- Monitor for skipped collections
+- Ensure tiers complete within intervals
+
+---
+
+=== PRIORITY MATRIX FOR NEW METRICS ===
+
+**CRITICAL (Implement with corresponding refactor)**
+- meraki_parallel_collections_active (P1.1)
+- meraki_org_collection_wait_time_seconds (P1.1)
+- meraki_cache_hits_total / misses_total (P1.4)
+- meraki_metrics_cleaned_total (P1.3)
+- meraki_active_metric_series (P1.3)
+- meraki_api_call_duration_seconds (P1.5)
+- meraki_api_rate_limit_remaining (P1.5)
+
+**HIGH (Operational visibility)**
+- meraki_exporter_memory_usage_bytes
+- meraki_active_devices_total
+- meraki_tier_collections_skipped_total
+- meraki_prometheus_registry_size_bytes
+
+**MEDIUM (Monitoring & tuning)**
+- meraki_batch_processing_duration_seconds
+- meraki_cache_size_bytes
+- meraki_dns_resolution_duration_seconds
+- meraki_tier_cycle_duration_seconds
+
+**LOW (Nice to have)**
+- meraki_cache_evictions_total
+- meraki_batch_size_actual
+- meraki_metric_series_created_total
+- meraki_otel_metrics_exported_total
+
+---
