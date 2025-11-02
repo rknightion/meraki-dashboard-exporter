@@ -83,7 +83,7 @@ jobs:
           MERAKI_EXPORTER_MERAKI__API_KEY: "00000000000000000000000000000000deadbeef"
         run: |
           # Test that the image can start and show help
-          docker run --rm -e MERAKI_EXPORTER_MERAKI__API_KEY meraki-dashboard-exporter:test --help || true
+          docker run --rm -e MERAKI_EXPORTER_MERAKI__API_KEY meraki-dashboard-exporter:test --help
 
           # Test image metadata
           docker inspect meraki-dashboard-exporter:test | jq '.[0].Config.Labels'
