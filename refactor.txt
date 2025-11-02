@@ -5,6 +5,7 @@
 2. **Check "Current Migration Tasks"** section to identify active work
 3. **Review most recent `[>] IN PROGRESS` items** to understand what was being worked on
 4. **Read blockers marked `[!]`** to avoid redundant attempts at blocked tasks
+5. **Smoke-test startup when needed** by running `PYTHONPATH=src uv run python -m meraki_dashboard_exporter` (requires a populated `.env`); watch the console for errors and exit with `Ctrl+C` once the app reports it is serving.
 
 ### During Active Work
 1. **Mark tasks `[>]` when starting work** — update status immediately when beginning a task
@@ -15,8 +16,8 @@
    - Blockers or issues discovered
    - File paths or modules created/modified
    - API changes or breaking changes
-   Example: `- [x] P6.5.2: Build device table — NOTE: Used QTableView with proxy model for filtering; main widget in ui/devices/widgets.py:DeviceTableWidget`
-5. **Complete as many sub/child tasks along with the parent at the same time as reasonable especially if they are related
+   Example: `- [x] P1.2: Build device table — NOTE: Used QTableView with proxy model for filtering; main widget in ui/devices/widgets.py:DeviceTableWidget`
+5. **Complete as many sub/child tasks along with the parent at the same time as reasonable** especially if they are related
 
 ### Task Completion
 1. **Mark `[x]` ONLY when fully complete** — if partial, leave as `[>]` with status note
@@ -25,60 +26,47 @@
    - Implementation is partial
    - Errors remain unresolved
    - Dependencies are missing
-3. **Move completed task details** to appropriate "What Has Been Completed" phase section for context preservation
-
-### Discovering New Work
-0. **Proceed with the order of parent tasks as listed in this document. The numbering may not be sequential it is the order of the parent task that's important in this document**
-1. **Add new subtasks freely** when you discover additional work needed
-2. **Use hierarchical numbering** (e.g., P6.5.1, P6.5.2, P6.5.2.1) to nest related tasks
-3. **Place new tasks in appropriate phase** or create new phase if scope expands
-4. **Flag architectural decisions** that may impact other phases
-5. **Note if task should be deferred** to later phase with reasoning
-
-### On Session End (CRITICAL)
-1. **Update all `[>]` items** with current status or notes
-2. **Document any blockers** encountered with `[!]` and explanation
-3. **List files modified** in session summary area (if not already in task notes)
-4. **Add "What's Ready" notes** if you've completed infrastructure others can build on
-5. **Recommend next steps** to help future sessions pick up momentum
+3. **Move completed task details** to "Completed Tasks" section for context preservation
 
 ### Context7 MCP Usage (CRITICAL)
 When working with Cisco Meraki Dashboard API:
 - **Always check Meraki API docs** via Context7 MCP before implementing Meraki API calls
-- Use library ID `openapi/api_meraki_api_v1_openapispec` for the latest Meraki API Spec. You can search for calls or functionality you want and it will return usage snippets.
-- Use library ID `meraki/dashboard-api-python` for context on the Meraki Python SDK we use for API calls
+- Use library ID `openapi/api_meraki_api_v1_openapispec` for the latest Meraki API Spec
+- Use library ID `meraki/dashboard-api-python` for context on the Meraki Python SDK
 
-### Task Expansion Philosophy
-- **Do expand tasks** when you discover complexity not originally captured
-- **Do add tasks** for quality/testing/documentation as you work
-- **Do adjust future phases** if project architecture evolves
-- **Don't be constrained** by original task list — this is a living document
-- **Do preserve intent** of original phases while adapting tactical approach
+# Meraki Dashboard Exporter - Optimized Refactoring Plan
 
+This document combines the best elements from both refactor proposals to create an optimal refactoring strategy for the Meraki Dashboard Exporter project.
 
-# Meraki Dashboard Exporter - Refactoring Analysis
+## Project Overview
 
-This document provides a comprehensive analysis of refactoring opportunities for the Meraki Dashboard Exporter project to improve LLM maintainability and align with modern Python best practices.
-## Aims of refactor
+**Current State (as of 2025-11-02):**
+- **Codebase**: ~21,369 lines across ~90 Python files
+- **Collectors**: 24 classes (7 main, 17 sub-collectors)
+- **Architecture**: Well-designed with strong typing and observability
+- **Scale**: Works well <1,000 devices; needs optimization for 1,000-5,000 devices
+- **Key Issue**: Serial organization processing creates bottleneck for multi-org deployments
 
-Easier for LLM consumption
-1. **Smaller, focused files**: Easier for LLMs to understand and modify specific functionality
-2. **Clear patterns**: Consistent code patterns make it easier for LLMs to replicate and extend
-3. **Strong typing**: Type annotations provide clear contracts and prevent errors
-4. **Self-documenting code**: Domain models and clear naming reduce need for external context
-5. **Modular architecture**: Easy to add new features without understanding entire codebase
-6. **Consistent error handling**: Predictable behavior makes debugging easier
-7. **Clear separation of concerns**: Each module has a single responsibility
+## Refactor Goals
 
-Improve exporter/collector performance
+### LLM Optimization
+1. **Smaller, focused files**: Easier for LLMs to understand and modify
+2. **Clear patterns**: Consistent code patterns for replication and extension
+3. **Strong typing**: Type annotations provide clear contracts
+4. **Self-documenting code**: Domain models and clear naming
+5. **Modular architecture**: Easy feature addition without full codebase understanding
+6. **Consistent error handling**: Predictable debugging behavior
+7. **Clear separation of concerns**: Single responsibility per module
+8. **Shared data caches**: Reuse organization/device inventories
+9. **Config-driven toggles**: Runtime behaviour reflects CollectorSettings
+10. **Operational visibility**: First-class metrics/logs for API pressure and health
 
-After each sub task is completed YOU MUST update this document to move the task from Pending or In progress to completed tasks at the bottom of this document. This is so we can split the refactor across multiple sessions.
-
-When refactoring ensure any failing tests are updated to support the post refactored code.
-Ensure claude.md file is updated where necessary for better LLM concept (only update it if it is useful or in line with claude.md best practices)
-
-
-This file also serves as the ongoing todo tracking document.
+### Performance Targets
+1. **2-10x faster collection** for multi-org deployments
+2. **30-50% API call reduction** through intelligent caching
+3. **Support 1,000-5,000 devices** with optimization
+4. **Memory stability** through metric expiration
+5. **Adaptive concurrency** based on rate limits
 
 ## Legend
 - [ ] TODO — not started
@@ -87,3 +75,316 @@ This file also serves as the ongoing todo tracking document.
 - [!] BLOCKED — pending external input
 
 ---
+
+## Current Migration Tasks
+
+### Phase 1: Performance & Foundation (Week 1-2) [CRITICAL - START HERE]
+**Goal**: Immediate performance improvements and architectural foundation
+**Impact**: 2-10x faster collection, 30-50% fewer API calls
+
+#### P1.1: Parallel Organization Processing with ManagedTaskGroup
+**Priority**: CRITICAL | **Impact**: 2-10x speedup 
+
+- [ ] P1.1.1: Implement ManagedTaskGroup for bounded concurrency
+  - Create `async_utils.ManagedTaskGroup` with error handling
+  - Support bounded pipeline execution
+  - Add backpressure management
+  
+- [ ] P1.1.2: Refactor CollectorManager to use ManagedTaskGroup
+  - Replace sequential tier execution with bounded pipeline
+  - Derive timeouts from `settings.collectors.collector_timeout`
+  - Honor `settings.api.concurrency_limit` (default: 3 orgs parallel)
+  
+- [ ] P1.1.3: Update collectors for parallel organization processing
+  - Convert `DeviceCollector._collect_impl()` serial loop to parallel
+  - Apply to `OrganizationCollector` and `NetworkHealthCollector`
+  - Add per-org semaphore controls
+  
+- [ ] P1.1.4: Add parallel collection metrics
+  - `meraki_parallel_collections_active` gauge
+  - `meraki_org_collection_wait_time_seconds` histogram
+  - `meraki_collection_errors_total` by collector and phase
+
+#### P1.2: Shared Organization Inventory Service
+**Priority**: CRITICAL | **Impact**: 30-50% API reduction 
+
+- [ ] P1.2.1: Create OrganizationInventory service
+  - New file: `services/inventory.py`
+  - Cache org/network/device listings per tier cycle
+  - Implement TTL-based invalidation (5 min FAST, 15 min MEDIUM, 30 min SLOW)
+  
+- [ ] P1.2.2: Add inventory API methods
+  - `get_organizations()` with caching
+  - `get_networks(org_id)` with caching  
+  - `get_devices(org_id, network_id=None)` with caching
+  - `invalidate(org_id=None)` for cache management
+  
+- [ ] P1.2.3: Integrate inventory service into collectors
+  - Inject service via dependency injection
+  - Update all collectors to use cached data
+  - Add cache hit/miss metrics
+
+#### P1.3: Metric Expiration & Memory Management
+**Priority**: HIGH 
+
+- [ ] P1.3.1: Implement metric lifecycle management
+  - Add `last_updated` timestamp to metrics
+  - Create background task for metric cleanup
+  - Default TTL: 2x collection interval per tier
+  
+- [ ] P1.3.2: Add expiration configuration
+  - `MERAKI_EXPORTER_MONITORING__METRIC_TTL_MULTIPLIER` (default: 2)
+  - Per-collector TTL overrides
+  - Grace period for intermittent devices
+  
+- [ ] P1.3.3: Add memory monitoring
+  - Track metric count per collector
+  - Alert on unusual growth patterns
+  - Log cleanup statistics
+
+#### P1.4: Optimized Batch Sizes
+**Priority**: HIGH 
+
+- [ ] P1.4.1: Make batch sizes configurable
+  - Add `settings.collectors.default_batch_size` (default: 20)
+  - Per-collector batch size overrides
+  - Environment variable support
+  
+- [ ] P1.4.2: Update critical collectors
+  - `DeviceCollector`: 5 → 20 devices/batch
+  - `NetworkHealthCollector`: 10 → 30 networks/batch
+  - `MRCollector`: 5 → 20 clients/batch
+
+#### P1.5: CollectorManager Configuration Integration
+**Priority**: MEDIUM 
+
+- [ ] P1.5.1: Honor collector configuration
+  - Teach CollectorManager about `active_collectors` and `disable_collectors`
+  - Surface skipped collectors on landing page
+  - Add config validation and warnings
+  
+- [ ] P1.5.2: Add collector health monitoring
+  - `last_success_age` per collector
+  - `failure_streak` counter
+  - Include in landing page and OTEL export
+
+### Phase 2: API Client & Observability (Week 2-3)
+**Goal**: Robust API handling and comprehensive observability
+**Impact**: Better reliability, debugging, and monitoring
+**Effort**: 1 week
+
+#### P2.1: Enhanced API Client with Observability
+**Priority**: HIGH 
+
+- [ ] P2.1.1: Refactor AsyncMerakiClient core
+  - Build DashboardAPI under async lock
+  - Create `_request()` helper with semaphore management
+  - Add automatic retry with backoff on 429 errors
+  
+- [ ] P2.1.2: Add comprehensive API metrics
+  - Latency histograms per endpoint
+  - Rate limit gauges and approaching warnings
+  - Error counters by type and endpoint
+  - OTEL span attributes for each call
+  
+- [ ] P2.1.3: Return typed Pydantic models
+  - Convert raw dicts to domain models
+  - Add response validation
+  - Remove scattered `asyncio.to_thread` calls
+
+#### P2.2: PrometheusToOTelBridge Improvements
+**Priority**: MEDIUM 
+
+- [ ] P2.2.1: Improve metric collection
+  - Use `CollectorRegistry.collect()` instead of `_collector_to_names`
+  - Add metric/label allowlists for filtering
+  - Support custom metric transformations
+  
+- [ ] P2.2.2: Add robustness features
+  - Push failure tracking and backoff
+  - Circuit breaker for OTEL endpoint
+  - Fallback to local metrics on failure
+
+#### P2.3: CardinalityMonitor Enhancements
+**Priority**: MEDIUM
+
+- [ ] P2.3.1: Add FastAPI JSON endpoint
+  - Route: `/api/metrics/cardinality`
+  - Real-time cardinality analysis
+  - Top-K highest cardinality metrics
+  
+- [ ] P2.3.2: Add warning system
+  - Warning metrics tied to `settings.monitoring`
+  - Gate analysis behind inventory cache status
+  - Automatic alerts on threshold breach
+
+### Phase 3: Code Quality & Maintainability (Week 3-4)
+**Goal**: Improve code organization and reduce duplication
+**Impact**: Better maintainability and easier feature addition
+**Effort**: 1 week
+
+#### P3.1: Refactor MR Collector
+**Priority**: MEDIUM
+
+- [ ] P3.1.1: Split into focused modules (1,763 → ~300 lines each)
+  - `collectors/mr/clients.py` - Client metrics
+  - `collectors/mr/wireless.py` - Wireless health  
+  - `collectors/mr/performance.py` - Performance metrics
+  - `collectors/mr/security.py` - Security events
+  
+- [ ] P3.1.2: Extract shared functionality
+  - Common base class for MR sub-collectors
+  - Shared metric initialization
+  - Unified error handling
+
+#### P3.2: Standardize Patterns
+**Priority**: MEDIUM 
+
+- [ ] P3.2.1: Create collector base classes
+  - `BaseCollector` with common functionality
+  - `BaseDeviceCollector` for device-specific
+  - `BaseNetworkCollector` for network-specific
+  
+- [ ] P3.2.2: Standardize label creation
+  - Central label factory service
+  - Consistent label naming conventions
+  - Validation and sanitization
+
+#### P3.3: Extract Common Utilities
+**Priority**: LOW 
+
+- [ ] P3.3.1: Create shared helpers
+  - Batch processing utilities
+  - Retry logic helpers  
+  - Metric update helpers
+  
+- [ ] P3.3.2: Remove dead code
+  - Audit unused utilities
+  - Clean up legacy patterns
+  - Update documentation
+
+### Phase 4: Feature Enhancements (Week 4-5)
+**Goal**: Add high-value monitoring capabilities
+**Impact**: Better visibility and operational insights
+
+#### P4.1: Health Score Collection [HIGH VALUE]
+**Priority**: HIGH 
+
+- [ ] P4.1.1: Research health score APIs
+  - Device health: `GET /organizations/{orgId}/devices/healths`
+  - Wireless health: `GET /organizations/{orgId}/wireless/healths`
+  - Client health: `GET /networks/{networkId}/clients/{clientId}/healthScores`
+  
+- [ ] P4.1.2: Create HealthScoreCollector
+  - New file: `collectors/health_scores.py`
+  - Tier: MEDIUM (5-minute updates)
+  - Comprehensive health metrics
+  
+- [ ] P4.1.3: Add health score metrics
+  - `DEVICE_HEALTH_SCORE`
+  - `DEVICE_HEALTH_WAN_SCORE`
+  - `DEVICE_HEALTH_LAN_SCORE`
+  - `DEVICE_HEALTH_RECOMMENDATIONS_TOTAL`
+
+#### P4.2: Webhook Event Support [MEDIUM VALUE]
+**Priority**: MEDIUM 
+
+- [ ] P4.2.1: Add webhook receiver
+  - Route: `/api/webhooks/meraki`
+  - Validate shared secret
+  - Parse event payloads
+  
+- [ ] P4.2.2: Create webhook metrics
+  - Event counts by type
+  - Processing latency
+  - Real-time alerting metrics
+
+#### P4.3: Enhanced Port Metrics [MEDIUM VALUE]
+**Priority**: LOW 
+
+- [ ] P4.3.1: Add detailed error metrics
+  - CRC, alignment, symbol errors
+  - Broadcast storm metrics
+  - PoE power budget tracking
+
+### Phase 5: Testing & Documentation (Ongoing)
+**Goal**: Ensure reliability and maintainability
+**Effort**: Ongoing throughout refactor
+
+#### P5.1: Testing
+- [ ] P5.1.1: Large-org simulation fixture (1k+ devices)
+- [ ] P5.1.2: Unit tests for refactored components
+- [ ] P5.1.3: Integration tests for parallel collection
+- [ ] P5.1.4: Performance regression tests
+
+#### P5.2: Documentation
+- [ ] P5.2.1: Update README with new features
+- [ ] P5.2.2: Performance tuning guide
+- [ ] P5.2.3: Scaling guide for large deployments
+- [ ] P5.2.4: Update CLAUDE.md with new patterns
+
+---
+
+## Implementation Priority Order
+
+### Foundation (MUST DO FIRST)
+1. P1.1: Parallel Organization Processing (CRITICAL)
+2. P1.2: Shared Organization Inventory Service (CRITICAL)
+
+### Core Improvements
+3. P1.3: Metric Expiration (HIGH)
+4. P1.4: Optimized Batch Sizes (HIGH)
+5. P2.1: Enhanced API Client (HIGH)
+
+### Quality & Monitoring
+6. P4.1: Health Score Collection (HIGH VALUE)
+7. P2.2: PrometheusToOTelBridge Improvements (MEDIUM)
+8. P2.3: CardinalityMonitor Enhancements (MEDIUM)
+
+### Refactoring
+9. P3.1: Refactor MR Collector (MEDIUM)
+10. P3.2: Standardize Patterns (MEDIUM)
+
+### Polish & Features
+11. P4.2: Webhook Support (MEDIUM)
+12. P5.1-P5.2: Testing & Documentation (ONGOING)
+
+---
+
+## Key Architecture Decisions
+
+1. **Use ManagedTaskGroup over simple semaphores** - Better error handling and backpressure
+2. **Shared inventory service is critical** - Implement early for maximum impact
+3. **Metric expiration before new features** - Prevent production issues
+4. **Health scores are high-value quick win** - Prioritize over complex refactoring
+5. **Keep OTEL improvements with API client work** - Natural coupling
+
+---
+
+## Success Metrics
+
+- **Performance**: 2-10x faster multi-org collection
+- **Efficiency**: 30-50% reduction in API calls
+- **Scalability**: Support for 5,000+ devices
+- **Memory**: Stable memory usage over time
+- **Quality**: <100 lines per module (from 1,763)
+- **Observability**: 100% API call coverage with metrics
+
+---
+
+## Notes for LLM Implementation
+
+1. **Always check Context7 MCP first** for Meraki API documentation
+2. **Use enums for all metric/label names** - never hardcode strings
+3. **Follow error handling patterns** - use `@with_error_handling` decorator
+4. **Add metrics for everything** - API calls, errors, performance
+5. **Update tests immediately** - don't accumulate test debt
+6. **Keep CLAUDE.md current** - documentation is part of the code
+
+**Remember**: Performance improvements before features, architecture before implementation, testing throughout.
+
+---
+
+## Completed Tasks
+
+_(Tasks will be moved here as completed during implementation)_
