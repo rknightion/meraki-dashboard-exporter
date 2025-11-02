@@ -1,0 +1,682 @@
+# Meraki Dashboard API - Overlooked Granular Endpoints
+
+Based on research of the Meraki Dashboard API v1 documentation, here are specific, granular endpoints that could provide valuable monitoring metrics not currently collected:
+
+## 1. Device-Specific Configuration Status
+
+### Switch Port Configuration Details
+- `GET /devices/{serial}/switch/ports/{portId}` - Per-port configuration including:
+  - PoE enabled/disabled status
+  - VLAN configuration (access/trunk mode, allowed VLANs)
+  - Voice VLAN settings
+  - Port isolation status
+  - RSTP/STP guard settings
+  - Link negotiation settings
+  - UDLD status
+
+### SSID Configuration per Network
+- `GET /networks/{networkId}/wireless/ssids/{number}` - Per-SSID configuration:
+  - Authentication mode (PSK, 802.1X, etc.)
+  - VLAN tagging
+  - Client isolation settings
+  - Band selection
+  - Per-SSID bandwidth limits
+  - Splash page settings
+
+## 2. Bluetooth and BLE Beacon Endpoints
+- `GET /devices/{serial}/wireless/bluetooth/settings` - Bluetooth radio settings
+- `PUT /devices/{serial}/wireless/bluetooth/settings` - Configure Bluetooth
+- `GET /networks/{networkId}/wireless/bluetooth/clients` - BLE client tracking
+
+## 3. Systems Manager (SM) Device Management
+- `GET /networks/{networkId}/sm/devices` - Enrolled device inventory
+- `GET /networks/{networkId}/sm/devices/{deviceId}/performanceHistory` - Historical performance:
+  - CPU usage
+  - Memory usage
+  - Disk usage
+  - Battery percentage
+- `GET /networks/{networkId}/sm/devices/{deviceId}/deviceProfiles` - Configuration profiles
+- `GET /networks/{networkId}/sm/devices/{deviceId}/networkAdapters` - Network interface details
+- `GET /networks/{networkId}/sm/devices/{deviceId}/securityCenters` - Security status
+
+## 4. Location Analytics and Scanning API
+- `GET /networks/{networkId}/wireless/clients/connectionStats` - Client connection analytics
+- `GET /networks/{networkId}/camera/analytics/zones` - Camera zone analytics
+- `GET /devices/{serial}/camera/analytics/overview` - Camera analytics summary
+- `GET /devices/{serial}/camera/analytics/recent` - Recent motion events
+
+## 5. MV Camera Analytics Beyond Basic Motion
+- `GET /devices/{serial}/camera/analytics/zones/{zoneId}/history` - Zone-specific analytics:
+  - People counting
+  - Object detection
+  - Dwell time
+  - Queue length
+- `GET /devices/{serial}/camera/sense` - MV Sense API data
+- `GET /devices/{serial}/camera/qualityAndRetention` - Video quality settings
+
+## 6. Protocol Statistics (CDP, LLDP, etc.)
+- `GET /devices/{serial}/lldpCdp` - LLDP/CDP neighbor information
+- `GET /devices/{serial}/switch/ports/{portId}/packets` - Per-port packet statistics:
+  - Broadcast packets
+  - Multicast packets
+  - CRC errors
+  - Collision counts
+
+## 7. RF Spectrum Analysis and Channel Utilization
+- `GET /networks/{networkId}/wireless/channelUtilizationHistory` - Historical channel usage
+- `GET /networks/{networkId}/wireless/rfProfiles` - RF profile configurations
+- `GET /devices/{serial}/wireless/radio/settings` - Radio-specific settings:
+  - Channel width
+  - TX power
+  - RX-SOP (Receiver Start of Packet)
+
+## 8. DNS and DHCP Server Statistics
+- `GET /devices/{serial}/appliance/dhcp/subnets` - DHCP subnet details
+- `GET /devices/{serial}/switch/routing/interfaces/{interfaceId}/dhcp` - Interface DHCP stats
+- `GET /networks/{networkId}/appliance/firewall/l7FirewallRules` - DNS filtering rules
+
+## 9. NAT and Port Forwarding Usage
+- `GET /networks/{networkId}/appliance/firewall/portForwardingRules` - Active NAT rules
+- `GET /networks/{networkId}/appliance/firewall/oneToOneNatRules` - 1:1 NAT mappings
+- `GET /networks/{networkId}/appliance/firewall/oneToManyNatRules` - Port forwarding rules
+
+## 10. Content Filtering and Web Security Statistics
+- `GET /networks/{networkId}/appliance/contentFiltering` - Content filtering settings
+- `GET /networks/{networkId}/appliance/contentFiltering/categories` - Blocked categories
+- `GET /networks/{networkId}/appliance/security/malware` - Malware detection settings
+- `GET /networks/{networkId}/appliance/security/intrusion` - IDS/IPS settings
+
+## 11. Guest User Analytics and Session Data
+- `GET /networks/{networkId}/wireless/ssids/{number}/splash/guestSponsors` - Guest sponsors
+- `GET /networks/{networkId}/wireless/ssids/{number}/identityPsks` - Per-user PSKs
+- `GET /networks/{networkId}/merakiAuthUsers` - Guest user sessions
+
+## 12. Switch Port Mirroring and Packet Capture Stats
+- `GET /organizations/{organizationId}/packetCaptures` - Active captures
+- `GET /devices/{serial}/switch/ports/mirror` - Port mirroring configuration
+
+## 13. Voice VLAN and QoS Statistics
+- `GET /networks/{networkId}/switch/qosRules` - QoS rule definitions
+- `GET /devices/{serial}/switch/ports/{portId}/status` - Voice VLAN client count
+- `GET /networks/{networkId}/wireless/ssids/{number}/trafficShaping` - Per-SSID QoS
+
+## 14. 802.1X Authentication Statistics
+- `GET /networks/{networkId}/switch/accessPolicies` - 802.1X policies
+- `GET /devices/{serial}/switch/ports/{portId}/status` - Authentication status
+- `GET /networks/{networkId}/wireless/ssids/{number}/eapOverride` - EAP settings
+
+## 15. IPv6-Specific Metrics
+- `GET /devices/{serial}/appliance/prefixes/delegated` - IPv6 prefix delegation
+- `GET /devices/{serial}/appliance/prefixes/delegated/vlanAssignments` - IPv6 VLAN assignments
+- `GET /networks/{networkId}/appliance/firewall/l3FirewallRules` - IPv6 firewall rules
+
+## 16. Multicast Routing and IGMP Snooping
+- `GET /networks/{networkId}/switch/routing/multicast` - Multicast settings
+- `PUT /networks/{networkId}/appliance/firewall/multicastForwarding` - IGMP proxy settings
+- `GET /networks/{networkId}/switch/routing/ospf` - OSPF multicast settings
+
+## 17. Switch Power Budget and PoE Allocation
+- `GET /devices/{serial}/switch/ports/statuses` - Per-port PoE allocation
+- `GET /organizations/{organizationId}/switch/ports/bySwitch` - Org-wide PoE usage
+- Power warnings: "PoE overload", "PoE port was denied power"
+
+## 18. Air Marshal Security Classifications
+- `GET /networks/{networkId}/wireless/airMarshal` - Rogue AP detection
+- `GET /networks/{networkId}/wireless/airMarshal/rules` - Custom security rules
+- `GET /networks/{networkId}/wireless/airMarshal/settings` - Security policy
+
+## 19. Client Fingerprinting and Device Profiling
+- `GET /networks/{networkId}/clients/{clientId}` - Detailed client info including:
+  - Device type classification
+  - OS detection
+  - Manufacturer identification
+- `GET /networks/{networkId}/policies/byClient` - Per-client policies
+
+## 20. Meraki Health Scores and Recommendations
+- `GET /devices/{serial}/healthScores` - Device health scores
+- `GET /networks/{networkId}/wireless/clientHealthScores` - Client health metrics
+- `GET /devices/{serial}/wireless/healthScores` - Wireless-specific health
+- `GET /organizations/{organizationId}/assurance/alerts` - Health recommendations
+
+## Additional Valuable Endpoints
+
+### Performance and Latency Metrics
+- `GET /devices/{serial}/lossAndLatencyHistory` - WAN performance metrics
+- `GET /networks/{networkId}/wireless/latencyHistory` - Wireless latency stats
+- `GET /devices/{serial}/clients/{clientId}/latencyHistory` - Per-client latency
+
+### Traffic Analysis
+- `GET /networks/{networkId}/traffic/analysis` - DPI traffic classification
+- `GET /networks/{networkId}/appliance/trafficShaping/applicationCategories` - App categories
+- `GET /devices/{serial}/switch/ports/{portId}/usage` - Detailed port usage
+
+### Environmental and Physical Security
+- `GET /devices/{serial}/sensor/readings/latest` - Latest sensor readings
+- `GET /devices/{serial}/sensor/readings/history` - Historical sensor data
+- `GET /devices/{serial}/camera/snapshot` - Camera snapshots
+
+### Advanced Wireless Features
+- `GET /networks/{networkId}/wireless/rfProfiles/{rfProfileId}` - RF profile details
+- `GET /networks/{networkId}/wireless/alternateManagementInterface` - Management VLAN
+- `GET /devices/{serial}/wireless/alternateManagementInterface` - Per-AP management
+
+### Security and Compliance
+- `GET /organizations/{organizationId}/loginSecurity` - Security policy details
+- `GET /networks/{networkId}/syslogServers` - Syslog configuration
+- `GET /networks/{networkId}/snmp` - SNMP settings
+
+## Implementation Priority
+
+High Priority (immediate monitoring value):
+1. Health scores and recommendations
+2. Per-port PoE allocation and power budget
+3. 802.1X authentication statistics
+4. RF channel utilization history
+5. Client fingerprinting data
+
+Medium Priority (enhanced visibility):
+6. Protocol statistics (CDP/LLDP)
+7. Voice VLAN and QoS metrics
+8. Air Marshal security data
+9. DNS/DHCP server statistics
+10. Content filtering statistics
+
+Low Priority (specialized use cases):
+11. Systems Manager device metrics
+12. Camera analytics zones
+13. IPv6-specific metrics
+14. Multicast/IGMP statistics
+15. NAT/port forwarding usage
+
+
+=== ROUND 3: DEEP DIVE INTO GRANULAR AND ADVANCED METRICS ===
+
+After exhaustive analysis of edge cases, beta features, and granular endpoints, here are additional metrics not covered in rounds 1 and 2:
+
+=== HEALTH SCORES & RECOMMENDATIONS ===
+
+meraki_device_health_score
+API: GET /organizations/{organizationId}/devices/healths
+Description: Overall device health score (0-100) with performance indicators.
+
+meraki_wireless_health_score
+API: GET /organizations/{organizationId}/wireless/healths
+Description: Wireless network health score including RF performance, client experience.
+
+meraki_client_health_score
+API: GET /networks/{networkId}/clients/{clientId}/healthScores
+Description: Individual client health score based on connection quality.
+
+meraki_health_recommendations_total
+API: GET /organizations/{organizationId}/devices/healths
+Description: Number of active health recommendations per device.
+
+meraki_assurance_alerts_total
+API: GET /organizations/{organizationId}/assurance/alerts
+Description: Assurance-based alerts for proactive issue detection.
+
+meraki_assurance_alert_severity_distribution
+API: GET /organizations/{organizationId}/assurance/alerts/overview
+Description: Alert distribution by severity level (critical, warning, info).
+
+=== SYSTEMS MANAGER (SM) DEVICE METRICS ===
+
+meraki_sm_device_cpu_usage_percent
+API: GET /networks/{networkId}/sm/devices/{deviceId}/performanceHistory
+Description: CPU usage percentage for managed endpoints.
+
+meraki_sm_device_memory_usage_percent
+API: GET /networks/{networkId}/sm/devices/{deviceId}/performanceHistory
+Description: Memory utilization for Systems Manager devices.
+
+meraki_sm_device_disk_usage_percent
+API: GET /networks/{networkId}/sm/devices/{deviceId}/deviceProfiles
+Description: Disk space utilization on managed devices.
+
+meraki_sm_device_battery_level_percent
+API: GET /networks/{networkId}/sm/devices
+Description: Battery level for mobile devices.
+
+meraki_sm_device_compliance_status
+API: GET /networks/{networkId}/sm/devices
+Description: Device compliance state (compliant=1, non-compliant=0).
+
+meraki_sm_apps_installed_total
+API: GET /networks/{networkId}/sm/devices/{deviceId}/softwares
+Description: Number of applications installed per device.
+
+meraki_sm_security_centers_threats_total
+API: GET /networks/{networkId}/sm/devices/{deviceId}/securityCenters
+Description: Security threats detected on managed devices.
+
+=== GRANULAR WIRELESS METRICS ===
+
+meraki_rf_channel_utilization_percent
+API: GET /networks/{networkId}/wireless/channelUtilizationHistory
+Description: Historical RF channel utilization percentage per AP and band.
+
+meraki_rf_profile_changes_total
+API: GET /networks/{networkId}/wireless/rfProfiles
+Description: Count of RF profile changes affecting network performance.
+
+meraki_wireless_alternate_management_interface_status
+API: GET /networks/{networkId}/wireless/alternateManagementInterface
+Description: Status of alternate management interface for wireless (enabled=1).
+
+meraki_wireless_bluetooth_clients_total
+API: GET /networks/{networkId}/bluetoothClients
+Description: Number of Bluetooth/BLE clients detected.
+
+meraki_wireless_air_marshal_classifications
+API: GET /networks/{networkId}/wireless/airMarshal
+Description: Detailed classifications of detected APs (rogue, neighbor, known).
+
+meraki_wireless_rx_sop_threshold_dbm
+API: GET /networks/{networkId}/wireless/settings
+Description: RX-SOP (Receiver Start of Packet) threshold for high-density deployments.
+
+meraki_wireless_ssid_l3_firewall_rules_total
+API: GET /networks/{networkId}/wireless/ssids/{number}/firewall/l3FirewallRules
+Description: Number of Layer 3 firewall rules per SSID.
+
+meraki_wireless_ssid_traffic_shaping_enabled
+API: GET /networks/{networkId}/wireless/ssids/{number}/trafficShaping/rules
+Description: Traffic shaping status per SSID (enabled=1, disabled=0).
+
+=== GRANULAR SWITCH METRICS ===
+
+meraki_switch_port_cdp_lldp_neighbors_total
+API: GET /devices/{serial}/liveTools/cdp
+Description: Number of CDP/LLDP neighbors discovered per port.
+
+meraki_switch_port_packet_errors_total
+API: GET /devices/{serial}/switch/ports/statuses/packets
+Description: Packet errors including CRC, collisions, and alignment errors.
+
+meraki_switch_port_broadcast_storm_dropped_packets
+API: GET /devices/{serial}/switch/ports/statuses
+Description: Packets dropped due to broadcast storm control.
+
+meraki_switch_port_poe_power_allocated_watts
+API: GET /devices/{serial}/switch/ports/statuses
+Description: PoE power allocated per port in watts.
+
+meraki_switch_port_poe_power_budget_exceeded
+API: GET /devices/{serial}/switch/ports/statuses
+Description: Binary metric indicating PoE budget exceeded (1=exceeded).
+
+meraki_switch_port_mirror_sessions_active
+API: GET /networks/{networkId}/switch/portMirror
+Description: Number of active port mirroring sessions.
+
+meraki_switch_mtu_size_bytes
+API: GET /networks/{networkId}/switch/mtu
+Description: MTU size configured on switch network.
+
+=== AUTHENTICATION & 802.1X METRICS ===
+
+meraki_dot1x_authentication_attempts_total
+API: Derived from switch port status and events
+Description: Total 802.1X authentication attempts per port.
+
+meraki_dot1x_authentication_failures_total
+API: Derived from switch port status and events
+Description: Failed 802.1X authentication attempts.
+
+meraki_dot1x_reauthentication_count
+API: Derived from switch port status
+Description: Number of 802.1X reauthentications.
+
+meraki_radius_server_response_time_ms
+API: Derived from authentication logs
+Description: RADIUS server response time for authentication requests.
+
+meraki_mac_authentication_bypass_total
+API: Derived from switch port status
+Description: MAB (MAC Authentication Bypass) attempts.
+
+=== VOICE & VIDEO OPTIMIZATION METRICS ===
+
+meraki_voice_vlan_clients_total
+API: GET /devices/{serial}/switch/ports/statuses
+Description: Number of clients on voice VLAN per port.
+
+meraki_qos_dscp_tagged_packets_total
+API: Derived from traffic analytics
+Description: Packets tagged with DSCP values for QoS.
+
+meraki_qos_queue_drops_total
+API: Derived from switch port statistics
+Description: Packets dropped per QoS queue due to congestion.
+
+meraki_video_streaming_optimization_enabled
+API: GET /networks/{networkId}/wireless/ssids/{number}/trafficShaping/rules
+Description: Video streaming optimization status per SSID.
+
+=== IPv6 SPECIFIC METRICS ===
+
+meraki_ipv6_clients_total
+API: GET /networks/{networkId}/clients
+Description: Number of clients using IPv6 addresses.
+
+meraki_ipv6_prefix_delegation_active
+API: GET /devices/{serial}/appliance/prefixes/delegated/vlanAssignments
+Description: Active IPv6 prefix delegations per VLAN.
+
+meraki_ipv6_dhcp_leases_total
+API: GET /devices/{serial}/appliance/dhcp/subnets
+Description: IPv6 DHCP leases issued.
+
+meraki_ipv6_traffic_percentage
+API: Derived from traffic analytics
+Description: Percentage of traffic using IPv6.
+
+=== CAMERA ANALYTICS ADVANCED ===
+
+meraki_camera_people_count_current
+API: GET /devices/{serial}/camera/analytics/zones/{zoneId}/history
+Description: Current people count in camera analytics zones.
+
+meraki_camera_average_dwell_time_seconds
+API: GET /devices/{serial}/camera/analytics/zones/{zoneId}/history
+Description: Average time people spend in analytics zones.
+
+meraki_camera_entrance_counts_total
+API: GET /devices/{serial}/camera/analytics/zones/{zoneId}/history
+Description: Total entrance counts for defined zones.
+
+meraki_camera_occupancy_percentage
+API: Derived from analytics data
+Description: Zone occupancy as percentage of capacity.
+
+meraki_camera_object_detection_events_total
+API: GET /devices/{serial}/camera/analytics/overview
+Description: Total object detection events by type (person, vehicle, etc).
+
+=== MQTT & STREAMING METRICS ===
+
+meraki_mqtt_broker_connections_active
+API: GET /networks/{networkId}/mqttBrokers
+Description: Active MQTT broker connections for real-time data.
+
+meraki_mqtt_messages_published_total
+API: Derived from MQTT broker stats
+Description: Total messages published to MQTT topics.
+
+meraki_mqtt_topic_subscriptions_total
+API: GET /networks/{networkId}/mqttBrokers
+Description: Number of active MQTT topic subscriptions.
+
+=== CONTENT FILTERING & WEB SECURITY ===
+
+meraki_content_filter_blocked_requests_total
+API: Derived from security events
+Description: Web requests blocked by content category.
+
+meraki_malware_blocked_downloads_total
+API: Derived from security events
+Description: File downloads blocked due to malware detection.
+
+meraki_url_blocked_by_category_total
+API: Derived from content filtering logs
+Description: URLs blocked grouped by category.
+
+meraki_web_security_threats_detected_total
+API: GET /organizations/{organizationId}/appliance/security/events
+Description: Web-based security threats detected.
+
+=== LOCATION ANALYTICS ===
+
+meraki_location_scanning_clients_total
+API: GET /networks/{networkId}/wireless/clients
+Description: Number of clients detected via location scanning.
+
+meraki_location_visitor_count_hourly
+API: Derived from scanning API data
+Description: Hourly visitor counts from location analytics.
+
+meraki_location_repeat_visitors_percentage
+API: Derived from location data
+Description: Percentage of repeat visitors based on MAC addresses.
+
+meraki_location_average_visit_duration_minutes
+API: Derived from location scanning data
+Description: Average time visitors spend on premises.
+
+=== ACTION BATCHES & BULK METRICS ===
+
+meraki_action_batch_success_rate_percent
+API: GET /organizations/{organizationId}/actionBatches
+Description: Success rate of action batch operations.
+
+meraki_action_batch_pending_total
+API: GET /organizations/{organizationId}/actionBatches
+Description: Number of pending action batches.
+
+meraki_action_batch_execution_time_seconds
+API: GET /organizations/{organizationId}/actionBatches/{actionBatchId}
+Description: Execution time for action batches.
+
+=== EARLY ACCESS & BETA FEATURES ===
+
+meraki_early_access_features_enabled_total
+API: GET /organizations/{organizationId}/earlyAccess/features/optIns
+Description: Number of early access features enabled.
+
+meraki_beta_firmware_devices_total
+API: Derived from firmware upgrade status
+Description: Devices running beta firmware versions.
+
+=== LIVE TOOLS DIAGNOSTICS ===
+
+meraki_live_tool_arp_entries_total
+API: GET /devices/{serial}/liveTools/arpTable
+Description: Number of ARP entries in device ARP table.
+
+meraki_live_tool_mac_table_entries_total
+API: GET /devices/{serial}/liveTools/macTable
+Description: MAC address table size from live tools.
+
+meraki_live_tool_routing_table_entries_total
+API: GET /devices/{serial}/liveTools/routingTable
+Description: Number of routing table entries.
+
+=== MULTICAST & IGMP METRICS ===
+
+meraki_igmp_snooping_enabled
+API: GET /networks/{networkId}/switch/settings/multicast
+Description: IGMP snooping status (enabled=1, disabled=0).
+
+meraki_multicast_groups_active_total
+API: Derived from IGMP snooping data
+Description: Number of active multicast groups.
+
+meraki_multicast_bandwidth_usage_mbps
+API: Derived from traffic analytics
+Description: Bandwidth used by multicast traffic.
+
+=== NAT & PORT FORWARDING METRICS ===
+
+meraki_nat_rules_configured_total
+API: GET /devices/{serial}/appliance/firewall/oneToOneNatRules
+Description: Number of 1:1 NAT rules configured.
+
+meraki_port_forwarding_rules_total
+API: GET /devices/{serial}/appliance/firewall/portForwardingRules
+Description: Total port forwarding rules configured.
+
+meraki_nat_translations_active_total
+API: Derived from appliance status
+Description: Active NAT translation sessions.
+
+=== COMPUTED/DERIVED METRICS ===
+
+meraki_network_complexity_score
+Description: Computed score based on number of VLANs, firewall rules, and policies.
+
+meraki_security_posture_score
+Description: Aggregate score from various security metrics.
+
+meraki_wireless_roaming_efficiency_percent
+Description: Percentage of seamless roaming events vs total roaming.
+
+meraki_network_change_frequency_daily
+Description: Average number of configuration changes per day.
+
+meraki_api_usage_efficiency_score
+Description: API calls per managed device (efficiency metric).
+
+meraki_device_refresh_recommended_total
+Description: Devices recommended for refresh based on age and support status.
+
+meraki_compliance_drift_score
+Description: Deviation from baseline configuration templates.
+
+meraki_network_health_composite_score
+Description: Weighted average of all health metrics.
+
+meraki_automation_adoption_score
+Description: Percentage of features using automation vs manual config.
+
+=== WEBHOOK EVENT METRICS ===
+
+meraki_webhook_events_received_total
+API: Webhook receiver implementation
+Description: Total webhook events received by type.
+
+meraki_webhook_processing_latency_ms
+API: Webhook receiver implementation
+Description: Time to process webhook events.
+
+meraki_webhook_delivery_failures_total
+API: Derived from webhook logs
+Description: Failed webhook delivery attempts.
+
+=== ROUND 3 IMPLEMENTATION RECOMMENDATIONS ===
+
+1. **Critical Monitoring Gaps**:
+   - Health scores provide instant visibility into issues
+   - Systems Manager metrics enable endpoint monitoring
+   - RF channel utilization crucial for wireless performance
+
+2. **Security Enhancement**:
+   - 802.1X authentication metrics for access control monitoring
+   - Content filtering stats for web security visibility
+   - Air Marshal classifications for wireless security
+
+3. **Advanced Analytics**:
+   - Camera analytics for business intelligence
+   - Location analytics for visitor patterns
+   - MQTT streaming for real-time dashboards
+
+4. **Operational Intelligence**:
+   - Computed metrics provide higher-level insights
+   - Action batch monitoring for automation health
+   - Voice/video optimization for UC performance
+
+5. **Future-Proofing**:
+   - Early access feature tracking
+   - IPv6 readiness metrics
+   - Beta firmware adoption monitoring
+
+ROUND 3 PRIORITIES:
+1. CRITICAL: Health scores, RF utilization, 802.1X metrics
+2. HIGH: Systems Manager, Camera analytics, MQTT streaming
+3. MEDIUM: Location analytics, Content filtering, Voice optimization
+4. LOW: Computed metrics, Beta features, Action batches
+
+ROUND 3 NOTES:
+- Many metrics require specific license types (SM, MV, etc.)
+- Some endpoints are rate-limited more aggressively
+- MQTT provides real-time alternative to polling
+- Health scores aggregate multiple data points efficiently
+- Consider webhook integration for event-driven metrics
+- Camera and location analytics require privacy considerations
+- Live tools provide on-demand diagnostic data
+- Computed metrics require correlation across multiple endpoints
+
+
+=== ROUND 4: SNMP-EXCLUSIVE METRICS ===
+
+After analyzing SNMP MIBs (MERAKI-CLOUD-CONTROLLER-MIB and device-specific OIDs), here are metrics available via SNMP that provide unique value beyond the Dashboard API:
+
+=== CLOUD CONTROLLER SNMP METRICS ===
+
+The MERAKI-CLOUD-CONTROLLER-MIB provides organization and network-level visibility:
+
+meraki_device_status
+SNMP OID: 1.3.6.1.4.1.29671.1.1.4.1.3 (devStatus)
+Source: CLOUD CONTROLLER SNMP
+Description: Device online/offline status from cloud perspective.
+Value: Complements API device status with SNMP trap capability.
+
+meraki_device_client_count
+SNMP OID: 1.3.6.1.4.1.29671.1.1.4.1.5 (devClientCount)
+Source: CLOUD CONTROLLER SNMP
+Description: Number of clients per device.
+Value: Real-time client count via SNMP polling.
+
+meraki_device_last_contact
+SNMP OID: 1.3.6.1.4.1.29671.1.1.4.1.4 (devContactedAt)
+Source: CLOUD CONTROLLER SNMP
+Description: Last contact time with cloud controller.
+Value: Device connectivity monitoring.
+
+meraki_interface_packets_sent
+SNMP OID: 1.3.6.1.4.1.29671.1.1.5.1.4 (devInterfaceSentPkts)
+Source: CLOUD CONTROLLER SNMP
+Description: Packets sent per device interface.
+Value: Basic traffic counters when device SNMP unavailable.
+
+meraki_interface_packets_received
+SNMP OID: 1.3.6.1.4.1.29671.1.1.5.1.5 (devInterfaceRecvPkts)
+Source: CLOUD CONTROLLER SNMP
+Description: Packets received per device interface.
+Value: Basic traffic counters when device SNMP unavailable.
+
+NOTE: Cloud Controller SNMP is primarily valuable for:
+- SNMP trap reception (device up/down, security events)
+- Basic monitoring when direct device SNMP is not possible
+- Organization-wide device inventory via SNMP
+
+=== SNMP COLLECTION CONSIDERATIONS ===
+
+1. **Polling Frequency**:
+   - Error counters: 60 seconds (FAST) - DEVICE SNMP
+   - Memory/CPU: 60 seconds (FAST) - DEVICE SNMP
+   - MAC table size: 300 seconds (MEDIUM) - DEVICE SNMP
+   - Hardware sensors: 900 seconds (SLOW) - DEVICE SNMP
+   - Cloud status: 300 seconds (MEDIUM) - CLOUD SNMP
+
+2. **SNMP Version**:
+   - Prefer SNMPv3 for security
+   - Fall back to SNMPv2c if required
+   - Bulk operations for efficiency
+
+3. **Access Methods**:
+   - Cloud Controller SNMP: Organization-wide basic metrics and traps
+   - Direct Device SNMP: Granular performance and error counters
+   - Requires SNMP community/credentials configuration
+
+4. **Implementation Strategy**:
+   - Start with Cloud Controller SNMP for basic coverage
+   - Add Device SNMP for critical devices needing detailed monitoring
+   - Use Cloud SNMP traps for real-time alerting
+   - Device SNMP for troubleshooting and capacity planning
+
+5. **Unique Value Propositions**:
+   - Real-time error detection (Device SNMP)
+   - Memory leak identification (Device SNMP)
+   - Hardware failure prediction (Device SNMP)
+   - Layer 2 loop detection (Device SNMP)
+   - RF interference troubleshooting (Device SNMP)
+   - SNMP trap-based alerting (Cloud SNMP)
+
+=== SNMP-EXCLUSIVE INSIGHTS ===
+
+These SNMP metrics provide:
+- **Faster Detection**: 5-second CPU spikes, immediate error counts
+- **Root Cause Analysis**: Specific error types (CRC vs alignment vs symbol)
+- **Predictive Maintenance**: Fan RPM degradation, temperature trends
+- **Hidden Problems**: MAC flapping, multicast floods, buffer exhaustion
+- **Compliance**: Detailed PoE power measurements for safety audits
