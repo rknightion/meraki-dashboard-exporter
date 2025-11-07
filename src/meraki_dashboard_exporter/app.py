@@ -9,7 +9,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, HTTPException, Response
+from fastapi import Request as FastAPIRequest
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
@@ -24,9 +25,11 @@ from .core.config_logger import log_configuration
 from .core.constants import UpdateTier
 from .core.discovery import DiscoveryService
 from .core.logging import get_logger, setup_logging
+from .core.metric_expiration import MetricExpirationManager
 from .core.otel_logging import OTELLoggingConfig
 from .core.otel_metrics import PrometheusToOTelBridge
 from .core.otel_tracing import TracingConfig
+from .core.webhook_handler import WebhookHandler
 
 if TYPE_CHECKING:
     pass
@@ -62,9 +65,14 @@ class ExporterApp:
         log_configuration(self.settings)
 
         self.client = AsyncMerakiClient(self.settings)
+
+        # Initialize metric expiration manager (Phase 3.2)
+        self.expiration_manager = MetricExpirationManager(settings=self.settings)
+
         self.collector_manager = CollectorManager(
             client=self.client,
             settings=self.settings,
+            expiration_manager=self.expiration_manager,
         )
 
         self._background_tasks: set[asyncio.Task[Any]] = set()
@@ -94,6 +102,15 @@ class ExporterApp:
             critical_threshold=10000,
         )
 
+        # Setup webhook handler (Phase 4.2)
+        self.webhook_handler: WebhookHandler | None = None
+        if self.settings.webhooks.enabled:
+            self.webhook_handler = WebhookHandler(self.settings)
+            logger.info(
+                "Webhook receiver enabled",
+                require_secret=self.settings.webhooks.require_secret,
+            )
+
     def _handle_shutdown(self) -> None:
         """Handle shutdown request."""
         logger.info("Shutdown requested, stopping collection...")
@@ -112,6 +129,38 @@ class ExporterApp:
             return f"{hours}h {minutes}m"
         else:
             return f"{minutes}m"
+
+    def _get_metrics_stats(self) -> dict[str, int]:
+        """Calculate total metrics and timeseries from the Prometheus registry.
+
+        Returns
+        -------
+        dict[str, int]
+            Dictionary containing:
+            - metric_count: Total number of unique metrics
+            - timeseries_count: Total number of unique time series
+
+        """
+        from prometheus_client import REGISTRY
+
+        metric_count = 0
+        timeseries_count = 0
+
+        for metric_family in REGISTRY.collect():
+            # Skip internal cardinality metrics to avoid counting monitoring of monitoring
+            if metric_family.name.startswith("meraki_cardinality_"):
+                continue
+
+            metric_count += 1
+
+            # Count all samples (time series) for this metric
+            for sample in metric_family.samples:
+                timeseries_count += 1
+
+        return {
+            "metric_count": metric_count,
+            "timeseries_count": timeseries_count,
+        }
 
     @asynccontextmanager
     async def lifespan(self, app: FastAPI) -> AsyncIterator[None]:
@@ -151,6 +200,13 @@ class ExporterApp:
                 interval=self.settings.otel.export_interval,
             )
 
+        # Start metric expiration manager (Phase 3.2)
+        await self.expiration_manager.start()
+        logger.info(
+            "Started metric expiration manager",
+            ttl_multiplier=self.settings.monitoring.metric_ttl_multiplier,
+        )
+
         # Start background task for initial collection and tiered loops
         startup_task = asyncio.create_task(self._startup_collections())
         self._background_tasks.add(startup_task)
@@ -189,6 +245,10 @@ class ExporterApp:
             if self.otel_bridge:
                 await self.otel_bridge.stop()
                 logger.info("Stopped OpenTelemetry metric export")
+
+            # Stop metric expiration manager (Phase 3.2)
+            await self.expiration_manager.stop()
+            logger.info("Stopped metric expiration manager")
 
             # Cleanup
             await self.client.close()
@@ -383,19 +443,52 @@ class ExporterApp:
             # Get exporter instance from app state
             exporter = app.state.exporter
 
-            # Get collector information
+            # Get collector information with health status
             collectors = []
             for tier, collector_list in exporter.collector_manager.collectors.items():
                 for collector in collector_list:
                     # Only show active collectors
                     if collector.is_active:
+                        collector_name = collector.__class__.__name__
+                        health = exporter.collector_manager.collector_health.get(collector_name, {})
+
+                        # Calculate success rate
+                        total_runs = health.get("total_runs", 0)
+                        total_successes = health.get("total_successes", 0)
+                        success_rate = (
+                            (total_successes / total_runs * 100) if total_runs > 0 else 0.0
+                        )
+
+                        # Calculate last success age
+                        last_success_time = health.get("last_success_time")
+                        if last_success_time:
+                            last_success_age = int(time.time() - last_success_time)
+                            if last_success_age < 60:
+                                last_success_str = f"{last_success_age}s ago"
+                            elif last_success_age < 3600:
+                                last_success_str = f"{last_success_age // 60}m ago"
+                            else:
+                                last_success_str = f"{last_success_age // 3600}h ago"
+                        else:
+                            last_success_str = "Never"
+
                         collectors.append({
-                            "name": collector.__class__.__name__.replace("Collector", ""),
+                            "name": collector_name.replace("Collector", ""),
                             "tier": tier.value.upper(),
+                            "failure_streak": health.get("failure_streak", 0),
+                            "success_rate": f"{success_rate:.1f}",
+                            "last_success": last_success_str,
+                            "total_runs": total_runs,
                         })
+
+            # Get skipped collectors
+            skipped_collectors = exporter.collector_manager.skipped_collectors
 
             # Get organization count (if available)
             org_count = 1 if exporter.settings.meraki.org_id else "All"
+
+            # Get real-time metrics stats
+            metrics_stats = exporter._get_metrics_stats()
 
             context = {
                 "request": request,
@@ -403,7 +496,10 @@ class ExporterApp:
                 "uptime": exporter._format_uptime(),
                 "collector_count": len(collectors),
                 "org_count": org_count,
+                "metric_count": metrics_stats["metric_count"],
+                "timeseries_count": metrics_stats["timeseries_count"],
                 "collectors": collectors,
+                "skipped_collectors": skipped_collectors,
                 "fast_interval": exporter.settings.update_intervals.fast,
                 "medium_interval": exporter.settings.update_intervals.medium,
                 "slow_interval": exporter.settings.update_intervals.slow,
@@ -516,6 +612,99 @@ class ExporterApp:
             # Clear the cache
             dns_resolver.clear_cache()
             return {"status": "success", "message": "DNS cache cleared"}
+
+        @app.post("/api/webhooks/meraki")
+        async def webhook_receiver(request: FastAPIRequest) -> dict[str, str]:
+            """Meraki webhook receiver endpoint (Phase 4.2).
+
+            This endpoint receives and processes webhook events from Meraki Dashboard.
+            Events are validated and tracked via Prometheus metrics.
+
+            Parameters
+            ----------
+            request : FastAPIRequest
+                The incoming webhook request.
+
+            Returns
+            -------
+            dict[str, str]
+                Status response.
+
+            Raises
+            ------
+            HTTPException
+                If webhooks are disabled, validation fails, or processing errors occur.
+
+            """
+            # Get exporter instance from app state
+            exporter = app.state.exporter
+
+            # Check if webhooks are enabled
+            if not exporter.settings.webhooks.enabled or not exporter.webhook_handler:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Webhook receiver is not enabled",
+                )
+
+            # Validate content type
+            content_type = request.headers.get("content-type", "")
+            if "application/json" not in content_type:
+                logger.warning(
+                    "Invalid content type for webhook",
+                    content_type=content_type,
+                )
+                exporter.webhook_handler.validation_failures.labels(
+                    validation_error="invalid_content_type"
+                ).inc()
+                raise HTTPException(
+                    status_code=400,
+                    detail="Content-Type must be application/json",
+                )
+
+            # Check payload size
+            content_length = request.headers.get("content-length")
+            if content_length:
+                size = int(content_length)
+                max_size = exporter.settings.webhooks.max_payload_size
+                if size > max_size:
+                    logger.warning(
+                        "Webhook payload too large",
+                        size=size,
+                        max_size=max_size,
+                    )
+                    exporter.webhook_handler.validation_failures.labels(
+                        validation_error="payload_too_large"
+                    ).inc()
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Payload too large (max: {max_size} bytes)",
+                    )
+
+            # Parse JSON body
+            try:
+                payload_data = await request.json()
+            except Exception as e:
+                logger.error("Failed to parse webhook JSON", error=str(e))
+                exporter.webhook_handler.validation_failures.labels(
+                    validation_error="invalid_json"
+                ).inc()
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid JSON payload",
+                ) from e
+
+            # Process webhook
+            payload = exporter.webhook_handler.process_webhook(payload_data)
+
+            if payload is None:
+                # Processing failed (validation or secret mismatch)
+                raise HTTPException(
+                    status_code=401,
+                    detail="Webhook validation failed",
+                )
+
+            # Return success
+            return {"status": "success", "message": "Webhook processed"}
 
         return app
 

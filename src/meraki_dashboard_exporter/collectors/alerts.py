@@ -76,6 +76,20 @@ class AlertsCollector(MetricCollector):
             ],
         )
 
+        # Network health alerts (Phase 4.1)
+        self._network_health_alerts_total = self._create_gauge(
+            AlertMetricName.NETWORK_HEALTH_ALERTS_TOTAL,
+            "Total number of active network health alerts by category and severity",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.CATEGORY,
+                LabelName.SEVERITY,
+            ],
+        )
+
     async def _collect_impl(self) -> None:
         """Collect alert metrics."""
         start_time = time.time()
@@ -136,6 +150,17 @@ class AlertsCollector(MetricCollector):
 
                 # Count successful sensor alert collections
                 for result in sensor_results:
+                    if not isinstance(result, Exception):
+                        api_calls_made += 1
+
+                # Collect network health alerts (Phase 4.1)
+                health_alert_tasks = [
+                    self._collect_network_health_alerts(network) for network in networks
+                ]
+                health_results = await asyncio.gather(*health_alert_tasks, return_exceptions=True)
+
+                # Count successful network health alert collections
+                for result in health_results:
                     if not isinstance(result, Exception):
                         api_calls_made += 1
 
@@ -441,3 +466,72 @@ class AlertsCollector(MetricCollector):
                     network_name=network_name,
                     metric_count=len(counts),
                 )
+
+    @log_api_call("getNetworkHealthAlerts")
+    @with_error_handling(
+        operation="Collect network health alerts",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_NOT_AVAILABLE,
+    )
+    async def _collect_network_health_alerts(self, network: dict[str, Any]) -> None:
+        """Collect health alerts for a specific network (Phase 4.1).
+
+        Parameters
+        ----------
+        network : dict[str, Any]
+            Network data with org info.
+
+        """
+        network_id = network["id"]
+        network_name = network.get("name", network_id)
+        org_id = network.get("orgId", "")
+        org_name = network.get("orgName", org_id)
+
+        with LogContext(network_id=network_id, network_name=network_name, org_id=org_id):
+            # Get network health alerts
+            alerts = await asyncio.to_thread(
+                self.api.networks.getNetworkHealthAlerts,
+                network_id,
+            )
+
+            alerts = validate_response_format(
+                alerts, expected_type=list, operation="getNetworkHealthAlerts"
+            )
+
+            if not alerts:
+                logger.debug("No network health alerts", network_id=network_id)
+                return
+
+            # Aggregate alerts by category and severity
+            alert_counts: dict[tuple[str, str], int] = {}
+
+            for alert in alerts:
+                category = alert.get("category", "unknown")
+                severity = alert.get("severity", "unknown")
+
+                # Skip if alert is resolved
+                if alert.get("closedAt"):
+                    continue
+
+                key = (category, severity)
+                alert_counts[key] = alert_counts.get(key, 0) + 1
+
+            # Set metrics for network health alerts
+            for (category, severity), count in alert_counts.items():
+                self._network_health_alerts_total.labels(
+                    org_id=org_id,
+                    org_name=org_name,
+                    network_id=network_id,
+                    network_name=network_name,
+                    category=category,
+                    severity=severity,
+                ).set(count)
+
+            logger.debug(
+                "Collected network health alert metrics",
+                network_id=network_id,
+                network_name=network_name,
+                total_alerts=len(alerts),
+                active_alerts=sum(alert_counts.values()),
+                categories=len(alert_counts),
+            )

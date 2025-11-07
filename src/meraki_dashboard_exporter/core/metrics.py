@@ -94,6 +94,18 @@ class LabelName(StrEnum):
     MEDIA = "media"  # rj45, sfp
     LINK_SPEED = "link_speed"  # 10, 100, 1000, etc in Mbps
 
+    # Collector infrastructure labels
+    COLLECTOR = "collector"  # Collector name
+    TIER = "tier"  # Collection tier (fast/medium/slow)
+
+    # API client labels (Phase 2.1)
+    ENDPOINT = "endpoint"  # API endpoint name
+    METHOD = "method"  # HTTP method (GET, POST, etc)
+    RETRY_REASON = "retry_reason"  # Reason for retry (rate_limit, timeout, etc)
+
+    # Webhook labels (Phase 4.2)
+    VALIDATION_ERROR = "validation_error"  # Webhook validation error reason
+
 
 MetricType = Literal["gauge", "counter", "histogram", "info"]
 

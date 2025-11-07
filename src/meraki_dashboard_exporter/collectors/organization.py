@@ -6,6 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ..core.api_helpers import create_api_helper
+from ..core.async_utils import ManagedTaskGroup
 from ..core.collector import MetricCollector
 from ..core.constants import OrgMetricName, UpdateTier
 from ..core.error_handling import ErrorCategory, with_error_handling
@@ -22,6 +23,8 @@ if TYPE_CHECKING:
     from prometheus_client import CollectorRegistry
 
     from ..core.config import Settings
+    from ..core.metric_expiration import MetricExpirationManager
+    from ..services.inventory import OrganizationInventory
 
 logger = get_logger(__name__)
 
@@ -35,9 +38,11 @@ class OrganizationCollector(MetricCollector):
         api: DashboardAPI,
         settings: Settings,
         registry: CollectorRegistry | None = None,
+        inventory: OrganizationInventory | None = None,
+        expiration_manager: MetricExpirationManager | None = None,
     ) -> None:
         """Initialize organization collector with sub-collectors."""
-        super().__init__(api, settings, registry)
+        super().__init__(api, settings, registry, inventory, expiration_manager)
 
         # Create API helper
         self.api_helper = create_api_helper(self)
@@ -184,7 +189,11 @@ class OrganizationCollector(MetricCollector):
         )
 
     async def _collect_impl(self) -> None:
-        """Collect organization metrics."""
+        """Collect organization metrics with parallel organization processing.
+
+        Organizations are processed in parallel with bounded concurrency
+        to significantly improve performance for multi-org deployments.
+        """
         start_time = asyncio.get_event_loop().time()
         metrics_collected = 0
         organizations_processed = 0
@@ -198,16 +207,26 @@ class OrganizationCollector(MetricCollector):
                 return
             api_calls_made += 1
 
-            # Collect metrics for each organization
-            tasks = [self._collect_org_metrics(org) for org in organizations]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            logger.info(
+                "Starting parallel organization processing",
+                org_count=len(organizations),
+                concurrency_limit=self.settings.api.concurrency_limit,
+            )
 
-            # Count successful collections
-            for result in results:
-                if not isinstance(result, Exception):
+            # Process organizations in parallel with bounded concurrency
+            async with ManagedTaskGroup(
+                name="org_collector_orgs",
+                max_concurrency=self.settings.api.concurrency_limit,
+            ) as group:
+                for org in organizations:
+                    await group.create_task(
+                        self._collect_org_metrics(org),
+                        name=f"org_{org['id']}",
+                    )
                     organizations_processed += 1
-                    # Each org makes multiple API calls
-                    api_calls_made += 7  # Approximate
+
+            # Approximate API calls (actual count may vary)
+            api_calls_made += organizations_processed * 7
 
             # Log collection summary
             log_metric_collection_summary(
@@ -222,15 +241,26 @@ class OrganizationCollector(MetricCollector):
             logger.exception("Failed to collect organization metrics")
 
     async def _fetch_organizations(self) -> list[dict[str, Any]] | None:
-        """Fetch organizations using API helper.
+        """Fetch organizations using inventory cache.
 
         Returns
         -------
         list[dict[str, Any]] | None
             List of organizations or None on error.
 
+        Raises
+        ------
+        RuntimeError
+            If inventory service is not configured.
+
         """
-        return await self.api_helper.get_organizations()
+        if not self.inventory:
+            raise RuntimeError(
+                "Inventory service not configured for OrganizationCollector. "
+                "This is a programming error - collectors must be initialized with inventory service."
+            )
+
+        return await self.inventory.get_organizations()
 
     @log_batch_operation("collect org metrics", batch_size=1)
     @with_error_handling(

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import time
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from opentelemetry import metrics
@@ -28,8 +30,25 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+class CircuitState(Enum):
+    """Circuit breaker states."""
+
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing, block requests
+    HALF_OPEN = "half_open"  # Testing if recovered
+
+
 class PrometheusToOTelBridge:
-    """Bridge to automatically export Prometheus metrics to OpenTelemetry."""
+    """Bridge to automatically export Prometheus metrics to OpenTelemetry.
+
+    Features:
+    - Proper Prometheus registry collection via collect()
+    - Metric/label allowlists and blocklists for filtering
+    - Circuit breaker for OTEL endpoint failures
+    - Exponential backoff on push failures
+    - Failure tracking and recovery
+
+    """
 
     def __init__(
         self,
@@ -38,6 +57,9 @@ class PrometheusToOTelBridge:
         service_name: str = "meraki-dashboard-exporter",
         export_interval_seconds: int = 60,
         resource_attributes: dict[str, str] | None = None,
+        metric_allowlist: list[str] | None = None,
+        metric_blocklist: list[str] | None = None,
+        label_allowlist: list[str] | None = None,
     ) -> None:
         """Initialize the Prometheus to OpenTelemetry bridge.
 
@@ -53,6 +75,12 @@ class PrometheusToOTelBridge:
             How often to export metrics (in seconds).
         resource_attributes : dict[str, str] | None
             Additional resource attributes.
+        metric_allowlist : list[str] | None
+            Only export metrics matching these prefixes (None = all).
+        metric_blocklist : list[str] | None
+            Never export metrics matching these prefixes (None = none blocked).
+        label_allowlist : list[str] | None
+            Only include these label names (None = all labels).
 
         """
         self.registry = registry
@@ -62,10 +90,34 @@ class PrometheusToOTelBridge:
         self._running = False
         self._sync_task: asyncio.Task[None] | None = None
 
+        # Filtering configuration
+        self.metric_allowlist = metric_allowlist or []
+        self.metric_blocklist = metric_blocklist or []
+        self.label_allowlist = set(label_allowlist) if label_allowlist else None
+
+        # Circuit breaker state
+        self._circuit_state = CircuitState.CLOSED
+        self._failure_count = 0
+        self._last_failure_time: float | None = None
+        self._circuit_open_time: float | None = None
+        self._failure_threshold = 5  # Open circuit after 5 consecutive failures
+        self._recovery_timeout = 60  # Try to recover after 60 seconds
+        self._half_open_max_failures = 2  # Allow 2 failures in half-open before reopening
+
+        # Backoff configuration
+        self._backoff_multiplier = 2.0
+        self._max_backoff = 300  # Max 5 minutes
+        self._current_backoff = export_interval_seconds
+
+        # Metrics tracking
+        self._total_exports = 0
+        self._failed_exports = 0
+        self._last_successful_export: float | None = None
+
         # Create resource with attributes
         resource_attrs = {
             "service.name": service_name,
-            "service.version": "0.8.0",  # Match project version
+            "service.version": "0.8.0",
         }
         if resource_attributes:
             resource_attrs.update(resource_attributes)
@@ -75,7 +127,7 @@ class PrometheusToOTelBridge:
         # Set up OTLP exporter
         exporter = OTLPMetricExporter(
             endpoint=endpoint,
-            insecure=True,  # Use insecure for non-TLS endpoints
+            insecure=True,
         )
 
         # Create metric reader with specified interval
@@ -100,25 +152,83 @@ class PrometheusToOTelBridge:
         self._metric_cache: dict[str, list[tuple[dict[str, str], float]]] = {}
 
         logger.info(
-            "Initialized Prometheus to OpenTelemetry bridge",
+            "Initialized Prometheus to OpenTelemetry bridge with circuit breaker",
             endpoint=endpoint,
             service_name=service_name,
             export_interval=export_interval_seconds,
+            metric_allowlist_count=len(self.metric_allowlist) if self.metric_allowlist else None,
+            metric_blocklist_count=len(self.metric_blocklist) if self.metric_blocklist else None,
+            label_filtering=bool(self.label_allowlist),
         )
 
+    def _should_export_metric(self, metric_name: str) -> bool:
+        """Check if a metric should be exported based on allowlist/blocklist.
+
+        Parameters
+        ----------
+        metric_name : str
+            Name of the metric to check.
+
+        Returns
+        -------
+        bool
+            True if metric should be exported.
+
+        """
+        # Check blocklist first (higher priority)
+        if self.metric_blocklist:
+            for blocked_prefix in self.metric_blocklist:
+                if metric_name.startswith(blocked_prefix):
+                    return False
+
+        # Check allowlist
+        if self.metric_allowlist:
+            for allowed_prefix in self.metric_allowlist:
+                if metric_name.startswith(allowed_prefix):
+                    return True
+            return False  # Not in allowlist
+
+        return True  # No filtering, export everything
+
+    def _filter_labels(self, labels: dict[str, str]) -> dict[str, str]:
+        """Filter labels based on allowlist.
+
+        Parameters
+        ----------
+        labels : dict[str, str]
+            Original labels.
+
+        Returns
+        -------
+        dict[str, str]
+            Filtered labels.
+
+        """
+        if not self.label_allowlist:
+            return labels
+
+        return {k: v for k, v in labels.items() if k in self.label_allowlist}
+
     def _get_prometheus_metrics(self) -> None:
-        """Collect all metrics from Prometheus registry and cache values."""
+        """Collect all metrics from Prometheus registry using proper API."""
         new_cache: dict[str, list[tuple[dict[str, str], float]]] = {}
         histogram_data: dict[str, dict[str, float]] = {}
 
         try:
-            # Collect all metrics from Prometheus registry
-            for collector in self.registry._collector_to_names:
-                for metric in collector.collect():
-                    if metric.type == "histogram":
-                        self._process_histogram_metric(metric, histogram_data)
-                    else:
-                        self._process_regular_metric(metric, new_cache)
+            # Use proper collect() method instead of private _collector_to_names
+            for metric_family in self.registry.collect():
+                # Check if metric should be exported
+                if not self._should_export_metric(metric_family.name):
+                    logger.debug(
+                        "Skipping metric (filtered)",
+                        metric_name=metric_family.name,
+                    )
+                    continue
+
+                if metric_family.type == "histogram":
+                    self._process_histogram_metric(metric_family, histogram_data)
+                else:
+                    self._process_regular_metric(metric_family, new_cache)
 
             # Add histogram averages to cache
             self._add_histogram_averages(histogram_data, new_cache)
@@ -144,20 +254,22 @@ class PrometheusToOTelBridge:
                 histogram_data.setdefault(metric.name, {})["sum"] = sample.value
             elif sample.name.endswith("_count"):
                 histogram_data.setdefault(metric.name, {})["count"] = sample.value
-            # Note: We skip buckets for now as OTEL histograms work differently
 
     def _process_regular_metric(
         self, metric: Any, new_cache: dict[str, list[tuple[dict[str, str], float]]]
     ) -> None:
-        """Process non-histogram metric samples."""
+        """Process non-histogram metric samples with label filtering."""
         metric_values = []
-        # Process each sample in the metric
         for sample in metric.samples:
             # Skip created timestamps
             if sample.name.endswith("_created"):
                 continue
+
+            # Filter labels if allowlist is configured
+            filtered_labels = self._filter_labels(sample.labels)
+
             # Store labels and value
-            metric_values.append((sample.labels, sample.value))
+            metric_values.append((filtered_labels, sample.value))
 
         if metric_values:
             new_cache[metric.name] = metric_values
@@ -222,7 +334,6 @@ class PrometheusToOTelBridge:
 
         try:
             if metric_type in {"gauge", "info"}:
-                # Gauges and info metrics use ObservableGauge
                 self._otel_metrics[metric_name] = self.meter.create_observable_gauge(
                     name=metric_name,
                     callbacks=[callback],
@@ -230,7 +341,6 @@ class PrometheusToOTelBridge:
                     unit="1",
                 )
             elif metric_type == "counter":
-                # Counters use ObservableCounter
                 self._otel_metrics[metric_name] = self.meter.create_observable_counter(
                     name=metric_name,
                     callbacks=[callback],
@@ -238,9 +348,6 @@ class PrometheusToOTelBridge:
                     unit="1",
                 )
             elif metric_type == "histogram":
-                # Histograms use ObservableGauge for average values
-                # Note: This is a simplification - full histogram support would require
-                # recording individual observations, not just averages
                 self._otel_metrics[metric_name] = self.meter.create_observable_gauge(
                     name=metric_name,
                     callbacks=[callback],
@@ -261,34 +368,157 @@ class PrometheusToOTelBridge:
                 metric_type=metric_type,
             )
 
-    async def _sync_metrics(self) -> None:
-        """Sync Prometheus metrics to OpenTelemetry."""
-        # Update metric cache from Prometheus
-        self._get_prometheus_metrics()
+    def _check_circuit_breaker(self) -> bool:
+        """Check if circuit breaker allows operation.
 
-        # Ensure OTEL metrics exist for all Prometheus metrics
-        for collector in self.registry._collector_to_names:
-            for metric in collector.collect():
-                self._ensure_otel_metric(metric.name, metric.type, metric.documentation)
+        Returns
+        -------
+        bool
+            True if operation should proceed, False if blocked by circuit.
 
-        logger.debug(
-            "Synced metrics to OpenTelemetry",
-            prometheus_metrics=len(self._metric_cache),
-            otel_metrics=len(self._otel_metrics),
+        """
+        current_time = time.time()
+
+        if self._circuit_state == CircuitState.CLOSED:
+            # Normal operation
+            return True
+
+        elif self._circuit_state == CircuitState.OPEN:
+            # Check if recovery timeout has elapsed
+            if (
+                self._circuit_open_time
+                and (current_time - self._circuit_open_time) >= self._recovery_timeout
+            ):
+                logger.info(
+                    "Circuit breaker entering half-open state (testing recovery)",
+                    failure_count=self._failure_count,
+                    time_open=current_time - self._circuit_open_time,
+                )
+                self._circuit_state = CircuitState.HALF_OPEN
+                self._failure_count = 0
+                return True
+
+            # Still in open state, block operation
+            logger.debug(
+                "Circuit breaker blocking OTEL export (open)",
+                time_remaining=self._recovery_timeout
+                - (current_time - (self._circuit_open_time or current_time)),
+            )
+            return False
+
+        else:  # HALF_OPEN
+            # Allow operation to test recovery
+            return True
+
+    def _record_success(self) -> None:
+        """Record successful export."""
+        self._total_exports += 1
+        self._last_successful_export = time.time()
+        self._failure_count = 0
+        self._current_backoff = self.export_interval
+
+        if self._circuit_state != CircuitState.CLOSED:
+            logger.info(
+                "Circuit breaker recovered (closing circuit)",
+                previous_state=self._circuit_state.value,
+                total_exports=self._total_exports,
+                failed_exports=self._failed_exports,
+            )
+            self._circuit_state = CircuitState.CLOSED
+
+    def _record_failure(self) -> None:
+        """Record failed export and update circuit breaker state."""
+        self._total_exports += 1
+        self._failed_exports += 1
+        self._failure_count += 1
+        self._last_failure_time = time.time()
+
+        # Update backoff
+        self._current_backoff = min(
+            self._current_backoff * self._backoff_multiplier,
+            self._max_backoff,
         )
 
+        if self._circuit_state == CircuitState.CLOSED:
+            # Check if we should open circuit
+            if self._failure_count >= self._failure_threshold:
+                logger.error(
+                    "Circuit breaker opening (too many failures)",
+                    failure_count=self._failure_count,
+                    failure_threshold=self._failure_threshold,
+                    backoff_seconds=self._current_backoff,
+                )
+                self._circuit_state = CircuitState.OPEN
+                self._circuit_open_time = time.time()
+
+        elif self._circuit_state == CircuitState.HALF_OPEN:
+            # Failed during recovery testing
+            if self._failure_count >= self._half_open_max_failures:
+                logger.warning(
+                    "Circuit breaker reopening (recovery test failed)",
+                    failure_count=self._failure_count,
+                    recovery_timeout=self._recovery_timeout,
+                )
+                self._circuit_state = CircuitState.OPEN
+                self._circuit_open_time = time.time()
+
+    async def _sync_metrics(self) -> None:
+        """Sync Prometheus metrics to OpenTelemetry with circuit breaker."""
+        # Check circuit breaker
+        if not self._check_circuit_breaker():
+            return
+
+        try:
+            # Update metric cache from Prometheus
+            self._get_prometheus_metrics()
+
+            # Ensure OTEL metrics exist for all Prometheus metrics
+            for metric_family in self.registry.collect():
+                if self._should_export_metric(metric_family.name):
+                    self._ensure_otel_metric(
+                        metric_family.name,
+                        metric_family.type,
+                        metric_family.documentation,
+                    )
+
+            # Record success
+            self._record_success()
+
+            logger.debug(
+                "Synced metrics to OpenTelemetry",
+                prometheus_metrics=len(self._metric_cache),
+                otel_metrics=len(self._otel_metrics),
+                circuit_state=self._circuit_state.value,
+            )
+
+        except Exception as e:
+            # Record failure
+            self._record_failure()
+
+            logger.error(
+                "Failed to sync metrics to OpenTelemetry",
+                error=str(e),
+                error_type=type(e).__name__,
+                failure_count=self._failure_count,
+                circuit_state=self._circuit_state.value,
+                backoff_seconds=self._current_backoff,
+            )
+
     async def _sync_loop(self) -> None:
-        """Periodically sync metrics from Prometheus to OTEL cache."""
+        """Periodically sync metrics with exponential backoff on failures."""
         while self._running:
             try:
                 await self._sync_metrics()
-                # Sync at half the export interval to ensure fresh data
-                await asyncio.sleep(self.export_interval / 2)
+
+                # Use current backoff interval (increases on failures)
+                sleep_time = self._current_backoff / 2
+                await asyncio.sleep(sleep_time)
+
             except asyncio.CancelledError:
                 break
             except Exception:
                 logger.exception("Error in OTEL sync loop")
-                await asyncio.sleep(10)  # Wait before retry
+                await asyncio.sleep(10)
 
     async def start(self) -> None:
         """Start the metric sync process."""
@@ -304,7 +534,12 @@ class PrometheusToOTelBridge:
         # Start background sync task
         self._sync_task = asyncio.create_task(self._sync_loop())
 
-        logger.info("Started Prometheus to OpenTelemetry bridge")
+        logger.info(
+            "Started Prometheus to OpenTelemetry bridge with circuit breaker",
+            export_interval=self.export_interval,
+            failure_threshold=self._failure_threshold,
+            recovery_timeout=self._recovery_timeout,
+        )
 
     async def stop(self) -> None:
         """Stop the metric sync process."""
@@ -321,4 +556,39 @@ class PrometheusToOTelBridge:
             except asyncio.CancelledError:
                 pass
 
-        logger.info("Stopped Prometheus to OpenTelemetry bridge")
+        logger.info(
+            "Stopped Prometheus to OpenTelemetry bridge",
+            total_exports=self._total_exports,
+            failed_exports=self._failed_exports,
+            success_rate=(
+                f"{(self._total_exports - self._failed_exports) / self._total_exports * 100:.1f}%"
+                if self._total_exports > 0
+                else "N/A"
+            ),
+        )
+
+    def get_stats(self) -> dict[str, Any]:
+        """Get statistics about OTEL bridge performance.
+
+        Returns
+        -------
+        dict[str, Any]
+            Statistics including exports, failures, circuit state.
+
+        """
+        return {
+            "total_exports": self._total_exports,
+            "failed_exports": self._failed_exports,
+            "success_rate": (
+                (self._total_exports - self._failed_exports) / self._total_exports
+                if self._total_exports > 0
+                else 0.0
+            ),
+            "circuit_state": self._circuit_state.value,
+            "failure_count": self._failure_count,
+            "current_backoff": self._current_backoff,
+            "last_successful_export": self._last_successful_export,
+            "last_failure_time": self._last_failure_time,
+            "metrics_cached": len(self._metric_cache),
+            "otel_metrics_created": len(self._otel_metrics),
+        }

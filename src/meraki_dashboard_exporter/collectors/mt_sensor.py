@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     from prometheus_client import CollectorRegistry
 
     from ..core.config import Settings
+    from ..core.metric_expiration import MetricExpirationManager
+    from ..services.inventory import OrganizationInventory
 
 logger = get_logger(__name__)
 
@@ -35,9 +37,11 @@ class MTSensorCollector(MetricCollector):
         api: DashboardAPI,
         settings: Settings,
         registry: CollectorRegistry | None = None,
+        inventory: OrganizationInventory | None = None,
+        expiration_manager: MetricExpirationManager | None = None,
     ) -> None:
         """Initialize MT sensor collector."""
-        super().__init__(api, settings, registry)
+        super().__init__(api, settings, registry, inventory, expiration_manager)
         # Create MT collector in standalone mode
         self.mt_collector = MTCollector(None)
         # Pass API and settings to MT collector

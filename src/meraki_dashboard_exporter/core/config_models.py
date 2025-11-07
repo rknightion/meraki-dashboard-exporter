@@ -27,10 +27,28 @@ class APISettings(BaseModel):
         description="Maximum concurrent API requests",
     )
     batch_size: int = Field(
-        10,
+        20,  # Increased from 10 for better throughput
         ge=1,
-        le=50,
+        le=100,  # Increased max from 50
         description="Default batch size for API operations",
+    )
+    device_batch_size: int = Field(
+        20,  # Optimized for device operations
+        ge=1,
+        le=100,
+        description="Batch size for device operations",
+    )
+    network_batch_size: int = Field(
+        30,  # Optimized for network operations
+        ge=1,
+        le=100,
+        description="Batch size for network operations",
+    )
+    client_batch_size: int = Field(
+        20,  # Optimized for client operations
+        ge=1,
+        le=100,
+        description="Batch size for client operations (e.g., MR client metrics)",
     )
     batch_delay: float = Field(
         0.5,
@@ -108,6 +126,12 @@ class MonitoringSettings(BaseModel):
         le=90,
         description="Days before license expiration to start warning",
     )
+    metric_ttl_multiplier: float = Field(
+        2.0,
+        ge=1.0,
+        le=10.0,
+        description="Multiplier for metric TTL (collection_interval * multiplier)",
+    )
 
     @field_validator("histogram_buckets")
     @classmethod
@@ -179,16 +203,40 @@ class ServerSettings(BaseModel):
     )
 
 
+class WebhookSettings(BaseModel):
+    """Webhook receiver configuration."""
+
+    enabled: bool = Field(
+        False,
+        description="Enable webhook receiver endpoint",
+    )
+    shared_secret: SecretStr | None = Field(
+        None,
+        description="Shared secret for webhook validation (recommended)",
+    )
+    require_secret: bool = Field(
+        True,
+        description="Require shared secret validation (disable for testing only)",
+    )
+    max_payload_size: int = Field(
+        1024 * 1024,  # 1MB
+        ge=1024,
+        le=10 * 1024 * 1024,  # 10MB max
+        description="Maximum webhook payload size in bytes",
+    )
+
+
 class CollectorSettings(BaseModel):
     """Collector-specific settings."""
 
     enabled_collectors: set[str] = Field(
         default_factory=lambda: {
             "alerts",
+            "clients",
             "config",
             "device",
-            "mt_sensor",
-            "network_health",
+            "mtsensor",
+            "networkhealth",
             "organization",
         },
         description="Enabled collector names",

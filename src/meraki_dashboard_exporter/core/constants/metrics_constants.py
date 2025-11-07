@@ -240,6 +240,11 @@ class AlertMetricName(StrEnum):
     ALERTS_TOTAL_BY_NETWORK = "meraki_alerts_total_by_network"
     SENSOR_ALERTS_TOTAL = "meraki_sensor_alerts_total"
 
+    # Health alert metrics (Phase 4.1)
+    ORGANIZATION_HEALTH_ALERTS_TOTAL = "meraki_organization_health_alerts_total"
+    NETWORK_HEALTH_ALERTS_TOTAL = "meraki_network_health_alerts_total"
+    HEALTH_ALERT_INFO = "meraki_health_alert_info"
+
 
 class ConfigMetricName(StrEnum):
     """Configuration metric names."""
@@ -291,3 +296,39 @@ class ClientMetricName(StrEnum):
     # Wireless client signal quality metrics
     WIRELESS_CLIENT_RSSI = "meraki_wireless_client_rssi"
     WIRELESS_CLIENT_SNR = "meraki_wireless_client_snr"
+
+
+class CollectorMetricName(StrEnum):
+    """Collector infrastructure metric names for monitoring collection performance."""
+
+    # Parallel collection metrics
+    PARALLEL_COLLECTIONS_ACTIVE = "meraki_parallel_collections_active"
+    ORG_COLLECTION_WAIT_TIME_SECONDS = "meraki_org_collection_wait_time_seconds"
+    COLLECTION_ERRORS_TOTAL = "meraki_collection_errors_total"
+
+    # Inventory cache metrics
+    INVENTORY_CACHE_HITS_TOTAL = "meraki_inventory_cache_hits_total"
+    INVENTORY_CACHE_MISSES_TOTAL = "meraki_inventory_cache_misses_total"
+    INVENTORY_CACHE_SIZE = "meraki_inventory_cache_size"
+
+    # API client metrics (Phase 2.1)
+    API_REQUEST_DURATION_SECONDS = "meraki_api_request_duration_seconds"
+    API_REQUESTS_TOTAL = "meraki_api_requests_total"
+    API_RATE_LIMIT_REMAINING = "meraki_api_rate_limit_remaining"
+    API_RATE_LIMIT_TOTAL = "meraki_api_rate_limit_total"
+    API_RETRY_ATTEMPTS_TOTAL = "meraki_api_retry_attempts_total"
+
+
+class WebhookMetricName(StrEnum):
+    """Webhook receiver metric names for monitoring webhook events (Phase 4.2)."""
+
+    # Event processing metrics
+    WEBHOOK_EVENTS_RECEIVED_TOTAL = "meraki_webhook_events_received_total"
+    WEBHOOK_EVENTS_PROCESSED_TOTAL = "meraki_webhook_events_processed_total"
+    WEBHOOK_EVENTS_FAILED_TOTAL = "meraki_webhook_events_failed_total"
+
+    # Processing latency
+    WEBHOOK_PROCESSING_DURATION_SECONDS = "meraki_webhook_processing_duration_seconds"
+
+    # Validation metrics
+    WEBHOOK_VALIDATION_FAILURES_TOTAL = "meraki_webhook_validation_failures_total"

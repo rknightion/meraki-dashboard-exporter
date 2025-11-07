@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
+from ..core.async_utils import ManagedTaskGroup
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import (
@@ -29,6 +30,8 @@ if TYPE_CHECKING:
     from prometheus_client import CollectorRegistry
 
     from ..core.config import Settings
+    from ..core.metric_expiration import MetricExpirationManager
+    from ..services.inventory import OrganizationInventory
 
 logger = get_logger(__name__)
 
@@ -95,9 +98,11 @@ class DeviceCollector(MetricCollector):
         api: DashboardAPI,
         settings: Settings,
         registry: CollectorRegistry | None = None,
+        inventory: OrganizationInventory | None = None,
+        expiration_manager: MetricExpirationManager | None = None,
     ) -> None:
         """Initialize device collector with sub-collectors."""
-        super().__init__(api, settings, registry)
+        super().__init__(api, settings, registry, inventory, expiration_manager)
 
         # Initialize device-specific collectors
         self.mg_collector = MGCollector(self)
@@ -262,7 +267,11 @@ class DeviceCollector(MetricCollector):
         )
 
     async def _collect_impl(self) -> None:
-        """Collect device metrics."""
+        """Collect device metrics with parallel organization processing.
+
+        Organizations are processed in parallel with bounded concurrency
+        to significantly improve performance for multi-org deployments.
+        """
         start_time = asyncio.get_event_loop().time()
         metrics_collected = 0
         organizations_processed = 0
@@ -276,12 +285,26 @@ class DeviceCollector(MetricCollector):
                 return
             api_calls_made += 1
 
-            # Collect devices for each organization
-            for org in organizations:
-                await self._collect_org_devices(org["id"], org.get("name", org["id"]))
-                organizations_processed += 1
-                # Each org makes multiple API calls
-                api_calls_made += 10  # Approximate
+            logger.info(
+                "Starting parallel organization processing",
+                org_count=len(organizations),
+                concurrency_limit=self.settings.api.concurrency_limit,
+            )
+
+            # Process organizations in parallel with bounded concurrency
+            async with ManagedTaskGroup(
+                name="device_collector_orgs",
+                max_concurrency=self.settings.api.concurrency_limit,
+            ) as group:
+                for org in organizations:
+                    await group.create_task(
+                        self._collect_org_devices(org["id"], org.get("name", org["id"])),
+                        name=f"org_{org['id']}",
+                    )
+                    organizations_processed += 1
+
+            # Approximate API calls (actual count may vary)
+            api_calls_made += organizations_processed * 10
 
             # Log collection summary
             log_metric_collection_summary(
@@ -295,30 +318,32 @@ class DeviceCollector(MetricCollector):
         except Exception:
             logger.exception("Failed to collect device metrics")
 
-    @log_api_call("getOrganizations")
     @with_error_handling(
         operation="Fetch organizations",
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
     async def _fetch_organizations(self) -> list[dict[str, Any]] | None:
-        """Fetch organizations for device collection.
+        """Fetch organizations for device collection using inventory cache.
 
         Returns
         -------
         list[dict[str, Any]] | None
             List of organizations or None on error.
 
+        Raises
+        ------
+        RuntimeError
+            If inventory service is not configured.
+
         """
-        if self.settings.meraki.org_id:
-            return [{"id": self.settings.meraki.org_id}]
-        else:
-            with LogContext(operation="fetch_organizations"):
-                orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
-                orgs = validate_response_format(
-                    orgs, expected_type=list, operation="getOrganizations"
-                )
-                return cast(list[dict[str, Any]], orgs)
+        if not self.inventory:
+            raise RuntimeError(
+                "Inventory service not configured for DeviceCollector. "
+                "This is a programming error - collectors must be initialized with inventory service."
+            )
+
+        return await self.inventory.get_organizations()
 
     @log_batch_operation("collect devices", batch_size=None)
     @with_error_handling(
@@ -422,11 +447,11 @@ class DeviceCollector(MetricCollector):
 
             # Process MS devices
             if ms_devices:
-                # Process devices in smaller batches to avoid overwhelming the API
+                # Process devices in batches (configurable via device_batch_size)
                 await process_in_batches_with_errors(
                     ms_devices,
                     self._collect_ms_device_with_timeout,
-                    batch_size=5,
+                    batch_size=self.settings.api.device_batch_size,
                     delay_between_batches=self.settings.api.batch_delay,
                     item_description="MS device",
                     error_context_func=lambda device: {"serial": device["serial"]},
@@ -434,11 +459,11 @@ class DeviceCollector(MetricCollector):
 
             # Process MR devices
             if mr_devices:
-                # Process devices in smaller batches to avoid overwhelming the API
+                # Process devices in batches (configurable via device_batch_size)
                 await process_in_batches_with_errors(
                     mr_devices,
                     self._collect_mr_device_with_timeout,
-                    batch_size=5,
+                    batch_size=self.settings.api.device_batch_size,
                     delay_between_batches=self.settings.api.batch_delay,
                     item_description="MR device",
                     error_context_func=lambda device: {"serial": device["serial"]},
@@ -451,7 +476,7 @@ class DeviceCollector(MetricCollector):
                     continue
 
                 if type_devices:
-                    # Process devices in smaller batches
+                    # Process devices in batches (configurable via device_batch_size)
                     # Create a coroutine factory to avoid loop variable issues
                     def make_collect_coroutine(dt: DeviceType) -> Any:
                         async def collect_device(d: dict[str, Any]) -> None:
@@ -462,7 +487,7 @@ class DeviceCollector(MetricCollector):
                     await process_in_batches_with_errors(
                         type_devices,
                         make_collect_coroutine(device_type),
-                        batch_size=5,
+                        batch_size=self.settings.api.device_batch_size,
                         delay_between_batches=self.settings.api.batch_delay,
                         item_description=f"{device_type} device",
                         error_context_func=lambda device: {"serial": device["serial"]},
@@ -789,12 +814,16 @@ class DeviceCollector(MetricCollector):
 
                 # Set network-wide POE metric
                 network_name = network_map.get(network_id, network_id)
-                self.ms_collector._switch_poe_network_total.labels(
-                    org_id=org_id,
-                    org_name=org_name,
-                    network_id=network_id,
-                    network_name=network_name,
-                ).set(total_poe)
+                self._set_metric(
+                    self.ms_collector._switch_poe_network_total,
+                    {
+                        "org_id": org_id,
+                        "org_name": org_name,
+                        "network_id": network_id,
+                        "network_name": network_name,
+                    },
+                    total_poe,
+                )
 
                 logger.debug(
                     "Set network POE total",
@@ -841,15 +870,17 @@ class DeviceCollector(MetricCollector):
         active_count = counts.get("byStatus", {}).get("active", {}).get("total", 0)
         inactive_count = counts.get("byStatus", {}).get("inactive", {}).get("total", 0)
 
-        self._ms_ports_active_total.labels(
-            org_id=org_id,
-            org_name=org_name,
-        ).set(active_count)
+        self._set_metric(
+            self._ms_ports_active_total,
+            {"org_id": org_id, "org_name": org_name},
+            active_count,
+        )
 
-        self._ms_ports_inactive_total.labels(
-            org_id=org_id,
-            org_name=org_name,
-        ).set(inactive_count)
+        self._set_metric(
+            self._ms_ports_inactive_total,
+            {"org_id": org_id, "org_name": org_name},
+            inactive_count,
+        )
 
         logger.debug(
             "Set port overview totals",
@@ -865,22 +896,30 @@ class DeviceCollector(MetricCollector):
         for media_type, media_data in by_media_speed.items():
             # Set total for this media type (active)
             media_total = media_data.get("total", 0)
-            self._ms_ports_by_media_total.labels(
-                org_id=org_id,
-                org_name=org_name,
-                media=media_type,
-                status="active",
-            ).set(media_total)
+            self._set_metric(
+                self._ms_ports_by_media_total,
+                {
+                    "org_id": org_id,
+                    "org_name": org_name,
+                    "media": media_type,
+                    "status": "active",
+                },
+                media_total,
+            )
 
             # Set breakdown by link speed
             for speed, count in media_data.items():
                 if speed != "total" and isinstance(count, (int, float)):
-                    self._ms_ports_by_link_speed_total.labels(
-                        org_id=org_id,
-                        org_name=org_name,
-                        media=media_type,
-                        link_speed=str(speed),  # Speed in Mbps
-                    ).set(count)
+                    self._set_metric(
+                        self._ms_ports_by_link_speed_total,
+                        {
+                            "org_id": org_id,
+                            "org_name": org_name,
+                            "media": media_type,
+                            "link_speed": str(speed),
+                        },
+                        count,
+                    )
 
                     logger.debug(
                         "Set port link speed count",
@@ -896,26 +935,29 @@ class DeviceCollector(MetricCollector):
 
         for media_type, media_data in by_media.items():
             media_total = media_data.get("total", 0)
-            self._ms_ports_by_media_total.labels(
-                org_id=org_id,
-                org_name=org_name,
-                media=media_type,
-                status="inactive",
-            ).set(media_total)
+            self._set_metric(
+                self._ms_ports_by_media_total,
+                {
+                    "org_id": org_id,
+                    "org_name": org_name,
+                    "media": media_type,
+                    "status": "inactive",
+                },
+                media_total,
+            )
 
         logger.debug(
             "Completed switch port overview collection",
             org_id=org_id,
         )
 
-    @log_api_call("getOrganizationDevices")
     @with_error_handling(
         operation="Fetch devices",
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
     async def _fetch_devices(self, org_id: str) -> list[dict[str, Any]] | None:
-        """Fetch devices for an organization.
+        """Fetch devices for an organization using inventory cache.
 
         Parameters
         ----------
@@ -927,17 +969,19 @@ class DeviceCollector(MetricCollector):
         list[dict[str, Any]] | None
             List of devices or None on error.
 
+        Raises
+        ------
+        RuntimeError
+            If inventory service is not configured.
+
         """
-        with LogContext(org_id=org_id):
-            devices = await asyncio.to_thread(
-                self.api.organizations.getOrganizationDevices,
-                org_id,
-                total_pages="all",
+        if not self.inventory:
+            raise RuntimeError(
+                "Inventory service not configured for DeviceCollector. "
+                "This is a programming error - collectors must be initialized with inventory service."
             )
-            devices = validate_response_format(
-                devices, expected_type=list, operation="getOrganizationDevices"
-            )
-            return cast(list[dict[str, Any]], devices)
+
+        return await self.inventory.get_devices(org_id)
 
     @log_api_call("getOrganizationDevicesAvailabilities")
     @with_error_handling(
