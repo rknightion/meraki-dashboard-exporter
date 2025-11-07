@@ -17,7 +17,9 @@ from ..core.logging import get_logger
 if TYPE_CHECKING:
     from meraki import DashboardAPI
 
+    from ..services.inventory import OrganizationInventory
     from .config import Settings
+    from .metric_expiration import MetricExpirationManager
 
 logger = get_logger(__name__)
 
@@ -67,11 +69,32 @@ class MetricCollector(ABC):
         api: DashboardAPI,
         settings: Settings,
         registry: CollectorRegistry | None = None,
+        inventory: OrganizationInventory | None = None,
+        expiration_manager: MetricExpirationManager | None = None,
     ) -> None:
-        """Initialize the metric collector with API client and settings."""
+        """Initialize the metric collector with API client and settings.
+
+        Parameters
+        ----------
+        api : DashboardAPI
+            Meraki Dashboard API client.
+        settings : Settings
+            Application settings.
+        registry : CollectorRegistry | None
+            Prometheus collector registry, defaults to the global registry.
+        inventory : OrganizationInventory | None
+            Shared inventory cache for org/network/device data. If not provided,
+            collectors will fetch data directly from the API without caching.
+        expiration_manager : MetricExpirationManager | None
+            Manager for tracking and expiring stale metrics. If provided,
+            the _set_metric() helper will automatically track metric updates.
+
+        """
         self.api = api
         self.settings = settings
         self.registry = registry or REGISTRY
+        self.inventory = inventory
+        self.expiration_manager = expiration_manager
         self._metrics: dict[str, Any] = {}
 
         # Initialize performance metrics only once
@@ -384,6 +407,9 @@ class MetricCollector(ABC):
     ) -> None:
         """Safely set a metric value with validation.
 
+        This is a legacy helper method that accepts metric names as strings.
+        It now uses `_set_metric()` internally for automatic expiration tracking.
+
         Parameters
         ----------
         metric_name : str
@@ -411,18 +437,105 @@ class MetricCollector(ABC):
             )
             return
 
+        # Use _set_metric() for automatic expiration tracking (Phase 3.2.3)
+        # Only works with Gauge metrics (Counter doesn't have .set() method)
+        if isinstance(metric, Gauge):
+            # Extract full metric name from metric object
+            full_metric_name = getattr(metric, "_name", None)
+            if full_metric_name:
+                # Use new helper with expiration tracking
+                self._set_metric(metric, labels, value, full_metric_name)
+            else:
+                # Fallback to direct set if we can't get metric name
+                try:
+                    metric.labels(**labels).set(value)
+                    logger.debug(
+                        "Set metric value (no expiration tracking - no name)",
+                        metric_name=metric_name,
+                        labels=labels,
+                        value=value,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to set metric value",
+                        metric_name=metric_name,
+                        labels=labels,
+                        value=value,
+                    )
+        else:
+            # Non-Gauge metric (e.g., Counter) - use direct set without expiration
+            try:
+                metric.labels(**labels).set(value)
+                logger.debug(
+                    "Set metric value (no expiration tracking - not a Gauge)",
+                    metric_name=metric_name,
+                    labels=labels,
+                    value=value,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to set metric value",
+                    metric_name=metric_name,
+                    labels=labels,
+                    value=value,
+                )
+
+    def _set_metric(
+        self,
+        metric: Gauge,
+        labels: dict[str, str],
+        value: float,
+        metric_name: str | None = None,
+    ) -> None:
+        """Set a metric value with automatic expiration tracking (Phase 3.2).
+
+        This helper automatically tracks metric updates with the expiration manager
+        when available. Use this instead of calling metric.labels().set() directly
+        to enable automatic metric lifecycle management.
+
+        Parameters
+        ----------
+        metric : Gauge
+            The Gauge metric object to update.
+        labels : dict[str, str]
+            Labels to apply to the metric.
+        value : float
+            Value to set.
+        metric_name : str | None
+            Full metric name (e.g., "meraki_device_up"). If not provided,
+            will attempt to extract from metric object.
+
+        Examples
+        --------
+        >>> self._set_metric(
+        ...     self.device_up,
+        ...     {"org_id": "123", "serial": "ABC"},
+        ...     1.0,
+        ...     "meraki_device_up"
+        ... )
+
+        """
         try:
+            # Set the metric value
             metric.labels(**labels).set(value)
-            logger.debug(
-                "Successfully set metric value",
-                metric_name=metric_name,
-                labels=labels,
-                value=value,
-            )
+
+            # Track for expiration if manager is available
+            if self.expiration_manager:
+                # Get metric name if not provided
+                if metric_name is None:
+                    metric_name = getattr(metric, "_name", "unknown")
+
+                # Track the update
+                self.expiration_manager.track_metric_update(
+                    collector_name=self.__class__.__name__,
+                    metric_name=metric_name,
+                    label_values=labels,
+                )
+
         except Exception:
             logger.exception(
-                "Failed to set metric value",
-                metric_name=metric_name,
+                "Failed to set metric with tracking",
+                metric_name=metric_name or "unknown",
                 labels=labels,
                 value=value,
             )

@@ -42,11 +42,13 @@ class CardinalityMonitor:
         registry: CollectorRegistry | None = None,
         warning_threshold: int = 1000,
         critical_threshold: int = 10000,
+        inventory_ready_callback: Any | None = None,
     ) -> None:
         """Initialize the cardinality monitor."""
         self.registry = registry or REGISTRY
         self.warning_threshold = warning_threshold
         self.critical_threshold = critical_threshold
+        self._inventory_ready_callback = inventory_ready_callback
 
         # Track cardinality over time
         self._cardinality_history: dict[str, list[tuple[float, int]]] = defaultdict(list)
@@ -67,13 +69,18 @@ class CardinalityMonitor:
             lambda: defaultdict(set)
         )
 
+        # Warning tracking
+        self._warning_triggered: dict[str, bool] = {}  # Track if warning already triggered
+        self._last_warning_time: dict[str, float] = {}  # Prevent warning spam
+
         # Initialize monitoring metrics
         self._initialize_metrics()
 
         logger.info(
-            "Initialized CardinalityMonitor",
+            "Initialized CardinalityMonitor with inventory gating",
             warning_threshold=warning_threshold,
             critical_threshold=critical_threshold,
+            inventory_gating=inventory_ready_callback is not None,
         )
 
     def _initialize_metrics(self) -> None:
@@ -145,18 +152,40 @@ class CardinalityMonitor:
         self._cache_timestamp = time.time()
         logger.debug("Cached cardinality analysis results")
 
+    def _is_inventory_ready(self) -> bool:
+        """Check if inventory cache is ready for analysis.
+
+        Returns
+        -------
+        bool
+            True if inventory is ready or no callback configured.
+
+        """
+        if self._inventory_ready_callback is None:
+            return True
+
+        try:
+            return bool(self._inventory_ready_callback())
+        except Exception as e:
+            logger.warning("Error checking inventory readiness", error=str(e))
+            return False
+
     def mark_first_run_complete(self) -> None:
         """Mark that collectors have completed their first run."""
         self._first_run_complete = True
         logger.info("First collector run completed, cardinality analysis now available")
 
-    def analyze_cardinality(self, use_cache: bool = True) -> dict[str, Any]:
+    def analyze_cardinality(
+        self, use_cache: bool = True, bypass_inventory_check: bool = False
+    ) -> dict[str, Any]:
         """Analyze current metric cardinality.
 
         Parameters
         ----------
         use_cache : bool
             Whether to use cached results if available.
+        bypass_inventory_check : bool
+            Whether to bypass inventory readiness check (for testing).
 
         Returns
         -------
@@ -180,6 +209,18 @@ class CardinalityMonitor:
                 "critical": [],
                 "error": "Waiting for initial collector run to complete",
                 "first_run_pending": True,
+            }
+
+        # Gate analysis behind inventory cache if configured
+        if not bypass_inventory_check and not self._is_inventory_ready():
+            return {
+                "timestamp": time.time(),
+                "metrics": {},
+                "total_series": 0,
+                "warnings": [],
+                "critical": [],
+                "error": "Waiting for inventory cache to be populated",
+                "inventory_not_ready": True,
             }
 
         start_time = time.time()
@@ -221,20 +262,32 @@ class CardinalityMonitor:
                             "cardinality": metric_info["cardinality"],
                             "type": metric_info["type"],
                         })
-                        self.cardinality_warnings.labels(
-                            metric_name=metric_family.name,
-                            severity="critical",
-                        ).inc()
+                        # Only increment counter once per metric (not on every analysis)
+                        if not self._warning_triggered.get(f"{metric_family.name}_critical", False):
+                            self.cardinality_warnings.labels(
+                                metric_name=metric_family.name,
+                                severity="critical",
+                            ).inc()
+                            self._warning_triggered[f"{metric_family.name}_critical"] = True
+                            self._last_warning_time[f"{metric_family.name}_critical"] = time.time()
                     elif metric_info["cardinality"] >= self.warning_threshold:
                         results["warnings"].append({
                             "metric": metric_family.name,
                             "cardinality": metric_info["cardinality"],
                             "type": metric_info["type"],
                         })
-                        self.cardinality_warnings.labels(
-                            metric_name=metric_family.name,
-                            severity="warning",
-                        ).inc()
+                        # Only increment counter once per metric
+                        if not self._warning_triggered.get(f"{metric_family.name}_warning", False):
+                            self.cardinality_warnings.labels(
+                                metric_name=metric_family.name,
+                                severity="warning",
+                            ).inc()
+                            self._warning_triggered[f"{metric_family.name}_warning"] = True
+                            self._last_warning_time[f"{metric_family.name}_warning"] = time.time()
+                    else:
+                        # Reset warning flags if metric drops below threshold
+                        self._warning_triggered.pop(f"{metric_family.name}_warning", None)
+                        self._warning_triggered.pop(f"{metric_family.name}_critical", None)
 
         except Exception as e:
             logger.exception("Error during cardinality analysis", error=str(e))
@@ -654,6 +707,64 @@ class CardinalityMonitor:
 
         return sorted(histograms, key=lambda x: x["total_cardinality"], reverse=True)
 
+    def get_top_k_metrics(self, k: int = 10, sort_by: str = "cardinality") -> dict[str, Any]:
+        """Get top K metrics by cardinality or growth rate.
+
+        Parameters
+        ----------
+        k : int
+            Number of top metrics to return (default: 10).
+        sort_by : str
+            Sort criterion: "cardinality" or "growth" (default: "cardinality").
+
+        Returns
+        -------
+        dict[str, Any]
+            Top K metrics with detailed information.
+
+        """
+        analysis = self.analyze_cardinality()
+
+        if "error" in analysis:
+            return {
+                "error": analysis["error"],
+                "top_metrics": [],
+                "total_metrics_analyzed": 0,
+            }
+
+        metrics_list = []
+        growth_rates = self._calculate_growth_rates()
+
+        for metric_name, info in analysis["metrics"].items():
+            metric_data = {
+                "name": metric_name,
+                "cardinality": info["cardinality"],
+                "type": info["type"],
+                "labels": list(info["label_cardinalities"].keys()),
+                "label_count": len(info["label_cardinalities"]),
+                "label_cardinalities": info["label_cardinalities"],
+                "documentation": info.get("documentation", ""),
+                "growth_rate": growth_rates.get(metric_name, 0.0),
+            }
+            metrics_list.append(metric_data)
+
+        # Sort by requested criterion
+        if sort_by == "growth":
+            metrics_list.sort(key=lambda x: abs(x["growth_rate"]), reverse=True)
+        else:  # cardinality
+            metrics_list.sort(key=lambda x: x["cardinality"], reverse=True)
+
+        return {
+            "top_metrics": metrics_list[:k],
+            "total_metrics_analyzed": len(analysis["metrics"]),
+            "total_series": analysis["total_series"],
+            "warnings_count": len(analysis.get("warnings", [])),
+            "critical_count": len(analysis.get("critical", [])),
+            "sort_by": sort_by,
+            "k": k,
+            "timestamp": analysis["timestamp"],
+        }
+
     def export_as_json(self) -> dict[str, Any]:
         """Export full cardinality data as JSON.
 
@@ -692,6 +803,35 @@ def setup_cardinality_endpoint(app: FastAPI, monitor: CardinalityMonitor) -> Non
         Cardinality monitor instance.
 
     """
+
+    @app.get("/api/metrics/cardinality")
+    async def get_cardinality_api(
+        k: int = 10, sort_by: str = "cardinality", format: str = "summary"
+    ) -> dict[str, Any]:
+        """Get cardinality analysis via JSON API.
+
+        Query Parameters
+        ----------------
+        k : int
+            Number of top metrics to return (default: 10, max: 100).
+        sort_by : str
+            Sort by 'cardinality' or 'growth' (default: 'cardinality').
+        format : str
+            Response format: 'summary' (top-K only) or 'full' (complete export).
+
+        Returns
+        -------
+        dict[str, Any]
+            Cardinality analysis data.
+
+        """
+        # Clamp k to reasonable range
+        k = max(1, min(k, 100))
+
+        if format == "full":
+            return monitor.export_as_json()
+        else:  # summary
+            return monitor.get_top_k_metrics(k=k, sort_by=sort_by)
 
     @app.get("/cardinality", response_class=HTMLResponse)
     async def get_cardinality_report(request: Request) -> HTMLResponse:
@@ -759,5 +899,12 @@ def setup_cardinality_endpoint(app: FastAPI, monitor: CardinalityMonitor) -> Non
         return monitor.get_label_value_distribution(metric_name)
 
     logger.info(
-        "Added cardinality monitoring endpoints: /cardinality, /cardinality/all-metrics, /cardinality/all-labels"
+        "Added cardinality monitoring endpoints",
+        endpoints=[
+            "/api/metrics/cardinality (JSON API)",
+            "/cardinality (HTML report)",
+            "/cardinality/all-metrics",
+            "/cardinality/all-labels",
+            "/cardinality/export/json",
+        ],
     )

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from .error_handling import ErrorCategory, with_error_handling
 from .logging import get_logger
@@ -19,8 +19,6 @@ if TYPE_CHECKING:
     from .collector import MetricCollector
 
 logger = get_logger(__name__)
-
-T = TypeVar("T")
 
 
 class APIHelper:
@@ -183,76 +181,6 @@ class APIHelper:
             )
 
         return devices
-
-    async def process_in_batches(
-        self,
-        items: list[T],
-        process_func: Callable[[T], Any],
-        batch_size: int | None = None,
-        description: str = "items",
-    ) -> list[Any]:
-        """Process items in batches to avoid overwhelming the API.
-
-        Parameters
-        ----------
-        items : list[T]
-            List of items to process.
-        process_func : Callable[[T], Any]
-            Async function to process each item.
-        batch_size : int
-            Number of items to process concurrently.
-        description : str
-            Description of items for logging.
-
-        Returns
-        -------
-        list[Any]
-            Results from processing all items.
-
-        """
-        results = []
-        total_items = len(items)
-
-        # Use configured batch size if not specified
-        if batch_size is None:
-            batch_size = self.settings.api.batch_size
-
-        for i in range(0, total_items, batch_size):
-            batch = items[i : i + batch_size]
-            batch_end = min(i + batch_size, total_items)
-
-            logger.debug(
-                f"Processing batch of {description}",
-                batch_start=i + 1,
-                batch_end=batch_end,
-                total=total_items,
-            )
-
-            # Create tasks for batch
-            tasks = [process_func(item) for item in batch]
-
-            # Process batch concurrently
-            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            # Filter out exceptions but log them
-            for idx, result in enumerate(batch_results):
-                if isinstance(result, Exception):
-                    logger.error(
-                        f"Failed to process {description}",
-                        error=str(result),
-                        item_index=i + idx,
-                    )
-                else:
-                    results.append(result)
-
-        logger.debug(
-            f"Completed batch processing of {description}",
-            total_processed=total_items,
-            successful=len(results),
-            failed=total_items - len(results),
-        )
-
-        return results
 
     @with_error_handling(
         operation="Fetch time-based data",

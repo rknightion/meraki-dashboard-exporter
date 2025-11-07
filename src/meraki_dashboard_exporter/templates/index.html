@@ -245,6 +245,63 @@
             font-weight: 500;
         }
 
+        .collector-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .collector-table th {
+            background-color: #f8f8f8;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .collector-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .collector-table tr:hover {
+            background-color: #fafafa;
+        }
+
+        .health-good {
+            color: var(--success-color);
+            font-weight: 500;
+        }
+
+        .health-warning {
+            color: var(--warning-color);
+            font-weight: 500;
+        }
+
+        .health-error {
+            color: #f44336;
+            font-weight: 500;
+        }
+
+        .skipped-collectors {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+        }
+
+        .skipped-collectors h4 {
+            margin: 0 0 10px 0;
+            color: #856404;
+        }
+
+        .skipped-collectors p {
+            margin: 5px 0;
+            color: #856404;
+            font-size: 0.9rem;
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 2rem;
@@ -292,6 +349,14 @@
                     <div class="stat">
                         <div class="stat-value">{{ org_count }}</div>
                         <div class="stat-label">Organizations</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">{{ metric_count }}</div>
+                        <div class="stat-label">Total Metrics</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">{{ timeseries_count }}</div>
+                        <div class="stat-label">Time Series</div>
                     </div>
                 </div>
             </div>
@@ -346,15 +411,56 @@
             </div>
 
             <div class="collectors">
-                <h3>Active Collectors</h3>
-                <div class="collector-list">
-                    {% for collector in collectors %}
-                    <div class="collector-badge">
-                        {{ collector.name }}
-                        <span class="tier-badge">{{ collector.tier }}</span>
-                    </div>
+                <h3>Active Collectors ({{ collector_count }})</h3>
+                <table class="collector-table">
+                    <thead>
+                        <tr>
+                            <th>Collector</th>
+                            <th>Tier</th>
+                            <th>Success Rate</th>
+                            <th>Last Success</th>
+                            <th>Failure Streak</th>
+                            <th>Total Runs</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for collector in collectors %}
+                        <tr>
+                            <td>{{ collector.name }}</td>
+                            <td><span class="tier-badge">{{ collector.tier }}</span></td>
+                            <td>
+                                {% if collector.success_rate | float >= 95.0 %}
+                                <span class="health-good">{{ collector.success_rate }}%</span>
+                                {% elif collector.success_rate | float >= 75.0 %}
+                                <span class="health-warning">{{ collector.success_rate }}%</span>
+                                {% else %}
+                                <span class="health-error">{{ collector.success_rate }}%</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ collector.last_success }}</td>
+                            <td>
+                                {% if collector.failure_streak == 0 %}
+                                <span class="health-good">{{ collector.failure_streak }}</span>
+                                {% elif collector.failure_streak <= 2 %}
+                                <span class="health-warning">{{ collector.failure_streak }}</span>
+                                {% else %}
+                                <span class="health-error">{{ collector.failure_streak }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ collector.total_runs }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {% if skipped_collectors %}
+                <div class="skipped-collectors">
+                    <h4>⚠️ Skipped Collectors ({{ skipped_collectors | length }})</h4>
+                    {% for skipped in skipped_collectors %}
+                    <p><strong>{{ skipped.name }}</strong> ({{ skipped.tier }}): {{ skipped.reason }}</p>
                     {% endfor %}
                 </div>
+                {% endif %}
             </div>
         </div>
     </div>

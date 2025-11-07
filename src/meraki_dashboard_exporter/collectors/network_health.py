@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
+from ..core.async_utils import ManagedTaskGroup
 from ..core.collector import MetricCollector
 from ..core.constants import NetworkHealthMetricName, NetworkMetricName, ProductType, UpdateTier
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -23,6 +24,8 @@ if TYPE_CHECKING:
     from prometheus_client import CollectorRegistry
 
     from ..core.config import Settings
+    from ..core.metric_expiration import MetricExpirationManager
+    from ..services.inventory import OrganizationInventory
 
 logger = get_logger(__name__)
 
@@ -36,9 +39,11 @@ class NetworkHealthCollector(MetricCollector):
         api: DashboardAPI,
         settings: Settings,
         registry: CollectorRegistry | None = None,
+        inventory: OrganizationInventory | None = None,
+        expiration_manager: MetricExpirationManager | None = None,
     ) -> None:
         """Initialize network health collector with sub-collectors."""
-        super().__init__(api, settings, registry)
+        super().__init__(api, settings, registry, inventory, expiration_manager)
 
         # Initialize sub-collectors
         self.rf_health_collector = RFHealthCollector(self)
@@ -155,7 +160,11 @@ class NetworkHealthCollector(MetricCollector):
         )
 
     async def _collect_impl(self) -> None:
-        """Collect network health metrics."""
+        """Collect network health metrics with parallel organization processing.
+
+        Organizations are processed in parallel with bounded concurrency
+        to significantly improve performance for multi-org deployments.
+        """
         start_time = asyncio.get_event_loop().time()
         metrics_collected = 0
         organizations_processed = 0
@@ -169,14 +178,28 @@ class NetworkHealthCollector(MetricCollector):
                 return
             api_calls_made += 1
 
-            # Collect network health for each organization
-            for org in organizations:
-                org_id = org["id"]
-                org_name = org.get("name", org_id)
-                await self._collect_org_network_health(org_id, org_name)
-                organizations_processed += 1
-                # Each org makes multiple API calls for network health
-                api_calls_made += 5  # Approximate
+            logger.info(
+                "Starting parallel organization processing",
+                org_count=len(organizations),
+                concurrency_limit=self.settings.api.concurrency_limit,
+            )
+
+            # Process organizations in parallel with bounded concurrency
+            async with ManagedTaskGroup(
+                name="network_health_collector_orgs",
+                max_concurrency=self.settings.api.concurrency_limit,
+            ) as group:
+                for org in organizations:
+                    org_id = org["id"]
+                    org_name = org.get("name", org_id)
+                    await group.create_task(
+                        self._collect_org_network_health(org_id, org_name),
+                        name=f"org_{org_id}",
+                    )
+                    organizations_processed += 1
+
+            # Approximate API calls (actual count may vary)
+            api_calls_made += organizations_processed * 5
 
             # Log collection summary
             log_metric_collection_summary(
@@ -190,30 +213,32 @@ class NetworkHealthCollector(MetricCollector):
         except Exception:
             logger.exception("Failed to collect network health metrics")
 
-    @log_api_call("getOrganizations")
     @with_error_handling(
         operation="Fetch organizations",
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
     async def _fetch_organizations(self) -> list[dict[str, Any]] | None:
-        """Fetch organizations for network health collection.
+        """Fetch organizations for network health collection using inventory cache.
 
         Returns
         -------
         list[dict[str, Any]] | None
             List of organizations or None on error.
 
+        Raises
+        ------
+        RuntimeError
+            If inventory service is not configured.
+
         """
-        if self.settings.meraki.org_id:
-            return [{"id": self.settings.meraki.org_id}]
-        else:
-            with LogContext(operation="fetch_organizations"):
-                orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
-                orgs = validate_response_format(
-                    orgs, expected_type=list, operation="getOrganizations"
-                )
-                return cast(list[dict[str, Any]], orgs)
+        if not self.inventory:
+            raise RuntimeError(
+                "Inventory service not configured for NetworkHealthCollector. "
+                "This is a programming error - collectors must be initialized with inventory service."
+            )
+
+        return await self.inventory.get_organizations()
 
     @log_batch_operation("collect network health", batch_size=None)
     @with_error_handling(
@@ -241,8 +266,8 @@ class NetworkHealthCollector(MetricCollector):
                 network["orgName"] = org_name or org_id
 
             # Collect health metrics for each network in batches
-            # to avoid overwhelming the API connection pool
-            batch_size = 10
+            # to avoid overwhelming the API connection pool (configurable via network_batch_size)
+            batch_size = self.settings.api.network_batch_size
             for i in range(0, len(networks), batch_size):
                 batch = networks[i : i + batch_size]
                 tasks = []

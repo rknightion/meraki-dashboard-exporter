@@ -237,6 +237,11 @@ class DeviceFactory:
         )
 
     @staticmethod
+    def create_many(count: int = 5, **kwargs: Any) -> list[dict[str, Any]]:
+        """Create multiple devices with the same parameters."""
+        return [DeviceFactory.create(**kwargs) for _ in range(count)]
+
+    @staticmethod
     def create_mixed(count: int = 6, network_id: str | None = None) -> list[dict[str, Any]]:
         """Create a mix of different device types."""
         devices = []

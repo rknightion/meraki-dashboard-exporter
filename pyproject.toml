@@ -4,7 +4,11 @@ version = "0.26.0"
 description = "Prometheus exporter for Cisco Meraki Dashboard API metrics"
 readme = "README.md"
 requires-python = ">=3.13"
-classifiers = [ "Programming Language :: Python :: 3 :: Only", "Programming Language :: Python :: 3.13" ]
+classifiers = [
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
 dependencies = [
   "anyio>=4.6",
   "cryptography>=45.0.5",
@@ -107,6 +111,9 @@ lint.per-file-ignores."tests/**/*.py" = [ "PLR0904" ] # Allow more than 20 publi
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
 testpaths = [ "tests" ]
 python_files = [ "test_*.py", "*_test.py" ]
 python_classes = [ "Test*" ]

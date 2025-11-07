@@ -50,6 +50,17 @@ class ManagedTaskGroup:
     ...             name=f"devices_{org['id']}"
     ...         )
 
+    Bounded concurrency with backpressure (NEW):
+    >>> async with ManagedTaskGroup("org_fetch", max_concurrency=3) as group:
+    ...     orgs = await fetch_organizations()
+    ...     for org in orgs:
+    ...         # Only 3 orgs will be processed concurrently
+    ...         # Additional tasks wait for semaphore slot (backpressure)
+    ...         await group.create_task(
+    ...             process_organization(org["id"]),
+    ...             name=f"org_{org['id']}"
+    ...         )
+
     Error handling - all tasks cancelled on exception:
     >>> async with ManagedTaskGroup("metrics") as group:
     ...     await group.create_task(collect_fast_metrics())
@@ -80,18 +91,32 @@ class ManagedTaskGroup:
 
     """
 
-    def __init__(self, name: str = "task_group") -> None:
+    def __init__(
+        self,
+        name: str = "task_group",
+        max_concurrency: int | None = None,
+    ) -> None:
         """Initialize the task group.
 
         Parameters
         ----------
         name : str
             Name for the task group (used in logging).
+        max_concurrency : int | None
+            Maximum number of concurrent tasks. If None, unlimited concurrency.
+            Used for bounded pipeline execution and backpressure management.
 
         """
         self.name = name
         self.tasks: set[Task[Any]] = set()
         self._closed = False
+        self.max_concurrency = max_concurrency
+        self._semaphore: Semaphore | None = (
+            asyncio.Semaphore(max_concurrency) if max_concurrency else None
+        )
+        self._active_count = 0
+        self._total_created = 0
+        self._total_completed = 0
 
     async def __aenter__(self) -> ManagedTaskGroup:
         """Enter the context manager."""
@@ -138,7 +163,10 @@ class ManagedTaskGroup:
         coro: Coroutine[Any, Any, T],
         name: str | None = None,
     ) -> Task[T]:
-        """Create and track a task.
+        """Create and track a task with optional bounded concurrency.
+
+        If max_concurrency is set, this method will wait for a semaphore
+        slot before creating the task, implementing backpressure management.
 
         Parameters
         ----------
@@ -161,13 +189,61 @@ class ManagedTaskGroup:
         if self._closed:
             raise RuntimeError(f"Cannot add tasks to closed group: {self.name}")
 
-        task = asyncio.create_task(coro, name=name)
-        self.tasks.add(task)
+        # Wrap coroutine with semaphore if bounded concurrency is enabled
+        if self._semaphore:
+            wrapped_coro = self._run_with_semaphore(coro, name or "unnamed")
+            task = asyncio.create_task(wrapped_coro, name=name)
+        else:
+            task = asyncio.create_task(coro, name=name)
 
-        # Remove from set when done
-        task.add_done_callback(self.tasks.discard)
+        self.tasks.add(task)
+        self._total_created += 1
+
+        # Remove from set and update counters when done
+        def _on_complete(t: Task[T]) -> None:
+            self.tasks.discard(t)
+            self._total_completed += 1
+
+        task.add_done_callback(_on_complete)
 
         return task
+
+    async def _run_with_semaphore(
+        self,
+        coro: Coroutine[Any, Any, T],
+        task_name: str,
+    ) -> T:
+        """Run coroutine with semaphore for bounded concurrency.
+
+        Parameters
+        ----------
+        coro : Coroutine
+            The coroutine to run.
+        task_name : str
+            Name of the task for logging.
+
+        Returns
+        -------
+        T
+            Result from the coroutine.
+
+        """
+        if not self._semaphore:
+            return await coro
+
+        # Wait for semaphore slot (backpressure)
+        async with self._semaphore:
+            self._active_count += 1
+            logger.debug(
+                f"Task acquired semaphore in {self.name}",
+                task_name=task_name,
+                active=self._active_count,
+                max_concurrency=self.max_concurrency,
+            )
+            try:
+                return await coro
+            finally:
+                self._active_count -= 1
 
     async def gather(self) -> list[Any]:
         """Wait for all tasks and return results.
@@ -182,6 +258,64 @@ class ManagedTaskGroup:
             return []
 
         return await asyncio.gather(*self.tasks, return_exceptions=True)
+
+    def get_stats(self) -> dict[str, int]:
+        """Get statistics about task group execution.
+
+        Returns
+        -------
+        dict[str, int]
+            Dictionary with statistics including active, pending, completed counts.
+
+        """
+        return {
+            "active": len(self.tasks),
+            "total_created": self._total_created,
+            "total_completed": self._total_completed,
+            "pending": self._total_created - self._total_completed,
+            "active_count": self._active_count,
+        }
+
+    async def wait_for_capacity(self, target_active: int = 1) -> None:
+        """Wait until the number of active tasks drops below target.
+
+        Useful for implementing backpressure in producer-consumer patterns.
+
+        Parameters
+        ----------
+        target_active : int
+            Target number of active tasks to wait for.
+
+        """
+        while len(self.tasks) >= (self.max_concurrency or target_active):
+            # Wait a bit and check again
+            await asyncio.sleep(0.1)
+
+    async def create_tasks_batch(
+        self,
+        coros: list[Coroutine[Any, Any, T]],
+        name_prefix: str = "task",
+    ) -> list[Task[T]]:
+        """Create multiple tasks at once with optional backpressure.
+
+        Parameters
+        ----------
+        coros : list[Coroutine]
+            List of coroutines to create tasks for.
+        name_prefix : str
+            Prefix for task names.
+
+        Returns
+        -------
+        list[Task[T]]
+            List of created tasks.
+
+        """
+        tasks = []
+        for i, coro in enumerate(coros):
+            task = await self.create_task(coro, name=f"{name_prefix}_{i}")
+            tasks.append(task)
+        return tasks
 
 
 async def with_timeout(

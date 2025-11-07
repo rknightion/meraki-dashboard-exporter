@@ -17,6 +17,7 @@ from .config_models import (
     OTelSettings,
     ServerSettings,
     UpdateIntervals,
+    WebhookSettings,
 )
 
 
@@ -52,6 +53,10 @@ class Settings(BaseSettings):
     server: ServerSettings = Field(
         default_factory=ServerSettings,
         description="HTTP server settings",
+    )
+    webhooks: WebhookSettings = Field(
+        default_factory=WebhookSettings,
+        description="Webhook receiver settings",
     )
     otel: OTelSettings = Field(
         default_factory=OTelSettings,
