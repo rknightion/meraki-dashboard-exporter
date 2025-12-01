@@ -7,9 +7,10 @@ reducing code duplication and ensuring consistent behavior across collectors.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Callable, Coroutine
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
+from .batch_processing import extract_successful_results, process_in_batches_with_errors
 from .error_handling import ErrorCategory, with_error_handling
 from .logging import get_logger
 
@@ -19,6 +20,8 @@ if TYPE_CHECKING:
     from .collector import MetricCollector
 
 logger = get_logger(__name__)
+T = TypeVar("T")
+R = TypeVar("R")
 
 
 class APIHelper:
@@ -248,6 +251,53 @@ class APIHelper:
             wrapped_response=False,
         )
         return cast(dict[str, Any] | list[dict[str, Any]], response)
+
+    async def process_in_batches(
+        self,
+        items: list[T],
+        process_func: Callable[[T], Coroutine[Any, Any, R]],
+        batch_size: int | None = None,
+        description: str = "item",
+    ) -> list[R]:
+        """Process items in batches using configured defaults.
+
+        Parameters
+        ----------
+        items : list[T]
+            Items to process.
+        process_func : Callable[[T], Awaitable[R]]
+            Async function to process each item.
+        batch_size : int | None
+            Batch size to use (defaults to settings.api.batch_size).
+        description : str
+            Description of items for logging.
+
+        Returns
+        -------
+        list[R]
+            Successful results in original item order. Failed items are omitted.
+
+        """
+        if not items:
+            return []
+
+        resolved_batch_size = batch_size or self.settings.api.batch_size
+        # Default to zero delay if batch_delay is not configured as a float
+        raw_delay = getattr(self.settings.api, "batch_delay", 0.0)
+        try:
+            delay_between_batches = float(raw_delay)
+        except (TypeError, ValueError):
+            delay_between_batches = 0.0
+
+        results_with_items: list[tuple[T, R | Exception]] = await process_in_batches_with_errors(
+            items,
+            process_func,
+            batch_size=resolved_batch_size,
+            delay_between_batches=delay_between_batches,
+            item_description=description,
+        )
+
+        return extract_successful_results(results_with_items)
 
 
 def create_api_helper(collector: MetricCollector) -> APIHelper:

@@ -10,6 +10,7 @@ from prometheus_client import CollectorRegistry
 
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.constants import UpdateTier
+from meraki_dashboard_exporter.services.inventory import OrganizationInventory
 
 from .metrics import MetricAssertions, MetricSnapshot
 from .mock_api import MockAPIBuilder
@@ -86,13 +87,22 @@ class BaseCollectorTest:
 
     @pytest.fixture
     def collector(
-        self, mock_api: MagicMock, settings: Settings, isolated_registry: CollectorRegistry
+        self,
+        mock_api: MagicMock,
+        settings: Settings,
+        isolated_registry: CollectorRegistry,
+        inventory: OrganizationInventory,
     ) -> MetricCollector:
         """Create the collector instance."""
         if not self.collector_class:
             raise NotImplementedError("Set collector_class in your test class")
 
-        return self.collector_class(api=mock_api, settings=settings, registry=isolated_registry)
+        return self.collector_class(
+            api=mock_api,
+            settings=settings,
+            registry=isolated_registry,
+            inventory=inventory,
+        )
 
     @pytest.fixture
     def metrics(self, isolated_registry: CollectorRegistry) -> MetricAssertions:
@@ -103,6 +113,11 @@ class BaseCollectorTest:
     def metric_snapshot(self, isolated_registry: CollectorRegistry) -> MetricSnapshot:
         """Create a metric snapshot."""
         return MetricSnapshot(isolated_registry)
+
+    @pytest.fixture
+    def inventory(self, mock_api: MagicMock, settings: Settings) -> OrganizationInventory:
+        """Provide an inventory service backed by the mock API."""
+        return OrganizationInventory(mock_api, settings)
 
     # Helper methods
 
@@ -208,6 +223,14 @@ class BaseCollectorTest:
             Any exception that was raised
 
         """
+        # Ensure helper services use the latest API instance (tests often swap mock APIs)
+        if hasattr(collector, "inventory") and collector.inventory is not None:
+            collector.inventory.api = collector.api
+        if hasattr(collector, "api_helper") and hasattr(collector.api_helper, "api"):
+            collector.api_helper.api = collector.api
+        if hasattr(collector, "_sync_subcollector_api"):
+            collector._sync_subcollector_api()
+
         try:
             await collector.collect()
             if not expect_success:

@@ -238,6 +238,7 @@ class NetworkHealthCollector(MetricCollector):
                 "This is a programming error - collectors must be initialized with inventory service."
             )
 
+        self._track_api_call("getOrganizations")
         return await self.inventory.get_organizations()
 
     @log_batch_operation("collect network health", batch_size=None)

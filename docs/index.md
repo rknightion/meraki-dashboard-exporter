@@ -1,6 +1,7 @@
 ---
 title: Meraki Dashboard Exporter
 description: High level overview and quick links
+image: assets/social-card.png
 ---
 
 # Meraki Dashboard Exporter

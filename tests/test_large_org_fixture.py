@@ -311,6 +311,6 @@ class TestLargeOrgPerformance:
         # Should have good distribution across orgs
         devices_per_org = stats["devices_per_org"]
         avg_devices = stats["total_devices"] / 10
-        for org_id, count in devices_per_org.items():
+        for count in devices_per_org.values():
             # Each org should be within ±50% of average
             assert 0.5 * avg_devices <= count <= 1.5 * avg_devices

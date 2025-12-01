@@ -7,7 +7,7 @@ import sys
 sys.path.insert(0, "/app")
 
 # Import and run the main function
-from meraki_dashboard_exporter.__main__ import main
+from meraki_dashboard_exporter import main
 
 if __name__ == "__main__":
     main()

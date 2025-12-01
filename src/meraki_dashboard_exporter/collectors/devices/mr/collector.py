@@ -11,6 +11,8 @@ from .performance import MRPerformanceCollector
 from .wireless import MRWirelessCollector
 
 if TYPE_CHECKING:
+    from meraki import DashboardAPI
+
     from ...device import DeviceCollector
 
 logger = get_logger(__name__)
@@ -111,6 +113,14 @@ class MRCollector(BaseDeviceCollector):
         self._ssid_usage_upstream_mb = self.wireless._ssid_usage_upstream_mb
         self._ssid_usage_percentage = self.wireless._ssid_usage_percentage
         self._ssid_client_count = self.wireless._ssid_client_count
+        self._packet_value_cache = self.performance._packet_value_cache
+
+    def update_api(self, api: DashboardAPI) -> None:
+        """Propagate API updates to sub-collectors."""
+        self.api = api
+        self.clients.api = api
+        self.performance.api = api
+        self.wireless.api = api
 
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect per-device wireless AP metrics.

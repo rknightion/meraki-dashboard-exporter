@@ -28,6 +28,8 @@ def mock_settings() -> Settings:
     settings.api.concurrency_limit = 5
     settings.api.timeout = 30
     settings.api.max_retries = 3
+    settings.api.action_batch_retry_wait = 10
+    settings.api.rate_limit_retry_wait = 5
 
     return settings
 

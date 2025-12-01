@@ -201,6 +201,8 @@ class AsyncMerakiClient:
         api_func: Callable[..., T],
         *args: Any,
         max_retries: int | None = None,
+        span_name: str | None = None,
+        result_hook: Callable[[T, Any], None] | None = None,
         **kwargs: Any,
     ) -> T:
         """Execute an API request with retry logic, metrics, and observability.
@@ -215,6 +217,10 @@ class AsyncMerakiClient:
             Positional arguments for the API function.
         max_retries : int | None
             Maximum retry attempts (defaults to settings.api.max_retries).
+        span_name : str | None
+            Optional tracing span name (defaults to endpoint_name).
+        result_hook : Callable[[T, Any], None] | None
+            Optional callback invoked on successful responses for span enrichment.
         **kwargs : Any
             Keyword arguments for the API function.
 
@@ -235,10 +241,20 @@ class AsyncMerakiClient:
         # Ensure API client is initialized
         await self._get_api_client()
 
+        # Metrics are initialized in __init__, but assert for type safety
+        assert self._api_request_duration is not None
+        assert self._api_requests_total is not None
+        assert self._api_retry_attempts is not None
+        api_request_duration = self._api_request_duration
+        api_requests_total = self._api_requests_total
+        api_retry_attempts = self._api_retry_attempts
+
         retry_count = 0
         last_error: Exception | None = None
 
-        with tracer.start_as_current_span(endpoint_name) as span:
+        span_name = span_name or endpoint_name
+
+        with tracer.start_as_current_span(span_name) as span:
             span.set_attribute("api.endpoint", endpoint_name)
             span.set_attribute("api.max_retries", max_retries)
 
@@ -255,13 +271,13 @@ class AsyncMerakiClient:
                     duration = time.time() - start_time
                     status_code = "200"
 
-                    self._api_request_duration.labels(
+                    api_request_duration.labels(
                         endpoint=endpoint_name,
                         method="GET",  # Most Meraki API calls are GET
                         status_code=status_code,
                     ).observe(duration)
 
-                    self._api_requests_total.labels(
+                    api_requests_total.labels(
                         endpoint=endpoint_name,
                         method="GET",
                         status_code=status_code,
@@ -270,6 +286,9 @@ class AsyncMerakiClient:
                     span.set_attribute("api.status_code", status_code)
                     span.set_attribute("api.duration_seconds", duration)
                     span.set_attribute("api.retry_count", retry_count)
+
+                    if result_hook:
+                        result_hook(result, span)
 
                     logger.debug(
                         "API request successful",
@@ -286,13 +305,13 @@ class AsyncMerakiClient:
                     last_error = e
 
                     # Record metrics for failed request
-                    self._api_request_duration.labels(
+                    api_request_duration.labels(
                         endpoint=endpoint_name,
                         method="GET",
                         status_code=status_code,
                     ).observe(duration)
 
-                    self._api_requests_total.labels(
+                    api_requests_total.labels(
                         endpoint=endpoint_name,
                         method="GET",
                         status_code=status_code,
@@ -309,7 +328,7 @@ class AsyncMerakiClient:
                             60,  # Max 60 seconds
                         )
 
-                        self._api_retry_attempts.labels(
+                        api_retry_attempts.labels(
                             endpoint=endpoint_name,
                             retry_reason="rate_limit",
                         ).inc()
@@ -350,13 +369,13 @@ class AsyncMerakiClient:
                     last_error = e
 
                     # Record metrics for unexpected error
-                    self._api_request_duration.labels(
+                    api_request_duration.labels(
                         endpoint=endpoint_name,
                         method="GET",
                         status_code="error",
                     ).observe(duration)
 
-                    self._api_requests_total.labels(
+                    api_requests_total.labels(
                         endpoint=endpoint_name,
                         method="GET",
                         status_code="error",
@@ -399,6 +418,8 @@ class AsyncMerakiClient:
         result = await self._request(
             "getOrganizations",
             api_client.organizations.getOrganizations,
+            span_name="get_organizations",
+            result_hook=lambda orgs, span: span.set_attribute("org.count", len(orgs)),
         )
         logger.debug("Successfully fetched organizations", count=len(result))
         return result
