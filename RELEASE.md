@@ -15,19 +15,6 @@ The version is maintained in `pyproject.toml` as the single source of truth.
 
 The Makefile provides automated commands for creating releases:
 
-### Quick Release Commands
-
-```bash
-# Create a patch release (0.0.X)
-make release-patch
-
-# Create a minor release (0.X.0)
-make release-minor
-
-# Create a major release (X.0.0)
-make release-major
-```
-
 ### What These Commands Do
 
 1. **Pre-release checks**: Runs `make check` (lint, typecheck, tests)
