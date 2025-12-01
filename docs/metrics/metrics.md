@@ -3,9 +3,9 @@
 This page provides a comprehensive reference of all Prometheus metrics exposed by the Meraki Dashboard Exporter.
 
 !!! summary "Metrics Summary"
-    📊 **Total Metrics:** 156
-    🏗️ **Collectors:** 9
-    📈 **Gauges:** 151
+    📊 **Total Metrics:** 157
+    🏗️ **Collectors:** 11
+    📈 **Gauges:** 152
     📊 **Counters:** 4
     ℹ️ **Info Metrics:** 1
 
@@ -15,11 +15,13 @@ The exporter provides metrics across several categories:
 
 | Collector | Metrics | Description |
 |-----------|---------|-------------|
-| [AlertsCollector](#alerts) | 4 | 🚨 Active alerts by severity, type, and category |
+| [AlertsCollector](#alerts) | 5 | 🚨 Active alerts by severity, type, and category |
 | [ClientsCollector](#clients) | 21 | 👥 Detailed client-level metrics including usage and status |
 | [ConfigCollector](#config) | 14 | ⚙️ Organization security settings and configuration tracking |
 | [DeviceCollector](#device) | 10 | 📱 Device status, performance, and uptime metrics |
-| [MRCollector](#mr) | 38 | 📡 Access point metrics including clients, power, and performance |
+| [MRClientsCollector](#mrclients) | 2 | Various metrics |
+| [MRPerformanceCollector](#mrperformance) | 27 | Various metrics |
+| [MRWirelessCollector](#mrwireless) | 9 | Various metrics |
 | [MSCollector](#ms) | 24 | 🔀 Switch-specific metrics including port status, power, and PoE |
 | [MTSensorCollector](#mtsensor) | 18 | 📊 Environmental monitoring from MT sensors |
 | [NetworkHealthCollector](#networkhealth) | 8 | 🏥 Network-wide wireless health and performance |
@@ -46,7 +48,7 @@ The exporter provides metrics across several categories:
       ClientsCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_exporter_client_dns_lookups_total`](#meraki-exporter-client-dns-lookups-total)
@@ -55,7 +57,7 @@ The exporter provides metrics across several categories:
 
     </div>
 
-??? abstract "📈 **Gauges** - Values that can increase or decrease (current state) (151 metrics)"
+??? abstract "📈 **Gauges** - Values that can increase or decrease (current state) (152 metrics)"
 
     <div class="grid cards" markdown>
 
@@ -72,7 +74,7 @@ The exporter provides metrics across several categories:
       ConfigCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_ENABLED`](#orgmetricname-org-login-security-different-passwords-enabled)
@@ -88,7 +90,7 @@ The exporter provides metrics across several categories:
       ConfigCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`OrgMetricName.ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED`](#orgmetricname-org-login-security-strong-passwords-enabled)
@@ -104,7 +106,7 @@ The exporter provides metrics across several categories:
       AlertsCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_alerts_total_by_severity`](#meraki-alerts-total-by-severity)
@@ -120,7 +122,7 @@ The exporter provides metrics across several categories:
       NetworkHealthCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_client_application_usage_recv_kb`](#meraki-client-application-usage-recv-kb)
@@ -136,7 +138,7 @@ The exporter provides metrics across several categories:
       ClientsCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_client_status`](#meraki-client-status)
@@ -152,7 +154,7 @@ The exporter provides metrics across several categories:
       ClientsCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_client_usage_total_kb`](#meraki-client-usage-total-kb)
@@ -168,7 +170,7 @@ The exporter provides metrics across several categories:
       ClientsCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_device_memory_free_bytes`](#meraki-device-memory-free-bytes)
@@ -184,7 +186,7 @@ The exporter provides metrics across several categories:
       DeviceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_device_memory_used_bytes`](#meraki-device-memory-used-bytes)
@@ -200,7 +202,7 @@ The exporter provides metrics across several categories:
       DeviceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_exporter_client_dns_cache_expired`](#meraki-exporter-client-dns-cache-expired)
@@ -216,7 +218,7 @@ The exporter provides metrics across several categories:
       ClientsCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_exporter_client_store_networks`](#meraki-exporter-client-store-networks)
@@ -229,207 +231,207 @@ The exporter provides metrics across several categories:
 
     - [`meraki_mr_aggregation_enabled`](#meraki-mr-aggregation-enabled)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_aggregation_speed_mbps`](#meraki-mr-aggregation-speed-mbps)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_clients_connected`](#meraki-mr-clients-connected)
       ---
-      MRCollector
+      MRClientsCollector
 
     - [`meraki_mr_connection_stats_total`](#meraki-mr-connection-stats-total)
       ---
-      MRCollector
+      MRClientsCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_cpu_load_5min`](#meraki-mr-cpu-load-5min)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_network_packet_loss_downstream_percent`](#meraki-mr-network-packet-loss-downstream-percent)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_network_packet_loss_total_percent`](#meraki-mr-network-packet-loss-total-percent)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_network_packet_loss_upstream_percent`](#meraki-mr-network-packet-loss-upstream-percent)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_network_packets_downstream_lost`](#meraki-mr-network-packets-downstream-lost)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_network_packets_downstream_total`](#meraki-mr-network-packets-downstream-total)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_network_packets_lost_total`](#meraki-mr-network-packets-lost-total)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_network_packets_total`](#meraki-mr-network-packets-total)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_network_packets_upstream_lost`](#meraki-mr-network-packets-upstream-lost)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_network_packets_upstream_total`](#meraki-mr-network-packets-upstream-total)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_packet_loss_downstream_percent`](#meraki-mr-packet-loss-downstream-percent)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_packet_loss_total_percent`](#meraki-mr-packet-loss-total-percent)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_packet_loss_upstream_percent`](#meraki-mr-packet-loss-upstream-percent)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_packets_downstream_lost`](#meraki-mr-packets-downstream-lost)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_packets_downstream_total`](#meraki-mr-packets-downstream-total)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_packets_lost_total`](#meraki-mr-packets-lost-total)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_packets_total`](#meraki-mr-packets-total)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_packets_upstream_lost`](#meraki-mr-packets-upstream-lost)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_packets_upstream_total`](#meraki-mr-packets-upstream-total)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_port_link_negotiation_info`](#meraki-mr-port-link-negotiation-info)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_port_link_negotiation_speed_mbps`](#meraki-mr-port-link-negotiation-speed-mbps)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_port_poe_info`](#meraki-mr-port-poe-info)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_power_ac_connected`](#meraki-mr-power-ac-connected)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_power_info`](#meraki-mr-power-info)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_power_poe_connected`](#meraki-mr-power-poe-connected)
       ---
-      MRCollector
+      MRPerformanceCollector
 
     - [`meraki_mr_radio_broadcasting`](#meraki-mr-radio-broadcasting)
       ---
-      MRCollector
+      MRWirelessCollector
 
     - [`meraki_mr_radio_channel`](#meraki-mr-radio-channel)
       ---
-      MRCollector
+      MRWirelessCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_radio_channel_width_mhz`](#meraki-mr-radio-channel-width-mhz)
       ---
-      MRCollector
+      MRWirelessCollector
 
     - [`meraki_mr_radio_power_dbm`](#meraki-mr-radio-power-dbm)
       ---
-      MRCollector
+      MRWirelessCollector
 
     - [`meraki_mr_ssid_client_count`](#meraki-mr-ssid-client-count)
       ---
-      MRCollector
+      MRWirelessCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_ssid_usage_downstream_mb`](#meraki-mr-ssid-usage-downstream-mb)
       ---
-      MRCollector
+      MRWirelessCollector
 
     - [`meraki_mr_ssid_usage_percentage`](#meraki-mr-ssid-usage-percentage)
       ---
-      MRCollector
+      MRWirelessCollector
 
     - [`meraki_mr_ssid_usage_total_mb`](#meraki-mr-ssid-usage-total-mb)
       ---
-      MRCollector
+      MRWirelessCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mr_ssid_usage_upstream_mb`](#meraki-mr-ssid-usage-upstream-mb)
       ---
-      MRCollector
+      MRWirelessCollector
 
     - [`meraki_ms_poe_budget_watts`](#meraki-ms-poe-budget-watts)
       ---
@@ -440,7 +442,7 @@ The exporter provides metrics across several categories:
       MSCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_poe_port_power_watthours`](#meraki-ms-poe-port-power-watthours)
@@ -456,7 +458,7 @@ The exporter provides metrics across several categories:
       MSCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_port_packets_broadcast`](#meraki-ms-port-packets-broadcast)
@@ -472,7 +474,7 @@ The exporter provides metrics across several categories:
       MSCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_port_packets_fragments`](#meraki-ms-port-packets-fragments)
@@ -488,7 +490,7 @@ The exporter provides metrics across several categories:
       MSCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_port_packets_rate_collisions`](#meraki-ms-port-packets-rate-collisions)
@@ -504,7 +506,7 @@ The exporter provides metrics across several categories:
       MSCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_port_packets_rate_multicast`](#meraki-ms-port-packets-rate-multicast)
@@ -520,7 +522,7 @@ The exporter provides metrics across several categories:
       MSCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_port_packets_topologychanges`](#meraki-ms-port-packets-topologychanges)
@@ -536,7 +538,7 @@ The exporter provides metrics across several categories:
       MSCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_port_traffic_bytes`](#meraki-ms-port-traffic-bytes)
@@ -552,7 +554,7 @@ The exporter provides metrics across several categories:
       DeviceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_ports_by_link_speed_total`](#meraki-ms-ports-by-link-speed-total)
@@ -568,7 +570,7 @@ The exporter provides metrics across several categories:
       DeviceCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_ms_power_usage_watts`](#meraki-ms-power-usage-watts)
@@ -584,7 +586,7 @@ The exporter provides metrics across several categories:
       MTSensorCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mt_battery_percentage`](#meraki-mt-battery-percentage)
@@ -600,7 +602,7 @@ The exporter provides metrics across several categories:
       MTSensorCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mt_door_status`](#meraki-mt-door-status)
@@ -616,7 +618,7 @@ The exporter provides metrics across several categories:
       MTSensorCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mt_humidity_percent`](#meraki-mt-humidity-percent)
@@ -632,7 +634,7 @@ The exporter provides metrics across several categories:
       MTSensorCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mt_pm25_ug_m3`](#meraki-mt-pm25-ug-m3)
@@ -648,7 +650,7 @@ The exporter provides metrics across several categories:
       MTSensorCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mt_remote_lockout_status`](#meraki-mt-remote-lockout-status)
@@ -664,7 +666,7 @@ The exporter provides metrics across several categories:
       MTSensorCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_mt_voltage_volts`](#meraki-mt-voltage-volts)
@@ -680,7 +682,7 @@ The exporter provides metrics across several categories:
       NetworkHealthCollector
 
     </div>
-
+    
     <div class="grid cards" markdown>
 
     - [`meraki_network_channel_utilization_2_4ghz_percent`](#meraki-network-channel-utilization-2-4ghz-percent)
@@ -691,13 +693,17 @@ The exporter provides metrics across several categories:
       ---
       NetworkHealthCollector
 
+    - [`meraki_network_health_alerts_total`](#meraki-network-health-alerts-total)
+      ---
+      AlertsCollector
+
+    </div>
+    
+    <div class="grid cards" markdown>
+
     - [`meraki_network_wireless_connection_stats_total`](#meraki-network-wireless-connection-stats-total)
       ---
       NetworkHealthCollector
-
-    </div>
-
-    <div class="grid cards" markdown>
 
     - [`meraki_network_wireless_download_kbps`](#meraki-network-wireless-download-kbps)
       ---
@@ -707,13 +713,13 @@ The exporter provides metrics across several categories:
       ---
       NetworkHealthCollector
 
+    </div>
+    
+    <div class="grid cards" markdown>
+
     - [`meraki_org_api_requests_by_status`](#meraki-org-api-requests-by-status)
       ---
       OrganizationCollector
-
-    </div>
-
-    <div class="grid cards" markdown>
 
     - [`meraki_org_api_requests_total`](#meraki-org-api-requests-total)
       ---
@@ -723,13 +729,13 @@ The exporter provides metrics across several categories:
       ---
       OrganizationCollector
 
+    </div>
+    
+    <div class="grid cards" markdown>
+
     - [`meraki_org_application_usage_percentage`](#meraki-org-application-usage-percentage)
       ---
       OrganizationCollector
-
-    </div>
-
-    <div class="grid cards" markdown>
 
     - [`meraki_org_application_usage_total_mb`](#meraki-org-application-usage-total-mb)
       ---
@@ -739,13 +745,13 @@ The exporter provides metrics across several categories:
       ---
       OrganizationCollector
 
+    </div>
+    
+    <div class="grid cards" markdown>
+
     - [`meraki_org_clients_total`](#meraki-org-clients-total)
       ---
       OrganizationCollector
-
-    </div>
-
-    <div class="grid cards" markdown>
 
     - [`meraki_org_configuration_changes_total`](#meraki-org-configuration-changes-total)
       ---
@@ -755,13 +761,13 @@ The exporter provides metrics across several categories:
       ---
       OrganizationCollector
 
+    </div>
+    
+    <div class="grid cards" markdown>
+
     - [`meraki_org_devices_by_model_total`](#meraki-org-devices-by-model-total)
       ---
       OrganizationCollector
-
-    </div>
-
-    <div class="grid cards" markdown>
 
     - [`meraki_org_devices_total`](#meraki-org-devices-total)
       ---
@@ -771,13 +777,13 @@ The exporter provides metrics across several categories:
       ---
       OrganizationCollector
 
+    </div>
+    
+    <div class="grid cards" markdown>
+
     - [`meraki_org_licenses_total`](#meraki-org-licenses-total)
       ---
       OrganizationCollector
-
-    </div>
-
-    <div class="grid cards" markdown>
 
     - [`meraki_org_login_security_account_lockout_enabled`](#meraki-org-login-security-account-lockout-enabled)
       ---
@@ -787,13 +793,13 @@ The exporter provides metrics across several categories:
       ---
       ConfigCollector
 
+    </div>
+    
+    <div class="grid cards" markdown>
+
     - [`meraki_org_login_security_idle_timeout_minutes`](#meraki-org-login-security-idle-timeout-minutes)
       ---
       ConfigCollector
-
-    </div>
-
-    <div class="grid cards" markdown>
 
     - [`meraki_org_login_security_ip_ranges_enabled`](#meraki-org-login-security-ip-ranges-enabled)
       ---
@@ -803,13 +809,13 @@ The exporter provides metrics across several categories:
       ---
       ConfigCollector
 
+    </div>
+    
+    <div class="grid cards" markdown>
+
     - [`meraki_org_login_security_two_factor_enabled`](#meraki-org-login-security-two-factor-enabled)
       ---
       ConfigCollector
-
-    </div>
-
-    <div class="grid cards" markdown>
 
     - [`meraki_org_networks_total`](#meraki-org-networks-total)
       ---
@@ -819,13 +825,13 @@ The exporter provides metrics across several categories:
       ---
       OrganizationCollector
 
+    </div>
+    
+    <div class="grid cards" markdown>
+
     - [`meraki_org_packetcaptures_total`](#meraki-org-packetcaptures-total)
       ---
       OrganizationCollector
-
-    </div>
-
-    <div class="grid cards" markdown>
 
     - [`meraki_org_usage_downstream_kb`](#meraki-org-usage-downstream-kb)
       ---
@@ -835,13 +841,13 @@ The exporter provides metrics across several categories:
       ---
       OrganizationCollector
 
+    </div>
+    
+    <div class="grid cards" markdown>
+
     - [`meraki_org_usage_upstream_kb`](#meraki-org-usage-upstream-kb)
       ---
       OrganizationCollector
-
-    </div>
-
-    <div class="grid cards" markdown>
 
     - [`meraki_sensor_alerts_total`](#meraki-sensor-alerts-total)
       ---
@@ -851,13 +857,13 @@ The exporter provides metrics across several categories:
       ---
       ClientsCollector
 
+    </div>
+    
+    <div class="grid cards" markdown>
+
     - [`meraki_wireless_client_rssi`](#meraki-wireless-client-rssi)
       ---
       ClientsCollector
-
-    </div>
-
-    <div class="grid cards" markdown>
 
     - [`meraki_wireless_client_snr`](#meraki-wireless-client-snr)
       ---
@@ -880,7 +886,6 @@ The exporter provides metrics across several categories:
 === "Device & Infrastructure"
 
     - [DeviceCollector](#device) (10 metrics)
-    - [MRCollector](#mr) (38 metrics)
     - [MSCollector](#ms) (24 metrics)
     - [MTSensorCollector](#mtsensor) (18 metrics)
 
@@ -890,7 +895,7 @@ The exporter provides metrics across several categories:
 
 === "Organization & Management"
 
-    - [AlertsCollector](#alerts) (4 metrics)
+    - [AlertsCollector](#alerts) (5 metrics)
     - [ClientsCollector](#clients) (21 metrics)
     - [ConfigCollector](#config) (14 metrics)
     - [OrganizationCollector](#organization) (19 metrics)
@@ -902,7 +907,7 @@ The exporter provides metrics across several categories:
 !!! info "Collector Information"
     **Description:** 🚨 Active alerts by severity, type, and category
     **Source File:** `src/meraki_dashboard_exporter/collectors/alerts.py`
-    **Metrics Count:** 4
+    **Metrics Count:** 5
 
 #### `meraki_alerts_active` { #meraki-alerts-active }
 
@@ -970,6 +975,30 @@ The exporter provides metrics across several categories:
 
     **Variable:** `self._alerts_by_severity`
     **Source Line:** 48
+
+---
+
+#### `meraki_network_health_alerts_total` { #meraki-network-health-alerts-total }
+
+**Type:** 🔢 Gauge
+
+**Description:** Total number of active network health alerts by category and severity
+
+**Labels:**
+
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.CATEGORY`
+- `LabelName.SEVERITY`
+
+??? example "Technical Details"
+
+    **Constant:** `AlertMetricName.NETWORK_HEALTH_ALERTS_TOTAL`
+
+    **Variable:** `self._network_health_alerts_total`
+    **Source Line:** 80
 
 ---
 
@@ -1732,7 +1761,7 @@ The exporter provides metrics across several categories:
     **Constant:** `DeviceMetricName.DEVICE_MEMORY_FREE_BYTES`
 
     **Variable:** `self._device_memory_free_bytes`
-    **Source Line:** 218
+    **Source Line:** 255
 
 ---
 
@@ -1758,7 +1787,7 @@ The exporter provides metrics across several categories:
     **Constant:** `DeviceMetricName.DEVICE_MEMORY_TOTAL_BYTES`
 
     **Variable:** `self._device_memory_total_bytes`
-    **Source Line:** 234
+    **Source Line:** 271
 
 ---
 
@@ -1784,7 +1813,7 @@ The exporter provides metrics across several categories:
     **Constant:** `DeviceMetricName.DEVICE_MEMORY_USAGE_PERCENT`
 
     **Variable:** `self._device_memory_usage_percent`
-    **Source Line:** 249
+    **Source Line:** 286
 
 ---
 
@@ -1811,7 +1840,7 @@ The exporter provides metrics across several categories:
     **Constant:** `DeviceMetricName.DEVICE_MEMORY_USED_BYTES`
 
     **Variable:** `self._device_memory_used_bytes`
-    **Source Line:** 202
+    **Source Line:** 239
 
 ---
 
@@ -1838,7 +1867,7 @@ The exporter provides metrics across several categories:
     **Constant:** `DeviceMetricName.DEVICE_STATUS_INFO`
 
     **Variable:** `self._device_status_info`
-    **Source Line:** 185
+    **Source Line:** 222
 
 ---
 
@@ -1864,7 +1893,7 @@ The exporter provides metrics across several categories:
     **Constant:** `DeviceMetricName.DEVICE_UP`
 
     **Variable:** `self._device_up`
-    **Source Line:** 170
+    **Source Line:** 207
 
 ---
 
@@ -1884,7 +1913,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MSMetricName.MS_PORTS_ACTIVE_TOTAL`
 
     **Variable:** `self._ms_ports_active_total`
-    **Source Line:** 127
+    **Source Line:** 145
 
 ---
 
@@ -1906,7 +1935,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MSMetricName.MS_PORTS_BY_LINK_SPEED_TOTAL`
 
     **Variable:** `self._ms_ports_by_link_speed_total`
-    **Source Line:** 156
+    **Source Line:** 174
 
 ---
 
@@ -1928,7 +1957,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MSMetricName.MS_PORTS_BY_MEDIA_TOTAL`
 
     **Variable:** `self._ms_ports_by_media_total`
-    **Source Line:** 145
+    **Source Line:** 163
 
 ---
 
@@ -1948,67 +1977,15 @@ The exporter provides metrics across several categories:
     **Constant:** `MSMetricName.MS_PORTS_INACTIVE_TOTAL`
 
     **Variable:** `self._ms_ports_inactive_total`
-    **Source Line:** 136
+    **Source Line:** 154
 
 
-### MRCollector { #mr }
+### MRClientsCollector { #mrclients }
 
 !!! info "Collector Information"
-    **Description:** 📡 Access point metrics including clients, power, and performance
-    **Source File:** `src/meraki_dashboard_exporter/collectors/devices/mr.py`
-    **Metrics Count:** 38
-
-#### `meraki_mr_aggregation_enabled` { #meraki-mr-aggregation-enabled }
-
-**Type:** 🔢 Gauge
-
-**Description:** Access point port aggregation enabled status (1 = enabled, 0 = disabled)
-
-**Labels:**
-
-- `LabelName.ORG_ID`
-- `LabelName.ORG_NAME`
-- `LabelName.NETWORK_ID`
-- `LabelName.NETWORK_NAME`
-- `LabelName.SERIAL`
-- `LabelName.NAME`
-- `LabelName.MODEL`
-- `LabelName.DEVICE_TYPE`
-
-??? example "Technical Details"
-
-    **Constant:** `MRMetricName.MR_AGGREGATION_ENABLED`
-
-    **Variable:** `self._mr_aggregation_enabled`
-    **Source Line:** 172
-
----
-
-#### `meraki_mr_aggregation_speed_mbps` { #meraki-mr-aggregation-speed-mbps }
-
-**Type:** 🔢 Gauge
-
-**Description:** Access point total aggregated port speed in Mbps
-
-**Labels:**
-
-- `LabelName.ORG_ID`
-- `LabelName.ORG_NAME`
-- `LabelName.NETWORK_ID`
-- `LabelName.NETWORK_NAME`
-- `LabelName.SERIAL`
-- `LabelName.NAME`
-- `LabelName.MODEL`
-- `LabelName.DEVICE_TYPE`
-
-??? example "Technical Details"
-
-    **Constant:** `MRMetricName.MR_AGGREGATION_SPEED_MBPS`
-
-    **Variable:** `self._mr_aggregation_speed`
-    **Source Line:** 187
-
----
+    **Description:** Various metrics
+    **Source File:** `src/meraki_dashboard_exporter/collectors/devices/mr/clients.py`
+    **Metrics Count:** 2
 
 #### `meraki_mr_clients_connected` { #meraki-mr-clients-connected }
 
@@ -2032,7 +2009,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_CLIENTS_CONNECTED`
 
     **Variable:** `self._ap_clients`
-    **Source Line:** 44
+    **Source Line:** 41
 
 ---
 
@@ -2059,7 +2036,65 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_CONNECTION_STATS`
 
     **Variable:** `self._ap_connection_stats`
-    **Source Line:** 59
+    **Source Line:** 56
+
+
+### MRPerformanceCollector { #mrperformance }
+
+!!! info "Collector Information"
+    **Description:** Various metrics
+    **Source File:** `src/meraki_dashboard_exporter/collectors/devices/mr/performance.py`
+    **Metrics Count:** 27
+
+#### `meraki_mr_aggregation_enabled` { #meraki-mr-aggregation-enabled }
+
+**Type:** 🔢 Gauge
+
+**Description:** Access point port aggregation enabled status (1 = enabled, 0 = disabled)
+
+**Labels:**
+
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+
+??? example "Technical Details"
+
+    **Constant:** `MRMetricName.MR_AGGREGATION_ENABLED`
+
+    **Variable:** `self._mr_aggregation_enabled`
+    **Source Line:** 148
+
+---
+
+#### `meraki_mr_aggregation_speed_mbps` { #meraki-mr-aggregation-speed-mbps }
+
+**Type:** 🔢 Gauge
+
+**Description:** Access point total aggregated port speed in Mbps
+
+**Labels:**
+
+- `LabelName.ORG_ID`
+- `LabelName.ORG_NAME`
+- `LabelName.NETWORK_ID`
+- `LabelName.NETWORK_NAME`
+- `LabelName.SERIAL`
+- `LabelName.NAME`
+- `LabelName.MODEL`
+- `LabelName.DEVICE_TYPE`
+
+??? example "Technical Details"
+
+    **Constant:** `MRMetricName.MR_AGGREGATION_SPEED_MBPS`
+
+    **Variable:** `self._mr_aggregation_speed`
+    **Source Line:** 163
 
 ---
 
@@ -2067,7 +2102,7 @@ The exporter provides metrics across several categories:
 
 **Type:** 🔢 Gauge
 
-**Description:** Access point CPU load average over 5 minutes (normalized to 0-100 per core)
+**Description:** Access point CPU load percentage (5-minute average)
 
 **Labels:**
 
@@ -2085,7 +2120,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_CPU_LOAD_5MIN`
 
     **Variable:** `self._mr_cpu_load_5min`
-    **Source Line:** 441
+    **Source Line:** 416
 
 ---
 
@@ -2093,7 +2128,7 @@ The exporter provides metrics across several categories:
 
 **Type:** 🔢 Gauge
 
-**Description:** Downstream packet loss percentage for all access points in network (5-minute window)
+**Description:** Downstream packet loss percentage for network (5-minute window)
 
 **Labels:**
 
@@ -2107,7 +2142,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_NETWORK_PACKET_LOSS_DOWNSTREAM_PERCENT`
 
     **Variable:** `self._mr_network_packet_loss_downstream_percent`
-    **Source Line:** 362
+    **Source Line:** 338
 
 ---
 
@@ -2115,7 +2150,7 @@ The exporter provides metrics across several categories:
 
 **Type:** 🔢 Gauge
 
-**Description:** Total packet loss percentage (upstream + downstream) for all access points in network (5-minute window)
+**Description:** Total packet loss percentage for network (5-minute window)
 
 **Labels:**
 
@@ -2129,7 +2164,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_NETWORK_PACKET_LOSS_TOTAL_PERCENT`
 
     **Variable:** `self._mr_network_packet_loss_total_percent`
-    **Source Line:** 429
+    **Source Line:** 404
 
 ---
 
@@ -2137,7 +2172,7 @@ The exporter provides metrics across several categories:
 
 **Type:** 🔢 Gauge
 
-**Description:** Upstream packet loss percentage for all access points in network (5-minute window)
+**Description:** Upstream packet loss percentage for network (5-minute window)
 
 **Labels:**
 
@@ -2151,7 +2186,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_NETWORK_PACKET_LOSS_UPSTREAM_PERCENT`
 
     **Variable:** `self._mr_network_packet_loss_upstream_percent`
-    **Source Line:** 395
+    **Source Line:** 371
 
 ---
 
@@ -2159,7 +2194,7 @@ The exporter provides metrics across several categories:
 
 **Type:** 🔢 Gauge
 
-**Description:** Downstream packets lost for all access points in network (5-minute window)
+**Description:** Downstream packets lost for network (5-minute window)
 
 **Labels:**
 
@@ -2173,7 +2208,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_NETWORK_PACKETS_DOWNSTREAM_LOST`
 
     **Variable:** `self._mr_network_packets_downstream_lost`
-    **Source Line:** 351
+    **Source Line:** 327
 
 ---
 
@@ -2181,7 +2216,7 @@ The exporter provides metrics across several categories:
 
 **Type:** 🔢 Gauge
 
-**Description:** Total downstream packets for all access points in network (5-minute window)
+**Description:** Total downstream packets for network (5-minute window)
 
 **Labels:**
 
@@ -2195,7 +2230,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_NETWORK_PACKETS_DOWNSTREAM_TOTAL`
 
     **Variable:** `self._mr_network_packets_downstream_total`
-    **Source Line:** 340
+    **Source Line:** 316
 
 ---
 
@@ -2203,7 +2238,7 @@ The exporter provides metrics across several categories:
 
 **Type:** 🔢 Gauge
 
-**Description:** Total packets lost (upstream + downstream) for all access points in network (5-minute window)
+**Description:** Total packets lost (upstream + downstream) for network (5-minute window)
 
 **Labels:**
 
@@ -2217,7 +2252,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_NETWORK_PACKETS_LOST_TOTAL`
 
     **Variable:** `self._mr_network_packets_lost_total`
-    **Source Line:** 418
+    **Source Line:** 393
 
 ---
 
@@ -2225,7 +2260,7 @@ The exporter provides metrics across several categories:
 
 **Type:** 🔢 Gauge
 
-**Description:** Total packets (upstream + downstream) for all access points in network (5-minute window)
+**Description:** Total packets (upstream + downstream) for network (5-minute window)
 
 **Labels:**
 
@@ -2239,7 +2274,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_NETWORK_PACKETS_TOTAL`
 
     **Variable:** `self._mr_network_packets_total`
-    **Source Line:** 407
+    **Source Line:** 382
 
 ---
 
@@ -2247,7 +2282,7 @@ The exporter provides metrics across several categories:
 
 **Type:** 🔢 Gauge
 
-**Description:** Upstream packets lost for all access points in network (5-minute window)
+**Description:** Upstream packets lost for network (5-minute window)
 
 **Labels:**
 
@@ -2261,7 +2296,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_NETWORK_PACKETS_UPSTREAM_LOST`
 
     **Variable:** `self._mr_network_packets_upstream_lost`
-    **Source Line:** 384
+    **Source Line:** 360
 
 ---
 
@@ -2269,7 +2304,7 @@ The exporter provides metrics across several categories:
 
 **Type:** 🔢 Gauge
 
-**Description:** Total upstream packets for all access points in network (5-minute window)
+**Description:** Total upstream packets for network (5-minute window)
 
 **Labels:**
 
@@ -2283,7 +2318,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_NETWORK_PACKETS_UPSTREAM_TOTAL`
 
     **Variable:** `self._mr_network_packets_upstream_total`
-    **Source Line:** 373
+    **Source Line:** 349
 
 ---
 
@@ -2309,7 +2344,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_PACKET_LOSS_DOWNSTREAM_PERCENT`
 
     **Variable:** `self._mr_packet_loss_downstream_percent`
-    **Source Line:** 233
+    **Source Line:** 209
 
 ---
 
@@ -2317,7 +2352,7 @@ The exporter provides metrics across several categories:
 
 **Type:** 🔢 Gauge
 
-**Description:** Total packet loss percentage (upstream + downstream) for access point (5-minute window)
+**Description:** Total packet loss percentage for access point (5-minute window)
 
 **Labels:**
 
@@ -2335,7 +2370,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_PACKET_LOSS_TOTAL_PERCENT`
 
     **Variable:** `self._mr_packet_loss_total_percent`
-    **Source Line:** 324
+    **Source Line:** 300
 
 ---
 
@@ -2361,7 +2396,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_PACKET_LOSS_UPSTREAM_PERCENT`
 
     **Variable:** `self._mr_packet_loss_upstream_percent`
-    **Source Line:** 278
+    **Source Line:** 254
 
 ---
 
@@ -2387,7 +2422,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_PACKETS_DOWNSTREAM_LOST`
 
     **Variable:** `self._mr_packets_downstream_lost`
-    **Source Line:** 218
+    **Source Line:** 194
 
 ---
 
@@ -2413,7 +2448,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_PACKETS_DOWNSTREAM_TOTAL`
 
     **Variable:** `self._mr_packets_downstream_total`
-    **Source Line:** 203
+    **Source Line:** 179
 
 ---
 
@@ -2439,7 +2474,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_PACKETS_LOST_TOTAL`
 
     **Variable:** `self._mr_packets_lost_total`
-    **Source Line:** 309
+    **Source Line:** 285
 
 ---
 
@@ -2465,7 +2500,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_PACKETS_TOTAL`
 
     **Variable:** `self._mr_packets_total`
-    **Source Line:** 294
+    **Source Line:** 270
 
 ---
 
@@ -2491,7 +2526,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_PACKETS_UPSTREAM_LOST`
 
     **Variable:** `self._mr_packets_upstream_lost`
-    **Source Line:** 263
+    **Source Line:** 239
 
 ---
 
@@ -2517,7 +2552,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_PACKETS_UPSTREAM_TOTAL`
 
     **Variable:** `self._mr_packets_upstream_total`
-    **Source Line:** 248
+    **Source Line:** 224
 
 ---
 
@@ -2545,7 +2580,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_PORT_LINK_NEGOTIATION_INFO`
 
     **Variable:** `self._mr_port_link_negotiation_info`
-    **Source Line:** 139
+    **Source Line:** 115
 
 ---
 
@@ -2572,7 +2607,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_PORT_LINK_NEGOTIATION_SPEED_MBPS`
 
     **Variable:** `self._mr_port_link_negotiation_speed`
-    **Source Line:** 156
+    **Source Line:** 132
 
 ---
 
@@ -2600,7 +2635,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_PORT_POE_INFO`
 
     **Variable:** `self._mr_port_poe_info`
-    **Source Line:** 122
+    **Source Line:** 98
 
 ---
 
@@ -2626,7 +2661,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_POWER_AC_CONNECTED`
 
     **Variable:** `self._mr_power_ac_connected`
-    **Source Line:** 92
+    **Source Line:** 68
 
 ---
 
@@ -2653,7 +2688,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_POWER_INFO`
 
     **Variable:** `self._mr_power_info`
-    **Source Line:** 76
+    **Source Line:** 52
 
 ---
 
@@ -2679,9 +2714,15 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_POWER_POE_CONNECTED`
 
     **Variable:** `self._mr_power_poe_connected`
-    **Source Line:** 107
+    **Source Line:** 83
 
----
+
+### MRWirelessCollector { #mrwireless }
+
+!!! info "Collector Information"
+    **Description:** Various metrics
+    **Source File:** `src/meraki_dashboard_exporter/collectors/devices/mr/wireless.py`
+    **Metrics Count:** 9
 
 #### `meraki_mr_radio_broadcasting` { #meraki-mr-radio-broadcasting }
 
@@ -2707,7 +2748,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_RADIO_BROADCASTING`
 
     **Variable:** `self._mr_radio_broadcasting`
-    **Source Line:** 457
+    **Source Line:** 49
 
 ---
 
@@ -2735,7 +2776,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_RADIO_CHANNEL`
 
     **Variable:** `self._mr_radio_channel`
-    **Source Line:** 474
+    **Source Line:** 66
 
 ---
 
@@ -2763,7 +2804,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_RADIO_CHANNEL_WIDTH_MHZ`
 
     **Variable:** `self._mr_radio_channel_width`
-    **Source Line:** 491
+    **Source Line:** 83
 
 ---
 
@@ -2791,7 +2832,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_RADIO_POWER_DBM`
 
     **Variable:** `self._mr_radio_power`
-    **Source Line:** 508
+    **Source Line:** 100
 
 ---
 
@@ -2814,7 +2855,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_SSID_CLIENT_COUNT`
 
     **Variable:** `self._ssid_client_count`
-    **Source Line:** 574
+    **Source Line:** 166
 
 ---
 
@@ -2837,7 +2878,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_SSID_USAGE_DOWNSTREAM_MB`
 
     **Variable:** `self._ssid_usage_downstream_mb`
-    **Source Line:** 538
+    **Source Line:** 130
 
 ---
 
@@ -2860,7 +2901,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_SSID_USAGE_PERCENTAGE`
 
     **Variable:** `self._ssid_usage_percentage`
-    **Source Line:** 562
+    **Source Line:** 154
 
 ---
 
@@ -2883,7 +2924,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_SSID_USAGE_TOTAL_MB`
 
     **Variable:** `self._ssid_usage_total_mb`
-    **Source Line:** 526
+    **Source Line:** 118
 
 ---
 
@@ -2906,7 +2947,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MRMetricName.MR_SSID_USAGE_UPSTREAM_MB`
 
     **Variable:** `self._ssid_usage_upstream_mb`
-    **Source Line:** 550
+    **Source Line:** 142
 
 
 ### MSCollector { #ms }
@@ -3424,7 +3465,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_APPARENT_POWER_VA`
 
     **Variable:** `self._sensor_apparent_power`
-    **Source Line:** 248
+    **Source Line:** 252
 
 ---
 
@@ -3450,7 +3491,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_BATTERY_PERCENTAGE`
 
     **Variable:** `self._sensor_battery`
-    **Source Line:** 173
+    **Source Line:** 177
 
 ---
 
@@ -3476,7 +3517,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_CO2_PPM`
 
     **Variable:** `self._sensor_co2`
-    **Source Line:** 113
+    **Source Line:** 117
 
 ---
 
@@ -3502,7 +3543,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_CURRENT_AMPS`
 
     **Variable:** `self._sensor_current`
-    **Source Line:** 218
+    **Source Line:** 222
 
 ---
 
@@ -3528,7 +3569,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_DOOR_STATUS`
 
     **Variable:** `self._sensor_door`
-    **Source Line:** 83
+    **Source Line:** 87
 
 ---
 
@@ -3554,7 +3595,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_DOWNSTREAM_POWER_ENABLED`
 
     **Variable:** `self._sensor_downstream_power`
-    **Source Line:** 293
+    **Source Line:** 297
 
 ---
 
@@ -3580,7 +3621,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_FREQUENCY_HZ`
 
     **Variable:** `self._sensor_frequency`
-    **Source Line:** 278
+    **Source Line:** 282
 
 ---
 
@@ -3606,7 +3647,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_HUMIDITY_PERCENT`
 
     **Variable:** `self._sensor_humidity`
-    **Source Line:** 68
+    **Source Line:** 72
 
 ---
 
@@ -3632,7 +3673,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_INDOOR_AIR_QUALITY_SCORE`
 
     **Variable:** `self._sensor_air_quality`
-    **Source Line:** 188
+    **Source Line:** 192
 
 ---
 
@@ -3658,7 +3699,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_NOISE_DB`
 
     **Variable:** `self._sensor_noise`
-    **Source Line:** 158
+    **Source Line:** 162
 
 ---
 
@@ -3684,7 +3725,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_PM25_UG_M3`
 
     **Variable:** `self._sensor_pm25`
-    **Source Line:** 143
+    **Source Line:** 147
 
 ---
 
@@ -3710,7 +3751,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_POWER_FACTOR_PERCENT`
 
     **Variable:** `self._sensor_power_factor`
-    **Source Line:** 263
+    **Source Line:** 267
 
 ---
 
@@ -3736,7 +3777,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_REAL_POWER_WATTS`
 
     **Variable:** `self._sensor_real_power`
-    **Source Line:** 233
+    **Source Line:** 237
 
 ---
 
@@ -3762,7 +3803,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_REMOTE_LOCKOUT_STATUS`
 
     **Variable:** `self._sensor_remote_lockout`
-    **Source Line:** 308
+    **Source Line:** 312
 
 ---
 
@@ -3788,7 +3829,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_TEMPERATURE_CELSIUS`
 
     **Variable:** `self._sensor_temperature`
-    **Source Line:** 53
+    **Source Line:** 57
 
 ---
 
@@ -3814,7 +3855,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_TVOC_PPB`
 
     **Variable:** `self._sensor_tvoc`
-    **Source Line:** 128
+    **Source Line:** 132
 
 ---
 
@@ -3840,7 +3881,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_VOLTAGE_VOLTS`
 
     **Variable:** `self._sensor_voltage`
-    **Source Line:** 203
+    **Source Line:** 207
 
 ---
 
@@ -3866,7 +3907,7 @@ The exporter provides metrics across several categories:
     **Constant:** `MTMetricName.MT_WATER_DETECTED`
 
     **Variable:** `self._sensor_water`
-    **Source Line:** 98
+    **Source Line:** 102
 
 
 ### NetworkHealthCollector { #networkhealth }
@@ -3899,7 +3940,7 @@ The exporter provides metrics across several categories:
     **Constant:** `NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_2_4GHZ_PERCENT`
 
     **Variable:** `self._ap_utilization_2_4ghz`
-    **Source Line:** 52
+    **Source Line:** 57
 
 ---
 
@@ -3926,7 +3967,7 @@ The exporter provides metrics across several categories:
     **Constant:** `NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_5GHZ_PERCENT`
 
     **Variable:** `self._ap_utilization_5ghz`
-    **Source Line:** 68
+    **Source Line:** 73
 
 ---
 
@@ -3948,7 +3989,7 @@ The exporter provides metrics across several categories:
     **Constant:** `NetworkHealthMetricName.NETWORK_BLUETOOTH_CLIENTS_TOTAL`
 
     **Variable:** `self._network_bluetooth_clients_total`
-    **Source Line:** 146
+    **Source Line:** 151
 
 ---
 
@@ -3971,7 +4012,7 @@ The exporter provides metrics across several categories:
     **Constant:** `NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_2_4GHZ_PERCENT`
 
     **Variable:** `self._network_utilization_2_4ghz`
-    **Source Line:** 85
+    **Source Line:** 90
 
 ---
 
@@ -3994,7 +4035,7 @@ The exporter provides metrics across several categories:
     **Constant:** `NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_5GHZ_PERCENT`
 
     **Variable:** `self._network_utilization_5ghz`
-    **Source Line:** 97
+    **Source Line:** 102
 
 ---
 
@@ -4017,7 +4058,7 @@ The exporter provides metrics across several categories:
     **Constant:** `NetworkMetricName.NETWORK_WIRELESS_CONNECTION_STATS`
 
     **Variable:** `self._network_connection_stats`
-    **Source Line:** 110
+    **Source Line:** 115
 
 ---
 
@@ -4039,7 +4080,7 @@ The exporter provides metrics across several categories:
     **Constant:** `NetworkHealthMetricName.NETWORK_WIRELESS_DOWNLOAD_KBPS`
 
     **Variable:** `self._network_wireless_download_kbps`
-    **Source Line:** 123
+    **Source Line:** 128
 
 ---
 
@@ -4061,7 +4102,7 @@ The exporter provides metrics across several categories:
     **Constant:** `NetworkHealthMetricName.NETWORK_WIRELESS_UPLOAD_KBPS`
 
     **Variable:** `self._network_wireless_upload_kbps`
-    **Source Line:** 134
+    **Source Line:** 139
 
 
 ### OrganizationCollector { #organization }
@@ -4087,7 +4128,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_INFO`
 
     **Variable:** `self._org_info`
-    **Source Line:** 53
+    **Source Line:** 58
 
 ---
 
@@ -4108,7 +4149,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_API_REQUESTS_BY_STATUS`
 
     **Variable:** `self._api_requests_by_status`
-    **Source Line:** 66
+    **Source Line:** 71
 
 ---
 
@@ -4128,7 +4169,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_API_REQUESTS_TOTAL`
 
     **Variable:** `self._api_requests_total`
-    **Source Line:** 60
+    **Source Line:** 65
 
 ---
 
@@ -4149,7 +4190,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_MB`
 
     **Variable:** `self._application_usage_downstream_mb`
-    **Source Line:** 168
+    **Source Line:** 173
 
 ---
 
@@ -4170,7 +4211,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_PERCENTAGE`
 
     **Variable:** `self._application_usage_percentage`
-    **Source Line:** 180
+    **Source Line:** 185
 
 ---
 
@@ -4191,7 +4232,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_MB`
 
     **Variable:** `self._application_usage_total_mb`
-    **Source Line:** 162
+    **Source Line:** 167
 
 ---
 
@@ -4212,7 +4253,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_MB`
 
     **Variable:** `self._application_usage_upstream_mb`
-    **Source Line:** 174
+    **Source Line:** 179
 
 ---
 
@@ -4232,7 +4273,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_CLIENTS_TOTAL`
 
     **Variable:** `self._clients_total`
-    **Source Line:** 123
+    **Source Line:** 128
 
 ---
 
@@ -4254,7 +4295,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_DEVICES_AVAILABILITY_TOTAL`
 
     **Variable:** `self._devices_availability_total`
-    **Source Line:** 93
+    **Source Line:** 98
 
 ---
 
@@ -4275,7 +4316,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_DEVICES_BY_MODEL_TOTAL`
 
     **Variable:** `self._devices_by_model_total`
-    **Source Line:** 86
+    **Source Line:** 91
 
 ---
 
@@ -4296,7 +4337,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_DEVICES_TOTAL`
 
     **Variable:** `self._devices_total`
-    **Source Line:** 80
+    **Source Line:** 85
 
 ---
 
@@ -4317,7 +4358,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_LICENSES_EXPIRING`
 
     **Variable:** `self._licenses_expiring`
-    **Source Line:** 116
+    **Source Line:** 121
 
 ---
 
@@ -4339,7 +4380,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_LICENSES_TOTAL`
 
     **Variable:** `self._licenses_total`
-    **Source Line:** 105
+    **Source Line:** 110
 
 ---
 
@@ -4359,7 +4400,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_NETWORKS_TOTAL`
 
     **Variable:** `self._networks_total`
-    **Source Line:** 73
+    **Source Line:** 78
 
 ---
 
@@ -4379,7 +4420,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_PACKETCAPTURES_REMAINING`
 
     **Variable:** `self._packetcaptures_remaining`
-    **Source Line:** 155
+    **Source Line:** 160
 
 ---
 
@@ -4399,7 +4440,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_PACKETCAPTURES_TOTAL`
 
     **Variable:** `self._packetcaptures_total`
-    **Source Line:** 149
+    **Source Line:** 154
 
 ---
 
@@ -4419,7 +4460,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_USAGE_DOWNSTREAM_KB`
 
     **Variable:** `self._usage_downstream_kb`
-    **Source Line:** 136
+    **Source Line:** 141
 
 ---
 
@@ -4439,7 +4480,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_USAGE_TOTAL_KB`
 
     **Variable:** `self._usage_total_kb`
-    **Source Line:** 130
+    **Source Line:** 135
 
 ---
 
@@ -4459,7 +4500,7 @@ The exporter provides metrics across several categories:
     **Constant:** `OrgMetricName.ORG_USAGE_UPSTREAM_KB`
 
     **Variable:** `self._usage_upstream_kb`
-    **Source Line:** 142
+    **Source Line:** 147
 
 
 ## 📖 Complete Metrics Index
@@ -4504,44 +4545,44 @@ All metrics in alphabetical order with quick access:
 | [`meraki_exporter_client_dns_lookups_total`](#meraki-exporter-client-dns-lookups-total) | 📈 counter | ClientsCollector | No labels | Total number of DNS lookups performed |
 | [`meraki_exporter_client_store_networks`](#meraki-exporter-client-store-networks) | 🔢 gauge | ClientsCollector | No labels | Total number of networks with clients |
 | [`meraki_exporter_client_store_total`](#meraki-exporter-client-store-total) | 🔢 gauge | ClientsCollector | No labels | Total number of clients in the store |
-| [`meraki_mr_aggregation_enabled`](#meraki-mr-aggregation-enabled) | 🔢 gauge | MRCollector | 8 labels | Access point port aggregation enabled status (1 = enabled, 0 = disabled) |
-| [`meraki_mr_aggregation_speed_mbps`](#meraki-mr-aggregation-speed-mbps) | 🔢 gauge | MRCollector | 8 labels | Access point total aggregated port speed in Mbps |
-| [`meraki_mr_clients_connected`](#meraki-mr-clients-connected) | 🔢 gauge | MRCollector | 8 labels | Number of clients connected to access point |
-| [`meraki_mr_connection_stats_total`](#meraki-mr-connection-stats-total) | 🔢 gauge | MRCollector | 9 labels | Wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success) |
-| [`meraki_mr_cpu_load_5min`](#meraki-mr-cpu-load-5min) | 🔢 gauge | MRCollector | 8 labels | Access point CPU load average over 5 minutes (normalized to 0-100 per core) |
-| [`meraki_mr_network_packet_loss_downstream_percent`](#meraki-mr-network-packet-loss-downstream-percent) | 🔢 gauge | MRCollector | 4 labels | Downstream packet loss percentage for all access points in network (5-minute window) |
-| [`meraki_mr_network_packet_loss_total_percent`](#meraki-mr-network-packet-loss-total-percent) | 🔢 gauge | MRCollector | 4 labels | Total packet loss percentage (upstream + downstream) for all access points in network (5-minute window) |
-| [`meraki_mr_network_packet_loss_upstream_percent`](#meraki-mr-network-packet-loss-upstream-percent) | 🔢 gauge | MRCollector | 4 labels | Upstream packet loss percentage for all access points in network (5-minute window) |
-| [`meraki_mr_network_packets_downstream_lost`](#meraki-mr-network-packets-downstream-lost) | 🔢 gauge | MRCollector | 4 labels | Downstream packets lost for all access points in network (5-minute window) |
-| [`meraki_mr_network_packets_downstream_total`](#meraki-mr-network-packets-downstream-total) | 🔢 gauge | MRCollector | 4 labels | Total downstream packets for all access points in network (5-minute window) |
-| [`meraki_mr_network_packets_lost_total`](#meraki-mr-network-packets-lost-total) | 🔢 gauge | MRCollector | 4 labels | Total packets lost (upstream + downstream) for all access points in network (5-minute window) |
-| [`meraki_mr_network_packets_total`](#meraki-mr-network-packets-total) | 🔢 gauge | MRCollector | 4 labels | Total packets (upstream + downstream) for all access points in network (5-minute window) |
-| [`meraki_mr_network_packets_upstream_lost`](#meraki-mr-network-packets-upstream-lost) | 🔢 gauge | MRCollector | 4 labels | Upstream packets lost for all access points in network (5-minute window) |
-| [`meraki_mr_network_packets_upstream_total`](#meraki-mr-network-packets-upstream-total) | 🔢 gauge | MRCollector | 4 labels | Total upstream packets for all access points in network (5-minute window) |
-| [`meraki_mr_packet_loss_downstream_percent`](#meraki-mr-packet-loss-downstream-percent) | 🔢 gauge | MRCollector | 8 labels | Downstream packet loss percentage for access point (5-minute window) |
-| [`meraki_mr_packet_loss_total_percent`](#meraki-mr-packet-loss-total-percent) | 🔢 gauge | MRCollector | 8 labels | Total packet loss percentage (upstream + downstream) for access point (5-minute window) |
-| [`meraki_mr_packet_loss_upstream_percent`](#meraki-mr-packet-loss-upstream-percent) | 🔢 gauge | MRCollector | 8 labels | Upstream packet loss percentage for access point (5-minute window) |
-| [`meraki_mr_packets_downstream_lost`](#meraki-mr-packets-downstream-lost) | 🔢 gauge | MRCollector | 8 labels | Downstream packets lost by access point (5-minute window) |
-| [`meraki_mr_packets_downstream_total`](#meraki-mr-packets-downstream-total) | 🔢 gauge | MRCollector | 8 labels | Total downstream packets transmitted by access point (5-minute window) |
-| [`meraki_mr_packets_lost_total`](#meraki-mr-packets-lost-total) | 🔢 gauge | MRCollector | 8 labels | Total packets lost (upstream + downstream) for access point (5-minute window) |
-| [`meraki_mr_packets_total`](#meraki-mr-packets-total) | 🔢 gauge | MRCollector | 8 labels | Total packets (upstream + downstream) for access point (5-minute window) |
-| [`meraki_mr_packets_upstream_lost`](#meraki-mr-packets-upstream-lost) | 🔢 gauge | MRCollector | 8 labels | Upstream packets lost by access point (5-minute window) |
-| [`meraki_mr_packets_upstream_total`](#meraki-mr-packets-upstream-total) | 🔢 gauge | MRCollector | 8 labels | Total upstream packets received by access point (5-minute window) |
-| [`meraki_mr_port_link_negotiation_info`](#meraki-mr-port-link-negotiation-info) | 🔢 gauge | MRCollector | 10 labels | Access point port link negotiation information |
-| [`meraki_mr_port_link_negotiation_speed_mbps`](#meraki-mr-port-link-negotiation-speed-mbps) | 🔢 gauge | MRCollector | 9 labels | Access point port link negotiation speed in Mbps |
-| [`meraki_mr_port_poe_info`](#meraki-mr-port-poe-info) | 🔢 gauge | MRCollector | 10 labels | Access point port PoE information |
-| [`meraki_mr_power_ac_connected`](#meraki-mr-power-ac-connected) | 🔢 gauge | MRCollector | 8 labels | Access point AC power connection status (1 = connected, 0 = not connected) |
-| [`meraki_mr_power_info`](#meraki-mr-power-info) | 🔢 gauge | MRCollector | 9 labels | Access point power information |
-| [`meraki_mr_power_poe_connected`](#meraki-mr-power-poe-connected) | 🔢 gauge | MRCollector | 8 labels | Access point PoE power connection status (1 = connected, 0 = not connected) |
-| [`meraki_mr_radio_broadcasting`](#meraki-mr-radio-broadcasting) | 🔢 gauge | MRCollector | 10 labels | Access point radio broadcasting status (1 = broadcasting, 0 = not broadcasting) |
-| [`meraki_mr_radio_channel`](#meraki-mr-radio-channel) | 🔢 gauge | MRCollector | 10 labels | Access point radio channel number |
-| [`meraki_mr_radio_channel_width_mhz`](#meraki-mr-radio-channel-width-mhz) | 🔢 gauge | MRCollector | 10 labels | Access point radio channel width in MHz |
-| [`meraki_mr_radio_power_dbm`](#meraki-mr-radio-power-dbm) | 🔢 gauge | MRCollector | 10 labels | Access point radio transmit power in dBm |
-| [`meraki_mr_ssid_client_count`](#meraki-mr-ssid-client-count) | 🔢 gauge | MRCollector | 5 labels | Number of clients connected to SSID over the last day |
-| [`meraki_mr_ssid_usage_downstream_mb`](#meraki-mr-ssid-usage-downstream-mb) | 🔢 gauge | MRCollector | 5 labels | Downstream data usage in MB by SSID over the last day |
-| [`meraki_mr_ssid_usage_percentage`](#meraki-mr-ssid-usage-percentage) | 🔢 gauge | MRCollector | 5 labels | Percentage of total organization data usage by SSID over the last day |
-| [`meraki_mr_ssid_usage_total_mb`](#meraki-mr-ssid-usage-total-mb) | 🔢 gauge | MRCollector | 5 labels | Total data usage in MB by SSID over the last day |
-| [`meraki_mr_ssid_usage_upstream_mb`](#meraki-mr-ssid-usage-upstream-mb) | 🔢 gauge | MRCollector | 5 labels | Upstream data usage in MB by SSID over the last day |
+| [`meraki_mr_aggregation_enabled`](#meraki-mr-aggregation-enabled) | 🔢 gauge | MRPerformanceCollector | 8 labels | Access point port aggregation enabled status (1 = enabled, 0 = disabled) |
+| [`meraki_mr_aggregation_speed_mbps`](#meraki-mr-aggregation-speed-mbps) | 🔢 gauge | MRPerformanceCollector | 8 labels | Access point total aggregated port speed in Mbps |
+| [`meraki_mr_clients_connected`](#meraki-mr-clients-connected) | 🔢 gauge | MRClientsCollector | 8 labels | Number of clients connected to access point |
+| [`meraki_mr_connection_stats_total`](#meraki-mr-connection-stats-total) | 🔢 gauge | MRClientsCollector | 9 labels | Wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success) |
+| [`meraki_mr_cpu_load_5min`](#meraki-mr-cpu-load-5min) | 🔢 gauge | MRPerformanceCollector | 8 labels | Access point CPU load percentage (5-minute average) |
+| [`meraki_mr_network_packet_loss_downstream_percent`](#meraki-mr-network-packet-loss-downstream-percent) | 🔢 gauge | MRPerformanceCollector | 4 labels | Downstream packet loss percentage for network (5-minute window) |
+| [`meraki_mr_network_packet_loss_total_percent`](#meraki-mr-network-packet-loss-total-percent) | 🔢 gauge | MRPerformanceCollector | 4 labels | Total packet loss percentage for network (5-minute window) |
+| [`meraki_mr_network_packet_loss_upstream_percent`](#meraki-mr-network-packet-loss-upstream-percent) | 🔢 gauge | MRPerformanceCollector | 4 labels | Upstream packet loss percentage for network (5-minute window) |
+| [`meraki_mr_network_packets_downstream_lost`](#meraki-mr-network-packets-downstream-lost) | 🔢 gauge | MRPerformanceCollector | 4 labels | Downstream packets lost for network (5-minute window) |
+| [`meraki_mr_network_packets_downstream_total`](#meraki-mr-network-packets-downstream-total) | 🔢 gauge | MRPerformanceCollector | 4 labels | Total downstream packets for network (5-minute window) |
+| [`meraki_mr_network_packets_lost_total`](#meraki-mr-network-packets-lost-total) | 🔢 gauge | MRPerformanceCollector | 4 labels | Total packets lost (upstream + downstream) for network (5-minute window) |
+| [`meraki_mr_network_packets_total`](#meraki-mr-network-packets-total) | 🔢 gauge | MRPerformanceCollector | 4 labels | Total packets (upstream + downstream) for network (5-minute window) |
+| [`meraki_mr_network_packets_upstream_lost`](#meraki-mr-network-packets-upstream-lost) | 🔢 gauge | MRPerformanceCollector | 4 labels | Upstream packets lost for network (5-minute window) |
+| [`meraki_mr_network_packets_upstream_total`](#meraki-mr-network-packets-upstream-total) | 🔢 gauge | MRPerformanceCollector | 4 labels | Total upstream packets for network (5-minute window) |
+| [`meraki_mr_packet_loss_downstream_percent`](#meraki-mr-packet-loss-downstream-percent) | 🔢 gauge | MRPerformanceCollector | 8 labels | Downstream packet loss percentage for access point (5-minute window) |
+| [`meraki_mr_packet_loss_total_percent`](#meraki-mr-packet-loss-total-percent) | 🔢 gauge | MRPerformanceCollector | 8 labels | Total packet loss percentage for access point (5-minute window) |
+| [`meraki_mr_packet_loss_upstream_percent`](#meraki-mr-packet-loss-upstream-percent) | 🔢 gauge | MRPerformanceCollector | 8 labels | Upstream packet loss percentage for access point (5-minute window) |
+| [`meraki_mr_packets_downstream_lost`](#meraki-mr-packets-downstream-lost) | 🔢 gauge | MRPerformanceCollector | 8 labels | Downstream packets lost by access point (5-minute window) |
+| [`meraki_mr_packets_downstream_total`](#meraki-mr-packets-downstream-total) | 🔢 gauge | MRPerformanceCollector | 8 labels | Total downstream packets transmitted by access point (5-minute window) |
+| [`meraki_mr_packets_lost_total`](#meraki-mr-packets-lost-total) | 🔢 gauge | MRPerformanceCollector | 8 labels | Total packets lost (upstream + downstream) for access point (5-minute window) |
+| [`meraki_mr_packets_total`](#meraki-mr-packets-total) | 🔢 gauge | MRPerformanceCollector | 8 labels | Total packets (upstream + downstream) for access point (5-minute window) |
+| [`meraki_mr_packets_upstream_lost`](#meraki-mr-packets-upstream-lost) | 🔢 gauge | MRPerformanceCollector | 8 labels | Upstream packets lost by access point (5-minute window) |
+| [`meraki_mr_packets_upstream_total`](#meraki-mr-packets-upstream-total) | 🔢 gauge | MRPerformanceCollector | 8 labels | Total upstream packets received by access point (5-minute window) |
+| [`meraki_mr_port_link_negotiation_info`](#meraki-mr-port-link-negotiation-info) | 🔢 gauge | MRPerformanceCollector | 10 labels | Access point port link negotiation information |
+| [`meraki_mr_port_link_negotiation_speed_mbps`](#meraki-mr-port-link-negotiation-speed-mbps) | 🔢 gauge | MRPerformanceCollector | 9 labels | Access point port link negotiation speed in Mbps |
+| [`meraki_mr_port_poe_info`](#meraki-mr-port-poe-info) | 🔢 gauge | MRPerformanceCollector | 10 labels | Access point port PoE information |
+| [`meraki_mr_power_ac_connected`](#meraki-mr-power-ac-connected) | 🔢 gauge | MRPerformanceCollector | 8 labels | Access point AC power connection status (1 = connected, 0 = not connected) |
+| [`meraki_mr_power_info`](#meraki-mr-power-info) | 🔢 gauge | MRPerformanceCollector | 9 labels | Access point power information |
+| [`meraki_mr_power_poe_connected`](#meraki-mr-power-poe-connected) | 🔢 gauge | MRPerformanceCollector | 8 labels | Access point PoE power connection status (1 = connected, 0 = not connected) |
+| [`meraki_mr_radio_broadcasting`](#meraki-mr-radio-broadcasting) | 🔢 gauge | MRWirelessCollector | 10 labels | Access point radio broadcasting status (1 = broadcasting, 0 = not broadcasting) |
+| [`meraki_mr_radio_channel`](#meraki-mr-radio-channel) | 🔢 gauge | MRWirelessCollector | 10 labels | Access point radio channel number |
+| [`meraki_mr_radio_channel_width_mhz`](#meraki-mr-radio-channel-width-mhz) | 🔢 gauge | MRWirelessCollector | 10 labels | Access point radio channel width in MHz |
+| [`meraki_mr_radio_power_dbm`](#meraki-mr-radio-power-dbm) | 🔢 gauge | MRWirelessCollector | 10 labels | Access point radio transmit power in dBm |
+| [`meraki_mr_ssid_client_count`](#meraki-mr-ssid-client-count) | 🔢 gauge | MRWirelessCollector | 5 labels | Number of clients connected to SSID over the last day |
+| [`meraki_mr_ssid_usage_downstream_mb`](#meraki-mr-ssid-usage-downstream-mb) | 🔢 gauge | MRWirelessCollector | 5 labels | Downstream data usage in MB by SSID over the last day |
+| [`meraki_mr_ssid_usage_percentage`](#meraki-mr-ssid-usage-percentage) | 🔢 gauge | MRWirelessCollector | 5 labels | Percentage of total organization data usage by SSID over the last day |
+| [`meraki_mr_ssid_usage_total_mb`](#meraki-mr-ssid-usage-total-mb) | 🔢 gauge | MRWirelessCollector | 5 labels | Total data usage in MB by SSID over the last day |
+| [`meraki_mr_ssid_usage_upstream_mb`](#meraki-mr-ssid-usage-upstream-mb) | 🔢 gauge | MRWirelessCollector | 5 labels | Upstream data usage in MB by SSID over the last day |
 | [`meraki_ms_poe_budget_watts`](#meraki-ms-poe-budget-watts) | 🔢 gauge | MSCollector | 8 labels | Total POE power budget for switch in watts |
 | [`meraki_ms_poe_network_total_watthours`](#meraki-ms-poe-network-total-watthours) | 🔢 gauge | MSCollector | 4 labels | Total POE power consumption for all switches in network in watt-hours (Wh) |
 | [`meraki_ms_poe_port_power_watthours`](#meraki-ms-poe-port-power-watthours) | 🔢 gauge | MSCollector | 10 labels | Per-port POE power consumption in watt-hours (Wh) over the last 1 hour |
@@ -4591,6 +4632,7 @@ All metrics in alphabetical order with quick access:
 | [`meraki_network_bluetooth_clients_total`](#meraki-network-bluetooth-clients-total) | 🔢 gauge | NetworkHealthCollector | 4 labels | Total number of Bluetooth clients detected by MR devices in the last 5 minutes |
 | [`meraki_network_channel_utilization_2_4ghz_percent`](#meraki-network-channel-utilization-2-4ghz-percent) | 🔢 gauge | NetworkHealthCollector | 5 labels | Network-wide average 2.4GHz channel utilization percentage |
 | [`meraki_network_channel_utilization_5ghz_percent`](#meraki-network-channel-utilization-5ghz-percent) | 🔢 gauge | NetworkHealthCollector | 5 labels | Network-wide average 5GHz channel utilization percentage |
+| [`meraki_network_health_alerts_total`](#meraki-network-health-alerts-total) | 🔢 gauge | AlertsCollector | 6 labels | Total number of active network health alerts by category and severity |
 | [`meraki_network_wireless_connection_stats_total`](#meraki-network-wireless-connection-stats-total) | 🔢 gauge | NetworkHealthCollector | 5 labels | Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success) |
 | [`meraki_network_wireless_download_kbps`](#meraki-network-wireless-download-kbps) | 🔢 gauge | NetworkHealthCollector | 4 labels | Network-wide wireless download bandwidth in kilobits per second |
 | [`meraki_network_wireless_upload_kbps`](#meraki-network-wireless-upload-kbps) | 🔢 gauge | NetworkHealthCollector | 4 labels | Network-wide wireless upload bandwidth in kilobits per second |
@@ -4663,3 +4705,4 @@ All metrics in alphabetical order with quick access:
     - Monitor query performance in production environments
 
 For more information on using these metrics, see the [Overview](overview.md) page.
+

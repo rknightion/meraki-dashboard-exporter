@@ -11,21 +11,21 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 - **Organization-level metrics**: API usage, licenses, device counts, network health alerts
 - **Device-specific metrics**: Status, performance, sensor readings, port statistics
 - **Webhook receiver**: Real-time event processing from Meraki Dashboard alerts
-- **Client tracking**: Optional DNS-enhanced client identification and monitoring
+- **Client tracking**: Optional DNS-enhanced client identification and monitoring (disabled by default)
+- **Cardinality monitoring**: Built-in `/cardinality` UI and `/api/metrics/cardinality` JSON API
 
 ### Performance & Reliability
 - **High-performance collection**: Parallel organization processing with bounded concurrency
-- **Shared inventory caching**: 30-50% reduction in API calls through intelligent caching
+- **Shared inventory caching**: Reduces duplicate org/network/device lookups with tier-aware TTLs
 - **Automatic metric expiration**: Prevents stale metrics for offline/removed devices
-- **Circuit breaker protection**: Graceful handling of API failures and rate limits
-- **Enhanced retry logic**: Exponential backoff with configurable retry strategies
+- **Retry-aware API client**: Exponential backoff on rate limits with per-endpoint latency metrics
 
 ### Observability
 - **Dual metric export**: Prometheus `/metrics` endpoint + automatic OpenTelemetry export
 - **Distributed tracing**: Full request tracing with OpenTelemetry instrumentation
 - **Structured logging**: JSON output with trace correlation and contextual information
 - **Cardinality monitoring**: Built-in tracking and alerting for metric growth
-- **Health monitoring**: Collector health metrics with success rates and failure tracking
+- **Health monitoring**: Collector health metrics with success rates, failure streaks, and last success timestamps
 
 ### Deployment
 - Docker support with health checks and multi-stage builds
@@ -186,7 +186,11 @@ All configuration is done via environment variables. See `.env.example` for all 
 - `MERAKI_EXPORTER_LOGGING__LEVEL`: Logging level (default: INFO)
 - `MERAKI_EXPORTER_MERAKI__API_BASE_URL`: API base URL for regional endpoints (default: https://api.meraki.com/api/v1)
 - `MERAKI_EXPORTER_API__TIMEOUT`: API request timeout in seconds (default: 30)
-- `MERAKI_EXPORTER_API__MAX_RETRIES`: Maximum API request retries (default: 4)
+- `MERAKI_EXPORTER_API__MAX_RETRIES`: Maximum API request retries (default: 3)
+- `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT`: Max parallel collector/org work (default: 5)
+- `MERAKI_EXPORTER_API__BATCH_SIZE`: Default batch size for API operations (default: 20)
+- `MERAKI_EXPORTER_CLIENTS__ENABLED`: Enable client collector and DNS resolution (default: false)
+- `MERAKI_EXPORTER_WEBHOOKS__ENABLED`: Enable Meraki webhook receiver (default: false)
 
 ### Update Intervals
 - `MERAKI_EXPORTER_UPDATE_INTERVALS__FAST`: Fast tier interval in seconds (default: 60, range: 30-300)
@@ -210,121 +214,23 @@ export MERAKI_EXPORTER_MERAKI__API_BASE_URL="https://api.meraki.ca/api/v1"  # Fo
 
 ## Metrics
 
-### Organization Metrics
-- `meraki_org_api_requests_total`: Total API requests
-- `meraki_org_networks_total`: Number of networks
-- `meraki_org_devices_total`: Number of devices by type
-- `meraki_org_licenses_total`: License counts by type and status
-- `meraki_org_clients_total`: Total active clients (5-minute window)
-- `meraki_org_usage_total_kb`: Total data usage in KB (5-minute window)
-- `meraki_org_usage_downstream_kb`: Downstream data usage in KB (5-minute window)
-- `meraki_org_usage_upstream_kb`: Upstream data usage in KB (5-minute window)
+- **Organization & license metrics**: API usage, device/network counts, licenses, configuration, and alerts
+- **Device metrics**: Availability, status info, switch port health (including per-second error rates), AP performance, camera/sensor readings, and gateway connectivity
+- **Network health metrics**: RF/channel utilization, connection stats, Bluetooth sightings, and data rates
+- **Client metrics (optional)**: Per-client status and usage when `MERAKI_EXPORTER_CLIENTS__ENABLED=true`
+- **Webhook metrics (optional)**: Event counts, validation failures, and processing duration for `POST /api/webhooks/meraki`
+- **Infrastructure metrics**: Collector duration/error counts, parallel collection activity, API latency/counters, inventory cache hits/misses/size, and metric expiration tracking
+- **Cardinality monitoring**: `/cardinality` HTML report and `/api/metrics/cardinality` JSON API for top-k series growth
 
-### Device Metrics
-- `meraki_device_up`: Device online status
-- `meraki_device_uptime_seconds`: Device uptime
-
-### Switch (MS) Metrics
-**Port Status & Traffic:**
-- `meraki_ms_port_status`: Port connection status with speed and duplex
-- `meraki_ms_port_traffic_bytes`: Port traffic rate in bytes/sec (rx/tx)
-- `meraki_ms_port_usage_bytes`: Total data usage over 1-hour window
-- `meraki_ms_port_client_count`: Number of connected clients per port
-
-**Port Error Metrics (5-minute window):**
-- `meraki_ms_port_packets_crcerrors`: CRC align error packets (count + rate)
-- `meraki_ms_port_packets_fragments`: Fragment packets (count + rate)
-- `meraki_ms_port_packets_collisions`: Collision packets (count + rate)
-- `meraki_ms_port_packets_topologychanges`: STP topology changes (count + rate)
-- `meraki_ms_port_packets_broadcast`: Broadcast packets (count + rate)
-- `meraki_ms_port_packets_multicast`: Multicast packets (count + rate)
-- `meraki_ms_port_packets_total`: Total packets (count + rate)
-
-**PoE Metrics:**
-- `meraki_ms_poe_port_power_watts`: Per-port PoE power consumption
-- `meraki_ms_poe_total_power_watts`: Total switch PoE consumption
-- `meraki_ms_poe_network_total_watts`: Network-wide PoE consumption
-- `meraki_ms_power_usage_watts`: Switch power usage
-
-**STP Metrics:**
-- `meraki_ms_stp_priority`: Spanning Tree Protocol priority per switch
-
-### Access Point (MR) Metrics
-- `meraki_mr_clients_connected`: Connected client count
-- `meraki_ap_channel_utilization_*`: Channel utilization metrics
-- `meraki_network_bluetooth_clients_total`: Bluetooth clients detected by MR devices
-
-### Sensor (MT) Metrics
-- `meraki_mt_temperature_celsius`: Temperature readings
-- `meraki_mt_humidity_percent`: Humidity readings
-- `meraki_mt_door_status`: Door sensor status
-- `meraki_mt_water_detected`: Water detection status
-- And more...
-
-### Alert Metrics
-- `meraki_alerts_active`: Number of active alerts by type, category, severity, and device type
-- `meraki_alerts_total_by_severity`: Total alerts grouped by severity level
-- `meraki_alerts_total_by_network`: Total alerts per network
-
-### Configuration Metrics
-- `meraki_org_login_security_*`: Various login security settings (see config collector for full list)
-- `meraki_org_configuration_changes_total`: Total configuration changes in the last 24 hours
-
-### Observability Metrics (Auto-generated)
-When OpenTelemetry tracing is enabled, these metrics are automatically generated from spans:
-- `meraki_span_requests_total`: Request rate by operation, collector, endpoint, and status
-- `meraki_span_duration_seconds`: Request duration histogram by operation
-- `meraki_span_errors_total`: Error rate by operation, collector, endpoint, and error type
-- `meraki_sli_*`: Service Level Indicator metrics for availability, latency, and error rates
-
-### Collector Infrastructure Metrics
-**Performance Monitoring:**
-- `meraki_parallel_collections_active`: Active parallel collections per collector/tier
-- `meraki_collection_errors_total`: Collection errors by collector/tier/error_type
-- `meraki_collector_duration_seconds`: Time taken for each collection run
-- `meraki_collector_last_success_timestamp`: Last successful collection timestamp
-
-**Inventory Cache:**
-- `meraki_inventory_cache_hits_total`: Cache hit count for org/device/network lookups
-- `meraki_inventory_cache_misses_total`: Cache miss count requiring API calls
-- `meraki_inventory_cache_size`: Current number of cached items
-
-**Metric Expiration:**
-- `meraki_metric_expirations_total`: Metrics expired due to device removal/offline status
-- `meraki_metric_expiration_errors_total`: Errors during metric expiration processing
-
-### Cardinality Monitoring
-The exporter includes built-in cardinality monitoring to help track metric growth:
-- `meraki_metric_cardinality_total`: Total unique label combinations per metric
-- `meraki_label_cardinality_total`: Cardinality per label per metric
-- `meraki_cardinality_warnings_total`: Warnings when metrics exceed thresholds
-- `meraki_total_series`: Total time series count across all metrics
-
-Access cardinality report at: `/cardinality`
-
-### Circuit Breaker Metrics
-The exporter includes circuit breaker metrics for monitoring reliability:
-- `meraki_circuit_breaker_state`: Current state of circuit breakers (closed/open/half_open)
-- `meraki_circuit_breaker_failures_total`: Total failures handled by circuit breakers
-- `meraki_circuit_breaker_success_total`: Successful calls through circuit breakers
-- `meraki_circuit_breaker_rejections_total`: Calls rejected by open circuit breakers
-- `meraki_circuit_breaker_state_changes_total`: State transitions tracked by from/to state
+See the generated [docs/metrics/metrics.md](docs/metrics/metrics.md) for the authoritative metric list (kept in sync via `uv run python src/meraki_dashboard_exporter/tools/generate_metrics_docs.py`).
 
 ## Performance
 
-The exporter is optimized for large Meraki deployments:
-
-- **Parallel Organization Processing**: Collects from multiple organizations concurrently with bounded concurrency
-- **Shared Inventory Caching**: Reduces API calls by 30-50% through intelligent caching (5-30 minute TTLs)
-- **Automatic Metric Expiration**: Prevents stale metrics by tracking and expiring metrics for offline/removed devices
-- **Tiered Collection Intervals**: Different update frequencies based on data volatility (60s/300s/900s)
-- **Configurable Batch Sizes**: Optimized batch sizes for device, network, and client operations (20-30 per batch)
-- **Enhanced API Client**: Exponential backoff, retry logic, and circuit breaker protection
-
-**Typical Performance** (single organization, 100+ devices):
-- Initial collection: ~30-60 seconds
-- Subsequent collections: ~10-20 seconds (with caching)
-- API calls per collection cycle: ~50-100 (vs 150-200 without caching)
+- **Bounded concurrency**: ManagedTaskGroup keeps parallel collectors/orgs within `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT`
+- **Tiered scheduling**: FAST/MEDIUM/SLOW tiers align with data volatility (60s/300s/900s by default)
+- **Inventory caching**: Organization/network/device lookups cached per tier with TTL to reduce duplicate API calls
+- **Batch controls**: Tunable batch sizes and delays (`MERAKI_EXPORTER_API__*BATCH_SIZE`, `MERAKI_EXPORTER_API__BATCH_DELAY`)
+- **Metric lifecycle**: Automatic expiration cleans up stale series when devices disappear or go offline
 
 ## Development
 

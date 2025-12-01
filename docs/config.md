@@ -34,7 +34,7 @@ Core Meraki API configuration
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_MERAKI__API_KEY` | `SecretStr` | `PydanticUndefined` | Meraki Dashboard API key |
+| `MERAKI_EXPORTER_MERAKI__API_KEY` | `SecretStr` | `_(required)_` | Meraki Dashboard API key |
 | `MERAKI_EXPORTER_MERAKI__ORG_ID` | `str | None` | `_(none)_` | Meraki organization ID (optional, will fetch all orgs if not set) |
 | `MERAKI_EXPORTER_MERAKI__API_BASE_URL` | `str` | `https://api.meraki.com/api/v1` | Meraki API base URL (use regional endpoints if needed) |
 
@@ -55,7 +55,10 @@ Configuration for Meraki API interactions
 | `MERAKI_EXPORTER_API__MAX_RETRIES` | `int` | `3` | Maximum number of retries for API requests |
 | `MERAKI_EXPORTER_API__TIMEOUT` | `int` | `30` | API request timeout in seconds |
 | `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT` | `int` | `5` | Maximum concurrent API requests |
-| `MERAKI_EXPORTER_API__BATCH_SIZE` | `int` | `10` | Default batch size for API operations |
+| `MERAKI_EXPORTER_API__BATCH_SIZE` | `int` | `20` | Default batch size for API operations |
+| `MERAKI_EXPORTER_API__DEVICE_BATCH_SIZE` | `int` | `20` | Batch size for device operations |
+| `MERAKI_EXPORTER_API__NETWORK_BATCH_SIZE` | `int` | `30` | Batch size for network operations |
+| `MERAKI_EXPORTER_API__CLIENT_BATCH_SIZE` | `int` | `20` | Batch size for client operations |
 | `MERAKI_EXPORTER_API__BATCH_DELAY` | `float` | `0.5` | Delay between batches in seconds |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_RETRY_WAIT` | `int` | `5` | Wait time in seconds when rate limited |
 | `MERAKI_EXPORTER_API__ACTION_BATCH_RETRY_WAIT` | `int` | `10` | Wait time for action batch retries |
@@ -70,6 +73,8 @@ Control how often different types of metrics are collected
 | `MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM` | `int` | `300` | Interval for medium-moving data (device metrics) in seconds |
 | `MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW` | `int` | `900` | Interval for slow-moving data (configuration) in seconds |
 
+`MEDIUM` must be greater than or equal to `FAST`, `SLOW` must be greater than or equal to `MEDIUM`, and `MEDIUM` must be an integer multiple of `FAST`.
+
 ## Server Settings
 
 HTTP server configuration for the metrics endpoint
@@ -81,6 +86,19 @@ HTTP server configuration for the metrics endpoint
 | `MERAKI_EXPORTER_SERVER__PATH_PREFIX` | `str` | `` | URL path prefix for all endpoints |
 | `MERAKI_EXPORTER_SERVER__ENABLE_HEALTH_CHECK` | `bool` | `True` | Enable /health endpoint |
 
+`PATH_PREFIX` and `ENABLE_HEALTH_CHECK` are currently defined for compatibility but the application exposes `/health`, `/metrics`, `/cardinality`, and the landing page unconditionally.
+
+## Webhook Settings
+
+Webhook receiver configuration (disabled by default)
+
+| Environment Variable | Type | Default | Description |
+|---------------------|------|---------|-------------|
+| `MERAKI_EXPORTER_WEBHOOKS__ENABLED` | `bool` | `False` | Enable webhook receiver endpoint (`POST /api/webhooks/meraki`) |
+| `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET` | `str | None` | `_(none)_` | Shared secret for webhook validation (recommended) |
+| `MERAKI_EXPORTER_WEBHOOKS__REQUIRE_SECRET` | `bool` | `True` | Require shared secret validation (disable for testing only) |
+| `MERAKI_EXPORTER_WEBHOOKS__MAX_PAYLOAD_SIZE` | `int` | `1048576` | Maximum webhook payload size in bytes |
+
 ## OpenTelemetry Settings
 
 OpenTelemetry observability configuration
@@ -91,7 +109,13 @@ OpenTelemetry observability configuration
 | `MERAKI_EXPORTER_OTEL__ENDPOINT` | `str | None` | `_(none)_` | OpenTelemetry collector endpoint |
 | `MERAKI_EXPORTER_OTEL__SERVICE_NAME` | `str` | `meraki-dashboard-exporter` | Service name for OpenTelemetry |
 | `MERAKI_EXPORTER_OTEL__EXPORT_INTERVAL` | `int` | `60` | Export interval for OpenTelemetry metrics |
-| `MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES` | `dict` | `PydanticUndefined` | Additional resource attributes for OpenTelemetry |
+| `MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES` | `dict` | `{}` | Additional resource attributes for OpenTelemetry |
+
+Additional tracing option (read directly from the environment, not part of the Pydantic settings model):
+
+| Environment Variable | Type | Default | Description |
+|---------------------|------|---------|-------------|
+| `MERAKI_EXPORTER_OTEL__SAMPLING_RATE` | `float` | `0.1` | Trace sampling rate between 0 and 1 |
 
 ## Monitoring Settings
 
@@ -102,6 +126,7 @@ Internal monitoring and alerting configuration
 | `MERAKI_EXPORTER_MONITORING__MAX_CONSECUTIVE_FAILURES` | `int` | `10` | Maximum consecutive failures before alerting |
 | `MERAKI_EXPORTER_MONITORING__HISTOGRAM_BUCKETS` | `list` | `[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0]` | Histogram buckets for collector duration metrics |
 | `MERAKI_EXPORTER_MONITORING__LICENSE_EXPIRATION_WARNING_DAYS` | `int` | `30` | Days before license expiration to start warning |
+| `MERAKI_EXPORTER_MONITORING__METRIC_TTL_MULTIPLIER` | `float` | `2.0` | Multiplier applied to collection interval to derive metric expiration TTL |
 
 ## Collector Settings
 
@@ -109,8 +134,8 @@ Enable/disable specific metric collectors
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set` | `PydanticUndefined` | Enabled collector names |
-| `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` | `set` | `PydanticUndefined` | Explicitly disabled collectors (overrides enabled) |
+| `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set` | `alerts,clients,config,device,mtsensor,networkhealth,organization` | Enabled collector names (clients collector still honours `MERAKI_EXPORTER_CLIENTS__ENABLED`) |
+| `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` | `set` | `_(empty)_` | Explicitly disabled collectors (overrides enabled) |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` | `int` | `120` | Timeout for individual collector runs in seconds |
 
 ## Client Settings
