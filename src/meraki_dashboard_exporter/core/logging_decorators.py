@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import functools
+import inspect
 import time
 from collections.abc import Callable
 from typing import Any, ParamSpec, TypeVar, cast
@@ -125,7 +125,7 @@ def log_api_call(
                 raise
 
         # Return appropriate wrapper based on function type
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
             return cast(Callable[P, R], async_wrapper)
         else:
             return cast(Callable[P, R], sync_wrapper)
@@ -207,7 +207,7 @@ def log_collection_progress(
             return func(self, *args, **kwargs)
 
         # Return appropriate wrapper based on function type
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
             return cast(Callable[P, R], async_wrapper)
         else:
             return cast(Callable[P, R], sync_wrapper)
@@ -294,7 +294,7 @@ def log_metric_update(metric_name: str) -> Callable[[Callable[P, R]], Callable[P
             return result
 
         # Return appropriate wrapper based on function type
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
             return cast(Callable[P, R], async_wrapper)
         else:
             return cast(Callable[P, R], sync_wrapper)
@@ -351,7 +351,7 @@ def log_collector_discovery(collector_type: str) -> Callable[[Callable[P, R]], C
             return result
 
         # Return appropriate wrapper based on function type
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
             return cast(Callable[P, R], async_wrapper)
         else:
             return cast(Callable[P, R], sync_wrapper)
@@ -536,7 +536,7 @@ def log_batch_operation(
                 raise
 
         # Return appropriate wrapper based on function type
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
             return cast(Callable[P, R], async_wrapper)
         else:
             return cast(Callable[P, R], sync_wrapper)

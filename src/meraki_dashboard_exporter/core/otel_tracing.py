@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
+import inspect
 import os
 from typing import TYPE_CHECKING, Any
 
@@ -286,7 +286,7 @@ def trace_method(name: str | None = None) -> Any:
         """Inner decorator."""
         import functools
 
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
 
             @functools.wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
