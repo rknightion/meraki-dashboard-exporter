@@ -52,7 +52,7 @@ jobs:
 
       # Install Syft for SBOM generation
       - name: Install Syft
-        uses: anchore/sbom-action/download-syft@7b36ad622f042cab6f59a75c2ac24ccb256e9b45 # v0.20.4
+        uses: anchore/sbom-action/download-syft@fbfd9c6c189226748411491745178e0c2017392d # v0.20.10
         if: github.event_name != 'pull_request'
 
       # Set up BuildKit Docker container builder to be able to build
