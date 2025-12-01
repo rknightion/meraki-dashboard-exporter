@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.27.0...v0.27.1) (2025-12-01)
+
+
+### Bug Fixes
+
+* add automated docker build on release creation ([c6e3328](https://github.com/rknightion/meraki-dashboard-exporter/commit/c6e332859e8da0494e245f1203208c2f7900afb2))
+
 ## [0.27.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.26.1...v0.27.0) (2025-12-01)
 
 
