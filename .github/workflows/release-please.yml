@@ -27,5 +27,11 @@ jobs:
   docker-release:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
     uses: ./.github/workflows/docker-build.yml
     secrets: inherit
