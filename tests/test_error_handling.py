@@ -13,6 +13,7 @@ from meraki_dashboard_exporter.core.error_handling import (
     CollectorError,
     DataValidationError,
     ErrorCategory,
+    RetryableAPIError,
     batch_with_concurrency_limit,
     validate_response_format,
     with_error_handling,
@@ -224,15 +225,15 @@ class TestValidateResponseFormat:
 
         assert "Expected list, got dict" in str(exc_info.value)
 
-    def test_validate_detects_api_error_response(self) -> None:
-        """Test that error responses with 'errors' key are detected and raise DataValidationError."""
+    def test_validate_detects_rate_limit_error_response(self) -> None:
+        """Test that rate limit error responses raise RetryableAPIError."""
         error_response = {"errors": ["API rate limit exceeded for organization"]}
 
-        with pytest.raises(DataValidationError) as exc_info:
+        with pytest.raises(RetryableAPIError) as exc_info:
             validate_response_format(error_response, list, "getOrganizationDevices")
 
-        assert "API returned errors" in str(exc_info.value)
-        assert "rate limit" in str(exc_info.value)
+        assert "rate limit" in str(exc_info.value).lower()
+        assert exc_info.value.category == ErrorCategory.API_RATE_LIMIT
         assert exc_info.value.context["operation"] == "getOrganizationDevices"
         assert exc_info.value.context["errors"] == ["API rate limit exceeded for organization"]
 
@@ -266,6 +267,191 @@ class TestValidateResponseFormat:
             validate_response_format(error_response, dict, "getDevice")
 
         assert "API returned errors" in str(exc_info.value)
+
+    def test_validate_too_many_requests_raises_retryable(self) -> None:
+        """Test that 'too many requests' errors raise RetryableAPIError."""
+        error_response = {"errors": ["Too many requests, please wait"]}
+
+        with pytest.raises(RetryableAPIError):
+            validate_response_format(error_response, list, "getNetworks")
+
+    def test_validate_throttled_raises_retryable(self) -> None:
+        """Test that 'throttled' errors raise RetryableAPIError."""
+        error_response = {"errors": ["Request throttled"]}
+
+        with pytest.raises(RetryableAPIError):
+            validate_response_format(error_response, list, "getDevices")
+
+
+class TestRetryableAPIError:
+    """Test RetryableAPIError exception class."""
+
+    def test_retryable_error_initialization(self) -> None:
+        """Test RetryableAPIError initialization."""
+        error = RetryableAPIError(
+            "Rate limit exceeded",
+            retry_after=30.0,
+            context={"org_id": "123"},
+        )
+        assert str(error) == "Rate limit exceeded"
+        assert error.category == ErrorCategory.API_RATE_LIMIT
+        assert error.retry_after == 30.0
+        assert error.context == {"org_id": "123"}
+
+    def test_retryable_error_default_retry_after(self) -> None:
+        """Test RetryableAPIError with default retry_after."""
+        error = RetryableAPIError("Rate limit exceeded")
+        assert error.retry_after is None
+        assert error.category == ErrorCategory.API_RATE_LIMIT
+
+
+class TestWithErrorHandlingRetry:
+    """Test retry behavior in with_error_handling decorator."""
+
+    @pytest.mark.asyncio
+    async def test_retries_on_retryable_error(self) -> None:
+        """Test that decorator retries on RetryableAPIError."""
+        call_count = 0
+
+        @with_error_handling(
+            operation="Test operation",
+            max_retries=2,
+            base_delay=0.01,  # Fast for testing
+        )
+        async def flaky_operation() -> str:
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise RetryableAPIError("Rate limit exceeded")
+            return "success"
+
+        result = await flaky_operation()
+        assert result == "success"
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_respects_max_retries(self) -> None:
+        """Test that decorator stops after max_retries."""
+        call_count = 0
+
+        @with_error_handling(
+            operation="Test operation",
+            continue_on_error=True,
+            max_retries=2,
+            base_delay=0.01,
+        )
+        async def always_fails() -> str:
+            nonlocal call_count
+            call_count += 1
+            raise RetryableAPIError("Rate limit exceeded")
+
+        result = await always_fails()
+        assert result is None
+        assert call_count == 3  # Initial + 2 retries
+
+    @pytest.mark.asyncio
+    async def test_reraises_after_max_retries_when_not_continue(self) -> None:
+        """Test that decorator re-raises after max_retries when continue_on_error=False."""
+        call_count = 0
+
+        @with_error_handling(
+            operation="Test operation",
+            continue_on_error=False,
+            max_retries=1,
+            base_delay=0.01,
+        )
+        async def always_fails() -> str:
+            nonlocal call_count
+            call_count += 1
+            raise RetryableAPIError("Rate limit exceeded")
+
+        with pytest.raises(CollectorError) as exc_info:
+            await always_fails()
+
+        assert "failed after 1 retries" in str(exc_info.value)
+        assert call_count == 2  # Initial + 1 retry
+
+    @pytest.mark.asyncio
+    async def test_uses_retry_after_from_exception(self) -> None:
+        """Test that retry_after from exception is used when provided."""
+        delays_used: list[float] = []
+
+        async def mock_sleep(delay: float) -> None:
+            delays_used.append(delay)
+
+        call_count = 0
+
+        @with_error_handling(
+            operation="Test operation",
+            max_retries=2,
+            base_delay=100.0,  # Would be very long if used
+        )
+        async def fails_with_retry_after() -> str:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 2:
+                raise RetryableAPIError("Rate limit", retry_after=0.05)
+            return "success"
+
+        # Patch asyncio.sleep in the error_handling module
+        with patch(
+            "meraki_dashboard_exporter.core.error_handling.asyncio.sleep", mock_sleep
+        ):
+            result = await fails_with_retry_after()
+
+        assert result == "success"
+        assert len(delays_used) == 2
+        assert all(d == 0.05 for d in delays_used)  # Should use retry_after
+
+    @pytest.mark.asyncio
+    async def test_non_retryable_errors_not_retried(self) -> None:
+        """Test that non-retryable errors are not retried."""
+        call_count = 0
+
+        @with_error_handling(
+            operation="Test operation",
+            continue_on_error=True,
+            max_retries=3,
+            base_delay=0.01,
+        )
+        async def fails_with_validation_error() -> str:
+            nonlocal call_count
+            call_count += 1
+            raise DataValidationError("Invalid format")
+
+        result = await fails_with_validation_error()
+        assert result is None
+        assert call_count == 1  # No retries for DataValidationError
+
+    @pytest.mark.asyncio
+    async def test_exponential_backoff(self) -> None:
+        """Test that exponential backoff is applied correctly."""
+        delays_used: list[float] = []
+
+        async def mock_sleep(delay: float) -> None:
+            delays_used.append(delay)
+
+        call_count = 0
+
+        @with_error_handling(
+            operation="Test operation",
+            max_retries=3,
+            base_delay=1.0,
+            max_delay=60.0,
+        )
+        async def always_fails() -> str:
+            nonlocal call_count
+            call_count += 1
+            raise RetryableAPIError("Rate limit exceeded")
+
+        with patch(
+            "meraki_dashboard_exporter.core.error_handling.asyncio.sleep", mock_sleep
+        ):
+            result = await always_fails()
+
+        assert result is None
+        # Delays: 1.0 * 2^0 = 1.0, 1.0 * 2^1 = 2.0, 1.0 * 2^2 = 4.0
+        assert delays_used == [1.0, 2.0, 4.0]
 
 
 class TestConcurrencyUtilities:
