@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from meraki_dashboard_exporter.collectors.manager import CollectorManager
+from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.constants import UpdateTier
 
 
@@ -19,14 +20,10 @@ def mock_client():
 
 
 @pytest.fixture
-def mock_settings():
-    """Create mock settings."""
-    settings = MagicMock()
-    settings.update_intervals.fast = 60
-    settings.update_intervals.medium = 300
-    settings.update_intervals.slow = 900
-    settings.organization_ids = ["123456"]
-    return settings
+def mock_settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
+    """Create real settings with defaults for testing."""
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+    return Settings()
 
 
 class TestCollectorManagerIntegration:

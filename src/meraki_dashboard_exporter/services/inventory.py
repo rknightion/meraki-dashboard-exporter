@@ -139,7 +139,14 @@ class OrganizationInventory:
             # Fetch from API
             if self.settings.meraki.org_id:
                 # Single org mode
-                organizations = [{"id": self.settings.meraki.org_id}]
+                org_id = self.settings.meraki.org_id
+                organizations = [
+                    {
+                        "id": org_id,
+                        # Use org_id as a placeholder name when only ID is configured
+                        "name": org_id,
+                    }
+                ]
             else:
                 # Multi-org mode
                 orgs_result = await asyncio.to_thread(self.api.organizations.getOrganizations)

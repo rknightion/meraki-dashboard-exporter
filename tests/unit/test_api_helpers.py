@@ -24,6 +24,7 @@ def mock_collector():
     collector.settings.meraki.org_id = None
     collector.settings.api = MagicMock()
     collector.settings.api.batch_size = 10
+    collector.settings.api.batch_delay = 0.0
 
     collector._track_api_call = MagicMock()
     return collector

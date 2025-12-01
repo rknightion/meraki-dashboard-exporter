@@ -17,7 +17,7 @@ function addStructuredData() {
     "applicationCategory": "Network Monitoring Software",
     "operatingSystem": "Linux, Docker",
     "description": "A high-performance Prometheus exporter for Cisco Meraki Dashboard API metrics with comprehensive monitoring capabilities and OpenTelemetry support",
-    "url": "https://rknightion.github.io/meraki-dashboard-exporter/",
+    "url": "https://m7kni.io/meraki-dashboard-exporter/",
     "downloadUrl": "https://github.com/rknightion/meraki-dashboard-exporter",
     "softwareVersion": "latest",
     "programmingLanguage": "Python",
@@ -54,7 +54,7 @@ function addStructuredData() {
       "price": "0",
       "priceCurrency": "USD"
     },
-    "screenshot": "https://rknightion.github.io/meraki-dashboard-exporter/assets/dashboard-preview.png",
+    "screenshot": "https://m7kni.io/meraki-dashboard-exporter/assets/social-card.png",
     "featureList": [
       "Multi-tier metric collection system",
       "27+ specialized collectors for Meraki devices",
@@ -82,7 +82,7 @@ function addStructuredData() {
     "publisher": {
       "@type": "Organization",
       "name": "Meraki Dashboard Exporter",
-      "url": "https://rknightion.github.io/meraki-dashboard-exporter/"
+      "url": "https://m7kni.io/meraki-dashboard-exporter/"
     },
     "mainEntityOfPage": {
       "@type": "WebPage",
@@ -155,7 +155,7 @@ function addOpenGraphTags() {
   addMetaTag('property', 'og:description', description);
   addMetaTag('property', 'og:url', url);
   addMetaTag('property', 'og:locale', 'en_US');
-  addMetaTag('property', 'og:image', 'https://rknightion.github.io/meraki-dashboard-exporter/assets/og-image.png');
+  addMetaTag('property', 'og:image', 'https://m7kni.io/meraki-dashboard-exporter/assets/social-card.png');
   addMetaTag('property', 'og:image:width', '1200');
   addMetaTag('property', 'og:image:height', '630');
   addMetaTag('property', 'og:image:alt', 'Meraki Dashboard Exporter - Prometheus metrics for Cisco Meraki');
@@ -170,7 +170,7 @@ function addTwitterCardTags() {
   addMetaTag('name', 'twitter:card', 'summary_large_image');
   addMetaTag('name', 'twitter:title', title);
   addMetaTag('name', 'twitter:description', description);
-  addMetaTag('name', 'twitter:image', 'https://rknightion.github.io/meraki-dashboard-exporter/assets/twitter-card.png');
+  addMetaTag('name', 'twitter:image', 'https://m7kni.io/meraki-dashboard-exporter/assets/social-card.png');
   addMetaTag('name', 'twitter:creator', '@rknightion');
   addMetaTag('name', 'twitter:site', '@rknightion');
 }

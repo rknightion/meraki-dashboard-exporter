@@ -197,6 +197,8 @@ class MRWirelessCollector:
                 ssid_statuses = await asyncio.to_thread(
                     self.api.wireless.getOrganizationWirelessSsidsStatusesByDevice,
                     org_id,
+                    perPage=500,
+                    total_pages="all",
                 )
                 ssid_statuses = validate_response_format(
                     ssid_statuses,
@@ -215,12 +217,13 @@ class MRWirelessCollector:
                 basic_info = device_status.get("basicServiceSets", [])
 
                 for bss in basic_info:
-                    band = bss.get("band")
-                    radio_index = bss.get("index")
-                    broadcasting = bss.get("broadcasting")
-                    channel = bss.get("channel")
-                    channel_width = bss.get("channelWidth")
-                    power = bss.get("power")
+                    radio = bss.get("radio", {})
+                    band = radio.get("band")
+                    radio_index = radio.get("index")
+                    broadcasting = radio.get("isBroadcasting")
+                    channel = radio.get("channel")
+                    channel_width = radio.get("channelWidth")
+                    power = radio.get("power")
 
                     # Create device info dict
                     device_info = {
@@ -339,7 +342,7 @@ class MRWirelessCollector:
             )
             return {}
 
-    @log_api_call("getOrganizationWirelessSsidUsage")
+    @log_api_call("getOrganizationSummaryTopSsidsByUsage")
     @with_error_handling(
         operation="Collect SSID usage",
         continue_on_error=True,
@@ -359,14 +362,13 @@ class MRWirelessCollector:
         try:
             with LogContext(org_id=org_id):
                 ssid_usage = await asyncio.to_thread(
-                    self.api.wireless.getOrganizationWirelessSsidUsage,
+                    self.api.organizations.getOrganizationSummaryTopSsidsByUsage,
                     org_id,
-                    timespan=86400,  # 24 hours
                 )
                 ssid_usage = validate_response_format(
                     ssid_usage,
                     expected_type=list,
-                    operation="getOrganizationWirelessSsidUsage",
+                    operation="getOrganizationSummaryTopSsidsByUsage",
                 )
 
             # Build SSID to network mapping for better labeling
@@ -374,25 +376,25 @@ class MRWirelessCollector:
 
             # Process SSID usage data
             for ssid_data in ssid_usage:
-                ssid_name = ssid_data.get("ssidName", "")
+                ssid_name = ssid_data.get("name", "") or ssid_data.get("ssidName", "")
                 if not ssid_name:
                     continue
 
                 # Get usage metrics
                 usage = ssid_data.get("usage", {})
-                total_mb = usage.get("total", 0) / (1024 * 1024)  # Convert bytes to MB
-                downstream_mb = usage.get("downstream", 0) / (1024 * 1024)
-                upstream_mb = usage.get("upstream", 0) / (1024 * 1024)
-
-                # Calculate percentage of total org usage
-                org_total = sum(s.get("usage", {}).get("total", 0) for s in ssid_usage)
-                usage_percentage = (usage.get("total", 0) / org_total * 100) if org_total > 0 else 0
+                total_mb = usage.get("total", 0)
+                downstream_mb = usage.get("downstream", 0)
+                upstream_mb = usage.get("upstream", 0)
+                usage_percentage = usage.get("percentage", 0)
 
                 # Client count
-                client_count = ssid_data.get("clients", 0)
+                clients = ssid_data.get("clients", {})
+                client_count = clients.get("counts", {}).get("total", clients.get("total", 0))
 
                 # Get networks for this SSID
                 networks = ssid_to_networks.get(ssid_name, [])
+                if not networks:
+                    networks = [{"id": "", "name": "unknown"}]
 
                 if networks:
                     # Set metrics for each network with this SSID

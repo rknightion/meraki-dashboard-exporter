@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 from prometheus_client import REGISTRY, CollectorRegistry
 
+pytest_plugins = ["tests.fixtures.large_org"]
+
 
 @pytest.fixture(autouse=True)
 def clean_prometheus_registry():

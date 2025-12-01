@@ -154,7 +154,7 @@ class ExporterApp:
             metric_count += 1
 
             # Count all samples (time series) for this metric
-            for sample in metric_family.samples:
+            for _sample in metric_family.samples:
                 timeseries_count += 1
 
         return {

@@ -40,6 +40,18 @@ logger = get_logger(__name__)
 class DeviceCollector(MetricCollector):
     """Collector for device-level metrics."""
 
+    @property
+    def api(self) -> DashboardAPI:
+        """Return the current API client."""
+        return self._api
+
+    @api.setter
+    def api(self, api: DashboardAPI) -> None:
+        """Update the API client and propagate to subcollectors when ready."""
+        self._api = api
+        if getattr(self, "_subcollectors_ready", False):
+            self._sync_subcollector_api()
+
     def _set_packet_metric_value(
         self, metric_name: str, labels: dict[str, str], value: float | None
     ) -> None:
@@ -102,6 +114,7 @@ class DeviceCollector(MetricCollector):
         expiration_manager: MetricExpirationManager | None = None,
     ) -> None:
         """Initialize device collector with sub-collectors."""
+        self._subcollectors_ready = False
         super().__init__(api, settings, registry, inventory, expiration_manager)
 
         # Initialize device-specific collectors
@@ -168,6 +181,25 @@ class DeviceCollector(MetricCollector):
                 LabelName.LINK_SPEED,  # speed in Mbps
             ],
         )
+
+        # Ensure all subcollectors share the current API instance
+        self._subcollectors_ready = True
+        self._sync_subcollector_api()
+
+    def _sync_subcollector_api(self) -> None:
+        """Ensure subcollectors use the current API client."""
+        if hasattr(self, "mg_collector"):
+            self.mg_collector.api = self.api
+        if hasattr(self, "mr_collector"):
+            self.mr_collector.update_api(self.api)
+        if hasattr(self, "ms_collector"):
+            self.ms_collector.api = self.api
+        if hasattr(self, "mt_collector"):
+            self.mt_collector.api = self.api
+        if hasattr(self, "mv_collector"):
+            self.mv_collector.api = self.api
+        if hasattr(self, "mx_collector"):
+            self.mx_collector.api = self.api
 
     def _initialize_metrics(self) -> None:
         """Initialize device metrics."""
@@ -981,6 +1013,7 @@ class DeviceCollector(MetricCollector):
                 "This is a programming error - collectors must be initialized with inventory service."
             )
 
+        self._track_api_call("getOrganizationDevices")
         return await self.inventory.get_devices(org_id)
 
     @log_api_call("getOrganizationDevicesAvailabilities")

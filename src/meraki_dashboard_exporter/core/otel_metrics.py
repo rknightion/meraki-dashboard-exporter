@@ -106,8 +106,8 @@ class PrometheusToOTelBridge:
 
         # Backoff configuration
         self._backoff_multiplier = 2.0
-        self._max_backoff = 300  # Max 5 minutes
-        self._current_backoff = export_interval_seconds
+        self._max_backoff: float = 300.0  # Max 5 minutes
+        self._current_backoff: float = float(export_interval_seconds)
 
         # Metrics tracking
         self._total_exports = 0
