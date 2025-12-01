@@ -441,6 +441,7 @@ class DeviceCollector(MetricCollector):
 
                 # Skip unsupported device types
                 if device_type_str not in DeviceType.__members__.values():
+
                     logger.debug(
                         "Skipping device with unsupported type",
                         serial=device["serial"],
@@ -715,7 +716,25 @@ class DeviceCollector(MetricCollector):
 
         """
         model = device.get("model", "")
-        return model[:2] if len(model) >= 2 else "Unknown"
+        device_type_str = model[:2] if len(model) >= 2 else "Unknown"
+
+        # If device type based on the model isn't supported, use the product type instead
+        if device_type_str not in DeviceType.__members__.values():
+
+            # Try mapping it using the product type instead
+            product_type = device.get("productType", "")
+            match product_type:
+                case "switch":
+                    logger.debug("Overriding the device type", device_type_str=DeviceType.MS)
+                    device_type_str = DeviceType.MS
+                case "appliance":
+                    logger.debug("Overriding the device type", device_type_str=DeviceType.MX)
+                    device_type_str = DeviceType.MX
+                case "wireless":
+                    logger.debug("Overriding the device type", device_type_str=DeviceType.MR)
+                    device_type_str = DeviceType.MR
+
+        return device_type_str
 
     def _collect_common_metrics(self, device: dict[str, Any], org_id: str, org_name: str) -> None:
         """Collect common device metrics.
