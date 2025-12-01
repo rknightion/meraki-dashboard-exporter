@@ -15,7 +15,8 @@
       "description": "Automerge GitHub Actions",
       "matchManagers": ["github-actions"],
       "labels": ["dep:gha"],
-      "automerge": true
+      "automerge": true,
+      "rebaseWhen": "conflicted"
     },
     {
       "description": "Automerge patch and minor updates for low risk",
