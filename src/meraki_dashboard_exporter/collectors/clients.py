@@ -11,7 +11,11 @@ from ..core.api_helpers import create_api_helper
 from ..core.api_models import NetworkClient
 from ..core.collector import MetricCollector
 from ..core.constants import ClientMetricName, UpdateTier
-from ..core.error_handling import ErrorCategory, with_error_handling
+from ..core.error_handling import (
+    ErrorCategory,
+    validate_response_format,
+    with_error_handling,
+)
 from ..core.label_helpers import create_client_labels, create_network_labels
 from ..core.logging_decorators import log_api_call, log_collection_progress
 from ..core.metrics import LabelName
@@ -414,6 +418,11 @@ class ClientsCollector(MetricCollector):
             )
             self._track_error(ErrorCategory.API_CLIENT_ERROR)
             return
+
+        # Validate response format (handles API error responses like rate limits)
+        clients_data = validate_response_format(
+            clients_data, expected_type=list, operation="getNetworkClients"
+        )
 
         # Parse client data
         clients = [NetworkClient.model_validate(c) for c in clients_data]

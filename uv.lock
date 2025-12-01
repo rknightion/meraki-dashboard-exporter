@@ -806,7 +806,7 @@ wheels = [
 
 [[package]]
 name = "meraki-dashboard-exporter"
-version = "0.26.0"
+version = "0.26.1"
 source = { virtual = "." }
 dependencies = [
     { name = "anyio" },

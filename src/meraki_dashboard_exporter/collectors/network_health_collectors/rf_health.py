@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ...core.constants import DeviceType, ProductType
 from ...core.domain_models import RFHealthData
+from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_device_labels, create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -41,12 +42,18 @@ class RFHealthCollector(BaseNetworkHealthCollector):
             List of devices.
 
         """
-        return await asyncio.to_thread(
+        devices = await asyncio.to_thread(
             self.api.organizations.getOrganizationDevices,
             org_id,
             networkIds=[network_id],
             productTypes=[ProductType.WIRELESS],
             total_pages="all",
+        )
+        return cast(
+            list[dict[str, Any]],
+            validate_response_format(
+                devices, expected_type=list, operation="getOrganizationDevices"
+            ),
         )
 
     @log_api_call("getNetworkNetworkHealthChannelUtilization")

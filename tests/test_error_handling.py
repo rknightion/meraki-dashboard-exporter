@@ -224,6 +224,49 @@ class TestValidateResponseFormat:
 
         assert "Expected list, got dict" in str(exc_info.value)
 
+    def test_validate_detects_api_error_response(self) -> None:
+        """Test that error responses with 'errors' key are detected and raise DataValidationError."""
+        error_response = {"errors": ["API rate limit exceeded for organization"]}
+
+        with pytest.raises(DataValidationError) as exc_info:
+            validate_response_format(error_response, list, "getOrganizationDevices")
+
+        assert "API returned errors" in str(exc_info.value)
+        assert "rate limit" in str(exc_info.value)
+        assert exc_info.value.context["operation"] == "getOrganizationDevices"
+        assert exc_info.value.context["errors"] == ["API rate limit exceeded for organization"]
+
+    def test_validate_detects_multiple_api_errors(self) -> None:
+        """Test that multiple error messages are joined in the error output."""
+        error_response = {"errors": ["Error 1", "Error 2", "Error 3"]}
+
+        with pytest.raises(DataValidationError) as exc_info:
+            validate_response_format(error_response, list, "getNetworkClients")
+
+        error_msg = str(exc_info.value)
+        assert "Error 1" in error_msg
+        assert "Error 2" in error_msg
+        assert "Error 3" in error_msg
+
+    def test_validate_detects_string_error(self) -> None:
+        """Test that non-list error values are handled correctly."""
+        error_response = {"errors": "Single error message"}
+
+        with pytest.raises(DataValidationError) as exc_info:
+            validate_response_format(error_response, dict, "getDeviceStatus")
+
+        assert "Single error message" in str(exc_info.value)
+
+    def test_validate_dict_with_errors_key_as_data(self) -> None:
+        """Test that a dict response expecting dict type with errors key raises error."""
+        # Even when expecting dict type, an errors response should be detected
+        error_response = {"errors": ["Not found"]}
+
+        with pytest.raises(DataValidationError) as exc_info:
+            validate_response_format(error_response, dict, "getDevice")
+
+        assert "API returned errors" in str(exc_info.value)
+
 
 class TestConcurrencyUtilities:
     """Test concurrency limiting utilities."""

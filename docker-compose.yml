@@ -30,16 +30,3 @@ services:
       - ALL
     tmpfs:
       - /tmp:size=64M,mode=1777
-    # Resource limits (requires docker compose v2+ or --compatibility flag)
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
-
-networks:
-  default:
-    driver: bridge
