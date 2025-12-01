@@ -124,7 +124,7 @@ jobs:
           provenance: ${{ github.event_name != 'pull_request' }}
           sbom: ${{ github.event_name != 'pull_request' }}
           build-args: |
-            PY_VERSION=3.13
+            PY_VERSION=3.14
 
       # Generate and attach SBOM using Syft
       - name: Generate SBOM
@@ -237,7 +237,7 @@ jobs:
   #         provenance: true
   #         sbom: true
   #         build-args: |
-  #           PY_VERSION=3.13
+  #           PY_VERSION=3.14
 
   #     - name: Sign Docker Hub images
   #       env:

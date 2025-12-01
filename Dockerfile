@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.20
-ARG PY_VERSION=3.13
+ARG PY_VERSION=3.14
 
 # --------------------------------------------------------------------------- #
 # Builder stage - uses official slim image to compile wheels with uv

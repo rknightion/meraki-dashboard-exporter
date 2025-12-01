@@ -126,7 +126,7 @@ repos:
 
 # Configuration
 default_language_version:
-  python: python3.13
+  python: python3.14
 
 # Run specific hooks only on certain stages
 default_stages: [pre-commit, pre-push]

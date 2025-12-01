@@ -4,7 +4,7 @@
 # Variables
 DOCKER_IMAGE_NAME := meraki-dashboard-exporter
 DOCKER_REGISTRY := ghcr.io/rknightion
-PYTHON_VERSION := 3.13
+PYTHON_VERSION := 3.14
 VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml 2>/dev/null || echo "0.0.0")
 GITHUB_REPO := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*github\.com[:/]([^/]+/[^/]+)\.git.*|\1|' || echo "owner/repo")
 
