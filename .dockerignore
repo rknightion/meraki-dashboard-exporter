@@ -5,7 +5,6 @@
 
 # GitHub
 .github/
-!.github/workflows
 
 # Python
 __pycache__/
@@ -55,13 +54,15 @@ htmlcov/
 coverage.xml
 *.cover
 *.log
+tests/
 
 # Documentation
 docs/
 *.md
-!README.md
+site/
+mkdocs.yml
 
-# Docker
+# Docker (meta files not needed in build)
 docker-compose*.yml
 Dockerfile*
 .dockerignore
@@ -73,8 +74,28 @@ prometheus.yml
 prometheus_data/
 
 # Development
-tests/
 .ruff_cache/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# AI assistant files
+CLAUDE.md
+.claude/
+
+# Development files
+dashboards/
+scripts/
+examples/
+Makefile
+
+# Security/scanning config
+.snyk
+*.sarif.json
+.secrets.baseline
+
+# Release/CI config (not needed in image)
+release-please-config.json
+.release-please-manifest.json
+renovate.json
+.pre-commit-config.yaml
