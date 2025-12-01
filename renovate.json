@@ -35,6 +35,12 @@
       "matchUpdateTypes": ["digest"],
       "automerge": true,
       "labels": ["dep:low-risk"]
+    },
+    {
+      "description": "Track OpenTelemetry pre-release versions",
+      "matchPackagePatterns": ["^opentelemetry"],
+      "ignoreUnstable": false,
+      "labels": ["dep:opentelemetry"]
     }
   ]
 }
