@@ -402,6 +402,30 @@ class MetricCollector(ABC):
                 },
             )
 
+    def _track_retry(self, operation: str, reason: str) -> None:
+        """Track a retry attempt for metrics.
+
+        Parameters
+        ----------
+        operation : str
+            The operation being retried.
+        reason : str
+            The reason for the retry (e.g., 'http_200_rate_limit').
+
+        """
+        # Use the existing API retry counter from the API client
+        try:
+            from ..api.client import AsyncMerakiClient
+
+            if AsyncMerakiClient._api_retry_attempts is not None:
+                AsyncMerakiClient._api_retry_attempts.labels(
+                    endpoint=operation,
+                    retry_reason=reason,
+                ).inc()
+        except (ImportError, AttributeError):
+            # Silently fail if client not available - metrics are optional
+            pass
+
     def _set_metric_value(
         self, metric_name: str, labels: dict[str, str], value: float | None
     ) -> None:
