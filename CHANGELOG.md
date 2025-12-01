@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.27.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.26.1...v0.27.0) (2025-12-01)
+
+
+### Features
+
+* add retry mechanism for rate-limited API responses ([7177659](https://github.com/rknightion/meraki-dashboard-exporter/commit/7177659d07f100a1f69fa454342fc690cf128bfe))
+
+
+### Bug Fixes
+
+* **error-handling:** add api error response validation ([d4708df](https://github.com/rknightion/meraki-dashboard-exporter/commit/d4708dff439700baae1cc364fa93784a4647bbd9))
+
+
+### Documentation
+
+* add comprehensive changelog for version 0.26.1 ([bc70586](https://github.com/rknightion/meraki-dashboard-exporter/commit/bc70586248d8cf6c63c0df1d01525aa60a6f2786))
+
 ## [0.26.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.26.0...v0.26.1) (2025-12-01)
 
 
