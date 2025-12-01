@@ -76,13 +76,13 @@ LABEL org.opencontainers.image.source="https://github.com/rknightion/meraki-dash
 WORKDIR /app
 
 # Copy the virtual environment from builder (with pre-compiled bytecode)
-COPY --link --from=builder --chown=exporter:exporter /app/.venv /app/.venv
+COPY --link --from=builder --chown=1000:1000 /app/.venv /app/.venv
 
 # Copy application code from builder
-COPY --link --from=builder --chown=exporter:exporter /app/meraki_dashboard_exporter ./meraki_dashboard_exporter
+COPY --link --from=builder --chown=1000:1000 /app/meraki_dashboard_exporter ./meraki_dashboard_exporter
 
 # Copy entrypoint script
-COPY --link --chown=exporter:exporter docker-entrypoint.py ./
+COPY --link --chown=1000:1000 docker-entrypoint.py ./
 
 # Environment setup - use the venv Python
 # Note: PYTHONDONTWRITEBYTECODE removed since we pre-compile bytecode
