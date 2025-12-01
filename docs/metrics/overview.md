@@ -90,9 +90,11 @@ All metrics include relevant labels for filtering and grouping:
 | `org_name` | Organization name | `Acme Corp` |
 | `network_id` | Network ID | `N_123456` |
 | `network_name` | Network name | `Main Office` |
-| `device_serial` | Device serial number | `Q2XX-XXXX-XXXX` |
-| `device_name` | Device name | `3rd Floor Switch` |
-| `device_model` | Device model | `MS120-8LP` |
+| `serial` | Device serial number | `Q2XX-XXXX-XXXX` |
+| `name` | Device name | `3rd Floor Switch` |
+| `model` | Device model | `MS120-8LP` |
+| `collector` | Collector name (infrastructure metrics) | `DeviceCollector` |
+| `tier` | Collection tier | `medium` |
 
 ## Metric Categories
 

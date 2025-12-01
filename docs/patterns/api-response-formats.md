@@ -32,7 +32,17 @@ Endpoints supporting pagination may return metadata:
 
 ## Standard Handling Pattern
 
-Use this pattern to handle both formats:
+Prefer the shared validation helpers before processing:
+
+```python
+validated = validate_response_format(
+    response,
+    expected_type=list,
+    operation="getOrganizationDevices"
+)
+```
+
+When a quick format check is needed, use this fallback pattern:
 
 ```python
 # Generic pattern
@@ -107,12 +117,11 @@ def extract_items(response: Any) -> list[dict[str, Any]]:
 ```python
 from ..core.error_handling import validate_response_format
 
-# Validates and logs if format is unexpected
-devices = validate_response_format(
-    response,
-    expected_type=list,
-    operation="getOrganizationDevices"
-)
+# Validates, logs, and categorises errors consistently
+devices = validate_response_format(response, expected_type=list, operation="getOrganizationDevices")
+
+# Pydantic validation for structured responses
+device = Device.model_validate(raw_device_dict)
 ```
 
 ## Why This Pattern Exists
@@ -121,3 +130,4 @@ devices = validate_response_format(
 2. **Pagination Support** - Wrapped format supports metadata
 3. **Backward Compatibility** - Must support both formats
 4. **Future Proofing** - New endpoints may use either format
+5. **Metrics Accuracy** - Validation prevents invalid data from polluting metrics

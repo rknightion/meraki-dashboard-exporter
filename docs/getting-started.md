@@ -13,7 +13,7 @@ This section shows the quickest way to run the exporter.
 
 ## Setup
 
-1. Copy `.env.example` to `.env` and set `MERAKI_API_KEY`.
+1. Copy `.env.example` to `.env` and set `MERAKI_EXPORTER_MERAKI__API_KEY`.
 2. Start the container with `docker compose up -d`. You can review the [docker-compose.yml](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/docker-compose.yml) for optional settings.
 
 Alternatively, run directly with Docker:

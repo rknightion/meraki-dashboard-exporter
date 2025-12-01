@@ -13,7 +13,9 @@ docker compose up -d
 
 ## Health checks
 - `/health` – basic liveness
-- `/ready` – exporter has successfully collected data
+- `/metrics` – scrape endpoint for Prometheus
+- `/cardinality` – HTML report (and `/api/metrics/cardinality` for JSON)
+- `/clients` – client inventory UI (only when `MERAKI_EXPORTER_CLIENTS__ENABLED=true`)
 
 ## Monitoring
 Scrape `http://<host>:9099/metrics` with Prometheus. Example job:

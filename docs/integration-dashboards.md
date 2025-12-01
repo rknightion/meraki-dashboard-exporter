@@ -34,6 +34,7 @@ prometheus.remote_write "default" {
 ```
 
 Prometheus and Grafana configuration examples are available in the [docker-compose.yml](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/docker-compose.yml).
+The compose file ships only the exporter container; integrate the scrape job into your existing Prometheus/Grafana stack.
 
 ## Dashboards
 Pre-built Grafana dashboards can be found in the [dashboards directory](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/dashboards). Import them to get instant visibility into your organisation.
