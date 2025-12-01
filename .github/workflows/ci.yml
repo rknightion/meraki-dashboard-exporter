@@ -28,7 +28,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@1e862dfacbd1d6d858c55d9b792c756523627244 # v7.1.4
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           activate-environment: true
           enable-cache: true
 
@@ -76,7 +76,7 @@ jobs:
           tags: meraki-dashboard-exporter:test
           cache-from: type=gha
           build-args: |
-            PY_VERSION=3.13
+            PY_VERSION=3.14
 
       - name: Test Docker image startup
         env:
