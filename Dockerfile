@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.20
+# syntax=docker/dockerfile:1.10
 ARG PY_VERSION=3.14
 
 # --------------------------------------------------------------------------- #
@@ -6,30 +6,30 @@ ARG PY_VERSION=3.14
 # --------------------------------------------------------------------------- #
 FROM --platform=${BUILDPLATFORM} python:${PY_VERSION}-slim-bookworm AS builder
 
-# System deps needed for building wheels
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
+# Install system deps with cache mounts for faster rebuilds
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends ca-certificates
 
-# Download the latest installer
-ADD https://astral.sh/uv/install.sh /uv-installer.sh
-
-# Run the installer then remove it
-RUN sh /uv-installer.sh && rm /uv-installer.sh
-
-# Ensure the installed binary is on the `PATH`
-ENV PATH="/root/.local/bin/:$PATH"
+# Copy uv binary from official container image (faster than downloading installer)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Verify uv is installed
 RUN uv --version
 
 WORKDIR /app
 
-# Copy dependency files
+# Configure uv for container builds
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/app/.venv
+
+# Copy dependency files first (most cacheable layer)
 COPY pyproject.toml uv.lock ./
 
-# Create virtual environment and install dependencies using uv
-# uv will create .venv in the current directory
-ENV UV_PROJECT_ENVIRONMENT=/app/.venv
-RUN uv sync --frozen --no-install-project
+# Create virtual environment and install dependencies with cache mount
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    uv sync --frozen --no-install-project
 
 # Copy application source code directly (not as a package)
 COPY src/meraki_dashboard_exporter ./meraki_dashboard_exporter
@@ -41,31 +41,32 @@ FROM python:${PY_VERSION}-slim-bookworm AS runtime
 
 # Install runtime dependencies and create non-root user
 RUN apt-get update -qq \
- && apt-get install -y --no-install-recommends ca-certificates \
- && rm -rf /var/lib/apt/lists/* \
- && useradd -m -u 1000 -s /bin/false exporter
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1000 -s /bin/false exporter
 
-# Labels for container metadata
-LABEL org.opencontainers.image.source="https://github.com/rknightion/meraki-dashboard-exporter"
-LABEL org.opencontainers.image.description="Prometheus exporter for Cisco Meraki Dashboard API metrics"
-LABEL org.opencontainers.image.vendor="Rob Knight"
-LABEL org.opencontainers.image.licenses="MIT"
-
-# Copy the virtual environment from builder
-COPY --from=builder --chown=exporter:exporter /app/.venv /app/.venv
-
-# Environment setup - use the venv Python
-ENV PATH="/app/.venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+# Labels for container metadata (consolidated for single layer)
+LABEL org.opencontainers.image.source="https://github.com/rknightion/meraki-dashboard-exporter" \
+      org.opencontainers.image.description="Prometheus exporter for Cisco Meraki Dashboard API metrics" \
+      org.opencontainers.image.vendor="Rob Knight" \
+      org.opencontainers.image.licenses="MIT"
 
 WORKDIR /app
 
+# Copy the virtual environment from builder (with pre-compiled bytecode)
+COPY --link --from=builder --chown=exporter:exporter /app/.venv /app/.venv
+
 # Copy application code from builder
-COPY --from=builder --chown=exporter:exporter /app/meraki_dashboard_exporter ./meraki_dashboard_exporter
+COPY --link --from=builder --chown=exporter:exporter /app/meraki_dashboard_exporter ./meraki_dashboard_exporter
 
 # Copy entrypoint script
-COPY --chown=exporter:exporter docker-entrypoint.py ./
+COPY --link --chown=exporter:exporter docker-entrypoint.py ./
+
+# Environment setup - use the venv Python
+# Note: PYTHONDONTWRITEBYTECODE removed since we pre-compile bytecode
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1
 
 # Switch to non-root user
 USER exporter
