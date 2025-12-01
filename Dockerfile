@@ -4,18 +4,17 @@ ARG PY_VERSION=3.14
 # --------------------------------------------------------------------------- #
 # Builder stage - uses official slim image to compile wheels with uv
 # --------------------------------------------------------------------------- #
-FROM --platform=${BUILDPLATFORM} python:${PY_VERSION}-slim-bookworm AS builder
+FROM python:${PY_VERSION}-slim-bookworm AS builder
 
 # Install system deps with cache mounts for faster rebuilds
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends ca-certificates
-
-# Copy uv binary from official container image (faster than downloading installer)
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
-# Verify uv is installed
-RUN uv --version
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        curl \
+        libffi-dev \
+        pkg-config
 
 WORKDIR /app
 
@@ -23,6 +22,29 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/app/.venv
+
+# Install uv for the target architecture
+ARG UV_VERSION=latest
+ARG TARGETARCH
+ARG TARGETVARIANT
+RUN set -eux \
+    && case "${TARGETARCH}${TARGETVARIANT:-}" in \
+         amd64) uv_arch="x86_64-unknown-linux-gnu" ;; \
+         arm64) uv_arch="aarch64-unknown-linux-gnu" ;; \
+         armv7) uv_arch="armv7-unknown-linux-gnueabihf" ;; \
+         *) echo "Unsupported TARGETARCH=${TARGETARCH}${TARGETVARIANT:-}" >&2; exit 1 ;; \
+       esac \
+    && if [ "${UV_VERSION}" = "latest" ]; then \
+         uv_url="https://github.com/astral-sh/uv/releases/latest/download/uv-${uv_arch}.tar.gz"; \
+       else \
+         uv_url="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${uv_arch}.tar.gz"; \
+       fi \
+    && mkdir -p /tmp/uv \
+    && curl -sSfL "${uv_url}" -o /tmp/uv.tar.gz \
+    && tar -xzf /tmp/uv.tar.gz -C /tmp/uv --strip-components=1 \
+    && install -m 0755 /tmp/uv/uv /usr/local/bin/uv \
+    && rm -rf /tmp/uv /tmp/uv.tar.gz \
+    && uv --version
 
 # Copy dependency files first (most cacheable layer)
 COPY pyproject.toml uv.lock ./
