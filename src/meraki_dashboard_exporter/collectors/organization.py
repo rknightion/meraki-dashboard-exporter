@@ -9,7 +9,7 @@ from ..core.api_helpers import create_api_helper
 from ..core.async_utils import ManagedTaskGroup
 from ..core.collector import MetricCollector
 from ..core.constants import OrgMetricName, UpdateTier
-from ..core.error_handling import ErrorCategory, with_error_handling
+from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.label_helpers import create_org_labels
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call, log_batch_operation
@@ -386,6 +386,11 @@ class OrganizationCollector(MetricCollector):
             devices = await self.api_helper.get_organization_devices(org_id)
             if not devices:
                 return
+
+            # Validate response format (handles API error responses like rate limits)
+            devices = validate_response_format(
+                devices, expected_type=list, operation="getOrganizationDevices"
+            )
 
             # Count devices by type
             device_counts: dict[str, int] = {}

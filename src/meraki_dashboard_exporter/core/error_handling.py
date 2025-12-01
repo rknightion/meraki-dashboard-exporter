@@ -266,9 +266,18 @@ def validate_response_format(
     Raises
     ------
     DataValidationError
-        If response format is unexpected.
+        If response format is unexpected or contains API errors.
 
     """
+    # Check for API error responses (e.g., rate limit errors)
+    if isinstance(response, dict) and "errors" in response:
+        errors = response["errors"]
+        error_msg = "; ".join(str(e) for e in errors) if isinstance(errors, list) else str(errors)
+        raise DataValidationError(
+            f"{operation}: API returned errors: {error_msg}",
+            {"errors": errors, "operation": operation},
+        )
+
     # Handle wrapped responses
     if isinstance(response, dict) and "items" in response:
         data = response["items"]
