@@ -221,12 +221,6 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/rknightion/meraki-dashboard-exporter
       name: GitHub Repository
-    - icon: fontawesome/brands/docker
-      link: https://github.com/rknightion/meraki-dashboard-exporter/pkgs/container/meraki-dashboard-exporter
-      name: Docker Images
-    - icon: fontawesome/solid/paper-plane
-      link: mailto:rob@example.com
-      name: Send a message
   version:
     provider: mike
     default: stable
@@ -254,8 +248,7 @@ extra_javascript:
   - javascripts/seo.js
 
 copyright: |
-  &copy; 2024 <a href="https://github.com/rknightion"  target="_blank" rel="noopener">Rob Knighton</a> &nbsp;
-  <a href="#__consent">Change cookie settings</a>
+  <a href="https://m7kni.io" target="_blank" rel="noopener">m7kni.io</a>
 
 watch:
   - docs/includes/
