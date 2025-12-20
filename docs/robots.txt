@@ -18,4 +18,3 @@ Allow: /stylesheets/
 Allow: /javascripts/
 
 Sitemap: https://m7kni.io/meraki-dashboard-exporter/sitemap.xml
-Sitemap: https://m7kni.io/meraki-dashboard-exporter/sitemap.xml.gz
