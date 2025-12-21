@@ -222,7 +222,7 @@ export MERAKI_EXPORTER_MERAKI__API_BASE_URL="https://api.meraki.ca/api/v1"  # Fo
 - **Infrastructure metrics**: Collector duration/error counts, parallel collection activity, API latency/counters, inventory cache hits/misses/size, and metric expiration tracking
 - **Cardinality monitoring**: `/cardinality` HTML report and `/api/metrics/cardinality` JSON API for top-k series growth
 
-See the generated [docs/metrics/metrics.md](docs/metrics/metrics.md) for the authoritative metric list (kept in sync via `uv run python src/meraki_dashboard_exporter/tools/generate_metrics_docs.py`).
+See the generated [metrics reference](https://m7kni.io/meraki-dashboard-exporter/metrics/metrics/) for the authoritative metric list (kept in sync via `uv run python src/meraki_dashboard_exporter/tools/generate_metrics_docs.py`).
 
 ## Performance
 
