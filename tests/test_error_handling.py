@@ -394,9 +394,7 @@ class TestWithErrorHandlingRetry:
             return "success"
 
         # Patch asyncio.sleep in the error_handling module
-        with patch(
-            "meraki_dashboard_exporter.core.error_handling.asyncio.sleep", mock_sleep
-        ):
+        with patch("meraki_dashboard_exporter.core.error_handling.asyncio.sleep", mock_sleep):
             result = await fails_with_retry_after()
 
         assert result == "success"
@@ -444,9 +442,7 @@ class TestWithErrorHandlingRetry:
             call_count += 1
             raise RetryableAPIError("Rate limit exceeded")
 
-        with patch(
-            "meraki_dashboard_exporter.core.error_handling.asyncio.sleep", mock_sleep
-        ):
+        with patch("meraki_dashboard_exporter.core.error_handling.asyncio.sleep", mock_sleep):
             result = await always_fails()
 
         assert result is None
