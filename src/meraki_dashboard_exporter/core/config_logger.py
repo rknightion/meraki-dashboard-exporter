@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any
+
+import structlog
 
 from .config import Settings
 from .logging import get_logger
@@ -87,6 +90,143 @@ def log_configuration(settings: Settings) -> None:
 
     """
     logger.info("=" * 80)
+
+
+def _truncate_list(values: list[str], max_items: int = 20) -> tuple[list[str], bool]:
+    """Truncate a list for logging to avoid excessive output."""
+    if len(values) <= max_items:
+        return values, False
+    return values[:max_items], True
+
+
+def _get_unfiltered_logger() -> Any:
+    """Create a logger that bypasses level filtering for startup summaries."""
+    config = structlog.get_config()
+    return structlog.wrap_logger(
+        structlog.PrintLoggerFactory()(),
+        processors=config.get("processors"),
+        wrapper_class=structlog.make_filtering_bound_logger(logging.NOTSET),
+        context_class=config.get("context_class", dict),
+        cache_logger_on_first_use=False,
+    )
+
+
+def log_startup_summary(
+    settings: Settings,
+    discovery_summary: dict[str, Any] | None = None,
+) -> None:
+    """Log a one-time startup summary with config + discovery context.
+
+    This is intentionally logged at WARNING level to remain visible when the
+    log level is set to WARN (and uses an unfiltered logger to avoid suppression).
+    """
+    startup_logger = _get_unfiltered_logger()
+    log_method = startup_logger.warning
+
+    log_method("=" * 80)
+    log_method("Meraki Dashboard Exporter Startup Summary")
+    log_method("=" * 80)
+
+    # Environment variables
+    env_vars = get_env_vars()
+    if env_vars:
+        log_method("Environment Variables:")
+        for key, value in sorted(env_vars.items()):
+            log_method(f"  {key}={value}")
+    else:
+        log_method("No MERAKI_EXPORTER environment variables found")
+
+    log_method("-" * 80)
+    log_method("Configuration Summary:")
+
+    log_method("  API Base URL", value=settings.meraki.api_base_url)
+    log_method("  API Timeout", value=f"{settings.api.timeout}s")
+    log_method("  API Max Retries", value=settings.api.max_retries)
+    log_method("  API Concurrency Limit", value=settings.api.concurrency_limit)
+    log_method("  API Batch Sizes", value={
+        "default": settings.api.batch_size,
+        "device": settings.api.device_batch_size,
+        "network": settings.api.network_batch_size,
+        "client": settings.api.client_batch_size,
+    })
+    log_method("  API Batch Delay", value=f"{settings.api.batch_delay}s")
+
+    if settings.otel.enabled:
+        log_method("  OpenTelemetry", status="ENABLED")
+        log_method("  OTEL Endpoint", value=settings.otel.endpoint)
+        log_method("  OTEL Export Interval", value=f"{settings.otel.export_interval}s")
+        log_method("  OTEL Service Name", value=settings.otel.service_name)
+    else:
+        log_method("  OpenTelemetry", status="DISABLED")
+
+    log_method(
+        "  Update Intervals",
+        fast=f"{settings.update_intervals.fast}s",
+        medium=f"{settings.update_intervals.medium}s",
+        slow=f"{settings.update_intervals.slow}s",
+    )
+
+    log_method("  Server", host=settings.server.host, port=settings.server.port)
+
+    if settings.meraki.org_id:
+        log_method("  Organization Filter", org_id=settings.meraki.org_id)
+    else:
+        log_method("  Organization Filter", value="None (all organizations)")
+
+    log_method(
+        "  Enabled Collectors",
+        collectors=sorted(settings.collectors.active_collectors),
+    )
+
+    # Discovery summary
+    if discovery_summary:
+        log_method("-" * 80)
+        log_method("Discovery Summary:")
+
+        organizations = discovery_summary.get("organizations", [])
+        org_names = [org.get("name", "unknown") for org in organizations]
+        org_ids = [org.get("id", "") for org in organizations]
+        truncated_org_names, orgs_truncated = _truncate_list(org_names)
+        truncated_org_ids, _ = _truncate_list(org_ids)
+
+        log_method(
+            "  Organizations",
+            count=len(organizations),
+            org_names=truncated_org_names,
+            org_ids=truncated_org_ids,
+            truncated=orgs_truncated,
+        )
+
+        network_summary = discovery_summary.get("networks", {})
+        if network_summary:
+            total_networks = 0
+            combined_product_types: dict[str, int] = {}
+            for org_id, summary in network_summary.items():
+                total_networks += summary.get("count", 0)
+                product_types = summary.get("product_types", {})
+                for product_type, count in product_types.items():
+                    combined_product_types[product_type] = (
+                        combined_product_types.get(product_type, 0) + count
+                    )
+                log_method(
+                    "  Networks",
+                    org_id=org_id,
+                    org_name=summary.get("org_name", org_id),
+                    count=summary.get("count", 0),
+                    product_types=product_types,
+                )
+
+            log_method(
+                "  Network Totals",
+                total_networks=total_networks,
+                product_types=combined_product_types,
+            )
+
+        errors = discovery_summary.get("errors", [])
+        if errors:
+            log_method("  Discovery Errors", errors=errors)
+
+    log_method("=" * 80)
     logger.info("Meraki Dashboard Exporter Configuration")
     logger.info("=" * 80)
 

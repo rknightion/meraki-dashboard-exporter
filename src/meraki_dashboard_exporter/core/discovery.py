@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ..core.logging import get_logger
+from ..core.error_handling import validate_response_format
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -23,16 +24,19 @@ class DiscoveryService:
         self.api = api
         self.settings = settings
 
-    async def run_discovery(self) -> None:
-        """Run discovery scan and log environment information at INFO level."""
-        logger.info("Starting Meraki environment discovery")
+    async def run_discovery(self) -> dict[str, Any]:
+        """Run discovery scan and return environment summary for startup logging."""
+        summary: dict[str, Any] = {
+            "organizations": [],
+            "networks": {},
+            "errors": [],
+        }
+
+        logger.debug("Starting Meraki environment discovery")
 
         try:
             # Get organizations
             if self.settings.meraki.org_id:
-                logger.info(
-                    "Configured for single organization", org_id=self.settings.meraki.org_id
-                )
                 org = await asyncio.to_thread(
                     self.api.organizations.getOrganization,
                     self.settings.meraki.org_id,
@@ -40,50 +44,33 @@ class DiscoveryService:
                 organizations = [org]
             else:
                 organizations = await asyncio.to_thread(self.api.organizations.getOrganizations)
-                logger.info(
-                    "Discovered organizations",
-                    count=len(organizations),
-                    org_names=[org.get("name", "unknown") for org in organizations],
+                organizations = validate_response_format(
+                    organizations, expected_type=list, operation="getOrganizations"
                 )
 
-            # Process each organization
+            summary["organizations"] = [
+                {
+                    "id": org.get("id", ""),
+                    "name": org.get("name", "unknown"),
+                }
+                for org in organizations
+            ]
+
+            # Process each organization for network summaries
             for org in organizations:
-                org_id = org["id"]
+                org_id = org.get("id", "")
                 org_name = org.get("name", "unknown")
+                if not org_id:
+                    continue
 
-                # Log organization info
-                logger.info(
-                    "Organization details",
-                    org_id=org_id,
-                    org_name=org_name,
-                    url=org.get("url", ""),
-                )
-
-                # Check licensing model
-                try:
-                    licenses = await asyncio.to_thread(
-                        self.api.organizations.getOrganizationLicenses,
-                        org_id,
-                        total_pages="all",
-                    )
-                    logger.info(
-                        "Organization uses per-device licensing",
-                        org_name=org_name,
-                        license_count=len(licenses),
-                    )
-                except Exception as e:
-                    if "does not support per-device licensing" in str(e):
-                        logger.info(
-                            "Organization uses co-termination licensing model",
-                            org_name=org_name,
-                        )
-
-                # Get networks
                 try:
                     networks = await asyncio.to_thread(
                         self.api.organizations.getOrganizationNetworks,
                         org_id,
                         total_pages="all",
+                    )
+                    networks = validate_response_format(
+                        networks, expected_type=list, operation="getOrganizationNetworks"
                     )
 
                     # Count by product type
@@ -92,77 +79,24 @@ class DiscoveryService:
                         for product in network.get("productTypes", []):
                             product_counts[product] = product_counts.get(product, 0) + 1
 
-                    logger.info(
-                        "Network summary",
-                        org_name=org_name,
-                        total_networks=len(networks),
-                        product_types=product_counts,
-                    )
-                except Exception:
-                    logger.exception("Failed to fetch networks", org_name=org_name)
-
-                # Get devices
-                try:
-                    devices = await asyncio.to_thread(
-                        self.api.organizations.getOrganizationDevices,
-                        org_id,
-                        total_pages="all",
-                    )
-
-                    # Count by model prefix
-                    device_counts: dict[str, int] = {}
-                    for device in devices:
-                        model = device.get("model", "unknown")
-                        prefix = model[:2] if len(model) >= 2 else "unknown"
-                        device_counts[prefix] = device_counts.get(prefix, 0) + 1
-
-                    logger.info(
-                        "Device summary",
-                        org_name=org_name,
-                        total_devices=len(devices),
-                        device_types=device_counts,
-                    )
-                except Exception:
-                    logger.exception("Failed to fetch devices", org_name=org_name)
-
-                # Check alerts API availability
-                try:
-                    alerts = await asyncio.to_thread(
-                        self.api.organizations.getOrganizationAssuranceAlerts,
-                        org_id,
-                        total_pages="all",
-                    )
-                    active_alerts = [
-                        a for a in alerts if not a.get("dismissedAt") and not a.get("resolvedAt")
-                    ]
-                    logger.info(
-                        "Assurance alerts API available",
-                        org_name=org_name,
-                        total_alerts=len(alerts),
-                        active_alerts=len(active_alerts),
-                    )
+                    summary["networks"][org_id] = {
+                        "org_name": org_name,
+                        "count": len(networks),
+                        "product_types": product_counts,
+                    }
                 except Exception as e:
-                    if "404" in str(e):
-                        logger.info(
-                            "Assurance alerts API not available",
-                            org_name=org_name,
-                        )
-                    else:
-                        logger.debug(
-                            "Failed to check alerts API",
-                            org_name=org_name,
-                            error=str(e),
-                        )
+                    logger.warning(
+                        "Failed to fetch networks during discovery",
+                        org_id=org_id,
+                        org_name=org_name,
+                        error=str(e),
+                    )
+                    summary["errors"].append(f"{org_id}: networks_fetch_failed")
 
-            # Log collector configuration
-            logger.info(
-                "Collector configuration",
-                fast_update_interval=self.settings.update_intervals.fast,
-                medium_update_interval=self.settings.update_intervals.medium,
-                slow_update_interval=self.settings.update_intervals.slow,
-            )
+            logger.debug("Environment discovery completed")
+            return summary
 
-            logger.info("Environment discovery completed")
-
-        except Exception:
-            logger.exception("Failed to complete environment discovery")
+        except Exception as e:
+            logger.warning("Failed to complete environment discovery", error=str(e))
+            summary["errors"].append("discovery_failed")
+            return summary
