@@ -41,6 +41,7 @@ dev = [
   "pytest-cov>=6",
   "ruff>=0.12.2",
   "ty>=0.0.1a13",
+  "zensical>=0.0.14",
 ]
 
 [tool.ruff]
