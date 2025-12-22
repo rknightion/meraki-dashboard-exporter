@@ -299,24 +299,28 @@ class ClientMetricName(StrEnum):
 
 
 class CollectorMetricName(StrEnum):
-    """Collector infrastructure metric names for monitoring collection performance."""
+    """Collector infrastructure metric names for monitoring exporter performance.
+
+    Note: These metrics use the 'meraki_exporter_' prefix to distinguish them
+    from Meraki network data metrics (which use 'meraki_' prefix).
+    """
 
     # Parallel collection metrics
-    PARALLEL_COLLECTIONS_ACTIVE = "meraki_parallel_collections_active"
-    ORG_COLLECTION_WAIT_TIME_SECONDS = "meraki_org_collection_wait_time_seconds"
-    COLLECTION_ERRORS_TOTAL = "meraki_collection_errors_total"
+    PARALLEL_COLLECTIONS_ACTIVE = "meraki_exporter_collections_active"
+    ORG_COLLECTION_WAIT_TIME_SECONDS = "meraki_exporter_collection_wait_seconds"
+    COLLECTION_ERRORS_TOTAL = "meraki_exporter_collection_errors_total"
 
     # Inventory cache metrics
-    INVENTORY_CACHE_HITS_TOTAL = "meraki_inventory_cache_hits_total"
-    INVENTORY_CACHE_MISSES_TOTAL = "meraki_inventory_cache_misses_total"
-    INVENTORY_CACHE_SIZE = "meraki_inventory_cache_size"
+    INVENTORY_CACHE_HITS_TOTAL = "meraki_exporter_cache_hits_total"
+    INVENTORY_CACHE_MISSES_TOTAL = "meraki_exporter_cache_misses_total"
+    INVENTORY_CACHE_SIZE = "meraki_exporter_cache_size"
 
-    # API client metrics (Phase 2.1)
-    API_REQUEST_DURATION_SECONDS = "meraki_api_request_duration_seconds"
-    API_REQUESTS_TOTAL = "meraki_api_requests_total"
-    API_RATE_LIMIT_REMAINING = "meraki_api_rate_limit_remaining"
-    API_RATE_LIMIT_TOTAL = "meraki_api_rate_limit_total"
-    API_RETRY_ATTEMPTS_TOTAL = "meraki_api_retry_attempts_total"
+    # API client metrics
+    API_REQUEST_DURATION_SECONDS = "meraki_exporter_api_duration_seconds"
+    API_REQUESTS_TOTAL = "meraki_exporter_api_requests_total"
+    API_RATE_LIMIT_REMAINING = "meraki_exporter_api_rate_limit_remaining"
+    API_RATE_LIMIT_TOTAL = "meraki_exporter_api_rate_limit_total"
+    API_RETRY_ATTEMPTS_TOTAL = "meraki_exporter_api_retry_total"
 
 
 class WebhookMetricName(StrEnum):

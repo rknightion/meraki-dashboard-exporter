@@ -107,7 +107,7 @@ class CollectorManager:
 
         # Gauge for collector health - last successful collection age in seconds
         self._collector_last_success_age = Gauge(
-            "meraki_collector_last_success_age_seconds",
+            "meraki_exporter_collector_success_age_seconds",
             "Seconds since the last successful collection for each collector",
             labelnames=[
                 LabelName.COLLECTOR.value,
@@ -117,7 +117,7 @@ class CollectorManager:
 
         # Gauge for collector failure streak
         self._collector_failure_streak = Gauge(
-            "meraki_collector_failure_streak",
+            "meraki_exporter_collector_failure_streak",
             "Consecutive failures for each collector since last success",
             labelnames=[
                 LabelName.COLLECTOR.value,
