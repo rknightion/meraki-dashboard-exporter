@@ -92,7 +92,7 @@ lint.ignore = [
   "PLW0603", # using global statement
   "W293",    # blank line contains whitespace
 ]
-lint.per-file-ignores."src/meraki_dashboard_exporter/tools/*.py" = [ "C414", "PLR0916", "PLR6201", "PLW1514", "PTH123" ]
+lint.per-file-ignores."scripts/*.py" = [ "C414", "PLR0916", "PLR6201", "PLW1514", "PTH123" ]
 lint.per-file-ignores."tests/**/*.py" = [ "PLR0904" ] # Allow more than 20 public methods in test classes
 
 [tool.pytest.ini_options]
@@ -120,7 +120,7 @@ plugins = [ "pydantic.mypy" ]
 exclude = [
   "docs/.*\\.md$",
   "tests/",
-  "src/meraki_dashboard_exporter/tools/.*\\.py",
+  "scripts/.*\\.py",
 ]
 
 [[tool.mypy.overrides]]

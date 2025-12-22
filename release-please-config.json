@@ -4,7 +4,7 @@
   "packages": {
     ".": {
       "package-name": "meraki-dashboard-exporter",
-      "changelog-path": "CHANGELOG.md",
+      "changelog-path": "docs/changelog.md",
       "extra-files": [
         {
           "type": "generic",

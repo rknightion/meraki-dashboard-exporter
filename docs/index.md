@@ -6,7 +6,7 @@ image: assets/social-card.png
 
 # Meraki Dashboard Exporter
 
-A lightweight Prometheus exporter for the Cisco Meraki Dashboard API. It collects metrics for organisations and all device types and can forward data via OpenTelemetry.
+A production-ready Prometheus exporter for the Cisco Meraki Dashboard API. It covers all Meraki device types, includes collector health and cardinality monitoring, and can mirror metrics plus traces via OpenTelemetry.
 
 ## Quick start
 
@@ -26,4 +26,6 @@ docker run -d \
 - [Configuration](config.md)
 - [Deployment & Operations](deployment-operations.md)
 - [Integration & Dashboards](integration-dashboards.md)
+- [Collectors Overview](collectors/index.md)
 - [Metrics Reference](metrics/index.md)
+- [OpenTelemetry](observability/otel.md)

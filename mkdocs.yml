@@ -183,24 +183,25 @@ nav:
     - index.md
   - Getting Started: getting-started.md
   - Configuration: config.md
-  - Deployment & Operations: deployment-operations.md
+  - Deployment & Operations:
+    - deployment-operations.md
+    - Security: security.md
+    - HTTP Endpoints: reference/endpoints.md
+  - Observability:
+    - OpenTelemetry: observability/otel.md
+    - Tracing: observability/tracing.md
   - Integration & Dashboards: integration-dashboards.md
   - Metrics Reference:
     - metrics/index.md
     - Overview: metrics/overview.md
     - Complete Reference: metrics/metrics.md
-  - Collector Reference: collectors.md
+  - Collectors:
+    - collectors/index.md
+    - Reference: collectors/reference.md
   - Changelog: changelog.md
   - Development:
     - Extending Collectors: extending-collectors.md
-    - Architecture Decisions:
-      - adr/index.md
-      - Collector Architecture: adr/001-collector-architecture.md
-      - Error Handling Strategy: adr/002-error-handling-strategy.md
-    - Patterns:
-      - patterns/index.md
-      - API Response Formats: patterns/api-response-formats.md
-      - Metric Collection Strategies: patterns/metric-collection-strategies.md
+    - Release Process: development/release-process.md
 
 extra:
   analytics:
