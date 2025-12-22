@@ -491,9 +491,10 @@ class OrganizationCollector(MetricCollector):
         """
         await self.license_collector.collect(org_id, org_name)
 
-    @log_api_call("getOrganizationDevicesAvailabilities")
     async def _collect_device_availability_metrics(self, org_id: str, org_name: str) -> None:
         """Collect device availability metrics.
+
+        Uses inventory cache if available (2-min TTL), otherwise falls back to direct API call.
 
         Parameters
         ----------
@@ -505,11 +506,19 @@ class OrganizationCollector(MetricCollector):
         """
         try:
             with LogContext(org_id=org_id, org_name=org_name):
-                availabilities = await asyncio.to_thread(
-                    self.api.organizations.getOrganizationDevicesAvailabilities,
-                    org_id,
-                    total_pages="all",
-                )
+                # Use inventory cache if available
+                if self.inventory:
+                    logger.debug("Using inventory cache for device availabilities", org_id=org_id)
+                    availabilities = await self.inventory.get_device_availabilities(org_id)
+                else:
+                    logger.debug(
+                        "Inventory not available, fetching availabilities directly", org_id=org_id
+                    )
+                    availabilities = await asyncio.to_thread(
+                        self.api.organizations.getOrganizationDevicesAvailabilities,
+                        org_id,
+                        total_pages="all",
+                    )
 
             # Group by status and product type
             availability_counts: dict[tuple[str, str], int] = {}
