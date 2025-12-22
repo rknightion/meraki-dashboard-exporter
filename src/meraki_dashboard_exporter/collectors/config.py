@@ -114,6 +114,22 @@ class ConfigCollector(MetricCollector):
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
+    async def _get_organizations(self) -> list[dict[str, Any]]:
+        """Get organizations from inventory cache or direct API.
+
+        Uses inventory cache if available, otherwise falls back to direct API call.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of organization data.
+
+        """
+        if not self.inventory:
+            logger.debug("Inventory not available, fetching organizations directly")
+            return await self._fetch_organizations_direct() or []
+        return await self.inventory.get_organizations()
+
     async def _collect_impl(self) -> None:
         """Collect configuration metrics."""
         start_time = time.time()
@@ -121,12 +137,14 @@ class ConfigCollector(MetricCollector):
         api_calls_made = 0
 
         try:
-            # Get organizations with error handling
-            organizations = await self._fetch_organizations()
+            # Get organizations from cache or API
+            organizations = await self._get_organizations()
             if not organizations:
                 logger.warning("No organizations found for config collection")
                 return
-            api_calls_made += 1
+            # Only count as API call if we didn't use cache
+            if not self.inventory:
+                api_calls_made += 1
 
             # Collect metrics for each organization
             tasks = [self._collect_org_config(org) for org in organizations]
@@ -157,8 +175,8 @@ class ConfigCollector(MetricCollector):
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def _fetch_organizations(self) -> list[dict[str, Any]] | None:
-        """Fetch organizations for config collection.
+    async def _fetch_organizations_direct(self) -> list[dict[str, Any]] | None:
+        """Fetch organizations directly from API (fallback when inventory unavailable).
 
         Returns
         -------
