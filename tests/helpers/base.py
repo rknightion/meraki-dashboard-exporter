@@ -139,7 +139,7 @@ class BaseCollectorTest:
 
         # Should have recorded duration
         metrics.assert_histogram_count(
-            "meraki_collector_duration_seconds",
+            "meraki_exporter_collector_duration_seconds",
             1,
             collector=collector_name,
             tier=(self.update_tier.value if self.update_tier else "medium"),
@@ -147,7 +147,7 @@ class BaseCollectorTest:
 
         # Should have set last success timestamp
         last_success = metrics.get_metric_value(
-            "meraki_collector_last_success_timestamp_seconds",
+            "meraki_exporter_collector_success_timestamp_seconds",
             collector=collector_name,
             tier=(self.update_tier.value if self.update_tier else "medium"),
         )
@@ -172,7 +172,7 @@ class BaseCollectorTest:
         collector_name = collector.__class__.__name__
 
         metrics.assert_counter_incremented(
-            "meraki_collector_errors_total",
+            "meraki_exporter_collector_errors_total",
             collector=collector_name,
             tier=(self.update_tier.value if self.update_tier else "medium"),
             error_type=error_type,
@@ -198,7 +198,7 @@ class BaseCollectorTest:
         collector_name = collector.__class__.__name__
 
         metrics.assert_counter_value(
-            "meraki_collector_api_calls",
+            "meraki_exporter_collector_api_calls",
             count,
             collector=collector_name,
             tier=(self.update_tier.value if self.update_tier else "medium"),

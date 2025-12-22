@@ -14,7 +14,7 @@ class MetricAssertions:
     --------
     metrics = MetricAssertions(registry)
     metrics.assert_gauge_value("meraki_device_up", 1, serial="Q2KD-XXXX")
-    metrics.assert_counter_incremented("meraki_api_calls_total", endpoint="getDevices")
+    metrics.assert_counter_incremented("meraki_exporter_api_requests_total", endpoint="getDevices")
     metrics.assert_metric_not_set("meraki_device_cpu_percent")
 
     """

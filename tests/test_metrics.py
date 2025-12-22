@@ -114,7 +114,7 @@ class TestMetricDefinition:
     def test_metric_already_has_unit_suffix(self) -> None:
         """Test metric that already has unit in name."""
         metric = MetricDefinition(
-            name="meraki_api_calls_total",
+            name="meraki_exporter_api_calls_total",
             description="Total API calls",
             metric_type="counter",
             labels=["org_id"],
@@ -122,7 +122,7 @@ class TestMetricDefinition:
         )
 
         # Should not double-add the unit
-        assert metric.full_name == "meraki_api_calls_total"
+        assert metric.full_name == "meraki_exporter_api_calls_total"
 
     def test_validate_labels_success(self) -> None:
         """Test successful label validation."""
@@ -380,7 +380,7 @@ class TestValidateMetricName:
         # These should not raise
         validate_metric_name("meraki_device_up")
         validate_metric_name("meraki_port_traffic_bytes")
-        validate_metric_name("meraki_api_calls_total")
+        validate_metric_name("meraki_exporter_api_calls_total")
         validate_metric_name("meraki_temperature_celsius")
         validate_metric_name("meraki_response_time_seconds")
         validate_metric_name("meraki_usage_percent")
@@ -542,14 +542,14 @@ class TestIntegrationScenarios:
     def test_create_api_usage_metric(self) -> None:
         """Test creating an API usage metric."""
         metric_def = MetricFactory.organization_metric(
-            name="meraki_api_calls",
+            name="meraki_exporter_api_calls",
             description="Number of API calls",
             metric_type="counter",
             extra_labels=[str(LabelName.STATUS_CODE)],
             unit="total",
         )
 
-        assert metric_def.full_name == "meraki_api_calls_total"
+        assert metric_def.full_name == "meraki_exporter_api_calls_total"
         assert str(LabelName.STATUS_CODE) in metric_def.labels
 
     def test_create_sensor_metric(self) -> None:
