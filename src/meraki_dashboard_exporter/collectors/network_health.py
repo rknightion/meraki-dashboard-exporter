@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
+from ..core.batch_processing import process_in_batches_with_errors
 from ..core.async_utils import ManagedTaskGroup
 from ..core.collector import MetricCollector
 from ..core.constants import NetworkHealthMetricName, NetworkMetricName, ProductType, UpdateTier
@@ -266,50 +267,40 @@ class NetworkHealthCollector(MetricCollector):
                 network["orgId"] = org_id
                 network["orgName"] = org_name or org_id
 
-            # Collect health metrics for each network in batches
-            # to avoid overwhelming the API connection pool (configurable via network_batch_size)
-            batch_size = self.settings.api.network_batch_size
-            for i in range(0, len(networks), batch_size):
-                batch = networks[i : i + batch_size]
-                tasks = []
+            wireless_networks = [
+                network
+                for network in networks
+                if ProductType.WIRELESS in network.get("productTypes", [])
+            ]
+            if not wireless_networks:
+                return
 
-                # Use list comprehension for better performance
-                tasks = [
-                    self._collect_network_rf_health(network)
-                    for network in batch
-                    if ProductType.WIRELESS in network.get("productTypes", [])
-                ]
-
-                # Also collect connection stats for wireless networks
-                connection_tasks = [
-                    self._collect_network_connection_stats(network)
-                    for network in batch
-                    if ProductType.WIRELESS in network.get("productTypes", [])
-                ]
-
-                # Also collect data rate metrics for wireless networks
-                data_rate_tasks = [
-                    self._collect_network_data_rates(network)
-                    for network in batch
-                    if ProductType.WIRELESS in network.get("productTypes", [])
-                ]
-
-                # Also collect Bluetooth clients for wireless networks
-                bluetooth_tasks = [
-                    self._collect_network_bluetooth_clients(network)
-                    for network in batch
-                    if ProductType.WIRELESS in network.get("productTypes", [])
-                ]
-
-                all_tasks = tasks + connection_tasks + data_rate_tasks + bluetooth_tasks
-                if all_tasks:
-                    await asyncio.gather(*all_tasks, return_exceptions=True)
+            await process_in_batches_with_errors(
+                wireless_networks,
+                self._collect_network_health_bundle,
+                batch_size=self.settings.api.network_batch_size,
+                delay_between_batches=self.settings.api.batch_delay,
+                item_description="network health",
+                error_context_func=lambda network: {
+                    "org_id": org_id,
+                    "org_name": org_name or org_id,
+                    "network_id": network.get("id"),
+                    "network_name": network.get("name"),
+                },
+            )
 
         except Exception:
             logger.exception(
                 "Failed to collect network health for organization",
                 org_id=org_id,
             )
+
+    async def _collect_network_health_bundle(self, network: dict[str, Any]) -> None:
+        """Collect all network health sub-metrics for a single network."""
+        await self._collect_network_rf_health(network)
+        await self._collect_network_connection_stats(network)
+        await self._collect_network_data_rates(network)
+        await self._collect_network_bluetooth_clients(network)
 
     @log_api_call("getOrganizationNetworks")
     async def _fetch_networks_for_health(self, org_id: str) -> list[dict[str, Any]]:
