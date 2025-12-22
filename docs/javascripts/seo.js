@@ -201,8 +201,6 @@ function getDocumentationSection() {
   if (path.includes('/collectors/')) return 'Collector Reference';
   if (path.includes('/config/')) return 'Configuration';
   if (path.includes('/deployment/')) return 'Deployment';
-  if (path.includes('/adr/')) return 'Architecture Decisions';
-  if (path.includes('/patterns/')) return 'Development Patterns';
   return 'Documentation';
 }
 

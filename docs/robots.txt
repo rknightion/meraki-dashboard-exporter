@@ -9,8 +9,6 @@ Allow: /integration-dashboards/
 Allow: /metrics/
 Allow: /collectors/
 Allow: /extending-collectors/
-Allow: /adr/
-Allow: /patterns/
 
 # Static assets
 Allow: /assets/
