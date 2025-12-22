@@ -90,6 +90,43 @@ class AlertsCollector(MetricCollector):
             ],
         )
 
+    async def _get_organizations(self) -> list[dict[str, Any]]:
+        """Get organizations from inventory cache or direct API.
+
+        Uses inventory cache if available, otherwise falls back to direct API call.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of organization data.
+
+        """
+        if not self.inventory:
+            logger.debug("Inventory not available, fetching organizations directly")
+            return await self._fetch_organizations_direct() or []
+        return await self.inventory.get_organizations()
+
+    async def _get_networks(self, org_id: str) -> list[dict[str, Any]]:
+        """Get networks for an organization from inventory cache or direct API.
+
+        Uses inventory cache if available, otherwise falls back to direct API call.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of network data.
+
+        """
+        if not self.inventory:
+            logger.debug("Inventory not available, fetching networks directly", org_id=org_id)
+            return await self._fetch_networks_direct(org_id) or []
+        return await self.inventory.get_networks(org_id)
+
     async def _collect_impl(self) -> None:
         """Collect alert metrics."""
         start_time = time.time()
@@ -97,12 +134,14 @@ class AlertsCollector(MetricCollector):
         api_calls_made = 0
 
         try:
-            # Get organizations with error handling
-            orgs_data = await self._fetch_organizations()
+            # Get organizations from cache or API
+            orgs_data = await self._get_organizations()
             if not orgs_data:
                 logger.warning("No organizations found for alerts collection")
                 return
-            api_calls_made += 1
+            # Only count as API call if we didn't use cache
+            if not self.inventory:
+                api_calls_made += 1
 
             # Build org mapping
             if self.settings.meraki.org_id:
@@ -126,25 +165,45 @@ class AlertsCollector(MetricCollector):
                 if not isinstance(result, Exception):
                     api_calls_made += 1
 
-            # Collect sensor alerts for all networks
-            # First get all networks for all orgs
-            networks = []
+            # Collect sensor alerts for networks with MT sensors
+            # Only query networks that actually have sensor devices (reduces API calls)
+            sensor_networks = []
+            all_networks = []
             for org_id in org_ids:
-                org_networks = await self._fetch_networks(org_id)
-                if org_networks:
-                    networks.extend(org_networks)
-                    api_calls_made += 1
+                if self.inventory:
+                    # Use filtered network list (only networks with sensors)
+                    org_sensor_networks = await self.inventory.get_networks_with_device_types(
+                        org_id, ["sensor"]
+                    )
+                    # Also get all networks for health alerts (from cache)
+                    org_all_networks = await self.inventory.get_networks(org_id)
+                else:
+                    # Fallback: get all networks (can't filter without inventory)
+                    org_sensor_networks = await self._get_networks(org_id) or []
+                    org_all_networks = org_sensor_networks
+                    if org_sensor_networks:
+                        api_calls_made += 1
 
-            # Collect sensor alerts for each network
-            if networks:
-                # Add org info to each network
-                for network in networks:
-                    org_id = network.get("organizationId", "")
+                # Add org info to networks
+                for network in org_sensor_networks:
                     network["orgId"] = org_id
                     network["orgName"] = org_names.get(org_id, org_id)
+                sensor_networks.extend(org_sensor_networks)
 
+                for network in org_all_networks:
+                    network["orgId"] = org_id
+                    network["orgName"] = org_names.get(org_id, org_id)
+                all_networks.extend(org_all_networks)
+
+            # Collect sensor alerts only for networks with sensors
+            if sensor_networks:
+                logger.debug(
+                    "Collecting sensor alerts for filtered networks",
+                    total_networks=len(all_networks),
+                    networks_with_sensors=len(sensor_networks),
+                )
                 sensor_tasks = [
-                    self._collect_network_sensor_alerts(network) for network in networks
+                    self._collect_network_sensor_alerts(network) for network in sensor_networks
                 ]
                 sensor_results = await asyncio.gather(*sensor_tasks, return_exceptions=True)
 
@@ -153,9 +212,10 @@ class AlertsCollector(MetricCollector):
                     if not isinstance(result, Exception):
                         api_calls_made += 1
 
-                # Collect network health alerts (Phase 4.1)
+            # Collect network health alerts for all networks
+            if all_networks:
                 health_alert_tasks = [
-                    self._collect_network_health_alerts(network) for network in networks
+                    self._collect_network_health_alerts(network) for network in all_networks
                 ]
                 health_results = await asyncio.gather(*health_alert_tasks, return_exceptions=True)
 
@@ -183,8 +243,8 @@ class AlertsCollector(MetricCollector):
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def _fetch_organizations(self) -> list[dict[str, Any]] | None:
-        """Fetch organizations for alerts collection.
+    async def _fetch_organizations_direct(self) -> list[dict[str, Any]] | None:
+        """Fetch organizations directly from API (fallback when inventory unavailable).
 
         Returns
         -------
@@ -367,8 +427,8 @@ class AlertsCollector(MetricCollector):
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def _fetch_networks(self, org_id: str) -> list[dict[str, Any]] | None:
-        """Fetch networks for sensor alerts collection.
+    async def _fetch_networks_direct(self, org_id: str) -> list[dict[str, Any]] | None:
+        """Fetch networks directly from API (fallback when inventory unavailable).
 
         Parameters
         ----------
