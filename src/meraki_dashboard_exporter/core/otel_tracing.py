@@ -26,7 +26,6 @@ from opentelemetry.sdk.trace.sampling import (
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 from .logging import get_logger
-from .span_metrics import setup_span_metrics
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -58,8 +57,16 @@ class TracingConfig:
             logger.warning("Tracing already initialized, skipping setup")
             return
 
-        if not self.settings.otel.enabled or not self.settings.otel.endpoint:
+        if not self.settings.otel.enabled:
             logger.info("OpenTelemetry tracing disabled (OTEL not enabled)")
+            return
+
+        if not self.settings.otel.tracing_enabled:
+            logger.info("OpenTelemetry tracing disabled (tracing_enabled=false)")
+            return
+
+        if not self.settings.otel.endpoint:
+            logger.info("OpenTelemetry tracing disabled (no endpoint configured)")
             return
 
         try:
@@ -96,11 +103,6 @@ class TracingConfig:
                 export_timeout_millis=30000,
             )
             self._tracer_provider.add_span_processor(span_processor)
-
-            # Add span metrics processor for RED metrics
-            from prometheus_client.core import REGISTRY
-
-            setup_span_metrics(self._tracer_provider, REGISTRY)
 
             # Set as global tracer provider
             trace.set_tracer_provider(self._tracer_provider)
