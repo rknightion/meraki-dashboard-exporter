@@ -14,13 +14,13 @@ The Meraki Dashboard Exporter provides comprehensive metrics across all aspects 
 
 ## Collection Tiers
 
-The exporter uses a three-tier system to optimize API usage and provide timely data (intervals are configurable via `MERAKI_EXPORTER_UPDATE_INTERVALS__*`):
+The exporter uses a three-tier system to optimize API usage and provide timely data (intervals are configurable via `MERAKI_EXPORTER_UPDATE_INTERVALS__*` in the [Configuration](../config.md) reference):
 
 ```mermaid
 graph TD
-    A[Meraki API] --> B[Fast Tier<br/>60 seconds]
-    A --> C[Medium Tier<br/>5 minutes]
-    A --> D[Slow Tier<br/>15 minutes]
+    A[Meraki API] --> B[Fast Tier]
+    A --> C[Medium Tier]
+    A --> D[Slow Tier]
 
     B --> E[Sensor Metrics<br/>Temperature, Humidity, etc.]
     C --> F[Device Metrics<br/>Status, Performance]
@@ -32,17 +32,17 @@ graph TD
     style D fill:#69db7c,stroke:#51cf66
 ```
 
-### Fast Tier (60 seconds)
+### Fast Tier
 - **Purpose**: Real-time environmental monitoring
 - **Metrics**: MT sensor readings (temperature, humidity, door status, etc.)
 - **Use Case**: Critical environmental alerts, real-time dashboards
 
-### Medium Tier (5 minutes)
+### Medium Tier
 - **Purpose**: Standard operational metrics
 - **Metrics**: Device status, network health, client counts, traffic statistics
 - **Aligned**: With Meraki's 5-minute data aggregation windows
 
-### Slow Tier (15 minutes)
+### Slow Tier
 - **Purpose**: Configuration and slowly changing data
 - **Metrics**: Security settings, configuration changes
 - **Use Case**: Compliance monitoring, configuration drift detection
