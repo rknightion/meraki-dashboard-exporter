@@ -258,6 +258,4 @@ class MRCollector(BaseDeviceCollector):
             Device lookup table for device info.
 
         """
-        await self.clients.collect_connection_stats(
-            org_id, org_name, networks, device_lookup
-        )
+        await self.clients.collect_connection_stats(org_id, org_name, networks, device_lookup)
