@@ -92,7 +92,8 @@ class TestAlertsCollectorWithHelpers(BaseCollectorTest):
 
         # Configure API with mixed responses
         api = (
-            mock_api_builder.with_organizations(orgs)
+            mock_api_builder
+            .with_organizations(orgs)
             .with_alerts(AlertFactory.create_many(3), org_id=orgs[0]["id"])
             .with_error("getOrganizationAssuranceAlerts", 404, organizationId=orgs[1]["id"])
             .build()
@@ -181,7 +182,8 @@ class TestAlertsCollectorWithHelpers(BaseCollectorTest):
         org = OrganizationFactory.create()
 
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_alerts([], org_id=org["id"])  # Empty alerts
             .build()
         )
@@ -213,7 +215,8 @@ class TestAlertsCollectorWithHelpers(BaseCollectorTest):
 
         # Set up paginated response
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_paginated_response(
                 "getOrganizationAssuranceAlerts", alerts, per_page=20, use_items_wrapper=False
             )

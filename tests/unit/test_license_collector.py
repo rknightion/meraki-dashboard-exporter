@@ -191,9 +191,8 @@ class TestLicenseCollector:
 
         # Configure mock API
         api = (
-            mock_api_builder.with_custom_response(
-                "getOrganizationLicensesOverview", overview_response
-            )
+            mock_api_builder
+            .with_custom_response("getOrganizationLicensesOverview", overview_response)
             .with_custom_response("getOrganizationLicenses", licenses_response)
             .build()
         )
@@ -253,9 +252,8 @@ class TestLicenseCollector:
 
         # Configure mock API
         api = (
-            mock_api_builder.with_custom_response(
-                "getOrganizationLicensesOverview", overview_response
-            )
+            mock_api_builder
+            .with_custom_response("getOrganizationLicensesOverview", overview_response)
             .with_custom_response("getOrganizationLicenses", licenses_response)
             .build()
         )
@@ -401,9 +399,8 @@ class TestLicenseCollector:
 
         # Configure mock API
         api = (
-            mock_api_builder.with_custom_response(
-                "getOrganizationLicensesOverview", overview_response
-            )
+            mock_api_builder
+            .with_custom_response("getOrganizationLicensesOverview", overview_response)
             .with_custom_response("getOrganizationLicenses", licenses_response)
             .build()
         )
@@ -499,9 +496,8 @@ class TestLicenseCollector:
 
         # Configure mock API
         api = (
-            mock_api_builder.with_custom_response(
-                "getOrganizationLicensesOverview", {"status": "OK"}
-            )
+            mock_api_builder
+            .with_custom_response("getOrganizationLicensesOverview", {"status": "OK"})
             .with_custom_response("getOrganizationLicenses", [])
             .build()
         )

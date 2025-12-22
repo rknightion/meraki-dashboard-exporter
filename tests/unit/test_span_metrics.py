@@ -21,4 +21,4 @@ def test_span_metrics_module_is_deprecated() -> None:
     # Module should only have standard attributes (no classes or functions)
     public_attrs = [attr for attr in dir(span_metrics) if not attr.startswith("_")]
     # Only annotations should be present
-    assert public_attrs == ["annotations"] or public_attrs == []
+    assert public_attrs in (["annotations"], [])

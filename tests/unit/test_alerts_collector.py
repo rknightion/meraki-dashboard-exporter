@@ -24,7 +24,8 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_custom_response("getOrganizationAssuranceAlerts", [])
             .build()
         )
@@ -87,7 +88,8 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_custom_response("getOrganizationAssuranceAlerts", alerts)
             .build()
         )
@@ -157,7 +159,8 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_custom_response("getOrganizationAssuranceAlerts", alerts)
             .build()
         )
@@ -180,7 +183,8 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Configure mock API with 404 error
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_error("getOrganizationAssuranceAlerts", 404)
             .build()
         )
@@ -236,7 +240,8 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_custom_response("getOrganizationAssuranceAlerts", alerts)
             .build()
         )
@@ -326,7 +331,8 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_custom_response("getOrganizationAssuranceAlerts", [])
             .with_custom_response("getOrganizationNetworks", networks)
             .build()
@@ -434,7 +440,8 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Configure mock API with empty sensor alert response
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_custom_response("getOrganizationAssuranceAlerts", [])
             .with_custom_response("getOrganizationNetworks", [network])
             .with_custom_response("getNetworkSensorAlertsOverviewByMetric", [])
@@ -456,7 +463,8 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Configure mock API with error for sensor alerts
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_custom_response("getOrganizationAssuranceAlerts", [])
             .with_custom_response("getOrganizationNetworks", [network])
             .with_error("getNetworkSensorAlertsOverviewByMetric", Exception("API Error"))
@@ -477,7 +485,8 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Configure mock API with no networks
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_custom_response("getOrganizationAssuranceAlerts", [])
             .with_custom_response("getOrganizationNetworks", [])
             .build()
@@ -507,7 +516,8 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_custom_response("getOrganizationAssuranceAlerts", [])
             .with_custom_response("getOrganizationNetworks", [network])
             .with_custom_response("getNetworkSensorAlertsOverviewByMetric", sensor_alert_response)

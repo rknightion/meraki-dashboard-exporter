@@ -98,6 +98,7 @@ lint.per-file-ignores."tests/**/*.py" = [ "PLR0904" ] # Allow more than 20 publi
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+pythonpath = [ "src" ]
 markers = [
   "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
@@ -105,6 +106,9 @@ testpaths = [ "tests" ]
 python_files = [ "test_*.py", "*_test.py" ]
 python_classes = [ "Test*" ]
 python_functions = [ "test_*" ]
+filterwarnings = [
+  "ignore:Remove `format_exc_info` from your processor chain:UserWarning",
+]
 
 [tool.mypy]
 python_version = "3.14"

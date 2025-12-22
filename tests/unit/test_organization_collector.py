@@ -58,7 +58,8 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Configure mock API with all necessary endpoints
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([NetworkFactory.create(org_id=org["id"])])
             .with_devices([])
             .with_custom_response("getOrganizationDevicesOverviewByModel", {"counts": []})
@@ -114,7 +115,8 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([])
             .with_devices([])
             .with_custom_response("getOrganizationDevicesOverviewByModel", {"counts": []})
@@ -159,7 +161,8 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Configure mock API with error for packet captures
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([])
             .with_devices([])
             .with_custom_response("getOrganizationDevicesOverviewByModel", {"counts": []})
@@ -206,7 +209,8 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([])
             .with_devices([])
             .with_custom_response("getOrganizationDevicesOverviewByModel", {"counts": []})
@@ -279,7 +283,8 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([])
             .with_devices([])
             .with_custom_response("getOrganizationDevicesOverviewByModel", {"counts": []})
@@ -404,7 +409,8 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Configure mock API with empty response
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([])
             .with_devices([])
             .with_custom_response("getOrganizationDevicesOverviewByModel", {"counts": []})
@@ -436,7 +442,8 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Configure mock API with error
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([])
             .with_devices([])
             .with_custom_response("getOrganizationDevicesOverviewByModel", {"counts": []})

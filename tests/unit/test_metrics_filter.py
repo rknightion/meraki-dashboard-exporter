@@ -13,8 +13,6 @@ This module tests all runtime modes for metrics export:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 from prometheus_client import CollectorRegistry, Counter, Gauge
 
@@ -190,7 +188,9 @@ class TestMode3OtelOnlyAll:
 
     def test_python_metrics_not_exported_to_otel(self, settings: OTelSettings) -> None:
         """Test Python runtime metrics are NOT exported to OTEL."""
-        assert not MetricsFilter.should_export_to_otel("python_gc_objects_collected_total", settings)
+        assert not MetricsFilter.should_export_to_otel(
+            "python_gc_objects_collected_total", settings
+        )
 
     def test_otel_allowlist_includes_both_prefixes(self, settings: OTelSettings) -> None:
         """Test OTEL allowlist includes both meraki_ and meraki_exporter_ prefixes."""
@@ -271,9 +271,7 @@ class TestDualExport:
         assert MetricsFilter.should_export_to_prometheus(
             "meraki_exporter_api_duration_seconds", settings
         )
-        assert MetricsFilter.should_export_to_otel(
-            "meraki_exporter_api_duration_seconds", settings
-        )
+        assert MetricsFilter.should_export_to_otel("meraki_exporter_api_duration_seconds", settings)
 
 
 class TestTracingControl:

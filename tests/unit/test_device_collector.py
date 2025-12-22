@@ -363,7 +363,8 @@ class TestDeviceCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_devices(devices, org_id=org["id"])
             .with_device_statuses([], org_id=org["id"])
             .with_custom_response(

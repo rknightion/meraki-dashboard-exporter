@@ -99,7 +99,7 @@ def test_webhook_endpoint_invalid_content_type(
 
     response = client.post(
         "/api/webhooks/meraki",
-        data="not json",
+        content="not json",
         headers={"Content-Type": "text/plain"},
     )
 
