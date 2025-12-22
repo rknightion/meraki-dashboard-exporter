@@ -22,7 +22,7 @@ from .api.client import AsyncMerakiClient
 from .collectors.manager import CollectorManager
 from .core.cardinality import CardinalityMonitor, setup_cardinality_endpoint
 from .core.config import Settings
-from .core.config_logger import log_configuration
+from .core.config_logger import log_startup_summary
 from .core.constants import UpdateTier
 from .core.discovery import DiscoveryService
 from .core.logging import get_logger, setup_logging
@@ -62,9 +62,6 @@ class ExporterApp:
         self.otel_logging = OTELLoggingConfig(self.settings)
         if self.settings.otel.enabled:
             self.otel_logging.setup_otel_logging()
-
-        # Log configuration early for visibility
-        log_configuration(self.settings)
 
         self.client = AsyncMerakiClient(self.settings)
 
@@ -216,9 +213,10 @@ class ExporterApp:
         # Run discovery to log environment information once at startup
         discovery = DiscoveryService(self.client.api, self.settings)
         try:
-            await discovery.run_discovery()
+            self._discovery_summary = await discovery.run_discovery()
         except Exception:
             logger.exception("Discovery failed, continuing with normal operation")
+            self._discovery_summary = {"errors": ["discovery_failed"]}
 
         # Start OTEL bridge if enabled
         if self.otel_bridge:

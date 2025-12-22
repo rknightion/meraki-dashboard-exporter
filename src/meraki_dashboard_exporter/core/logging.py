@@ -12,6 +12,8 @@ from structlog.types import EventDict, Processor
 if TYPE_CHECKING:
     from .config import Settings
 
+_LOGGING_CONFIGURED = False
+
 
 def setup_logging(settings: Settings) -> None:
     """Configure structured logging with structlog using logfmt format.
@@ -22,6 +24,10 @@ def setup_logging(settings: Settings) -> None:
         Application settings containing log level.
 
     """
+    global _LOGGING_CONFIGURED
+    if _LOGGING_CONFIGURED:
+        return
+
     # Configure standard library logging
     logging.basicConfig(
         format="%(message)s",
@@ -33,13 +39,29 @@ def setup_logging(settings: Settings) -> None:
     # These libraries are used by the Meraki SDK and can be noisy
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
 
-    # For Meraki SDK, respect DEBUG level but default to WARNING for other levels
-    meraki_logger = logging.getLogger("meraki")
-    if settings.logging.level == "DEBUG":
-        meraki_logger.setLevel(logging.DEBUG)
+    # OpenTelemetry libraries can be chatty at INFO/DEBUG
+    base_level = getattr(logging, settings.logging.level)
+    if base_level == logging.DEBUG:
+        otel_level = logging.DEBUG
     else:
-        meraki_logger.setLevel(logging.WARNING)
+        otel_level = max(logging.WARNING, base_level)
+    for logger_name in (
+        "opentelemetry",
+        "opentelemetry.sdk",
+        "opentelemetry.instrumentation",
+        "opentelemetry.exporter",
+    ):
+        logging.getLogger(logger_name).setLevel(otel_level)
+
+    # For Meraki SDK, respect DEBUG level but default to WARNING for INFO
+    meraki_logger = logging.getLogger("meraki")
+    if base_level == logging.DEBUG:
+        meraki_level = logging.DEBUG
+    else:
+        meraki_level = max(logging.WARNING, base_level)
+    meraki_logger.setLevel(meraki_level)
 
     # Configure Meraki logger to use structlog formatting
     # Remove any existing handlers first
@@ -132,8 +154,10 @@ def setup_logging(settings: Settings) -> None:
         ),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(),
-        cache_logger_on_first_use=True,
+        cache_logger_on_first_use=False,
     )
+
+    _LOGGING_CONFIGURED = True
 
 
 def add_otel_context(logger: Any, method_name: str, event_dict: EventDict) -> EventDict:
