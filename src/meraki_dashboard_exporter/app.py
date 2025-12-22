@@ -26,6 +26,7 @@ from .core.constants import UpdateTier
 from .core.discovery import DiscoveryService
 from .core.logging import get_logger, setup_logging
 from .core.metric_expiration import MetricExpirationManager
+from .core.metrics_filter import FilteredRegistry, MetricsFilter
 from .core.otel_logging import OTELLoggingConfig
 from .core.otel_metrics import PrometheusToOTelBridge
 from .core.otel_tracing import TracingConfig
@@ -84,16 +85,40 @@ class ExporterApp:
         template_dir = Path(__file__).parent / "templates"
         self.templates = Jinja2Templates(directory=str(template_dir))
 
-        # Setup OTEL bridge if enabled
+        # Setup OTEL bridge if enabled and metrics are configured for OTEL export
         self.otel_bridge: PrometheusToOTelBridge | None = None
-        if self.settings.otel.enabled and self.settings.otel.endpoint:
-            self.otel_bridge = PrometheusToOTelBridge(
-                registry=REGISTRY,
-                endpoint=self.settings.otel.endpoint,
-                service_name=self.settings.otel.service_name,
-                export_interval_seconds=self.settings.otel.export_interval,
-                resource_attributes=self.settings.otel.resource_attributes,
+        otel_settings = self.settings.otel
+        if otel_settings.enabled and otel_settings.endpoint:
+            # Check if any metrics are configured for OTEL export
+            should_export_to_otel = (
+                otel_settings.export_meraki_metrics_to_otel
+                or otel_settings.export_exporter_metrics_to_otel
             )
+
+            if should_export_to_otel:
+                # Get allowlist and blocklist based on configuration
+                allowlist = MetricsFilter.get_otel_allowlist(otel_settings)
+                blocklist = MetricsFilter.get_otel_blocklist(otel_settings)
+
+                self.otel_bridge = PrometheusToOTelBridge(
+                    registry=REGISTRY,
+                    endpoint=otel_settings.endpoint,
+                    service_name=otel_settings.service_name,
+                    export_interval_seconds=otel_settings.export_interval,
+                    resource_attributes=otel_settings.resource_attributes,
+                    metric_allowlist=allowlist,
+                    metric_blocklist=blocklist,
+                )
+                logger.info(
+                    "OTEL metrics bridge configured",
+                    allowlist=allowlist,
+                    blocklist=blocklist,
+                )
+            else:
+                logger.info(
+                    "OTEL enabled but no metrics configured for export",
+                    tracing_enabled=otel_settings.tracing_enabled,
+                )
 
         # Setup cardinality monitor
         self.cardinality_monitor = CardinalityMonitor(
@@ -515,8 +540,14 @@ class ExporterApp:
 
         @app.get("/metrics", response_class=Response)
         async def metrics() -> Response:
-            """Prometheus metrics endpoint."""
-            data = generate_latest(REGISTRY)
+            """Prometheus metrics endpoint with filtering based on configuration."""
+            exporter = app.state.exporter
+
+            # Use filtered registry to respect export configuration
+            filtered_registry = FilteredRegistry(REGISTRY, exporter.settings.otel)
+            # FilteredRegistry implements collect() interface required by generate_latest
+            data = generate_latest(filtered_registry)  # type: ignore[arg-type]
+
             return Response(
                 content=data,
                 media_type=CONTENT_TYPE_LATEST,
