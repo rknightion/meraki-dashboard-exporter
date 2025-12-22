@@ -25,6 +25,9 @@ class LicenseCollector(BaseOrganizationCollector):
     async def _fetch_licenses_overview(self, org_id: str) -> dict[str, Any]:
         """Fetch organization licenses overview.
 
+        Uses inventory cache with 30-minute TTL for efficiency since
+        license data rarely changes.
+
         Parameters
         ----------
         org_id : str
@@ -36,6 +39,11 @@ class LicenseCollector(BaseOrganizationCollector):
             Licenses overview data.
 
         """
+        # Use inventory cache if available (30-min TTL for licenses)
+        if self.inventory:
+            return await self.inventory.get_licenses_overview(org_id)
+
+        # Fallback to direct API call
         self._track_api_call("getOrganizationLicensesOverview")
         return await asyncio.to_thread(
             self.api.organizations.getOrganizationLicensesOverview,
