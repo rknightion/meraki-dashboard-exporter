@@ -49,12 +49,18 @@ class TestMRCollector:
         """Create MR collector instance."""
         return MRCollector(mock_parent)
 
-    async def test_collect_basic_device_metrics(
+    async def test_collect_is_noop(
         self,
         mr_collector: MRCollector,
         mock_api: MagicMock,
     ) -> None:
-        """Test collection of basic MR metrics (client count and connection stats)."""
+        """Test that per-device collect() is a no-op.
+
+        Client counts and connection stats are now collected at org/network level
+        for better API efficiency:
+        - Client counts: collect_wireless_clients() uses org-wide endpoint
+        - Connection stats: collect_connection_stats() uses network-level endpoint
+        """
         # Mock device data
         device = {
             "serial": "Q123-456-789",
@@ -63,28 +69,14 @@ class TestMRCollector:
             "networkId": "net1",
         }
 
-        # Mock wireless status
-        mock_api.wireless.getDeviceWirelessStatus = MagicMock(return_value={"clientCount": 42})
-
-        # Mock connection stats
-        mock_api.wireless.getDeviceWirelessConnectionStats = MagicMock(
-            return_value={
-                "assoc": 100,
-                "auth": 98,
-                "dhcp": 95,
-                "dns": 94,
-                "success": 90,
-            }
-        )
-
-        # Run collection for device
+        # Run collection for device (should be a no-op)
         await mr_collector.collect(device)
 
-        # Verify API calls were made
-        mock_api.wireless.getDeviceWirelessStatus.assert_called_once_with("Q123-456-789")
-        mock_api.wireless.getDeviceWirelessConnectionStats.assert_called_once()
+        # Verify NO per-device API calls were made (they're now org/network level)
+        mock_api.wireless.getDeviceWirelessStatus.assert_not_called()
+        mock_api.wireless.getDeviceWirelessConnectionStats.assert_not_called()
 
-        # Verify metrics were set
+        # Metrics are still initialized (but set at org/network level)
         assert mr_collector._ap_clients is not None
         assert mr_collector._ap_connection_stats is not None
 
@@ -166,38 +158,54 @@ class TestMRCollector:
         assert hasattr(mr_collector, "_packet_value_cache")
         assert isinstance(mr_collector._packet_value_cache, dict)
 
-    async def test_collect_handles_missing_data(
+    async def test_collect_connection_stats_network_level(
         self,
         mr_collector: MRCollector,
         mock_api: MagicMock,
     ) -> None:
-        """Test handling of missing or None values in API responses."""
-        # Mock device
-        device = {
-            "serial": "Q123",
-            "name": "Test AP",
-            "model": "MR46",
-            "networkId": "net1",
+        """Test network-level connection stats collection."""
+        org_id = "123"
+        org_name = "Test Org"
+        networks = [
+            {"id": "net1", "name": "Network 1", "productTypes": ["wireless"]},
+            {"id": "net2", "name": "Network 2", "productTypes": ["wireless"]},
+        ]
+        device_lookup = {
+            "Q123": {"serial": "Q123", "name": "AP1", "model": "MR46"},
+            "Q456": {"serial": "Q456", "name": "AP2", "model": "MR46"},
         }
 
-        # Mock wireless status with missing clientCount
-        mock_api.wireless.getDeviceWirelessStatus = MagicMock(
-            return_value={}  # No clientCount field
+        # Mock network-level connection stats response
+        mock_api.wireless.getNetworkWirelessDevicesConnectionStats = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q123",
+                    "connectionStats": {
+                        "assoc": 100,
+                        "auth": 98,
+                        "dhcp": 95,
+                        "dns": 94,
+                        "success": 90,
+                    },
+                },
+                {
+                    "serial": "Q456",
+                    "connectionStats": {
+                        "assoc": 50,
+                        "auth": 48,
+                        "dhcp": 45,
+                        "dns": 44,
+                        "success": 40,
+                    },
+                },
+            ]
         )
 
-        # Mock connection stats with None values
-        mock_api.wireless.getDeviceWirelessConnectionStats = MagicMock(
-            return_value={
-                "assoc": None,
-                "auth": 98,
-                "dhcp": None,
-                "dns": 94,
-                "success": 90,
-            }
-        )
+        # Run collection
+        await mr_collector.collect_connection_stats(org_id, org_name, networks, device_lookup)
 
-        # Should not raise errors
-        await mr_collector.collect(device)
+        # Verify network-level API calls (one per wireless network)
+        assert mock_api.wireless.getNetworkWirelessDevicesConnectionStats.call_count == 2
 
     async def test_collect_ssid_usage(
         self,
