@@ -143,12 +143,15 @@ def log_startup_summary(
     log_method("  API Timeout", value=f"{settings.api.timeout}s")
     log_method("  API Max Retries", value=settings.api.max_retries)
     log_method("  API Concurrency Limit", value=settings.api.concurrency_limit)
-    log_method("  API Batch Sizes", value={
-        "default": settings.api.batch_size,
-        "device": settings.api.device_batch_size,
-        "network": settings.api.network_batch_size,
-        "client": settings.api.client_batch_size,
-    })
+    log_method(
+        "  API Batch Sizes",
+        value={
+            "default": settings.api.batch_size,
+            "device": settings.api.device_batch_size,
+            "network": settings.api.network_batch_size,
+            "client": settings.api.client_batch_size,
+        },
+    )
     log_method("  API Batch Delay", value=f"{settings.api.batch_delay}s")
 
     if settings.otel.enabled:

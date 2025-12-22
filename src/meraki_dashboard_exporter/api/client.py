@@ -330,14 +330,13 @@ class AsyncMerakiClient:
                             if retry_after_header:
                                 try:
                                     retry_after = float(retry_after_header)
-                                except (TypeError, ValueError):
+                                except TypeError, ValueError:
                                     retry_after = None
 
                         base_wait = (
                             retry_after
                             if retry_after is not None
-                            else self.settings.api.rate_limit_retry_wait
-                            * (2 ** (retry_count - 1))
+                            else self.settings.api.rate_limit_retry_wait * (2 ** (retry_count - 1))
                         )
                         wait_time = min(base_wait, 60)
                         wait_time = max(0.0, wait_time * (1.0 + random.uniform(-0.2, 0.2)))
