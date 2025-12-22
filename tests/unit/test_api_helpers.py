@@ -26,6 +26,9 @@ def mock_collector():
     collector.settings.api.batch_size = 10
     collector.settings.api.batch_delay = 0.0
 
+    # No inventory cache - tests expect direct API calls
+    collector.inventory = None
+
     collector._track_api_call = MagicMock()
     return collector
 
