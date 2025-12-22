@@ -9,17 +9,23 @@ tags:
 
 # Tracing
 
-When OpenTelemetry is enabled, the exporter emits traces for Meraki API calls and FastAPI endpoints. Tracing uses OTLP gRPC and a parent-based, head-sampling strategy.
+When OpenTelemetry is enabled and tracing is turned on, the exporter emits traces
+for Meraki API calls and FastAPI endpoints. Tracing uses a parent-based,
+head-sampling strategy.
 
 ## Configuration
 
-```bash
-export MERAKI_EXPORTER_OTEL__ENABLED=true
-export MERAKI_EXPORTER_OTEL__ENDPOINT=http://localhost:4317
+Enable OTEL first (see [OpenTelemetry](otel.md)), then configure tracing:
 
+```bash
+export MERAKI_EXPORTER_OTEL__TRACING_ENABLED=true
 # Optional sampling (default: 0.1 = 10%)
 export MERAKI_EXPORTER_OTEL__SAMPLING_RATE=0.1
 ```
+
+Tracing requires OTEL to be enabled with an endpoint. Set
+`MERAKI_EXPORTER_OTEL__TRACING_ENABLED=false` to disable traces while keeping
+OTEL metrics export.
 
 Sampling behavior:
 - `0.0` disables tracing
@@ -45,14 +51,10 @@ Common attributes include:
 - `meraki.request_id`, `meraki.retry_after`, `meraki.rate_limit.remaining`
 - `http.response.size`
 
-## Span Metrics (RED)
+## Span-derived Metrics
 
-When tracing is enabled, the exporter generates RED metrics from spans:
-- `meraki_span_requests_total`
-- `meraki_span_duration_seconds` (histogram)
-- `meraki_span_errors_total`
-
-These appear in `/metrics` and can be queried for SLIs/SLOs.
+The exporter does not emit RED metrics from spans. Use your tracing backend's
+metrics generation (e.g., Tempo, Jaeger, Datadog) if you need span-derived SLIs.
 
 ## Troubleshooting
 
