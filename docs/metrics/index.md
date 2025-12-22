@@ -58,9 +58,15 @@ The Meraki Dashboard Exporter provides comprehensive metrics for monitoring your
 - Alert counts by type
 - Security events
 
+### Platform & Internal Metrics
+- Collector health and duration
+- API client latency and rate limit metrics
+- Cardinality analysis metrics
+- Webhook processing metrics (when enabled)
+
 ## Collection Tiers
 
-The exporter uses a three-tier collection system:
+The exporter uses a three-tier collection system (configurable in `MERAKI_EXPORTER_UPDATE_INTERVALS__*`):
 
 | Tier | Interval | Metrics | Purpose |
 |------|----------|---------|---------|

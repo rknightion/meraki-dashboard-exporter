@@ -14,7 +14,7 @@ The Meraki Dashboard Exporter provides comprehensive metrics across all aspects 
 
 ## Collection Tiers
 
-The exporter uses a three-tier system to optimize API usage and provide timely data:
+The exporter uses a three-tier system to optimize API usage and provide timely data (intervals are configurable via `MERAKI_EXPORTER_UPDATE_INTERVALS__*`):
 
 ```mermaid
 graph TD
@@ -93,6 +93,7 @@ All metrics include relevant labels for filtering and grouping:
 | `serial` | Device serial number | `Q2XX-XXXX-XXXX` |
 | `name` | Device name | `3rd Floor Switch` |
 | `model` | Device model | `MS120-8LP` |
+| `device_type` | Device type | `ms` |
 | `collector` | Collector name (infrastructure metrics) | `DeviceCollector` |
 | `tier` | Collection tier | `medium` |
 
@@ -114,6 +115,9 @@ All metrics include relevant labels for filtering and grouping:
 
 - :material-security: **Configuration Metrics**
   Security settings and configuration tracking
+
+- :material-tune-variant: **Platform Metrics**
+  Collector health, API client metrics, cardinality, and webhooks
 
 </div>
 
@@ -171,13 +175,13 @@ up{job="meraki"} == 0
 meraki_device_up{org_name="Production"}
 
 # Filter by device type
-meraki_device_up{device_model=~"MS.*"}
+meraki_device_up{model=~"MS.*"}
 ```
 
 ### 3. Aggregation
 ```promql
 # Total devices by type
-sum by (device_model) (meraki_device_up)
+sum by (model) (meraki_device_up)
 
 # Average temperature by location
 avg by (network_name) (meraki_mt_temperature_celsius)
@@ -189,7 +193,7 @@ Example queries for common dashboards:
 
 ### Device Status Overview
 ```promql
-sum by (device_model) (meraki_device_up)
+sum by (model) (meraki_device_up)
 ```
 
 ### Temperature Heatmap

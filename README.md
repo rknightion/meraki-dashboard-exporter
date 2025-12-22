@@ -23,8 +23,8 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 ### Observability
 - **Dual metric export**: Prometheus `/metrics` endpoint + automatic OpenTelemetry export
 - **Distributed tracing**: Full request tracing with OpenTelemetry instrumentation
-- **Structured logging**: JSON output with trace correlation and contextual information
-- **Cardinality monitoring**: Built-in tracking and alerting for metric growth
+- **Structured logging**: logfmt output with trace correlation and contextual information
+- **Cardinality monitoring**: Built-in tracking and warning metrics for metric growth
 - **Health monitoring**: Collector health metrics with success rates, failure streaks, and last success timestamps
 
 ### Deployment
@@ -45,7 +45,7 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 
 2. Run with Docker Compose:
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 3. Access metrics at http://localhost:9099/metrics
@@ -78,7 +78,6 @@ The exporter provides comprehensive OpenTelemetry support when enabled:
 - Automatic instrumentation of HTTP, threading, and logging
 - Configurable sampling rates for production use
 - Correlation with logs via trace IDs
-- **Automatic RED metrics** from spans (Rate, Errors, Duration)
 
 **Logs**: Structured logging with trace correlation
 - Automatic trace context injection (trace_id, span_id)
@@ -135,7 +134,7 @@ services:
       - "4317:4317"  # OTLP gRPC receiver
 ```
 
-See [OTEL.md](OTEL.md) for detailed OpenTelemetry configuration and [TRACING.md](TRACING.md) for distributed tracing documentation.
+See [docs/observability/otel.md](docs/observability/otel.md) for detailed OpenTelemetry configuration and [docs/observability/tracing.md](docs/observability/tracing.md) for distributed tracing documentation.
 
 ## Webhook Support
 
@@ -222,7 +221,7 @@ export MERAKI_EXPORTER_MERAKI__API_BASE_URL="https://api.meraki.ca/api/v1"  # Fo
 - **Infrastructure metrics**: Collector duration/error counts, parallel collection activity, API latency/counters, inventory cache hits/misses/size, and metric expiration tracking
 - **Cardinality monitoring**: `/cardinality` HTML report and `/api/metrics/cardinality` JSON API for top-k series growth
 
-See the generated [metrics reference](https://m7kni.io/meraki-dashboard-exporter/metrics/metrics/) for the authoritative metric list (kept in sync via `uv run python src/meraki_dashboard_exporter/tools/generate_metrics_docs.py`).
+See the generated [metrics reference](https://m7kni.io/meraki-dashboard-exporter/metrics/metrics/) for the authoritative metric list (kept in sync via `uv run python scripts/generate_metrics_docs.py`).
 
 ## Performance
 

@@ -21,8 +21,8 @@ Our Docker images include the following security features:
 
 1. **Non-root User**: Containers run as a non-root user (UID 1000) by default
 2. **Minimal Base Image**: Using Python slim-bookworm base image (~40MB)
-3. **Read-only Filesystem**: Containers run with read-only root filesystem
-4. **No New Privileges**: Containers cannot gain new privileges
+3. **Read-only Filesystem**: The provided `docker-compose.yml` sets `read_only: true` and mounts `/tmp` as tmpfs
+4. **No New Privileges**: Containers cannot gain new privileges (compose defaults)
 5. **Health Checks**: Built-in health check endpoints
 
 ### Supply Chain Security
@@ -31,7 +31,7 @@ Our Docker images include the following security features:
 2. **SBOM Generation**: Software Bill of Materials (SBOM) generated for every build
 3. **Attestations**: Build provenance attestations are generated and published
 4. **Vulnerability Scanning**: Automated scanning with Trivy for CRITICAL and HIGH vulnerabilities
-5. **Dependency Updates**: Automated dependency updates via Dependabot
+5. **Dependency Updates**: Automated dependency updates via Renovate
 
 ### Verification
 

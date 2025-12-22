@@ -9,7 +9,7 @@ This section shows the quickest way to run the exporter.
 
 ## Requirements
 - Docker
-- Meraki Dashboard API access and key
+- Meraki Dashboard API access and key (read-only recommended)
 
 ## Setup
 
@@ -25,8 +25,10 @@ docker run -d \
 ```
 
 ## Verify
-- Visit `http://localhost:9099/metrics` to see metrics.
+- Visit `http://localhost:9099/` for the landing page.
+- `http://localhost:9099/metrics` exposes Prometheus metrics.
 - `curl http://localhost:9099/health` should return `{"status": "healthy"}`.
+- Cardinality reports appear after the first full collection cycle (defaults to 15 minutes).
 
 Next read the [Configuration](config.md) guide for all settings and the
 [Metrics Reference](metrics/metrics.md) for available metrics.

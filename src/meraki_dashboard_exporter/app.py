@@ -102,7 +102,7 @@ class ExporterApp:
             critical_threshold=10000,
         )
 
-        # Setup webhook handler (Phase 4.2)
+        # Setup webhook handler
         self.webhook_handler: WebhookHandler | None = None
         if self.settings.webhooks.enabled:
             self.webhook_handler = WebhookHandler(self.settings)
@@ -615,7 +615,7 @@ class ExporterApp:
 
         @app.post("/api/webhooks/meraki")
         async def webhook_receiver(request: FastAPIRequest) -> dict[str, str]:
-            """Meraki webhook receiver endpoint (Phase 4.2).
+            """Meraki webhook receiver endpoint.
 
             This endpoint receives and processes webhook events from Meraki Dashboard.
             Events are validated and tracked via Prometheus metrics.

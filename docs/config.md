@@ -19,10 +19,10 @@ Configuration follows a hierarchical structure using environment variables:
     # Meraki API configuration
     export MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here
     export MERAKI_EXPORTER_MERAKI__ORG_ID=123456
-
+    
     # Logging configuration
     export MERAKI_EXPORTER_LOGGING__LEVEL=INFO
-
+    
     # API settings
     export MERAKI_EXPORTER_API__TIMEOUT=30
     export MERAKI_EXPORTER_API__CONCURRENCY_LIMIT=5
@@ -44,7 +44,7 @@ Logging configuration
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_LOGGING__LEVEL` | `str` | `INFO` | Logging level |
+| `MERAKI_EXPORTER_LOGGING__LEVEL` | `str` | `INFO` | Logging level (pattern: ^(DEBUG\|INFO\|WARNING\|ERROR\|CRITICAL)$) |
 
 ## API Settings
 
@@ -52,16 +52,16 @@ Configuration for Meraki API interactions
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_API__MAX_RETRIES` | `int` | `3` | Maximum number of retries for API requests |
-| `MERAKI_EXPORTER_API__TIMEOUT` | `int` | `30` | API request timeout in seconds |
-| `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT` | `int` | `5` | Maximum concurrent API requests |
-| `MERAKI_EXPORTER_API__BATCH_SIZE` | `int` | `20` | Default batch size for API operations |
-| `MERAKI_EXPORTER_API__DEVICE_BATCH_SIZE` | `int` | `20` | Batch size for device operations |
-| `MERAKI_EXPORTER_API__NETWORK_BATCH_SIZE` | `int` | `30` | Batch size for network operations |
-| `MERAKI_EXPORTER_API__CLIENT_BATCH_SIZE` | `int` | `20` | Batch size for client operations |
-| `MERAKI_EXPORTER_API__BATCH_DELAY` | `float` | `0.5` | Delay between batches in seconds |
-| `MERAKI_EXPORTER_API__RATE_LIMIT_RETRY_WAIT` | `int` | `5` | Wait time in seconds when rate limited |
-| `MERAKI_EXPORTER_API__ACTION_BATCH_RETRY_WAIT` | `int` | `10` | Wait time for action batch retries |
+| `MERAKI_EXPORTER_API__MAX_RETRIES` | `int` | `3` | Maximum number of retries for API requests (min: 0, max: 10) |
+| `MERAKI_EXPORTER_API__TIMEOUT` | `int` | `30` | API request timeout in seconds (min: 10, max: 300) |
+| `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT` | `int` | `5` | Maximum concurrent API requests (min: 1, max: 20) |
+| `MERAKI_EXPORTER_API__BATCH_SIZE` | `int` | `20` | Default batch size for API operations (min: 1, max: 100) |
+| `MERAKI_EXPORTER_API__DEVICE_BATCH_SIZE` | `int` | `20` | Batch size for device operations (min: 1, max: 100) |
+| `MERAKI_EXPORTER_API__NETWORK_BATCH_SIZE` | `int` | `30` | Batch size for network operations (min: 1, max: 100) |
+| `MERAKI_EXPORTER_API__CLIENT_BATCH_SIZE` | `int` | `20` | Batch size for client operations (e.g., MR client metrics) (min: 1, max: 100) |
+| `MERAKI_EXPORTER_API__BATCH_DELAY` | `float` | `0.5` | Delay between batches in seconds (min: 0.0, max: 5.0) |
+| `MERAKI_EXPORTER_API__RATE_LIMIT_RETRY_WAIT` | `int` | `5` | Wait time in seconds when rate limited (min: 1, max: 60) |
+| `MERAKI_EXPORTER_API__ACTION_BATCH_RETRY_WAIT` | `int` | `10` | Wait time for action batch retries (min: 1, max: 60) |
 
 ## Update Intervals
 
@@ -69,11 +69,11 @@ Control how often different types of metrics are collected
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_UPDATE_INTERVALS__FAST` | `int` | `60` | Interval for fast-moving data (sensors) in seconds |
-| `MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM` | `int` | `300` | Interval for medium-moving data (device metrics) in seconds |
-| `MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW` | `int` | `900` | Interval for slow-moving data (configuration) in seconds |
+| `MERAKI_EXPORTER_UPDATE_INTERVALS__FAST` | `int` | `60` | Interval for fast-moving data (sensors) in seconds (min: 30, max: 300) |
+| `MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM` | `int` | `300` | Interval for medium-moving data (device metrics) in seconds (min: 300, max: 1800) |
+| `MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW` | `int` | `900` | Interval for slow-moving data (configuration) in seconds (min: 600, max: 3600) |
 
-`MEDIUM` must be greater than or equal to `FAST`, `SLOW` must be greater than or equal to `MEDIUM`, and `MEDIUM` must be an integer multiple of `FAST`.
+`MEDIUM` must be greater than or equal to `FAST`, `SLOW` must be greater than or equal to `MEDIUM`, and `MEDIUM` must be a multiple of `FAST`.
 
 ## Server Settings
 
@@ -82,22 +82,24 @@ HTTP server configuration for the metrics endpoint
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_SERVER__HOST` | `str` | `0.0.0.0` | Host to bind the exporter to |
-| `MERAKI_EXPORTER_SERVER__PORT` | `int` | `9099` | Port to bind the exporter to |
+| `MERAKI_EXPORTER_SERVER__PORT` | `int` | `9099` | Port to bind the exporter to (min: 1, max: 65535) |
 | `MERAKI_EXPORTER_SERVER__PATH_PREFIX` | `str` | `` | URL path prefix for all endpoints |
 | `MERAKI_EXPORTER_SERVER__ENABLE_HEALTH_CHECK` | `bool` | `True` | Enable /health endpoint |
 
-`PATH_PREFIX` and `ENABLE_HEALTH_CHECK` are currently defined for compatibility but the application exposes `/health`, `/metrics`, `/cardinality`, and the landing page unconditionally.
+`PATH_PREFIX` and `ENABLE_HEALTH_CHECK` are currently defined for compatibility, but the application still exposes `/`, `/health`, `/metrics`, and `/cardinality` unconditionally.
 
 ## Webhook Settings
 
-Webhook receiver configuration (disabled by default)
+Webhook receiver configuration
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_WEBHOOKS__ENABLED` | `bool` | `False` | Enable webhook receiver endpoint (`POST /api/webhooks/meraki`) |
-| `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET` | `str | None` | `_(none)_` | Shared secret for webhook validation (recommended) |
+| `MERAKI_EXPORTER_WEBHOOKS__ENABLED` | `bool` | `False` | Enable webhook receiver endpoint |
+| `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET` | `SecretStr | None` | `_(none)_` | Shared secret for webhook validation (recommended) |
 | `MERAKI_EXPORTER_WEBHOOKS__REQUIRE_SECRET` | `bool` | `True` | Require shared secret validation (disable for testing only) |
-| `MERAKI_EXPORTER_WEBHOOKS__MAX_PAYLOAD_SIZE` | `int` | `1048576` | Maximum webhook payload size in bytes |
+| `MERAKI_EXPORTER_WEBHOOKS__MAX_PAYLOAD_SIZE` | `int` | `1048576` | Maximum webhook payload size in bytes (min: 1024, max: 10485760) |
+
+Webhooks are received on `POST /api/webhooks/meraki` when enabled.
 
 ## OpenTelemetry Settings
 
@@ -108,14 +110,8 @@ OpenTelemetry observability configuration
 | `MERAKI_EXPORTER_OTEL__ENABLED` | `bool` | `False` | Enable OpenTelemetry export |
 | `MERAKI_EXPORTER_OTEL__ENDPOINT` | `str | None` | `_(none)_` | OpenTelemetry collector endpoint |
 | `MERAKI_EXPORTER_OTEL__SERVICE_NAME` | `str` | `meraki-dashboard-exporter` | Service name for OpenTelemetry |
-| `MERAKI_EXPORTER_OTEL__EXPORT_INTERVAL` | `int` | `60` | Export interval for OpenTelemetry metrics |
-| `MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES` | `dict` | `{}` | Additional resource attributes for OpenTelemetry |
-
-Additional tracing option (read directly from the environment, not part of the Pydantic settings model):
-
-| Environment Variable | Type | Default | Description |
-|---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_OTEL__SAMPLING_RATE` | `float` | `0.1` | Trace sampling rate between 0 and 1 |
+| `MERAKI_EXPORTER_OTEL__EXPORT_INTERVAL` | `int` | `60` | Export interval for OpenTelemetry metrics (min: 10, max: 300) |
+| `MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES` | `dict[str, str]` | `{}` | Additional resource attributes for OpenTelemetry |
 
 ## Monitoring Settings
 
@@ -123,10 +119,10 @@ Internal monitoring and alerting configuration
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_MONITORING__MAX_CONSECUTIVE_FAILURES` | `int` | `10` | Maximum consecutive failures before alerting |
-| `MERAKI_EXPORTER_MONITORING__HISTOGRAM_BUCKETS` | `list` | `[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0]` | Histogram buckets for collector duration metrics |
-| `MERAKI_EXPORTER_MONITORING__LICENSE_EXPIRATION_WARNING_DAYS` | `int` | `30` | Days before license expiration to start warning |
-| `MERAKI_EXPORTER_MONITORING__METRIC_TTL_MULTIPLIER` | `float` | `2.0` | Multiplier applied to collection interval to derive metric expiration TTL |
+| `MERAKI_EXPORTER_MONITORING__MAX_CONSECUTIVE_FAILURES` | `int` | `10` | Maximum consecutive failures before alerting (min: 1, max: 100) |
+| `MERAKI_EXPORTER_MONITORING__HISTOGRAM_BUCKETS` | `list[float]` | `[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0]` | Histogram buckets for collector duration metrics |
+| `MERAKI_EXPORTER_MONITORING__LICENSE_EXPIRATION_WARNING_DAYS` | `int` | `30` | Days before license expiration to start warning (min: 7, max: 90) |
+| `MERAKI_EXPORTER_MONITORING__METRIC_TTL_MULTIPLIER` | `float` | `2.0` | Multiplier for metric TTL (collection_interval * multiplier) (min: 1.0, max: 10.0) |
 
 ## Collector Settings
 
@@ -134,9 +130,9 @@ Enable/disable specific metric collectors
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set` | `alerts,clients,config,device,mtsensor,networkhealth,organization` | Enabled collector names (clients collector still honours `MERAKI_EXPORTER_CLIENTS__ENABLED`) |
-| `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` | `set` | `_(empty)_` | Explicitly disabled collectors (overrides enabled) |
-| `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` | `int` | `120` | Timeout for individual collector runs in seconds |
+| `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set[str]` | `["alerts", "clients", "config", "device", "mtsensor", "networkhealth", "organization"]` | Enabled collector names |
+| `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` | `set[str]` | `[]` | Explicitly disabled collectors (overrides enabled) |
+| `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` | `int` | `120` | Timeout for individual collector runs in seconds (min: 30, max: 600) |
 
 ## Client Settings
 
@@ -146,7 +142,16 @@ Client data collection and DNS resolution settings
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_CLIENTS__ENABLED` | `bool` | `False` | Enable client data collection |
 | `MERAKI_EXPORTER_CLIENTS__DNS_SERVER` | `str | None` | `_(none)_` | DNS server for reverse lookups (uses system default if not set) |
-| `MERAKI_EXPORTER_CLIENTS__DNS_TIMEOUT` | `float` | `5.0` | DNS lookup timeout in seconds |
-| `MERAKI_EXPORTER_CLIENTS__DNS_CACHE_TTL` | `int` | `21600` | DNS cache TTL in seconds (default: 6 hours) |
-| `MERAKI_EXPORTER_CLIENTS__CACHE_TTL` | `int` | `3600` | Client cache TTL in seconds (for ID/hostname mappings, not metrics) |
-| `MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_PER_NETWORK` | `int` | `10000` | Maximum clients to track per network |
+| `MERAKI_EXPORTER_CLIENTS__DNS_TIMEOUT` | `float` | `5.0` | DNS lookup timeout in seconds (min: 0.5, max: 10.0) |
+| `MERAKI_EXPORTER_CLIENTS__DNS_CACHE_TTL` | `int` | `21600` | DNS cache TTL in seconds (default: 6 hours) (min: 300, max: 86400) |
+| `MERAKI_EXPORTER_CLIENTS__CACHE_TTL` | `int` | `3600` | Client cache TTL in seconds (for ID/hostname mappings, not metrics) (min: 300, max: 86400) |
+| `MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_PER_NETWORK` | `int` | `10000` | Maximum clients to track per network (min: 100, max: 50000) |
+
+## Additional Runtime Options
+
+Some runtime knobs are read directly from environment variables and are not part of the Pydantic settings model:
+
+| Environment Variable | Type | Default | Description |
+|---------------------|------|---------|-------------|
+| `MERAKI_EXPORTER_OTEL__SAMPLING_RATE` | `float` | `0.1` | Trace sampling rate between 0 and 1 |
+

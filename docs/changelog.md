@@ -1,6 +1,80 @@
 # Changelog
 
-The changelog is maintained in the GitHub repository.
+## [0.27.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.27.0...v0.27.1) (2025-12-01)
 
-- [Releases](https://github.com/rknightion/meraki-dashboard-exporter/releases)
-- [CHANGELOG.md](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/CHANGELOG.md)
+
+### Bug Fixes
+
+* add automated docker build on release creation ([c6e3328](https://github.com/rknightion/meraki-dashboard-exporter/commit/c6e332859e8da0494e245f1203208c2f7900afb2))
+
+## [0.27.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.26.1...v0.27.0) (2025-12-01)
+
+
+### Features
+
+* add retry mechanism for rate-limited API responses ([7177659](https://github.com/rknightion/meraki-dashboard-exporter/commit/7177659d07f100a1f69fa454342fc690cf128bfe))
+
+
+### Bug Fixes
+
+* **error-handling:** add api error response validation ([d4708df](https://github.com/rknightion/meraki-dashboard-exporter/commit/d4708dff439700baae1cc364fa93784a4647bbd9))
+
+
+### Documentation
+
+* add comprehensive changelog for version 0.26.1 ([bc70586](https://github.com/rknightion/meraki-dashboard-exporter/commit/bc70586248d8cf6c63c0df1d01525aa60a6f2786))
+
+## [0.26.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.26.0...v0.26.1) (2025-12-01)
+
+
+### Bug Fixes
+
+* remove error suppression from docker help test ([3a4af40](https://github.com/rknightion/meraki-dashboard-exporter/commit/3a4af403918e7dcab850e7b37d41f5384fcbe30f))
+
+
+### Code Refactoring
+
+* replace asyncio with inspect for coroutine detection ([d9976c1](https://github.com/rknightion/meraki-dashboard-exporter/commit/d9976c103a0708a82f82cbdf7329dc6ae3487c4a))
+
+
+### Documentation
+
+* rewrite collector reference with practical usage guide ([489d631](https://github.com/rknightion/meraki-dashboard-exporter/commit/489d631a42a0b78cacc1f4887a0f0c70a06036b7))
+
+## Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.26.1] - 2025-12-01
+
+### Highlights
+- Bounded parallel collection with shared inventory caching and configurable batch sizes to speed up multi-org runs and cut API calls.
+- Docker-first packaging with a dedicated entrypoint plus a refreshed dependency stack targeting Python 3.14.
+- Wireless SSID collection fixes that align with the latest Meraki APIs for more accurate MR metrics.
+- Documentation overhaul (new collector guide, config updates, SEO/social cards) and release automation via release-please.
+
+### Features & Improvements
+- Added an inventory caching service (organizations, networks, devices) with TTLs, new collector concurrency/cache metrics, and the metric expiration framework controlled by `MERAKI_EXPORTER_MONITORING__METRIC_TTL_MULTIPLIER`.
+- Collectors now use `ManagedTaskGroup` bounded concurrency and larger configurable batch sizes (devices 20, networks 30, clients 20 by default) for faster collection.
+- Docker image rebuilt around `docker-entrypoint.py` and docs now recommend Docker as the primary deployment path.
+- Expanded `.env.example` with grouped settings, OTEL/monitoring options, and added `uv.lock` for reproducible installs; exposed the package `main` for easier embedding.
+- Improved OpenTelemetry tracing coverage and API client hooks; added Claude PR/code-review workflows and release-please automation.
+
+### Fixes
+- MR wireless collector now paginates SSID status, parses radio details correctly, and uses the organization summary SSID usage endpoint.
+- Device type detection falls back to `productType` when the model prefix is unknown (thanks @dmitchsplunk for the first external contribution in #83).
+- Docker CLI help test no longer suppresses errors, ensuring failures surface during CI.
+
+### Documentation
+- Collector reference rewritten into a practical usage guide; configuration docs updated with new settings and metric TTL guidance.
+- Documentation site moved to https://m7kni.io with new SEO/social assets and Docker-first getting started flow.
+
+### CI/CD
+- Baseline runtime and CI bumped to Python 3.14 with refreshed dependency pins and pre-commit hooks.
+- CI simplified to Ubuntu-only testing, optimized PR Docker builds, and removed legacy workflows (PyPI publish, Dependabot, CodeQL, etc.).
+
+### Contributors
+- @dmitchsplunk for improving device type detection (first external community contribution).

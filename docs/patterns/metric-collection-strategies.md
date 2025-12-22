@@ -60,7 +60,7 @@ Use `_set_metric()` (or `_set_metric_value`) so metric expiration tracking can r
 ```python
 labels = {LabelName.ORG_ID.value: org_id, LabelName.SERIAL.value: device.serial}
 status = 1.0 if device.status == "online" else 0.0
-self._set_metric(self.device_up, labels, status, DeviceMetricName.DEVICE_UP)
+self._set_metric(self.device_up, labels, status)
 ```
 
 ## Optimization Strategies

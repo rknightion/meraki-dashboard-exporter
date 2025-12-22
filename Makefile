@@ -205,12 +205,22 @@ docgen: ## Generate all documentation (metrics and configuration)
 .PHONY: docs-metrics
 docs-metrics: ## Generate metrics documentation only
 	@echo "$(BLUE)Generating metrics documentation...$(NC)"
-	uv run python src/meraki_dashboard_exporter/tools/generate_metrics_docs.py
+	uv run python scripts/generate_metrics_docs.py
 
 .PHONY: docs-config
 docs-config: ## Generate configuration documentation only
 	@echo "$(BLUE)Generating configuration documentation...$(NC)"
-	uv run python -m meraki_dashboard_exporter.tools.generate_config_docs
+	uv run python scripts/generate_config_docs.py
+
+.PHONY: docs-collectors
+docs-collectors: ## Generate collector documentation only
+	@echo "$(BLUE)Generating collector documentation...$(NC)"
+	uv run python scripts/generate_collector_docs.py
+
+.PHONY: docs-endpoints
+docs-endpoints: ## Generate HTTP endpoints documentation only
+	@echo "$(BLUE)Generating endpoint documentation...$(NC)"
+	uv run python scripts/generate_endpoints_docs.py
 
 # Development Server
 .PHONY: run
