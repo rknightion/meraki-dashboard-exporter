@@ -30,7 +30,6 @@ EXCLUDED_FILES = {
 CONDITIONAL_NOTES = {
     "ClientsCollector": "Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true",
     "WebhookHandler": "Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true",
-    "SpanMetricsProcessor": "Requires OTEL tracing enabled",
 }
 
 INTERNAL_OWNERS = {
@@ -474,9 +473,7 @@ def generate_markdown(metrics: list[MetricDefinition]) -> str:
     lines.append(
         "This page provides a reference of Prometheus metrics exposed by the Meraki Dashboard Exporter."
     )
-    lines.append(
-        "Some metrics are conditional (clients, webhooks, or OTEL tracing); notes are shown where relevant."
-    )
+    lines.append("Some metrics are conditional (clients or webhooks); notes are shown where relevant.")
     lines.append("")
 
     metric_types: dict[str, int] = {}
