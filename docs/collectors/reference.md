@@ -2,7 +2,7 @@
 
 This page summarizes the collectors that ship with the exporter.
 
-Update tiers default to FAST (60s), MEDIUM (300s), and SLOW (900s) but are configurable via `MERAKI_EXPORTER_UPDATE_INTERVALS__*`.
+Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_INTERVALS__*`. See the Metrics Overview for tier definitions.
 
 **Total collector classes:** 26
 **Auto-registered collectors:** 7
@@ -11,13 +11,13 @@ Update tiers default to FAST (60s), MEDIUM (300s), and SLOW (900s) but are confi
 
 | Collector | Tier | Purpose | Metrics | Notes |
 |-----------|------|---------|---------|-------|
-| `AlertsCollector` | MEDIUM (300s) | Collector for Meraki assurance alerts. | 5 |  |
-| `ClientsCollector` | MEDIUM (300s) | Collector for client-level metrics across all networks. | 21 | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `ConfigCollector` | SLOW (900s) | Collector for configuration and security settings. | 14 |  |
-| `DeviceCollector` | MEDIUM (300s) | Collector for device-level metrics. | 6 |  |
-| `MTSensorCollector` | FAST (60s) | Collector for fast-moving sensor metrics (MT devices). | 18 |  |
-| `NetworkHealthCollector` | MEDIUM (300s) | Collector for medium-moving network health metrics. | 8 |  |
-| `OrganizationCollector` | MEDIUM (300s) | Collector for organization-level metrics. | 19 |  |
+| `AlertsCollector` | MEDIUM | Collector for Meraki assurance alerts. | 5 |  |
+| `ClientsCollector` | MEDIUM | Collector for client-level metrics across all networks. | 21 | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `ConfigCollector` | SLOW | Collector for configuration and security settings. | 14 |  |
+| `DeviceCollector` | MEDIUM | Collector for device-level metrics. | 6 |  |
+| `MTSensorCollector` | FAST | Collector for fast-moving sensor metrics (MT devices). | 18 |  |
+| `NetworkHealthCollector` | MEDIUM | Collector for medium-moving network health metrics. | 8 |  |
+| `OrganizationCollector` | MEDIUM | Collector for organization-level metrics. | 19 |  |
 
 ## Coordinator Relationships
 
@@ -59,7 +59,5 @@ Update tiers default to FAST (60s), MEDIUM (300s), and SLOW (900s) but are confi
 
 ## Notes
 
-- Collector enablement is controlled by `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` and `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS`.
-- `ClientsCollector` only runs when `MERAKI_EXPORTER_CLIENTS__ENABLED=true`.
+- Collector enablement is configured in the [Configuration](../config.md) reference.
 - Full metric details live in the [Metrics Reference](../metrics/metrics.md).
-
