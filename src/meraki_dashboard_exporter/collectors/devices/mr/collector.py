@@ -236,3 +236,28 @@ class MRCollector(BaseDeviceCollector):
 
         """
         await self.wireless.collect_ssid_usage(org_id, org_name)
+
+    async def collect_connection_stats(
+        self,
+        org_id: str,
+        org_name: str,
+        networks: list[dict[str, Any]],
+        device_lookup: dict[str, dict[str, Any]],
+    ) -> None:
+        """Collect wireless connection statistics for MR devices (network-level).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        networks : list[dict[str, Any]]
+            List of wireless networks in the organization.
+        device_lookup : dict[str, dict[str, Any]]
+            Device lookup table for device info.
+
+        """
+        await self.clients.collect_connection_stats(
+            org_id, org_name, networks, device_lookup
+        )

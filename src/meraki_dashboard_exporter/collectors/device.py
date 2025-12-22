@@ -473,9 +473,8 @@ class DeviceCollector(MetricCollector):
                     devices_by_type[device_type] = []
                 devices_by_type[device_type].append(device)
 
-            # Store references for legacy code
+            # Store references for device processing
             ms_devices = devices_by_type.get(DeviceType.MS, [])
-            mr_devices = devices_by_type.get(DeviceType.MR, [])
 
             # Process MS devices
             if ms_devices:
@@ -489,17 +488,9 @@ class DeviceCollector(MetricCollector):
                     error_context_func=lambda device: {"serial": device["serial"]},
                 )
 
-            # Process MR devices
-            if mr_devices:
-                # Process devices in batches (configurable via device_batch_size)
-                await process_in_batches_with_errors(
-                    mr_devices,
-                    self._collect_mr_device_with_timeout,
-                    batch_size=self.settings.api.device_batch_size,
-                    delay_between_batches=self.settings.api.batch_delay,
-                    item_description="MR device",
-                    error_context_func=lambda device: {"serial": device["serial"]},
-                )
+            # Note: MR per-device collection has been replaced with org/network-level
+            # collection for efficiency. Client counts use org-wide endpoint and
+            # connection stats use network-level endpoint. See _collect_mr_specific_metrics().
 
             # Process other device types (MX, MG, MV)
             for device_type, type_devices in devices_by_type.items():
@@ -598,17 +589,6 @@ class DeviceCollector(MetricCollector):
         """
         await self.ms_collector.collect(device)
 
-    async def _collect_mr_device_with_timeout(self, device: dict[str, Any]) -> None:
-        """Collect MR device metrics with timeout.
-
-        Parameters
-        ----------
-        device : dict[str, Any]
-            Device data.
-
-        """
-        await self.mr_collector.collect(device)
-
     async def _collect_mr_specific_metrics(
         self, org_id: str, org_name: str, devices: list[dict[str, Any]]
     ) -> None:
@@ -625,13 +605,27 @@ class DeviceCollector(MetricCollector):
 
         """
         try:
-            # Collect wireless client counts
+            # Get networks for connection stats collection
+            networks: list[dict[str, Any]] = []
+            if self.inventory:
+                networks = await self.inventory.get_networks(org_id)
+
+            # Collect wireless client counts (org-wide - replaces per-device getDeviceWirelessStatus)
             try:
                 await self.mr_collector.collect_wireless_clients(
                     org_id, org_name, self._device_lookup
                 )
             except Exception:
                 logger.exception("Failed to collect wireless client counts")
+
+            # Collect connection stats (network-level - replaces per-device getDeviceWirelessConnectionStats)
+            if networks:
+                try:
+                    await self.mr_collector.collect_connection_stats(
+                        org_id, org_name, networks, self._device_lookup
+                    )
+                except Exception:
+                    logger.exception("Failed to collect MR connection stats")
 
             # Collect MR ethernet status
             try:
