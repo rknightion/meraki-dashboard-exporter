@@ -1,5 +1,4 @@
 *[API]: Application Programming Interface
-*[ADR]: Architecture Decision Record
 *[CPU]: Central Processing Unit
 *[DNS]: Domain Name System
 *[HTTP]: Hypertext Transfer Protocol
