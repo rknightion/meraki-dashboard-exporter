@@ -574,7 +574,7 @@ class MetricCollector(ABC):
         try:
             # Create metrics and assign to class attributes
             duration_metric = Histogram(
-                "meraki_collector_duration_seconds",
+                "meraki_exporter_collector_duration_seconds",
                 "Time spent collecting metrics",
                 labelnames=["collector", "tier"],
                 buckets=(0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0),
@@ -583,7 +583,7 @@ class MetricCollector(ABC):
             cls._collector_duration = duration_metric
 
             errors_metric = Counter(
-                "meraki_collector_errors_total",
+                "meraki_exporter_collector_errors_total",
                 "Total number of collector errors",
                 labelnames=["collector", "tier", "error_type"],
                 registry=REGISTRY,
@@ -591,7 +591,7 @@ class MetricCollector(ABC):
             cls._collector_errors = errors_metric
 
             success_metric = Gauge(
-                "meraki_collector_last_success_timestamp_seconds",
+                "meraki_exporter_collector_success_timestamp_seconds",
                 "Unix timestamp of last successful collection",
                 labelnames=["collector", "tier"],
                 registry=REGISTRY,
@@ -599,7 +599,7 @@ class MetricCollector(ABC):
             cls._collector_last_success = success_metric
 
             api_calls_metric = Counter(
-                "meraki_collector_api_calls_total",
+                "meraki_exporter_collector_api_calls_total",
                 "Total number of API calls made by collectors",
                 labelnames=["collector", "tier", "endpoint"],
                 registry=REGISTRY,

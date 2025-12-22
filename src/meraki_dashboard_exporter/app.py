@@ -173,7 +173,7 @@ class ExporterApp:
 
         for metric_family in REGISTRY.collect():
             # Skip internal cardinality metrics to avoid counting monitoring of monitoring
-            if metric_family.name.startswith("meraki_cardinality_"):
+            if metric_family.name.startswith("meraki_exporter_cardinality_"):
                 continue
 
             metric_count += 1

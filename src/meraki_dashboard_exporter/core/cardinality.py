@@ -86,27 +86,27 @@ class CardinalityMonitor:
     def _initialize_metrics(self) -> None:
         """Initialize cardinality monitoring metrics."""
         self.cardinality_warnings = Counter(
-            "meraki_cardinality_warnings_total",
+            "meraki_exporter_cardinality_warnings_total",
             "Number of cardinality warnings triggered",
             labelnames=["metric_name", "severity"],
             registry=self.registry,
         )
 
         self.total_series = Gauge(
-            "meraki_total_series",
+            "meraki_exporter_total_series",
             "Total number of time series across all metrics",
             registry=self.registry,
         )
 
         # Add analysis performance metrics
         self.analysis_duration = Gauge(
-            "meraki_cardinality_analysis_duration_seconds",
+            "meraki_exporter_cardinality_duration_seconds",
             "Time taken to complete cardinality analysis",
             registry=self.registry,
         )
 
         self.analyzed_metrics_count = Gauge(
-            "meraki_cardinality_analyzed_metrics_total",
+            "meraki_exporter_cardinality_analyzed_total",
             "Total number of metrics analyzed in last run",
             registry=self.registry,
         )
@@ -240,12 +240,9 @@ class CardinalityMonitor:
         # Collect all metrics
         try:
             for metric_family in self.registry.collect():
-                if (
-                    metric_family.name.startswith("meraki_cardinality_")
-                    or metric_family.name.startswith("meraki_total_series")
-                    or metric_family.name.startswith("meraki_analyzed_metrics_")
-                    or metric_family.name.startswith("meraki_analysis_duration")
-                ):
+                if metric_family.name.startswith(
+                    "meraki_exporter_cardinality_"
+                ) or metric_family.name.startswith("meraki_exporter_total_series"):
                     # Skip our own metrics to avoid recursion
                     continue
 
