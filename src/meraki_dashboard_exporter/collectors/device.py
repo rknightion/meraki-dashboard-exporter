@@ -441,7 +441,6 @@ class DeviceCollector(MetricCollector):
 
                 # Skip unsupported device types
                 if device_type_str not in DeviceType.__members__.values():
-
                     logger.debug(
                         "Skipping device with unsupported type",
                         serial=device["serial"],
@@ -720,7 +719,6 @@ class DeviceCollector(MetricCollector):
 
         # If device type based on the model isn't supported, use the product type instead
         if device_type_str not in DeviceType.__members__.values():
-
             # Try mapping it using the product type instead
             product_type = device.get("productType", "")
             match product_type:

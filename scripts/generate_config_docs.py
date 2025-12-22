@@ -32,9 +32,7 @@ def find_repo_root(start_path: Path) -> Path:
 
 def load_config_models(repo_root: Path) -> Any:
     """Load config_models without importing the package __init__."""
-    module_path = (
-        repo_root / "src" / "meraki_dashboard_exporter" / "core" / "config_models.py"
-    )
+    module_path = repo_root / "src" / "meraki_dashboard_exporter" / "core" / "config_models.py"
     if not module_path.exists():
         raise FileNotFoundError(f"Config models not found at {module_path}")
 
@@ -279,9 +277,7 @@ def generate_configuration_docs() -> str:
             "but the application still exposes `/`, `/health`, `/metrics`, and `/cardinality` "
             "unconditionally."
         ),
-        "Webhook Settings": (
-            "Webhooks are received on `POST /api/webhooks/meraki` when enabled."
-        ),
+        "Webhook Settings": ("Webhooks are received on `POST /api/webhooks/meraki` when enabled."),
     }
 
     for title, model, prefix, description in nested_models:
