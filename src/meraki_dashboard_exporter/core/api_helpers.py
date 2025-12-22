@@ -40,13 +40,33 @@ class APIHelper:
         self.api: DashboardAPI = collector.api
         self.settings = collector.settings
 
+    async def get_organizations(self) -> list[dict[str, Any]]:
+        """Get all organizations or configured organization.
+
+        Uses inventory cache if available, otherwise falls back to direct API call.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of organization dictionaries.
+
+        """
+        # Use inventory cache if available
+        if self.collector.inventory:
+            logger.debug("Using inventory cache for organizations")
+            return await self.collector.inventory.get_organizations()
+
+        # Fallback to direct API call
+        result = await self._fetch_organizations_direct()
+        return result if result is not None else []
+
     @with_error_handling(
         operation="Fetch organizations",
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def get_organizations(self) -> list[dict[str, Any]]:
-        """Get all organizations or configured organization.
+    async def _fetch_organizations_direct(self) -> list[dict[str, Any]]:
+        """Fetch organizations directly from API (fallback when inventory unavailable).
 
         Returns
         -------
@@ -67,21 +87,18 @@ class APIHelper:
             return [org]
         else:
             # Fetch all organizations
-            logger.debug("Fetching all organizations")
+            logger.debug("Fetching all organizations directly (no inventory cache)")
             self.collector._track_api_call("getOrganizations")
             orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
             logger.debug("Successfully fetched organizations", count=len(orgs))
             return cast(list[dict[str, Any]], orgs)
 
-    @with_error_handling(
-        operation="Fetch organization networks",
-        continue_on_error=True,
-        error_category=ErrorCategory.API_CLIENT_ERROR,
-    )
     async def get_organization_networks(
         self, org_id: str, product_types: list[str] | None = None
     ) -> list[dict[str, Any]]:
         """Get all networks for an organization, optionally filtered by product type.
+
+        Uses inventory cache if available, otherwise falls back to direct API call.
 
         Parameters
         ----------
@@ -96,17 +113,17 @@ class APIHelper:
             List of network dictionaries.
 
         """
-        logger.debug("Fetching networks", org_id=org_id, product_types=product_types)
-        self.collector._track_api_call("getOrganizationNetworks")
-        networks = await asyncio.to_thread(
-            self.api.organizations.getOrganizationNetworks,
-            org_id,
-            total_pages="all",
-        )
-        logger.debug("Successfully fetched networks", org_id=org_id, count=len(networks))
+        # Use inventory cache if available
+        if self.collector.inventory:
+            logger.debug("Using inventory cache for networks", org_id=org_id)
+            networks = await self.collector.inventory.get_networks(org_id)
+        else:
+            # Fallback to direct API call
+            result = await self._fetch_networks_direct(org_id)
+            networks = result if result is not None else []
 
         # Filter by product types if specified
-        if product_types:
+        if product_types and networks:
             networks = [
                 network
                 for network in networks
@@ -119,13 +136,37 @@ class APIHelper:
                 filtered_count=len(networks),
             )
 
-        return cast(list[dict[str, Any]], networks)
+        return networks
 
     @with_error_handling(
-        operation="Fetch organization devices",
+        operation="Fetch organization networks",
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
+    async def _fetch_networks_direct(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch networks directly from API (fallback when inventory unavailable).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of network dictionaries.
+
+        """
+        logger.debug("Fetching networks directly (no inventory cache)", org_id=org_id)
+        self.collector._track_api_call("getOrganizationNetworks")
+        networks = await asyncio.to_thread(
+            self.api.organizations.getOrganizationNetworks,
+            org_id,
+            total_pages="all",
+        )
+        logger.debug("Successfully fetched networks", org_id=org_id, count=len(networks))
+        return cast(list[dict[str, Any]], networks)
+
     async def get_organization_devices(
         self,
         org_id: str,
@@ -133,6 +174,8 @@ class APIHelper:
         models: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Get all devices for an organization with optional filtering.
+
+        Uses inventory cache if available, otherwise falls back to direct API call.
 
         Parameters
         ----------
@@ -149,11 +192,60 @@ class APIHelper:
             List of device dictionaries.
 
         """
+        # Use inventory cache if available (note: inventory doesn't support product_types filter)
+        if self.collector.inventory and not product_types:
+            logger.debug("Using inventory cache for devices", org_id=org_id)
+            devices = await self.collector.inventory.get_devices(org_id)
+        else:
+            # Fallback to direct API call (required when product_types filter is used)
+            result = await self._fetch_devices_direct(org_id, product_types)
+            devices = result if result is not None else []
+
+        # Additional model filtering if specified
+        if models and devices:
+            devices = [
+                device
+                for device in devices
+                if any(device.get("model", "").startswith(model) for model in models)
+            ]
+            logger.debug(
+                "Filtered devices by models",
+                org_id=org_id,
+                models=models,
+                filtered_count=len(devices),
+            )
+
+        return devices
+
+    @with_error_handling(
+        operation="Fetch organization devices",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _fetch_devices_direct(
+        self,
+        org_id: str,
+        product_types: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Fetch devices directly from API (fallback when inventory unavailable).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        product_types : list[str] | None
+            Optional list of product types to filter by.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of device dictionaries.
+
+        """
         logger.debug(
-            "Fetching devices",
+            "Fetching devices directly (no inventory cache)",
             org_id=org_id,
             product_types=product_types,
-            models=models,
         )
         self.collector._track_api_call("getOrganizationDevices")
 
@@ -168,21 +260,6 @@ class APIHelper:
             **params,
         )
         logger.debug("Successfully fetched devices", org_id=org_id, count=len(devices))
-
-        # Additional model filtering if specified
-        if models:
-            devices = [
-                device
-                for device in devices
-                if any(device.get("model", "").startswith(model) for model in models)
-            ]
-            logger.debug(
-                "Filtered devices by models",
-                org_id=org_id,
-                models=models,
-                filtered_count=len(devices),
-            )
-
         return devices
 
     @with_error_handling(
