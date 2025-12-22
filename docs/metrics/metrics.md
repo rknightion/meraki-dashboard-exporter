@@ -1,14 +1,14 @@
 # Metrics Reference
 
 This page provides a reference of Prometheus metrics exposed by the Meraki Dashboard Exporter.
-Some metrics are conditional (clients, webhooks, or OTEL tracing); notes are shown where relevant.
+Some metrics are conditional (clients or webhooks); notes are shown where relevant.
 
 ## Summary
 
-- **Total metrics:** 185
+- **Total metrics:** 182
 - **Gauges:** 162
-- **Counters:** 17
-- **Histograms:** 5
+- **Counters:** 15
+- **Histograms:** 4
 - **Info metrics:** 1
 
 ## Collector Metrics
@@ -231,54 +231,46 @@ Some metrics are conditional (clients, webhooks, or OTEL tracing); notes are sho
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_api_rate_limit_remaining` | gauge | `org_id` | Remaining rate limit for Meraki API |  |
-| `meraki_api_rate_limit_total` | gauge | `org_id` | Total rate limit for Meraki API |  |
-| `meraki_api_request_duration_seconds` | histogram | `endpoint`, `method`, `status_code` | Duration of Meraki API requests in seconds |  |
-| `meraki_api_requests_total` | counter | `endpoint`, `method`, `status_code` | Total number of Meraki API requests |  |
-| `meraki_api_retry_attempts_total` | counter | `endpoint`, `retry_reason` | Total number of API retry attempts |  |
+| `meraki_exporter_api_duration_seconds` | histogram | `endpoint`, `method`, `status_code` | Duration of Meraki API requests in seconds |  |
+| `meraki_exporter_api_rate_limit_remaining` | gauge | `org_id` | Remaining rate limit for Meraki API |  |
+| `meraki_exporter_api_rate_limit_total` | gauge | `org_id` | Total rate limit for Meraki API |  |
+| `meraki_exporter_api_requests_total` | counter | `endpoint`, `method`, `status_code` | Total number of Meraki API requests |  |
+| `meraki_exporter_api_retry_total` | counter | `endpoint`, `retry_reason` | Total number of API retry attempts |  |
 
 ### CardinalityMonitor
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_cardinality_analysis_duration_seconds` | gauge | — | Time taken to complete cardinality analysis |  |
-| `meraki_cardinality_analyzed_metrics_total` | gauge | — | Total number of metrics analyzed in last run |  |
-| `meraki_cardinality_warnings_total` | counter | `metric_name`, `severity` | Number of cardinality warnings triggered |  |
-| `meraki_total_series` | gauge | — | Total number of time series across all metrics |  |
+| `meraki_exporter_cardinality_analyzed_total` | gauge | — | Total number of metrics analyzed in last run |  |
+| `meraki_exporter_cardinality_duration_seconds` | gauge | — | Time taken to complete cardinality analysis |  |
+| `meraki_exporter_cardinality_warnings_total` | counter | `metric_name`, `severity` | Number of cardinality warnings triggered |  |
+| `meraki_exporter_total_series` | gauge | — | Total number of time series across all metrics |  |
 
 ### CollectorManager
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_collection_errors_total` | counter | `collector`, `tier`, `error_type` | Total number of collection errors by collector and phase |  |
-| `meraki_collector_failure_streak` | gauge | `collector`, `tier` | Consecutive failures for each collector since last success |  |
-| `meraki_collector_last_success_age_seconds` | gauge | `collector`, `tier` | Seconds since the last successful collection for each collector |  |
-| `meraki_org_collection_wait_time_seconds` | histogram | `collector`, `org_id` | Time an organization spends waiting for semaphore slot before collection starts |  |
-| `meraki_parallel_collections_active` | gauge | `collector`, `tier` | Number of parallel organization collections currently active |  |
+| `meraki_exporter_collection_errors_total` | counter | `collector`, `tier`, `error_type` | Total number of collection errors by collector and phase |  |
+| `meraki_exporter_collection_wait_seconds` | histogram | `collector`, `org_id` | Time an organization spends waiting for semaphore slot before collection starts |  |
+| `meraki_exporter_collections_active` | gauge | `collector`, `tier` | Number of parallel organization collections currently active |  |
+| `meraki_exporter_collector_failure_streak` | gauge | `collector`, `tier` | Consecutive failures for each collector since last success |  |
+| `meraki_exporter_collector_success_age_seconds` | gauge | `collector`, `tier` | Seconds since the last successful collection for each collector |  |
 
 ### MetricCollector
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_collector_api_calls_total` | counter | `collector`, `tier`, `endpoint` | Total number of API calls made by collectors |  |
-| `meraki_collector_duration_seconds` | histogram | `collector`, `tier` | Time spent collecting metrics |  |
-| `meraki_collector_errors_total` | counter | `collector`, `tier`, `error_type` | Total number of collector errors |  |
-| `meraki_collector_last_success_timestamp_seconds` | gauge | `collector`, `tier` | Unix timestamp of last successful collection |  |
+| `meraki_exporter_collector_api_calls_total` | counter | `collector`, `tier`, `endpoint` | Total number of API calls made by collectors |  |
+| `meraki_exporter_collector_duration_seconds` | histogram | `collector`, `tier` | Time spent collecting metrics |  |
+| `meraki_exporter_collector_errors_total` | counter | `collector`, `tier`, `error_type` | Total number of collector errors |  |
+| `meraki_exporter_collector_success_timestamp_seconds` | gauge | `collector`, `tier` | Unix timestamp of last successful collection |  |
 
 ### MetricExpirationManager
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_collection_errors_total_expired` | counter | `collector`, `tier` | Total number of metrics expired due to TTL |  |
-| `meraki_inventory_cache_size_tracked_metrics` | gauge | `collector` | Number of metrics currently tracked for expiration |  |
-
-### SpanMetricsProcessor
-
-| Metric | Type | Labels | Description | Notes |
-|--------|------|--------|-------------|-------|
-| `meraki_span_duration_seconds` | histogram | `operation`, `collector`, `endpoint` | Request duration tracked via spans | Requires OTEL tracing enabled |
-| `meraki_span_errors_total` | counter | `operation`, `collector`, `endpoint`, `error_type` | Total number of errors tracked via spans | Requires OTEL tracing enabled |
-| `meraki_span_requests_total` | counter | `operation`, `collector`, `endpoint`, `status` | Total number of requests tracked via spans | Requires OTEL tracing enabled |
+| `meraki_exporter_cache_size_tracked_metrics` | gauge | `collector` | Number of metrics currently tracked for expiration |  |
+| `meraki_exporter_collection_errors_total_expired` | counter | `collector`, `tier` | Total number of metrics expired due to TTL |  |
 
 ### WebhookHandler
 
