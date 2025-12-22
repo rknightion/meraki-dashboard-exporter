@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from meraki import DashboardAPI
 
     from ...core.config import Settings
+    from ...services.inventory import OrganizationInventory
     from ..organization import OrganizationCollector
 
 logger = get_logger(__name__)
@@ -30,6 +31,7 @@ class BaseOrganizationCollector:
         self.parent = parent
         self.api: DashboardAPI = parent.api
         self.settings: Settings = parent.settings
+        self.inventory: OrganizationInventory | None = getattr(parent, "inventory", None)
 
     def _track_api_call(self, method_name: str) -> None:
         """Track API call in parent collector.
