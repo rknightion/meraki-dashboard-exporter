@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -323,10 +324,23 @@ class AsyncMerakiClient:
                     # Handle rate limit (429) with retry
                     if e.status == 429 and retry_count < max_retries:
                         retry_count += 1
-                        wait_time = min(
-                            self.settings.api.rate_limit_retry_wait * (2**retry_count),
-                            60,  # Max 60 seconds
+                        retry_after = None
+                        if hasattr(e, "response") and e.response is not None:
+                            retry_after_header = e.response.headers.get("Retry-After")
+                            if retry_after_header:
+                                try:
+                                    retry_after = float(retry_after_header)
+                                except (TypeError, ValueError):
+                                    retry_after = None
+
+                        base_wait = (
+                            retry_after
+                            if retry_after is not None
+                            else self.settings.api.rate_limit_retry_wait
+                            * (2 ** (retry_count - 1))
                         )
+                        wait_time = min(base_wait, 60)
+                        wait_time = max(0.0, wait_time * (1.0 + random.uniform(-0.2, 0.2)))
 
                         api_retry_attempts.labels(
                             endpoint=endpoint_name,
@@ -339,6 +353,7 @@ class AsyncMerakiClient:
                             retry_count=retry_count,
                             max_retries=max_retries,
                             wait_seconds=wait_time,
+                            retry_after_seconds=retry_after,
                             status=e.status,
                         )
 

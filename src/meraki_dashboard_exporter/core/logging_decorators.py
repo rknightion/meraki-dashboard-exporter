@@ -15,6 +15,14 @@ logger = structlog.get_logger()
 P = ParamSpec("P")
 R = TypeVar("R")
 
+# Rate limit patterns to detect in API error messages
+_RATE_LIMIT_PATTERNS: tuple[str, ...] = (
+    "429",
+    "rate limit",
+    "too many requests",
+    "throttled",
+)
+
 
 def log_api_call(
     operation: str,
@@ -72,7 +80,8 @@ def log_api_call(
 
             except Exception as e:
                 duration = time.time() - start_time
-                logger.error(
+                log_method = logger.warning if _is_rate_limit_error(e) else logger.error
+                log_method(
                     f"API call failed: {operation}",
                     operation=operation,
                     duration_seconds=round(duration, 3),
@@ -114,7 +123,8 @@ def log_api_call(
 
             except Exception as e:
                 duration = time.time() - start_time
-                logger.error(
+                log_method = logger.warning if _is_rate_limit_error(e) else logger.error
+                log_method(
                     f"API call failed: {operation}",
                     operation=operation,
                     duration_seconds=round(duration, 3),
@@ -424,6 +434,15 @@ def _get_discovery_summary(collector_type: str, result: Any) -> dict[str, Any]:
             summary["networks_by_type"] = by_type
 
     return summary
+
+
+def _is_rate_limit_error(error: Exception) -> bool:
+    """Check if an exception indicates a rate limit."""
+    status = getattr(error, "status", None)
+    if status == 429:
+        return True
+    error_str = str(error).lower()
+    return any(pattern in error_str for pattern in _RATE_LIMIT_PATTERNS)
 
 
 # Additional helper for batch operations

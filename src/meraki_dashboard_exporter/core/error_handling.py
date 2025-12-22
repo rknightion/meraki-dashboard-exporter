@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import random
 import time
 from collections.abc import Callable, Coroutine
 from enum import StrEnum
@@ -191,18 +192,20 @@ def with_error_handling(
                     if retry_count < max_retries:
                         retry_count += 1
                         # Calculate delay with exponential backoff
-                        delay = min(
+                        base_wait = (
                             e.retry_after
-                            if e.retry_after
-                            else (base_delay * (2 ** (retry_count - 1))),
-                            max_delay,
+                            if e.retry_after is not None
+                            else (base_delay * (2 ** (retry_count - 1)))
                         )
+                        delay = min(base_wait, max_delay)
+                        delay = _apply_jitter(delay)
 
                         logger.warning(
                             f"{operation} rate limited, retrying",
                             retry_count=retry_count,
                             max_retries=max_retries,
                             wait_seconds=round(delay, 2),
+                            retry_after_seconds=e.retry_after,
                             error=str(e),
                             **context,
                         )
@@ -264,6 +267,61 @@ def with_error_handling(
                     duration = time.time() - start_time
                     error_type = type(e).__name__
                     error_msg = str(e)
+
+                    if _is_rate_limit_error(e):
+                        retry_after = _get_retry_after_seconds(e)
+                        if retry_count < max_retries:
+                            retry_count += 1
+                            base_wait = (
+                                retry_after
+                                if retry_after is not None
+                                else (base_delay * (2 ** (retry_count - 1)))
+                            )
+                            delay = min(base_wait, max_delay)
+                            delay = _apply_jitter(delay)
+
+                            logger.warning(
+                                f"{operation} rate limited, retrying",
+                                retry_count=retry_count,
+                                max_retries=max_retries,
+                                wait_seconds=round(delay, 2),
+                                retry_after_seconds=retry_after,
+                                error_type=error_type,
+                                error=error_msg,
+                                **context,
+                            )
+
+                            if collector_instance and hasattr(collector_instance, "_track_retry"):
+                                collector_instance._track_retry(operation, "http_429_rate_limit")
+
+                            await asyncio.sleep(delay)
+                            continue
+
+                        # Max retries exceeded for rate limit
+                        rate_context = dict(context)
+                        rate_context.update({
+                            "duration_seconds": round(duration, 2),
+                            "retry_count": retry_count,
+                            "error_type": error_type,
+                            "error": error_msg,
+                        })
+
+                        logger.warning(
+                            f"{operation} rate limited, retries exhausted",
+                            **rate_context,
+                        )
+
+                        if collector_instance and hasattr(collector_instance, "_track_error"):
+                            collector_instance._track_error(ErrorCategory.API_RATE_LIMIT)
+
+                        if continue_on_error:
+                            return None
+
+                        raise CollectorError(
+                            f"{operation} failed after {max_retries} retries: {error_msg}",
+                            ErrorCategory.API_RATE_LIMIT,
+                            rate_context,
+                        ) from e
 
                     # Determine error category
                     category = error_category or _categorize_error(e)
@@ -416,6 +474,44 @@ def validate_response_format(
     )
 
     return data
+
+
+def _apply_jitter(delay: float, jitter_ratio: float = 0.2) -> float:
+    """Apply jitter to a delay to avoid thundering herd effects."""
+    if delay <= 0:
+        return delay
+    jitter_multiplier = 1.0 + random.uniform(-jitter_ratio, jitter_ratio)
+    return max(0.0, delay * jitter_multiplier)
+
+
+def _get_retry_after_seconds(error: Exception) -> float | None:
+    """Extract Retry-After seconds from an exception if available."""
+    retry_after = getattr(error, "retry_after", None)
+    if retry_after is not None:
+        try:
+            return float(retry_after)
+        except (TypeError, ValueError):
+            return None
+
+    response = getattr(error, "response", None)
+    if response is not None and hasattr(response, "headers"):
+        header_value = response.headers.get("Retry-After")
+        if header_value:
+            try:
+                return float(header_value)
+            except (TypeError, ValueError):
+                return None
+
+    return None
+
+
+def _is_rate_limit_error(error: Exception) -> bool:
+    """Check if an exception indicates a rate limit condition."""
+    status = getattr(error, "status", None)
+    if status == 429:
+        return True
+    error_str = str(error).lower()
+    return any(pattern in error_str for pattern in RATE_LIMIT_PATTERNS)
 
 
 async def with_semaphore_limit[T](
