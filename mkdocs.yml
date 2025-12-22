@@ -204,9 +204,6 @@ nav:
     - Release Process: development/release-process.md
 
 extra:
-  analytics:
-    provider: google
-    property: !ENV GOOGLE_ANALYTICS_KEY
   social_image: assets/social-card.png
   social_image_alt: Meraki Dashboard Exporter social preview card
   twitter_site: "@rknightion"

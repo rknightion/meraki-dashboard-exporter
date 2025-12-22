@@ -219,6 +219,7 @@ class CreateMetricVisitor(ast.NodeVisitor):
         metric_name_map: dict[str, str],
         label_map: dict[str, str],
     ) -> None:
+        """Initialize visitor state for helper-based metric discovery."""
         self.filepath = filepath
         self.repo_root = repo_root
         self.metric_name_map = metric_name_map
@@ -233,6 +234,7 @@ class CreateMetricVisitor(ast.NodeVisitor):
         return {}
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        """Track class context for metric ownership."""
         if node.name in EXCLUDED_CLASS_NAMES:
             return
         old_class = self.current_class
@@ -241,16 +243,19 @@ class CreateMetricVisitor(ast.NodeVisitor):
         self.current_class = old_class
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """Add a new label scope for function-local variables."""
         self._label_vars_stack.append({})
         self.generic_visit(node)
         self._label_vars_stack.pop()
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        """Add a new label scope for async function-local variables."""
         self._label_vars_stack.append({})
         self.generic_visit(node)
         self._label_vars_stack.pop()
 
     def visit_Assign(self, node: ast.Assign) -> None:
+        """Capture label variables and helper-based metric creation."""
         if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
             labels = parse_label_list(node.value, self.label_map)
             if labels:
@@ -309,6 +314,7 @@ class CreateMetricVisitor(ast.NodeVisitor):
         )
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        """Handle annotated assignments for label and metric tracking."""
         if node.value is not None and isinstance(node.target, ast.Name):
             labels = parse_label_list(node.value, self.label_map)
             if labels:
@@ -329,6 +335,7 @@ class PrometheusMetricVisitor(ast.NodeVisitor):
         metric_name_map: dict[str, str],
         label_map: dict[str, str],
     ) -> None:
+        """Initialize visitor state for direct Prometheus metrics."""
         self.filepath = filepath
         self.repo_root = repo_root
         self.metric_name_map = metric_name_map
@@ -343,6 +350,7 @@ class PrometheusMetricVisitor(ast.NodeVisitor):
         return {}
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        """Track class context for metric ownership."""
         if node.name in EXCLUDED_CLASS_NAMES:
             return
         old_class = self.current_class
@@ -351,16 +359,19 @@ class PrometheusMetricVisitor(ast.NodeVisitor):
         self.current_class = old_class
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """Add a new label scope for function-local variables."""
         self._label_vars_stack.append({})
         self.generic_visit(node)
         self._label_vars_stack.pop()
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        """Add a new label scope for async function-local variables."""
         self._label_vars_stack.append({})
         self.generic_visit(node)
         self._label_vars_stack.pop()
 
     def visit_Assign(self, node: ast.Assign) -> None:
+        """Capture label variables and direct Prometheus constructors."""
         if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
             labels = parse_label_list(node.value, self.label_map)
             if labels:
@@ -410,6 +421,7 @@ class PrometheusMetricVisitor(ast.NodeVisitor):
         )
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        """Handle annotated assignments for label and metric tracking."""
         if node.value is not None and isinstance(node.target, ast.Name):
             labels = parse_label_list(node.value, self.label_map)
             if labels:
@@ -473,7 +485,9 @@ def generate_markdown(metrics: list[MetricDefinition]) -> str:
     lines.append(
         "This page provides a reference of Prometheus metrics exposed by the Meraki Dashboard Exporter."
     )
-    lines.append("Some metrics are conditional (clients or webhooks); notes are shown where relevant.")
+    lines.append(
+        "Some metrics are conditional (clients or webhooks); notes are shown where relevant."
+    )
     lines.append("")
 
     metric_types: dict[str, int] = {}

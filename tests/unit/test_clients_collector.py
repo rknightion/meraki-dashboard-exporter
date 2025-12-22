@@ -56,7 +56,8 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_custom_response("getNetworkClients", [])
             .build()
@@ -101,7 +102,8 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_custom_response("getNetworkClients", clients)
             .build()
@@ -167,7 +169,8 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_custom_response("getNetworkClients", clients)
             .build()
@@ -252,7 +255,8 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_custom_response("getNetworkClients", clients)
             .with_custom_response("getNetworkClientsApplicationUsage", app_usage_data)
@@ -356,7 +360,8 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_custom_response("getNetworkClients", clients)
             .build()
@@ -448,7 +453,8 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_custom_response("getNetworkClients", clients)
             .build()
@@ -488,7 +494,8 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_custom_response("getNetworkClients", clients)
             .build()
@@ -534,7 +541,8 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_custom_response("getNetworkClients", clients)
             .build()

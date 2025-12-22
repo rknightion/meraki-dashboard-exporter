@@ -99,14 +99,19 @@ class TestManagedTaskGroupBasics:
         async with group:
             pass
 
+        async def dummy_task() -> None:
+            pass
+
         # Try to add task after exit - should raise immediately
-        with pytest.raises(RuntimeError, match="Cannot add tasks to closed group"):
-
-            async def dummy_task() -> None:
-                pass
-
-            # create_task will raise before executing dummy_task
-            await group.create_task(dummy_task())
+        # Create the coroutine and ensure it's closed properly to avoid warning
+        coro = dummy_task()
+        try:
+            with pytest.raises(RuntimeError, match="Cannot add tasks to closed group"):
+                # create_task will raise before executing dummy_task
+                await group.create_task(coro)
+        finally:
+            # Close the coroutine to avoid "never awaited" warning
+            coro.close()
 
 
 class TestManagedTaskGroupBoundedConcurrency:

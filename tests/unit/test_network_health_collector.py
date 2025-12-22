@@ -78,7 +78,8 @@ class TestNetworkHealthCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_devices(devices, org_id=org["id"])
             .with_custom_response("getNetworkNetworkHealthChannelUtilization", channel_util_data)
@@ -144,7 +145,8 @@ class TestNetworkHealthCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_devices([], org_id=org["id"])
             .with_custom_response("getNetworkNetworkHealthChannelUtilization", [])
@@ -197,7 +199,8 @@ class TestNetworkHealthCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_devices([], org_id=org["id"])
             .with_custom_response("getNetworkNetworkHealthChannelUtilization", [])
@@ -239,7 +242,8 @@ class TestNetworkHealthCollector(BaseCollectorTest):
 
         # Configure mock API with empty responses
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_devices([], org_id=org["id"])
             .with_custom_response("getNetworkNetworkHealthChannelUtilization", [])
@@ -268,7 +272,8 @@ class TestNetworkHealthCollector(BaseCollectorTest):
 
         # Configure mock API with errors
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_devices([], org_id=org["id"])
             .with_error("getNetworkNetworkHealthChannelUtilization", 400)
@@ -307,7 +312,8 @@ class TestNetworkHealthCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks(networks, org_id=org["id"])
             .build()
         )
@@ -364,7 +370,8 @@ class TestNetworkHealthCollector(BaseCollectorTest):
 
         # Configure mock API
         api = (
-            mock_api_builder.with_organizations([org])
+            mock_api_builder
+            .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_devices([], org_id=org["id"])
             .with_custom_response("getNetworkNetworkHealthChannelUtilization", [])

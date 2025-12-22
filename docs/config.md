@@ -19,10 +19,10 @@ Configuration follows a hierarchical structure using environment variables:
     # Meraki API configuration
     export MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here
     export MERAKI_EXPORTER_MERAKI__ORG_ID=123456
-    
+
     # Logging configuration
     export MERAKI_EXPORTER_LOGGING__LEVEL=INFO
-    
+
     # API settings
     export MERAKI_EXPORTER_API__TIMEOUT=30
     export MERAKI_EXPORTER_API__CONCURRENCY_LIMIT=5
@@ -159,4 +159,3 @@ Some runtime knobs are read directly from environment variables and are not part
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_OTEL__SAMPLING_RATE` | `float` | `0.1` | Trace sampling rate between 0 and 1 |
-
