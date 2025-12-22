@@ -172,6 +172,30 @@ class OTelSettings(BaseModel):
         description="Additional resource attributes for OpenTelemetry",
     )
 
+    # Metrics export routing (simple boolean flags)
+    export_meraki_metrics_to_prometheus: bool = Field(
+        True,
+        description="Export Meraki network metrics to Prometheus /metrics endpoint",
+    )
+    export_meraki_metrics_to_otel: bool = Field(
+        False,
+        description="Export Meraki network metrics to OpenTelemetry collector",
+    )
+    export_exporter_metrics_to_prometheus: bool = Field(
+        True,
+        description="Export internal exporter metrics (meraki_exporter_*) to Prometheus",
+    )
+    export_exporter_metrics_to_otel: bool = Field(
+        False,
+        description="Export internal exporter metrics to OpenTelemetry collector",
+    )
+
+    # Tracing control (separate from metrics)
+    tracing_enabled: bool = Field(
+        True,
+        description="Enable distributed tracing (requires enabled=true and endpoint)",
+    )
+
     @model_validator(mode="after")
     def validate_endpoint(self) -> OTelSettings:
         """Ensure endpoint is provided when enabled."""
