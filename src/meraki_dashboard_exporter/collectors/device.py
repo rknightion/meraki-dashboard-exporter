@@ -1057,9 +1057,7 @@ class DeviceCollector(MetricCollector):
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def _fetch_device_availabilities_direct(
-        self, org_id: str
-    ) -> list[dict[str, Any]] | None:
+    async def _fetch_device_availabilities_direct(self, org_id: str) -> list[dict[str, Any]] | None:
         """Fetch device availabilities directly from API (fallback when inventory unavailable).
 
         Parameters
