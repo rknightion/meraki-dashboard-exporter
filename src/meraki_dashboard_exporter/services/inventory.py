@@ -51,6 +51,13 @@ class OrganizationInventory:
     TTL_MEDIUM = 900  # 15 minutes
     TTL_SLOW = 1800  # 30 minutes
 
+    # Shorter TTL for availability data (more dynamic than inventory)
+    TTL_AVAILABILITY = 120  # 2 minutes
+
+    # Longer TTL for slow-changing configuration data
+    TTL_LICENSE = 1800  # 30 minutes - license data rarely changes
+    TTL_CONFIG = 3600  # 60 minutes - org config/security settings rarely change
+
     def __init__(self, api: DashboardAPI, settings: Settings) -> None:
         """Initialize the inventory service.
 
@@ -73,11 +80,17 @@ class OrganizationInventory:
         self._organizations: list[dict[str, Any]] | None = None
         self._networks: dict[str, list[dict[str, Any]]] = {}
         self._devices: dict[str, list[dict[str, Any]]] = {}
+        self._device_availabilities: dict[str, list[dict[str, Any]]] = {}
+        self._licenses_overview: dict[str, dict[str, Any]] = {}
+        self._login_security: dict[str, dict[str, Any]] = {}
 
         # Cache timestamps
         self._org_timestamp: float = 0.0
         self._network_timestamps: dict[str, float] = {}
         self._device_timestamps: dict[str, float] = {}
+        self._availability_timestamps: dict[str, float] = {}
+        self._license_timestamps: dict[str, float] = {}
+        self._security_timestamps: dict[str, float] = {}
 
         # Lock for thread-safe cache updates
         self._lock = asyncio.Lock()
@@ -312,6 +325,80 @@ class OrganizationInventory:
 
         return devices
 
+    async def get_device_availabilities(
+        self,
+        org_id: str,
+        force_refresh: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Get device availabilities for an organization with caching.
+
+        Uses a shorter TTL (2 minutes) than other inventory data since
+        availability status is more dynamic.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        force_refresh : bool
+            If True, bypass cache and fetch fresh data.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of device availability data for the organization.
+
+        """
+        current_time = time.time()
+
+        # Check cache validity (using shorter TTL for availabilities)
+        cache_timestamp = self._availability_timestamps.get(org_id, 0.0)
+        if (
+            not force_refresh
+            and org_id in self._device_availabilities
+            and (current_time - cache_timestamp) < self.TTL_AVAILABILITY
+        ):
+            self._cache_hits += 1
+            logger.debug(
+                "Cache hit for device availabilities",
+                org_id=org_id,
+                cache_age_seconds=current_time - cache_timestamp,
+            )
+            return self._device_availabilities[org_id]
+
+        # Cache miss - fetch from API
+        self._cache_misses += 1
+        logger.debug("Cache miss for device availabilities, fetching from API", org_id=org_id)
+
+        async with self._lock:
+            # Double-check after acquiring lock
+            cache_timestamp = self._availability_timestamps.get(org_id, 0.0)
+            if (
+                not force_refresh
+                and org_id in self._device_availabilities
+                and (current_time - cache_timestamp) < self.TTL_AVAILABILITY
+            ):
+                return self._device_availabilities[org_id]
+
+            # Fetch from API
+            availabilities_result = await asyncio.to_thread(
+                self.api.organizations.getOrganizationDevicesAvailabilities,
+                org_id,
+                total_pages="all",
+            )
+            availabilities = cast(list[dict[str, Any]], availabilities_result)
+
+            # Update cache
+            self._device_availabilities[org_id] = availabilities
+            self._availability_timestamps[org_id] = current_time
+
+            logger.info(
+                "Updated device availabilities cache",
+                org_id=org_id,
+                device_count=len(availabilities),
+            )
+
+            return availabilities
+
     async def invalidate(self, org_id: str | None = None) -> None:
         """Invalidate cache for an organization or all organizations.
 
@@ -328,9 +415,15 @@ class OrganizationInventory:
                 self._organizations = None
                 self._networks.clear()
                 self._devices.clear()
+                self._device_availabilities.clear()
+                self._licenses_overview.clear()
+                self._login_security.clear()
                 self._org_timestamp = 0.0
                 self._network_timestamps.clear()
                 self._device_timestamps.clear()
+                self._availability_timestamps.clear()
+                self._license_timestamps.clear()
+                self._security_timestamps.clear()
                 logger.info("Invalidated all inventory cache")
             else:
                 # Invalidate specific org
@@ -338,10 +431,22 @@ class OrganizationInventory:
                     del self._networks[org_id]
                 if org_id in self._devices:
                     del self._devices[org_id]
+                if org_id in self._device_availabilities:
+                    del self._device_availabilities[org_id]
+                if org_id in self._licenses_overview:
+                    del self._licenses_overview[org_id]
+                if org_id in self._login_security:
+                    del self._login_security[org_id]
                 if org_id in self._network_timestamps:
                     del self._network_timestamps[org_id]
                 if org_id in self._device_timestamps:
                     del self._device_timestamps[org_id]
+                if org_id in self._availability_timestamps:
+                    del self._availability_timestamps[org_id]
+                if org_id in self._license_timestamps:
+                    del self._license_timestamps[org_id]
+                if org_id in self._security_timestamps:
+                    del self._security_timestamps[org_id]
                 logger.info("Invalidated inventory cache for organization", org_id=org_id)
 
     def get_cache_stats(self) -> dict[str, Any]:
@@ -364,6 +469,9 @@ class OrganizationInventory:
             "cached_orgs": 1 if self._organizations else 0,
             "cached_networks": len(self._networks),
             "cached_devices": len(self._devices),
+            "cached_availabilities": len(self._device_availabilities),
+            "cached_licenses": len(self._licenses_overview),
+            "cached_security": len(self._login_security),
         }
 
     def set_ttl_for_tier(self, tier: UpdateTier) -> None:
@@ -387,3 +495,229 @@ class OrganizationInventory:
             tier=tier.value,
             ttl_seconds=self._ttl,
         )
+
+    async def get_networks_with_device_types(
+        self,
+        org_id: str,
+        product_types: list[str],
+    ) -> list[dict[str, Any]]:
+        """Get networks that have at least one device of specified types.
+
+        This helper reduces API calls by filtering networks based on cached
+        device inventory, so you only make per-network API calls for networks
+        that actually have relevant devices.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        product_types : list[str]
+            Product types to filter by (e.g., ["sensor"], ["wireless"], ["switch"]).
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of networks that have at least one device of the specified types.
+
+        Examples
+        --------
+        Get networks with MT sensors:
+        >>> networks = await inventory.get_networks_with_device_types(org_id, ["sensor"])
+
+        Get networks with wireless or switch devices:
+        >>> networks = await inventory.get_networks_with_device_types(
+        ...     org_id, ["wireless", "switch"]
+        ... )
+
+        """
+        # Get all devices from cache
+        devices = await self.get_devices(org_id)
+
+        # Find network IDs that have at least one device of specified types
+        network_ids_with_devices = {
+            d.get("networkId")
+            for d in devices
+            if d.get("productType") in product_types and d.get("networkId")
+        }
+
+        if not network_ids_with_devices:
+            logger.debug(
+                "No networks found with specified device types",
+                org_id=org_id,
+                product_types=product_types,
+            )
+            return []
+
+        # Get all networks from cache
+        networks = await self.get_networks(org_id)
+
+        # Filter to networks that have the device types
+        filtered_networks = [n for n in networks if n.get("id") in network_ids_with_devices]
+
+        logger.debug(
+            "Filtered networks by device types",
+            org_id=org_id,
+            product_types=product_types,
+            total_networks=len(networks),
+            filtered_networks=len(filtered_networks),
+        )
+
+        return filtered_networks
+
+    async def get_licenses_overview(
+        self,
+        org_id: str,
+        force_refresh: bool = False,
+    ) -> dict[str, Any]:
+        """Get organization license overview with caching.
+
+        Uses a longer TTL (30 minutes) since license data rarely changes.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        force_refresh : bool
+            If True, bypass cache and fetch fresh data.
+
+        Returns
+        -------
+        dict[str, Any]
+            License overview data for the organization.
+
+        """
+        current_time = time.time()
+
+        # Check cache validity (using longer TTL for licenses)
+        cache_timestamp = self._license_timestamps.get(org_id, 0.0)
+        if (
+            not force_refresh
+            and org_id in self._licenses_overview
+            and (current_time - cache_timestamp) < self.TTL_LICENSE
+        ):
+            self._cache_hits += 1
+            logger.debug(
+                "Cache hit for licenses overview",
+                org_id=org_id,
+                cache_age_seconds=current_time - cache_timestamp,
+            )
+            return self._licenses_overview[org_id]
+
+        # Cache miss - fetch from API
+        self._cache_misses += 1
+        logger.debug("Cache miss for licenses overview, fetching from API", org_id=org_id)
+
+        async with self._lock:
+            # Double-check after acquiring lock
+            cache_timestamp = self._license_timestamps.get(org_id, 0.0)
+            if (
+                not force_refresh
+                and org_id in self._licenses_overview
+                and (current_time - cache_timestamp) < self.TTL_LICENSE
+            ):
+                return self._licenses_overview[org_id]
+
+            # Fetch from API
+            try:
+                overview_result = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationLicensesOverview,
+                    org_id,
+                )
+                overview = cast(dict[str, Any], overview_result)
+
+                # Update cache
+                self._licenses_overview[org_id] = overview
+                self._license_timestamps[org_id] = current_time
+
+                logger.info(
+                    "Updated licenses overview cache",
+                    org_id=org_id,
+                )
+
+                return overview
+            except Exception:
+                # Return empty dict on error, don't cache errors
+                logger.debug(
+                    "Failed to fetch licenses overview (may not be supported)",
+                    org_id=org_id,
+                )
+                return {}
+
+    async def get_login_security(
+        self,
+        org_id: str,
+        force_refresh: bool = False,
+    ) -> dict[str, Any]:
+        """Get organization login security settings with caching.
+
+        Uses a longer TTL (60 minutes) since security settings rarely change.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        force_refresh : bool
+            If True, bypass cache and fetch fresh data.
+
+        Returns
+        -------
+        dict[str, Any]
+            Login security settings for the organization.
+
+        """
+        current_time = time.time()
+
+        # Check cache validity (using longer TTL for config data)
+        cache_timestamp = self._security_timestamps.get(org_id, 0.0)
+        if (
+            not force_refresh
+            and org_id in self._login_security
+            and (current_time - cache_timestamp) < self.TTL_CONFIG
+        ):
+            self._cache_hits += 1
+            logger.debug(
+                "Cache hit for login security",
+                org_id=org_id,
+                cache_age_seconds=current_time - cache_timestamp,
+            )
+            return self._login_security[org_id]
+
+        # Cache miss - fetch from API
+        self._cache_misses += 1
+        logger.debug("Cache miss for login security, fetching from API", org_id=org_id)
+
+        async with self._lock:
+            # Double-check after acquiring lock
+            cache_timestamp = self._security_timestamps.get(org_id, 0.0)
+            if (
+                not force_refresh
+                and org_id in self._login_security
+                and (current_time - cache_timestamp) < self.TTL_CONFIG
+            ):
+                return self._login_security[org_id]
+
+            # Fetch from API
+            try:
+                security_result = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationLoginSecurity,
+                    org_id,
+                )
+                security = cast(dict[str, Any], security_result)
+
+                # Update cache
+                self._login_security[org_id] = security
+                self._security_timestamps[org_id] = current_time
+
+                logger.info(
+                    "Updated login security cache",
+                    org_id=org_id,
+                )
+
+                return security
+            except Exception:
+                # Return empty dict on error, don't cache errors
+                logger.debug(
+                    "Failed to fetch login security",
+                    org_id=org_id,
+                )
+                return {}
