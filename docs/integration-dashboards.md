@@ -5,7 +5,8 @@ description: Connect the exporter to Prometheus and Grafana
 
 # Integration & Dashboards
 
-The exporter exposes metrics on `http://<host>:9099/metrics`. Scrape this endpoint with Prometheus or any other OpenMetrics compatible collector.
+The exporter exposes metrics on `http://<host>:9099/metrics`. Scrape this
+endpoint with Prometheus or any other OpenMetrics compatible collector.
 
 ## Prometheus example
 ```yaml
@@ -37,7 +38,7 @@ Prometheus and Grafana configuration examples are available in the [docker-compo
 The compose file ships only the exporter container; integrate the scrape job into your existing Prometheus/Grafana stack.
 
 !!! tip "Scrape interval"
-    Align your Prometheus scrape interval with the exporter’s update tiers (60s/300s/900s by default) to avoid unnecessary load.
+    Align your Prometheus scrape interval with the exporter’s update tiers to avoid unnecessary load (see [Metrics Overview](metrics/overview.md)).
 
 ## Dashboards
 Pre-built Grafana dashboards can be found in the [dashboards directory](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/dashboards). Import them to get instant visibility into your organisation.
