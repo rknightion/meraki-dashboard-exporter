@@ -8,7 +8,9 @@ tags:
 
 # OpenTelemetry
 
-The exporter can mirror all Prometheus metrics to an OpenTelemetry (OTEL) collector and emit traces for API calls and HTTP requests. Prometheus remains the primary scrape target; OTEL is an optional secondary export.
+The exporter can emit traces and mirror selected Prometheus metrics to an
+OpenTelemetry (OTEL) collector. Metrics are always produced in the Prometheus
+registry; export to `/metrics` and OTEL is routed independently.
 
 ## Enable OTEL
 
@@ -23,21 +25,56 @@ export MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES='{"environment":"production"}'
 ```
 
 - **Endpoint**: OTLP gRPC (`http://host:4317`). OTLP/HTTP is not currently supported.
+- **Required**: `ENABLED=true` requires `ENDPOINT`; startup will fail without it.
 - **Resource attributes**: JSON string of key/value pairs.
+- **Metrics export**: OTEL metrics are opt-in; enable at least one
+  `EXPORT_*_TO_OTEL` flag to send metrics to the collector.
+
+## Export routing
+
+Metrics are grouped by prefix:
+
+- `meraki_*`: Meraki data metrics
+- `meraki_exporter_*`: exporter/internal metrics
+
+Non-meraki metrics (for example `python_*`, `process_*`) always remain on
+`/metrics` and are not exported to OTEL.
+
+Routing flags:
+
+- `MERAKI_EXPORTER_OTEL__EXPORT_MERAKI_METRICS_TO_PROMETHEUS`
+- `MERAKI_EXPORTER_OTEL__EXPORT_EXPORTER_METRICS_TO_PROMETHEUS`
+- `MERAKI_EXPORTER_OTEL__EXPORT_MERAKI_METRICS_TO_OTEL`
+- `MERAKI_EXPORTER_OTEL__EXPORT_EXPORTER_METRICS_TO_OTEL`
+
+Prometheus export flags apply regardless of OTEL being enabled. OTEL export only
+runs when `MERAKI_EXPORTER_OTEL__ENABLED=true` and an endpoint is configured.
+
+### Examples
+
+```bash
+# OTEL metrics + Prometheus (mirror meraki_* and exporter metrics)
+export MERAKI_EXPORTER_OTEL__ENABLED=true
+export MERAKI_EXPORTER_OTEL__ENDPOINT=http://localhost:4317
+export MERAKI_EXPORTER_OTEL__EXPORT_MERAKI_METRICS_TO_OTEL=true
+export MERAKI_EXPORTER_OTEL__EXPORT_EXPORTER_METRICS_TO_OTEL=true
+
+# OTEL-only meraki/exporter metrics (non-meraki metrics still stay on /metrics)
+export MERAKI_EXPORTER_OTEL__EXPORT_MERAKI_METRICS_TO_PROMETHEUS=false
+export MERAKI_EXPORTER_OTEL__EXPORT_EXPORTER_METRICS_TO_PROMETHEUS=false
+```
 
 ## Metric Mirroring
 
 The exporter uses a Prometheus-to-OTEL bridge that:
-- Mirrors every Prometheus metric in the registry at the configured export interval
+- Mirrors selected metrics from the registry based on the export routing flags
 - Preserves labels as OTEL attributes
 - Exports counters and gauges directly
 - Exports histograms as an **average gauge** (OTEL histogram export is not used yet)
 
-## Tracing and Logs
+## Tracing
 
-When OTEL is enabled, tracing is also initialized. See [Tracing](tracing.md) for details.
-
-Logs remain logfmt and are not exported to OTEL by default, but they include trace context fields (`trace_id`, `span_id`, `trace_flags`) when a span is active.
+Tracing is configured separately. See [Tracing](tracing.md) for details.
 
 ## Docker Compose Example
 
@@ -61,7 +98,8 @@ services:
 
 ## Troubleshooting
 
-- Confirm `/metrics` is populated first — OTEL mirrors Prometheus.
+- Confirm OTEL export flags are enabled for the metrics you expect.
+- `/metrics` can be filtered by the Prometheus export flags.
 - Check logs for OTEL bridge initialization or connection errors.
 - Verify the collector is listening on the OTLP gRPC endpoint.
 
