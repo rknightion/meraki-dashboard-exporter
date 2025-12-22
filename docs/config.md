@@ -83,10 +83,6 @@ HTTP server configuration for the metrics endpoint
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_SERVER__HOST` | `str` | `0.0.0.0` | Host to bind the exporter to |
 | `MERAKI_EXPORTER_SERVER__PORT` | `int` | `9099` | Port to bind the exporter to (min: 1, max: 65535) |
-| `MERAKI_EXPORTER_SERVER__PATH_PREFIX` | `str` | `` | URL path prefix for all endpoints |
-| `MERAKI_EXPORTER_SERVER__ENABLE_HEALTH_CHECK` | `bool` | `True` | Enable /health endpoint |
-
-`PATH_PREFIX` and `ENABLE_HEALTH_CHECK` are currently defined for compatibility, but the application still exposes `/`, `/health`, `/metrics`, and `/cardinality` unconditionally.
 
 ## Webhook Settings
 

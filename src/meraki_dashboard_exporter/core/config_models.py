@@ -217,14 +217,6 @@ class ServerSettings(BaseModel):
         le=65535,
         description="Port to bind the exporter to",
     )
-    path_prefix: str = Field(
-        "",
-        description="URL path prefix for all endpoints",
-    )
-    enable_health_check: bool = Field(
-        True,
-        description="Enable /health endpoint",
-    )
 
 
 class WebhookSettings(BaseModel):
