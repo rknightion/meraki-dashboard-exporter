@@ -26,7 +26,9 @@ docker run -d \
 
 ## Verify
 - Visit `http://localhost:9099/` for the landing page.
-- `http://localhost:9099/metrics` exposes Prometheus metrics.
+- `http://localhost:9099/metrics` exposes Prometheus metrics (defaults on; see
+  [Configuration](config.md) to disable export for `meraki_*` or
+  `meraki_exporter_*`).
 - `curl http://localhost:9099/health` should return `{"status": "healthy"}`.
 - Cardinality reports appear after the first full collection cycle (defaults to 15 minutes).
 
