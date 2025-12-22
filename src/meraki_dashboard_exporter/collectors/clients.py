@@ -7,6 +7,7 @@ from typing import Any
 
 import structlog
 
+from ..core.batch_processing import process_in_batches_with_errors
 from ..core.api_helpers import create_api_helper
 from ..core.api_models import NetworkClient
 from ..core.collector import MetricCollector
@@ -350,17 +351,33 @@ class ClientsCollector(MetricCollector):
             List of networks to process.
 
         """
-        tasks = []
-        for network in networks:
-            task = self._collect_network_clients(
+        if not networks:
+            return
+
+        batch_size = self.settings.api.client_batch_size
+        delay_between_batches = self.settings.api.batch_delay
+
+        async def _process_network(network: dict[str, Any]) -> None:
+            await self._collect_network_clients(
                 org_id,
                 org_name,
                 network["id"],
                 network["name"],
             )
-            tasks.append(task)
 
-        await asyncio.gather(*tasks, return_exceptions=True)
+        await process_in_batches_with_errors(
+            networks,
+            _process_network,
+            batch_size=batch_size,
+            delay_between_batches=delay_between_batches,
+            item_description="network",
+            error_context_func=lambda network: {
+                "org_id": org_id,
+                "org_name": org_name,
+                "network_id": network.get("id"),
+                "network_name": network.get("name"),
+            },
+        )
 
     @with_error_handling(
         operation="Collect network clients",
