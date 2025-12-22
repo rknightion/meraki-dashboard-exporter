@@ -286,7 +286,7 @@ class APIHelper:
         raw_delay = getattr(self.settings.api, "batch_delay", 0.0)
         try:
             delay_between_batches = float(raw_delay)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             delay_between_batches = 0.0
 
         results_with_items: list[tuple[T, R | Exception]] = await process_in_batches_with_errors(

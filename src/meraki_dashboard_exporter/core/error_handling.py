@@ -208,21 +208,15 @@ def with_error_handling(
                         )
 
                         # Track retry metric if collector available
-                        if collector_instance and hasattr(
-                            collector_instance, "_track_retry"
-                        ):
-                            collector_instance._track_retry(
-                                operation, "http_200_rate_limit"
-                            )
+                        if collector_instance and hasattr(collector_instance, "_track_retry"):
+                            collector_instance._track_retry(operation, "http_200_rate_limit")
 
                         await asyncio.sleep(delay)
                         continue
 
                     # Max retries exceeded
                     error_context = dict(context)
-                    error_context["duration_seconds"] = round(
-                        time.time() - start_time, 2
-                    )
+                    error_context["duration_seconds"] = round(time.time() - start_time, 2)
                     error_context["retry_count"] = retry_count
 
                     logger.error(
@@ -233,9 +227,7 @@ def with_error_handling(
                     )
 
                     # Track error metric if collector available
-                    if collector_instance and hasattr(
-                        collector_instance, "_track_error"
-                    ):
+                    if collector_instance and hasattr(collector_instance, "_track_error"):
                         collector_instance._track_error(ErrorCategory.API_RATE_LIMIT)
 
                     if continue_on_error:
@@ -249,9 +241,7 @@ def with_error_handling(
                 except TimeoutError as e:
                     # Create a new context dict with the duration
                     error_context = dict(context)
-                    error_context["duration_seconds"] = round(
-                        time.time() - start_time, 2
-                    )
+                    error_context["duration_seconds"] = round(time.time() - start_time, 2)
                     logger.error(
                         f"{operation} timed out",
                         error_type="TimeoutError",
@@ -259,9 +249,7 @@ def with_error_handling(
                     )
 
                     # Track error metric if collector available
-                    if collector_instance and hasattr(
-                        collector_instance, "_track_error"
-                    ):
+                    if collector_instance and hasattr(collector_instance, "_track_error"):
                         collector_instance._track_error(ErrorCategory.TIMEOUT)
 
                     if continue_on_error:
@@ -302,9 +290,7 @@ def with_error_handling(
                         )
 
                     # Track error metric if collector available
-                    if collector_instance and hasattr(
-                        collector_instance, "_track_error"
-                    ):
+                    if collector_instance and hasattr(collector_instance, "_track_error"):
                         collector_instance._track_error(category)
 
                     if continue_on_error:
@@ -390,9 +376,7 @@ def validate_response_format(
     # Check for API error responses (e.g., rate limit errors)
     if isinstance(response, dict) and "errors" in response:
         errors = response["errors"]
-        error_msg = (
-            "; ".join(str(e) for e in errors) if isinstance(errors, list) else str(errors)
-        )
+        error_msg = "; ".join(str(e) for e in errors) if isinstance(errors, list) else str(errors)
 
         # Check if this is a retryable rate limit error
         error_lower = error_msg.lower()
