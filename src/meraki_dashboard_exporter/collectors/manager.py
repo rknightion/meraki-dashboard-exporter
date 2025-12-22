@@ -248,7 +248,7 @@ class CollectorManager:
     async def collect_initial(self) -> None:
         """Run initial collection from all tiers sequentially to avoid API overload."""
         # Collect tier by tier to reduce API load during startup
-        for tier in [UpdateTier.SLOW, UpdateTier.MEDIUM, UpdateTier.FAST]:
+        for tier in [UpdateTier.FAST, UpdateTier.MEDIUM, UpdateTier.SLOW]:
             try:
                 await self.collect_tier(tier)
                 # Small delay between tiers to avoid connection pool exhaustion

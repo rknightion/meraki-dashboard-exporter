@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -80,6 +81,9 @@ class ExporterApp:
         self._shutdown_event = asyncio.Event()
         self._tier_tasks: dict[str, asyncio.Task[Any]] = {}
         self._start_time = time.time()
+        self._discovery_summary: dict[str, Any] | None = None
+        self._startup_summary_logged = False
+        self._first_collection_complete = False
 
         # Setup Jinja2 templates
         template_dir = Path(__file__).parent / "templates"
@@ -290,17 +294,36 @@ class ExporterApp:
     async def _startup_collections(self) -> None:
         """Start tiered collection loops immediately."""
         try:
-            # Start tiered collection tasks immediately
-            # Each will do its first collection right away
+            # Run a sequential first collection to avoid startup bursts
+            initial_collection_completed = False
+            try:
+                logger.info("Starting initial sequential collection")
+                await self.collector_manager.collect_initial()
+                self._first_collection_complete = True
+                initial_collection_completed = True
+                self.cardinality_monitor.mark_first_run_complete()
+                logger.info("Initial collection completed")
+            except Exception:
+                logger.exception("Initial collection failed, continuing with tiered loops")
+
+            # Emit one-time startup summary after discovery + initial collection
+            self._log_startup_summary()
+
+            # Start tiered collection tasks with an initial delay
             for tier in UpdateTier:
                 interval = self.collector_manager.get_tier_interval(tier)
+                jitter_window = min(10.0, interval * 0.1)
+                jitter = random.uniform(0.0, jitter_window)
+                initial_delay = (interval + jitter) if initial_collection_completed else jitter
                 logger.debug(
                     "Creating tiered collection task",
                     tier=tier,
                     interval=interval,
+                    initial_delay_seconds=round(initial_delay, 2),
                 )
-                # Start with immediate collection (no initial wait)
-                task = asyncio.create_task(self._tiered_collection_loop(tier))
+                task = asyncio.create_task(
+                    self._tiered_collection_loop(tier, initial_delay=initial_delay)
+                )
                 self._tier_tasks[tier] = task
                 self._background_tasks.add(task)
                 task.add_done_callback(self._background_tasks.discard)
@@ -311,14 +334,18 @@ class ExporterApp:
                 tiers=list(self._tier_tasks.keys()),
             )
 
-            # Wait for first collection cycle to complete
+            # Wait for first collection cycle to complete (no-op if already done)
             asyncio.create_task(self._wait_for_first_collection())
 
         except Exception:
             logger.exception("Failed during startup collections")
             # Don't crash the server if initial collection fails
 
-    async def _tiered_collection_loop(self, tier: UpdateTier) -> None:
+    async def _tiered_collection_loop(
+        self,
+        tier: UpdateTier,
+        initial_delay: float = 0.0,
+    ) -> None:
         """Background task for periodic metric collection for a specific tier.
 
         Parameters
@@ -338,6 +365,18 @@ class ExporterApp:
         )
 
         try:
+            if initial_delay > 0:
+                logger.debug(
+                    "Delaying initial collection",
+                    tier=tier,
+                    delay_seconds=round(initial_delay, 2),
+                )
+                remaining_delay = float(initial_delay)
+                while remaining_delay > 0 and not self._shutdown_event.is_set():
+                    wait_time = min(1.0, remaining_delay)
+                    await asyncio.sleep(wait_time)
+                    remaining_delay -= wait_time
+
             while not self._shutdown_event.is_set():
                 # Run collection
                 try:
@@ -396,11 +435,24 @@ class ExporterApp:
 
     async def _wait_for_first_collection(self) -> None:
         """Wait for all collectors to complete their first run."""
+        if self._first_collection_complete:
+            return
         # Wait for the slowest tier (SLOW) to complete once
         slow_interval = self.collector_manager.get_tier_interval(UpdateTier.SLOW)
         await asyncio.sleep(slow_interval + 5)  # Add 5 seconds buffer
         self.cardinality_monitor.mark_first_run_complete()
+        self._first_collection_complete = True
         logger.info("First collection cycle complete, cardinality analysis enabled")
+
+    def _log_startup_summary(self) -> None:
+        """Log a one-time startup summary with config + discovery details."""
+        if self._startup_summary_logged:
+            return
+        try:
+            log_startup_summary(self.settings, self._discovery_summary)
+            self._startup_summary_logged = True
+        except Exception:
+            logger.exception("Failed to log startup summary")
 
     async def _cardinality_monitor_loop(self) -> None:
         """Background task for periodic cardinality monitoring."""
