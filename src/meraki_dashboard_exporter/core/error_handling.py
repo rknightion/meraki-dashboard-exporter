@@ -490,7 +490,7 @@ def _get_retry_after_seconds(error: Exception) -> float | None:
     if retry_after is not None:
         try:
             return float(retry_after)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
 
     response = getattr(error, "response", None)
@@ -499,7 +499,7 @@ def _get_retry_after_seconds(error: Exception) -> float | None:
         if header_value:
             try:
                 return float(header_value)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return None
 
     return None

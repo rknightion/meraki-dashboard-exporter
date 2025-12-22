@@ -350,6 +350,8 @@ class ExporterApp:
         ----------
         tier : UpdateTier
             The update tier to run collection for.
+        initial_delay : float
+            Initial delay in seconds before the first collection run.
 
         """
         consecutive_failures = 0

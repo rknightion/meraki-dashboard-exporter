@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
-from ..core.batch_processing import process_in_batches_with_errors
 from ..core.async_utils import ManagedTaskGroup
+from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import NetworkHealthMetricName, NetworkMetricName, ProductType, UpdateTier
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling

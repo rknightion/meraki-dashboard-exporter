@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from ..core.logging import get_logger
 from ..core.error_handling import validate_response_format
+from ..core.logging import get_logger
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI

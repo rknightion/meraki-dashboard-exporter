@@ -7,9 +7,9 @@ from typing import Any
 
 import structlog
 
-from ..core.batch_processing import process_in_batches_with_errors
 from ..core.api_helpers import create_api_helper
 from ..core.api_models import NetworkClient
+from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import ClientMetricName, UpdateTier
 from ..core.error_handling import (
