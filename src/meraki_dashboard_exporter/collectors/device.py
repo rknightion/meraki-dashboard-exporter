@@ -1033,14 +1033,40 @@ class DeviceCollector(MetricCollector):
         self._track_api_call("getOrganizationDevices")
         return await self.inventory.get_devices(org_id)
 
+    async def _fetch_device_availabilities(self, org_id: str) -> list[dict[str, Any]] | None:
+        """Fetch device availabilities for an organization.
+
+        Uses inventory cache if available (2-min TTL), otherwise falls back to direct API call.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]] | None
+            List of device availabilities or None on error.
+
+        """
+        if self.inventory:
+            logger.debug("Using inventory cache for device availabilities", org_id=org_id)
+            return await self.inventory.get_device_availabilities(org_id)
+
+        # Fallback to direct API call
+        result = await self._fetch_device_availabilities_direct(org_id)
+        return cast(list[dict[str, Any]] | None, result)
+
     @log_api_call("getOrganizationDevicesAvailabilities")
     @with_error_handling(
         operation="Fetch device availabilities",
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def _fetch_device_availabilities(self, org_id: str) -> list[dict[str, Any]] | None:
-        """Fetch device availabilities for an organization.
+    async def _fetch_device_availabilities_direct(
+        self, org_id: str
+    ) -> list[dict[str, Any]] | None:
+        """Fetch device availabilities directly from API (fallback when inventory unavailable).
 
         Parameters
         ----------
