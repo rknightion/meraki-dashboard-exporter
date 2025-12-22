@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 from meraki_dashboard_exporter.collectors.alerts import AlertsCollector
 from meraki_dashboard_exporter.core.constants import AlertMetricName, UpdateTier
 from tests.helpers.base import BaseCollectorTest
-from tests.helpers.factories import AlertFactory, NetworkFactory, OrganizationFactory
+from tests.helpers.factories import AlertFactory, DeviceFactory, NetworkFactory, OrganizationFactory
 from tests.helpers.metrics import MetricAssertions
 
 
@@ -37,9 +37,8 @@ class TestAlertsCollector(BaseCollectorTest):
         # Verify success
         self.assert_collector_success(collector, metrics)
 
-        # The API call tracking expects two calls - one for getOrganization and one for getOrganizationAssuranceAlerts
-        # But the mock doesn't call getOrganizations, it calls getOrganization
-        self.assert_api_call_tracked(collector, metrics, "getOrganization")
+        # The getOrganization call now goes through the inventory cache, so it's not tracked
+        # directly by the collector. Only the alerts API call is tracked.
         self.assert_api_call_tracked(collector, metrics, "getOrganizationAssuranceAlerts")
 
         # Verify no alerts metrics were set
@@ -277,6 +276,15 @@ class TestAlertsCollector(BaseCollectorTest):
             NetworkFactory.create(network_id="N_123", name="Test Network 1"),
             NetworkFactory.create(network_id="N_456", name="Test Network 2"),
         ]
+        # Need sensor devices for network filtering to include networks for sensor alerts
+        sensor_devices = [
+            DeviceFactory.create_mt(
+                network_id="N_123", productType="sensor", serial="Q2MT-XXXX-0001"
+            ),
+            DeviceFactory.create_mt(
+                network_id="N_456", productType="sensor", serial="Q2MT-XXXX-0002"
+            ),
+        ]
 
         # Create sensor alert response data
         sensor_alert_response_1 = [
@@ -333,6 +341,7 @@ class TestAlertsCollector(BaseCollectorTest):
         api = (
             mock_api_builder
             .with_organizations([org])
+            .with_devices(sensor_devices, org_id="123")
             .with_custom_response("getOrganizationAssuranceAlerts", [])
             .with_custom_response("getOrganizationNetworks", networks)
             .build()
