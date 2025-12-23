@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import functools
 import inspect
 import os
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -268,39 +270,114 @@ class TracingConfig:
                 logger.exception("Error shutting down tracing")
 
 
+# Common attribute names to auto-extract from kwargs
+_AUTO_EXTRACT_ATTRS = [
+    "org_id",
+    "org_name",
+    "network_id",
+    "network_name",
+    "serial",
+    "device_serial",
+    "device_name",
+]
+
+
+def _extract_span_attributes(
+    span: Any,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    static_attributes: dict[str, Any] | None,
+) -> None:
+    """Extract and set span attributes from function arguments.
+
+    Parameters
+    ----------
+    span : Any
+        The span to set attributes on.
+    args : tuple
+        Positional arguments to the function.
+    kwargs : dict
+        Keyword arguments to the function.
+    static_attributes : dict | None
+        Static attributes to always set.
+
+    """
+    # Add class name if this is a method call
+    if args and hasattr(args[0], "__class__"):
+        span.set_attribute("class", args[0].__class__.__name__)
+
+    # Add static attributes
+    if static_attributes:
+        for key, value in static_attributes.items():
+            span.set_attribute(key, value)
+
+    # Auto-extract common kwargs as span attributes
+    for attr_name in _AUTO_EXTRACT_ATTRS:
+        if attr_name in kwargs:
+            value = kwargs[attr_name]
+            if value is not None:
+                # Convert to dot notation for OpenTelemetry convention
+                # e.g., org_id -> org.id, network_name -> network.name
+                otel_attr_name = attr_name.replace("_", ".")
+                span.set_attribute(otel_attr_name, str(value))
+
+
+# Type variables for preserving function signatures
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
 # Decorator for adding custom spans
-def trace_method(name: str | None = None) -> Any:
-    """Decorator to add tracing to methods.
+def trace_method(
+    name: str | None = None,
+    attributes: dict[str, Any] | None = None,
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    """Decorator to add tracing to methods with auto-extracted attributes.
+
+    This decorator wraps async or sync methods with OpenTelemetry tracing,
+    automatically extracting common attributes from kwargs such as org_id,
+    network_id, serial, etc.
 
     Parameters
     ----------
     name : str | None
         Optional span name, defaults to function name.
+    attributes : dict[str, Any] | None
+        Optional static attributes to always add to the span.
 
     Returns
     -------
-    Any
-        Decorated function.
+    Callable
+        Decorated function with preserved type signature.
+
+    Examples
+    --------
+    >>> @trace_method("process.organization")
+    ... async def _collect_org_devices(self, org_id: str, org_name: str) -> None:
+    ...     # org_id and org_name will be auto-extracted as span attributes
+    ...     pass
+
+    >>> @trace_method("fetch.data", attributes={"data.type": "metrics"})
+    ... async def _fetch_metrics(self, serial: str) -> dict:
+    ...     # serial will be auto-extracted, data.type will be added
+    ...     pass
 
     """
 
-    def decorator(func: Any) -> Any:
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
         """Inner decorator."""
-        import functools
-
         if inspect.iscoroutinefunction(func):
 
             @functools.wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 """Async wrapper with tracing."""
-                tracer = trace.get_tracer(__name__)
+                tracer = trace.get_tracer(func.__module__)
                 span_name = name or f"{func.__module__}.{func.__name__}"
 
                 with tracer.start_as_current_span(span_name) as span:
                     try:
-                        # Add function arguments as span attributes
-                        if args and hasattr(args[0], "__class__"):
-                            span.set_attribute("class", args[0].__class__.__name__)
+                        # Extract and set span attributes
+                        _extract_span_attributes(span, args, kwargs, attributes)
 
                         result = await func(*args, **kwargs)
                         span.set_status(trace.Status(trace.StatusCode.OK))
@@ -310,20 +387,19 @@ def trace_method(name: str | None = None) -> Any:
                         span.record_exception(e)
                         raise
 
-            return async_wrapper
+            return async_wrapper  # type: ignore[return-value]  # ParamSpec can't handle wrappers
         else:
 
             @functools.wraps(func)
             def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
                 """Sync wrapper with tracing."""
-                tracer = trace.get_tracer(__name__)
+                tracer = trace.get_tracer(func.__module__)
                 span_name = name or f"{func.__module__}.{func.__name__}"
 
                 with tracer.start_as_current_span(span_name) as span:
                     try:
-                        # Add function arguments as span attributes
-                        if args and hasattr(args[0], "__class__"):
-                            span.set_attribute("class", args[0].__class__.__name__)
+                        # Extract and set span attributes
+                        _extract_span_attributes(span, args, kwargs, attributes)
 
                         result = func(*args, **kwargs)
                         span.set_status(trace.Status(trace.StatusCode.OK))

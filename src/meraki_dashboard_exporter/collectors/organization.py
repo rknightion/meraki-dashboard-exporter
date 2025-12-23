@@ -15,6 +15,7 @@ from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call, log_batch_operation
 from ..core.logging_helpers import LogContext, log_metric_collection_summary
 from ..core.metrics import LabelName
+from ..core.otel_tracing import trace_method
 from ..core.registry import register_collector
 from .organization_collectors import APIUsageCollector, ClientOverviewCollector, LicenseCollector
 
@@ -262,6 +263,7 @@ class OrganizationCollector(MetricCollector):
 
         return await self.inventory.get_organizations()
 
+    @trace_method("process.organization")
     @log_batch_operation("collect org metrics", batch_size=1)
     @with_error_handling(
         operation="Collect organization metrics",

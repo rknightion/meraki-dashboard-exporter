@@ -6,6 +6,7 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
+from opentelemetry import trace
 from prometheus_client import Counter, Gauge, Histogram
 
 from ..core.async_utils import ManagedTaskGroup
@@ -13,6 +14,7 @@ from ..core.constants import UpdateTier
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
+from ..core.otel_tracing import trace_method
 from ..core.registry import get_registered_collectors
 from ..services.inventory import OrganizationInventory
 
@@ -260,6 +262,7 @@ class CollectorManager:
                 )
                 # Continue with next tier even if this one fails
 
+    @trace_method("collect.tier")
     async def collect_tier(self, tier: UpdateTier) -> None:
         """Run all collectors for a specific tier in parallel with bounded concurrency.
 
@@ -273,6 +276,11 @@ class CollectorManager:
             The update tier to collect.
 
         """
+        # Add tier to current span context for visibility
+        current_span = trace.get_current_span()
+        if current_span.is_recording():
+            current_span.set_attribute("tier", tier.value)
+
         tier_collectors = self.collectors.get(tier, [])
         if not tier_collectors:
             logger.debug(

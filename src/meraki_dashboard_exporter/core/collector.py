@@ -6,6 +6,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Protocol
 
+from opentelemetry import trace
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, Info
 from prometheus_client.core import REGISTRY
 
@@ -118,88 +119,106 @@ class MetricCollector(ABC):
         ...
 
     async def collect(self) -> None:
-        """Collect metrics from the Meraki API with performance tracking."""
+        """Collect metrics from the Meraki API with performance tracking and tracing."""
         collector_name = self.__class__.__name__
         start_time = time.time()
 
-        try:
-            await self._collect_impl()
+        # Get tracer for distributed tracing (returns no-op tracer if not configured)
+        tracer = trace.get_tracer(__name__)
 
-            # Record success
-            duration = time.time() - start_time
+        with tracer.start_as_current_span(f"collect.{collector_name}") as span:
+            # Set initial span attributes
+            span.set_attribute("collector.name", collector_name)
+            span.set_attribute("collector.tier", self.update_tier.value)
+            span.set_attribute("collector.active", self.is_active)
 
-            # Always try to record metrics (they should be initialized)
-            if MetricCollector._collector_duration is not None:
-                # Record the metric value
-                MetricCollector._collector_duration.labels(
+            try:
+                await self._collect_impl()
+
+                # Record success
+                duration = time.time() - start_time
+
+                # Set duration on span
+                span.set_attribute("collector.duration_seconds", duration)
+                span.set_status(trace.Status(trace.StatusCode.OK))
+
+                # Always try to record metrics (they should be initialized)
+                if MetricCollector._collector_duration is not None:
+                    # Record the metric value
+                    MetricCollector._collector_duration.labels(
+                        collector=collector_name,
+                        tier=self.update_tier.value,
+                    ).observe(duration)
+
+                    # Also try to add exemplar to link metric to trace
+                    # Note: This is a no-op if no trace is active
+                    add_exemplar(
+                        MetricCollector._collector_duration,
+                        value=duration,
+                        labels={
+                            "collector": collector_name,
+                            "tier": self.update_tier.value,
+                        },
+                    )
+                else:
+                    logger.warning("Collector duration metric not initialized")
+
+                if MetricCollector._collector_last_success is not None:
+                    MetricCollector._collector_last_success.labels(
+                        collector=collector_name,
+                        tier=self.update_tier.value,
+                    ).set(time.time())
+                else:
+                    logger.warning("Collector last success metric not initialized")
+
+                logger.debug(
+                    "Collector completed successfully",
                     collector=collector_name,
                     tier=self.update_tier.value,
-                ).observe(duration)
-
-                # Also try to add exemplar to link metric to trace
-                # Note: This is a no-op if no trace is active
-                add_exemplar(
-                    MetricCollector._collector_duration,
-                    value=duration,
-                    labels={
-                        "collector": collector_name,
-                        "tier": self.update_tier.value,
-                    },
+                    duration=f"{duration:.2f}s",
                 )
-            else:
-                logger.warning("Collector duration metric not initialized")
 
-            if MetricCollector._collector_last_success is not None:
-                MetricCollector._collector_last_success.labels(
+            except Exception as e:
+                # Record error
+                duration = time.time() - start_time
+
+                # Set error on span
+                span.set_attribute("collector.duration_seconds", duration)
+                span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                span.record_exception(e)
+
+                # Always try to record metrics (they should be initialized)
+                if MetricCollector._collector_errors is not None:
+                    # Record the error
+                    MetricCollector._collector_errors.labels(
+                        collector=collector_name,
+                        tier=self.update_tier.value,
+                        error_type=type(e).__name__,
+                    ).inc()
+
+                    # Also try to add exemplar to link error metric to trace
+                    # Note: This is a no-op if no trace is active
+                    add_exemplar(
+                        MetricCollector._collector_errors,
+                        value=1,
+                        labels={
+                            "collector": collector_name,
+                            "tier": self.update_tier.value,
+                            "error_type": type(e).__name__,
+                        },
+                    )
+                else:
+                    logger.warning("Collector errors metric not initialized")
+
+                logger.error(
+                    "Collector failed",
                     collector=collector_name,
                     tier=self.update_tier.value,
-                ).set(time.time())
-            else:
-                logger.warning("Collector last success metric not initialized")
-
-            logger.debug(
-                "Collector completed successfully",
-                collector=collector_name,
-                tier=self.update_tier.value,
-                duration=f"{duration:.2f}s",
-            )
-
-        except Exception as e:
-            # Record error
-            duration = time.time() - start_time
-
-            # Always try to record metrics (they should be initialized)
-            if MetricCollector._collector_errors is not None:
-                # Record the error
-                MetricCollector._collector_errors.labels(
-                    collector=collector_name,
-                    tier=self.update_tier.value,
+                    duration=f"{duration:.2f}s",
+                    error=str(e),
                     error_type=type(e).__name__,
-                ).inc()
-
-                # Also try to add exemplar to link error metric to trace
-                # Note: This is a no-op if no trace is active
-                add_exemplar(
-                    MetricCollector._collector_errors,
-                    value=1,
-                    labels={
-                        "collector": collector_name,
-                        "tier": self.update_tier.value,
-                        "error_type": type(e).__name__,
-                    },
                 )
-            else:
-                logger.warning("Collector errors metric not initialized")
-
-            logger.error(
-                "Collector failed",
-                collector=collector_name,
-                tier=self.update_tier.value,
-                duration=f"{duration:.2f}s",
-                error=str(e),
-                error_type=type(e).__name__,
-            )
-            raise
+                raise
 
     def _create_gauge(
         self,
