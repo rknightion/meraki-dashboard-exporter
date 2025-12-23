@@ -88,7 +88,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "count(count by (org_id) (meraki_org_info{org_id=~\"$organization\"}))",
+          "expr": "count(count by (org_id) (meraki_org{org_id=~\"$organization\"}))",
           "instant": true,
           "legendFormat": "Organizations",
           "range": false,
@@ -337,12 +337,18 @@
       },
       "id": 5,
       "options": {
-        "displayLabels": ["name", "value"],
+        "displayLabels": [
+          "name",
+          "value"
+        ],
         "legend": {
           "displayMode": "table",
           "placement": "right",
           "showLegend": true,
-          "values": ["value", "percent"]
+          "values": [
+            "value",
+            "percent"
+          ]
         },
         "pieType": "donut",
         "reduceOptions": {
@@ -364,7 +370,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (type) (meraki_org_devices_total{org_id=~\"$organization\"})",
+          "expr": "sum by (device_type) (meraki_org_devices_total{org_id=~\"$organization\"})",
           "instant": true,
           "legendFormat": "{{type}}",
           "range": false,
@@ -517,12 +523,17 @@
       },
       "id": 7,
       "options": {
-        "displayLabels": ["name", "percent"],
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true,
-          "values": ["value"]
+          "values": [
+            "value"
+          ]
         },
         "pieType": "pie",
         "reduceOptions": {
@@ -544,7 +555,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (availability) (meraki_org_devices_availability_total{org_id=~\"$organization\"})",
+          "expr": "sum by (status) (meraki_org_devices_availability_total{org_id=~\"$organization\"})",
           "instant": true,
           "legendFormat": "{{availability}}",
           "range": false,
@@ -630,7 +641,10 @@
       "id": 8,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": [
+            "mean",
+            "max"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -647,7 +661,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "rate(meraki_org_api_requests_total{org_id=~\"$organization\"}[$__rate_interval])",
+          "expr": "meraki_org_api_requests_total{org_id=~\"$organization\"} / 3600",
           "legendFormat": "{{org_name}} - Total Requests",
           "range": true,
           "refId": "A"
@@ -721,7 +735,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(rate(meraki_org_api_requests_total{org_id=~\"$organization\"}[$__rate_interval]) / meraki_org_api_requests_rate_limit{org_id=~\"$organization\"}) * 100",
+          "expr": "(1 - (meraki_exporter_api_rate_limit_remaining{org_id=\"$organization\"} / clamp_min(meraki_exporter_api_rate_limit_total{org_id=\"$organization\"}, 1))) * 100",
           "instant": true,
           "legendFormat": "{{org_name}}",
           "range": false,
@@ -772,12 +786,17 @@
       },
       "id": 10,
       "options": {
-        "displayLabels": ["name", "value"],
+        "displayLabels": [
+          "name",
+          "value"
+        ],
         "legend": {
           "displayMode": "table",
           "placement": "right",
           "showLegend": true,
-          "values": ["value"]
+          "values": [
+            "value"
+          ]
         },
         "pieType": "donut",
         "reduceOptions": {
@@ -1143,6 +1162,42 @@
           "instant": true,
           "range": false,
           "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_org_login_security_api_ip_restrictions_enabled{org_id=~\"$organization\"}",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "G"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_org_login_security_different_passwords_enabled{org_id=~\"$organization\"}",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "H"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_org_login_security_different_passwords_count{org_id=~\"$organization\"}",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "I"
         }
       ],
       "title": "Security Features Status",
@@ -1166,7 +1221,10 @@
               "Value #D": "Account Lockout",
               "Value #E": "Idle Timeout",
               "Value #F": "IP Restrictions",
-              "org_name": "Organization"
+              "org_name": "Organization",
+              "Value #G": "API IP Restrictions",
+              "Value #H": "Different Passwords",
+              "Value #I": "Different Password Count"
             }
           }
         }
@@ -1457,7 +1515,10 @@
       "id": 15,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": [
+            "mean",
+            "max"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -1474,7 +1535,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "rate(meraki_org_usage_upstream_kb{org_id=~\"$organization\"}[$__rate_interval])",
+          "expr": "meraki_org_usage_upstream_kb{org_id=~\"$organization\"} * 1024 / 3600",
           "legendFormat": "{{org_name}} - Upstream",
           "range": true,
           "refId": "A"
@@ -1485,10 +1546,21 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "rate(meraki_org_usage_downstream_kb{org_id=~\"$organization\"}[$__rate_interval])",
+          "expr": "meraki_org_usage_downstream_kb{org_id=~\"$organization\"} * 1024 / 3600",
           "legendFormat": "{{org_name}} - Downstream",
           "range": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_org_usage_total_kb{org_id=~\"$organization\"} * 1024 / 3600",
+          "legendFormat": "{{org_name}} - Total",
+          "range": true,
+          "refId": "C"
         }
       ],
       "title": "Organization Bandwidth Usage",
@@ -1559,7 +1631,10 @@
       "id": 16,
       "options": {
         "legend": {
-          "calcs": ["last", "sum"],
+          "calcs": [
+            "last",
+            "sum"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -1583,6 +1658,450 @@
         }
       ],
       "title": "Configuration Changes (24h)",
+      "type": "timeseries"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "id": 106,
+      "title": "Application Usage",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 53
+      },
+      "id": 107,
+      "options": {
+        "displayMode": "basic",
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "text"
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "topk(10, sum by (category) (meraki_org_application_usage_total_mb{org_id=~\"$organization\"})) * 1024 * 1024",
+          "instant": true,
+          "legendFormat": "{{category}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Application Usage by Category (MB)",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          },
+          "mappings": [],
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 53
+      },
+      "id": 108,
+      "options": {
+        "displayLabels": [
+          "name",
+          "value"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (category) (meraki_org_application_usage_percentage{org_id=~\"$organization\"})",
+          "instant": true,
+          "legendFormat": "{{category}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Application Usage Share (%)",
+      "type": "piechart"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 61
+      },
+      "id": 109,
+      "title": "API Status & Packet Captures",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 62
+      },
+      "id": 110,
+      "options": {
+        "displayMode": "basic",
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "text"
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (status_code) (meraki_org_api_requests_by_status{org_id=~\"$organization\"})",
+          "instant": true,
+          "legendFormat": "{{status_code}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "API Requests by Status Code",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 62
+      },
+      "id": 111,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_org_packetcaptures_total{org_id=~\"$organization\"}",
+          "instant": true,
+          "legendFormat": "Total",
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_org_packetcaptures_remaining{org_id=~\"$organization\"}",
+          "instant": true,
+          "legendFormat": "Remaining",
+          "range": false,
+          "refId": "B"
+        }
+      ],
+      "title": "Packet Captures (Total / Remaining)",
+      "type": "stat"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 70
+      },
+      "id": 112,
+      "title": "Application Usage Trends",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Downstream.*"
+            },
+            "properties": [
+              {
+                "id": "custom.transform",
+                "value": "negative-Y"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 71
+      },
+      "id": 113,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_org_application_usage_downstream_mb{org_id=~\"$organization\"}) * 1024 * 1024",
+          "legendFormat": "Downstream MB",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_org_application_usage_upstream_mb{org_id=~\"$organization\"}) * 1024 * 1024",
+          "legendFormat": "Upstream MB",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Application Usage (Upstream/Downstream MB)",
       "type": "timeseries"
     }
   ],
@@ -1628,7 +2147,7 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(meraki_org_info, org_id)",
+        "definition": "label_values(meraki_org, org_id)",
         "hide": 0,
         "includeAll": true,
         "label": "Organization",
@@ -1637,7 +2156,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(meraki_org_info, org_id)",
+          "query": "label_values(meraki_org, org_id)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,

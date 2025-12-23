@@ -30,7 +30,8 @@
       },
       "id": 100,
       "title": "Switch Overview",
-      "type": "row"
+      "type": "row",
+      "targets": []
     },
     {
       "datasource": {
@@ -257,7 +258,10 @@
       "id": 3,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": [
+            "mean",
+            "max"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -292,7 +296,8 @@
       },
       "id": 101,
       "title": "Port Statistics",
-      "type": "row"
+      "type": "row",
+      "targets": []
     },
     {
       "datasource": {
@@ -382,9 +387,9 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(meraki_ms_port_status{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", status=\"connected\"})",
+          "expr": "sum(meraki_ms_port_status{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"})",
           "instant": true,
-          "legendFormat": "Connected",
+          "legendFormat": "connected",
           "range": false,
           "refId": "A"
         },
@@ -394,9 +399,9 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(meraki_ms_port_status{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", status=\"disconnected\"})",
+          "expr": "count(meraki_ms_port_status{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}) - sum(meraki_ms_port_status{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"})",
           "instant": true,
-          "legendFormat": "Disconnected",
+          "legendFormat": "disconnected",
           "range": false,
           "refId": "B"
         }
@@ -482,7 +487,10 @@
       "id": 5,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": [
+            "mean",
+            "max"
+          ],
           "displayMode": "table",
           "placement": "right",
           "showLegend": true,
@@ -500,8 +508,8 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "rate(meraki_ms_port_traffic_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"sent\"}[$__rate_interval])",
-          "legendFormat": "{{name}} - Port {{port_id}} - sent",
+          "expr": "sum(meraki_ms_port_traffic_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"tx\"})",
+          "legendFormat": "tx",
           "range": true,
           "refId": "A"
         },
@@ -511,8 +519,8 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "rate(meraki_ms_port_traffic_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"recv\"}[$__rate_interval])",
-          "legendFormat": "{{name}} - Port {{port_id}} - recv",
+          "expr": "sum(meraki_ms_port_traffic_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"rx\"})",
+          "legendFormat": "rx",
           "range": true,
           "refId": "B"
         }
@@ -585,7 +593,10 @@
       "id": 6,
       "options": {
         "legend": {
-          "calcs": ["last", "sum"],
+          "calcs": [
+            "last",
+            "sum"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -602,10 +613,43 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "rate(meraki_ms_port_errors_total{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}[$__rate_interval])",
-          "legendFormat": "{{name}} - Port {{port_id}} - {{error_type}}",
+          "expr": "sum(meraki_ms_port_packets_rate_crcerrors{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "crc_errors",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_packets_rate_fragments{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "fragments",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_packets_rate_collisions{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "collisions",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_packets_rate_topologychanges{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "topology_changes",
+          "range": true,
+          "refId": "D"
         }
       ],
       "title": "Port Errors by Type",
@@ -765,7 +809,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_ms_port_status{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", status=\"connected\"}",
+          "expr": "meraki_ms_port_status{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}",
           "format": "table",
           "instant": true,
           "range": false,
@@ -777,7 +821,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (name, port_id) (rate(meraki_ms_port_traffic_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}[$__rate_interval]))",
+          "expr": "sum by (name, port_id) (meraki_ms_port_traffic_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=~\"rx|tx\"})",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -790,12 +834,25 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (name, port_id) (rate(meraki_ms_port_errors_total{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}[$__rate_interval]))",
+          "expr": "sum by (name, port_id) (meraki_ms_port_packets_rate_crcerrors{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"} + meraki_ms_port_packets_rate_fragments{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"} + meraki_ms_port_packets_rate_collisions{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"} + meraki_ms_port_packets_rate_topologychanges{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
           "format": "table",
           "hide": false,
           "instant": true,
           "range": false,
           "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_ms_port_client_count{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"}",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "D",
+          "legendFormat": "{{port_name}}"
         }
       ],
       "title": "Port Status Table",
@@ -828,7 +885,8 @@
               "Value #B": "Traffic Rate",
               "Value #C": "Error Rate",
               "name": "Switch",
-              "port_id": "Port"
+              "port_id": "Port",
+              "Value #D": "Client Count"
             }
           }
         }
@@ -844,7 +902,8 @@
       },
       "id": 102,
       "title": "PoE (Power over Ethernet)",
-      "type": "row"
+      "type": "row",
+      "targets": []
     },
     {
       "datasource": {
@@ -989,7 +1048,10 @@
       "id": 9,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": [
+            "mean",
+            "max"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -1084,7 +1146,10 @@
       "id": 10,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": [
+            "mean",
+            "max"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -1402,7 +1467,8 @@
       },
       "id": 103,
       "title": "Device Health",
-      "type": "row"
+      "type": "row",
+      "targets": []
     },
     {
       "datasource": {
@@ -1469,7 +1535,10 @@
       "id": 13,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": [
+            "mean",
+            "max"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -1642,7 +1711,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_device_memory_used_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MS.*\", stat=\"used\"}",
+          "expr": "meraki_device_memory_used_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MS.*\", stat=\"max\"}",
           "format": "table",
           "instant": true,
           "range": false,
@@ -1654,7 +1723,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_device_memory_free_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MS.*\", stat=\"free\"}",
+          "expr": "meraki_device_memory_free_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MS.*\", stat=\"min\"}",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -1719,6 +1788,1229 @@
         }
       ],
       "type": "table"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "id": 104,
+      "title": "Port Inventory & Clients",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Connected"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Disconnected"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 53
+      },
+      "id": 105,
+      "options": {
+        "displayMode": "lcd",
+        "maxVizHeight": 200,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "text"
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_ms_ports_active_total{org_id=~\"$organization\"}",
+          "instant": true,
+          "legendFormat": "active",
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_ms_ports_inactive_total{org_id=~\"$organization\"}",
+          "instant": true,
+          "legendFormat": "inactive",
+          "range": false,
+          "refId": "B"
+        }
+      ],
+      "title": "Ports Active vs Inactive",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          },
+          "mappings": [],
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 9,
+        "x": 6,
+        "y": 53
+      },
+      "id": 106,
+      "options": {
+        "displayLabels": [
+          "name",
+          "value"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (media) (meraki_ms_ports_by_media_total{org_id=~\"$organization\"})",
+          "instant": true,
+          "legendFormat": "{{media}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Ports by Media Type",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Connected"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Disconnected"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 9,
+        "x": 15,
+        "y": 53
+      },
+      "id": 107,
+      "options": {
+        "displayMode": "lcd",
+        "maxVizHeight": 200,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "text"
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (link_speed) (meraki_ms_ports_by_link_speed_total{org_id=~\"$organization\"})",
+          "instant": true,
+          "legendFormat": "{{link_speed}} Mbps",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Ports by Link Speed (Active)",
+      "type": "bargauge"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 61
+      },
+      "id": 108,
+      "title": "Port Clients & Usage",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "color": "dark-red",
+                        "index": 0,
+                        "text": "Disconnected"
+                      },
+                      "1": {
+                        "color": "green",
+                        "index": 1,
+                        "text": "Connected"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Traffic Rate"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "Bps"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "sparkline"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Error Rate"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "cps"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.01
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 62
+      },
+      "id": 109,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Traffic Rate"
+          }
+        ]
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "topk(10, meraki_ms_port_client_count{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\"})",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "legendFormat": "{{port_name}}"
+        }
+      ],
+      "title": "Top Ports by Client Count",
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "Value #A": "Client Count",
+              "port_name": "Port",
+              "name": "Switch"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "Bps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*recv.*"
+            },
+            "properties": [
+              {
+                "id": "custom.transform",
+                "value": "negative-Y"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 62
+      },
+      "id": 110,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "width": 200
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_usage_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "total",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_usage_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"rx\"})",
+          "legendFormat": "rx",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_usage_bytes{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"tx\"})",
+          "legendFormat": "tx",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Port Usage (Last Hour, Bytes)",
+      "type": "timeseries"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 70
+      },
+      "id": 111,
+      "title": "Spanning Tree",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory Used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory Free"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory Total"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Usage %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "percentage",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 70
+                    },
+                    {
+                      "color": "red",
+                      "value": 90
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 71
+      },
+      "id": 112,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Usage %"
+          }
+        ]
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_ms_stp_priority{org_id=~\"$organization\", network_id=~\"$network\"}",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "legendFormat": "{{name}}"
+        }
+      ],
+      "title": "STP Priority by Switch",
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "org_id": true,
+              "org_name": true,
+              "network_id": true,
+              "network_name": true,
+              "serial": true,
+              "model": true,
+              "device_type": true
+            },
+            "renameByName": {
+              "name": "Switch",
+              "Value #A": "STP Priority"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 79
+      },
+      "id": 113,
+      "title": "Packet Metrics",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "pps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*recv.*"
+            },
+            "properties": [
+              {
+                "id": "custom.transform",
+                "value": "negative-Y"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 80
+      },
+      "id": 114,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "width": 200
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_packets_rate_total{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "total",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_packets_rate_broadcast{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "broadcast",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_packets_rate_multicast{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "multicast",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Packet Rates (pps)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "Bps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*recv.*"
+            },
+            "properties": [
+              {
+                "id": "custom.transform",
+                "value": "negative-Y"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 80
+      },
+      "id": 115,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "width": 200
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_packets_total{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "total",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_packets_broadcast{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "broadcast",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_packets_multicast{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "multicast",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Packet Counts (5 min)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "Bps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*recv.*"
+            },
+            "properties": [
+              {
+                "id": "custom.transform",
+                "value": "negative-Y"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 80
+      },
+      "id": 116,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "width": 200
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_packets_crcerrors{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "crcerrors",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_packets_fragments{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "fragments",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_packets_collisions{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "collisions",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(meraki_ms_port_packets_topologychanges{serial=~\"$switch\", org_id=~\"$organization\", network_id=~\"$network\", direction=\"total\"})",
+          "legendFormat": "topology_changes",
+          "range": true,
+          "refId": "D"
+        }
+      ],
+      "title": "Error Counts (5 min)",
+      "type": "timeseries"
     }
   ],
   "refresh": "60s",
