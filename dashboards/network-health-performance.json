@@ -100,7 +100,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg(meraki_ap_channel_utilization_2_4ghz_percent{org_id=~\"$organization\", network_id=~\"$network\"})",
+          "expr": "avg(meraki_ap_channel_utilization_2_4ghz_percent{org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"})",
           "instant": true,
           "legendFormat": "2.4GHz Avg",
           "range": false,
@@ -178,7 +178,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg(meraki_ap_channel_utilization_5ghz_percent{org_id=~\"$organization\", network_id=~\"$network\"})",
+          "expr": "avg(meraki_ap_channel_utilization_5ghz_percent{org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"})",
           "instant": true,
           "legendFormat": "5GHz Avg",
           "range": false,
@@ -263,7 +263,10 @@
       "id": 3,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": [
+            "mean",
+            "max"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -280,8 +283,8 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_ap_channel_utilization_2_4ghz_percent{org_id=~\"$organization\", network_id=~\"$network\"}",
-          "legendFormat": "{{network_name}} - 2.4GHz",
+          "expr": "meraki_ap_channel_utilization_2_4ghz_percent{org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}",
+          "legendFormat": "2.4GHz total",
           "range": true,
           "refId": "A"
         },
@@ -291,9 +294,9 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_ap_channel_utilization_5ghz_percent{org_id=~\"$organization\", network_id=~\"$network\"}",
+          "expr": "meraki_ap_channel_utilization_5ghz_percent{org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}",
           "hide": false,
-          "legendFormat": "{{network_name}} - 5GHz",
+          "legendFormat": "5GHz total",
           "range": true,
           "refId": "B"
         }
@@ -380,7 +383,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg((meraki_network_wireless_connection_stats{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"success\"} / (meraki_network_wireless_connection_stats{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"success\"} + meraki_network_wireless_connection_stats{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"failures\"})) * 100)",
+          "expr": "avg((meraki_network_wireless_connection_stats_total{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"success\"} / (clamp_min(meraki_network_wireless_connection_stats_total{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"assoc\"}, 1))) * 100)",
           "instant": true,
           "legendFormat": "Success Rate",
           "range": false,
@@ -458,7 +461,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(meraki_network_wireless_connection_stats{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"assoc\"})",
+          "expr": "sum(meraki_network_wireless_connection_stats_total{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"assoc\"})",
           "instant": true,
           "legendFormat": "Associations",
           "range": false,
@@ -536,7 +539,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(meraki_network_wireless_connection_stats{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"auth\"})",
+          "expr": "sum(meraki_network_wireless_connection_stats_total{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"auth\"})",
           "instant": true,
           "legendFormat": "Authentications",
           "range": false,
@@ -611,7 +614,10 @@
       "id": 7,
       "options": {
         "legend": {
-          "calcs": ["mean", "min"],
+          "calcs": [
+            "mean",
+            "min"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -628,7 +634,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(meraki_network_wireless_connection_stats{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"success\"} / (meraki_network_wireless_connection_stats{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"success\"} + meraki_network_wireless_connection_stats{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"failures\"})) * 100",
+          "expr": "(meraki_network_wireless_connection_stats_total{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"success\"} / (clamp_min(meraki_network_wireless_connection_stats_total{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"assoc\"}, 1))) * 100",
           "legendFormat": "{{network_name}}",
           "range": true,
           "refId": "A"
@@ -713,7 +719,10 @@
       "id": 8,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": [
+            "mean",
+            "max"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -804,7 +813,9 @@
       "id": 9,
       "options": {
         "legend": {
-          "calcs": ["sum"],
+          "calcs": [
+            "sum"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -821,7 +832,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_network_wireless_download_kbps * 1024{org_id=~\"$organization\", network_id=~\"$network\"}",
+          "expr": "meraki_network_wireless_download_kbps{org_id=~\"$organization\", network_id=~\"$network\"} * 1024",
           "legendFormat": "{{network_name}} - Download",
           "range": true,
           "refId": "A"
@@ -832,7 +843,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_network_wireless_upload_kbps * 1024{org_id=~\"$organization\", network_id=~\"$network\"}",
+          "expr": "meraki_network_wireless_upload_kbps{org_id=~\"$organization\", network_id=~\"$network\"} * 1024",
           "hide": false,
           "legendFormat": "{{network_name}} - Upload",
           "range": true,
@@ -949,12 +960,17 @@
       },
       "id": 11,
       "options": {
-        "displayLabels": ["name", "value"],
+        "displayLabels": [
+          "name",
+          "value"
+        ],
         "legend": {
           "displayMode": "table",
           "placement": "right",
           "showLegend": true,
-          "values": ["value"]
+          "values": [
+            "value"
+          ]
         },
         "pieType": "donut",
         "reduceOptions": {
@@ -1051,7 +1067,9 @@
       "id": 12,
       "options": {
         "legend": {
-          "calcs": ["mean"],
+          "calcs": [
+            "mean"
+          ],
           "displayMode": "table",
           "placement": "right",
           "showLegend": true,
@@ -1306,7 +1324,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_ap_channel_utilization_2_4ghz_percent{org_id=~\"$organization\", network_id=~\"$network\"}",
+          "expr": "meraki_ap_channel_utilization_2_4ghz_percent{org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}",
           "format": "table",
           "instant": true,
           "range": false,
@@ -1318,7 +1336,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_ap_channel_utilization_5ghz_percent{org_id=~\"$organization\", network_id=~\"$network\"}",
+          "expr": "meraki_ap_channel_utilization_5ghz_percent{org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -1331,7 +1349,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(meraki_network_wireless_connection_stats{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"success\"} / (meraki_network_wireless_connection_stats{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"success\"} + meraki_network_wireless_connection_stats{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"failures\"})) * 100",
+          "expr": "(meraki_network_wireless_connection_stats_total{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"success\"} / (clamp_min(meraki_network_wireless_connection_stats_total{org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"assoc\"}, 1))) * 100",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -1400,6 +1418,247 @@
         }
       ],
       "type": "table"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 47
+      },
+      "id": 105,
+      "title": "Utilization Breakdown",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 48
+      },
+      "id": 106,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_ap_channel_utilization_2_4ghz_percent{org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"wifi\"}",
+          "legendFormat": "WiFi",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_ap_channel_utilization_2_4ghz_percent{org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"non_wifi\"}",
+          "legendFormat": "Non-WiFi",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "2.4GHz Utilization (WiFi vs Non-WiFi)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 48
+      },
+      "id": 107,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_ap_channel_utilization_5ghz_percent{org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"wifi\"}",
+          "legendFormat": "WiFi",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "meraki_ap_channel_utilization_5ghz_percent{org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"non_wifi\"}",
+          "legendFormat": "Non-WiFi",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "5GHz Utilization (WiFi vs Non-WiFi)",
+      "type": "timeseries"
     }
   ],
   "refresh": "60s",
@@ -1455,7 +1714,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(meraki_network_wireless_connection_stats, org_id)",
+          "query": "label_values(meraki_network_wireless_connection_stats_total, org_id)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -1487,7 +1746,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(meraki_network_wireless_connection_stats{org_id=~\"$organization\"}, network_id)",
+          "query": "label_values(meraki_network_wireless_connection_stats_total{org_id=~\"$organization\"}, network_id)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,

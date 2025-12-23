@@ -348,7 +348,10 @@
       "id": 4,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": [
+            "mean",
+            "max"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -580,7 +583,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_device_memory_used_bytes{serial=~\"$mg\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MG.*\", stat=\"used\"}",
+          "expr": "meraki_device_memory_used_bytes{serial=~\"$mg\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MG.*\", stat=\"max\"}",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -593,7 +596,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "meraki_device_memory_free_bytes{serial=~\"$mg\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MG.*\", stat=\"free\"}",
+          "expr": "meraki_device_memory_free_bytes{serial=~\"$mg\", org_id=~\"$organization\", network_id=~\"$network\", model=~\"MG.*\", stat=\"min\"}",
           "format": "table",
           "hide": false,
           "instant": true,
