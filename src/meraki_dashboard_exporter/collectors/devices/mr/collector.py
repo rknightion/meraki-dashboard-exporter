@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from ....core.logging import get_logger
+from ....core.otel_tracing import trace_method
 from ...devices.base import BaseDeviceCollector
 from .clients import MRClientsCollector
 from .performance import MRPerformanceCollector
@@ -141,6 +142,7 @@ class MRCollector(BaseDeviceCollector):
         # metrics (SSID status, radio config) are collected at org-level via
         # separate delegation methods called from the parent DeviceCollector
 
+    @trace_method("collect.mr_wireless_clients")
     async def collect_wireless_clients(
         self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
     ) -> None:
@@ -160,6 +162,7 @@ class MRCollector(BaseDeviceCollector):
         """
         await self.clients.collect_wireless_clients(org_id, org_name, device_lookup)
 
+    @trace_method("collect.mr_ethernet_status")
     async def collect_ethernet_status(
         self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
     ) -> None:
@@ -177,6 +180,7 @@ class MRCollector(BaseDeviceCollector):
         """
         await self.performance.collect_ethernet_status(org_id, org_name, device_lookup)
 
+    @trace_method("collect.mr_packet_loss")
     async def collect_packet_loss(
         self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
     ) -> None:
@@ -194,6 +198,7 @@ class MRCollector(BaseDeviceCollector):
         """
         await self.performance.collect_packet_loss(org_id, org_name, device_lookup)
 
+    @trace_method("collect.mr_cpu_load")
     async def collect_cpu_load(
         self, org_id: str, org_name: str, devices: list[dict[str, Any]]
     ) -> None:
@@ -211,6 +216,7 @@ class MRCollector(BaseDeviceCollector):
         """
         await self.performance.collect_cpu_load(org_id, org_name, devices)
 
+    @trace_method("collect.mr_ssid_status")
     async def collect_ssid_status(self, org_id: str, org_name: str) -> None:
         """Collect SSID status metrics (org-level).
 
@@ -224,6 +230,7 @@ class MRCollector(BaseDeviceCollector):
         """
         await self.wireless.collect_ssid_status(org_id, org_name)
 
+    @trace_method("collect.mr_ssid_usage")
     async def collect_ssid_usage(self, org_id: str, org_name: str) -> None:
         """Collect SSID usage metrics (org-level).
 
@@ -237,6 +244,7 @@ class MRCollector(BaseDeviceCollector):
         """
         await self.wireless.collect_ssid_usage(org_id, org_name)
 
+    @trace_method("collect.mr_connection_stats")
     async def collect_connection_stats(
         self,
         org_id: str,

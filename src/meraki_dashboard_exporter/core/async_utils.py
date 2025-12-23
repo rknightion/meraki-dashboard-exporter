@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Callable, Coroutine
 from contextlib import asynccontextmanager
+from contextvars import copy_context
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from opentelemetry import trace
 from prometheus_client import Counter, Gauge
 from prometheus_client.core import REGISTRY
 
@@ -118,55 +120,96 @@ class ManagedTaskGroup:
         self._total_created = 0
         self._total_completed = 0
 
+        # Tracing support for distributed tracing context propagation
+        self._span: trace.Span | None = None
+        self._span_context_manager: Any = None
+
     async def __aenter__(self) -> ManagedTaskGroup:
-        """Enter the context manager."""
+        """Enter the context manager with optional tracing span."""
         logger.debug(f"Starting task group: {self.name}")
+
+        # Create a span for the task group to enable distributed tracing
+        tracer = trace.get_tracer(__name__)
+        self._span = tracer.start_span(f"taskgroup.{self.name}")
+        self._span.set_attribute("taskgroup.name", self.name)
+        if self.max_concurrency:
+            self._span.set_attribute("taskgroup.max_concurrency", self.max_concurrency)
+
+        # Enter the span context to make it current
+        self._span_context_manager = trace.use_span(self._span, end_on_exit=False)
+        self._span_context_manager.__enter__()
+
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Exit the context manager and clean up tasks."""
         self._closed = True
 
-        if not self.tasks:
-            return
+        if self.tasks:
+            logger.debug(
+                f"Cleaning up task group: {self.name}",
+                task_count=len(self.tasks),
+                exception=exc_type.__name__ if exc_type else None,
+            )
 
-        logger.debug(
-            f"Cleaning up task group: {self.name}",
-            task_count=len(self.tasks),
-            exception=exc_type.__name__ if exc_type else None,
-        )
+            # If exiting due to exception, cancel all tasks
+            if exc_type:
+                for task in self.tasks:
+                    if not task.done():
+                        task.cancel()
 
-        # If exiting due to exception, cancel all tasks
-        if exc_type:
-            for task in self.tasks:
-                if not task.done():
-                    task.cancel()
+            # Wait for all tasks to complete
+            try:
+                results = await asyncio.gather(*self.tasks, return_exceptions=True)
 
-        # Wait for all tasks to complete
-        try:
-            results = await asyncio.gather(*self.tasks, return_exceptions=True)
+                # Log any exceptions from tasks
+                for i, result in enumerate(results):
+                    if isinstance(result, Exception) and not isinstance(
+                        result, asyncio.CancelledError
+                    ):
+                        logger.error(
+                            f"Task failed in group {self.name}",
+                            task_index=i,
+                            error=str(result),
+                            error_type=type(result).__name__,
+                        )
+            except Exception:
+                logger.exception(f"Error cleaning up task group: {self.name}")
 
-            # Log any exceptions from tasks
-            for i, result in enumerate(results):
-                if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
-                    logger.error(
-                        f"Task failed in group {self.name}",
-                        task_index=i,
-                        error=str(result),
-                        error_type=type(result).__name__,
-                    )
-        except Exception:
-            logger.exception(f"Error cleaning up task group: {self.name}")
+        # End the tracing span with proper status
+        if self._span is not None:
+            # Set span attributes with final statistics
+            self._span.set_attribute("taskgroup.tasks_created", self._total_created)
+            self._span.set_attribute("taskgroup.tasks_completed", self._total_completed)
+
+            if exc_type:
+                self._span.set_status(
+                    trace.Status(trace.StatusCode.ERROR, str(exc_val) if exc_val else "Error")
+                )
+                if exc_val:
+                    self._span.record_exception(exc_val)
+            else:
+                self._span.set_status(trace.Status(trace.StatusCode.OK))
+
+            # Exit the span context
+            if self._span_context_manager is not None:
+                self._span_context_manager.__exit__(exc_type, exc_val, exc_tb)
+
+            # End the span
+            self._span.end()
 
     async def create_task(
         self,
         coro: Coroutine[Any, Any, T],
         name: str | None = None,
     ) -> Task[T]:
-        """Create and track a task with optional bounded concurrency.
+        """Create and track a task with context propagation and optional bounded concurrency.
 
         If max_concurrency is set, this method will wait for a semaphore
         slot before creating the task, implementing backpressure management.
+
+        Trace context is automatically propagated to child tasks to maintain
+        distributed tracing hierarchy.
 
         Parameters
         ----------
@@ -189,12 +232,20 @@ class ManagedTaskGroup:
         if self._closed:
             raise RuntimeError(f"Cannot add tasks to closed group: {self.name}")
 
-        # Wrap coroutine with semaphore if bounded concurrency is enabled
-        if self._semaphore:
-            wrapped_coro = self._run_with_semaphore(coro, name or "unnamed")
-            task = asyncio.create_task(wrapped_coro, name=name)
-        else:
-            task = asyncio.create_task(coro, name=name)
+        # Copy the current context to propagate trace context to child tasks
+        # This ensures distributed tracing maintains proper parent-child relationships
+        ctx = copy_context()
+
+        async def _run_with_context() -> T:
+            """Run the coroutine within the copied context."""
+            if self._semaphore:
+                return await self._run_with_semaphore(coro, name or "unnamed")
+            return await coro
+
+        # Create the task using the copied context
+        # ctx.run() ensures the coroutine runs with the trace context from when
+        # create_task was called, not when the task actually executes
+        task = ctx.run(asyncio.create_task, _run_with_context(), name=name)
 
         self.tasks.add(task)
         self._total_created += 1

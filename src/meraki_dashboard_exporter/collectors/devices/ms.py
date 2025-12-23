@@ -12,6 +12,7 @@ from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
 from ...core.metrics import LabelName
+from ...core.otel_tracing import trace_method
 from .base import BaseDeviceCollector
 
 if TYPE_CHECKING:
@@ -289,6 +290,7 @@ class MSCollector(BaseDeviceCollector):
             labelnames=packet_labels,
         )
 
+    @trace_method("process.device")
     @log_api_call("getDeviceSwitchPortsStatuses")
     @with_error_handling(
         operation="Collect MS device metrics",

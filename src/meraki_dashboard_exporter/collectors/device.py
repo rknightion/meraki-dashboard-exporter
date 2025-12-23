@@ -22,6 +22,7 @@ from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call, log_batch_operation
 from ..core.logging_helpers import LogContext, log_metric_collection_summary
 from ..core.metrics import LabelName
+from ..core.otel_tracing import trace_method
 from ..core.registry import register_collector
 from .devices import MGCollector, MRCollector, MSCollector, MTCollector, MVCollector, MXCollector
 
@@ -377,6 +378,7 @@ class DeviceCollector(MetricCollector):
 
         return await self.inventory.get_organizations()
 
+    @trace_method("process.organization")
     @log_batch_operation("collect devices", batch_size=None)
     @with_error_handling(
         operation="Collect organization devices",
@@ -589,6 +591,7 @@ class DeviceCollector(MetricCollector):
         """
         await self.ms_collector.collect(device)
 
+    @trace_method("collect.mr_metrics")
     async def _collect_mr_specific_metrics(
         self, org_id: str, org_name: str, devices: list[dict[str, Any]]
     ) -> None:
@@ -665,6 +668,7 @@ class DeviceCollector(MetricCollector):
                 org_id=org_id,
             )
 
+    @trace_method("collect.ms_metrics")
     async def _collect_ms_specific_metrics(
         self, org_id: str, org_name: str, devices: list[dict[str, Any]]
     ) -> None:

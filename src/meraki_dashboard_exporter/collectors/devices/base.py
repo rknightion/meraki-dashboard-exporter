@@ -12,6 +12,7 @@ from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
+from ...core.otel_tracing import trace_method
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -131,6 +132,7 @@ class BaseDeviceCollector(ABC):
         if hasattr(self.parent, "_track_api_call"):
             self.parent._track_api_call(method_name)
 
+    @trace_method("collect.device_memory")
     @log_api_call("getOrganizationDevicesSystemMemoryUsageHistoryByInterval")
     @with_error_handling(
         operation="Collect device memory metrics",
