@@ -62,6 +62,17 @@ def log_api_call(
             elif hasattr(self, "parent") and hasattr(self.parent, "_track_api_call"):
                 self.parent._track_api_call(operation)
 
+            rate_limiter = _get_rate_limiter(self)
+            if rate_limiter is not None:
+                wait_seconds = await rate_limiter.acquire(context.get("org_id"), operation)
+                if wait_seconds > 0:
+                    logger.debug(
+                        "Rate limiter wait",
+                        operation=operation,
+                        wait_seconds=round(wait_seconds, 3),
+                        **context,
+                    )
+
             start_time = time.time()
             try:
                 result = await func(self, *args, **kwargs)  # type: ignore[misc]
@@ -380,14 +391,32 @@ def _extract_context(args: tuple[Any, ...], kwargs: dict[str, Any]) -> dict[str,
     for key in ["org_id", "network_id", "serial", "device_id", "name", "type"]:
         if key in kwargs:
             context[key] = kwargs[key]
+    if "org_id" not in context and "orgId" in kwargs:
+        context["org_id"] = kwargs["orgId"]
 
     # Try to extract org_id from first positional arg if not in kwargs
     if "org_id" not in context and args and isinstance(args[0], str):
         # Check if it looks like an org ID
-        if args[0].startswith(("org_", "O_")) or len(args[0]) == 18:
+        if args[0].startswith(("org_", "O_")) or len(args[0]) == 18 or args[0].isdigit():
             context["org_id"] = args[0]
 
+    # Try to extract org_id from first positional dict (device/network payloads)
+    if "org_id" not in context and args and isinstance(args[0], dict):
+        if "org_id" in args[0]:
+            context["org_id"] = args[0]["org_id"]
+        elif "orgId" in args[0]:
+            context["org_id"] = args[0]["orgId"]
+
     return context
+
+
+def _get_rate_limiter(target: Any) -> Any | None:
+    """Resolve a rate limiter instance from collector or parent."""
+    if hasattr(target, "rate_limiter"):
+        return target.rate_limiter
+    if hasattr(target, "parent") and hasattr(target.parent, "rate_limiter"):
+        return target.parent.rate_limiter
+    return None
 
 
 def _get_result_info(result: Any) -> dict[str, Any]:

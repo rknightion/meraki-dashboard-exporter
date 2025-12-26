@@ -43,9 +43,10 @@ class NetworkHealthCollector(MetricCollector):
         registry: CollectorRegistry | None = None,
         inventory: OrganizationInventory | None = None,
         expiration_manager: MetricExpirationManager | None = None,
+        rate_limiter: Any | None = None,
     ) -> None:
         """Initialize network health collector with sub-collectors."""
-        super().__init__(api, settings, registry, inventory, expiration_manager)
+        super().__init__(api, settings, registry, inventory, expiration_manager, rate_limiter)
 
         # Initialize sub-collectors
         self.rf_health_collector = RFHealthCollector(self)
@@ -282,6 +283,10 @@ class NetworkHealthCollector(MetricCollector):
                 self._collect_network_health_bundle,
                 batch_size=self.settings.api.network_batch_size,
                 delay_between_batches=self.settings.api.batch_delay,
+                spread_over_seconds=self._get_smoothing_window(),
+                initial_delay=self._get_smoothing_offset(f"{org_id}:network_health"),
+                min_batch_delay=self.settings.api.smoothing_min_batch_delay,
+                max_batch_delay=self.settings.api.smoothing_max_batch_delay,
                 item_description="network health",
                 error_context_func=lambda network: {
                     "org_id": org_id,

@@ -99,20 +99,14 @@ Webhooks are received on `POST /api/webhooks/meraki` when enabled.
 
 ## OpenTelemetry Settings
 
-OpenTelemetry observability configuration
+OpenTelemetry tracing configuration
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_OTEL__ENABLED` | `bool` | `False` | Enable OpenTelemetry export |
+| `MERAKI_EXPORTER_OTEL__ENABLED` | `bool` | `False` | Enable OpenTelemetry tracing |
 | `MERAKI_EXPORTER_OTEL__ENDPOINT` | `str | None` | `_(none)_` | OpenTelemetry collector endpoint |
 | `MERAKI_EXPORTER_OTEL__SERVICE_NAME` | `str` | `meraki-dashboard-exporter` | Service name for OpenTelemetry |
-| `MERAKI_EXPORTER_OTEL__EXPORT_INTERVAL` | `int` | `60` | Export interval for OpenTelemetry metrics (min: 10, max: 300) |
 | `MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES` | `dict[str, str]` | `{}` | Additional resource attributes for OpenTelemetry |
-| `MERAKI_EXPORTER_OTEL__EXPORT_MERAKI_METRICS_TO_PROMETHEUS` | `bool` | `True` | Export Meraki network metrics to Prometheus /metrics endpoint |
-| `MERAKI_EXPORTER_OTEL__EXPORT_MERAKI_METRICS_TO_OTEL` | `bool` | `False` | Export Meraki network metrics to OpenTelemetry collector |
-| `MERAKI_EXPORTER_OTEL__EXPORT_EXPORTER_METRICS_TO_PROMETHEUS` | `bool` | `True` | Export internal exporter metrics (meraki_exporter_*) to Prometheus |
-| `MERAKI_EXPORTER_OTEL__EXPORT_EXPORTER_METRICS_TO_OTEL` | `bool` | `False` | Export internal exporter metrics to OpenTelemetry collector |
-| `MERAKI_EXPORTER_OTEL__TRACING_ENABLED` | `bool` | `True` | Enable distributed tracing (requires enabled=true and endpoint) |
 
 ## Monitoring Settings
 

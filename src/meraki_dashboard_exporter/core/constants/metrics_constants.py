@@ -321,6 +321,11 @@ class CollectorMetricName(StrEnum):
     API_RATE_LIMIT_REMAINING = "meraki_exporter_api_rate_limit_remaining"
     API_RATE_LIMIT_TOTAL = "meraki_exporter_api_rate_limit_total"
     API_RETRY_ATTEMPTS_TOTAL = "meraki_exporter_api_retry_total"
+    API_RATE_LIMITER_WAIT_SECONDS = "meraki_exporter_api_rate_limiter_wait_seconds"
+    API_RATE_LIMITER_THROTTLED_TOTAL = "meraki_exporter_api_rate_limiter_throttled_total"
+    API_RATE_LIMITER_TOKENS = "meraki_exporter_api_rate_limiter_tokens"
+    COLLECTOR_START_OFFSET_SECONDS = "meraki_exporter_collector_start_offset_seconds"
+    COLLECTION_SMOOTHING_WINDOW_SECONDS = "meraki_exporter_collection_smoothing_window_seconds"
 
 
 class WebhookMetricName(StrEnum):

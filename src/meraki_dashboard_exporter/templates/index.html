@@ -374,6 +374,114 @@
         </div>
 
         <div class="endpoints">
+            <h3>⏱️ Polling Diagnostics</h3>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">
+                        {% if scheduling.rate_limiter.enabled %}On{% else %}Off{% endif %}
+                    </div>
+                    <div class="stat-label">Rate Limiter</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{{ scheduling.rate_limiter.rps }}</div>
+                    <div class="stat-label">Target RPS</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{{ scheduling.rate_limiter.burst }}</div>
+                    <div class="stat-label">Burst</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{{ scheduling.rate_limiter.share_fraction }}</div>
+                    <div class="stat-label">Budget Share</div>
+                </div>
+            </div>
+
+            <div class="stats" style="margin-top: 15px;">
+                <div class="stat">
+                    <div class="stat-value">
+                        {% if scheduling.smoothing.enabled %}On{% else %}Off{% endif %}
+                    </div>
+                    <div class="stat-label">Smoothing</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{{ scheduling.smoothing.window_ratio }}</div>
+                    <div class="stat-label">Window Ratio</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{{ scheduling.smoothing.min_batch_delay }}</div>
+                    <div class="stat-label">Min Batch Delay</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{{ scheduling.smoothing.max_batch_delay }}</div>
+                    <div class="stat-label">Max Batch Delay</div>
+                </div>
+            </div>
+
+            <div class="stats" style="margin-top: 15px;">
+                <div class="stat">
+                    <div class="stat-value">{{ scheduling.endpoint_intervals.ms_port_usage_interval }}s</div>
+                    <div class="stat-label">MS Port Usage</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{{ scheduling.endpoint_intervals.ms_packet_stats_interval }}s</div>
+                    <div class="stat-label">MS Packet Stats</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{{ scheduling.endpoint_intervals.client_app_usage_interval }}s</div>
+                    <div class="stat-label">Client App Usage</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">
+                        {% if scheduling.endpoint_intervals.ms_port_status_org_endpoint %}Org{% else %}Device{% endif %}
+                    </div>
+                    <div class="stat-label">MS Port Status Source</div>
+                </div>
+            </div>
+
+            <h4 style="margin-top: 20px;">Tier Schedule</h4>
+            <table class="collector-table">
+                <thead>
+                    <tr>
+                        <th>Tier</th>
+                        <th>Interval (s)</th>
+                        <th>Jitter Window (s)</th>
+                        <th>Smoothing Window (s)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tier, info in scheduling.tiers.items() %}
+                    <tr>
+                        <td>{{ tier | upper }}</td>
+                        <td>{{ info.interval }}</td>
+                        <td>{{ info.jitter_window }}</td>
+                        <td>{{ info.smoothing_window }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <h4 style="margin-top: 20px;">Collector Offsets</h4>
+            <table class="collector-table">
+                <thead>
+                    <tr>
+                        <th>Collector</th>
+                        <th>Tier</th>
+                        <th>Start Offset (s)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in scheduling.collector_offsets %}
+                    <tr>
+                        <td>{{ entry.collector }}</td>
+                        <td><span class="tier-badge">{{ entry.tier | upper }}</span></td>
+                        <td>{{ entry.offset_seconds }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="endpoints">
             <h3>Available Endpoints</h3>
             <div class="endpoint-list">
                 <div class="endpoint">

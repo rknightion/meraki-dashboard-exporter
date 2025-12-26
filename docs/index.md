@@ -6,7 +6,7 @@ image: assets/social-card.png
 
 # Meraki Dashboard Exporter
 
-A production-ready Prometheus exporter for the Cisco Meraki Dashboard API. It covers all Meraki device types, includes collector health and cardinality monitoring, and can mirror metrics plus traces via OpenTelemetry.
+A production-ready Prometheus exporter for the Cisco Meraki Dashboard API. It covers all Meraki device types, includes collector health and cardinality monitoring, and supports OpenTelemetry tracing.
 
 ## Get started
 

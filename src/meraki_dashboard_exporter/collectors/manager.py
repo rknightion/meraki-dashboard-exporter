@@ -15,6 +15,7 @@ from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
 from ..core.otel_tracing import trace_method
+from ..core.rate_limiter import OrgRateLimiter
 from ..core.registry import get_registered_collectors
 from ..services.inventory import OrganizationInventory
 
@@ -51,6 +52,7 @@ class CollectorManager:
         self.client = client
         self.settings = settings
         self.expiration_manager = expiration_manager
+        self.rate_limiter = OrgRateLimiter(settings)
         self.collectors: dict[UpdateTier, list[MetricCollector]] = {
             UpdateTier.FAST: [],
             UpdateTier.MEDIUM: [],
@@ -61,6 +63,7 @@ class CollectorManager:
         self.inventory = OrganizationInventory(
             api=self.client.api,
             settings=self.settings,
+            rate_limiter=self.rate_limiter,
         )
 
         # Track collector health state
@@ -68,6 +71,9 @@ class CollectorManager:
 
         # Track skipped/disabled collectors for visibility
         self.skipped_collectors: list[dict[str, str]] = []
+
+        # Track collector offsets for diagnostics
+        self.collector_offsets: dict[tuple[str, str], float] = {}
 
         self._initialize_metrics()
         self._initialize_collectors()
@@ -127,6 +133,31 @@ class CollectorManager:
             ],
         )
 
+    def _get_tier_interval(self, tier: UpdateTier) -> int:
+        if tier == UpdateTier.FAST:
+            return self.settings.update_intervals.fast
+        if tier == UpdateTier.MEDIUM:
+            return self.settings.update_intervals.medium
+        return self.settings.update_intervals.slow
+
+    def _get_smoothing_window(self, tier: UpdateTier) -> float:
+        if not self.settings.api.smoothing_enabled:
+            return 0.0
+        interval = self._get_tier_interval(tier)
+        return max(0.0, float(interval) * self.settings.api.smoothing_window_ratio)
+
+    def _get_collector_offset(self, collector_name: str, tier: UpdateTier) -> float:
+        import hashlib
+
+        window = self._get_smoothing_window(tier)
+        if window <= 0:
+            return 0.0
+        key = f"{collector_name}:{tier.value}"
+        digest = hashlib.sha256(key.encode("utf-8")).digest()
+        raw = int.from_bytes(digest[:4], "big")
+        ratio = raw / 0xFFFFFFFF
+        return ratio * window
+
     def _initialize_collectors(self) -> None:
         """Initialize all enabled collectors."""
         # Import all collectors to trigger registration
@@ -175,6 +206,7 @@ class CollectorManager:
                         settings=self.settings,
                         inventory=self.inventory,
                         expiration_manager=self.expiration_manager,
+                        rate_limiter=self.rate_limiter,
                     )
                     self.collectors[tier].append(collector_instance)
 
@@ -299,15 +331,22 @@ class CollectorManager:
         # Use collector_timeout from settings (default: 120s)
         timeout = self.settings.collectors.collector_timeout
 
+        smoothing_window = self._get_smoothing_window(tier)
+
         # Run collectors in parallel with bounded concurrency
         async with ManagedTaskGroup(
             name=f"tier_{tier.value}",
             max_concurrency=self.settings.api.concurrency_limit,
         ) as group:
             for collector in tier_collectors:
+                collector_name = collector.__class__.__name__
+                offset = self._get_collector_offset(collector_name, tier)
+                self.collector_offsets[(collector_name, tier.value)] = offset
                 await group.create_task(
-                    self._run_collector_with_timeout(collector, tier, timeout),
-                    name=collector.__class__.__name__,
+                    self._run_collector_with_delay(
+                        collector, tier, timeout, offset, smoothing_window
+                    ),
+                    name=collector_name,
                 )
 
         logger.info(
@@ -315,6 +354,25 @@ class CollectorManager:
             tier=tier,
             collector_count=len(tier_collectors),
         )
+
+    async def _run_collector_with_delay(
+        self,
+        collector: MetricCollector,
+        tier: UpdateTier,
+        timeout: int,
+        offset_seconds: float,
+        window_seconds: float,
+    ) -> None:
+        if offset_seconds > 0:
+            logger.debug(
+                "Delaying collector start for smoothing",
+                collector=collector.__class__.__name__,
+                tier=tier.value,
+                offset_seconds=round(offset_seconds, 2),
+                window_seconds=round(window_seconds, 2),
+            )
+            await asyncio.sleep(offset_seconds)
+        await self._run_collector_with_timeout(collector, tier, timeout)
 
     async def _run_collector_with_timeout(
         self,
@@ -442,6 +500,56 @@ class CollectorManager:
             return self.settings.update_intervals.medium
         else:  # SLOW
             return self.settings.update_intervals.slow
+
+    def get_scheduling_diagnostics(self) -> dict[str, Any]:
+        """Return scheduling diagnostics for UI/logging."""
+        tier_info: dict[str, dict[str, Any]] = {}
+        for tier in UpdateTier:
+            interval = self.get_tier_interval(tier)
+            jitter_window = min(10.0, interval * 0.1)
+            smoothing_window = self._get_smoothing_window(tier)
+            tier_info[tier.value] = {
+                "interval": interval,
+                "jitter_window": round(jitter_window, 2),
+                "smoothing_window": round(smoothing_window, 2),
+            }
+
+        collector_offsets: list[dict[str, Any]] = []
+        for tier, collectors in self.collectors.items():
+            for collector in collectors:
+                collector_name = collector.__class__.__name__
+                offset = self._get_collector_offset(collector_name, tier)
+                collector_offsets.append({
+                    "collector": collector_name,
+                    "tier": tier.value,
+                    "offset_seconds": round(offset, 2),
+                })
+
+        return {
+            "tiers": tier_info,
+            "collector_offsets": sorted(
+                collector_offsets,
+                key=lambda item: (item["tier"], item["offset_seconds"]),
+            ),
+            "smoothing": {
+                "enabled": self.settings.api.smoothing_enabled,
+                "window_ratio": self.settings.api.smoothing_window_ratio,
+                "min_batch_delay": self.settings.api.smoothing_min_batch_delay,
+                "max_batch_delay": self.settings.api.smoothing_max_batch_delay,
+            },
+            "rate_limiter": {
+                "enabled": self.settings.api.rate_limit_enabled,
+                "rps": self.settings.api.rate_limit_requests_per_second,
+                "burst": self.settings.api.rate_limit_burst,
+                "share_fraction": self.settings.api.rate_limit_shared_fraction,
+            },
+            "endpoint_intervals": {
+                "ms_port_usage_interval": self.settings.api.ms_port_usage_interval,
+                "ms_packet_stats_interval": self.settings.api.ms_packet_stats_interval,
+                "client_app_usage_interval": self.settings.api.client_app_usage_interval,
+                "ms_port_status_org_endpoint": self.settings.api.ms_port_status_use_org_endpoint,
+            },
+        }
 
     def register_collector(self, collector: MetricCollector) -> None:
         """Register an additional collector.

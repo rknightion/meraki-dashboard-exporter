@@ -22,7 +22,9 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
     """Collector for network-wide wireless connection statistics."""
 
     @log_api_call("getNetworkWirelessConnectionStats")
-    async def _fetch_connection_stats(self, network_id: str) -> dict[str, Any]:
+    async def _fetch_connection_stats(
+        self, network_id: str, org_id: str | None = None
+    ) -> dict[str, Any]:
         """Fetch network wireless connection statistics.
 
         Parameters
@@ -36,6 +38,7 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
             Connection statistics data.
 
         """
+        _ = org_id  # Included for logging/rate limiting context
         return await asyncio.to_thread(
             self.api.wireless.getNetworkWirelessConnectionStats,
             network_id,
@@ -59,7 +62,7 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
         try:
             with LogContext(network_id=network_id, network_name=network_name, org_id=org_id):
                 # Use 30 minute (1800 second) timespan as minimum
-                connection_stats = await self._fetch_connection_stats(network_id)
+                connection_stats = await self._fetch_connection_stats(network_id, org_id=org_id)
 
             # Parse response using domain model
             if not connection_stats:

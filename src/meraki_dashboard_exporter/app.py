@@ -27,9 +27,7 @@ from .core.constants import UpdateTier
 from .core.discovery import DiscoveryService
 from .core.logging import get_logger, setup_logging
 from .core.metric_expiration import MetricExpirationManager
-from .core.metrics_filter import FilteredRegistry, MetricsFilter
 from .core.otel_logging import OTELLoggingConfig
-from .core.otel_metrics import PrometheusToOTelBridge
 from .core.otel_tracing import TracingConfig
 from .core.webhook_handler import WebhookHandler
 
@@ -85,41 +83,6 @@ class ExporterApp:
         # Setup Jinja2 templates
         template_dir = Path(__file__).parent / "templates"
         self.templates = Jinja2Templates(directory=str(template_dir))
-
-        # Setup OTEL bridge if enabled and metrics are configured for OTEL export
-        self.otel_bridge: PrometheusToOTelBridge | None = None
-        otel_settings = self.settings.otel
-        if otel_settings.enabled and otel_settings.endpoint:
-            # Check if any metrics are configured for OTEL export
-            should_export_to_otel = (
-                otel_settings.export_meraki_metrics_to_otel
-                or otel_settings.export_exporter_metrics_to_otel
-            )
-
-            if should_export_to_otel:
-                # Get allowlist and blocklist based on configuration
-                allowlist = MetricsFilter.get_otel_allowlist(otel_settings)
-                blocklist = MetricsFilter.get_otel_blocklist(otel_settings)
-
-                self.otel_bridge = PrometheusToOTelBridge(
-                    registry=REGISTRY,
-                    endpoint=otel_settings.endpoint,
-                    service_name=otel_settings.service_name,
-                    export_interval_seconds=otel_settings.export_interval,
-                    resource_attributes=otel_settings.resource_attributes,
-                    metric_allowlist=allowlist,
-                    metric_blocklist=blocklist,
-                )
-                logger.info(
-                    "OTEL metrics bridge configured",
-                    allowlist=allowlist,
-                    blocklist=blocklist,
-                )
-            else:
-                logger.info(
-                    "OTEL enabled but no metrics configured for export",
-                    tracing_enabled=otel_settings.tracing_enabled,
-                )
 
         # Setup cardinality monitor
         self.cardinality_monitor = CardinalityMonitor(
@@ -218,15 +181,6 @@ class ExporterApp:
             logger.exception("Discovery failed, continuing with normal operation")
             self._discovery_summary = {"errors": ["discovery_failed"]}
 
-        # Start OTEL bridge if enabled
-        if self.otel_bridge:
-            await self.otel_bridge.start()
-            logger.info(
-                "Started OpenTelemetry metric export",
-                endpoint=self.settings.otel.endpoint,
-                interval=self.settings.otel.export_interval,
-            )
-
         # Start metric expiration manager (Phase 3.2)
         await self.expiration_manager.start()
         logger.info(
@@ -267,11 +221,6 @@ class ExporterApp:
                     )
                 except TimeoutError:
                     logger.warning("Some tasks did not complete within timeout")
-
-            # Stop OTEL bridge if running
-            if self.otel_bridge:
-                await self.otel_bridge.stop()
-                logger.info("Stopped OpenTelemetry metric export")
 
             # Stop metric expiration manager (Phase 3.2)
             await self.expiration_manager.stop()
@@ -380,6 +329,7 @@ class ExporterApp:
             while not self._shutdown_event.is_set():
                 # Run collection
                 try:
+                    cycle_start = time.monotonic()
                     logger.debug(
                         "Starting metric collection",
                         tier=tier,
@@ -416,14 +366,17 @@ class ExporterApp:
                         raise
 
                 # Wait for next collection
+                elapsed = time.monotonic() - cycle_start
+                wait_seconds = max(0.0, float(interval) - elapsed)
                 logger.debug(
                     "Waiting for next collection",
                     tier=tier,
-                    wait_seconds=interval,
+                    wait_seconds=round(wait_seconds, 2),
+                    elapsed_seconds=round(elapsed, 2),
                 )
 
                 # Wait in small increments for responsiveness
-                remaining_time = float(interval)
+                remaining_time = wait_seconds
                 while remaining_time > 0 and not self._shutdown_event.is_set():
                     wait_time = min(1.0, remaining_time)
                     await asyncio.sleep(wait_time)
@@ -449,7 +402,8 @@ class ExporterApp:
         if self._startup_summary_logged:
             return
         try:
-            log_startup_summary(self.settings, self._discovery_summary)
+            scheduling = self.collector_manager.get_scheduling_diagnostics()
+            log_startup_summary(self.settings, self._discovery_summary, scheduling)
             self._startup_summary_logged = True
         except Exception:
             logger.exception("Failed to log startup summary")
@@ -566,6 +520,7 @@ class ExporterApp:
 
             # Get real-time metrics stats
             metrics_stats = exporter._get_metrics_stats()
+            scheduling = exporter.collector_manager.get_scheduling_diagnostics()
 
             context = {
                 "request": request,
@@ -581,6 +536,7 @@ class ExporterApp:
                 "medium_interval": exporter.settings.update_intervals.medium,
                 "slow_interval": exporter.settings.update_intervals.slow,
                 "org_id": exporter.settings.meraki.org_id,
+                "scheduling": scheduling,
             }
 
             return app.state.templates.TemplateResponse("index.html", context)  # type: ignore[no-any-return]
@@ -592,13 +548,8 @@ class ExporterApp:
 
         @app.get("/metrics", response_class=Response)
         async def metrics() -> Response:
-            """Prometheus metrics endpoint with filtering based on configuration."""
-            exporter = app.state.exporter
-
-            # Use filtered registry to respect export configuration
-            filtered_registry = FilteredRegistry(REGISTRY, exporter.settings.otel)
-            # FilteredRegistry implements collect() interface required by generate_latest
-            data = generate_latest(filtered_registry)  # type: ignore[arg-type]
+            """Prometheus metrics endpoint."""
+            data = generate_latest(REGISTRY)
 
             return Response(
                 content=data,

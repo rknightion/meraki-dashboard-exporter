@@ -2,7 +2,7 @@
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Frknightion%2Fmeraki-dashboard-exporter.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Frknightion%2Fmeraki-dashboard-exporter?ref=badge_shield)
 
 
-A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry support.
+A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry tracing support.
 
 ## Features
 
@@ -21,7 +21,7 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 - **Retry-aware API client**: Exponential backoff on rate limits with per-endpoint latency metrics
 
 ### Observability
-- **Dual metric export**: Prometheus `/metrics` endpoint + automatic OpenTelemetry export
+- **Prometheus metrics**: `/metrics` endpoint for scraping
 - **Distributed tracing**: Full request tracing with OpenTelemetry instrumentation
 - **Structured logging**: logfmt output with trace correlation and contextual information
 - **Cardinality monitoring**: Built-in tracking and warning metrics for metric growth
@@ -65,13 +65,9 @@ docker run -d \
   meraki-dashboard-exporter
 ```
 
-## OpenTelemetry Support
+## OpenTelemetry Tracing
 
-The exporter provides comprehensive OpenTelemetry support when enabled:
-
-**Metrics**: All Prometheus metrics are automatically mirrored to OTEL
-- Use existing Prometheus dashboards while sending to OTEL backends
-- No code changes needed - new metrics are automatically exported
+The exporter provides OpenTelemetry tracing when enabled:
 
 **Tracing**: Distributed tracing for all operations
 - Every Meraki API call is traced with timing and metadata
@@ -86,7 +82,7 @@ The exporter provides comprehensive OpenTelemetry support when enabled:
 - Compatible with log aggregation systems
 
 **Benefits**:
-- Full observability with metrics, traces, and logs
+- Prometheus metrics with traces and logs for correlation
 - Debug slow API calls and identify bottlenecks
 - Track request flow across the entire system
 - Compatible with Jaeger, Tempo, Datadog, New Relic, etc.
@@ -96,14 +92,11 @@ The exporter provides comprehensive OpenTelemetry support when enabled:
 Set these environment variables:
 
 ```bash
-# Enable OTEL export
+# Enable OTEL tracing
 export MERAKI_EXPORTER_OTEL__ENABLED=true
 
 # Set the OTEL collector endpoint
 export MERAKI_EXPORTER_OTEL__ENDPOINT=http://localhost:4317
-
-# Optional: Configure export interval (default: 60 seconds)
-export MERAKI_EXPORTER_OTEL__EXPORT_INTERVAL=30
 
 # Optional: Add resource attributes
 export MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES='{"environment":"production","region":"us-east"}'

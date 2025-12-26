@@ -41,9 +41,10 @@ class OrganizationCollector(MetricCollector):
         registry: CollectorRegistry | None = None,
         inventory: OrganizationInventory | None = None,
         expiration_manager: MetricExpirationManager | None = None,
+        rate_limiter: Any | None = None,
     ) -> None:
         """Initialize organization collector with sub-collectors."""
-        super().__init__(api, settings, registry, inventory, expiration_manager)
+        super().__init__(api, settings, registry, inventory, expiration_manager, rate_limiter)
 
         # Create API helper
         self.api_helper = create_api_helper(self)

@@ -68,6 +68,78 @@ class APISettings(BaseModel):
         le=60,
         description="Wait time for action batch retries",
     )
+    rate_limit_enabled: bool = Field(
+        True,
+        description="Enable client-side rate limiting to smooth API calls",
+    )
+    rate_limit_requests_per_second: float = Field(
+        10.0,
+        ge=1.0,
+        le=50.0,
+        description="Target requests per second per organization",
+    )
+    rate_limit_burst: int = Field(
+        20,
+        ge=1,
+        le=100,
+        description="Token bucket burst capacity per organization",
+    )
+    rate_limit_shared_fraction: float = Field(
+        1.0,
+        ge=0.1,
+        le=1.0,
+        description="Fraction of org call budget reserved for this exporter",
+    )
+    rate_limit_jitter_ratio: float = Field(
+        0.1,
+        ge=0.0,
+        le=0.5,
+        description="Jitter ratio applied to client-side rate limiter waits",
+    )
+    smoothing_enabled: bool = Field(
+        True,
+        description="Spread batch work across the collection interval",
+    )
+    smoothing_window_ratio: float = Field(
+        0.8,
+        ge=0.1,
+        le=1.0,
+        description="Fraction of the collection interval used for smoothing",
+    )
+    smoothing_min_batch_delay: float = Field(
+        1.0,
+        ge=0.0,
+        le=60.0,
+        description="Minimum delay between batches when smoothing",
+    )
+    smoothing_max_batch_delay: float = Field(
+        15.0,
+        ge=0.0,
+        le=300.0,
+        description="Maximum delay between batches when smoothing",
+    )
+    ms_port_status_use_org_endpoint: bool = Field(
+        True,
+        description="Use org-level switch port status endpoint for MS status metrics",
+    )
+    ms_port_usage_interval: int = Field(
+        600,
+        ge=0,
+        le=3600,
+        description="Minimum seconds between per-switch port usage/POE refreshes",
+    )
+    ms_packet_stats_interval: int = Field(
+        600,
+        ge=0,
+        le=3600,
+        description="Minimum seconds between per-switch packet stats refreshes",
+    )
+    client_app_usage_interval: int = Field(
+        600,
+        ge=0,
+        le=3600,
+        description="Minimum seconds between client application usage refreshes",
+    )
 
 
 class UpdateIntervals(BaseModel):
@@ -151,49 +223,19 @@ class OTelSettings(BaseModel):
 
     enabled: bool = Field(
         False,
-        description="Enable OpenTelemetry export",
+        description="Enable OpenTelemetry tracing",
     )
     endpoint: str | None = Field(
         None,
-        description="OpenTelemetry collector endpoint",
+        description="OpenTelemetry collector endpoint (OTLP gRPC)",
     )
     service_name: str = Field(
         "meraki-dashboard-exporter",
-        description="Service name for OpenTelemetry",
-    )
-    export_interval: int = Field(
-        60,
-        ge=10,
-        le=300,
-        description="Export interval for OpenTelemetry metrics",
+        description="Service name for OpenTelemetry tracing",
     )
     resource_attributes: dict[str, str] = Field(
         default_factory=dict,
         description="Additional resource attributes for OpenTelemetry",
-    )
-
-    # Metrics export routing (simple boolean flags)
-    export_meraki_metrics_to_prometheus: bool = Field(
-        True,
-        description="Export Meraki network metrics to Prometheus /metrics endpoint",
-    )
-    export_meraki_metrics_to_otel: bool = Field(
-        False,
-        description="Export Meraki network metrics to OpenTelemetry collector",
-    )
-    export_exporter_metrics_to_prometheus: bool = Field(
-        True,
-        description="Export internal exporter metrics (meraki_exporter_*) to Prometheus",
-    )
-    export_exporter_metrics_to_otel: bool = Field(
-        False,
-        description="Export internal exporter metrics to OpenTelemetry collector",
-    )
-
-    # Tracing control (separate from metrics)
-    tracing_enabled: bool = Field(
-        True,
-        description="Enable distributed tracing (requires enabled=true and endpoint)",
     )
 
     @model_validator(mode="after")

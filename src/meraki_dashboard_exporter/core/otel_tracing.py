@@ -63,10 +63,6 @@ class TracingConfig:
             logger.info("OpenTelemetry tracing disabled (OTEL not enabled)")
             return
 
-        if not self.settings.otel.tracing_enabled:
-            logger.info("OpenTelemetry tracing disabled (tracing_enabled=false)")
-            return
-
         if not self.settings.otel.endpoint:
             logger.info("OpenTelemetry tracing disabled (no endpoint configured)")
             return
