@@ -48,4 +48,4 @@ Use PromQL rules with metrics such as `meraki_device_up` or `meraki_collector_er
 
 For more metrics see the [Metrics Reference](metrics/metrics.md).
 Configuration options are documented in the [Configuration](config.md) guide.
-OpenTelemetry mirroring is documented in [OpenTelemetry](observability/otel.md).
+OpenTelemetry tracing is documented in [OpenTelemetry](observability/otel.md).

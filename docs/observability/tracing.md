@@ -15,17 +15,14 @@ head-sampling strategy.
 
 ## Configuration
 
-Enable OTEL first (see [OpenTelemetry](otel.md)), then configure tracing:
+Enable OTEL first (see [OpenTelemetry](otel.md)), then configure sampling:
 
 ```bash
-export MERAKI_EXPORTER_OTEL__TRACING_ENABLED=true
 # Optional sampling (default: 0.1 = 10%)
 export MERAKI_EXPORTER_OTEL__SAMPLING_RATE=0.1
 ```
 
-Tracing requires OTEL to be enabled with an endpoint. Set
-`MERAKI_EXPORTER_OTEL__TRACING_ENABLED=false` to disable traces while keeping
-OTEL metrics export.
+Tracing requires OTEL to be enabled with an endpoint. Disable OTEL to stop traces.
 
 Sampling behavior:
 - `0.0` disables tracing

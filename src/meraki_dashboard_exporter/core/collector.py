@@ -11,9 +11,11 @@ from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, Info
 from prometheus_client.core import REGISTRY
 
 from ..core.constants import UpdateTier
+from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.error_handling import ErrorCategory
 from ..core.exemplars import add_exemplar
 from ..core.logging import get_logger
+from ..core.metrics import LabelName
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -47,6 +49,8 @@ class MetricCollector(ABC):
     _collector_errors: Counter | None = None
     _collector_last_success: Gauge | None = None
     _collector_api_calls: Counter | None = None
+    _collector_smoothing_window: Gauge | None = None
+    _collector_start_offset: Gauge | None = None
 
     # Flag to ensure we initialize only once
     _metrics_initialized: bool = False
@@ -72,6 +76,7 @@ class MetricCollector(ABC):
         registry: CollectorRegistry | None = None,
         inventory: OrganizationInventory | None = None,
         expiration_manager: MetricExpirationManager | None = None,
+        rate_limiter: Any | None = None,
     ) -> None:
         """Initialize the metric collector with API client and settings.
 
@@ -96,6 +101,7 @@ class MetricCollector(ABC):
         self.registry = registry or REGISTRY
         self.inventory = inventory
         self.expiration_manager = expiration_manager
+        self.rate_limiter = rate_limiter
         self._metrics: dict[str, Any] = {}
 
         # Initialize performance metrics only once
@@ -131,8 +137,10 @@ class MetricCollector(ABC):
             span.set_attribute("collector.name", collector_name)
             span.set_attribute("collector.tier", self.update_tier.value)
             span.set_attribute("collector.active", self.is_active)
+            span.set_attribute("collector.smoothing_enabled", self.settings.api.smoothing_enabled)
 
             try:
+                self._record_smoothing_metrics()
                 await self._collect_impl()
 
                 # Record success
@@ -445,6 +453,53 @@ class MetricCollector(ABC):
             # Silently fail if client not available - metrics are optional
             pass
 
+    def _get_tier_interval(self) -> int:
+        """Return the configured interval for this collector's tier."""
+        if self.update_tier == UpdateTier.FAST:
+            return self.settings.update_intervals.fast
+        if self.update_tier == UpdateTier.MEDIUM:
+            return self.settings.update_intervals.medium
+        return self.settings.update_intervals.slow
+
+    def _get_smoothing_window(self) -> float:
+        """Get the smoothing window duration in seconds for this collector."""
+        if not self.settings.api.smoothing_enabled:
+            return 0.0
+        interval = self._get_tier_interval()
+        return max(0.0, float(interval) * self.settings.api.smoothing_window_ratio)
+
+    def _get_smoothing_offset(self, key: str) -> float:
+        """Compute a stable offset within the smoothing window for a given key."""
+        import hashlib
+
+        window = self._get_smoothing_window()
+        if window <= 0:
+            return 0.0
+        digest = hashlib.sha256(key.encode("utf-8")).digest()
+        raw = int.from_bytes(digest[:4], "big")
+        ratio = raw / 0xFFFFFFFF
+        return ratio * window
+
+    def _record_smoothing_metrics(self) -> None:
+        """Record smoothing window and base offset metrics for this collector."""
+        if self._collector_smoothing_window is None and self._collector_start_offset is None:
+            return
+
+        window = self._get_smoothing_window()
+        offset = self._get_smoothing_offset(f"{self.__class__.__name__}:{self.update_tier.value}")
+
+        if self._collector_smoothing_window is not None:
+            self._collector_smoothing_window.labels(
+                collector=self.__class__.__name__,
+                tier=self.update_tier.value,
+            ).set(window)
+
+        if self._collector_start_offset is not None:
+            self._collector_start_offset.labels(
+                collector=self.__class__.__name__,
+                tier=self.update_tier.value,
+            ).set(offset)
+
     def _set_metric_value(
         self, metric_name: str, labels: dict[str, str], value: float | None
     ) -> None:
@@ -625,6 +680,20 @@ class MetricCollector(ABC):
             )
             cls._collector_api_calls = api_calls_metric
 
+            cls._collector_smoothing_window = Gauge(
+                CollectorMetricName.COLLECTION_SMOOTHING_WINDOW_SECONDS.value,
+                "Configured smoothing window for collector runs",
+                labelnames=[LabelName.COLLECTOR.value, LabelName.TIER.value],
+                registry=REGISTRY,
+            )
+
+            cls._collector_start_offset = Gauge(
+                CollectorMetricName.COLLECTOR_START_OFFSET_SECONDS.value,
+                "Configured collector start offset within smoothing window",
+                labelnames=[LabelName.COLLECTOR.value, LabelName.TIER.value],
+                registry=REGISTRY,
+            )
+
             logger.info("Successfully initialized collector performance metrics")
 
             # Initialize gauge values for common collectors
@@ -643,6 +712,16 @@ class MetricCollector(ABC):
                         collector=collector_name,
                         tier=tier,
                     ).set(0)
+                    if cls._collector_smoothing_window is not None:
+                        cls._collector_smoothing_window.labels(
+                            collector=collector_name,
+                            tier=tier,
+                        ).set(0)
+                    if cls._collector_start_offset is not None:
+                        cls._collector_start_offset.labels(
+                            collector=collector_name,
+                            tier=tier,
+                        ).set(0)
 
             cls._metrics_initialized = True
 

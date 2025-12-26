@@ -6,7 +6,7 @@ This collector handles environmental sensor metrics from MT devices.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ..core.collector import MetricCollector
 from ..core.constants import MTMetricName, UpdateTier
@@ -39,9 +39,10 @@ class MTSensorCollector(MetricCollector):
         registry: CollectorRegistry | None = None,
         inventory: OrganizationInventory | None = None,
         expiration_manager: MetricExpirationManager | None = None,
+        rate_limiter: Any | None = None,
     ) -> None:
         """Initialize MT sensor collector."""
-        super().__init__(api, settings, registry, inventory, expiration_manager)
+        super().__init__(api, settings, registry, inventory, expiration_manager, rate_limiter)
         # Create MT collector in standalone mode
         self.mt_collector = MTCollector(None)
         # Pass API and settings to MT collector

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants import MSMetricName
@@ -23,6 +24,11 @@ logger = get_logger(__name__)
 
 class MSCollector(BaseDeviceCollector):
     """Collector for Meraki MS (Switch) devices."""
+
+    def __init__(self, parent: Any) -> None:
+        super().__init__(parent)
+        self._last_port_usage: dict[str, float] = {}
+        self._last_packet_stats: dict[str, float] = {}
 
     def _initialize_metrics(self) -> None:
         """Initialize MS-specific metrics."""
@@ -290,6 +296,94 @@ class MSCollector(BaseDeviceCollector):
             labelnames=packet_labels,
         )
 
+    def _should_collect_port_usage(self, serial: str) -> bool:
+        interval = self.settings.api.ms_port_usage_interval
+        if interval <= 0:
+            return True
+        last = self._last_port_usage.get(serial, 0.0)
+        return (time.time() - last) >= interval
+
+    def _mark_port_usage_collected(self, serial: str) -> None:
+        self._last_port_usage[serial] = time.time()
+
+    def _should_collect_packet_stats(self, serial: str) -> bool:
+        interval = self.settings.api.ms_packet_stats_interval
+        if interval <= 0:
+            return True
+        last = self._last_packet_stats.get(serial, 0.0)
+        return (time.time() - last) >= interval
+
+    def _mark_packet_stats_collected(self, serial: str) -> None:
+        self._last_packet_stats[serial] = time.time()
+
+    @log_api_call("getOrganizationSwitchPortsStatusesBySwitch")
+    @with_error_handling(
+        operation="Collect MS switch port statuses (org)",
+        continue_on_error=True,
+    )
+    async def collect_port_statuses_by_switch(
+        self,
+        org_id: str,
+        org_name: str,
+        devices: list[dict[str, Any]],
+    ) -> bool:
+        """Collect port status metrics using the org-level switch endpoint."""
+        device_lookup = {device.get("serial"): device for device in devices}
+        serials = [device.get("serial") for device in devices if device.get("serial")]
+        if not serials:
+            return True
+
+        with LogContext(org_id=org_id):
+            response = await asyncio.to_thread(
+                self.api.organizations.getOrganizationSwitchPortsStatusesBySwitch,
+                org_id,
+                serials=serials,
+                perPage=20,
+                total_pages="all",
+            )
+            switches = validate_response_format(
+                response,
+                expected_type=list,
+                operation="getOrganizationSwitchPortsStatusesBySwitch",
+            )
+
+        for switch in switches:
+            serial = switch.get("serial")
+            if not serial:
+                continue
+
+            device_info = device_lookup.get(serial, {})
+            network = switch.get("network", {}) or {}
+            network_id = network.get("id", device_info.get("networkId", ""))
+            network_name = network.get("name", device_info.get("networkName", network_id))
+
+            device_data = {
+                "serial": serial,
+                "name": switch.get("name", device_info.get("name", serial)),
+                "model": switch.get("model", device_info.get("model", "")),
+                "networkId": network_id,
+                "networkName": network_name,
+                "orgId": org_id,
+                "orgName": org_name,
+            }
+
+            for port in switch.get("ports", []) or []:
+                speed = port.get("speed", "")
+                duplex = port.get("duplex", "")
+                port_labels = create_port_labels(
+                    device_data,
+                    port,
+                    org_id=org_id,
+                    org_name=org_name,
+                    link_speed=speed,
+                    duplex=duplex,
+                )
+
+                is_connected = 1 if port.get("status") == "Connected" else 0
+                self._switch_port_status.labels(**port_labels).set(is_connected)
+
+        return True
+
     @trace_method("process.device")
     @log_api_call("getDeviceSwitchPortsStatuses")
     @with_error_handling(
@@ -311,7 +405,6 @@ class MSCollector(BaseDeviceCollector):
 
         # Create standard device labels
         device_labels = create_device_labels(device, org_id=org_id, org_name=org_name)
-
         try:
             # Get port statuses with 1-hour timespan
             with LogContext(serial=device_labels["serial"], name=device_labels["name"]):
@@ -421,12 +514,115 @@ class MSCollector(BaseDeviceCollector):
 
             # Collect packet statistics
             await self._collect_packet_statistics(device)
+            self._mark_port_usage_collected(device_labels["serial"])
 
         except Exception:
             logger.exception(
                 "Failed to collect switch metrics",
                 serial=device_labels["serial"],
             )
+
+    @log_api_call("getDeviceSwitchPortsStatuses")
+    @with_error_handling(
+        operation="Collect MS port usage metrics",
+        continue_on_error=True,
+    )
+    async def collect_device_port_usage_metrics(self, device: dict[str, Any]) -> None:
+        """Collect per-port usage and POE metrics for a switch."""
+        serial = device.get("serial")
+        if not serial:
+            return
+
+        if not self._should_collect_port_usage(serial):
+            logger.debug(
+                "Skipping switch port usage collection",
+                serial=serial,
+                interval_seconds=self.settings.api.ms_port_usage_interval,
+            )
+            return
+
+        org_id = device.get("orgId", "")
+        org_name = device.get("orgName", org_id)
+        device_labels = create_device_labels(device, org_id=org_id, org_name=org_name)
+
+        with LogContext(serial=device_labels["serial"], name=device_labels["name"]):
+            port_statuses = await asyncio.to_thread(
+                self.api.switch.getDeviceSwitchPortsStatuses,
+                device_labels["serial"],
+                timespan=3600,
+            )
+            port_statuses = validate_response_format(
+                port_statuses, expected_type=list, operation="getDeviceSwitchPortsStatuses"
+            )
+
+        for port in port_statuses:
+            # Traffic counters (rate in bytes per second)
+            if "trafficInKbps" in port:
+                traffic_counters = port["trafficInKbps"]
+
+                if "recv" in traffic_counters:
+                    rx_labels = create_port_labels(
+                        device, port, org_id=org_id, org_name=org_name, direction="rx"
+                    )
+                    self._switch_port_traffic.labels(**rx_labels).set(
+                        traffic_counters["recv"] * 1000 / 8
+                    )
+
+                if "sent" in traffic_counters:
+                    tx_labels = create_port_labels(
+                        device, port, org_id=org_id, org_name=org_name, direction="tx"
+                    )
+                    self._switch_port_traffic.labels(**tx_labels).set(
+                        traffic_counters["sent"] * 1000 / 8
+                    )
+
+            # Usage counters (total bytes over timespan)
+            if "usageInKb" in port:
+                usage_counters = port["usageInKb"]
+
+                if "recv" in usage_counters:
+                    rx_labels = create_port_labels(
+                        device, port, org_id=org_id, org_name=org_name, direction="rx"
+                    )
+                    self._switch_port_usage.labels(**rx_labels).set(usage_counters["recv"] * 1024)
+
+                if "sent" in usage_counters:
+                    tx_labels = create_port_labels(
+                        device, port, org_id=org_id, org_name=org_name, direction="tx"
+                    )
+                    self._switch_port_usage.labels(**tx_labels).set(usage_counters["sent"] * 1024)
+
+                if "total" in usage_counters:
+                    total_labels = create_port_labels(
+                        device, port, org_id=org_id, org_name=org_name, direction="total"
+                    )
+                    self._switch_port_usage.labels(**total_labels).set(
+                        usage_counters["total"] * 1024
+                    )
+
+            # Client count
+            client_count = port.get("clientCount", 0)
+            port_labels_no_extra = create_port_labels(
+                device, port, org_id=org_id, org_name=org_name
+            )
+            self._switch_port_client_count.labels(**port_labels_no_extra).set(client_count)
+
+        # Extract POE data from port statuses (POE data is included in port status)
+        total_poe_consumption = 0
+
+        for port in port_statuses:
+            port_labels = create_port_labels(device, port, org_id=org_id, org_name=org_name)
+            poe_info = port.get("poe", {})
+            if poe_info.get("isAllocated", False):
+                power_used = port.get("powerUsageInWh", 0)
+                self._switch_poe_port_power.labels(**port_labels).set(power_used)
+                total_poe_consumption += power_used
+            else:
+                self._switch_poe_port_power.labels(**port_labels).set(0)
+
+        self._switch_poe_total_power.labels(**device_labels).set(total_poe_consumption)
+        self._switch_power.labels(**device_labels).set(total_poe_consumption)
+        self._mark_port_usage_collected(serial)
 
     @log_api_call("getOrganizationNetworks")
     @with_error_handling(
@@ -544,6 +740,14 @@ class MSCollector(BaseDeviceCollector):
 
         # Create standard device labels
         device_labels = create_device_labels(device, org_id=org_id, org_name=org_name)
+        serial = device_labels.get("serial")
+        if serial and not self._should_collect_packet_stats(serial):
+            logger.debug(
+                "Skipping packet statistics collection",
+                serial=serial,
+                interval_seconds=self.settings.api.ms_packet_stats_interval,
+            )
+            return
 
         try:
             # Get packet statistics with 5-minute timespan
@@ -635,6 +839,8 @@ class MSCollector(BaseDeviceCollector):
                 name=device_labels["name"],
                 port_count=len(packet_stats),
             )
+            if serial:
+                self._mark_packet_stats_collected(serial)
 
         except Exception:
             logger.exception(

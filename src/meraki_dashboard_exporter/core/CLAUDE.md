@@ -14,7 +14,7 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 ## CORE COMPONENTS
 - `config.py` / `config_models.py` - Configuration management and validation
 - `logging.py` / `logging_helpers.py` / `logging_decorators.py` - Structured logging system
-- `metrics.py` / `otel_metrics.py` - Prometheus and OpenTelemetry metrics
+- `metrics.py` - Prometheus metrics utilities
 - `error_handling.py` - Centralized error handling with decorators
 - `api_models.py` / `domain_models.py` - Pydantic models for API and business logic
 - `collector.py` - Base collector classes and interfaces

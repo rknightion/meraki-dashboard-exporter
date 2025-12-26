@@ -114,6 +114,7 @@ def _get_unfiltered_logger() -> Any:
 def log_startup_summary(
     settings: Settings,
     discovery_summary: dict[str, Any] | None = None,
+    scheduling: dict[str, Any] | None = None,
 ) -> None:
     """Log a one-time startup summary with config + discovery context.
 
@@ -153,12 +154,34 @@ def log_startup_summary(
         },
     )
     log_method("  API Batch Delay", value=f"{settings.api.batch_delay}s")
+    log_method(
+        "  API Rate Limiter",
+        enabled=settings.api.rate_limit_enabled,
+        rps=settings.api.rate_limit_requests_per_second,
+        burst=settings.api.rate_limit_burst,
+        share_fraction=settings.api.rate_limit_shared_fraction,
+        jitter_ratio=settings.api.rate_limit_jitter_ratio,
+    )
+    log_method(
+        "  Smoothing",
+        enabled=settings.api.smoothing_enabled,
+        window_ratio=settings.api.smoothing_window_ratio,
+        min_batch_delay=f"{settings.api.smoothing_min_batch_delay}s",
+        max_batch_delay=f"{settings.api.smoothing_max_batch_delay}s",
+    )
+    log_method(
+        "  Switch/Client Intervals",
+        ms_port_usage_interval=f"{settings.api.ms_port_usage_interval}s",
+        ms_packet_stats_interval=f"{settings.api.ms_packet_stats_interval}s",
+        client_app_usage_interval=f"{settings.api.client_app_usage_interval}s",
+        ms_port_status_org_endpoint=settings.api.ms_port_status_use_org_endpoint,
+    )
 
     if settings.otel.enabled:
         log_method("  OpenTelemetry", status="ENABLED")
         log_method("  OTEL Endpoint", value=settings.otel.endpoint)
-        log_method("  OTEL Export Interval", value=f"{settings.otel.export_interval}s")
         log_method("  OTEL Service Name", value=settings.otel.service_name)
+        log_method("  OTEL Tracing", value="enabled")
     else:
         log_method("  OpenTelemetry", status="DISABLED")
 
@@ -168,8 +191,38 @@ def log_startup_summary(
         medium=f"{settings.update_intervals.medium}s",
         slow=f"{settings.update_intervals.slow}s",
     )
+    log_method(
+        "  Tier Jitter Window",
+        fast=f"{min(10.0, settings.update_intervals.fast * 0.1):.1f}s",
+        medium=f"{min(10.0, settings.update_intervals.medium * 0.1):.1f}s",
+        slow=f"{min(10.0, settings.update_intervals.slow * 0.1):.1f}s",
+    )
 
     log_method("  Server", host=settings.server.host, port=settings.server.port)
+
+    if scheduling:
+        log_method("-" * 80)
+        log_method("Scheduling Diagnostics:")
+        tier_schedule = scheduling.get("tiers")
+        if tier_schedule:
+            log_method("  Tier Schedule", value=tier_schedule)
+
+        offsets = scheduling.get("collector_offsets", [])
+        if offsets:
+            formatted_offsets = [
+                f"{entry['collector']}:{entry['tier']}@{entry['offset_seconds']}s"
+                for entry in offsets
+            ]
+            truncated_offsets, offsets_truncated = _truncate_list(formatted_offsets)
+            log_method(
+                "  Collector Offsets",
+                value=truncated_offsets,
+                truncated=offsets_truncated,
+            )
+
+        endpoint_intervals = scheduling.get("endpoint_intervals")
+        if endpoint_intervals:
+            log_method("  Endpoint Intervals", value=endpoint_intervals)
 
     if settings.meraki.org_id:
         log_method("  Organization Filter", org_id=settings.meraki.org_id)
@@ -256,8 +309,8 @@ def log_startup_summary(
     if settings.otel.enabled:
         logger.info("  OpenTelemetry: ENABLED")
         logger.info(f"    - Endpoint: {settings.otel.endpoint}")
-        logger.info(f"    - Export Interval: {settings.otel.export_interval}s")
         logger.info(f"    - Service Name: {settings.otel.service_name}")
+        logger.info("    - Tracing: enabled")
         if settings.otel.resource_attributes:
             logger.info(
                 f"    - Resource Attributes: {json.dumps(settings.otel.resource_attributes)}"

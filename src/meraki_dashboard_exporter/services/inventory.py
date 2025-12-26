@@ -58,7 +58,9 @@ class OrganizationInventory:
     TTL_LICENSE = 1800  # 30 minutes - license data rarely changes
     TTL_CONFIG = 3600  # 60 minutes - org config/security settings rarely change
 
-    def __init__(self, api: DashboardAPI, settings: Settings) -> None:
+    def __init__(
+        self, api: DashboardAPI, settings: Settings, rate_limiter: Any | None = None
+    ) -> None:
         """Initialize the inventory service.
 
         Parameters
@@ -71,6 +73,7 @@ class OrganizationInventory:
         """
         self.api = api
         self.settings = settings
+        self.rate_limiter = rate_limiter
 
         # Determine TTL based on fastest tier in use
         # Use MEDIUM tier TTL as a reasonable default
@@ -103,6 +106,11 @@ class OrganizationInventory:
             "Initialized organization inventory cache",
             ttl_seconds=self._ttl,
         )
+
+    async def _acquire_rate_limit(self, org_id: str | None, endpoint: str) -> None:
+        if self.rate_limiter is None:
+            return
+        await self.rate_limiter.acquire(org_id, endpoint)
 
     async def get_organizations(
         self,
@@ -162,6 +170,7 @@ class OrganizationInventory:
                 ]
             else:
                 # Multi-org mode
+                await self._acquire_rate_limit(None, "getOrganizations")
                 orgs_result = await asyncio.to_thread(self.api.organizations.getOrganizations)
                 organizations = cast(list[dict[str, Any]], orgs_result)
 
@@ -228,6 +237,7 @@ class OrganizationInventory:
                 return self._networks[org_id]
 
             # Fetch from API
+            await self._acquire_rate_limit(org_id, "getOrganizationNetworks")
             networks_result = await asyncio.to_thread(
                 self.api.organizations.getOrganizationNetworks,
                 org_id,
@@ -302,6 +312,7 @@ class OrganizationInventory:
                     devices = self._devices[org_id]
                 else:
                     # Fetch from API
+                    await self._acquire_rate_limit(org_id, "getOrganizationDevices")
                     devices_result = await asyncio.to_thread(
                         self.api.organizations.getOrganizationDevices,
                         org_id,
@@ -380,6 +391,7 @@ class OrganizationInventory:
                 return self._device_availabilities[org_id]
 
             # Fetch from API
+            await self._acquire_rate_limit(org_id, "getOrganizationDevicesAvailabilities")
             availabilities_result = await asyncio.to_thread(
                 self.api.organizations.getOrganizationDevicesAvailabilities,
                 org_id,
@@ -619,6 +631,7 @@ class OrganizationInventory:
 
             # Fetch from API
             try:
+                await self._acquire_rate_limit(org_id, "getOrganizationLicensesOverview")
                 overview_result = await asyncio.to_thread(
                     self.api.organizations.getOrganizationLicensesOverview,
                     org_id,
@@ -698,6 +711,7 @@ class OrganizationInventory:
 
             # Fetch from API
             try:
+                await self._acquire_rate_limit(org_id, "getOrganizationLoginSecurity")
                 security_result = await asyncio.to_thread(
                     self.api.organizations.getOrganizationLoginSecurity,
                     org_id,

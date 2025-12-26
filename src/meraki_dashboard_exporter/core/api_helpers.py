@@ -40,6 +40,10 @@ class APIHelper:
         self.api: DashboardAPI = collector.api
         self.settings = collector.settings
 
+    async def _acquire_rate_limit(self, org_id: str | None, endpoint: str) -> None:
+        if hasattr(self.collector, "rate_limiter") and self.collector.rate_limiter:
+            await self.collector.rate_limiter.acquire(org_id, endpoint)
+
     async def get_organizations(self) -> list[dict[str, Any]]:
         """Get all organizations or configured organization.
 
@@ -80,6 +84,7 @@ class APIHelper:
                 "Using configured organization", org_id=self.collector.settings.meraki.org_id
             )
             self.collector._track_api_call("getOrganization")
+            await self._acquire_rate_limit(self.collector.settings.meraki.org_id, "getOrganization")
             org = await asyncio.to_thread(
                 self.api.organizations.getOrganization,
                 self.collector.settings.meraki.org_id,
@@ -89,6 +94,7 @@ class APIHelper:
             # Fetch all organizations
             logger.debug("Fetching all organizations directly (no inventory cache)")
             self.collector._track_api_call("getOrganizations")
+            await self._acquire_rate_limit(None, "getOrganizations")
             orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
             logger.debug("Successfully fetched organizations", count=len(orgs))
             return cast(list[dict[str, Any]], orgs)
@@ -159,6 +165,7 @@ class APIHelper:
         """
         logger.debug("Fetching networks directly (no inventory cache)", org_id=org_id)
         self.collector._track_api_call("getOrganizationNetworks")
+        await self._acquire_rate_limit(org_id, "getOrganizationNetworks")
         networks = await asyncio.to_thread(
             self.api.organizations.getOrganizationNetworks,
             org_id,
@@ -248,6 +255,7 @@ class APIHelper:
             product_types=product_types,
         )
         self.collector._track_api_call("getOrganizationDevices")
+        await self._acquire_rate_limit(org_id, "getOrganizationDevices")
 
         # Build API call parameters
         params: dict[str, Any] = {"total_pages": "all"}

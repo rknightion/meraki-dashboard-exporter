@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 import structlog
@@ -64,6 +65,7 @@ class ClientsCollector(MetricCollector):
 
         # Initialize DNS stats tracking
         self._last_dns_stats: dict[str, int] | None = None
+        self._last_app_usage_by_network: dict[str, float] = {}
 
     def _initialize_metrics(self) -> None:
         """Initialize Prometheus metrics for client data."""
@@ -370,6 +372,10 @@ class ClientsCollector(MetricCollector):
             _process_network,
             batch_size=batch_size,
             delay_between_batches=delay_between_batches,
+            spread_over_seconds=self._get_smoothing_window(),
+            initial_delay=self._get_smoothing_offset(f"{org_id}:clients"),
+            min_batch_delay=self.settings.api.smoothing_min_batch_delay,
+            max_batch_delay=self.settings.api.smoothing_max_batch_delay,
             item_description="network",
             error_context_func=lambda network: {
                 "org_id": org_id,
@@ -858,6 +864,16 @@ class ClientsCollector(MetricCollector):
         if not clients:
             return
 
+        interval = self.settings.api.client_app_usage_interval
+        last_run = self._last_app_usage_by_network.get(network_id, 0.0)
+        if interval > 0 and (time.time() - last_run) < interval:
+            logger.debug(
+                "Skipping client application usage collection",
+                network_id=network_id,
+                interval_seconds=interval,
+            )
+            return
+
         # Extract client IDs
         client_ids = [client.id for client in clients]
 
@@ -876,7 +892,11 @@ class ClientsCollector(MetricCollector):
             batch_ids = client_ids[i : i + batch_size]
 
             try:
-                self._track_api_call("getNetworkClientsApplicationUsage")
+                if i > 0:
+                    self._track_api_call("getNetworkClientsApplicationUsage")
+                rate_limiter = getattr(self, "rate_limiter", None)
+                if rate_limiter is not None and i > 0:
+                    await rate_limiter.acquire(org_id, "getNetworkClientsApplicationUsage")
                 usage_data = await asyncio.to_thread(
                     self.api.networks.getNetworkClientsApplicationUsage,
                     network_id,
@@ -952,6 +972,8 @@ class ClientsCollector(MetricCollector):
                 self._track_error(ErrorCategory.API_CLIENT_ERROR)
                 # Continue with next batch
                 continue
+
+        self._last_app_usage_by_network[network_id] = time.time()
 
         logger.info(
             "Completed application usage collection",

@@ -16,7 +16,7 @@ function addStructuredData() {
     "name": "Meraki Dashboard Exporter",
     "applicationCategory": "Network Monitoring Software",
     "operatingSystem": "Linux, Docker",
-    "description": "A high-performance Prometheus exporter for Cisco Meraki Dashboard API metrics with comprehensive monitoring capabilities and OpenTelemetry support",
+    "description": "A high-performance Prometheus exporter for Cisco Meraki Dashboard API metrics with comprehensive monitoring capabilities and OpenTelemetry tracing support",
     "url": "https://m7kni.io/meraki-dashboard-exporter/",
     "downloadUrl": "https://github.com/rknightion/meraki-dashboard-exporter",
     "softwareVersion": "latest",
@@ -58,7 +58,7 @@ function addStructuredData() {
     "featureList": [
       "Multi-tier metric collection system",
       "27+ specialized collectors for Meraki devices",
-      "OpenTelemetry support",
+      "OpenTelemetry tracing support",
       "Docker container deployment",
       "Comprehensive error handling",
       "Rate limiting and API optimization",
