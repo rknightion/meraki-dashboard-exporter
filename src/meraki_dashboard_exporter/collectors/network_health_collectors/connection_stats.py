@@ -31,6 +31,8 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
         ----------
         network_id : str
             Network ID.
+        org_id : str | None
+            Organization ID for logging and rate limiting context.
 
         Returns
         -------

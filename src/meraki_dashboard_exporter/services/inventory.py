@@ -69,6 +69,8 @@ class OrganizationInventory:
             Meraki Dashboard API client.
         settings : Settings
             Application settings.
+        rate_limiter : Any | None
+            Optional rate limiter used to gate API calls.
 
         """
         self.api = api

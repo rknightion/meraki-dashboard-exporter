@@ -94,6 +94,8 @@ class MetricCollector(ABC):
         expiration_manager : MetricExpirationManager | None
             Manager for tracking and expiring stale metrics. If provided,
             the _set_metric() helper will automatically track metric updates.
+        rate_limiter : Any | None
+            Optional rate limiter to gate API calls per organization.
 
         """
         self.api = api
