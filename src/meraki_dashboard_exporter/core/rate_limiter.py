@@ -28,6 +28,14 @@ class OrgRateLimiter:
     _tokens_remaining: Gauge | None = None
 
     def __init__(self, settings: Settings) -> None:
+        """Initialize the organization rate limiter.
+
+        Parameters
+        ----------
+        settings : Settings
+            Application settings with rate limit configuration.
+
+        """
         self.settings = settings
         self.enabled = settings.api.rate_limit_enabled
 

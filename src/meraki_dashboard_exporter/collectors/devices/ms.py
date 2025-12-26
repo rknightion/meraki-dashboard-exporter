@@ -26,6 +26,14 @@ class MSCollector(BaseDeviceCollector):
     """Collector for Meraki MS (Switch) devices."""
 
     def __init__(self, parent: Any) -> None:
+        """Initialize the MS collector.
+
+        Parameters
+        ----------
+        parent : Any
+            Parent collector providing shared metrics and helpers.
+
+        """
         super().__init__(parent)
         self._last_port_usage: dict[str, float] = {}
         self._last_packet_stats: dict[str, float] = {}
