@@ -16,9 +16,8 @@ import structlog
 from meraki.exceptions import APIError
 from prometheus_client import Counter
 
+from ..api.client import AsyncMerakiClient
 from ..core.constants import UpdateTier
-from ..core.constants.metrics_constants import CollectorMetricName
-from ..core.metrics import LabelName
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -52,9 +51,6 @@ class OrganizationInventory:
     >>> await inventory.invalidate()  # Invalidate all
 
     """
-
-    # Class-level API metrics counter (shared across instances)
-    _api_requests_total: Counter | None = None
 
     # TTL values in seconds based on update tier
     TTL_FAST = 300  # 5 minutes
