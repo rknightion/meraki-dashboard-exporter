@@ -14,7 +14,7 @@ dependencies = [
   "fastapi>=0.115",
   "httpx>=0.27",
   "jinja2>=3.1",
-  "meraki>=2.0.3",
+  "meraki @ git+https://github.com/meraki/dashboard-api-python.git@2.1.0",
   "opentelemetry-api>=1.29",
   "opentelemetry-exporter-otlp>=1.29",
   "opentelemetry-instrumentation-fastapi>=0.50b0",
