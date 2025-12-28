@@ -43,12 +43,8 @@ def mask_sensitive_value(key: str, value: Any) -> Any:
     # Check if key contains any sensitive terms
     key_lower = key.lower()
     if any(sensitive in key_lower for sensitive in sensitive_keys):
-        if isinstance(value, str) and value:
-            # Show first and last 2 characters for verification
-            if len(value) > 8:
-                return f"{value[:2]}...{value[-2:]}"
-            else:
-                return "***MASKED***"
+        # Never expose sensitive values (API keys, tokens, secrets).
+        return "***REDACTED***"
 
     return value
 
