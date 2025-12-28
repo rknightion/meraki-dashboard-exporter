@@ -249,7 +249,10 @@ class OrganizationInventory:
             else:
                 # Multi-org mode
                 await self._acquire_rate_limit(None, "getOrganizations")
-                orgs_result = await asyncio.to_thread(self.api.organizations.getOrganizations)
+                orgs_result = await self._make_api_call(
+                    "getOrganizations",
+                    self.api.organizations.getOrganizations,
+                )
                 organizations = cast(list[dict[str, Any]], orgs_result)
 
             # Update cache
@@ -316,7 +319,8 @@ class OrganizationInventory:
 
             # Fetch from API
             await self._acquire_rate_limit(org_id, "getOrganizationNetworks")
-            networks_result = await asyncio.to_thread(
+            networks_result = await self._make_api_call(
+                "getOrganizationNetworks",
                 self.api.organizations.getOrganizationNetworks,
                 org_id,
                 total_pages="all",
@@ -391,7 +395,8 @@ class OrganizationInventory:
                 else:
                     # Fetch from API
                     await self._acquire_rate_limit(org_id, "getOrganizationDevices")
-                    devices_result = await asyncio.to_thread(
+                    devices_result = await self._make_api_call(
+                        "getOrganizationDevices",
                         self.api.organizations.getOrganizationDevices,
                         org_id,
                         total_pages="all",
@@ -470,7 +475,8 @@ class OrganizationInventory:
 
             # Fetch from API
             await self._acquire_rate_limit(org_id, "getOrganizationDevicesAvailabilities")
-            availabilities_result = await asyncio.to_thread(
+            availabilities_result = await self._make_api_call(
+                "getOrganizationDevicesAvailabilities",
                 self.api.organizations.getOrganizationDevicesAvailabilities,
                 org_id,
                 total_pages="all",
@@ -710,7 +716,8 @@ class OrganizationInventory:
             # Fetch from API
             try:
                 await self._acquire_rate_limit(org_id, "getOrganizationLicensesOverview")
-                overview_result = await asyncio.to_thread(
+                overview_result = await self._make_api_call(
+                    "getOrganizationLicensesOverview",
                     self.api.organizations.getOrganizationLicensesOverview,
                     org_id,
                 )
@@ -790,7 +797,8 @@ class OrganizationInventory:
             # Fetch from API
             try:
                 await self._acquire_rate_limit(org_id, "getOrganizationLoginSecurity")
-                security_result = await asyncio.to_thread(
+                security_result = await self._make_api_call(
+                    "getOrganizationLoginSecurity",
                     self.api.organizations.getOrganizationLoginSecurity,
                     org_id,
                 )
