@@ -492,7 +492,7 @@ class DeviceCollector(MetricCollector):
                         org_name,
                         ms_devices,
                     )
-                    if status_result is None:
+                    if not status_result:
                         used_fallback = True
                         logger.warning(
                             "Org-level switch port status collection failed; falling back to per-device status",
