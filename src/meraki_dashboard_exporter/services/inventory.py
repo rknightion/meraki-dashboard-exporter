@@ -182,9 +182,7 @@ class OrganizationInventory:
             counter.labels(endpoint=endpoint, method="GET", status_code="200").inc()
             return result
         except APIError as e:
-            counter.labels(
-                endpoint=endpoint, method="GET", status_code=str(e.status)
-            ).inc()
+            counter.labels(endpoint=endpoint, method="GET", status_code=str(e.status)).inc()
             raise
         except Exception:
             counter.labels(endpoint=endpoint, method="GET", status_code="error").inc()
