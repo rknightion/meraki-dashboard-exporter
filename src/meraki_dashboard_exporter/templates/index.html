@@ -415,6 +415,14 @@
                     <div class="stat-value">{{ scheduling.smoothing.max_batch_delay }}</div>
                     <div class="stat-label">Max Batch Delay</div>
                 </div>
+                <div class="stat">
+                    <div class="stat-value">{{ scheduling.smoothing.window_cap_seconds }}</div>
+                    <div class="stat-label">Window Cap (s)</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{{ scheduling.collector_timeout_seconds }}</div>
+                    <div class="stat-label">Collector Timeout (s)</div>
+                </div>
             </div>
 
             <div class="stats" style="margin-top: 15px;">

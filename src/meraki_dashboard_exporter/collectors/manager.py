@@ -508,6 +508,8 @@ class CollectorManager:
     def get_scheduling_diagnostics(self) -> dict[str, Any]:
         """Return scheduling diagnostics for UI/logging."""
         tier_info: dict[str, dict[str, Any]] = {}
+        timeout_seconds = self.settings.collectors.collector_timeout
+        smoothing_cap = max(0.0, float(timeout_seconds) - 10.0)
         for tier in UpdateTier:
             interval = self.get_tier_interval(tier)
             jitter_window = min(10.0, interval * 0.1)
@@ -540,7 +542,9 @@ class CollectorManager:
                 "window_ratio": self.settings.api.smoothing_window_ratio,
                 "min_batch_delay": self.settings.api.smoothing_min_batch_delay,
                 "max_batch_delay": self.settings.api.smoothing_max_batch_delay,
+                "window_cap_seconds": round(smoothing_cap, 2),
             },
+            "collector_timeout_seconds": timeout_seconds,
             "rate_limiter": {
                 "enabled": self.settings.api.rate_limit_enabled,
                 "rps": self.settings.api.rate_limit_requests_per_second,
