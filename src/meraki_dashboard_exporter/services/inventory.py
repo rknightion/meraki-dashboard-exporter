@@ -127,10 +127,10 @@ class OrganizationInventory:
         Reuses the Counter already registered by AsyncMerakiClient to avoid
         duplicate metric registration errors.
         """
+        AsyncMerakiClient._ensure_metrics_initialized()
         if AsyncMerakiClient._api_requests_total is None:
             raise RuntimeError(
-                "AsyncMerakiClient metrics not initialized. "
-                "Ensure AsyncMerakiClient is created before OrganizationInventory."
+                "AsyncMerakiClient metrics not available after initialization."
             )
         return AsyncMerakiClient._api_requests_total
 
