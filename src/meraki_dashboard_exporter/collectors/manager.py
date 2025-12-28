@@ -74,6 +74,9 @@ class CollectorManager:
 
         # Track collector offsets for diagnostics
         self.collector_offsets: dict[tuple[str, str], float] = {}
+        self._collector_index: dict[str, MetricCollector] = {}
+        self._collector_tiers: dict[str, UpdateTier] = {}
+        self._collector_locks: dict[str, asyncio.Lock] = {}
 
         self._initialize_metrics()
         self._initialize_collectors()
@@ -213,6 +216,7 @@ class CollectorManager:
                         rate_limiter=self.rate_limiter,
                     )
                     self.collectors[tier].append(collector_instance)
+                    self._register_collector_metadata(collector_instance, tier)
 
                     # Initialize health tracking for this collector
                     self.collector_health[collector_name] = {
@@ -243,6 +247,45 @@ class CollectorManager:
                         "reason": f"initialization failed: {type(e).__name__}",
                     })
                     # Continue with other collectors even if one fails to initialize
+
+    @staticmethod
+    def _normalize_collector_name(name: str) -> str:
+        return "".join(char for char in name.lower() if char.isalnum())
+
+    def _register_collector_metadata(
+        self,
+        collector: MetricCollector,
+        tier: UpdateTier,
+    ) -> None:
+        collector_name = collector.__class__.__name__
+        short_name = collector_name.replace("Collector", "")
+        for key in {collector_name, short_name}:
+            normalized = self._normalize_collector_name(key)
+            self._collector_index[normalized] = collector
+        self._collector_tiers[collector_name] = tier
+        if collector_name not in self._collector_locks:
+            self._collector_locks[collector_name] = asyncio.Lock()
+
+    def get_collector_by_name(
+        self, name: str
+    ) -> tuple[MetricCollector, UpdateTier] | None:
+        normalized = self._normalize_collector_name(name)
+        collector = self._collector_index.get(normalized)
+        if collector is None:
+            return None
+        collector_name = collector.__class__.__name__
+        tier = self._collector_tiers.get(collector_name, collector.update_tier)
+        return collector, tier
+
+    def is_collector_running(self, collector_name: str) -> bool:
+        lock = self._collector_locks.get(collector_name)
+        if lock is None:
+            return False
+        return lock.locked()
+
+    async def run_collector_once(self, collector: MetricCollector, tier: UpdateTier) -> None:
+        timeout = self.settings.collectors.collector_timeout
+        await self._run_collector_with_timeout(collector, tier, timeout)
 
     def _validate_collector_configuration(self) -> None:
         """Validate collector configuration and warn about invalid names.
@@ -570,6 +613,7 @@ class CollectorManager:
         """
         tier = collector.update_tier
         self.collectors[tier].append(collector)
+        self._register_collector_metadata(collector, tier)
         logger.info(
             "Registered collector",
             collector=collector.__class__.__name__,
