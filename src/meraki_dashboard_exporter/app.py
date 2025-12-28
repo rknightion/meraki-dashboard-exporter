@@ -506,11 +506,15 @@ class ExporterApp:
 
                         collectors.append({
                             "name": collector_name.replace("Collector", ""),
+                            "key": collector_name,
                             "tier": tier.value.upper(),
                             "failure_streak": health.get("failure_streak", 0),
                             "success_rate": f"{success_rate:.1f}",
                             "last_success": last_success_str,
                             "total_runs": total_runs,
+                            "is_running": exporter.collector_manager.is_collector_running(
+                                collector_name
+                            ),
                         })
 
             # Get skipped collectors

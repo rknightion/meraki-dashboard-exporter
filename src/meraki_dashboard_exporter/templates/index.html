@@ -268,6 +268,33 @@
             background-color: #fafafa;
         }
 
+        .collector-actions {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .collector-trigger {
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            background-color: #ffffff;
+            color: var(--text-primary);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+
+        .collector-trigger:hover:not(:disabled) {
+            background-color: #f0f7ff;
+            border-color: var(--link-color);
+            color: var(--link-color);
+        }
+
+        .collector-trigger:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
         .health-good {
             color: var(--success-color);
             font-weight: 500;
@@ -537,6 +564,7 @@
                             <th>Last Success</th>
                             <th>Failure Streak</th>
                             <th>Total Runs</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -564,6 +592,19 @@
                                 {% endif %}
                             </td>
                             <td>{{ collector.total_runs }}</td>
+                            <td class="collector-actions">
+                                <button
+                                    class="collector-trigger"
+                                    data-collector="{{ collector.key }}"
+                                    {% if collector.is_running %}disabled{% endif %}
+                                >
+                                    {% if collector.is_running %}
+                                    Running...
+                                    {% else %}
+                                    Run Now
+                                    {% endif %}
+                                </button>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -580,5 +621,53 @@
             </div>
         </div>
     </div>
+
+    <script>
+        (function () {
+            const buttons = document.querySelectorAll(".collector-trigger");
+            if (!buttons.length) {
+                return;
+            }
+
+            const resetButton = (button, label) => {
+                button.textContent = label;
+                button.disabled = false;
+            };
+
+            buttons.forEach((button) => {
+                const originalLabel = button.textContent.trim();
+                button.addEventListener("click", async () => {
+                    const collector = button.dataset.collector;
+                    if (!collector) {
+                        return;
+                    }
+
+                    button.disabled = true;
+                    button.textContent = "Starting...";
+
+                    try {
+                        const response = await fetch("/api/collectors/trigger", {
+                            method: "POST",
+                            headers: {"Content-Type": "application/json"},
+                            body: JSON.stringify({collector}),
+                        });
+
+                        const data = await response.json();
+                        if (data.status === "started") {
+                            button.textContent = "Started";
+                        } else if (data.status === "running") {
+                            button.textContent = "Already running";
+                        } else {
+                            button.textContent = "Failed";
+                        }
+                    } catch (error) {
+                        button.textContent = "Error";
+                    } finally {
+                        setTimeout(() => resetButton(button, originalLabel), 4000);
+                    }
+                });
+            });
+        })();
+    </script>
 </body>
 </html>
