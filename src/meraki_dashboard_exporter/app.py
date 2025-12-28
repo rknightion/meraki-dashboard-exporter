@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi import Request as FastAPIRequest
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 from starlette.requests import Request
 
@@ -646,6 +647,48 @@ class ExporterApp:
             # Clear the cache
             dns_resolver.clear_cache()
             return {"status": "success", "message": "DNS cache cleared"}
+
+        class CollectorTriggerRequest(BaseModel):
+            collector: str
+
+        @app.post("/api/collectors/trigger")
+        async def trigger_collector(
+            payload: CollectorTriggerRequest,
+        ) -> dict[str, str]:
+            """Trigger a collector run on-demand."""
+            exporter = app.state.exporter
+            result = exporter.collector_manager.get_collector_by_name(payload.collector)
+            if result is None:
+                return {
+                    "status": "error",
+                    "message": f"Collector '{payload.collector}' not found",
+                }
+
+            collector, tier = result
+            collector_name = collector.__class__.__name__
+            if not collector.is_active:
+                return {
+                    "status": "error",
+                    "message": f"Collector '{collector_name}' is disabled",
+                }
+
+            if exporter.collector_manager.is_collector_running(collector_name):
+                return {
+                    "status": "running",
+                    "message": f"Collector '{collector_name}' is already running",
+                }
+
+            task = asyncio.create_task(
+                exporter.collector_manager.run_collector_once(collector, tier),
+                name=f"manual_{collector_name}",
+            )
+            exporter._background_tasks.add(task)
+            task.add_done_callback(exporter._background_tasks.discard)
+
+            return {
+                "status": "started",
+                "message": f"Collector '{collector_name}' triggered",
+            }
 
         @app.post("/api/webhooks/meraki")
         async def webhook_receiver(request: FastAPIRequest) -> dict[str, str]:
