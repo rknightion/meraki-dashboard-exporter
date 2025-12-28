@@ -339,7 +339,7 @@ class MSCollector(BaseDeviceCollector):
         """Collect port status metrics using the org-level switch endpoint."""
         if self._org_port_status_supported is None:
             self._org_port_status_supported = hasattr(
-                self.api.organizations,
+                self.api.switch,
                 "getOrganizationSwitchPortsStatusesBySwitch",
             )
             if not self._org_port_status_supported:
@@ -359,7 +359,7 @@ class MSCollector(BaseDeviceCollector):
 
         with LogContext(org_id=org_id):
             response = await asyncio.to_thread(
-                self.api.organizations.getOrganizationSwitchPortsStatusesBySwitch,
+                self.api.switch.getOrganizationSwitchPortsStatusesBySwitch,
                 org_id,
                 serials=serials,
                 perPage=20,
