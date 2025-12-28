@@ -122,22 +122,17 @@ class OrganizationInventory:
 
     @classmethod
     def _get_api_metrics(cls) -> Counter:
-        """Get or create the API requests counter.
+        """Get the API requests counter from AsyncMerakiClient.
 
-        Uses the same metric name as AsyncMerakiClient so all API calls are
-        tracked in a single counter regardless of which component makes them.
+        Reuses the Counter already registered by AsyncMerakiClient to avoid
+        duplicate metric registration errors.
         """
-        if not hasattr(cls, "_api_requests_total") or cls._api_requests_total is None:
-            cls._api_requests_total = Counter(
-                CollectorMetricName.API_REQUESTS_TOTAL.value,
-                "Total number of Meraki API requests",
-                labelnames=[
-                    LabelName.ENDPOINT.value,
-                    LabelName.METHOD.value,
-                    LabelName.STATUS_CODE.value,
-                ],
+        if AsyncMerakiClient._api_requests_total is None:
+            raise RuntimeError(
+                "AsyncMerakiClient metrics not initialized. "
+                "Ensure AsyncMerakiClient is created before OrganizationInventory."
             )
-        return cls._api_requests_total
+        return AsyncMerakiClient._api_requests_total
 
     async def _make_api_call(
         self,
