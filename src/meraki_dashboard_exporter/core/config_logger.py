@@ -170,6 +170,15 @@ def log_startup_summary(
         max_batch_delay=f"{settings.api.smoothing_max_batch_delay}s",
     )
     log_method(
+        "  Collector Timeout",
+        value=f"{settings.collectors.collector_timeout}s",
+    )
+    smoothing_cap = max(0.0, float(settings.collectors.collector_timeout) - 10.0)
+    log_method(
+        "  Smoothing Window Cap",
+        value=f"{smoothing_cap:.1f}s",
+    )
+    log_method(
         "  Switch/Client Intervals",
         ms_port_usage_interval=f"{settings.api.ms_port_usage_interval}s",
         ms_packet_stats_interval=f"{settings.api.ms_packet_stats_interval}s",
