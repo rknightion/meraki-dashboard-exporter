@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import threading
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -47,6 +48,7 @@ class AsyncMerakiClient:
 
     # Class-level flag to prevent duplicate metric registration
     _metrics_initialized = False
+    _metrics_lock = threading.Lock()
     # Class-level metrics (shared across all instances)
     _api_request_duration: Histogram | None = None
     _api_requests_total: Counter | None = None
@@ -73,15 +75,21 @@ class AsyncMerakiClient:
         )
 
     def _init_metrics(self) -> None:
-        """Initialize API client metrics for comprehensive observability.
+        """Initialize API client metrics for comprehensive observability."""
+        self._ensure_metrics_initialized()
 
-        Uses class-level metrics to prevent duplicate registration when
-        multiple AsyncMerakiClient instances are created.
-        """
-        # Only initialize metrics once at class level to prevent duplicates
-        if not AsyncMerakiClient._metrics_initialized:
+    @classmethod
+    def _ensure_metrics_initialized(cls) -> None:
+        """Initialize API client metrics once in a thread-safe manner."""
+        if cls._metrics_initialized:
+            return
+
+        with cls._metrics_lock:
+            if cls._metrics_initialized:
+                return
+
             # Request duration histogram
-            AsyncMerakiClient._api_request_duration = Histogram(
+            cls._api_request_duration = Histogram(
                 CollectorMetricName.API_REQUEST_DURATION_SECONDS.value,
                 "Duration of Meraki API requests in seconds",
                 labelnames=[
@@ -93,7 +101,7 @@ class AsyncMerakiClient:
             )
 
             # Request counter
-            AsyncMerakiClient._api_requests_total = Counter(
+            cls._api_requests_total = Counter(
                 CollectorMetricName.API_REQUESTS_TOTAL.value,
                 "Total number of Meraki API requests",
                 labelnames=[
@@ -104,20 +112,20 @@ class AsyncMerakiClient:
             )
 
             # Rate limit gauges
-            AsyncMerakiClient._api_rate_limit_remaining = Gauge(
+            cls._api_rate_limit_remaining = Gauge(
                 CollectorMetricName.API_RATE_LIMIT_REMAINING.value,
                 "Remaining rate limit for Meraki API",
                 labelnames=[LabelName.ORG_ID.value],
             )
 
-            AsyncMerakiClient._api_rate_limit_total = Gauge(
+            cls._api_rate_limit_total = Gauge(
                 CollectorMetricName.API_RATE_LIMIT_TOTAL.value,
                 "Total rate limit for Meraki API",
                 labelnames=[LabelName.ORG_ID.value],
             )
 
             # Retry counter
-            AsyncMerakiClient._api_retry_attempts = Counter(
+            cls._api_retry_attempts = Counter(
                 CollectorMetricName.API_RETRY_ATTEMPTS_TOTAL.value,
                 "Total number of API retry attempts",
                 labelnames=[
@@ -126,10 +134,8 @@ class AsyncMerakiClient:
                 ],
             )
 
-            AsyncMerakiClient._metrics_initialized = True
+            cls._metrics_initialized = True
             logger.debug("Initialized AsyncMerakiClient metrics")
-        else:
-            logger.debug("Reusing existing AsyncMerakiClient metrics")
 
     async def _get_api_client(self) -> meraki.DashboardAPI:
         """Get or create the API client instance with thread-safe initialization.
