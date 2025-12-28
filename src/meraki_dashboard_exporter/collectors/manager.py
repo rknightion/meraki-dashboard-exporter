@@ -442,90 +442,112 @@ class CollectorManager:
 
         """
         collector_name = collector.__class__.__name__
-        logger.debug(
-            "Starting collector",
-            collector=collector_name,
-            tier=tier,
-        )
+        collector_lock = self._collector_locks.get(collector_name)
+        if collector_lock is None:
+            collector_lock = asyncio.Lock()
+            self._collector_locks[collector_name] = collector_lock
 
-        # Track active collection
-        self._parallel_collections_active.labels(
-            collector=collector_name,
-            tier=tier.value,
-        ).inc()
+        if collector_lock.locked():
+            logger.warning(
+                "Collector already running, skipping",
+                collector=collector_name,
+                tier=tier.value,
+            )
+            return
 
-        # Track run
-        if collector_name in self.collector_health:
-            self.collector_health[collector_name]["total_runs"] += 1
-
-        success = False
-        try:
-            await asyncio.wait_for(collector.collect(), timeout=timeout)
+        async with collector_lock:
             logger.debug(
-                "Collector completed successfully",
+                "Starting collector",
                 collector=collector_name,
                 tier=tier,
             )
-            success = True
-        except TimeoutError:
-            logger.error(
-                "Collector timeout",
-                collector=collector_name,
-                tier=tier,
-                timeout_seconds=timeout,
-            )
-            # Track timeout error
-            self._collection_errors.labels(
-                collector=collector_name,
-                tier=tier.value,
-                error_type="TimeoutError",
-            ).inc()
-            # Error logged, but don't raise to allow other collectors to continue
-        except Exception as e:
-            logger.error(
-                "Collector failed",
-                collector=collector_name,
-                tier=tier,
-                error=str(e),
-                error_type=type(e).__name__,
-            )
-            # Track collection error
-            self._collection_errors.labels(
-                collector=collector_name,
-                tier=tier.value,
-                error_type=type(e).__name__,
-            ).inc()
-            # Error logged, but don't raise to allow other collectors to continue
-        finally:
-            # Update health tracking
-            if collector_name in self.collector_health:
-                if success:
-                    self.collector_health[collector_name]["last_success_time"] = time.time()
-                    self.collector_health[collector_name]["failure_streak"] = 0
-                    self.collector_health[collector_name]["total_successes"] += 1
-                else:
-                    self.collector_health[collector_name]["failure_streak"] += 1
-                    self.collector_health[collector_name]["total_failures"] += 1
 
-                # Update health metrics
-                last_success = self.collector_health[collector_name]["last_success_time"]
-                if last_success is not None:
-                    age = time.time() - last_success
-                    self._collector_last_success_age.labels(
-                        collector=collector_name,
-                        tier=tier.value,
-                    ).set(age)
-
-                self._collector_failure_streak.labels(
-                    collector=collector_name,
-                    tier=tier.value,
-                ).set(self.collector_health[collector_name]["failure_streak"])
-
-            # Decrement active collection counter
+            # Track active collection
             self._parallel_collections_active.labels(
                 collector=collector_name,
                 tier=tier.value,
-            ).dec()
+            ).inc()
+
+            # Track run
+            if collector_name in self.collector_health:
+                self.collector_health[collector_name]["total_runs"] += 1
+
+            success = False
+            try:
+                async with asyncio.timeout(timeout):
+                    await collector.collect()
+                logger.debug(
+                    "Collector completed successfully",
+                    collector=collector_name,
+                    tier=tier,
+                )
+                success = True
+            except TimeoutError:
+                logger.error(
+                    "Collector timeout",
+                    collector=collector_name,
+                    tier=tier,
+                    timeout_seconds=timeout,
+                )
+                # Track timeout error
+                self._collection_errors.labels(
+                    collector=collector_name,
+                    tier=tier.value,
+                    error_type="TimeoutError",
+                ).inc()
+                # Error logged, but don't raise to allow other collectors to continue
+            except asyncio.CancelledError:
+                logger.info(
+                    "Collector task cancelled",
+                    collector=collector_name,
+                    tier=tier.value,
+                )
+                raise
+            except Exception as e:
+                logger.error(
+                    "Collector failed",
+                    collector=collector_name,
+                    tier=tier,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+                # Track collection error
+                self._collection_errors.labels(
+                    collector=collector_name,
+                    tier=tier.value,
+                    error_type=type(e).__name__,
+                ).inc()
+                # Error logged, but don't raise to allow other collectors to continue
+            finally:
+                # Update health tracking
+                if collector_name in self.collector_health:
+                    if success:
+                        self.collector_health[collector_name]["last_success_time"] = time.time()
+                        self.collector_health[collector_name]["failure_streak"] = 0
+                        self.collector_health[collector_name]["total_successes"] += 1
+                    else:
+                        self.collector_health[collector_name]["failure_streak"] += 1
+                        self.collector_health[collector_name]["total_failures"] += 1
+
+                    # Update health metrics
+                    last_success = self.collector_health[collector_name]["last_success_time"]
+                    if last_success is not None:
+                        age = time.time() - last_success
+                        self._collector_last_success_age.labels(
+                            collector=collector_name,
+                            tier=tier.value,
+                        ).set(age)
+
+                    self._collector_failure_streak.labels(
+                        collector=collector_name,
+                        tier=tier.value,
+                    ).set(self.collector_health[collector_name]["failure_streak"])
+
+                # Decrement active collection counter
+                self._parallel_collections_active.labels(
+                    collector=collector_name,
+                    tier=tier.value,
+                ).dec()
 
     def get_tier_interval(self, tier: UpdateTier) -> int:
         """Get the update interval for a tier.
