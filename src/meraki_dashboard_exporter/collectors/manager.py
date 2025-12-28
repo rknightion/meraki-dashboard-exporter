@@ -144,7 +144,11 @@ class CollectorManager:
         if not self.settings.api.smoothing_enabled:
             return 0.0
         interval = self._get_tier_interval(tier)
-        return max(0.0, float(interval) * self.settings.api.smoothing_window_ratio)
+        window = max(0.0, float(interval) * self.settings.api.smoothing_window_ratio)
+        timeout_budget = float(self.settings.collectors.collector_timeout) - 10.0
+        if timeout_budget > 0:
+            window = min(window, timeout_budget)
+        return max(0.0, window)
 
     def _get_collector_offset(self, collector_name: str, tier: UpdateTier) -> float:
         import hashlib
