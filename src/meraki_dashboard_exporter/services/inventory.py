@@ -9,16 +9,23 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 import structlog
+from meraki.exceptions import APIError
+from prometheus_client import Counter
 
 from ..core.constants import UpdateTier
+from ..core.constants.metrics_constants import CollectorMetricName
+from ..core.metrics import LabelName
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
 
     from ..core.config import Settings
+
+T = TypeVar("T")
 
 logger = structlog.get_logger(__name__)
 
@@ -45,6 +52,9 @@ class OrganizationInventory:
     >>> await inventory.invalidate()  # Invalidate all
 
     """
+
+    # Class-level API metrics counter (shared across instances)
+    _api_requests_total: Counter | None = None
 
     # TTL values in seconds based on update tier
     TTL_FAST = 300  # 5 minutes
@@ -113,6 +123,72 @@ class OrganizationInventory:
         if self.rate_limiter is None:
             return
         await self.rate_limiter.acquire(org_id, endpoint)
+
+    @classmethod
+    def _get_api_metrics(cls) -> Counter:
+        """Get or create the API requests counter.
+
+        Uses the same metric name as AsyncMerakiClient so all API calls are
+        tracked in a single counter regardless of which component makes them.
+        """
+        if not hasattr(cls, "_api_requests_total") or cls._api_requests_total is None:
+            cls._api_requests_total = Counter(
+                CollectorMetricName.API_REQUESTS_TOTAL.value,
+                "Total number of Meraki API requests",
+                labelnames=[
+                    LabelName.ENDPOINT.value,
+                    LabelName.METHOD.value,
+                    LabelName.STATUS_CODE.value,
+                ],
+            )
+        return cls._api_requests_total
+
+    async def _make_api_call(
+        self,
+        endpoint: str,
+        api_func: Callable[..., T],
+        *args: Any,
+        **kwargs: Any,
+    ) -> T:
+        """Make an API call with metric instrumentation.
+
+        Parameters
+        ----------
+        endpoint : str
+            The API endpoint name for metric labeling.
+        api_func : Callable
+            The API function to call.
+        *args : Any
+            Positional arguments to pass to the API function.
+        **kwargs : Any
+            Keyword arguments to pass to the API function.
+
+        Returns
+        -------
+        T
+            The result from the API call.
+
+        Raises
+        ------
+        APIError
+            Re-raised from the Meraki SDK with metric recorded.
+        Exception
+            Any other exception with metric recorded as "error".
+
+        """
+        counter = self._get_api_metrics()
+        try:
+            result = await asyncio.to_thread(api_func, *args, **kwargs)
+            counter.labels(endpoint=endpoint, method="GET", status_code="200").inc()
+            return result
+        except APIError as e:
+            counter.labels(
+                endpoint=endpoint, method="GET", status_code=str(e.status)
+            ).inc()
+            raise
+        except Exception:
+            counter.labels(endpoint=endpoint, method="GET", status_code="error").inc()
+            raise
 
     async def get_organizations(
         self,
