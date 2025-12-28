@@ -37,6 +37,7 @@ class MSCollector(BaseDeviceCollector):
         super().__init__(parent)
         self._last_port_usage: dict[str, float] = {}
         self._last_packet_stats: dict[str, float] = {}
+        self._org_port_status_supported: bool | None = None
 
     def _initialize_metrics(self) -> None:
         """Initialize MS-specific metrics."""
@@ -336,6 +337,21 @@ class MSCollector(BaseDeviceCollector):
         devices: list[dict[str, Any]],
     ) -> bool:
         """Collect port status metrics using the org-level switch endpoint."""
+        if self._org_port_status_supported is None:
+            self._org_port_status_supported = hasattr(
+                self.api.organizations,
+                "getOrganizationSwitchPortsStatusesBySwitch",
+            )
+            if not self._org_port_status_supported:
+                logger.warning(
+                    "Org-level switch port status endpoint not available in SDK; "
+                    "falling back to per-device collection",
+                    org_id=org_id,
+                )
+
+        if not self._org_port_status_supported:
+            return False
+
         device_lookup = {device.get("serial"): device for device in devices}
         serials = [device.get("serial") for device in devices if device.get("serial")]
         if not serials:
