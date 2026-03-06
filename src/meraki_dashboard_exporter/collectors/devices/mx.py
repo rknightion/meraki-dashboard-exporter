@@ -6,7 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants import MXMetricName
-from ...core.error_handling import ErrorCategory, with_error_handling
+from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -82,12 +82,16 @@ class MXCollector(BaseDeviceCollector):
             Device lookup table keyed by serial.
 
         """
-        self._track_api_call("getOrganizationApplianceUplinkStatuses")
-
         uplink_statuses = await asyncio.to_thread(
             self.api.appliance.getOrganizationApplianceUplinkStatuses,
             org_id,
             total_pages="all",
+        )
+
+        uplink_statuses = validate_response_format(
+            uplink_statuses,
+            expected_type=list,
+            operation="getOrganizationApplianceUplinkStatuses",
         )
 
         if not uplink_statuses:
@@ -97,28 +101,27 @@ class MXCollector(BaseDeviceCollector):
             serial = appliance.get("serial", "")
             device_info = device_lookup.get(serial, {})
             network_id = appliance.get("networkId", device_info.get("network_id", ""))
-            network_name = device_info.get("network_name", network_id)
-            name = device_info.get("name", serial)
-            model = appliance.get("model", device_info.get("model", ""))
-            device_type = model[:2] if len(model) >= 2 else "MX"
+
+            device_data = {
+                "serial": serial,
+                "name": device_info.get("name", serial),
+                "model": appliance.get("model", device_info.get("model", "")),
+                "networkId": network_id,
+                "networkName": device_info.get("network_name", network_id),
+            }
 
             uplinks = appliance.get("uplinks", [])
             for uplink in uplinks:
                 interface = uplink.get("interface", "")
                 status = uplink.get("status", "not connected")
 
-                labels = {
-                    "org_id": org_id,
-                    "org_name": org_name,
-                    "network_id": network_id,
-                    "network_name": network_name,
-                    "serial": serial,
-                    "name": name,
-                    "model": model,
-                    "device_type": device_type,
-                    "interface": interface,
-                    "status": status,
-                }
+                labels = create_device_labels(
+                    device_data,
+                    org_id=org_id,
+                    org_name=org_name,
+                    interface=interface,
+                    status=status,
+                )
 
                 self.parent._set_metric(self._mx_uplink_info, labels, 1)
 

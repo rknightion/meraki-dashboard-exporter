@@ -14,7 +14,6 @@ from ..core.constants import (
     DeviceStatus,
     DeviceType,
     MSMetricName,
-    MXMetricName,
     UpdateTier,
 )
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -442,7 +441,6 @@ class DeviceCollector(MetricCollector):
 
                 # Skip unsupported device types
                 if device_type_str not in DeviceType.__members__.values():
-
                     logger.debug(
                         "Skipping device with unsupported type",
                         serial=device["serial"],
@@ -565,12 +563,9 @@ class DeviceCollector(MetricCollector):
                 if d.get("model", "").startswith(DeviceType.MX)
                 or d.get("productType") == "appliance"
             ):
-                try:
-                    await self.mx_collector.collect_uplink_statuses(
-                        org_id, org_name, self._device_lookup
-                    )
-                except Exception:
-                    logger.exception("Failed to collect MX uplink statuses")
+                await self.mx_collector.collect_uplink_statuses(
+                    org_id, org_name, self._device_lookup
+                )
 
         except Exception as e:
             logger.exception(
@@ -735,7 +730,6 @@ class DeviceCollector(MetricCollector):
 
         # If device type based on the model isn't supported, use the product type instead
         if device_type_str not in DeviceType.__members__.values():
-
             # Try mapping it using the product type instead
             product_type = device.get("productType", "")
             match product_type:
