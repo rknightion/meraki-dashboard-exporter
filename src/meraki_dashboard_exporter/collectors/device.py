@@ -14,6 +14,7 @@ from ..core.constants import (
     DeviceStatus,
     DeviceType,
     MSMetricName,
+    MXMetricName,
     UpdateTier,
 )
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -556,6 +557,20 @@ class DeviceCollector(MetricCollector):
             if any(d for d in devices if d.get("model", "").startswith(DeviceType.MS)):
                 # Use MS collector for all MS-specific metrics
                 await self._collect_ms_specific_metrics(org_id, org_name, devices)
+
+            # Collect MX-specific metrics
+            if any(
+                d
+                for d in devices
+                if d.get("model", "").startswith(DeviceType.MX)
+                or d.get("productType") == "appliance"
+            ):
+                try:
+                    await self.mx_collector.collect_uplink_statuses(
+                        org_id, org_name, self._device_lookup
+                    )
+                except Exception:
+                    logger.exception("Failed to collect MX uplink statuses")
 
         except Exception as e:
             logger.exception(
