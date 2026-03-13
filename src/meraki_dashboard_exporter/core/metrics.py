@@ -57,6 +57,9 @@ class LabelName(StrEnum):
     # License labels
     LICENSE_TYPE = "license_type"
 
+    # Interface labels
+    INTERFACE = "interface"
+
     # Wireless specific
     SSID = "ssid"
     BAND = "band"

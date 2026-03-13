@@ -198,6 +198,12 @@ class MRMetricName(StrEnum):
     MR_SSID_CLIENT_COUNT = "meraki_mr_ssid_client_count"
 
 
+class MXMetricName(StrEnum):
+    """MX (Security Appliance) specific metric names."""
+
+    MX_UPLINK_INFO = "meraki_mx_uplink_info"
+
+
 class MVMetricName(StrEnum):
     """MV (Camera) specific metric names."""
 
