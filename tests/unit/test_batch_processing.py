@@ -26,7 +26,7 @@ class TestProcessInBatchesWithErrors:
 
         items = list(range(10))
         results = await process_in_batches_with_errors(
-            items, process_item, batch_size=3, delay_between_batches=0.05, item_description="number"
+            items, process_item, batch_size=3, delay_between_batches=0.01, item_description="number"
         )
 
         # All items should be processed
@@ -101,7 +101,7 @@ class TestProcessInBatchesWithErrors:
 
         items = list(range(6))
         await process_in_batches_with_errors(
-            items, process_item, batch_size=2, delay_between_batches=0.1
+            items, process_item, batch_size=2, delay_between_batches=0.02
         )
 
         # Should have 3 batches: [0,1], [2,3], [4,5]
@@ -111,8 +111,8 @@ class TestProcessInBatchesWithErrors:
         batch2_end = max(t for i, t in batch_times if i in {2, 3})
         batch3_start = min(t for i, t in batch_times if i in {4, 5})
 
-        assert batch2_start - batch1_end >= 0.09  # Allow small variance
-        assert batch3_start - batch2_end >= 0.09
+        assert batch2_start - batch1_end >= 0.019  # Allow small variance
+        assert batch3_start - batch2_end >= 0.019
 
     async def test_error_context_function(self):
         """Test custom error context extraction."""

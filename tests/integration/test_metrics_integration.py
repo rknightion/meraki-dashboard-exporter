@@ -329,9 +329,9 @@ class TestMetricsIntegration:
         isolated_registry = CollectorRegistry()
         monkeypatch.setattr("meraki_dashboard_exporter.core.collector.REGISTRY", isolated_registry)
 
-        # Make device collector fail
+        # Make device collector fail (avoid "rate limit" in message to prevent retries)
         mock_api_client.api.organizations.getOrganizationDevices = MagicMock(
-            side_effect=Exception("API rate limit exceeded")
+            side_effect=Exception("API unavailable")
         )
 
         # Other collectors should work
