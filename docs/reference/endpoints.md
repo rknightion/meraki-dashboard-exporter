@@ -16,10 +16,11 @@ This page lists HTTP endpoints exposed by the exporter.
 | `GET` | `/cardinality/label-values/{metric_name}` | Get label value distribution for a specific metric. | Cardinality data appears after the first full collection cycle. |
 | `GET` | `/clients` | Client data visualization endpoint. | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `GET` | `/health` | Health check endpoint. |  |
-| `GET` | `/metrics` | Prometheus metrics endpoint with filtering based on configuration. |  |
+| `GET` | `/metrics` | Prometheus metrics endpoint. |  |
 
 ## Notes
 
 - `/metrics` and `/health` are always available.
 - The client UI and DNS cache endpoint are gated by client collection.
 - The webhook endpoint returns 404 when webhooks are disabled.
+
