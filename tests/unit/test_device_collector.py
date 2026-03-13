@@ -466,6 +466,40 @@ class TestDeviceCollector(BaseCollectorTest):
         # The collector should only process each radio once
         # This test verifies the method completes without duplicate processing
 
+    def test_device_status_info_clears_stale_labels(self, collector):
+        """Test that stale device status label series are removed on status change.
+
+        When a device transitions (e.g. online -> offline), the old label
+        series with status="online" must be removed so only the current
+        status is reported.
+        """
+        device = {
+            "serial": "Q2AB-1234",
+            "name": "Test Device",
+            "model": "MR36",
+            "networkId": "N_111",
+            "networkName": "Test Network",
+            "availability_status": "online",
+        }
+
+        # First collection: device is online
+        collector._collect_common_metrics(device, org_id="org1", org_name="Test Org")
+
+        # Verify the "online" status entry exists
+        gauge = collector._device_status_info
+        assert len(gauge._metrics) == 1
+
+        # Second collection: device transitions to offline
+        device["availability_status"] = "offline"
+        collector._collect_common_metrics(device, org_id="org1", org_name="Test Org")
+
+        # Should have exactly 1 entry (offline), not 2 (online + offline)
+        assert len(gauge._metrics) == 1
+        # Verify the remaining entry has status="offline"
+        label_tuple = list(gauge._metrics.keys())[0]
+        # Status is the last label in the labelnames list
+        assert label_tuple[-1] == "offline"
+
     async def test_device_collection_basic(self, collector, mock_api_builder, metrics):
         """Test basic device collection functionality."""
         # Set up standard test data

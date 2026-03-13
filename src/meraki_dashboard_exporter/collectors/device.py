@@ -860,6 +860,24 @@ class DeviceCollector(MetricCollector):
             is_online,
         )
 
+        # Remove stale status label series for this device
+        # (status is a label, so transitions leave old series at 1)
+        for stale_status in DeviceStatus:
+            if stale_status.value != availability_status:
+                stale_labels = create_device_labels(
+                    device, org_id=org_id, org_name=org_name, status=stale_status.value
+                )
+                try:
+                    self._device_status_info.remove(
+                        *[stale_labels[ln.value] for ln in [
+                            LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.NETWORK_ID,
+                            LabelName.NETWORK_NAME, LabelName.SERIAL, LabelName.NAME,
+                            LabelName.MODEL, LabelName.DEVICE_TYPE, LabelName.STATUS,
+                        ]]
+                    )
+                except KeyError:
+                    pass  # Label combination doesn't exist
+
         # Device status info metric
         status_labels = create_device_labels(
             device, org_id=org_id, org_name=org_name, status=availability_status
