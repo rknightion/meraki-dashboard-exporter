@@ -269,6 +269,7 @@ class CollectorManager:
     def get_collector_by_name(
         self, name: str
     ) -> tuple[MetricCollector, UpdateTier] | None:
+        """Look up a collector and its tier by name."""
         normalized = self._normalize_collector_name(name)
         collector = self._collector_index.get(normalized)
         if collector is None:
@@ -278,12 +279,14 @@ class CollectorManager:
         return collector, tier
 
     def is_collector_running(self, collector_name: str) -> bool:
+        """Check whether the named collector is currently running."""
         lock = self._collector_locks.get(collector_name)
         if lock is None:
             return False
         return lock.locked()
 
     async def run_collector_once(self, collector: MetricCollector, tier: UpdateTier) -> None:
+        """Run a single collector once with the configured timeout."""
         timeout = self.settings.collectors.collector_timeout
         await self._run_collector_with_timeout(collector, tier, timeout)
 
