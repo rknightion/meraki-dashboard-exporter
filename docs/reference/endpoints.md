@@ -6,6 +6,7 @@ This page lists HTTP endpoints exposed by the exporter.
 |--------|------|-------------|-------|
 | `GET` | `/` | Root endpoint with HTML landing page. |  |
 | `POST` | `/api/clients/clear-dns-cache` | Clear the DNS cache. | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `POST` | `/api/collectors/trigger` | Trigger a collector run on-demand. |  |
 | `GET` | `/api/metrics/cardinality` | Get cardinality analysis via JSON API. | Cardinality data appears after the first full collection cycle. |
 | `POST` | `/api/webhooks/meraki` | Meraki webhook receiver endpoint. | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `GET` | `/cardinality` | Get cardinality analysis report in HTML format. | Cardinality data appears after the first full collection cycle. |
