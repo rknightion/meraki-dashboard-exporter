@@ -188,6 +188,12 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mt_voltage_volts` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Voltage in volts |  |
 | `meraki_mt_water_detected` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Water detection status (1 = detected, 0 = not detected) |  |
 
+### MXCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_mx_uplink_info` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `interface`, `status` | MX appliance uplink status info (1 = present) |  |
+
 ### NetworkHealthCollector
 
 | Metric | Type | Labels | Description | Notes |
