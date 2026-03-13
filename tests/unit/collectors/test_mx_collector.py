@@ -287,6 +287,68 @@ class TestMXCollector:
         # create_device_labels derives device_type from model[:2]
         assert labels["device_type"] == "Z3"
 
+    async def test_collect_uplink_statuses_clears_stale_labels(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Test that stale status label series are cleared on each collection.
+
+        When status changes (e.g. active -> failed), the old label series
+        must not persist alongside the new one.
+        """
+        gauge = mx_collector._mx_uplink_info
+
+        # Simulate a stale label entry from a previous collection cycle
+        gauge.labels(
+            org_id="org1",
+            org_name="Test Org",
+            network_id="N_111",
+            network_name="Office Network",
+            serial="Q2AB-1234-5678",
+            name="Office MX",
+            model="MX68",
+            device_type="MX",
+            interface="wan1",
+            status="active",
+        ).set(1)
+
+        # Verify the stale entry exists
+        assert len(gauge._metrics) == 1
+
+        # Now collect with the uplink having changed to "failed"
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2AB-1234-5678",
+                    "networkId": "N_111",
+                    "model": "MX68",
+                    "uplinks": [
+                        {"interface": "wan1", "status": "failed"},
+                    ],
+                }
+            ]
+        )
+
+        device_lookup = {
+            "Q2AB-1234-5678": {
+                "name": "Office MX",
+                "model": "MX68",
+                "network_id": "N_111",
+                "network_name": "Office Network",
+                "device_type": "MX",
+            }
+        }
+
+        await mx_collector.collect_uplink_statuses("org1", "Test Org", device_lookup)
+
+        # The _metrics dict should have been cleared before re-setting,
+        # so the old "active" entry should not persist.
+        # parent._set_metric is mocked so no new entries are added to the Gauge,
+        # but the clear should have removed the stale entry.
+        assert len(gauge._metrics) == 0
+
     async def test_collect_uplink_statuses_api_error(
         self,
         mx_collector: MXCollector,
