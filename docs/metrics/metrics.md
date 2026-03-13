@@ -5,10 +5,10 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 182
-- **Gauges:** 162
-- **Counters:** 15
-- **Histograms:** 4
+- **Total metrics:** 188
+- **Gauges:** 166
+- **Counters:** 16
+- **Histograms:** 5
 - **Info metrics:** 1
 
 ## Collector Metrics
@@ -188,6 +188,12 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mt_voltage_volts` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Voltage in volts |  |
 | `meraki_mt_water_detected` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Water detection status (1 = detected, 0 = not detected) |  |
 
+### MXCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_mx_uplink_info` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `interface`, `status` | MX appliance uplink status info (1 = present) |  |
+
 ### NetworkHealthCollector
 
 | Metric | Type | Labels | Description | Notes |
@@ -260,9 +266,11 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
+| `meraki_exporter_collection_smoothing_window_seconds` | gauge | `collector`, `tier` | Configured smoothing window for collector runs |  |
 | `meraki_exporter_collector_api_calls_total` | counter | `collector`, `tier`, `endpoint` | Total number of API calls made by collectors |  |
 | `meraki_exporter_collector_duration_seconds` | histogram | `collector`, `tier` | Time spent collecting metrics |  |
 | `meraki_exporter_collector_errors_total` | counter | `collector`, `tier`, `error_type` | Total number of collector errors |  |
+| `meraki_exporter_collector_start_offset_seconds` | gauge | `collector`, `tier` | Configured collector start offset within smoothing window |  |
 | `meraki_exporter_collector_success_timestamp_seconds` | gauge | `collector`, `tier` | Unix timestamp of last successful collection |  |
 
 ### MetricExpirationManager
@@ -271,6 +279,14 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_exporter_cache_size_tracked_metrics` | gauge | `collector` | Number of metrics currently tracked for expiration |  |
 | `meraki_exporter_collection_errors_total_expired` | counter | `collector`, `tier` | Total number of metrics expired due to TTL |  |
+
+### OrgRateLimiter
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_exporter_api_rate_limiter_throttled_total` | counter | `org_id`, `endpoint` | Total number of client-side rate limiter waits |  |
+| `meraki_exporter_api_rate_limiter_tokens` | gauge | `org_id` | Estimated remaining tokens in client-side rate limiter bucket |  |
+| `meraki_exporter_api_rate_limiter_wait_seconds` | histogram | `org_id`, `endpoint` | Seconds spent waiting for client-side rate limiter |  |
 
 ### WebhookHandler
 
@@ -288,3 +304,4 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 - **Counter**: Cumulative value that only increases
 - **Histogram**: Distribution of observations across buckets
 - **Info**: Metadata metric with labels and value 1
+

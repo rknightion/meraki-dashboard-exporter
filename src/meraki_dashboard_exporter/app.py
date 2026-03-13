@@ -14,8 +14,8 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi import Request as FastAPIRequest
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
+from pydantic import BaseModel
 from starlette.requests import Request
 
 from .__version__ import __version__

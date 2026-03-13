@@ -27,6 +27,7 @@ class TestMGCollector:
         parent = MagicMock()
         parent.api = mock_api
         parent.settings = MagicMock()
+        parent.rate_limiter = None
         return parent
 
     @pytest.fixture
