@@ -304,3 +304,4 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 - **Counter**: Cumulative value that only increases
 - **Histogram**: Distribution of observations across buckets
 - **Info**: Metadata metric with labels and value 1
+
