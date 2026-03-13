@@ -665,7 +665,7 @@ class MSCollector(BaseDeviceCollector):
         org_name : str
             Organization name.
         device_lookup : dict[str, dict[str, Any]] | None
-            Device lookup table. If not provided, uses parent's _device_lookup.
+            Device lookup table. If not provided, defaults to empty dict.
 
         """
         from ...core.domain_models import STPConfiguration
