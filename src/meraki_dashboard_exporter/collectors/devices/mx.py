@@ -97,6 +97,10 @@ class MXCollector(BaseDeviceCollector):
         if not uplink_statuses:
             return
 
+        # Clear previous label series to avoid stale status values
+        # (status is a label, so status transitions leave old series at 1)
+        self._mx_uplink_info._metrics.clear()
+
         for appliance in uplink_statuses:
             serial = appliance.get("serial", "")
             device_info = device_lookup.get(serial, {})
