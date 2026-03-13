@@ -126,12 +126,13 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Hybrid cache strategy: registry cache survives GHA cache evictions
+          # Hybrid cache strategy: registry cache (authenticated only) + GHA cache
+          # PRs skip registry login, so only use GHA cache to avoid 403 errors
           cache-from: |
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+            ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}:buildcache', env.REGISTRY, env.IMAGE_NAME) || '' }}
             type=gha
           cache-to: |
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+            ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}:buildcache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
             type=gha,mode=max
           # Generate SBOM and provenance attestations
           provenance: ${{ github.event_name != 'pull_request' }}
