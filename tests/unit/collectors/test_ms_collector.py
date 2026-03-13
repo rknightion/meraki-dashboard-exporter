@@ -30,6 +30,8 @@ class TestMSCollector:
         parent = MagicMock()
         parent.api = mock_api
         parent.settings = MagicMock()
+        parent.settings.api.ms_packet_stats_interval = 0
+        parent.rate_limiter = None
 
         # Mock the _create_gauge method to return actual Gauge objects
         def create_gauge(name, description, labelnames):
