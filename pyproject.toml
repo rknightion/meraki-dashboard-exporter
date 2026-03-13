@@ -39,6 +39,7 @@ dev = [
   "pytest>=8.3",
   "pytest-asyncio>=0.24",
   "pytest-cov>=6",
+  "pytest-timeout>=2.3",
   "ruff>=0.12.2",
   "ty>=0.0.1a13",
   "zensical>=0.0.14",
@@ -107,6 +108,7 @@ testpaths = [ "tests" ]
 python_files = [ "test_*.py", "*_test.py" ]
 python_classes = [ "Test*" ]
 python_functions = [ "test_*" ]
+timeout = 30
 filterwarnings = [
   "ignore:Remove `format_exc_info` from your processor chain:UserWarning",
 ]
