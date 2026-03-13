@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.28.0...v0.28.1) (2026-03-13)
+
+
+### Dependencies
+
+* switch meraki from git to PyPI source & update ([8bc84a4](https://github.com/rknightion/meraki-dashboard-exporter/commit/8bc84a4776d40e6be41d863c9c8c36adbfb8d9fa))
+
 ## [0.28.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.27.1...v0.28.0) (2026-03-13)
 
 
