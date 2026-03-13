@@ -62,6 +62,19 @@ Configuration for Meraki API interactions
 | `MERAKI_EXPORTER_API__BATCH_DELAY` | `float` | `0.5` | Delay between batches in seconds (min: 0.0, max: 5.0) |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_RETRY_WAIT` | `int` | `5` | Wait time in seconds when rate limited (min: 1, max: 60) |
 | `MERAKI_EXPORTER_API__ACTION_BATCH_RETRY_WAIT` | `int` | `10` | Wait time for action batch retries (min: 1, max: 60) |
+| `MERAKI_EXPORTER_API__RATE_LIMIT_ENABLED` | `bool` | `True` | Enable client-side rate limiting to smooth API calls |
+| `MERAKI_EXPORTER_API__RATE_LIMIT_REQUESTS_PER_SECOND` | `float` | `10.0` | Target requests per second per organization (min: 1.0, max: 50.0) |
+| `MERAKI_EXPORTER_API__RATE_LIMIT_BURST` | `int` | `20` | Token bucket burst capacity per organization (min: 1, max: 100) |
+| `MERAKI_EXPORTER_API__RATE_LIMIT_SHARED_FRACTION` | `float` | `1.0` | Fraction of org call budget reserved for this exporter (min: 0.1, max: 1.0) |
+| `MERAKI_EXPORTER_API__RATE_LIMIT_JITTER_RATIO` | `float` | `0.1` | Jitter ratio applied to client-side rate limiter waits (min: 0.0, max: 0.5) |
+| `MERAKI_EXPORTER_API__SMOOTHING_ENABLED` | `bool` | `True` | Spread batch work across the collection interval |
+| `MERAKI_EXPORTER_API__SMOOTHING_WINDOW_RATIO` | `float` | `0.8` | Fraction of the collection interval used for smoothing (min: 0.1, max: 1.0) |
+| `MERAKI_EXPORTER_API__SMOOTHING_MIN_BATCH_DELAY` | `float` | `1.0` | Minimum delay between batches when smoothing (min: 0.0, max: 60.0) |
+| `MERAKI_EXPORTER_API__SMOOTHING_MAX_BATCH_DELAY` | `float` | `15.0` | Maximum delay between batches when smoothing (min: 0.0, max: 300.0) |
+| `MERAKI_EXPORTER_API__MS_PORT_STATUS_USE_ORG_ENDPOINT` | `bool` | `True` | Use org-level switch port status endpoint for MS status metrics |
+| `MERAKI_EXPORTER_API__MS_PORT_USAGE_INTERVAL` | `int` | `600` | Minimum seconds between per-switch port usage/POE refreshes (min: 0, max: 3600) |
+| `MERAKI_EXPORTER_API__MS_PACKET_STATS_INTERVAL` | `int` | `600` | Minimum seconds between per-switch packet stats refreshes (min: 0, max: 3600) |
+| `MERAKI_EXPORTER_API__CLIENT_APP_USAGE_INTERVAL` | `int` | `600` | Minimum seconds between client application usage refreshes (min: 0, max: 3600) |
 
 ## Update Intervals
 
@@ -83,6 +96,8 @@ HTTP server configuration for the metrics endpoint
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_SERVER__HOST` | `str` | `0.0.0.0` | Host to bind the exporter to |
 | `MERAKI_EXPORTER_SERVER__PORT` | `int` | `9099` | Port to bind the exporter to (min: 1, max: 65535) |
+
+`PATH_PREFIX` and `ENABLE_HEALTH_CHECK` are currently defined for compatibility, but the application still exposes `/`, `/health`, `/metrics`, and `/cardinality` unconditionally.
 
 ## Webhook Settings
 
