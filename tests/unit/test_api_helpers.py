@@ -357,7 +357,7 @@ class TestAPIHelper:
 
         async def process_with_delay(item: int) -> int:
             # Add varying delays to test order preservation
-            await asyncio.sleep(0.01 * (20 - item))
+            await asyncio.sleep(0.001 * (20 - item))
             return item * 2
 
         results = await api_helper.process_in_batches(

@@ -200,7 +200,7 @@ class TestManagedTaskGroupErrorHandling:
         async def long_task() -> None:
             nonlocal task_cancelled
             try:
-                await asyncio.sleep(10)  # Long sleep
+                await asyncio.sleep(1)  # Long sleep
             except asyncio.CancelledError:
                 task_cancelled = True
                 raise
@@ -369,7 +369,7 @@ class TestManagedTaskGroupWaitForCapacity:
         waited = False
 
         async def long_task() -> None:
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.05)
 
         async with ManagedTaskGroup("test", max_concurrency=2) as group:
             # Fill up capacity

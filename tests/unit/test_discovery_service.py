@@ -8,7 +8,7 @@ import pytest
 
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.discovery import DiscoveryService
-from tests.helpers.factories import AlertFactory, DeviceFactory, NetworkFactory, OrganizationFactory
+from tests.helpers.factories import NetworkFactory, OrganizationFactory
 
 
 @pytest.fixture
@@ -39,11 +39,9 @@ class TestDiscoveryService:
     @pytest.mark.asyncio
     async def test_run_discovery_with_single_org(self, mock_api, mock_settings):
         """Test discovery with a specific org_id configured."""
-        # Configure specific org_id
         mock_settings.meraki.org_id = "123"
         service = DiscoveryService(api=mock_api, settings=mock_settings)
 
-        # Create test data using factories
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         networks = [
             NetworkFactory.create(
@@ -59,51 +57,22 @@ class TestDiscoveryService:
                 org_id=org["id"],
             ),
         ]
-        devices = [
-            DeviceFactory.create_mr(serial="Q2KD-XXXX", network_id=networks[0]["id"]),
-            DeviceFactory.create_ms(serial="Q2SW-XXXX", network_id=networks[0]["id"]),
-            DeviceFactory.create_mx(serial="Q2MX-XXXX", network_id=networks[1]["id"]),
-        ]
 
-        licenses = [
-            {"licenseType": "ENT", "state": "active"},
-            {"licenseType": "MR", "state": "active"},
-        ]
-
-        alerts = [
-            AlertFactory.create(
-                alert_id="alert1",
-                dismissedAt=None,
-                resolvedAt=None,
-            ),
-            AlertFactory.create(
-                alert_id="alert2",
-                dismissedAt="2024-01-01",
-                resolvedAt=None,
-            ),
-        ]
-
-        # Mock API responses
         mock_api.organizations.getOrganization = MagicMock(return_value=org)
-        mock_api.organizations.getOrganizationLicenses = MagicMock(return_value=licenses)
         mock_api.organizations.getOrganizationNetworks = MagicMock(return_value=networks)
-        mock_api.organizations.getOrganizationDevices = MagicMock(return_value=devices)
-        mock_api.organizations.getOrganizationAssuranceAlerts = MagicMock(return_value=alerts)
 
-        # Run discovery
-        await service.run_discovery()
+        result = await service.run_discovery()
 
-        # Verify API calls
         mock_api.organizations.getOrganization.assert_called_once_with("123")
-        mock_api.organizations.getOrganizationLicenses.assert_called_once()
-        mock_api.organizations.getOrganizationNetworks.assert_called_once()
-        mock_api.organizations.getOrganizationDevices.assert_called_once()
-        mock_api.organizations.getOrganizationAssuranceAlerts.assert_called_once()
+        mock_api.organizations.getOrganizationNetworks.assert_called_once_with(
+            "123", total_pages="all"
+        )
+        assert len(result["organizations"]) == 1
+        assert result["organizations"][0]["id"] == "123"
 
     @pytest.mark.asyncio
     async def test_run_discovery_with_multiple_orgs(self, discovery_service, mock_api):
         """Test discovery with multiple organizations."""
-        # Create test data
         orgs = [
             OrganizationFactory.create(org_id="123", name="Org1"),
             OrganizationFactory.create(org_id="456", name="Org2"),
@@ -113,135 +82,45 @@ class TestDiscoveryService:
             name="Network1",
             product_types=["wireless"],
         )
-        device = DeviceFactory.create_mr(serial="Q2KD-XXXX")
-        license = {"licenseType": "ENT", "state": "active"}
 
-        # Mock API responses
         mock_api.organizations.getOrganizations = MagicMock(return_value=orgs)
-        mock_api.organizations.getOrganizationLicenses = MagicMock(return_value=[license])
         mock_api.organizations.getOrganizationNetworks = MagicMock(return_value=[network])
-        mock_api.organizations.getOrganizationDevices = MagicMock(return_value=[device])
-        mock_api.organizations.getOrganizationAssuranceAlerts = MagicMock(return_value=[])
 
-        # Run discovery
         await discovery_service.run_discovery()
 
-        # Verify API calls
         mock_api.organizations.getOrganizations.assert_called_once()
-        assert mock_api.organizations.getOrganizationLicenses.call_count == 2
         assert mock_api.organizations.getOrganizationNetworks.call_count == 2
-        assert mock_api.organizations.getOrganizationDevices.call_count == 2
-        assert mock_api.organizations.getOrganizationAssuranceAlerts.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_discovery_handles_cotermination_licensing(self, discovery_service, mock_api):
-        """Test handling of co-termination licensing model."""
-        # Create test data
-        org = OrganizationFactory.create(org_id="123", name="Test Org")
-
-        # Mock API responses
-        mock_api.organizations.getOrganizations = MagicMock(return_value=[org])
-        # Mock co-termination licensing error
-        mock_api.organizations.getOrganizationLicenses = MagicMock(
-            side_effect=Exception("Organization 123 does not support per-device licensing")
-        )
-        mock_api.organizations.getOrganizationNetworks = MagicMock(return_value=[])
-        mock_api.organizations.getOrganizationDevices = MagicMock(return_value=[])
-        mock_api.organizations.getOrganizationAssuranceAlerts = MagicMock(return_value=[])
-
-        # Run discovery - should handle co-termination gracefully
-        await discovery_service.run_discovery()
-
-        # Verify license API was called
-        mock_api.organizations.getOrganizationLicenses.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_discovery_handles_alerts_api_not_available(self, discovery_service, mock_api):
-        """Test handling when alerts API is not available."""
-        # Create test data
-        org = OrganizationFactory.create(org_id="123", name="Test Org")
-
-        # Mock API responses
-        mock_api.organizations.getOrganizations = MagicMock(return_value=[org])
-        mock_api.organizations.getOrganizationLicenses = MagicMock(return_value=[])
-        mock_api.organizations.getOrganizationNetworks = MagicMock(return_value=[])
-        mock_api.organizations.getOrganizationDevices = MagicMock(return_value=[])
-
-        # Mock 404 error for alerts API
-        mock_api.organizations.getOrganizationAssuranceAlerts = MagicMock(
-            side_effect=Exception("404 Not Found")
-        )
-
-        # Run discovery - should handle 404 gracefully
-        await discovery_service.run_discovery()
-
-        # Verify alerts API was called
-        mock_api.organizations.getOrganizationAssuranceAlerts.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_discovery_handles_network_fetch_failure(self, discovery_service, mock_api):
         """Test handling of network fetch failures."""
-        # Create test data
         org = OrganizationFactory.create(org_id="123", name="Test Org")
 
-        # Mock API responses
         mock_api.organizations.getOrganizations = MagicMock(return_value=[org])
-        mock_api.organizations.getOrganizationLicenses = MagicMock(return_value=[])
-
-        # Mock network fetch failure
         mock_api.organizations.getOrganizationNetworks = MagicMock(
             side_effect=Exception("Network error")
         )
-        mock_api.organizations.getOrganizationDevices = MagicMock(return_value=[])
-        mock_api.organizations.getOrganizationAssuranceAlerts = MagicMock(return_value=[])
 
-        # Run discovery - should continue despite network fetch failure
-        await discovery_service.run_discovery()
+        result = await discovery_service.run_discovery()
 
-        # Verify other APIs were still called
-        mock_api.organizations.getOrganizationDevices.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_discovery_handles_device_fetch_failure(self, discovery_service, mock_api):
-        """Test handling of device fetch failures."""
-        # Create test data
-        org = OrganizationFactory.create(org_id="123", name="Test Org")
-
-        # Mock API responses
-        mock_api.organizations.getOrganizations = MagicMock(return_value=[org])
-        mock_api.organizations.getOrganizationLicenses = MagicMock(return_value=[])
-        mock_api.organizations.getOrganizationNetworks = MagicMock(return_value=[])
-
-        # Mock device fetch failure
-        mock_api.organizations.getOrganizationDevices = MagicMock(
-            side_effect=Exception("API rate limit")
-        )
-        mock_api.organizations.getOrganizationAssuranceAlerts = MagicMock(return_value=[])
-
-        # Run discovery - should continue despite device fetch failure
-        await discovery_service.run_discovery()
-
-        # Verify alerts API was still called
-        mock_api.organizations.getOrganizationAssuranceAlerts.assert_called_once()
+        mock_api.organizations.getOrganizationNetworks.assert_called_once()
+        assert "123: networks_fetch_failed" in result["errors"]
 
     @pytest.mark.asyncio
     async def test_discovery_handles_complete_failure(self, discovery_service, mock_api):
         """Test handling of complete discovery failure."""
-        # Mock initial API failure
         mock_api.organizations.getOrganizations = MagicMock(
             side_effect=Exception("Authentication failed")
         )
 
-        # Run discovery - should handle exception gracefully
-        await discovery_service.run_discovery()
+        result = await discovery_service.run_discovery()
 
-        # Verify only the first API was called
         mock_api.organizations.getOrganizations.assert_called_once()
+        assert "discovery_failed" in result["errors"]
 
     @pytest.mark.asyncio
-    async def test_discovery_counts_products_and_devices(self, discovery_service, mock_api):
-        """Test that discovery correctly counts products and device types."""
-        # Create test data
+    async def test_discovery_counts_products(self, discovery_service, mock_api):
+        """Test that discovery correctly counts product types from networks."""
         org = OrganizationFactory.create(org_id="123", name="Test Org")
 
         networks = [
@@ -265,26 +144,29 @@ class TestDiscoveryService:
             ),
         ]
 
-        devices = [
-            DeviceFactory.create_mr(serial="Q2KD-1111", model="MR36"),
-            DeviceFactory.create_mr(serial="Q2KD-2222", model="MR46"),
-            DeviceFactory.create_ms(serial="Q2SW-1111", model="MS120"),
-            DeviceFactory.create_ms(serial="Q2SW-2222", model="MS220"),
-            DeviceFactory.create_mx(serial="Q2MX-1111", model="MX64"),
-            DeviceFactory.create_mt(serial="Q2MT-1111", model="MT10"),
-            DeviceFactory.create(serial="XXXX-1111", model="unknown_model"),  # Unknown prefix
-        ]
-
-        # Mock API responses
         mock_api.organizations.getOrganizations = MagicMock(return_value=[org])
-        mock_api.organizations.getOrganizationLicenses = MagicMock(return_value=[])
         mock_api.organizations.getOrganizationNetworks = MagicMock(return_value=networks)
-        mock_api.organizations.getOrganizationDevices = MagicMock(return_value=devices)
-        mock_api.organizations.getOrganizationAssuranceAlerts = MagicMock(return_value=[])
 
-        # Run discovery
-        await discovery_service.run_discovery()
+        result = await discovery_service.run_discovery()
 
-        # Verify all counts were processed correctly
         mock_api.organizations.getOrganizationNetworks.assert_called_once()
-        mock_api.organizations.getOrganizationDevices.assert_called_once()
+        assert result["networks"]["123"]["count"] == 3
+        assert result["networks"]["123"]["product_types"]["wireless"] == 2
+        assert result["networks"]["123"]["product_types"]["switch"] == 2
+        assert result["networks"]["123"]["product_types"]["appliance"] == 1
+
+    @pytest.mark.asyncio
+    async def test_discovery_returns_summary_structure(self, discovery_service, mock_api):
+        """Test that discovery returns proper summary structure."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+
+        mock_api.organizations.getOrganizations = MagicMock(return_value=[org])
+        mock_api.organizations.getOrganizationNetworks = MagicMock(return_value=[])
+
+        result = await discovery_service.run_discovery()
+
+        assert "organizations" in result
+        assert "networks" in result
+        assert "errors" in result
+        assert len(result["organizations"]) == 1
+        assert result["organizations"][0]["name"] == "Test Org"

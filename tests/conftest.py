@@ -9,6 +9,13 @@ pytest_plugins = ["tests.fixtures.large_org"]
 
 
 @pytest.fixture(autouse=True)
+def fast_test_settings(monkeypatch):
+    """Disable production timing features that slow down tests."""
+    monkeypatch.setenv("MERAKI_EXPORTER_API__SMOOTHING_ENABLED", "false")
+    monkeypatch.setenv("MERAKI_EXPORTER_API__MAX_RETRIES", "0")
+
+
+@pytest.fixture(autouse=True)
 def clean_prometheus_registry():
     """Clean the Prometheus registry before and after each test."""
     # Store current collectors

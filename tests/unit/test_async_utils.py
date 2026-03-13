@@ -46,7 +46,7 @@ class TestManagedTaskGroup:
 
         async def long_task(name: str) -> None:
             try:
-                await asyncio.sleep(10)  # Long running task
+                await asyncio.sleep(1)  # Long running task
                 task_states[name] = True
             except asyncio.CancelledError:
                 task_states[name] = "cancelled"
@@ -155,7 +155,7 @@ class TestWithTimeout:
         """Test operation that exceeds timeout."""
 
         async def slow_operation() -> str:
-            await asyncio.sleep(2.0)
+            await asyncio.sleep(0.5)
             return "never_reached"
 
         result = await with_timeout(
@@ -301,7 +301,7 @@ class TestRateLimitedGather:
             nonlocal concurrent_count, max_concurrent
             concurrent_count += 1
             max_concurrent = max(max_concurrent, concurrent_count)
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.02)
             concurrent_count -= 1
 
         semaphore = asyncio.Semaphore(2)
@@ -396,17 +396,17 @@ class TestAsyncRetry:
             last_time = current_time
             raise ValueError("Force retry")
 
-        retry = AsyncRetry(max_attempts=3, base_delay=0.1, exponential_base=2.0)
+        retry = AsyncRetry(max_attempts=3, base_delay=0.01, exponential_base=2.0)
 
         with pytest.raises(ValueError):
             await retry.execute(operation, "test op")
 
         # First delay should be ~0 (first attempt)
-        # Second delay should be ~0.1 (base_delay)
-        # Third delay should be ~0.2 (base_delay * 2)
+        # Second delay should be ~0.01 (base_delay)
+        # Third delay should be ~0.02 (base_delay * 2)
         assert len(delays) == 3
-        assert delays[1] >= 0.09  # Allow small variance
-        assert delays[2] >= 0.19
+        assert delays[1] >= 0.009  # Allow small variance
+        assert delays[2] >= 0.019
 
 
 class TestChunkedAsyncIter:
@@ -427,13 +427,13 @@ class TestChunkedAsyncIter:
         items = list(range(6))
         times = []
 
-        async for _chunk in chunked_async_iter(items, chunk_size=2, delay_between_chunks=0.1):
+        async for _chunk in chunked_async_iter(items, chunk_size=2, delay_between_chunks=0.02):
             times.append(asyncio.get_event_loop().time())
 
         # Should have delays between chunks (but not after last)
         assert len(times) == 3
-        assert times[1] - times[0] >= 0.09
-        assert times[2] - times[1] >= 0.09
+        assert times[1] - times[0] >= 0.019
+        assert times[2] - times[1] >= 0.019
 
     async def test_empty_list(self):
         """Test chunking empty list."""
