@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.2](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.28.1...v0.28.2) (2026-03-23)
+
+
+### Bug Fixes
+
+* **deps:** update dependency meraki to v2.2.0 ([#173](https://github.com/rknightion/meraki-dashboard-exporter/issues/173)) ([342aa2e](https://github.com/rknightion/meraki-dashboard-exporter/commit/342aa2ed7ea83764cd28ee63b8949128be75521b))
+
 ## [0.28.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.28.0...v0.28.1) (2026-03-13)
 
 
