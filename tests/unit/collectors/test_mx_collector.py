@@ -46,25 +46,25 @@ class TestMXCollector:
         """Create MX collector instance."""
         return MXCollector(mock_parent)
 
-    async def test_collect_calls_common_metrics(
+    async def test_collect_does_not_set_common_metrics(
         self,
         mx_collector: MXCollector,
     ) -> None:
-        """Test that MX collector calls common metrics collection."""
+        """Test that MX collector does not redundantly set common metrics.
+
+        Common device metrics (device_up, status_info, uptime) are handled
+        by DeviceCollector._collect_common_metrics() before collect() is called.
+        """
         device = {
             "serial": "Q123",
             "name": "Test MX",
             "model": "MX100",
             "network_id": "net1",
             "organization_id": "123",
-            "status_info": {
-                "status": "online",
-            },
         }
 
-        mx_collector.collect_common_metrics = MagicMock()
         await mx_collector.collect(device)
-        mx_collector.collect_common_metrics.assert_called_once_with(device)
+        mx_collector.parent._device_up.labels.assert_not_called()
 
     def test_mx_collector_initialization(
         self,

@@ -53,13 +53,17 @@ class MXCollector(BaseDeviceCollector):
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect MX-specific metrics.
 
+        Common device metrics (device_up, status_info, uptime) are handled
+        by DeviceCollector._collect_common_metrics() before this is called.
+
         Parameters
         ----------
         device : dict[str, Any]
-            Device data with status_info added.
+            Device data.
 
         """
-        self.collect_common_metrics(device)
+        # MX per-device metrics can be added here
+        # Uplink statuses are collected separately via collect_uplink_statuses()
 
     @log_api_call("getOrganizationApplianceUplinkStatuses")
     @with_error_handling(

@@ -19,14 +19,13 @@ class MVCollector(BaseDeviceCollector):
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect MV-specific metrics.
 
+        Common device metrics (device_up, status_info, uptime) are handled
+        by DeviceCollector._collect_common_metrics() before this is called.
+
         Parameters
         ----------
         device : dict[str, Any]
-            Device data with status_info added.
+            Device data.
 
         """
-        # Collect common metrics
-        self.collect_common_metrics(device)
-
-        # MV currently doesn't have specific metrics beyond common ones
         # Future MV-specific metrics (video quality, storage usage, etc.) can be added here

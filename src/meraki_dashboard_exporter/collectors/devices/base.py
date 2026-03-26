@@ -6,7 +6,6 @@ import asyncio
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
-from ...core.constants import DeviceStatus
 from ...core.error_handling import ErrorCategory, with_error_handling
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
@@ -50,48 +49,6 @@ class BaseDeviceCollector(ABC):
 
         """
         ...
-
-    def collect_common_metrics(self, device: dict[str, Any]) -> None:
-        """Collect common device metrics.
-
-        Parameters
-        ----------
-        device : dict[str, Any]
-            Device data with status_info added.
-
-        """
-        status = device.get("availability_status", DeviceStatus.OFFLINE)
-        is_online = 1 if status == DeviceStatus.ONLINE else 0
-
-        # Extract org info from device data
-        org_id = device.get("orgId", "")
-        org_name = device.get("orgName", org_id)
-
-        # Create standard device labels
-        labels = create_device_labels(device, org_id=org_id, org_name=org_name)
-
-        logger.debug(
-            "Setting device status metric",
-            serial=labels["serial"],
-            name=labels["name"],
-            model=labels["model"],
-            device_type=labels["device_type"],
-            status=status,
-            is_online=is_online,
-        )
-
-        self.parent._device_up.labels(**labels).set(is_online)
-
-        # Uptime
-        if "uptimeInSeconds" in device:
-            # Check if uptime metric exists (it was removed in a previous cleanup)
-            if hasattr(self.parent, "_device_uptime"):
-                logger.debug(
-                    "Setting device uptime metric",
-                    serial=labels["serial"],
-                    uptime_seconds=device["uptimeInSeconds"],
-                )
-                self.parent._device_uptime.labels(**labels).set(device["uptimeInSeconds"])
 
     def _get_device_type(self, device: dict[str, Any]) -> str:
         """Get device type from device model.
