@@ -60,8 +60,7 @@ class BaseDeviceCollector(ABC):
             Device data with status_info added.
 
         """
-        status_info = device.get("status_info", {})
-        status = status_info.get("status", DeviceStatus.OFFLINE)
+        status = device.get("availability_status", DeviceStatus.OFFLINE)
         is_online = 1 if status == DeviceStatus.ONLINE else 0
 
         # Extract org info from device data
