@@ -10,9 +10,10 @@ jobs:
       issues: write
       id-token: write
     steps:
-      - uses: anthropics/claude-code-action@3ac52d0da9f8ec9ca7b4dc23bb477e36ef9c77a9 # v1
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             REPO: ${{ github.repository }}
             ISSUE NUMBER: ${{ github.event.issue.number }}
@@ -26,10 +27,15 @@ jobs:
             3. Suggest appropriate labels
             4. Check if it duplicates existing issues
 
+            Use ./scripts/gh.sh to interact with GitHub:
+            - `./scripts/gh.sh issue view [number]` to view the issue
+            - `./scripts/gh.sh search issues "query"` to find similar issues
+            - `./scripts/gh.sh label list` to see available labels
+
             Based on your analysis, add the appropriate labels using:
-            `gh issue edit [number] --add-label "label1,label2"`
+            `./scripts/edit-issue-labels.sh --issue [number] --add-label "label1" --add-label "label2"`
 
             If it appears to be a duplicate, post a comment mentioning the original issue.
 
           claude_args: |
-            --allowedTools "Bash(gh issue:*),Bash(gh search:*)"
+            --allowedTools "Bash(./scripts/gh.sh:*),Bash(./scripts/edit-issue-labels.sh:*)"
