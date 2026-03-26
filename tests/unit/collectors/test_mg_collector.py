@@ -38,31 +38,26 @@ class TestMGCollector:
         """Create MG collector instance."""
         return MGCollector(mock_parent)
 
-    async def test_collect_calls_common_metrics(
+    async def test_collect_does_not_set_common_metrics(
         self,
         mg_collector: MGCollector,
     ) -> None:
-        """Test that MG collector calls common metrics collection."""
-        # Create a mock device
+        """Test that MG collector does not redundantly set common metrics.
+
+        Common device metrics (device_up, status_info, uptime) are handled
+        by DeviceCollector._collect_common_metrics() before collect() is called.
+        """
         device = {
             "serial": "Q123",
             "name": "Test MG",
             "model": "MG21",
             "network_id": "net1",
             "organization_id": "123",
-            "status_info": {
-                "status": "online",
-            },
         }
 
-        # Mock the collect_common_metrics method to verify it's called
-        mg_collector.collect_common_metrics = MagicMock()
-
-        # Call collect
+        # collect() should complete without touching parent's device_up metric
         await mg_collector.collect(device)
-
-        # Verify only common metrics were collected
-        mg_collector.collect_common_metrics.assert_called_once_with(device)
+        mg_collector.parent._device_up.labels.assert_not_called()
 
     def test_mg_collector_initialization(
         self,
@@ -97,4 +92,4 @@ class TestMGCollector:
         # For now, verify the collector exists and can be instantiated
         assert mg_collector is not None
         assert hasattr(mg_collector, "collect")
-        assert hasattr(mg_collector, "collect_common_metrics")
+        assert hasattr(mg_collector, "collect")

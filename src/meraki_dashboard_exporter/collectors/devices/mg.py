@@ -19,14 +19,13 @@ class MGCollector(BaseDeviceCollector):
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect MG-specific metrics.
 
+        Common device metrics (device_up, status_info, uptime) are handled
+        by DeviceCollector._collect_common_metrics() before this is called.
+
         Parameters
         ----------
         device : dict[str, Any]
-            Device data with status_info added.
+            Device data.
 
         """
-        # Collect common metrics
-        self.collect_common_metrics(device)
-
-        # MG currently doesn't have specific metrics beyond common ones
         # Future MG-specific metrics (cellular signal strength, data usage, etc.) can be added here

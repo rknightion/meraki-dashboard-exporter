@@ -38,31 +38,25 @@ class TestMVCollector:
         """Create MV collector instance."""
         return MVCollector(mock_parent)
 
-    async def test_collect_calls_common_metrics(
+    async def test_collect_does_not_set_common_metrics(
         self,
         mv_collector: MVCollector,
     ) -> None:
-        """Test that MV collector calls common metrics collection."""
-        # Create a mock device
+        """Test that MV collector does not redundantly set common metrics.
+
+        Common device metrics (device_up, status_info, uptime) are handled
+        by DeviceCollector._collect_common_metrics() before collect() is called.
+        """
         device = {
             "serial": "Q123",
             "name": "Test Camera",
             "model": "MV12",
             "network_id": "net1",
             "organization_id": "123",
-            "status_info": {
-                "status": "online",
-            },
         }
 
-        # Mock the collect_common_metrics method to verify it's called
-        mv_collector.collect_common_metrics = MagicMock()
-
-        # Call collect
         await mv_collector.collect(device)
-
-        # Verify only common metrics were collected
-        mv_collector.collect_common_metrics.assert_called_once_with(device)
+        mv_collector.parent._device_up.labels.assert_not_called()
 
     def test_mv_collector_initialization(
         self,
@@ -98,4 +92,4 @@ class TestMVCollector:
         # For now, verify the collector exists and can be instantiated
         assert mv_collector is not None
         assert hasattr(mv_collector, "collect")
-        assert hasattr(mv_collector, "collect_common_metrics")
+        assert hasattr(mv_collector, "collect")
