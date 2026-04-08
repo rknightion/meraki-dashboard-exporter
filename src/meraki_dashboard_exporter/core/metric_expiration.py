@@ -67,10 +67,10 @@ class MetricExpirationManager:
         self.settings = settings
         self._ttl_multiplier = settings.monitoring.metric_ttl_multiplier
 
-        # Track last update time per metric
+        # Track last update time and tier per metric
         # Key: (collector_name, metric_name, frozen_labels)
-        # Value: timestamp of last update
-        self._metric_timestamps: dict[tuple[str, str, str], float] = {}
+        # Value: (timestamp of last update, tier or None)
+        self._metric_timestamps: dict[tuple[str, str, str], tuple[float, UpdateTier | None]] = {}
 
         # Track metric count per collector
         self._metric_counts: defaultdict[str, int] = defaultdict(int)
@@ -102,6 +102,7 @@ class MetricExpirationManager:
         collector_name: str,
         metric_name: str,
         label_values: dict[str, str],
+        tier: UpdateTier | None = None,
     ) -> None:
         """Track that a metric was updated.
 
@@ -113,18 +114,21 @@ class MetricExpirationManager:
             Full name of the metric (e.g., "meraki_device_up").
         label_values : dict[str, str]
             Label key-value pairs that uniquely identify this metric series.
+        tier : UpdateTier | None
+            The update tier for this metric, used to calculate the TTL.
+            If None, the default TTL (MEDIUM) is used.
 
         """
         # Create a frozen representation of labels for dict key
         frozen_labels = self._freeze_labels(label_values)
         key = (collector_name, metric_name, frozen_labels)
 
-        # Update timestamp
+        # Update timestamp and tier
         current_time = time.time()
         if key not in self._metric_timestamps:
             self._metric_counts[collector_name] += 1
 
-        self._metric_timestamps[key] = current_time
+        self._metric_timestamps[key] = (current_time, tier)
 
     def _freeze_labels(self, labels: dict[str, str]) -> str:
         """Convert label dict to frozen string representation.
@@ -220,16 +224,18 @@ class MetricExpirationManager:
 
         # Find expired metrics
         expired_keys = []
-        for key, last_update in self._metric_timestamps.items():
+        expired_by_collector_tier: defaultdict[tuple[str, str], int] = defaultdict(int)
+        for key, (last_update, tier) in self._metric_timestamps.items():
             collector_name, metric_name, _ = key
             age = current_time - last_update
 
-            # Use default TTL (we don't track tier per metric currently)
-            # TODO: Enhance to track tier per metric
-            if age > default_ttl:
+            ttl = self._get_ttl_for_tier(tier) if tier is not None else default_ttl
+            if age > ttl:
                 expired_keys.append(key)
                 expired_count += 1
                 expired_by_collector[collector_name] += 1
+                tier_label = tier.value if tier is not None else "unknown"
+                expired_by_collector_tier[(collector_name, tier_label)] += 1
 
         # Remove expired metrics from tracking
         for key in expired_keys:
@@ -238,11 +244,10 @@ class MetricExpirationManager:
             self._metric_counts[collector_name] -= 1
 
         # Update metrics
-        for collector_name, count in expired_by_collector.items():
-            # We don't have tier info here, using "unknown"
+        for (collector_name, tier_label), count in expired_by_collector_tier.items():
             self._expired_metrics_total.labels(
                 collector=collector_name,
-                tier="unknown",
+                tier=tier_label,
             ).inc(count)
 
         # Update tracked metrics gauge

@@ -637,6 +637,7 @@ class MetricCollector(ABC):
                     collector_name=self.__class__.__name__,
                     metric_name=metric_name,
                     label_values=labels,
+                    tier=self.update_tier,
                 )
 
         except Exception:

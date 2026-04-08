@@ -323,3 +323,268 @@ class TestExpirationManagerLifecycle:
         """Calling stop() when never started must not raise."""
         await expiration_manager.stop()  # Should be a no-op
         assert expiration_manager._running is False
+
+
+# ---------------------------------------------------------------------------
+# Tests: tier-aware expiration
+# ---------------------------------------------------------------------------
+
+
+class TestTierAwareExpiration:
+    """Metrics must expire at their tier-specific TTL."""
+
+    async def test_fast_metric_expires_at_120s(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """FAST metrics (TTL=120s) must expire after 120s."""
+        base_time = 7_000_000.0
+        fast_ttl = 120.0  # 60 * 2.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name=_METRIC,
+                label_values=_LABELS,
+                tier=UpdateTier.FAST,
+            )
+
+        # Cleanup runs just after FAST TTL
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + fast_ttl + 1.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        assert len(expiration_manager._metric_timestamps) == 0, (
+            "FAST metric should have been expired after 120s"
+        )
+
+    async def test_fast_metric_survives_before_120s(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """FAST metrics must NOT expire before 120s have elapsed."""
+        base_time = 7_100_000.0
+        fast_ttl = 120.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name=_METRIC,
+                label_values=_LABELS,
+                tier=UpdateTier.FAST,
+            )
+
+        # Cleanup just before FAST TTL boundary
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + fast_ttl - 1.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        assert len(expiration_manager._metric_timestamps) == 1, (
+            "FAST metric should not expire before 120s"
+        )
+
+    async def test_medium_metric_expires_at_600s(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """MEDIUM metrics (TTL=600s) must expire after 600s."""
+        base_time = 8_000_000.0
+        medium_ttl = 600.0  # 300 * 2.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name=_METRIC,
+                label_values=_LABELS,
+                tier=UpdateTier.MEDIUM,
+            )
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + medium_ttl + 1.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        assert len(expiration_manager._metric_timestamps) == 0, (
+            "MEDIUM metric should have been expired after 600s"
+        )
+
+    async def test_medium_metric_survives_before_600s(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """MEDIUM metrics must NOT expire before 600s have elapsed."""
+        base_time = 8_100_000.0
+        medium_ttl = 600.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name=_METRIC,
+                label_values=_LABELS,
+                tier=UpdateTier.MEDIUM,
+            )
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + medium_ttl - 1.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        assert len(expiration_manager._metric_timestamps) == 1, (
+            "MEDIUM metric should not expire before 600s"
+        )
+
+    async def test_slow_metric_expires_at_1800s(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """SLOW metrics (TTL=1800s) must expire after 1800s."""
+        base_time = 9_000_000.0
+        slow_ttl = 1800.0  # 900 * 2.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name=_METRIC,
+                label_values=_LABELS,
+                tier=UpdateTier.SLOW,
+            )
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + slow_ttl + 1.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        assert len(expiration_manager._metric_timestamps) == 0, (
+            "SLOW metric should have been expired after 1800s"
+        )
+
+    async def test_slow_metric_survives_before_1800s(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """SLOW metrics must NOT expire before 1800s have elapsed."""
+        base_time = 9_100_000.0
+        slow_ttl = 1800.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name=_METRIC,
+                label_values=_LABELS,
+                tier=UpdateTier.SLOW,
+            )
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + slow_ttl - 1.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        assert len(expiration_manager._metric_timestamps) == 1, (
+            "SLOW metric should not expire before 1800s"
+        )
+
+    async def test_no_tier_uses_default_ttl(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """Backward compatibility: metrics with no tier use the default (MEDIUM) TTL."""
+        base_time = 10_000_000.0
+        default_ttl = 600.0  # MEDIUM: 300 * 2.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            # Call without the tier kwarg (backward compatibility)
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name=_METRIC,
+                label_values=_LABELS,
+            )
+
+        # Should NOT expire before default TTL
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + default_ttl - 1.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        assert len(expiration_manager._metric_timestamps) == 1, (
+            "Metric without tier should not expire before default TTL"
+        )
+
+        # SHOULD expire after default TTL
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + default_ttl + 1.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        assert len(expiration_manager._metric_timestamps) == 0, (
+            "Metric without tier should expire after default TTL"
+        )
+
+    async def test_fast_metric_survives_medium_ttl_cleanup(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """A FAST metric that was re-tracked after 130s should survive a MEDIUM cleanup cycle."""
+        base_time = 11_000_000.0
+        fast_ttl = 120.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name=_METRIC,
+                label_values=_LABELS,
+                tier=UpdateTier.FAST,
+            )
+
+        # Re-track the FAST metric well within MEDIUM TTL but after FAST TTL
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + fast_ttl + 10.0  # 130s: FAST expired, MEDIUM not
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name=_METRIC,
+                label_values=_LABELS,
+                tier=UpdateTier.FAST,
+            )
+
+        # Cleanup should keep it because timestamp was refreshed
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + fast_ttl + 10.0 + fast_ttl - 1.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        assert len(expiration_manager._metric_timestamps) == 1, (
+            "Re-tracked FAST metric should survive because its TTL was reset"
+        )
+
+    async def test_mixed_tier_metrics_expire_independently(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """FAST metric must expire while MEDIUM metric still lives."""
+        base_time = 12_000_000.0
+        fast_ttl = 120.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name=_METRIC,
+                label_values={**_LABELS, "serial": "FAST-SERIAL"},
+                tier=UpdateTier.FAST,
+            )
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name=_METRIC,
+                label_values={**_LABELS, "serial": "MEDIUM-SERIAL"},
+                tier=UpdateTier.MEDIUM,
+            )
+
+        assert expiration_manager._metric_counts[_COLLECTOR] == 2
+
+        # Cleanup at FAST TTL + 1s — FAST should expire, MEDIUM should not
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + fast_ttl + 1.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        remaining = list(expiration_manager._metric_timestamps.keys())
+        remaining_labels = [key[2] for key in remaining]
+
+        assert len(remaining) == 1, "Only one metric should remain"
+        assert any("MEDIUM-SERIAL" in label for label in remaining_labels), (
+            "MEDIUM-SERIAL metric should still be tracked"
+        )
+        assert not any("FAST-SERIAL" in label for label in remaining_labels), (
+            "FAST-SERIAL metric should have been expired"
+        )
+        assert expiration_manager._metric_counts[_COLLECTOR] == 1
