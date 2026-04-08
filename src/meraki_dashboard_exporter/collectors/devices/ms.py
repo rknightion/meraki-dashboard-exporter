@@ -7,7 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants import MSMetricName
-from ...core.error_handling import validate_response_format, with_error_handling
+from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels, create_port_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -306,6 +306,47 @@ class MSCollector(BaseDeviceCollector):
             MSMetricName.MS_PORT_PACKETS_RATE_TOPOLOGYCHANGES,
             "Topology change packet rate on switch port (packets per second, 5-minute average)",
             labelnames=packet_labels,
+        )
+
+        # Port overview metrics (org-level aggregates)
+        self._ms_ports_active_total = self.parent._create_gauge(
+            MSMetricName.MS_PORTS_ACTIVE_TOTAL,
+            "Total number of active switch ports",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+            ],
+        )
+
+        self._ms_ports_inactive_total = self.parent._create_gauge(
+            MSMetricName.MS_PORTS_INACTIVE_TOTAL,
+            "Total number of inactive switch ports",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+            ],
+        )
+
+        self._ms_ports_by_media_total = self.parent._create_gauge(
+            MSMetricName.MS_PORTS_BY_MEDIA_TOTAL,
+            "Total number of switch ports by media type",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.MEDIA,
+                LabelName.STATUS,  # active or inactive
+            ],
+        )
+
+        self._ms_ports_by_link_speed_total = self.parent._create_gauge(
+            MSMetricName.MS_PORTS_BY_LINK_SPEED_TOTAL,
+            "Total number of active switch ports by link speed",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.MEDIA,
+                LabelName.LINK_SPEED,  # speed in Mbps
+            ],
         )
 
     def _evict_stale_serials(self, active_serials: set[str]) -> None:
@@ -902,3 +943,94 @@ class MSCollector(BaseDeviceCollector):
                 "Failed to collect packet statistics",
                 serial=device_labels["serial"],
             )
+
+    @log_api_call("getOrganizationSwitchPortsOverview")
+    @with_error_handling(
+        operation="Collect switch port overview",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def collect_port_overview(self, org_id: str, org_name: str) -> None:
+        """Collect switch port overview metrics for an organization.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        # Call the API with required timespan
+        overview = await asyncio.to_thread(
+            self.api.switch.getOrganizationSwitchPortsOverview,
+            org_id,
+            timespan=43200,  # 12 hours as required
+        )
+
+        # Parse the counts structure
+        counts = overview.get("counts", {})
+
+        # Set total active/inactive counts
+        active_count = counts.get("byStatus", {}).get("active", {}).get("total", 0)
+        inactive_count = counts.get("byStatus", {}).get("inactive", {}).get("total", 0)
+
+        self._ms_ports_active_total.labels(org_id=org_id, org_name=org_name).set(active_count)
+        self._ms_ports_inactive_total.labels(org_id=org_id, org_name=org_name).set(inactive_count)
+
+        logger.debug(
+            "Set port overview totals",
+            org_id=org_id,
+            active_count=active_count,
+            inactive_count=inactive_count,
+        )
+
+        # Process active ports by media and link speed
+        active_data = counts.get("byStatus", {}).get("active", {})
+        by_media_speed = active_data.get("byMediaAndLinkSpeed", {})
+
+        for media_type, media_data in by_media_speed.items():
+            # Set total for this media type (active)
+            media_total = media_data.get("total", 0)
+            self._ms_ports_by_media_total.labels(
+                org_id=org_id,
+                org_name=org_name,
+                media=media_type,
+                status="active",
+            ).set(media_total)
+
+            # Set breakdown by link speed
+            for speed, count in media_data.items():
+                if speed != "total" and isinstance(count, (int, float)):
+                    self._ms_ports_by_link_speed_total.labels(
+                        org_id=org_id,
+                        org_name=org_name,
+                        media=media_type,
+                        link_speed=str(speed),
+                    ).set(count)
+
+                    logger.debug(
+                        "Set port link speed count",
+                        org_id=org_id,
+                        media=media_type,
+                        speed=speed,
+                        count=count,
+                    )
+
+        # Process inactive ports by media
+        inactive_data = counts.get("byStatus", {}).get("inactive", {})
+        by_media = inactive_data.get("byMedia", {})
+
+        for media_type, media_data in by_media.items():
+            media_total = media_data.get("total", 0)
+            self._ms_ports_by_media_total.labels(
+                org_id=org_id,
+                org_name=org_name,
+                media=media_type,
+                status="inactive",
+            ).set(media_total)
+
+        logger.debug(
+            "Completed switch port overview collection",
+            org_id=org_id,
+        )

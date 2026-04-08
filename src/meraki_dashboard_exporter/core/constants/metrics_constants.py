@@ -123,6 +123,10 @@ class MSMetricName(StrEnum):
     MS_PORT_PACKETS_COLLISIONS = "meraki_ms_port_packets_collisions"
     MS_PORT_PACKETS_TOPOLOGYCHANGES = "meraki_ms_port_packets_topologychanges"
 
+    # Stack metrics
+    MS_STACK_MEMBER_STATUS = "meraki_ms_stack_member_status"
+    MS_STACK_MEMBERS_TOTAL = "meraki_ms_stack_members_total"
+
     # Packet rate metrics (packets per second)
     MS_PORT_PACKETS_RATE_TOTAL = "meraki_ms_port_packets_rate_total"
     MS_PORT_PACKETS_RATE_BROADCAST = "meraki_ms_port_packets_rate_broadcast"
@@ -202,6 +206,18 @@ class MXMetricName(StrEnum):
     """MX (Security Appliance) specific metric names."""
 
     MX_UPLINK_INFO = "meraki_mx_uplink_info"
+
+    # VPN health metrics
+    MX_VPN_PEER_STATUS = "meraki_mx_vpn_peer_status"
+    MX_VPN_LATENCY_MS = "meraki_mx_vpn_latency_ms"
+    MX_VPN_JITTER_MS = "meraki_mx_vpn_jitter_ms"
+    MX_VPN_PACKET_LOSS_RATIO = "meraki_mx_vpn_packet_loss_ratio"
+    MX_VPN_PEERS_TOTAL = "meraki_mx_vpn_peers_total"
+
+    # Firewall metrics
+    MX_FIREWALL_RULES_TOTAL = "meraki_mx_firewall_rules_total"
+    MX_FIREWALL_DEFAULT_POLICY = "meraki_mx_firewall_default_policy"
+    MX_SECURITY_EVENTS_TOTAL = "meraki_mx_security_events_total"
 
 
 class MVMetricName(StrEnum):
@@ -332,6 +348,9 @@ class CollectorMetricName(StrEnum):
     API_RATE_LIMITER_TOKENS = "meraki_exporter_api_rate_limiter_tokens"
     COLLECTOR_START_OFFSET_SECONDS = "meraki_exporter_collector_start_offset_seconds"
     COLLECTION_SMOOTHING_WINDOW_SECONDS = "meraki_exporter_collection_smoothing_window_seconds"
+
+    # Per-org health metrics
+    EXPORTER_ORG_COLLECTION_STATUS = "meraki_exporter_org_collection_status"
 
 
 class WebhookMetricName(StrEnum):

@@ -13,7 +13,6 @@ from ..core.constants import (
     DeviceMetricName,
     DeviceStatus,
     DeviceType,
-    MSMetricName,
     UpdateTier,
 )
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -24,7 +23,15 @@ from ..core.logging_helpers import LogContext, log_metric_collection_summary
 from ..core.metrics import LabelName
 from ..core.otel_tracing import trace_method
 from ..core.registry import register_collector
-from .devices import MGCollector, MRCollector, MSCollector, MTCollector, MVCollector, MXCollector
+from .devices import (
+    MGCollector,
+    MRCollector,
+    MSCollector,
+    MSStackCollector,
+    MTCollector,
+    MVCollector,
+    MXCollector,
+)
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -148,7 +155,8 @@ class DeviceCollector(MetricCollector):
         self.mg_collector = MGCollector(self)
         self.mr_collector = MRCollector(self)
         self.ms_collector = MSCollector(self)
-        self.mt_collector = MTCollector(self)
+        self.ms_stack_collector = MSStackCollector(self)
+        self.mt_collector = MTCollector.as_subcollector(self)
         self.mv_collector = MVCollector(self)
         self.mx_collector = MXCollector(self)
 
@@ -167,47 +175,6 @@ class DeviceCollector(MetricCollector):
         # Tracks which cache keys were touched during the current collection cycle
         self._active_cache_keys: set[str] = set()
 
-        # Initialize port overview metrics here since they're org-level
-        self._ms_ports_active_total = self._create_gauge(
-            MSMetricName.MS_PORTS_ACTIVE_TOTAL,
-            "Total number of active switch ports",
-            labelnames=[
-                LabelName.ORG_ID,
-                LabelName.ORG_NAME,
-            ],
-        )
-
-        self._ms_ports_inactive_total = self._create_gauge(
-            MSMetricName.MS_PORTS_INACTIVE_TOTAL,
-            "Total number of inactive switch ports",
-            labelnames=[
-                LabelName.ORG_ID,
-                LabelName.ORG_NAME,
-            ],
-        )
-
-        self._ms_ports_by_media_total = self._create_gauge(
-            MSMetricName.MS_PORTS_BY_MEDIA_TOTAL,
-            "Total number of switch ports by media type",
-            labelnames=[
-                LabelName.ORG_ID,
-                LabelName.ORG_NAME,
-                LabelName.MEDIA,
-                LabelName.STATUS,  # active or inactive
-            ],
-        )
-
-        self._ms_ports_by_link_speed_total = self._create_gauge(
-            MSMetricName.MS_PORTS_BY_LINK_SPEED_TOTAL,
-            "Total number of active switch ports by link speed",
-            labelnames=[
-                LabelName.ORG_ID,
-                LabelName.ORG_NAME,
-                LabelName.MEDIA,
-                LabelName.LINK_SPEED,  # speed in Mbps
-            ],
-        )
-
         # Ensure all subcollectors share the current API instance
         self._subcollectors_ready = True
         self._sync_subcollector_api()
@@ -216,6 +183,7 @@ class DeviceCollector(MetricCollector):
         """Ensure subcollectors use the current API client."""
         for collector in self._device_collectors.values():
             collector.update_api(self.api)
+        self.ms_stack_collector.update_api(self.api)
 
     def _initialize_metrics(self) -> None:
         """Initialize device metrics."""
@@ -625,7 +593,7 @@ class DeviceCollector(MetricCollector):
 
             # Collect switch port overview metrics
             try:
-                await self._collect_switch_port_overview(org_id, org_name)
+                await self.ms_collector.collect_port_overview(org_id, org_name)
             except Exception:
                 logger.exception("Failed to collect switch port overview")
 
@@ -653,7 +621,7 @@ class DeviceCollector(MetricCollector):
                 if d.get("model", "").startswith(DeviceType.MX)
                 or d.get("productType") == "appliance"
             ):
-                await self.mx_collector.collect_uplink_statuses(org_id, org_name, device_lookup)
+                await self._collect_mx_specific_metrics(org_id, org_name, device_lookup)
 
         except Exception as e:
             logger.exception(
@@ -804,9 +772,83 @@ class DeviceCollector(MetricCollector):
                 await self.ms_collector.collect_stp_priorities(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect STP priorities")
+
+            # Collect switch stack metrics
+            try:
+                networks: list[dict[str, Any]] = []
+                if self.inventory:
+                    networks = await self.inventory.get_networks(org_id)
+                await self.ms_stack_collector.collect_for_org(org_id, org_name, networks)
+            except Exception:
+                logger.exception("Failed to collect switch stack metrics")
         except Exception:
             logger.exception(
                 "Failed to collect MS-specific metrics",
+                org_id=org_id,
+            )
+
+    @trace_method("collect.mx_metrics")
+    async def _collect_mx_specific_metrics(
+        self,
+        org_id: str,
+        org_name: str,
+        device_lookup: dict[str, dict[str, Any]],
+    ) -> None:
+        """Collect MX-specific organization-wide metrics.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        device_lookup : dict[str, dict[str, Any]]
+            Device lookup table keyed by serial.
+
+        """
+        try:
+            # Collect uplink statuses
+            try:
+                await self.mx_collector.collect_uplink_statuses(org_id, org_name, device_lookup)
+            except Exception:
+                logger.exception("Failed to collect MX uplink statuses")
+
+            # Collect VPN health metrics
+            try:
+                await self.mx_collector.vpn_collector.collect(org_id, org_name)
+            except Exception:
+                logger.exception("Failed to collect MX VPN metrics")
+
+            # Collect firewall rules (SLOW tier: per-network API calls)
+            try:
+                networks: list[dict[str, Any]] = []
+                if self.inventory:
+                    networks = await self.inventory.get_networks(org_id)
+                # Identify unique appliance network IDs from device_lookup
+                appliance_network_ids = {
+                    info["network_id"]
+                    for info in device_lookup.values()
+                    if info.get("device_type") in {"MX", "Z3", "Z4"} and info.get("network_id")
+                }
+                network_map = {n["id"]: n.get("name", n["id"]) for n in networks}
+                async with ManagedTaskGroup(
+                    name="mx_firewall_networks",
+                    max_concurrency=self.settings.api.concurrency_limit,
+                ) as group:
+                    for network_id in appliance_network_ids:
+                        network_name = network_map.get(network_id, network_id)
+                        await group.create_task(
+                            self.mx_collector.firewall_collector.collect_for_network(
+                                org_id, org_name, network_id, network_name
+                            ),
+                            name=f"fw_{network_id}",
+                        )
+            except Exception:
+                logger.exception("Failed to collect MX firewall metrics")
+
+        except Exception:
+            logger.exception(
+                "Failed to collect MX-specific metrics",
                 org_id=org_id,
             )
 
@@ -1022,118 +1064,6 @@ class DeviceCollector(MetricCollector):
                 "Failed to aggregate network POE metrics",
                 org_id=org_id,
             )
-
-    @log_api_call("getOrganizationSwitchPortsOverview")
-    @with_error_handling(
-        operation="Collect switch port overview",
-        continue_on_error=True,
-        error_category=ErrorCategory.API_CLIENT_ERROR,
-    )
-    async def _collect_switch_port_overview(self, org_id: str, org_name: str) -> None:
-        """Collect switch port overview metrics for an organization.
-
-        Parameters
-        ----------
-        org_id : str
-            Organization ID.
-        org_name : str
-            Organization name.
-
-        """
-        # Call the API with required timespan
-        overview = await asyncio.to_thread(
-            self.api.switch.getOrganizationSwitchPortsOverview,
-            org_id,
-            timespan=43200,  # 12 hours as required
-        )
-
-        # Parse the counts structure
-        counts = overview.get("counts", {})
-
-        # Set total active/inactive counts
-        active_count = counts.get("byStatus", {}).get("active", {}).get("total", 0)
-        inactive_count = counts.get("byStatus", {}).get("inactive", {}).get("total", 0)
-
-        self._set_metric(
-            self._ms_ports_active_total,
-            {"org_id": org_id, "org_name": org_name},
-            active_count,
-        )
-
-        self._set_metric(
-            self._ms_ports_inactive_total,
-            {"org_id": org_id, "org_name": org_name},
-            inactive_count,
-        )
-
-        logger.debug(
-            "Set port overview totals",
-            org_id=org_id,
-            active_count=active_count,
-            inactive_count=inactive_count,
-        )
-
-        # Process active ports by media and link speed
-        active_data = counts.get("byStatus", {}).get("active", {})
-        by_media_speed = active_data.get("byMediaAndLinkSpeed", {})
-
-        for media_type, media_data in by_media_speed.items():
-            # Set total for this media type (active)
-            media_total = media_data.get("total", 0)
-            self._set_metric(
-                self._ms_ports_by_media_total,
-                {
-                    "org_id": org_id,
-                    "org_name": org_name,
-                    "media": media_type,
-                    "status": "active",
-                },
-                media_total,
-            )
-
-            # Set breakdown by link speed
-            for speed, count in media_data.items():
-                if speed != "total" and isinstance(count, (int, float)):
-                    self._set_metric(
-                        self._ms_ports_by_link_speed_total,
-                        {
-                            "org_id": org_id,
-                            "org_name": org_name,
-                            "media": media_type,
-                            "link_speed": str(speed),
-                        },
-                        count,
-                    )
-
-                    logger.debug(
-                        "Set port link speed count",
-                        org_id=org_id,
-                        media=media_type,
-                        speed=speed,
-                        count=count,
-                    )
-
-        # Process inactive ports by media
-        inactive_data = counts.get("byStatus", {}).get("inactive", {})
-        by_media = inactive_data.get("byMedia", {})
-
-        for media_type, media_data in by_media.items():
-            media_total = media_data.get("total", 0)
-            self._set_metric(
-                self._ms_ports_by_media_total,
-                {
-                    "org_id": org_id,
-                    "org_name": org_name,
-                    "media": media_type,
-                    "status": "inactive",
-                },
-                media_total,
-            )
-
-        logger.debug(
-            "Completed switch port overview collection",
-            org_id=org_id,
-        )
 
     @with_error_handling(
         operation="Fetch devices",
