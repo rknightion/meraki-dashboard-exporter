@@ -109,6 +109,19 @@ class LabelName(StrEnum):
     # Webhook labels (Phase 4.2)
     VALIDATION_ERROR = "validation_error"  # Webhook validation error reason
 
+    # VPN labels
+    PEER_NETWORK_ID = "peer_network_id"
+    PEER_TYPE = "peer_type"
+
+    # Switch stack labels
+    STACK_ID = "stack_id"
+    ROLE = "role"
+
+    # Firewall labels
+    RULE_TYPE = "rule_type"
+    EVENT_TYPE = "event_type"
+    DEFAULT_POLICY = "default_policy"
+
 
 MetricType = Literal["gauge", "counter", "histogram", "info"]
 

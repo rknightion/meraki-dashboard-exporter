@@ -12,6 +12,8 @@ from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.metrics import LabelName
 from .base import BaseDeviceCollector
+from .mx_firewall import MXFirewallCollector
+from .mx_vpn import MXVpnCollector
 
 if TYPE_CHECKING:
     from ..device import DeviceCollector
@@ -32,6 +34,8 @@ class MXCollector(BaseDeviceCollector):
 
         """
         super().__init__(parent)
+        self.vpn_collector = MXVpnCollector(self)
+        self.firewall_collector = MXFirewallCollector(self)
 
         self._mx_uplink_info = self.parent._create_gauge(
             MXMetricName.MX_UPLINK_INFO,
@@ -49,6 +53,32 @@ class MXCollector(BaseDeviceCollector):
                 LabelName.STATUS,
             ],
         )
+
+    def _create_gauge(self, *args: Any, **kwargs: Any) -> Any:
+        """Delegate gauge creation to the parent DeviceCollector.
+
+        Sub-collectors (e.g. MXVpnCollector) call ``self.parent._create_gauge``,
+        where ``self.parent`` is this MXCollector.  MXCollector itself does not
+        own a registry, so we forward the call to our own parent (DeviceCollector).
+        """
+        return self.parent._create_gauge(*args, **kwargs)
+
+    def _set_metric(self, *args: Any, **kwargs: Any) -> Any:
+        """Delegate metric setting to the parent DeviceCollector."""
+        return self.parent._set_metric(*args, **kwargs)
+
+    def update_api(self, api: Any) -> None:
+        """Update the API client and propagate to sub-collectors.
+
+        Parameters
+        ----------
+        api : Any
+            New DashboardAPI instance.
+
+        """
+        super().update_api(api)
+        self.vpn_collector.update_api(api)
+        self.firewall_collector.update_api(api)
 
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect MX-specific metrics.

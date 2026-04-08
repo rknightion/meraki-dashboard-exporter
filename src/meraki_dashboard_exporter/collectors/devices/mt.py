@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from meraki import DashboardAPI
 
+    from ...core.config import Settings
+    from ..device import DeviceCollector
+
 from ...api.client import AsyncMerakiClient
 from ...core.constants import (
     DeviceType,
@@ -23,9 +26,6 @@ from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
 from .base import BaseDeviceCollector
 
-if TYPE_CHECKING:
-    from ..device import DeviceCollector
-
 logger = get_logger(__name__)
 
 
@@ -39,41 +39,60 @@ class MTCollector(BaseDeviceCollector):
     # Sensor data updates frequently
     update_tier: UpdateTier = UpdateTier.FAST
 
-    def __init__(self, parent: DeviceCollector | None = None) -> None:
-        """Initialize MT collector.
+    def __init__(self, parent: DeviceCollector) -> None:
+        """Initialize MT collector as a sub-collector.
 
         Parameters
         ----------
-        parent : DeviceCollector | None
-            Parent DeviceCollector instance. If None, this collector
-            operates in standalone sensor mode.
+        parent : DeviceCollector
+            Parent DeviceCollector instance.
 
         """
-        if parent:
-            super().__init__(parent)
-        else:
-            # Standalone mode - initialize base attributes without calling parent init
-            # This avoids the "Parent collector not set" error
-            self.parent = None
-            self.api: DashboardAPI | None = None
-            self.settings = None  # type: ignore[assignment]
-            # Set a flag to indicate standalone mode for error checking
-            self._standalone_mode = True
+        super().__init__(parent)
 
-    def _track_api_call(self, method_name: str) -> None:
-        """Track API call, handling standalone mode.
+    @classmethod
+    def as_subcollector(cls, parent: DeviceCollector) -> MTCollector:
+        """Create as a sub-collector of DeviceCollector.
 
         Parameters
         ----------
-        method_name : str
-            Name of the API method being called.
+        parent : DeviceCollector
+            Parent DeviceCollector instance.
+
+        Returns
+        -------
+        MTCollector
+            Initialized sub-collector.
 
         """
-        if self.parent and hasattr(self.parent, "_track_api_call"):
-            self.parent._track_api_call(method_name)
-        else:
-            # In standalone mode, tracking is not needed
-            pass
+        return cls(parent)
+
+    @classmethod
+    def as_standalone(
+        cls,
+        api: DashboardAPI,
+        settings: Settings,
+    ) -> MTCollector:
+        """Create as an independent collector for MTSensorCollector.
+
+        Parameters
+        ----------
+        api : DashboardAPI
+            Meraki API client.
+        settings : Settings
+            Application settings.
+
+        Returns
+        -------
+        MTCollector
+            Initialized standalone collector.
+
+        """
+        instance = object.__new__(cls)
+        instance.parent = None
+        instance.api = api
+        instance.settings = settings
+        return instance
 
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect device-level MT metrics.
@@ -489,7 +508,7 @@ class MTCollector(BaseDeviceCollector):
 
         """
         # Validate parent exists (skip check in standalone mode)
-        if not self.parent and not getattr(self, "_standalone_mode", False):
+        if not self.parent:
             logger.error("Parent collector not set for MTCollector")
             return
 
