@@ -1,5 +1,4 @@
 """Meraki API client wrapper with async support and comprehensive observability."""
-# mypy: disable-error-code="no-any-return"
 
 from __future__ import annotations
 
@@ -9,7 +8,7 @@ import threading
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 import meraki
 from meraki.exceptions import APIError
@@ -442,7 +441,7 @@ class AsyncMerakiClient:
             result_hook=lambda orgs, span: span.set_attribute("org.count", len(orgs)),
         )
         logger.debug("Successfully fetched organizations", count=len(result))
-        return result
+        return cast(list[dict[str, Any]], result)
 
     async def get_organization(self, org_id: str) -> dict[str, Any]:
         """Fetch a specific organization.
@@ -469,7 +468,7 @@ class AsyncMerakiClient:
             org_id=org_id,
             org_name=result.get("name", "unknown"),
         )
-        return result
+        return cast(dict[str, Any], result)
 
     async def get_networks(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch all networks in an organization.
@@ -493,7 +492,7 @@ class AsyncMerakiClient:
             total_pages="all",
         )
         logger.debug("Successfully fetched networks", org_id=org_id, count=len(result))
-        return result
+        return cast(list[dict[str, Any]], result)
 
     async def get_devices(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch all devices in an organization.
@@ -517,7 +516,7 @@ class AsyncMerakiClient:
             total_pages="all",
         )
         logger.debug("Successfully fetched devices", org_id=org_id, count=len(result))
-        return result
+        return cast(list[dict[str, Any]], result)
 
     async def get_device_availabilities(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch device availabilities for an organization.
@@ -541,7 +540,7 @@ class AsyncMerakiClient:
             total_pages="all",
         )
         logger.debug("Successfully fetched device availabilities", org_id=org_id, count=len(result))
-        return result
+        return cast(list[dict[str, Any]], result)
 
     async def get_licenses(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch license information for an organization.
@@ -565,7 +564,7 @@ class AsyncMerakiClient:
             total_pages="all",
         )
         logger.debug("Successfully fetched licenses", org_id=org_id, count=len(result))
-        return result
+        return cast(list[dict[str, Any]], result)
 
     async def get_api_requests(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch API request statistics for an organization.
@@ -591,7 +590,7 @@ class AsyncMerakiClient:
         logger.debug(
             "Successfully fetched API request statistics", org_id=org_id, count=len(result)
         )
-        return result
+        return cast(list[dict[str, Any]], result)
 
     async def get_switch_port_statuses(self, serial: str) -> list[dict[str, Any]]:
         """Fetch switch port statuses.
@@ -614,7 +613,7 @@ class AsyncMerakiClient:
             serial,
         )
         logger.debug("Successfully fetched switch port statuses", serial=serial, count=len(result))
-        return result
+        return cast(list[dict[str, Any]], result)
 
     async def get_wireless_status(self, serial: str) -> dict[str, Any]:
         """Fetch wireless device status.
@@ -641,7 +640,7 @@ class AsyncMerakiClient:
             serial=serial,
             ssid_count=len(result.get("basicServiceSets", [])),
         )
-        return result
+        return cast(dict[str, Any], result)
 
     async def get_sensor_readings_latest(
         self, org_id: str, serials: list[str] | None = None
@@ -678,7 +677,7 @@ class AsyncMerakiClient:
             sensor_count=len(result),
             total_readings=sum(len(s.get("readings", [])) for s in result),
         )
-        return result
+        return cast(list[dict[str, Any]], result)
 
     async def get_organization_networks(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch networks for an organization.
@@ -717,7 +716,7 @@ class AsyncMerakiClient:
             network_id,
         )
         logger.debug("Successfully fetched devices", network_id=network_id, count=len(result))
-        return result
+        return cast(list[dict[str, Any]], result)
 
     async def get_organization_devices(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch all devices for an organization.
