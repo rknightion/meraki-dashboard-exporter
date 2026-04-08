@@ -40,6 +40,7 @@ class MSCollector(BaseDeviceCollector):
         self._org_port_status_supported: bool | None = None
         # Tracks which device serials were seen during the current collection cycle
         self._active_serials: set[str] = set()
+        self._initialize_metrics()
 
     def _initialize_metrics(self) -> None:
         """Initialize MS-specific metrics."""

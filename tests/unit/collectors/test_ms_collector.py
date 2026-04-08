@@ -46,10 +46,7 @@ class TestMSCollector:
         mock_parent: MagicMock,
     ) -> MSCollector:
         """Create MS collector instance."""
-        collector = MSCollector(mock_parent)
-        # Initialize metrics manually since we're using a mock parent
-        collector._initialize_metrics()
-        return collector
+        return MSCollector(mock_parent)
 
     async def test_collect_basic_api_call(
         self,

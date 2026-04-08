@@ -54,7 +54,7 @@ class MTCollector(BaseDeviceCollector):
         else:
             # Standalone mode - initialize base attributes without calling parent init
             # This avoids the "Parent collector not set" error
-            self.parent = None  # type: ignore[assignment]
+            self.parent = None
             self.api: DashboardAPI | None = None
             self.settings = None  # type: ignore[assignment]
             # Set a flag to indicate standalone mode for error checking

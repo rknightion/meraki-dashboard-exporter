@@ -167,9 +167,6 @@ class DeviceCollector(MetricCollector):
         # Tracks which cache keys were touched during the current collection cycle
         self._active_cache_keys: set[str] = set()
 
-        # Initialize sub-collector metrics (only for collectors without their own __init__)
-        self.ms_collector._initialize_metrics()
-
         # Initialize port overview metrics here since they're org-level
         self._ms_ports_active_total = self._create_gauge(
             MSMetricName.MS_PORTS_ACTIVE_TOTAL,
@@ -217,18 +214,8 @@ class DeviceCollector(MetricCollector):
 
     def _sync_subcollector_api(self) -> None:
         """Ensure subcollectors use the current API client."""
-        if hasattr(self, "mg_collector"):
-            self.mg_collector.api = self.api
-        if hasattr(self, "mr_collector"):
-            self.mr_collector.update_api(self.api)
-        if hasattr(self, "ms_collector"):
-            self.ms_collector.api = self.api
-        if hasattr(self, "mt_collector"):
-            self.mt_collector.api = self.api
-        if hasattr(self, "mv_collector"):
-            self.mv_collector.api = self.api
-        if hasattr(self, "mx_collector"):
-            self.mx_collector.api = self.api
+        for collector in self._device_collectors.values():
+            collector.update_api(self.api)
 
     def _initialize_metrics(self) -> None:
         """Initialize device metrics."""

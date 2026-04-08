@@ -5,10 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ...core.logging import get_logger
+from ..subcollector_mixin import SubCollectorMixin
 
 if TYPE_CHECKING:
-    from meraki import DashboardAPI
-
     from ...core.config import Settings
     from ...services.inventory import OrganizationInventory
     from ..organization import OrganizationCollector
@@ -16,7 +15,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class BaseOrganizationCollector:
+class BaseOrganizationCollector(SubCollectorMixin):
     """Base class for organization sub-collectors."""
 
     def __init__(self, parent: OrganizationCollector) -> None:
@@ -29,51 +28,6 @@ class BaseOrganizationCollector:
 
         """
         self.parent = parent
-        self.api: DashboardAPI = parent.api
+        self.api = parent.api
         self.settings: Settings = parent.settings
         self.inventory: OrganizationInventory | None = getattr(parent, "inventory", None)
-
-    def _track_api_call(self, method_name: str) -> None:
-        """Track API call in parent collector.
-
-        Parameters
-        ----------
-        method_name : str
-            Name of the API method being called.
-
-        """
-        if hasattr(self.parent, "_track_api_call"):
-            self.parent._track_api_call(method_name)
-
-    def _set_metric_value(
-        self, metric_name: str, labels: dict[str, str], value: float | None
-    ) -> None:
-        """Safely set a metric value with validation.
-
-        Parameters
-        ----------
-        metric_name : str
-            Name of the metric attribute.
-        labels : dict[str, str]
-            Labels to apply to the metric.
-        value : float | None
-            Value to set. If None, the metric will not be updated.
-
-        """
-        if hasattr(self.parent, "_set_metric_value"):
-            self.parent._set_metric_value(metric_name, labels, value)
-        else:
-            # Fall back to direct metric setting
-            if value is None:
-                return
-            metric = getattr(self.parent, metric_name, None)
-            if metric:
-                try:
-                    metric.labels(**labels).set(value)
-                except Exception:
-                    logger.exception(
-                        "Failed to set metric value",
-                        metric_name=metric_name,
-                        labels=labels,
-                        value=value,
-                    )
