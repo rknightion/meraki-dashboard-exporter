@@ -38,6 +38,8 @@ class MSCollector(BaseDeviceCollector):
         self._last_port_usage: dict[str, float] = {}
         self._last_packet_stats: dict[str, float] = {}
         self._org_port_status_supported: bool | None = None
+        # Tracks which device serials were seen during the current collection cycle
+        self._active_serials: set[str] = set()
 
     def _initialize_metrics(self) -> None:
         """Initialize MS-specific metrics."""
@@ -305,6 +307,29 @@ class MSCollector(BaseDeviceCollector):
             labelnames=packet_labels,
         )
 
+    def _evict_stale_serials(self, active_serials: set[str]) -> None:
+        """Remove timestamp cache entries for serials not seen this collection cycle.
+
+        Parameters
+        ----------
+        active_serials : set[str]
+            Device serials that were processed during the current cycle.
+            Entries for serials absent from this set are evicted from both
+            ``_last_port_usage`` and ``_last_packet_stats``.
+
+        """
+        stale = (set(self._last_port_usage) | set(self._last_packet_stats)) - active_serials
+        for serial in stale:
+            self._last_port_usage.pop(serial, None)
+            self._last_packet_stats.pop(serial, None)
+        if stale:
+            logger.debug(
+                "Evicted stale MS collector serial cache entries",
+                evicted_count=len(stale),
+                remaining_port_usage=len(self._last_port_usage),
+                remaining_packet_stats=len(self._last_packet_stats),
+            )
+
     def _should_collect_port_usage(self, serial: str) -> bool:
         interval = self.settings.api.ms_port_usage_interval
         if interval <= 0:
@@ -429,6 +454,11 @@ class MSCollector(BaseDeviceCollector):
 
         # Create standard device labels
         device_labels = create_device_labels(device, org_id=org_id, org_name=org_name)
+
+        # Track this serial as active in the current collection cycle
+        serial_key = device_labels["serial"]
+        self._active_serials.add(serial_key)
+
         try:
             # Get port statuses with 1-hour timespan
             with LogContext(serial=device_labels["serial"], name=device_labels["name"]):
