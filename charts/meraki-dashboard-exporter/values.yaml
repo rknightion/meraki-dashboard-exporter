@@ -1,0 +1,179 @@
+# Default values for meraki-dashboard-exporter.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# -- Number of replicas. The exporter is stateless so 1 is sufficient.
+replicaCount: 1
+
+image:
+  # -- Container image repository
+  repository: ghcr.io/rknightion/meraki-dashboard-exporter
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+  # -- Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+# -- Secrets used to pull images from private registries
+imagePullSecrets: []
+
+# -- Override the chart name
+nameOverride: ""
+# -- Override the full release name
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Specifies whether a service account should be created
+  create: true
+  # -- Annotations to add to the service account
+  annotations: {}
+  # -- The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template.
+  name: ""
+
+# -- Annotations to add to the pod
+podAnnotations: {}
+
+# -- Labels to add to the pod
+podLabels: {}
+
+# -- Pod-level security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+# -- Container-level security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  # -- Service type
+  type: ClusterIP
+  # -- Service port (must match the exporter's server port)
+  port: 9099
+
+# Meraki API credentials
+meraki:
+  # -- Meraki Dashboard API key. If set, a Secret will be created automatically.
+  # Mutually exclusive with existingSecret.
+  apiKey: ""
+  # -- Name of an existing Secret containing the API key.
+  # Mutually exclusive with apiKey.
+  existingSecret: ""
+  # -- Key within the existing Secret that holds the API key value.
+  existingSecretKey: "api-key"  # pragma: allowlist secret
+  # -- Meraki organization ID. Leave empty to collect metrics from all accessible organizations.
+  organizationId: ""
+
+# Application configuration (maps to MERAKI_EXPORTER_* environment variables)
+config:
+  # -- Log level. One of DEBUG, INFO, WARNING, ERROR, CRITICAL.
+  logLevel: "INFO"
+  # -- Meraki API base URL. Change for regional endpoints (e.g. China).
+  apiBaseUrl: "https://api.meraki.com/api/v1"
+  # -- API request timeout in seconds.
+  apiTimeout: "30"
+  # -- Maximum concurrent API requests.
+  apiConcurrencyLimit: "5"
+  # -- Maximum retries for failed API requests.
+  apiMaxRetries: "3"
+  # -- Fast update interval in seconds (sensors, real-time metrics).
+  updateIntervalFast: "60"
+  # -- Medium update interval in seconds (device metrics).
+  updateIntervalMedium: "300"
+  # -- Slow update interval in seconds (configuration, inventory).
+  updateIntervalSlow: "900"
+  # -- Timeout for individual collector runs in seconds.
+  collectorTimeout: "120"
+  # -- Enable webhook receiver endpoint.
+  webhooksEnabled: "false"
+  # -- Enable OpenTelemetry tracing.
+  otelEnabled: "false"
+  # -- OpenTelemetry collector endpoint (OTLP gRPC). Required when otelEnabled is true.
+  otelEndpoint: ""
+  # -- OpenTelemetry service name.
+  otelServiceName: "meraki-dashboard-exporter"
+
+# -- Resource requests and limits
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Liveness probe configuration
+livenessProbe:
+  # -- Enable liveness probe
+  enabled: true
+  httpGet:
+    path: /health
+    port: http
+  # -- Number of seconds after container start before first probe
+  initialDelaySeconds: 30
+  # -- Probe interval in seconds
+  periodSeconds: 30
+  # -- Probe timeout in seconds
+  timeoutSeconds: 10
+  # -- Number of consecutive successes required
+  successThreshold: 1
+  # -- Number of consecutive failures before pod is restarted
+  failureThreshold: 3
+
+# Readiness probe configuration
+readinessProbe:
+  # -- Enable readiness probe
+  enabled: true
+  httpGet:
+    path: /ready
+    port: http
+  # -- Number of seconds after container start before first probe.
+  # Set high to allow initial collection cycle to complete.
+  initialDelaySeconds: 300
+  # -- Probe interval in seconds
+  periodSeconds: 10
+  # -- Probe timeout in seconds
+  timeoutSeconds: 5
+  # -- Number of consecutive successes required
+  successThreshold: 1
+  # -- Number of consecutive failures before pod is removed from endpoints
+  failureThreshold: 3
+
+# -- Node selector for pod scheduling
+nodeSelector: {}
+
+# -- Tolerations for pod scheduling
+tolerations: []
+
+# -- Affinity rules for pod scheduling
+affinity: {}
+
+# Prometheus Operator ServiceMonitor
+serviceMonitor:
+  # -- Enable ServiceMonitor creation (requires Prometheus Operator)
+  enabled: false
+  # -- Namespace where the ServiceMonitor will be created. Defaults to release namespace.
+  namespace: ""
+  # -- Additional labels to add to the ServiceMonitor (e.g. for Prometheus selector)
+  additionalLabels: {}
+  # -- Scrape interval. Should match the exporter's fast update interval.
+  interval: "60s"
+  # -- Scrape timeout
+  scrapeTimeout: "30s"
+  # -- Path to scrape
+  path: /metrics
+  # -- Relabelings to apply to samples before ingestion
+  relabelings: []
+  # -- MetricRelabelings to apply to samples before ingestion
+  metricRelabelings: []
+  # -- Honor labels from the scrape target
+  honorLabels: false

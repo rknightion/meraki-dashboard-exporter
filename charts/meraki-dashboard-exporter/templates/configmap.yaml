@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "meraki-dashboard-exporter.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "meraki-dashboard-exporter.labels" . | nindent 4 }}
+data:
+  # Logging
+  MERAKI_EXPORTER_LOGGING__LEVEL: {{ .Values.config.logLevel | quote }}
+
+  # Meraki API settings
+  {{- if .Values.meraki.organizationId }}
+  MERAKI_EXPORTER_MERAKI__ORG_ID: {{ .Values.meraki.organizationId | quote }}
+  {{- end }}
+  MERAKI_EXPORTER_MERAKI__API_BASE_URL: {{ .Values.config.apiBaseUrl | quote }}
+
+  # API behaviour
+  MERAKI_EXPORTER_API__TIMEOUT: {{ .Values.config.apiTimeout | quote }}
+  MERAKI_EXPORTER_API__CONCURRENCY_LIMIT: {{ .Values.config.apiConcurrencyLimit | quote }}
+  MERAKI_EXPORTER_API__MAX_RETRIES: {{ .Values.config.apiMaxRetries | quote }}
+
+  # Update intervals
+  MERAKI_EXPORTER_UPDATE_INTERVALS__FAST: {{ .Values.config.updateIntervalFast | quote }}
+  MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM: {{ .Values.config.updateIntervalMedium | quote }}
+  MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW: {{ .Values.config.updateIntervalSlow | quote }}
+
+  # Server
+  MERAKI_EXPORTER_SERVER__PORT: {{ .Values.service.port | quote }}
+
+  # Collectors
+  MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT: {{ .Values.config.collectorTimeout | quote }}
+
+  # Webhooks
+  MERAKI_EXPORTER_WEBHOOKS__ENABLED: {{ .Values.config.webhooksEnabled | quote }}
+
+  # OpenTelemetry
+  MERAKI_EXPORTER_OTEL__ENABLED: {{ .Values.config.otelEnabled | quote }}
+  MERAKI_EXPORTER_OTEL__SERVICE_NAME: {{ .Values.config.otelServiceName | quote }}
+  {{- if .Values.config.otelEndpoint }}
+  MERAKI_EXPORTER_OTEL__ENDPOINT: {{ .Values.config.otelEndpoint | quote }}
+  {{- end }}
