@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,7 +12,7 @@ from meraki_dashboard_exporter.collectors.devices.ms_stack import MSStackCollect
 from meraki_dashboard_exporter.core.constants.metrics_constants import MSMetricName
 
 
-def _get_samples(registry: CollectorRegistry, metric_name: str) -> list:
+def _get_samples(registry: CollectorRegistry, metric_name: str) -> list[Any]:
     """Return all samples for a named metric from the registry."""
     for metric_family in registry.collect():
         if metric_family.name == metric_name:
@@ -43,7 +44,7 @@ class TestMSStackCollector:
         # Ensure rate_limiter is None so @log_api_call does not try to await it
         parent.rate_limiter = None
 
-        def create_gauge(name: MSMetricName, description: str, labelnames: list) -> Gauge:
+        def create_gauge(name: MSMetricName, description: str, labelnames: list[Any]) -> Gauge:
             return Gauge(name.value, description, labelnames, registry=registry)
 
         parent._create_gauge = MagicMock(side_effect=create_gauge)
@@ -295,7 +296,7 @@ class TestMSStackCollector:
     ) -> None:
         """Stacks from multiple networks all produce metrics."""
 
-        def stacks_for_network(network_id: str) -> list[dict]:
+        def stacks_for_network(network_id: str) -> list[dict[str, Any]]:
             if network_id == "net-a":
                 return [{"id": "stack-a", "serials": ["QAAA-A001", "QAAA-A002"]}]
             if network_id == "net-b":
