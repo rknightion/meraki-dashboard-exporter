@@ -41,7 +41,7 @@ jobs:
       - name: Run tests
         env:
           PYTHONPATH: src
-        run: uv run pytest --cov=meraki_dashboard_exporter --cov-report=xml
+        run: uv run pytest --cov=meraki_dashboard_exporter --cov-report=xml --cov-fail-under=80
 
       - name: Upload coverage
         if: success()
