@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Monday at 6am UTC
 
 permissions:
   contents: read
@@ -90,3 +92,20 @@ jobs:
 
           # Verify non-root user
           docker run --rm -e MERAKI_EXPORTER_MERAKI__API_KEY meraki-dashboard-exporter:test whoami | grep -q exporter
+
+  slow-tests:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          allow-prereleases: true
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Install dependencies
+        run: uv sync --all-extras
+      - name: Run slow tests
+        run: uv run pytest -m slow -v --timeout=300
