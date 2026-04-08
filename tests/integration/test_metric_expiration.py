@@ -25,6 +25,7 @@ def mock_settings() -> MagicMock:
     """Minimal mock Settings for MetricExpirationManager."""
     settings = MagicMock()
     settings.monitoring.metric_ttl_multiplier = 2.0
+    settings.monitoring.max_cardinality_per_collector = 10000
     # MEDIUM tier: 300 s * 2.0 = 600 s TTL (default used by cleanup logic)
     settings.update_intervals.fast = 60
     settings.update_intervals.medium = 300

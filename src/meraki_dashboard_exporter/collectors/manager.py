@@ -14,6 +14,7 @@ from ..core.constants import UpdateTier
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
+from ..core.org_health import OrgHealthTracker
 from ..core.otel_tracing import trace_method
 from ..core.rate_limiter import OrgRateLimiter
 from ..core.registry import get_registered_collectors
@@ -66,6 +67,9 @@ class CollectorManager:
             rate_limiter=self.rate_limiter,
         )
 
+        # Per-organization health tracking for graceful degradation
+        self.org_health_tracker = OrgHealthTracker()
+
         # Track collector health state
         self.collector_health: dict[str, dict[str, Any]] = {}
 
@@ -77,6 +81,13 @@ class CollectorManager:
         self._collector_index: dict[str, MetricCollector] = {}
         self._collector_tiers: dict[str, UpdateTier] = {}
         self._collector_locks: dict[str, asyncio.Lock] = {}
+
+        # Track whether each tier has completed its first collection cycle
+        self._tier_initial_complete: dict[str, bool] = {
+            "fast": False,
+            "medium": False,
+            "slow": False,
+        }
 
         self._initialize_metrics()
         self._initialize_collectors()
@@ -136,12 +147,44 @@ class CollectorManager:
             ],
         )
 
+        # Gauge for collection utilization ratio (actual_duration / tier_interval)
+        self._collection_utilization = Gauge(
+            CollectorMetricName.EXPORTER_COLLECTION_UTILIZATION_RATIO.value,
+            "Fraction of the tier interval consumed by actual collection (0=instant, 1=full interval)",
+            labelnames=[
+                LabelName.COLLECTOR.value,
+                LabelName.TIER.value,
+            ],
+        )
+
     def _get_tier_interval(self, tier: UpdateTier) -> int:
         if tier == UpdateTier.FAST:
             return self.settings.update_intervals.fast
         if tier == UpdateTier.MEDIUM:
             return self.settings.update_intervals.medium
         return self.settings.update_intervals.slow
+
+    def _get_tier_concurrency(self, tier: UpdateTier) -> int:
+        """Get the concurrency limit for a specific update tier.
+
+        Parameters
+        ----------
+        tier : UpdateTier
+            The update tier.
+
+        Returns
+        -------
+        int
+            The maximum concurrent tasks allowed for this tier.
+
+        """
+        if tier == UpdateTier.FAST:
+            return self.settings.api.concurrency_limit_fast
+        elif tier == UpdateTier.MEDIUM:
+            return self.settings.api.concurrency_limit_medium
+        elif tier == UpdateTier.SLOW:
+            return self.settings.api.concurrency_limit_slow
+        return self.settings.api.concurrency_limit  # fallback
 
     def _get_smoothing_window(self, tier: UpdateTier) -> float:
         if not self.settings.api.smoothing_enabled:
@@ -208,12 +251,17 @@ class CollectorManager:
 
                 try:
                     # Create instance of the collector with inventory service and expiration manager
+                    # Pass org_health_tracker to OrganizationCollector for per-org graceful degradation
+                    extra_kwargs: dict[str, Any] = {}
+                    if collector_name == "OrganizationCollector":
+                        extra_kwargs["org_health_tracker"] = self.org_health_tracker
                     collector_instance = collector_class(
                         api=self.client.api,
                         settings=self.settings,
                         inventory=self.inventory,
                         expiration_manager=self.expiration_manager,
                         rate_limiter=self.rate_limiter,
+                        **extra_kwargs,
                     )
                     self.collectors[tier].append(collector_instance)
                     self._register_collector_metadata(collector_instance, tier)
@@ -266,9 +314,7 @@ class CollectorManager:
         if collector_name not in self._collector_locks:
             self._collector_locks[collector_name] = asyncio.Lock()
 
-    def get_collector_by_name(
-        self, name: str
-    ) -> tuple[MetricCollector, UpdateTier] | None:
+    def get_collector_by_name(self, name: str) -> tuple[MetricCollector, UpdateTier] | None:
         """Look up a collector and its tier by name."""
         normalized = self._normalize_collector_name(name)
         collector = self._collector_index.get(normalized)
@@ -329,8 +375,43 @@ class CollectorManager:
             configured_names=sorted(configured_collectors),
         )
 
+    @property
+    def is_ready(self) -> bool:
+        """Return True when FAST and MEDIUM tiers have completed their first collection.
+
+        SLOW tier is excluded since it may take up to 900s and Kubernetes readiness
+        probes should not block that long.
+        """
+        return self._tier_initial_complete["fast"] and self._tier_initial_complete["medium"]
+
+    def get_readiness_status(self) -> dict[str, Any]:
+        """Return readiness status for each tier and overall readiness.
+
+        Returns
+        -------
+        dict[str, Any]
+            Dictionary with "ready" bool and "collectors" dict per tier.
+
+        """
+        return {
+            "ready": self.is_ready,
+            "collectors": {
+                "fast": self._tier_initial_complete["fast"],
+                "medium": self._tier_initial_complete["medium"],
+                "slow": self._tier_initial_complete["slow"],
+            },
+        }
+
     async def collect_initial(self) -> None:
         """Run initial collection from all tiers sequentially to avoid API overload."""
+        # Warm the cache before the first collection cycle so collectors get cache hits
+        try:
+            logger.info("Warming inventory cache before initial collection")
+            await self.inventory.warm_cache()
+            logger.info("Inventory cache warming complete")
+        except Exception:
+            logger.exception("Inventory cache warming failed, continuing with cold cache")
+
         # Collect tier by tier to reduce API load during startup
         for tier in [UpdateTier.FAST, UpdateTier.MEDIUM, UpdateTier.SLOW]:
             try:
@@ -369,13 +450,18 @@ class CollectorManager:
                 "No collectors for tier",
                 tier=tier,
             )
+            # No collectors to run — mark tier as complete immediately
+            tier_key = tier.value
+            if not self._tier_initial_complete.get(tier_key, False):
+                self._tier_initial_complete[tier_key] = True
             return
 
+        tier_concurrency = self._get_tier_concurrency(tier)
         logger.info(
             "Starting parallel collection for tier",
             tier=tier,
             collector_count=len(tier_collectors),
-            concurrency_limit=self.settings.api.concurrency_limit,
+            concurrency_limit=tier_concurrency,
         )
 
         # Use collector_timeout from settings (default: 120s)
@@ -386,7 +472,7 @@ class CollectorManager:
         # Run collectors in parallel with bounded concurrency
         async with ManagedTaskGroup(
             name=f"tier_{tier.value}",
-            max_concurrency=self.settings.api.concurrency_limit,
+            max_concurrency=tier_concurrency,
         ) as group:
             for collector in tier_collectors:
                 collector_name = collector.__class__.__name__
@@ -404,6 +490,16 @@ class CollectorManager:
             tier=tier,
             collector_count=len(tier_collectors),
         )
+
+        # Mark this tier's first collection as complete
+        tier_key = tier.value
+        if not self._tier_initial_complete.get(tier_key, False):
+            self._tier_initial_complete[tier_key] = True
+            logger.info(
+                "Tier initial collection complete",
+                tier=tier_key,
+                is_ready=self.is_ready,
+            )
 
     async def _run_collector_with_delay(
         self,
@@ -476,6 +572,7 @@ class CollectorManager:
                 self.collector_health[collector_name]["total_runs"] += 1
 
             success = False
+            start_time = time.time()
             try:
                 async with asyncio.timeout(timeout):
                     await collector.collect()
@@ -522,6 +619,24 @@ class CollectorManager:
                 ).inc()
                 # Error logged, but don't raise to allow other collectors to continue
             finally:
+                # Calculate and record collection utilization ratio
+                actual_duration = time.time() - start_time
+                tier_interval = self._get_tier_interval(tier)
+                utilization = actual_duration / tier_interval
+                self._collection_utilization.labels(
+                    collector=collector_name,
+                    tier=tier.value,
+                ).set(utilization)
+                if utilization > 0.8:
+                    logger.warning(
+                        "Collector utilization high - may not keep up",
+                        collector=collector_name,
+                        tier=tier.value,
+                        utilization=round(utilization, 2),
+                        duration=round(actual_duration, 1),
+                        interval=tier_interval,
+                    )
+
                 # Update health tracking
                 if collector_name in self.collector_health:
                     if success:

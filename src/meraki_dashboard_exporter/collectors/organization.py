@@ -9,12 +9,14 @@ from ..core.api_helpers import create_api_helper
 from ..core.async_utils import ManagedTaskGroup
 from ..core.collector import MetricCollector
 from ..core.constants import OrgMetricName, UpdateTier
+from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.label_helpers import create_org_labels
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call, log_batch_operation
 from ..core.logging_helpers import LogContext, log_metric_collection_summary
 from ..core.metrics import LabelName
+from ..core.org_health import OrgHealthTracker
 from ..core.otel_tracing import trace_method
 from ..core.registry import register_collector
 from .organization_collectors import APIUsageCollector, ClientOverviewCollector, LicenseCollector
@@ -42,9 +44,13 @@ class OrganizationCollector(MetricCollector):
         inventory: OrganizationInventory | None = None,
         expiration_manager: MetricExpirationManager | None = None,
         rate_limiter: Any | None = None,
+        org_health_tracker: OrgHealthTracker | None = None,
     ) -> None:
         """Initialize organization collector with sub-collectors."""
         super().__init__(api, settings, registry, inventory, expiration_manager, rate_limiter)
+
+        # Per-org health tracker for graceful degradation
+        self.org_health_tracker = org_health_tracker or OrgHealthTracker()
 
         # Create API helper
         self.api_helper = create_api_helper(self)
@@ -56,6 +62,13 @@ class OrganizationCollector(MetricCollector):
 
     def _initialize_metrics(self) -> None:
         """Initialize organization metrics."""
+        # Per-org collection health status (1=success, 0=failed/backed-off)
+        self._org_collection_status = self._create_gauge(
+            CollectorMetricName.EXPORTER_ORG_COLLECTION_STATUS,
+            "Organization collection status (1=success, 0=failed or in backoff)",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+        )
+
         # Organization info
         self._org_info = self._create_info(
             OrgMetricName.ORG_INFO,
@@ -282,6 +295,19 @@ class OrganizationCollector(MetricCollector):
         org_id = org["id"]
         org_name = org["name"]
 
+        # Check if this org is in backoff - if so, skip collection
+        if not self.org_health_tracker.should_collect(org_id):
+            health = self.org_health_tracker.get_health(org_id)
+            logger.info(
+                "Skipping organization collection due to backoff",
+                org_id=org_id,
+                org_name=org_name,
+                consecutive_failures=health.consecutive_failures if health else 0,
+            )
+            org_labels = create_org_labels(org)
+            self._org_collection_status.labels(**org_labels).set(0)
+            return
+
         try:
             with LogContext(org_id=org_id, org_name=org_name):
                 # Create org labels using helper
@@ -308,12 +334,19 @@ class OrganizationCollector(MetricCollector):
                 await self._collect_packet_capture_metrics(org_id, org_name)
                 await self._collect_application_usage_metrics(org_id, org_name)
 
+            # Record success after all sub-collections complete
+            self.org_health_tracker.record_success(org_id, org_name)
+            self._org_collection_status.labels(**org_labels).set(1)
+
         except Exception:
             logger.exception(
                 "Failed to collect metrics for organization",
                 org_id=org_id,
                 org_name=org_name,
             )
+            self.org_health_tracker.record_failure(org_id, org_name)
+            org_labels = create_org_labels(org)
+            self._org_collection_status.labels(**org_labels).set(0)
 
     @with_error_handling(
         operation="Collect API usage metrics",
