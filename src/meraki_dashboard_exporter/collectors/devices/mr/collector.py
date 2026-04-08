@@ -118,7 +118,7 @@ class MRCollector(BaseDeviceCollector):
 
     def update_api(self, api: DashboardAPI) -> None:
         """Propagate API updates to sub-collectors."""
-        self.api = api
+        super().update_api(api)
         self.clients.api = api
         self.performance.api = api
         self.wireless.api = api

@@ -12,6 +12,7 @@ from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
 from ...core.otel_tracing import trace_method
+from ..subcollector_mixin import SubCollectorMixin
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class BaseDeviceCollector(ABC):
+class BaseDeviceCollector(SubCollectorMixin, ABC):
     """Base class for device-specific collectors."""
 
     def __init__(self, parent: DeviceCollector) -> None:
@@ -75,18 +76,6 @@ class BaseDeviceCollector(ABC):
             )
 
         return device_type
-
-    def _track_api_call(self, method_name: str) -> None:
-        """Track API call in parent collector.
-
-        Parameters
-        ----------
-        method_name : str
-            Name of the API method being called.
-
-        """
-        if hasattr(self.parent, "_track_api_call"):
-            self.parent._track_api_call(method_name)
 
     @trace_method("collect.device_memory")
     @log_api_call("getOrganizationDevicesSystemMemoryUsageHistoryByInterval")
@@ -215,21 +204,3 @@ class BaseDeviceCollector(ABC):
                 "Failed to collect memory metrics",
                 org_id=org_id,
             )
-
-    def _set_metric_value(
-        self, metric_name: str, labels: dict[str, str], value: float | None
-    ) -> None:
-        """Set a metric value through parent collector.
-
-        Parameters
-        ----------
-        metric_name : str
-            Name of the metric attribute.
-        labels : dict[str, str]
-            Labels to apply to the metric.
-        value : float | None
-            Value to set. If None, the metric will not be updated.
-
-        """
-        if self.parent and hasattr(self.parent, "_set_metric_value"):
-            self.parent._set_metric_value(metric_name, labels, value)

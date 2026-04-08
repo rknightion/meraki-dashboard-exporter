@@ -297,8 +297,7 @@ class OrganizationCollector(MetricCollector):
                     logger.error("_org_info metric not initialized")
 
                 # Collect various metrics sequentially
-                # Skip API metrics for now - it's often problematic
-                # await self._collect_api_metrics(org_id, org_name)
+                await self._collect_api_metrics(org_id, org_name)
 
                 await self._collect_network_metrics(org_id, org_name)
                 await self._collect_device_metrics(org_id, org_name)
@@ -316,6 +315,11 @@ class OrganizationCollector(MetricCollector):
                 org_name=org_name,
             )
 
+    @with_error_handling(
+        operation="Collect API usage metrics",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
     async def _collect_api_metrics(self, org_id: str, org_name: str) -> None:
         """Collect API usage metrics.
 

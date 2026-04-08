@@ -50,7 +50,7 @@ class MTSensorCollector(MetricCollector):
         self.mt_collector.settings = settings
         # Pass this collector as the parent for metric access
         # This allows MTCollector to use MTSensorCollector's metrics
-        self.mt_collector.parent = self  # type: ignore[assignment]
+        self.mt_collector.parent = self
 
     def _initialize_metrics(self) -> None:
         """Initialize sensor metrics."""
