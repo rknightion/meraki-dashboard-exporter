@@ -1,0 +1,16 @@
+apiVersion: v2
+name: meraki-dashboard-exporter
+description: Prometheus exporter for Cisco Meraki Dashboard API metrics
+type: application
+version: 0.1.0
+appVersion: "0.28.0"
+home: https://github.com/rknightion/meraki-dashboard-exporter
+sources:
+  - https://github.com/rknightion/meraki-dashboard-exporter
+maintainers:
+  - name: Rob Knight
+keywords:
+  - meraki
+  - prometheus
+  - exporter
+  - monitoring

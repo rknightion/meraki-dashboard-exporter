@@ -1,0 +1,27 @@
+Meraki Dashboard Exporter has been deployed.
+
+  Release: {{ .Release.Name }}
+  Namespace: {{ .Release.Namespace }}
+
+The exporter metrics are available at:
+
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "meraki-dashboard-exporter.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  curl http://localhost:{{ .Values.service.port }}/metrics
+
+Health endpoints:
+  Liveness:  http://localhost:{{ .Values.service.port }}/health
+  Readiness: http://localhost:{{ .Values.service.port }}/ready
+
+{{- if .Values.serviceMonitor.enabled }}
+
+A Prometheus Operator ServiceMonitor has been created. Ensure your Prometheus
+instance is configured to select it via its label selector.
+{{- end }}
+
+{{- if not (or .Values.meraki.apiKey .Values.meraki.existingSecret) }}
+
+WARNING: No Meraki API key configured! Set either:
+  --set meraki.apiKey=<your-api-key>
+or reference an existing Secret:
+  --set meraki.existingSecret=<secret-name>
+{{- end }}
