@@ -1,9 +1,9 @@
 <system_context>
-Core infrastructure for Meraki Dashboard Exporter - Contains foundational components for configuration, logging, metrics, error handling, and domain models. This is the backbone that all collectors and services depend on.
+Core infrastructure for Meraki Dashboard Exporter - Contains foundational components for configuration, logging, metrics, error handling, domain models, and observability. This is the backbone that all collectors and services depend on.
 </system_context>
 
 <critical_notes>
-- **ALWAYS use MetricName enum** from `constants/metrics_constants.py` instead of hardcoded strings
+- **ALWAYS use domain-specific metric enums** from `constants/metrics_constants.py` (e.g., `OrgMetricName`, `MSMetricName`, `MRMetricName`)
 - **ALWAYS use LabelName enum** from `metrics.py` for consistent labeling
 - **Use domain models** from `api_models.py` and `domain_models.py` instead of raw dictionaries
 - **Structured logging** - Use context managers and decorators from `logging_helpers.py`
@@ -12,125 +12,114 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 
 <file_map>
 ## CORE COMPONENTS
-- `config.py` / `config_models.py` - Configuration management and validation
-- `logging.py` / `logging_helpers.py` / `logging_decorators.py` - Structured logging system
-- `metrics.py` - Prometheus metrics utilities
-- `error_handling.py` - Centralized error handling with decorators
-- `api_models.py` / `domain_models.py` - Pydantic models for API and business logic
-- `collector.py` - Base collector classes and interfaces
-- `registry.py` - Collector registration and discovery
-- `constants/` - All enums and constants organized by domain
+### Configuration
+- `config.py` - `Settings` class (Pydantic BaseSettings) with nested config models
+- `config_models.py` - Nested config models (APISettings, CollectorSettings, OTelSettings, etc.)
+- `config_logger.py` - Configuration-aware logging setup
+
+### Logging
+- `logging.py` - Structured logging setup (`get_logger()`)
+- `logging_helpers.py` - `LogContext` context manager, formatting helpers
+- `logging_decorators.py` - `@log_api_call()`, `@log_collection_progress()`, `@log_batch_operation()`
+
+### Metrics & Labels
+- `metrics.py` - `LabelName` enum, `MetricFactory`, `LabelSet`, `MetricDefinition`
+- `label_helpers.py` - Label construction helpers
+- `metric_expiration.py` - Metric TTL and automatic stale metric cleanup
+- `exemplars.py` - OpenTelemetry exemplar support
+
+### Error Handling
+- `error_handling.py` - `@with_error_handling()` decorator, `ErrorCategory` enum, custom exceptions
+
+### Domain Models
+- `api_models.py` - Basic API response models (`Organization`, `Network`, `Device`)
+- `domain_models.py` - Extended models (`RFHealthData`, `ConnectionStats`, `SwitchPort`, etc.)
+
+### Collector Infrastructure
+- `collector.py` - `MetricCollector` abstract base class with `_initialize_metrics()` and `_collect_impl()`
+- `registry.py` - `@register_collector(tier)` decorator for auto-registration
+- `async_utils.py` - `ManagedTaskGroup` for bounded concurrency, `batch_with_concurrency_limit()`
+- `batch_processing.py` - Batch operation helpers
+
+### API Helpers
+- `api_helpers.py` - API wrapper utilities
+- `rate_limiter.py` - API rate limiting
 - `type_definitions.py` - Shared type hints and protocols
+
+### Observability
+- `otel_logging.py` - OpenTelemetry log integration
+- `otel_tracing.py` - OpenTelemetry trace instrumentation
+- `span_metrics.py` - Span-level metrics
+
+### Other
+- `cardinality.py` - Metric cardinality tracking and management
+- `discovery.py` - Device/network discovery
+- `webhook_handler.py` - Webhook event processing and validation
+
+### Constants (`constants/` subdirectory)
+- `metrics_constants.py` - Domain-specific metric enums: `OrgMetricName`, `DeviceMetricName`, `NetworkMetricName`, `MSMetricName`, `MRMetricName`, `MXMetricName`, `MVMetricName`, `MTMetricName`, `AlertMetricName`, `ConfigMetricName`, `NetworkHealthMetricName`, `ClientMetricName`, `CollectorMetricName`, `WebhookMetricName`
+- `api_constants.py` - API-related constants
+- `config_constants.py` - Configuration constants
+- `device_constants.py` - Device types, `UpdateTier` enum
+- `sensor_constants.py` - Sensor type constants
 </file_map>
 
 <paved_path>
 ## METRIC CREATION PATTERN
 ```python
-# Always use enums for consistency
-from ..constants.metrics_constants import MetricName
-from .metrics import LabelName
+# Always use domain-specific enums
+from ..core.constants.metrics_constants import MSMetricName
+from ..core.metrics import LabelName
 
 # In collector's _initialize_metrics()
-self.device_status = Gauge(
-    MetricName.DEVICE_STATUS.value,
-    "Device operational status",
-    [LabelName.ORG_ID.value, LabelName.SERIAL.value]
+self._port_status = self.parent._create_gauge(
+    MSMetricName.MS_PORT_STATUS,
+    "Switch port status",
+    labelnames=[LabelName.ORG_ID.value, LabelName.SERIAL.value, LabelName.PORT_ID.value],
 )
 ```
 
 ## ERROR HANDLING PATTERN
 ```python
-from .error_handling import with_error_handling, ErrorCategory
+from ..core.error_handling import with_error_handling, ErrorCategory
 
 @with_error_handling(
     operation="Fetch devices",
     continue_on_error=True,
-    error_category=ErrorCategory.API_SERVER_ERROR
+    error_category=ErrorCategory.API_SERVER_ERROR,
 )
 async def _fetch_devices(self, org_id: str) -> list[Device] | None:
-    # Implementation with automatic error handling
+    ...
+```
+
+## CONFIGURATION ACCESS
+```python
+from ..core.config import Settings
+
+# Settings is instantiated once and passed to collectors
+# Access: settings.meraki.api_key, settings.api.timeout, settings.update_intervals, etc.
 ```
 
 ## LOGGING PATTERN
 ```python
-from .logging_helpers import LogContext
-from .logging_decorators import log_api_call
+from ..core.logging import get_logger
+from ..core.logging_helpers import LogContext
+from ..core.logging_decorators import log_api_call
+
+logger = get_logger(__name__)
 
 @log_api_call("getOrganizationDevices")
 async def _fetch_devices(self, org_id: str) -> list[Device]:
     with LogContext(org_id=org_id):
         logger.info("Fetching devices")
-        # All logs include org_id context
 ```
 </paved_path>
-
-<patterns>
-## DOMAIN MODEL USAGE
-```python
-# GOOD: Use validated domain models
-device = Device.model_validate(device_data)
-reading = SensorReading.model_validate(reading_data)
-
-# BAD: Raw dictionaries
-device = {"serial": "...", "name": "..."}
-```
-
-## CONFIGURATION ACCESS
-```python
-from .config import get_config
-
-config = get_config()
-api_key = config.meraki.api_key
-update_interval = config.collection.device_update_interval
-```
-</patterns>
-
-<examples>
-## Complete Collector with Core Infrastructure
-```python
-from prometheus_client import Gauge
-from ..core.collector import MetricCollector, register_collector
-from ..core.constants.metrics_constants import MetricName
-from ..core.metrics import LabelName
-from ..core.error_handling import with_error_handling
-from ..core.logging_decorators import log_api_call
-from ..core.domain_models import Device
-
-@register_collector(UpdateTier.MEDIUM)
-class ExampleCollector(MetricCollector):
-    def _initialize_metrics(self) -> None:
-        self.device_count = Gauge(
-            MetricName.DEVICE_COUNT.value,
-            "Number of devices per organization",
-            [LabelName.ORG_ID.value, LabelName.DEVICE_TYPE.value]
-        )
-
-    @with_error_handling("Count devices", continue_on_error=True)
-    @log_api_call("getOrganizationDevices")
-    async def _collect_impl(self) -> None:
-        organizations = await self._get_organizations()
-        for org in organizations:
-            devices = await self._fetch_devices(org.id)
-            self._update_metrics(org.id, devices)
-
-    def _update_metrics(self, org_id: str, devices: list[Device]) -> None:
-        device_counts = {}
-        for device in devices:
-            device_counts[device.product_type] = device_counts.get(device.product_type, 0) + 1
-
-        for device_type, count in device_counts.items():
-            self.device_count.labels(
-                org_id=org_id,
-                device_type=device_type
-            ).set(count)
-```
-</examples>
 
 <workflow>
 ## ADDING NEW METRICS
 1. **Define enum** in appropriate `constants/` file
 2. **Add labels** to `LabelName` enum in `metrics.py` if needed
-3. **Initialize metric** in collector's `_initialize_metrics()`
+3. **Initialize metric** in collector's `_initialize_metrics()` using `parent._create_gauge()`
 4. **Set values** in `_collect_impl()` using labels
 5. **Add tests** with metric assertions
 </workflow>
