@@ -6,6 +6,7 @@ import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from ...core.error_handling import ErrorCategory, with_error_handling
 from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -72,6 +73,11 @@ class LicenseCollector(BaseOrganizationCollector):
             total_pages="all",
         )
 
+    @with_error_handling(
+        operation="Collect license metrics",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
     async def collect(self, org_id: str, org_name: str) -> None:
         """Collect license metrics.
 
@@ -120,11 +126,7 @@ class LicenseCollector(BaseOrganizationCollector):
                     org_name=org_name,
                 )
             else:
-                logger.exception(
-                    "Failed to collect license metrics",
-                    org_id=org_id,
-                    org_name=org_name,
-                )
+                raise  # Let decorator handle non-404 errors
 
     def _process_per_device_licenses(
         self, org_id: str, org_name: str, licenses: list[dict[str, Any]]

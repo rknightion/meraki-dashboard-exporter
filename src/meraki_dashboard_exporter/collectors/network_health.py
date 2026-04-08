@@ -20,6 +20,7 @@ from .network_health_collectors.bluetooth import BluetoothCollector
 from .network_health_collectors.connection_stats import ConnectionStatsCollector
 from .network_health_collectors.data_rates import DataRatesCollector
 from .network_health_collectors.rf_health import RFHealthCollector
+from .network_health_collectors.ssid_performance import SSIDPerformanceCollector
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -53,6 +54,7 @@ class NetworkHealthCollector(MetricCollector):
         self.connection_stats_collector = ConnectionStatsCollector(self)
         self.data_rates_collector = DataRatesCollector(self)
         self.bluetooth_collector = BluetoothCollector(self)
+        self.ssid_performance_collector = SSIDPerformanceCollector(self)
 
     def _initialize_metrics(self) -> None:
         """Initialize network health metrics."""
@@ -159,6 +161,20 @@ class NetworkHealthCollector(MetricCollector):
                 LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
+            ],
+        )
+
+        # Per-SSID failed connections (Phase 4.4)
+        self._ssid_failed_connections = self._create_gauge(
+            NetworkHealthMetricName.MR_SSID_FAILED_CONNECTIONS_TOTAL,
+            "Failed wireless connections by SSID and failure step over the last hour",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SSID,
+                LabelName.FAILURE_STEP,
             ],
         )
 
@@ -308,6 +324,7 @@ class NetworkHealthCollector(MetricCollector):
         await self._collect_network_connection_stats(network)
         await self._collect_network_data_rates(network)
         await self._collect_network_bluetooth_clients(network)
+        await self._collect_network_ssid_performance(network)
 
     @log_api_call("getOrganizationNetworks")
     async def _fetch_networks_for_health(self, org_id: str) -> list[dict[str, Any]]:
@@ -378,3 +395,14 @@ class NetworkHealthCollector(MetricCollector):
 
         """
         await self.bluetooth_collector.collect(network)
+
+    async def _collect_network_ssid_performance(self, network: dict[str, Any]) -> None:
+        """Collect per-SSID wireless performance metrics for a network.
+
+        Parameters
+        ----------
+        network : dict[str, Any]
+            Network data.
+
+        """
+        await self.ssid_performance_collector.collect(network)

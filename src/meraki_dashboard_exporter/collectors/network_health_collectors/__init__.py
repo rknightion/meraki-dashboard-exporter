@@ -5,6 +5,7 @@ from .bluetooth import BluetoothCollector
 from .connection_stats import ConnectionStatsCollector
 from .data_rates import DataRatesCollector
 from .rf_health import RFHealthCollector
+from .ssid_performance import SSIDPerformanceCollector
 
 __all__ = [
     "BaseNetworkHealthCollector",
@@ -12,4 +13,5 @@ __all__ = [
     "ConnectionStatsCollector",
     "DataRatesCollector",
     "RFHealthCollector",
+    "SSIDPerformanceCollector",
 ]

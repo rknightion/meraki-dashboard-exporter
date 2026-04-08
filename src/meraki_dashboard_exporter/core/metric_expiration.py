@@ -92,6 +92,12 @@ class MetricExpirationManager:
             labelnames=[LabelName.COLLECTOR.value],
         )
 
+        self._cardinality_limit_reached = Gauge(
+            CollectorMetricName.EXPORTER_CARDINALITY_LIMIT_REACHED.value,
+            "1 if cardinality shedding is active for this collector, 0 otherwise",
+            labelnames=[LabelName.COLLECTOR.value],
+        )
+
         logger.info(
             "Initialized metric expiration manager",
             ttl_multiplier=self._ttl_multiplier,
@@ -260,6 +266,59 @@ class MetricExpirationManager:
                 total_expired=expired_count,
                 by_collector=dict(expired_by_collector),
             )
+
+        # Enforce cardinality limits per collector
+        max_cardinality = self.settings.monitoring.max_cardinality_per_collector
+        collectors = set(self._metric_counts.keys())
+        for collector_name in collectors:
+            self.check_cardinality(collector_name, max_cardinality)
+
+    def check_cardinality(self, collector_name: str, max_cardinality: int) -> int:
+        """Check and enforce cardinality limit for a collector.
+
+        If the collector exceeds max_cardinality, drop the oldest (least-recently-updated)
+        label sets until the count is within the limit.
+
+        Parameters
+        ----------
+        collector_name : str
+            Name of the collector to check.
+        max_cardinality : int
+            Maximum number of tracked label sets allowed for this collector.
+
+        Returns
+        -------
+        int
+            Number of label sets shed (0 if within limits).
+
+        """
+        collector_metrics = [
+            (key, ts)
+            for key, (ts, _tier) in self._metric_timestamps.items()
+            if key[0] == collector_name
+        ]
+
+        if len(collector_metrics) <= max_cardinality:
+            self._cardinality_limit_reached.labels(collector=collector_name).set(0)
+            return 0
+
+        # Sort by timestamp ascending (oldest first) and shed excess
+        collector_metrics.sort(key=lambda x: x[1])
+        to_shed = len(collector_metrics) - max_cardinality
+
+        for key, _ts in collector_metrics[:to_shed]:
+            del self._metric_timestamps[key]
+            self._metric_counts[collector_name] -= 1
+
+        self._cardinality_limit_reached.labels(collector=collector_name).set(1)
+
+        logger.warning(
+            "Cardinality limit reached, shed label sets",
+            collector=collector_name,
+            shed_count=to_shed,
+            remaining=max_cardinality,
+        )
+        return to_shed
 
     def get_stats(self) -> dict[str, Any]:
         """Get statistics about tracked metrics.

@@ -24,7 +24,25 @@ class APISettings(BaseModel):
         5,
         ge=1,
         le=20,
-        description="Maximum concurrent API requests",
+        description="Maximum concurrent API requests (global fallback)",
+    )
+    concurrency_limit_fast: int = Field(
+        5,
+        ge=1,
+        le=20,
+        description="Maximum concurrent API requests for FAST tier collectors",
+    )
+    concurrency_limit_medium: int = Field(
+        3,
+        ge=1,
+        le=20,
+        description="Maximum concurrent API requests for MEDIUM tier collectors",
+    )
+    concurrency_limit_slow: int = Field(
+        2,
+        ge=1,
+        le=20,
+        description="Maximum concurrent API requests for SLOW tier collectors",
     )
     batch_size: int = Field(
         20,  # Increased from 10 for better throughput
@@ -203,6 +221,12 @@ class MonitoringSettings(BaseModel):
         ge=1.0,
         le=10.0,
         description="Multiplier for metric TTL (collection_interval * multiplier)",
+    )
+    max_cardinality_per_collector: int = Field(
+        10000,
+        ge=100,
+        le=1000000,
+        description="Maximum number of tracked label sets per collector before shedding oldest",
     )
 
     @field_validator("histogram_buckets")

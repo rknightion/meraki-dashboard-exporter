@@ -8,13 +8,14 @@ TTL-based cache invalidation with different TTLs per update tier.
 from __future__ import annotations
 
 import asyncio
+import random
 import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 import structlog
 from meraki.exceptions import APIError
-from prometheus_client import Counter
+from prometheus_client import Counter, Gauge
 
 from ..api.client import AsyncMerakiClient
 from ..core.constants import UpdateTier
@@ -110,6 +111,13 @@ class OrganizationInventory:
         self._cache_hits = 0
         self._cache_misses = 0
 
+        # Prometheus gauge for cache sizes
+        self._cache_size = Gauge(
+            "meraki_exporter_inventory_cache_size",
+            "Number of entries in inventory cache",
+            ["org_id", "cache_type"],
+        )
+
         logger.info(
             "Initialized organization inventory cache",
             ttl_seconds=self._ttl,
@@ -120,6 +128,28 @@ class OrganizationInventory:
             return
         await self.rate_limiter.acquire(org_id, endpoint)
 
+    def _is_expired(self, timestamp: float, ttl: float) -> bool:
+        """Check if a cached entry has expired with jitter.
+
+        Adds ±10% jitter to TTL to prevent thundering herd when multiple
+        cache entries expire at the same time.
+
+        Parameters
+        ----------
+        timestamp : float
+            The time the entry was cached (from time.time()).
+        ttl : float
+            Base TTL in seconds.
+
+        Returns
+        -------
+        bool
+            True if the entry should be considered expired.
+
+        """
+        jittered_ttl = ttl * (0.9 + random.random() * 0.2)
+        return (time.time() - timestamp) >= jittered_ttl
+
     @classmethod
     def _get_api_metrics(cls) -> Counter:
         """Get the API requests counter from AsyncMerakiClient.
@@ -129,9 +159,7 @@ class OrganizationInventory:
         """
         AsyncMerakiClient._ensure_metrics_initialized()
         if AsyncMerakiClient._api_requests_total is None:
-            raise RuntimeError(
-                "AsyncMerakiClient metrics not available after initialization."
-            )
+            raise RuntimeError("AsyncMerakiClient metrics not available after initialization.")
         return AsyncMerakiClient._api_requests_total
 
     async def _make_api_call(
@@ -202,7 +230,7 @@ class OrganizationInventory:
         if (
             not force_refresh
             and self._organizations is not None
-            and (current_time - self._org_timestamp) < self._ttl
+            and not self._is_expired(self._org_timestamp, self._ttl)
         ):
             self._cache_hits += 1
             logger.debug(
@@ -220,7 +248,7 @@ class OrganizationInventory:
             if (
                 not force_refresh
                 and self._organizations is not None
-                and (current_time - self._org_timestamp) < self._ttl
+                and not self._is_expired(self._org_timestamp, self._ttl)
             ):
                 return self._organizations
 
@@ -247,6 +275,9 @@ class OrganizationInventory:
             # Update cache
             self._organizations = organizations
             self._org_timestamp = current_time
+            self._cache_size.labels(org_id="global", cache_type="organizations").set(
+                len(organizations)
+            )
 
             logger.info(
                 "Updated organization cache",
@@ -282,7 +313,7 @@ class OrganizationInventory:
         if (
             not force_refresh
             and org_id in self._networks
-            and (current_time - cache_timestamp) < self._ttl
+            and not self._is_expired(cache_timestamp, self._ttl)
         ):
             self._cache_hits += 1
             logger.debug(
@@ -302,7 +333,7 @@ class OrganizationInventory:
             if (
                 not force_refresh
                 and org_id in self._networks
-                and (current_time - cache_timestamp) < self._ttl
+                and not self._is_expired(cache_timestamp, self._ttl)
             ):
                 return self._networks[org_id]
 
@@ -319,6 +350,7 @@ class OrganizationInventory:
             # Update cache
             self._networks[org_id] = networks
             self._network_timestamps[org_id] = current_time
+            self._cache_size.labels(org_id=org_id, cache_type="networks").set(len(networks))
 
             logger.info(
                 "Updated network cache",
@@ -358,7 +390,7 @@ class OrganizationInventory:
         if (
             not force_refresh
             and org_id in self._devices
-            and (current_time - cache_timestamp) < self._ttl
+            and not self._is_expired(cache_timestamp, self._ttl)
         ):
             self._cache_hits += 1
             logger.debug(
@@ -378,7 +410,7 @@ class OrganizationInventory:
                 if (
                     not force_refresh
                     and org_id in self._devices
-                    and (current_time - cache_timestamp) < self._ttl
+                    and not self._is_expired(cache_timestamp, self._ttl)
                 ):
                     devices = self._devices[org_id]
                 else:
@@ -395,6 +427,7 @@ class OrganizationInventory:
                     # Update cache
                     self._devices[org_id] = devices
                     self._device_timestamps[org_id] = current_time
+                    self._cache_size.labels(org_id=org_id, cache_type="devices").set(len(devices))
 
                     logger.info(
                         "Updated device cache",
@@ -438,7 +471,7 @@ class OrganizationInventory:
         if (
             not force_refresh
             and org_id in self._device_availabilities
-            and (current_time - cache_timestamp) < self.TTL_AVAILABILITY
+            and not self._is_expired(cache_timestamp, self.TTL_AVAILABILITY)
         ):
             self._cache_hits += 1
             logger.debug(
@@ -458,7 +491,7 @@ class OrganizationInventory:
             if (
                 not force_refresh
                 and org_id in self._device_availabilities
-                and (current_time - cache_timestamp) < self.TTL_AVAILABILITY
+                and not self._is_expired(cache_timestamp, self.TTL_AVAILABILITY)
             ):
                 return self._device_availabilities[org_id]
 
@@ -475,6 +508,9 @@ class OrganizationInventory:
             # Update cache
             self._device_availabilities[org_id] = availabilities
             self._availability_timestamps[org_id] = current_time
+            self._cache_size.labels(org_id=org_id, cache_type="availabilities").set(
+                len(availabilities)
+            )
 
             logger.info(
                 "Updated device availabilities cache",
@@ -581,6 +617,42 @@ class OrganizationInventory:
             ttl_seconds=self._ttl,
         )
 
+    async def warm_cache(self, org_ids: list[str] | None = None) -> None:
+        """Pre-populate cache for all or specified organizations.
+
+        Called before starting collectors so the first collection cycle
+        gets cache hits instead of misses. Fetches organizations, networks,
+        and devices for each target organization.
+
+        Parameters
+        ----------
+        org_ids : list[str] | None
+            If provided, only warm cache for these organization IDs.
+            If None, warm cache for all organizations.
+
+        """
+        try:
+            orgs = await self.get_organizations()
+        except Exception:
+            logger.exception("Failed to fetch organizations during cache warming")
+            return
+
+        target_orgs = [o for o in orgs if org_ids is None or o.get("id") in org_ids]
+
+        for org in target_orgs:
+            org_id = org.get("id", "")
+            if not org_id:
+                continue
+            try:
+                await self.get_networks(org_id)
+                await self.get_devices(org_id)
+                logger.info("Warmed cache for organization", org_id=org_id)
+            except Exception:
+                logger.exception(
+                    "Failed to warm cache for organization",
+                    org_id=org_id,
+                )
+
     async def get_networks_with_device_types(
         self,
         org_id: str,
@@ -678,7 +750,7 @@ class OrganizationInventory:
         if (
             not force_refresh
             and org_id in self._licenses_overview
-            and (current_time - cache_timestamp) < self.TTL_LICENSE
+            and not self._is_expired(cache_timestamp, self.TTL_LICENSE)
         ):
             self._cache_hits += 1
             logger.debug(
@@ -698,7 +770,7 @@ class OrganizationInventory:
             if (
                 not force_refresh
                 and org_id in self._licenses_overview
-                and (current_time - cache_timestamp) < self.TTL_LICENSE
+                and not self._is_expired(cache_timestamp, self.TTL_LICENSE)
             ):
                 return self._licenses_overview[org_id]
 
@@ -759,7 +831,7 @@ class OrganizationInventory:
         if (
             not force_refresh
             and org_id in self._login_security
-            and (current_time - cache_timestamp) < self.TTL_CONFIG
+            and not self._is_expired(cache_timestamp, self.TTL_CONFIG)
         ):
             self._cache_hits += 1
             logger.debug(
@@ -779,7 +851,7 @@ class OrganizationInventory:
             if (
                 not force_refresh
                 and org_id in self._login_security
-                and (current_time - cache_timestamp) < self.TTL_CONFIG
+                and not self._is_expired(cache_timestamp, self.TTL_CONFIG)
             ):
                 return self._login_security[org_id]
 

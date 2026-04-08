@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi import Request as FastAPIRequest
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 from pydantic import BaseModel
@@ -550,6 +550,22 @@ class ExporterApp:
         async def health() -> dict[str, str]:
             """Health check endpoint."""
             return {"status": "healthy"}
+
+        @app.get("/ready")
+        async def readiness() -> JSONResponse:
+            """Readiness probe - returns 200 when initial collection is complete.
+
+            Returns 503 until both FAST and MEDIUM collection tiers have completed
+            their first cycle. SLOW tier is excluded to avoid blocking Kubernetes
+            readiness probes for up to 900s.
+            """
+            exporter = app.state.exporter
+            manager = exporter.collector_manager
+            status = manager.get_readiness_status()
+
+            if status["ready"]:
+                return JSONResponse(status_code=200, content=status)
+            return JSONResponse(status_code=503, content=status)
 
         @app.get("/metrics", response_class=Response)
         async def metrics() -> Response:

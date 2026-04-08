@@ -65,6 +65,7 @@ class LabelName(StrEnum):
     BAND = "band"
     RADIO = "radio"
     TYPE = "type"  # Generic type label
+    FAILURE_STEP = "failure_step"  # Wireless connection failure step (assoc/auth/dhcp/dns)
 
     # Sensor specific
     METRIC = "metric"

@@ -291,6 +291,9 @@ class NetworkHealthMetricName(StrEnum):
     # Bluetooth metrics
     NETWORK_BLUETOOTH_CLIENTS_TOTAL = "meraki_network_bluetooth_clients_total"
 
+    # Per-SSID performance metrics (Phase 4.4)
+    MR_SSID_FAILED_CONNECTIONS_TOTAL = "meraki_mr_ssid_failed_connections_total"
+
 
 class ClientMetricName(StrEnum):
     """Client-level metric names."""
@@ -352,6 +355,12 @@ class CollectorMetricName(StrEnum):
     # Per-org health metrics
     EXPORTER_ORG_COLLECTION_STATUS = "meraki_exporter_org_collection_status"
 
+    # Cardinality control metrics
+    EXPORTER_CARDINALITY_LIMIT_REACHED = "meraki_exporter_cardinality_limit_reached"
+
+    # Collection utilization metrics
+    EXPORTER_COLLECTION_UTILIZATION_RATIO = "meraki_exporter_collection_utilization_ratio"
+
 
 class WebhookMetricName(StrEnum):
     """Webhook receiver metric names for monitoring webhook events (Phase 4.2)."""
@@ -366,3 +375,8 @@ class WebhookMetricName(StrEnum):
 
     # Validation metrics
     WEBHOOK_VALIDATION_FAILURES_TOTAL = "meraki_webhook_validation_failures_total"
+
+    # Metric sink metrics (Phase 4.5) - event-driven, not polled
+    WEBHOOK_EVENTS_TOTAL = "meraki_webhook_events_total"
+    WEBHOOK_LAST_EVENT_TIMESTAMP = "meraki_webhook_last_event_timestamp"
+    WEBHOOK_PROCESSING_ERRORS_TOTAL = "meraki_webhook_processing_errors_total"

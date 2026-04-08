@@ -81,8 +81,15 @@ class TestMXCollector:
         mx_collector: MXCollector,
         mock_parent: MagicMock,
     ) -> None:
-        """Test that the MX uplink info gauge metric is created on init."""
-        mock_parent._create_gauge.assert_called_once()
+        """Test that the MX uplink info gauge metric is created on init.
+
+        MXCollector now delegates gauge creation to DeviceCollector for its own
+        metrics and also instantiates sub-collectors (VPN, Firewall) that each
+        create their own gauges via the same delegation path, so _create_gauge
+        is called multiple times on initialisation.
+        """
+        # At least the uplink info gauge must be created
+        mock_parent._create_gauge.assert_called()
         assert mx_collector._mx_uplink_info is not None
 
     async def test_collect_uplink_statuses_basic(
