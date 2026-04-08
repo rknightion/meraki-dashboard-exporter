@@ -103,8 +103,33 @@ class DeviceCollector(MetricCollector):
         if value is not None and (not is_total_metric or value > 0):
             self._packet_metrics_cache[cache_key] = value
 
+        # Record this key as active in the current collection cycle
+        self._active_cache_keys.add(cache_key)
+
         # Use regular metric setting
         self._set_metric_value(metric_name, labels, value)
+
+    def _evict_stale_cache_entries(self, active_keys: set[str]) -> None:
+        """Remove packet metric cache entries that were not updated this cycle.
+
+        Parameters
+        ----------
+        active_keys : set[str]
+            Cache keys that were written during the current collection cycle.
+            Any key in ``_packet_metrics_cache`` that is absent from this set
+            belongs to a device (or label combination) no longer present and
+            should be evicted to prevent unbounded memory growth.
+
+        """
+        stale_keys = set(self._packet_metrics_cache) - active_keys
+        for key in stale_keys:
+            del self._packet_metrics_cache[key]
+        if stale_keys:
+            logger.debug(
+                "Evicted stale packet metric cache entries",
+                evicted_count=len(stale_keys),
+                remaining_count=len(self._packet_metrics_cache),
+            )
 
     def __init__(
         self,
@@ -139,6 +164,8 @@ class DeviceCollector(MetricCollector):
 
         # Cache for retaining last known packet metric values
         self._packet_metrics_cache: dict[str, float] = {}
+        # Tracks which cache keys were touched during the current collection cycle
+        self._active_cache_keys: set[str] = set()
 
         # Initialize sub-collector metrics (only for collectors without their own __init__)
         self.ms_collector._initialize_metrics()
@@ -311,6 +338,9 @@ class DeviceCollector(MetricCollector):
         organizations_processed = 0
         api_calls_made = 0
 
+        # Reset active-key tracker for this collection cycle
+        self._active_cache_keys = set()
+
         try:
             # Get organizations with error handling
             organizations = await self._fetch_organizations()
@@ -339,6 +369,13 @@ class DeviceCollector(MetricCollector):
 
             # Approximate API calls (actual count may vary)
             api_calls_made += organizations_processed * 10
+
+            # Evict packet metric cache entries for devices no longer seen this cycle
+            self._evict_stale_cache_entries(self._active_cache_keys)
+            # Evict MS collector timestamp caches for serials no longer seen this cycle
+            self.ms_collector._evict_stale_serials(self.ms_collector._active_serials)
+            # Reset MS active serials for next cycle
+            self.ms_collector._active_serials = set()
 
             # Log collection summary
             log_metric_collection_summary(
@@ -608,25 +645,19 @@ class DeviceCollector(MetricCollector):
             # Collect memory metrics for all devices
             try:
                 # Use base collector's memory collection
-                await self.ms_collector.collect_memory_metrics(
-                    org_id, org_name, device_lookup
-                )
+                await self.ms_collector.collect_memory_metrics(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect memory metrics")
 
             # Collect MR-specific metrics
             if any(d for d in devices if d.get("model", "").startswith(DeviceType.MR)):
                 # Use MR collector for all MR-specific metrics
-                await self._collect_mr_specific_metrics(
-                    org_id, org_name, devices, device_lookup
-                )
+                await self._collect_mr_specific_metrics(org_id, org_name, devices, device_lookup)
 
             # Collect MS-specific metrics
             if any(d for d in devices if d.get("model", "").startswith(DeviceType.MS)):
                 # Use MS collector for all MS-specific metrics
-                await self._collect_ms_specific_metrics(
-                    org_id, org_name, devices, device_lookup
-                )
+                await self._collect_ms_specific_metrics(org_id, org_name, devices, device_lookup)
 
             # Collect MX-specific metrics
             if any(
@@ -635,9 +666,7 @@ class DeviceCollector(MetricCollector):
                 if d.get("model", "").startswith(DeviceType.MX)
                 or d.get("productType") == "appliance"
             ):
-                await self.mx_collector.collect_uplink_statuses(
-                    org_id, org_name, device_lookup
-                )
+                await self.mx_collector.collect_uplink_statuses(org_id, org_name, device_lookup)
 
         except Exception as e:
             logger.exception(
@@ -711,9 +740,7 @@ class DeviceCollector(MetricCollector):
 
             # Collect wireless client counts (org-wide - replaces per-device getDeviceWirelessStatus)
             try:
-                await self.mr_collector.collect_wireless_clients(
-                    org_id, org_name, device_lookup
-                )
+                await self.mr_collector.collect_wireless_clients(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect wireless client counts")
 
@@ -728,9 +755,7 @@ class DeviceCollector(MetricCollector):
 
             # Collect MR ethernet status
             try:
-                await self.mr_collector.collect_ethernet_status(
-                    org_id, org_name, device_lookup
-                )
+                await self.mr_collector.collect_ethernet_status(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect MR ethernet status")
 
@@ -789,9 +814,7 @@ class DeviceCollector(MetricCollector):
         try:
             # Collect STP metrics
             try:
-                await self.ms_collector.collect_stp_priorities(
-                    org_id, org_name, device_lookup
-                )
+                await self.ms_collector.collect_stp_priorities(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect STP priorities")
         except Exception:
@@ -868,13 +891,20 @@ class DeviceCollector(MetricCollector):
                     device, org_id=org_id, org_name=org_name, status=stale_status.value
                 )
                 try:
-                    self._device_status_info.remove(
-                        *[stale_labels[ln.value] for ln in [
-                            LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.NETWORK_ID,
-                            LabelName.NETWORK_NAME, LabelName.SERIAL, LabelName.NAME,
-                            LabelName.MODEL, LabelName.DEVICE_TYPE, LabelName.STATUS,
-                        ]]
-                    )
+                    self._device_status_info.remove(*[
+                        stale_labels[ln.value]
+                        for ln in [
+                            LabelName.ORG_ID,
+                            LabelName.ORG_NAME,
+                            LabelName.NETWORK_ID,
+                            LabelName.NETWORK_NAME,
+                            LabelName.SERIAL,
+                            LabelName.NAME,
+                            LabelName.MODEL,
+                            LabelName.DEVICE_TYPE,
+                            LabelName.STATUS,
+                        ]
+                    ])
                 except KeyError:
                     pass  # Label combination doesn't exist
 
