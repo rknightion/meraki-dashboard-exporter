@@ -132,7 +132,7 @@ class MSCollector(BaseDeviceCollector):
 
         # POE metrics
         self._switch_poe_port_power = self.parent._create_gauge(
-            MSMetricName.MS_POE_PORT_POWER_WATTS,
+            MSMetricName.MS_POE_PORT_POWER_WATTHOURS,
             "Per-port POE power consumption in watt-hours (Wh) over the last 1 hour",
             labelnames=[
                 LabelName.ORG_ID,
@@ -149,7 +149,7 @@ class MSCollector(BaseDeviceCollector):
         )
 
         self._switch_poe_total_power = self.parent._create_gauge(
-            MSMetricName.MS_POE_TOTAL_POWER_WATTS,
+            MSMetricName.MS_POE_TOTAL_POWER_WATTHOURS,
             "Total POE power consumption for switch in watt-hours (Wh)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -179,7 +179,7 @@ class MSCollector(BaseDeviceCollector):
         )
 
         self._switch_poe_network_total = self.parent._create_gauge(
-            MSMetricName.MS_POE_NETWORK_TOTAL_WATTS,
+            MSMetricName.MS_POE_NETWORK_TOTAL_WATTHOURS,
             "Total POE power consumption for all switches in network in watt-hours (Wh)",
             labelnames=[
                 LabelName.ORG_ID,

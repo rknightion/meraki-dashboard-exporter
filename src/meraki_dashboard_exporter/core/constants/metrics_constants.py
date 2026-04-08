@@ -96,10 +96,10 @@ class MSMetricName(StrEnum):
     MS_PORT_STATUS = "meraki_ms_port_status"
     MS_PORT_TRAFFIC_BYTES = "meraki_ms_port_traffic_bytes"
     MS_POWER_USAGE_WATTS = "meraki_ms_power_usage_watts"
-    MS_POE_PORT_POWER_WATTS = "meraki_ms_poe_port_power_watthours"  # Actually Wh not W
-    MS_POE_TOTAL_POWER_WATTS = "meraki_ms_poe_total_power_watthours"  # Actually Wh not W
+    MS_POE_PORT_POWER_WATTHOURS = "meraki_ms_poe_port_power_watthours"
+    MS_POE_TOTAL_POWER_WATTHOURS = "meraki_ms_poe_total_power_watthours"
     MS_POE_BUDGET_WATTS = "meraki_ms_poe_budget_watts"
-    MS_POE_NETWORK_TOTAL_WATTS = "meraki_ms_poe_network_total_watthours"  # Actually Wh not W
+    MS_POE_NETWORK_TOTAL_WATTHOURS = "meraki_ms_poe_network_total_watthours"
 
     # Port overview metrics
     MS_PORTS_ACTIVE_TOTAL = "meraki_ms_ports_active_total"
