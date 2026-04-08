@@ -25,145 +25,62 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - `tests/` - Test suite and patterns - See `tests/CLAUDE.md`
 - `pyproject.toml` - Project dependencies and configuration
 - `dashboards/` - Grafana dashboard JSON exports
-- `docs/` - Documentation including ADRs and metrics reference
+- `docs/` - MkDocs documentation site
+- `scripts/` - Code generation and documentation scripts
 </file_map>
 
 <paved_path>
 ## HIGH-LEVEL ARCHITECTURE
 
 ### Collector Organization
-- **Core Infrastructure**: Logging, config, metrics, error handling → `src/meraki_dashboard_exporter/core/CLAUDE.md`
-- **Collector Pattern**: Auto-registration, update tiers, base classes → `src/meraki_dashboard_exporter/collectors/CLAUDE.md`
-- **Device-Specific**: MR, MS, MX, MT, MG, MV collectors → `src/meraki_dashboard_exporter/collectors/devices/CLAUDE.md`
-- **API Integration**: Async wrapper for Meraki SDK → `src/meraki_dashboard_exporter/api/CLAUDE.md`
-- **Testing**: Factories, mocks, assertions → `tests/CLAUDE.md`
+- **Core Infrastructure**: Logging, config, metrics, error handling -> `src/meraki_dashboard_exporter/core/CLAUDE.md`
+- **Collector Pattern**: Auto-registration, update tiers, base classes -> `src/meraki_dashboard_exporter/collectors/CLAUDE.md`
+- **Device-Specific**: MR, MS, MX, MT, MG, MV collectors -> `src/meraki_dashboard_exporter/collectors/devices/CLAUDE.md`
+- **API Integration**: Async wrapper for Meraki SDK -> `src/meraki_dashboard_exporter/api/CLAUDE.md`
+- **Testing**: Factories, mocks, assertions -> `tests/CLAUDE.md`
 
 ### Key Principles
-- **Enum-based naming**: Use MetricName and LabelName enums for consistency
+- **Domain-specific metric enums**: Use `OrgMetricName`, `DeviceMetricName`, `MSMetricName`, `MRMetricName`, etc. from `core/constants/metrics_constants.py`
+- **Label enums**: Use `LabelName` enum from `core/metrics.py`
 - **Domain models**: Pydantic validation for all API responses
-- **Error handling**: Decorators for consistent error management
+- **Error handling**: Decorators from `core/error_handling.py`
 - **Update tiers**: FAST (60s), MEDIUM (300s), SLOW (900s) based on volatility
-- **Parallel collection**: Use ManagedTaskGroup for bounded concurrency
-- **Inventory caching**: Leverage shared inventory service to reduce API calls
+- **Parallel collection**: Use `ManagedTaskGroup` for bounded concurrency
+- **Inventory caching**: Leverage shared `OrganizationInventory` service to reduce API calls
 - **Metric lifecycle**: Track and expire metrics for offline/removed devices
-</paved_path>
-
-<workflow>
-## PROJECT-WIDE WORKFLOW
-Navigate to specific subdirectories for detailed implementation patterns:
-
-### Development Areas
-- **Core Changes**: Infrastructure, logging, config → `src/meraki_dashboard_exporter/core/CLAUDE.md`
-- **New Collectors**: Device, organization, network health → `src/meraki_dashboard_exporter/collectors/CLAUDE.md`
-- **API Updates**: Client wrapper changes → `src/meraki_dashboard_exporter/api/CLAUDE.md`
-- **Testing**: New tests, factories, mocks → `tests/CLAUDE.md`
 
 ### Cross-Cutting Concerns
-- **Metrics**: Always use enums from `core/constants/metrics_constants.py`
+- **Metrics**: Always use domain-specific enums from `core/constants/metrics_constants.py`
 - **Labels**: Always use `LabelName` enum from `core/metrics.py`
 - **Domain Models**: Always validate with Pydantic models
 - **Error Handling**: Always use decorators from `core/error_handling.py`
-
-## Modern Patterns (2024-2025 Refactor)
-
-### Parallel Collection Pattern
-Use `ManagedTaskGroup` for bounded concurrent operations:
-```python
-from core.async_utils import ManagedTaskGroup
-
-async def _collect_impl(self) -> None:
-    organizations = await self._get_organizations()
-
-    # Bounded parallelism with automatic cleanup
-    async with ManagedTaskGroup(
-        max_concurrency=self.settings.api.concurrency_limit
-    ) as task_group:
-        for org in organizations:
-            task_group.create_task(self._process_organization(org.id))
-```
-
-### Inventory Service Pattern
-Leverage shared caching to reduce API calls:
-```python
-async def _collect_impl(self) -> None:
-    # Get organizations from inventory (cached)
-    organizations = await self.inventory.get_organizations()
-
-    for org in organizations:
-        # Get devices from inventory (cached, 5-30 min TTL)
-        devices = await self.inventory.get_devices(org.id)
-
-        # Get networks from inventory (cached)
-        networks = await self.inventory.get_networks(org.id)
-```
-
-### Metric Expiration Pattern
-Track metrics for automatic cleanup:
-```python
-def _set_metric(self, metric: Gauge, value: float, labels: dict[str, str]) -> None:
-    """Set metric value and track for expiration."""
-    # Set the metric value
-    metric.labels(**labels).set(value)
-
-    # Track for automatic expiration (handled by parent)
-    self.parent._set_metric(metric.name, labels, value)
-```
-
-### Webhook Handler Pattern
-Process real-time events with validation:
-```python
-from core.webhook_handler import WebhookHandler
-
-# Initialize webhook handler
-webhook_handler = WebhookHandler(settings)
-
-# Process webhook event
-payload = webhook_handler.process_webhook(payload_data)
-if payload:
-    # Valid event, metrics automatically tracked
-    logger.info("Webhook processed", org_id=payload.organization_id)
-```
-
-### Enhanced Error Metrics Pattern
-Implement comprehensive port error tracking:
-```python
-# Define both count and rate metrics for errors
-self._port_errors = self.parent._create_gauge(
-    MSMetricName.MS_PORT_PACKETS_CRCERRORS,
-    "CRC align error packets (5-minute window)",
-    labelnames=[...],
-)
-
-self._port_errors_rate = self.parent._create_gauge(
-    MSMetricName.MS_PORT_PACKETS_RATE_CRCERRORS,
-    "CRC error rate (packets per second)",
-    labelnames=[...],
-)
-```
-</workflow>
+- **Configuration**: Access via `Settings` class (Pydantic BaseSettings) from `core/config.py`
+</paved_path>
 
 <bash_commands>
 ## COMMON COMMANDS
 - `uv run python -m meraki_dashboard_exporter` - Start the exporter
 - `uv run ruff check --fix .` - Lint and auto-fix code
+- `uv run ruff format .` - Format code
 - `uv run mypy .` - Type checking
 - `uv run pytest` - Run tests
 - `uv run pytest -v -k test_name` - Run specific test
-- `uv run python src/meraki_dashboard_exporter/tools/generate_metrics_docs.py` - Generate metrics docs
 - `uv add package_name` - Add new dependency
-- `docker-compose up` - Start with Docker
-- `make docs-serve` - Serve documentation locally
+- `make check` - Run all checks (lint, typecheck, test)
+- `make docgen` - Generate all documentation
+- `make docker-compose-up` - Start with Docker
+- `make run-dev` - Run with auto-reload for development
 </bash_commands>
 
 <code_style>
 ## PROJECT-WIDE STYLE GUIDELINES
-- **Formatting**: Black with 88-char line length
+- **Formatting**: Ruff with 100-char line length (target: py314)
 - **Type hints**: Use `from __future__ import annotations` and proper typing
-- **Imports**: Group stdlib, third-party, local with proper organization
+- **Imports**: Relative imports within package (e.g., `from ..core.metrics import LabelName`)
 - **Docstrings**: NumPy-style with type hints
-- **Constants**: Use Literal & Enum/StrEnum appropriately
+- **Constants**: Use StrEnum for metric/label names
 - **Early returns**: Reduce nesting where possible
-- **Async**: Use `asyncio.to_thread()` for Meraki SDK calls
+- **Async**: Use `asyncio.to_thread()` for Meraki SDK calls (SDK is synchronous)
 </code_style>
 
 <fatal_implications>
@@ -180,12 +97,3 @@ self._port_errors_rate = self.parent._create_gauge(
 - **NEVER bypass inventory service** - use cached data when available
 - **NEVER forget metric tracking** - use `parent._set_metric()` for automatic expiration
 </fatal_implications>
-
-<hatch>
-## ALTERNATIVE APPROACHES
-When the paved path doesn't fit, see subdirectory `CLAUDE.md` files for:
-- **Core Alternatives**: Custom metrics, error recovery → `src/meraki_dashboard_exporter/core/CLAUDE.md`
-- **Collector Variations**: Alternative registration, custom patterns → `src/meraki_dashboard_exporter/collectors/CLAUDE.md`
-- **API Workarounds**: Fallback strategies, custom endpoints → `src/meraki_dashboard_exporter/api/CLAUDE.md`
-- **Testing Strategies**: Custom mocks, specialized assertions → `tests/CLAUDE.md`
-</hatch>

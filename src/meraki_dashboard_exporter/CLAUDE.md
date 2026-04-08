@@ -1,26 +1,27 @@
 <system_context>
-Meraki Dashboard Exporter - Main source package containing core infrastructure, collectors, API client, and application entry points. This is the heart of the Prometheus exporter system.
+Meraki Dashboard Exporter - Main source package containing core infrastructure, collectors, API client, and application entry points.
 </system_context>
 
 <critical_notes>
-- **Entry point**: Use `app.py` for FastAPI application, `__main__.py` for CLI
-- **Import structure**: Always import from relative paths within package
+- **Entry point**: `app.py` for FastAPI application, `__main__.py` for CLI
+- **Import structure**: Always use relative imports within package
 - **Type safety**: Package includes `py.typed` marker for mypy compatibility
 </critical_notes>
 
 <file_map>
 ## PACKAGE STRUCTURE
-- `core/` - Core infrastructure (logging, config, models, metrics) - See `core/CLAUDE.md`
+- `core/` - Core infrastructure (logging, config, models, metrics, error handling, OTel) - See `core/CLAUDE.md`
 - `collectors/` - All metric collectors and collection logic - See `collectors/CLAUDE.md`
 - `api/` - Meraki API client wrapper - See `api/CLAUDE.md`
-- `services/` - Supporting services (DNS, client store)
-- `models/` - Shared data models (currently minimal)
-- `templates/` - HTML templates for web UI
-- `tools/` - Code generation and documentation tools
-- `utils/` - General utilities
+- `services/` - Supporting services:
+  - `inventory.py` - Shared organization/device/network cache with TTL-based invalidation
+  - `client_store.py` - Client data storage
+  - `dns_resolver.py` - DNS resolution service
+- `models/` - Shared data models (`webhook.py`)
+- `templates/` - HTML templates for web UI (index, cardinality, clients pages)
 - `app.py` - FastAPI application with web UI and metrics endpoint
 - `__main__.py` - CLI entry point for running the exporter
-- `__version__.py` - Version information
+- `__version__.py` - Version information (reads from pyproject.toml)
 </file_map>
 
 <paved_path>
@@ -34,17 +35,3 @@ from meraki_dashboard_exporter.app import create_app
 app = create_app()
 ```
 </paved_path>
-
-<example>
-Adding a new service:
-```python
-# src/meraki_dashboard_exporter/services/my_service.py
-from ..core.logging import get_logger
-
-logger = get_logger(__name__)
-
-class MyService:
-    def __init__(self):
-        logger.info("Service initialized")
-```
-</example>
