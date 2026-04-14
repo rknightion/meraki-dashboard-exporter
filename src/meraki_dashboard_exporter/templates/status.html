@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exporter Status</title>
+    <style>
+        :root {
+            --bg-color: #f5f5f5;
+            --card-bg: #ffffff;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --success-color: #4caf50;
+            --warning-color: #ff9800;
+            --error-color: #f44336;
+            --info-color: #2196f3;
+            --border-color: #e0e0e0;
+            --link-color: #1976d2;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; }
+
+        .header {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 24px 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 { font-size: 1.8rem; }
+        .header-meta { text-align: right; color: var(--text-secondary); font-size: 0.9rem; }
+
+        .readiness-banner {
+            border-radius: 8px;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        .readiness-ready { background-color: #e8f5e9; color: #2e7d32; }
+        .readiness-not-ready { background-color: #fff3e0; color: #e65100; }
+        .tier-pill {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .tier-complete { background-color: #c8e6c9; color: #2e7d32; }
+        .tier-pending { background-color: #ffe0b2; color: #e65100; }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .card h2 { font-size: 1.2rem; margin-bottom: 12px; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th { text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--border-color); color: var(--text-secondary); font-weight: 600; }
+        td { padding: 8px 10px; border-bottom: 1px solid var(--border-color); }
+
+        .row-ok { }
+        .row-warning { background-color: #fff8e1; }
+        .row-stale { background-color: #ffebee; }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .badge-ok { background-color: #e8f5e9; color: #2e7d32; }
+        .badge-warning { background-color: #fff3e0; color: #e65100; }
+        .badge-stale { background-color: #ffebee; color: #c62828; }
+        .badge-running { background-color: #e3f2fd; color: #1565c0; }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+        .stat-item { padding: 8px 0; }
+        .stat-value { font-size: 1.4rem; font-weight: 700; }
+        .stat-label { font-size: 0.85rem; color: var(--text-secondary); }
+
+        .nav-link {
+            color: var(--link-color);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        .nav-link:hover { text-decoration: underline; }
+
+        .collector-breakdown { margin-top: 8px; }
+        .collector-breakdown dt { font-weight: 600; display: inline; }
+        .collector-breakdown dd { display: inline; margin-left: 4px; margin-right: 16px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>Exporter Status</h1>
+                <a href="/" class="nav-link">Back to home</a>
+            </div>
+            <div class="header-meta">
+                <div>v{{ system.version }}</div>
+                <div>Uptime: {{ system.uptime }}</div>
+            </div>
+        </div>
+
+        <div class="readiness-banner {{ 'readiness-ready' if system.readiness.ready else 'readiness-not-ready' }}">
+            <span>{{ 'Ready' if system.readiness.ready else 'Not Ready' }}</span>
+            <span class="tier-pill {{ 'tier-complete' if system.readiness.collectors.fast else 'tier-pending' }}">FAST {{ 'done' if system.readiness.collectors.fast else 'pending' }}</span>
+            <span class="tier-pill {{ 'tier-complete' if system.readiness.collectors.medium else 'tier-pending' }}">MEDIUM {{ 'done' if system.readiness.collectors.medium else 'pending' }}</span>
+            <span class="tier-pill {{ 'tier-complete' if system.readiness.collectors.slow else 'tier-pending' }}">SLOW {{ 'done' if system.readiness.collectors.slow else 'pending' }}</span>
+        </div>
+
+        <div class="card">
+            <h2>Collectors ({{ collectors | length }})</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Tier</th>
+                        <th>Runs</th>
+                        <th>Success Rate</th>
+                        <th>Failure Streak</th>
+                        <th>Last Success</th>
+                        <th>Staleness</th>
+                        <th>Running</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in collectors %}
+                    <tr class="{{ 'row-stale' if c.staleness == 'stale' or c.failure_streak >= 3 else 'row-warning' if c.staleness == 'warning' else 'row-ok' }}">
+                        <td>{{ c.name }}</td>
+                        <td>{{ c.tier }}</td>
+                        <td>{{ c.total_runs }}</td>
+                        <td>{{ "%.1f"|format(c.success_rate) }}%</td>
+                        <td>{{ c.failure_streak }}</td>
+                        <td>{{ c.last_success_ago }}</td>
+                        <td><span class="badge badge-{{ c.staleness }}">{{ c.staleness }}</span></td>
+                        <td>{% if c.is_running %}<span class="badge badge-running">yes</span>{% else %}no{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>API Health</h2>
+            <div class="stat-grid">
+                <div class="stat-item">
+                    <div class="stat-value">{{ api_health.total_calls }}</div>
+                    <div class="stat-label">Total API Calls</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ api_health.throttle_events }}</div>
+                    <div class="stat-label">Throttle Events</div>
+                </div>
+            </div>
+            {% if api_health.per_org_rate_limits %}
+            <table style="margin-top: 12px;">
+                <thead><tr><th>Org ID</th><th>Tokens Remaining</th></tr></thead>
+                <tbody>
+                    {% for entry in api_health.per_org_rate_limits %}
+                    <tr><td>{{ entry.org_id }}</td><td>{{ entry.tokens_remaining }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Data Freshness</h2>
+            <div class="stat-grid">
+                <div class="stat-item">
+                    <div class="stat-value">{{ data_freshness.total_tracked_metrics }}</div>
+                    <div class="stat-label">Tracked Metrics</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ data_freshness.ttl_multiplier }}x</div>
+                    <div class="stat-label">TTL Multiplier</div>
+                </div>
+            </div>
+            {% if data_freshness.by_collector %}
+            <dl class="collector-breakdown">
+                {% for name, count in data_freshness.by_collector.items() %}
+                <dt>{{ name }}:</dt><dd>{{ count }}</dd>
+                {% endfor %}
+            </dl>
+            {% endif %}
+        </div>
+
+        {% if system.org_health %}
+        <div class="card">
+            <h2>Organization Health</h2>
+            <table>
+                <thead><tr><th>Organization</th><th>Failures</th><th>In Backoff</th><th>Backoff Remaining</th></tr></thead>
+                <tbody>
+                    {% for org in system.org_health %}
+                    <tr class="{{ 'row-stale' if org.in_backoff else '' }}">
+                        <td>{{ org.org_name }} ({{ org.org_id }})</td>
+                        <td>{{ org.consecutive_failures }}</td>
+                        <td>{% if org.in_backoff %}<span class="badge badge-stale">yes</span>{% else %}no{% endif %}</td>
+                        <td>{% if org.in_backoff %}{{ org.backoff_remaining_seconds }}s{% else %}-{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
