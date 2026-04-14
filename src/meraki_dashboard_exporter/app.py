@@ -31,6 +31,7 @@ from .core.metric_expiration import MetricExpirationManager
 from .core.otel_logging import OTELLoggingConfig
 from .core.otel_tracing import TracingConfig
 from .core.webhook_handler import WebhookHandler
+from .services.status import StatusService
 
 if TYPE_CHECKING:
     pass
@@ -78,6 +79,16 @@ class ExporterApp:
         self._tier_tasks: dict[str, asyncio.Task[Any]] = {}
         self._start_time = time.time()
         self._discovery_summary: dict[str, Any] | None = None
+
+        # Initialize status service for /status endpoint
+        self.status_service = StatusService(
+            collector_manager=self.collector_manager,
+            expiration_manager=self.expiration_manager,
+            client=self.client,
+            settings=self.settings,
+            start_time=self._start_time,
+        )
+
         self._startup_summary_logged = False
         self._first_collection_complete = False
 
@@ -641,6 +652,21 @@ class ExporterApp:
             }
 
             return app.state.templates.TemplateResponse(request, "clients.html", context=context)  # type: ignore[no-any-return]
+
+        @app.get("/status", response_class=HTMLResponse)
+        async def status(request: Request, format: str | None = None) -> Response:  # noqa: A002
+            """Exporter self-health status dashboard."""
+            exporter = app.state.exporter
+            snapshot = exporter.status_service.get_snapshot()
+
+            if format == "json":
+                return JSONResponse(content=snapshot.to_dict())
+
+            return app.state.templates.TemplateResponse(  # type: ignore[no-any-return]
+                request,
+                "status.html",
+                context=snapshot.to_dict(),
+            )
 
         @app.post("/api/clients/clear-dns-cache")
         async def clear_dns_cache() -> dict[str, str]:
