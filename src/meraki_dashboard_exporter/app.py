@@ -39,6 +39,12 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+class CollectorTriggerRequest(BaseModel):
+    """Request model for triggering a collector on-demand."""
+
+    collector: str
+
+
 class ExporterApp:
     """Main application class for the Meraki Dashboard Exporter.
 
@@ -691,9 +697,6 @@ class ExporterApp:
             # Clear the cache
             dns_resolver.clear_cache()
             return {"status": "success", "message": "DNS cache cleared"}
-
-        class CollectorTriggerRequest(BaseModel):
-            collector: str
 
         @app.post("/api/collectors/trigger")
         async def trigger_collector(
