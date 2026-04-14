@@ -842,12 +842,11 @@ def setup_cardinality_endpoint(app: FastAPI, monitor: CardinalityMonitor) -> Non
 
         # Prepare context for template
         context = {
-            "request": request,
             "report": report,
             "recommendations": recommendations,
         }
 
-        return templates.TemplateResponse("cardinality.html", context)  # type: ignore[no-any-return]
+        return templates.TemplateResponse(request, "cardinality.html", context=context)  # type: ignore[no-any-return]
 
     @app.get("/cardinality/all-metrics", response_class=HTMLResponse)
     async def get_all_metrics(request: Request) -> HTMLResponse:
@@ -860,12 +859,11 @@ def setup_cardinality_endpoint(app: FastAPI, monitor: CardinalityMonitor) -> Non
 
         # Prepare context for template
         context = {
-            "request": request,
             "metrics": all_metrics,
             "total_metrics": len(all_metrics),
         }
 
-        return templates.TemplateResponse("cardinality_all_metrics.html", context)  # type: ignore[no-any-return]
+        return templates.TemplateResponse(request, "cardinality_all_metrics.html", context=context)  # type: ignore[no-any-return]
 
     @app.get("/cardinality/all-labels", response_class=HTMLResponse)
     async def get_all_labels(request: Request) -> HTMLResponse:
@@ -878,12 +876,11 @@ def setup_cardinality_endpoint(app: FastAPI, monitor: CardinalityMonitor) -> Non
 
         # Prepare context for template
         context = {
-            "request": request,
             "labels": all_labels,
             "total_labels": len(all_labels),
         }
 
-        return templates.TemplateResponse("cardinality_all_labels.html", context)  # type: ignore[no-any-return]
+        return templates.TemplateResponse(request, "cardinality_all_labels.html", context=context)  # type: ignore[no-any-return]
 
     @app.get("/cardinality/export/json")
     async def export_cardinality_json() -> dict[str, Any]:

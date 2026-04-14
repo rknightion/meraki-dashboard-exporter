@@ -17,6 +17,7 @@ Network health collectors for Meraki Dashboard Exporter - Handles network-level 
 - `connection_stats.py` - Network connection quality and performance metrics
 - `data_rates.py` - Network throughput and data transfer metrics
 - `rf_health.py` - Radio frequency health and interference metrics
+- `ssid_performance.py` - `SSIDPerformanceCollector` - Per-SSID failed connection counts by failure step (assoc, auth, dhcp, dns)
 </file_map>
 
 <paved_path>

@@ -24,10 +24,14 @@ Meraki Dashboard Exporter Collectors - All metric collection logic organized by 
 - `organization.py` - `OrganizationCollector` coordinator (MEDIUM tier)
 - `config.py` - `ConfigCollector` for configuration/security settings (SLOW tier)
 
+### Shared Infrastructure
+- `subcollector_mixin.py` - `SubCollectorMixin` providing common sub-collector delegation patterns (_set_metric_value, _track_api_call, update_api)
+
 ### Standalone Collectors
 - `alerts.py` - Alert/event collection
 - `clients.py` - Client device tracking
 - `mt_sensor.py` - FAST-tier standalone sensor data collection
+- `webhook_metrics.py` - Event-driven webhook metric sink (NOT tier-registered; updated via inbound HTTP pushes)
 </file_map>
 
 <paved_path>

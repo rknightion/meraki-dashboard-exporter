@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.async_utils import ManagedTaskGroup
 from ...core.constants.metrics_constants import MSMetricName
 from ...core.error_handling import ErrorCategory, with_error_handling
 from ...core.logging import get_logger
@@ -177,9 +178,16 @@ class MSStackCollector(SubCollectorMixin):
             switch_network_count=len(switch_networks),
         )
 
-        for network in switch_networks:
-            network_id = network.get("id", "")
-            network_name = network.get("name", network_id)
-            if not network_id:
-                continue
-            await self.collect_for_network(org_id, org_name, network_id, network_name)
+        async with ManagedTaskGroup(
+            name="ms_stack_networks",
+            max_concurrency=self.settings.api.concurrency_limit,
+        ) as group:
+            for network in switch_networks:
+                network_id = network.get("id", "")
+                network_name = network.get("name", network_id)
+                if not network_id:
+                    continue
+                await group.create_task(
+                    self.collect_for_network(org_id, org_name, network_id, network_name),
+                    name=f"stack_{network_id}",
+                )

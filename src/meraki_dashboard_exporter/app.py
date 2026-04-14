@@ -528,7 +528,6 @@ class ExporterApp:
             scheduling = exporter.collector_manager.get_scheduling_diagnostics()
 
             context = {
-                "request": request,
                 "version": __version__,
                 "uptime": exporter._format_uptime(),
                 "collector_count": len(collectors),
@@ -544,7 +543,7 @@ class ExporterApp:
                 "scheduling": scheduling,
             }
 
-            return app.state.templates.TemplateResponse("index.html", context)  # type: ignore[no-any-return]
+            return app.state.templates.TemplateResponse(request, "index.html", context=context)  # type: ignore[no-any-return]
 
         @app.get("/health")
         async def health() -> dict[str, str]:
@@ -630,7 +629,6 @@ class ExporterApp:
             dns_cache_stats = dns_resolver.get_cache_stats() if dns_resolver else {}
 
             context = {
-                "request": request,
                 "version": __version__,
                 "clients_by_network": clients_by_network,
                 "total_clients": stats["total_clients"],
@@ -642,7 +640,7 @@ class ExporterApp:
                 "dns_cache_stats": dns_cache_stats,
             }
 
-            return app.state.templates.TemplateResponse("clients.html", context)  # type: ignore[no-any-return]
+            return app.state.templates.TemplateResponse(request, "clients.html", context=context)  # type: ignore[no-any-return]
 
         @app.post("/api/clients/clear-dns-cache")
         async def clear_dns_cache() -> dict[str, str]:
