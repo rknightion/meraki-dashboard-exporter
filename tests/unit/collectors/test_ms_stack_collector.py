@@ -41,6 +41,7 @@ class TestMSStackCollector:
         parent = MagicMock()
         parent.api = mock_api
         parent.settings = MagicMock()
+        parent.settings.api.concurrency_limit = 5
         # Ensure rate_limiter is None so @log_api_call does not try to await it
         parent.rate_limiter = None
 

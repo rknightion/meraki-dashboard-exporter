@@ -49,12 +49,6 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **Inventory caching**: Leverage shared `OrganizationInventory` service to reduce API calls
 - **Metric lifecycle**: Track and expire metrics for offline/removed devices
 
-### Cross-Cutting Concerns
-- **Metrics**: Always use domain-specific enums from `core/constants/metrics_constants.py`
-- **Labels**: Always use `LabelName` enum from `core/metrics.py`
-- **Domain Models**: Always validate with Pydantic models
-- **Error Handling**: Always use decorators from `core/error_handling.py`
-- **Configuration**: Access via `Settings` class (Pydantic BaseSettings) from `core/config.py`
 </paved_path>
 
 <bash_commands>

@@ -23,9 +23,11 @@ Meraki Dashboard Exporter Test Suite - Comprehensive testing infrastructure with
   - `large_org.py` - Large organization fixture data
 - `unit/` - Unit tests for individual components:
   - 25+ test modules for core, collectors, services
-  - `collectors/` - Device-specific collector tests (`test_mr_collector.py`, `test_ms_collector.py`, `test_mx_collector.py`, `test_mv_collector.py`, `test_mg_collector.py`)
+  - `collectors/` - Device-specific collector tests (`test_mr_collector.py`, `test_ms_collector.py`, `test_ms_stack_collector.py`, `test_mx_collector.py`, `test_mx_firewall_collector.py`, `test_mx_vpn_collector.py`, `test_mv_collector.py`, `test_mg_collector.py`, `test_ssid_performance_collector.py`)
 - `integration/` - Integration tests:
+  - `test_collection_cycle.py`
   - `test_collector_manager_integration.py`
+  - `test_metric_expiration.py`
   - `test_metrics_integration.py`
 - Root-level test files: `test_api_client.py`, `test_config.py`, `test_error_handling.py`, `test_inventory_service.py`, `test_managed_task_group.py`, `test_metrics.py`, `test_webhook.py`, `test_webhook_handler.py`, `test_large_org_fixture.py`
 </file_map>

@@ -18,7 +18,10 @@ Device-specific collectors for Meraki Dashboard Exporter - Handles metrics colle
   - `mr/performance.py` - `MRPerformanceCollector` - Ethernet, packet loss, CPU metrics
   - `mr/wireless.py` - `MRWirelessCollector` - SSID status, radio config, usage metrics
 - `ms.py` - MS (Switches) - Port status, PoE, cable diagnostics, STP, packet errors
-- `mx.py` - MX (Security Appliances) - VPN, firewall, WAN health
+- `ms_stack.py` - `MSStackCollector` - Switch stack membership and member count metrics
+- `mx.py` - MX (Security Appliances) - Coordinator delegating to sub-collectors
+- `mx_firewall.py` - `MXFirewallCollector` - L3/L7 firewall rule counts and default policy (SLOW tier)
+- `mx_vpn.py` - `MXVpnCollector` - Site-to-site VPN peer status and performance (latency, jitter, loss)
 - `mt.py` - MT (Sensors) - Environmental data, water detection, battery
 - `mg.py` - MG (Cellular Gateways) - Cellular connectivity, data usage
 - `mv.py` - MV (Security Cameras) - Camera health, analytics
