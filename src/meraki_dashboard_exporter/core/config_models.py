@@ -328,7 +328,7 @@ class CollectorSettings(BaseModel):
         description="Explicitly disabled collectors (overrides enabled)",
     )
     collector_timeout: int = Field(
-        120,
+        240,
         ge=30,
         le=600,
         description="Timeout for individual collector runs in seconds",
