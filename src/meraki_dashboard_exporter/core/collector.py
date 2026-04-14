@@ -464,16 +464,24 @@ class MetricCollector(ABC):
         return self.settings.update_intervals.slow
 
     def _get_smoothing_window(self) -> float:
-        """Get the smoothing window duration in seconds for this collector."""
+        """Get the smoothing window duration in seconds for this collector.
+
+        The window is capped at 30% of the collector timeout budget so that
+        multiple sequential phases (each drawing an initial_delay from this
+        window) don't cumulatively exhaust the timeout.  The manager-level
+        smoothing handles inter-collector spreading with the full budget.
+        """
         if not self.settings.api.smoothing_enabled:
             return 0.0
         interval = self._get_tier_interval()
         window = max(0.0, float(interval) * self.settings.api.smoothing_window_ratio)
 
-        # Cap smoothing to stay within collector timeout budget
+        # Cap at 30% of timeout budget.  Collectors have multiple sequential
+        # phases that each add an initial_delay from this window; without the
+        # cap the cumulative sleep can exceed the timeout.
         timeout_budget = float(self.settings.collectors.collector_timeout) - 10.0
         if timeout_budget > 0:
-            window = min(window, timeout_budget)
+            window = min(window, timeout_budget * 0.3)
 
         return max(0.0, window)
 
