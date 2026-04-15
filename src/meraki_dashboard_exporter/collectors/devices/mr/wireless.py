@@ -10,7 +10,7 @@ Pattern established in Phase 3.1 following Phase 3.2 metric expiration integrati
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ....core.constants import MRMetricName
 from ....core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -181,7 +181,9 @@ class MRWirelessCollector:
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def collect_ssid_status(self, org_id: str, org_name: str) -> None:
+    async def collect_ssid_status(
+        self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
+    ) -> None:
         """Collect SSID status metrics (org-level).
 
         Parameters
@@ -190,6 +192,8 @@ class MRWirelessCollector:
             Organization ID.
         org_name : str
             Organization name.
+        device_lookup : dict[str, dict[str, Any]]
+            Device lookup table for device info.
 
         """
         try:
@@ -225,14 +229,16 @@ class MRWirelessCollector:
                     channel_width = radio.get("channelWidth")
                     power = radio.get("power")
 
-                    # Create device info dict
-                    device_info = {
-                        "serial": serial,
-                        "networkId": network_id,
-                        "networkName": network_name,
-                        "orgId": org_id,
-                        "orgName": org_name,
-                    }
+                    # Enrich device info from lookup (provides name, model, device_type)
+                    device_info = device_lookup.get(serial, {"serial": serial})
+                    device_info["serial"] = serial
+                    device_info["networkId"] = network_id
+                    device_info["networkName"] = network_name
+                    device_info["name"] = device_info.get("name") or device_status.get(
+                        "name", serial
+                    )
+                    device_info["orgId"] = org_id
+                    device_info["orgName"] = org_name
 
                     # Create labels with band and radio index
                     radio_labels = create_device_labels(

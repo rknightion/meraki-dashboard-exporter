@@ -149,8 +149,21 @@ class TestDeviceCollector(BaseCollectorTest):
         # Also update the MR collector's API reference since it was initialized with the old API
         collector.mr_collector.api = api
 
+        # Create device lookup with device info
+        device_lookup = {
+            "Q2KD-XXXX": {
+                "name": "AP1",
+                "model": "MR36",
+                "network_id": network["id"],
+                "network_name": network["name"],
+                "device_type": "MR",
+            }
+        }
+
         # Collect SSID status
-        await collector.mr_collector.collect_ssid_status(org["id"], org.get("name", "Test Org"))
+        await collector.mr_collector.collect_ssid_status(
+            org["id"], org.get("name", "Test Org"), device_lookup
+        )
 
         # Verify API was called correctly
         api.wireless.getOrganizationWirelessSsidsStatusesByDevice.assert_called_once_with(
@@ -460,8 +473,21 @@ class TestDeviceCollector(BaseCollectorTest):
         collector.api = api
         collector.mr_collector.api = api
 
+        # Create device lookup with device info
+        device_lookup = {
+            "Q2KD-XXXX": {
+                "name": "AP1",
+                "model": "MR36",
+                "network_id": network["id"],
+                "network_name": network["name"],
+                "device_type": "MR",
+            }
+        }
+
         # Collect SSID status
-        await collector.mr_collector.collect_ssid_status(org["id"], org.get("name", "Test Org"))
+        await collector.mr_collector.collect_ssid_status(
+            org["id"], org.get("name", "Test Org"), device_lookup
+        )
 
         # The collector should only process each radio once
         # This test verifies the method completes without duplicate processing

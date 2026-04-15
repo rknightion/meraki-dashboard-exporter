@@ -217,7 +217,9 @@ class MRCollector(BaseDeviceCollector):
         await self.performance.collect_cpu_load(org_id, org_name, devices)
 
     @trace_method("collect.mr_ssid_status")
-    async def collect_ssid_status(self, org_id: str, org_name: str) -> None:
+    async def collect_ssid_status(
+        self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
+    ) -> None:
         """Collect SSID status metrics (org-level).
 
         Parameters
@@ -226,9 +228,11 @@ class MRCollector(BaseDeviceCollector):
             Organization ID.
         org_name : str
             Organization name.
+        device_lookup : dict[str, dict[str, Any]]
+            Device lookup table for device info.
 
         """
-        await self.wireless.collect_ssid_status(org_id, org_name)
+        await self.wireless.collect_ssid_status(org_id, org_name, device_lookup)
 
     @trace_method("collect.mr_ssid_usage")
     async def collect_ssid_usage(self, org_id: str, org_name: str) -> None:

@@ -728,7 +728,7 @@ class DeviceCollector(MetricCollector):
 
             # Collect MR SSID status metrics
             try:
-                await self.mr_collector.collect_ssid_status(org_id, org_name)
+                await self.mr_collector.collect_ssid_status(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect MR SSID status metrics")
 
