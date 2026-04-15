@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.29.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.28.2...v0.29.0) (2026-04-15)
+
+
+### Features
+
+* add /status health dashboard endpoint ([172a23c](https://github.com/rknightion/meraki-dashboard-exporter/commit/172a23c1cf08cd072b2963b5fe65b47670f0e148))
+* add firewall & security policy collector for MX appliances ([543b461](https://github.com/rknightion/meraki-dashboard-exporter/commit/543b46110396c30e662ceb7ca0ce670b6e95f164))
+* add Kubernetes Helm chart ([dc429a6](https://github.com/rknightion/meraki-dashboard-exporter/commit/dc429a67a74fe4ad4218197558d89bc4fd17bed1))
+* add tier-aware metric expiration ([33aa55a](https://github.com/rknightion/meraki-dashboard-exporter/commit/33aa55a8f084227eeba9368c04842f528c852110))
+* Waves 3-5 remaining source and test changes ([ca95923](https://github.com/rknightion/meraki-dashboard-exporter/commit/ca9592336f1be9bd13922826c17cacfcb6b42f75))
+
+
+### Bug Fixes
+
+* add type annotations to ms_stack test helper function ([dfba644](https://github.com/rknightion/meraki-dashboard-exporter/commit/dfba64469527e6fb8e861b157cd60586ef415134))
+* bound packet metric and MS collector caches ([f9953a9](https://github.com/rknightion/meraki-dashboard-exporter/commit/f9953a9a93fed4f7a3618cd103ef9f816a8a1033))
+* cap collector-internal smoothing at 30% of timeout budget ([800c81e](https://github.com/rknightion/meraki-dashboard-exporter/commit/800c81e6a596ebbbc885b100a752e7bf4e8cc59f))
+* increase default collector timeout from 120s to 240s ([fcab2e8](https://github.com/rknightion/meraki-dashboard-exporter/commit/fcab2e872e43a098a0efea6ca03a37f46f74aec1))
+* rename POE metric enums from WATTS to WATTHOURS ([fd4238e](https://github.com/rknightion/meraki-dashboard-exporter/commit/fd4238e2771036ac53fd21851cd560b5ce083fa5))
+* replace Python 2 exception syntax with tuple form ([f68ebdf](https://github.com/rknightion/meraki-dashboard-exporter/commit/f68ebdf63387c4e9ed7bfa4337eba17e24bef511))
+* update TemplateResponse for Starlette 1.0 and parallelize MSStackCollector ([0f3cd48](https://github.com/rknightion/meraki-dashboard-exporter/commit/0f3cd489291f15e3675d5a7a95e58580e698ddb2))
+* use device_lookup for MR radio metric labels ([#199](https://github.com/rknightion/meraki-dashboard-exporter/issues/199)) ([644e695](https://github.com/rknightion/meraki-dashboard-exporter/commit/644e6950b4d886f41ea74a99e6d1bcaa1003b547))
+
+
+### Code Refactoring
+
+* improve API client type safety ([927728f](https://github.com/rknightion/meraki-dashboard-exporter/commit/927728f2e72abaf8b85ef7f5c0a04ae8c496b9ef))
+* standardize sub-collector init and API updates ([64eaf9f](https://github.com/rknightion/meraki-dashboard-exporter/commit/64eaf9fcab3ccdc777a12b97f31d6101e2fbe30b))
+
+
+### Documentation
+
+* add API call reduction audit ([6f3a1f4](https://github.com/rknightion/meraki-dashboard-exporter/commit/6f3a1f41778f7635c74ec21a1613b6b721eff1a5))
+* add improvement roadmap spec and Wave 1 implementation plan ([60c6357](https://github.com/rknightion/meraki-dashboard-exporter/commit/60c6357ad335525d92a95c1d802d58eb35f42ad7))
+* add log aggregation examples with Grafana Alloy and LogQL ([d793627](https://github.com/rknightion/meraki-dashboard-exporter/commit/d7936270523c209d202aa6c263806a6fc3f0d054))
+* add scaling guide with deployment recommendations ([dc2a798](https://github.com/rknightion/meraki-dashboard-exporter/commit/dc2a798a00db0e0d1c9b69f7c2fcf8fe7424a54b))
+* update CLAUDE.md files across project ([e299f28](https://github.com/rknightion/meraki-dashboard-exporter/commit/e299f28e1493daae868ae83d9afa3825735d28db))
+
 ## [0.28.2](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.28.1...v0.28.2) (2026-03-26)
 
 
