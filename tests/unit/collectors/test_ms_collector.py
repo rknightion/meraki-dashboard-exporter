@@ -196,8 +196,12 @@ class TestMSCollector:
         mock_parent: MagicMock,
     ) -> None:
         """Test STP priority collection."""
-        # Mock organization networks response
-        mock_api.organizations.getOrganizationNetworks = MagicMock(
+        from unittest.mock import AsyncMock
+
+        # The collector now fetches networks via parent.inventory.get_networks
+        # rather than the SDK directly, so the network filter applies.
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_networks = AsyncMock(
             return_value=[
                 {
                     "id": "net1",
@@ -250,10 +254,9 @@ class TestMSCollector:
         # Run collection
         await ms_collector.collect_stp_priorities("org123", device_lookup)
 
-        # Verify API calls
-        mock_api.organizations.getOrganizationNetworks.assert_called_once_with(
-            "org123", total_pages="all"
-        )
+        # Verify network fetch went through inventory (filter applies),
+        # not directly to the SDK.
+        mock_parent.inventory.get_networks.assert_awaited_once_with("org123")
         assert mock_api.switch.getNetworkSwitchStp.call_count == 2  # Only for net1 and net2
 
         # Verify metrics were set correctly

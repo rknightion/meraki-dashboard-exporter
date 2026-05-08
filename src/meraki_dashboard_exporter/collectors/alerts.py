@@ -430,6 +430,10 @@ class AlertsCollector(MetricCollector):
     async def _fetch_networks_direct(self, org_id: str) -> list[dict[str, Any]] | None:
         """Fetch networks directly from API (fallback when inventory unavailable).
 
+        Even on this fallback path the configured NetworkFilter is applied
+        so excluded networks do not leak into alert collection when the
+        inventory service is missing.
+
         Parameters
         ----------
         org_id : str
@@ -438,7 +442,7 @@ class AlertsCollector(MetricCollector):
         Returns
         -------
         list[dict[str, Any]] | None
-            List of networks or None on error.
+            List of networks (filtered) or None on error.
 
         """
         networks = await asyncio.to_thread(
@@ -449,7 +453,14 @@ class AlertsCollector(MetricCollector):
         networks = validate_response_format(
             networks, expected_type=list, operation="getOrganizationNetworks"
         )
-        return cast(list[dict[str, Any]], networks)
+        networks_list = cast(list[dict[str, Any]], networks)
+
+        nf_settings = self.settings.network_filter
+        if nf_settings.is_active:
+            from ..core.network_filter import NetworkFilter
+
+            networks_list = NetworkFilter(nf_settings).apply(networks_list)
+        return networks_list
 
     @log_api_call("getNetworkSensorAlertsOverviewByMetric")
     @with_error_handling(

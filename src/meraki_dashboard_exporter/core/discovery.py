@@ -64,6 +64,11 @@ class DiscoveryService:
                     continue
 
                 try:
+                    # NOTE: This call deliberately bypasses the network filter.
+                    # EnvironmentDiscovery emits a startup diagnostic listing
+                    # every network in the org so operators can verify their
+                    # filter rules. Routing through inventory.get_networks
+                    # would hide excluded networks and defeat that purpose.
                     networks = await asyncio.to_thread(
                         self.api.organizations.getOrganizationNetworks,
                         org_id,
