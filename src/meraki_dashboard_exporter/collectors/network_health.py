@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from ..core.async_utils import ManagedTaskGroup
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import NetworkHealthMetricName, NetworkMetricName, ProductType, UpdateTier
-from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ..core.error_handling import ErrorCategory, with_error_handling
 from ..core.logging import get_logger
-from ..core.logging_decorators import log_api_call, log_batch_operation
-from ..core.logging_helpers import LogContext, log_metric_collection_summary
+from ..core.logging_decorators import log_batch_operation
+from ..core.logging_helpers import log_metric_collection_summary
 from ..core.metrics import LabelName
 from ..core.otel_tracing import trace_method
 from ..core.registry import register_collector
@@ -326,9 +326,8 @@ class NetworkHealthCollector(MetricCollector):
         await self._collect_network_bluetooth_clients(network)
         await self._collect_network_ssid_performance(network)
 
-    @log_api_call("getOrganizationNetworks")
     async def _fetch_networks_for_health(self, org_id: str) -> list[dict[str, Any]]:
-        """Fetch networks for health collection.
+        """Fetch networks for health collection via shared inventory cache.
 
         Parameters
         ----------
@@ -340,17 +339,20 @@ class NetworkHealthCollector(MetricCollector):
         list[dict[str, Any]]
             List of networks.
 
+        Raises
+        ------
+        RuntimeError
+            If inventory service is not configured.
+
         """
-        with LogContext(org_id=org_id):
-            networks = await asyncio.to_thread(
-                self.api.organizations.getOrganizationNetworks,
-                org_id,
-                total_pages="all",
+        if not self.inventory:
+            raise RuntimeError(
+                "Inventory service not configured for NetworkHealthCollector. "
+                "This is a programming error - collectors must be initialized with inventory service."
             )
-            networks = validate_response_format(
-                networks, expected_type=list, operation="getOrganizationNetworks"
-            )
-            return cast(list[dict[str, Any]], networks)
+
+        self._track_api_call("getOrganizationNetworks")
+        return await self.inventory.get_networks(org_id)
 
     async def _collect_network_rf_health(self, network: dict[str, Any]) -> None:
         """Collect RF health metrics for a network.
