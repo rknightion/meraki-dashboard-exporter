@@ -403,6 +403,106 @@ class MerakiSettings(BaseModel):
         return v
 
 
+class NetworkFilterSettings(BaseModel):
+    """Network-level filter for restricting which networks are scraped.
+
+    All fields default to empty. If every field is empty, the filter is
+    inactive and the exporter scrapes every network in every configured org
+    (preserving pre-filter behaviour). Resolution semantics:
+
+    - If any include_* field is non-empty, a network must match at least one
+      include rule (across name OR id OR tag) to be considered.
+    - If a network matches any exclude rule, it is dropped.
+    - Names use glob patterns via fnmatch (case-sensitive).
+    """
+
+    include_names: list[str] = Field(
+        default_factory=list,
+        description="Network name globs to include. Supports * and ? wildcards.",
+    )
+    include_ids: list[str] = Field(
+        default_factory=list,
+        description="Exact network IDs (e.g. L_xxx) to include.",
+    )
+    include_tags: list[str] = Field(
+        default_factory=list,
+        description=("Network tags to include. A network matches if it carries any of these tags."),
+    )
+    exclude_names: list[str] = Field(
+        default_factory=list,
+        description="Network name globs to exclude. Applied AFTER includes.",
+    )
+    exclude_ids: list[str] = Field(
+        default_factory=list,
+        description="Exact network IDs to exclude.",
+    )
+    exclude_tags: list[str] = Field(
+        default_factory=list,
+        description="Network tags to exclude.",
+    )
+
+    @field_validator(
+        "include_names",
+        "include_ids",
+        "include_tags",
+        "exclude_names",
+        "exclude_ids",
+        "exclude_tags",
+        mode="before",
+    )
+    @classmethod
+    def _split_csv(cls, v: object) -> list[str]:
+        """Accept either a list or a comma-separated string from env vars.
+
+        pydantic-settings does not auto-coerce csv -> list for nested
+        BaseModel fields (only at the top BaseSettings boundary), so we
+        normalise here.
+        """
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return [str(item).strip() for item in v if str(item).strip()]
+        if isinstance(v, str):
+            stripped = v.strip()
+            if not stripped:
+                return []
+            # Allow JSON-array form too (consistent with histogram_buckets).
+            if stripped.startswith("[") and stripped.endswith("]"):
+                import json
+
+                parsed = json.loads(stripped)
+                return [str(item).strip() for item in parsed if str(item).strip()]
+            return [item.strip() for item in stripped.split(",") if item.strip()]
+        raise ValueError(f"NetworkFilterSettings list field got unsupported type: {type(v)!r}")
+
+    @model_validator(mode="after")
+    def _validate_globs(self) -> NetworkFilterSettings:
+        """Compile globs at config time so typos fail fast."""
+        import fnmatch
+
+        for field_name in ("include_names", "exclude_names"):
+            for pattern in getattr(self, field_name):
+                try:
+                    fnmatch.translate(pattern)
+                except Exception as exc:  # pragma: no cover - defensive
+                    raise ValueError(
+                        f"Invalid glob pattern in {field_name}: {pattern!r} ({exc})"
+                    ) from exc
+        return self
+
+    @property
+    def is_active(self) -> bool:
+        """True iff any include or exclude rule is configured."""
+        return bool(
+            self.include_names
+            or self.include_ids
+            or self.include_tags
+            or self.exclude_names
+            or self.exclude_ids
+            or self.exclude_tags
+        )
+
+
 class LoggingSettings(BaseModel):
     """Logging configuration."""
 
