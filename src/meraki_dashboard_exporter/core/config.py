@@ -14,6 +14,7 @@ from .config_models import (
     LoggingSettings,
     MerakiSettings,
     MonitoringSettings,
+    NetworkFilterSettings,
     OTelSettings,
     ServerSettings,
     UpdateIntervals,
@@ -74,6 +75,10 @@ class Settings(BaseSettings):
         default_factory=ClientSettings,
         description="Client data collection settings",
     )
+    network_filter: NetworkFilterSettings = Field(
+        default_factory=NetworkFilterSettings,
+        description="Network-level filter for restricting which networks are scraped",
+    )
 
     @model_validator(mode="after")
     def validate_regional_settings(self) -> Settings:
@@ -130,5 +135,14 @@ class Settings(BaseSettings):
             "collectors": {
                 "active": sorted(self.collectors.active_collectors),
                 "timeout": self.collectors.collector_timeout,
+            },
+            "network_filter": {
+                "is_active": self.network_filter.is_active,
+                "include_names": self.network_filter.include_names,
+                "include_ids": self.network_filter.include_ids,
+                "include_tags": self.network_filter.include_tags,
+                "exclude_names": self.network_filter.exclude_names,
+                "exclude_ids": self.network_filter.exclude_ids,
+                "exclude_tags": self.network_filter.exclude_tags,
             },
         }
