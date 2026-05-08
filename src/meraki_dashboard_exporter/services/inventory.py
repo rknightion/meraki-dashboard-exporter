@@ -19,6 +19,7 @@ from prometheus_client import Counter, Gauge
 
 from ..api.client import AsyncMerakiClient
 from ..core.constants import UpdateTier
+from ..core.network_filter import NetworkFilter
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -66,7 +67,11 @@ class OrganizationInventory:
     TTL_CONFIG = 3600  # 60 minutes - org config/security settings rarely change
 
     def __init__(
-        self, api: DashboardAPI, settings: Settings, rate_limiter: Any | None = None
+        self,
+        api: DashboardAPI,
+        settings: Settings,
+        rate_limiter: Any | None = None,
+        network_filter: NetworkFilter | None = None,
     ) -> None:
         """Initialize the inventory service.
 
@@ -78,11 +83,18 @@ class OrganizationInventory:
             Application settings.
         rate_limiter : Any | None
             Optional rate limiter used to gate API calls.
+        network_filter : NetworkFilter | None
+            Optional network filter applied at the read path. The internal
+            cache always stores the full API response; filtering happens
+            on every call to :meth:`get_networks`, :meth:`get_devices`, and
+            :meth:`get_device_availabilities` unless ``unfiltered=True`` is
+            passed by the caller.
 
         """
         self.api = api
         self.settings = settings
         self.rate_limiter = rate_limiter
+        self._network_filter = network_filter
 
         # Determine TTL based on fastest tier in use
         # Use MEDIUM tier TTL as a reasonable default
@@ -127,6 +139,33 @@ class OrganizationInventory:
         if self.rate_limiter is None:
             return
         await self.rate_limiter.acquire(org_id, endpoint)
+
+    def _maybe_filter_networks(
+        self, networks: list[dict[str, Any]], *, unfiltered: bool
+    ) -> list[dict[str, Any]]:
+        """Apply the configured network filter unless ``unfiltered`` is True.
+
+        Returns a new list when filtering is active so callers can mutate
+        safely; returns the original list otherwise to avoid copies on the
+        hot path.
+        """
+        if unfiltered or self._network_filter is None or not self._network_filter.is_active:
+            return networks
+        return self._network_filter.apply(networks)
+
+    def _resolved_network_ids(self, org_id: str) -> set[str] | None:
+        """Return the set of allowed network IDs for ``org_id``, or None.
+
+        Returns None when no filter is active. Reads from the existing
+        ``_networks[org_id]`` cache; callers must ensure the cache has
+        been populated (typically via a prior ``get_networks`` call).
+        """
+        if self._network_filter is None or not self._network_filter.is_active:
+            return None
+        full = self._networks.get(org_id)
+        if full is None:
+            return None
+        return self._network_filter.resolved_ids(full)
 
     def _is_expired(self, timestamp: float, ttl: float) -> bool:
         """Check if a cached entry has expired with jitter.
@@ -290,6 +329,8 @@ class OrganizationInventory:
         self,
         org_id: str,
         force_refresh: bool = False,
+        *,
+        unfiltered: bool = False,
     ) -> list[dict[str, Any]]:
         """Get networks for an organization with caching.
 
@@ -299,11 +340,16 @@ class OrganizationInventory:
             Organization ID.
         force_refresh : bool
             If True, bypass cache and fetch fresh data.
+        unfiltered : bool
+            If True, return the full cached list ignoring any configured
+            :class:`NetworkFilter`. Defaults to False — most callers want
+            the filtered view.
 
         Returns
         -------
         list[dict[str, Any]]
-            List of network data for the organization.
+            List of network data for the organization (filter applied
+            unless ``unfiltered=True``).
 
         """
         current_time = time.time()
@@ -321,7 +367,7 @@ class OrganizationInventory:
                 org_id=org_id,
                 cache_age_seconds=current_time - cache_timestamp,
             )
-            return self._networks[org_id]
+            return self._maybe_filter_networks(self._networks[org_id], unfiltered=unfiltered)
 
         # Cache miss - fetch from API
         self._cache_misses += 1
@@ -335,7 +381,7 @@ class OrganizationInventory:
                 and org_id in self._networks
                 and not self._is_expired(cache_timestamp, self._ttl)
             ):
-                return self._networks[org_id]
+                return self._maybe_filter_networks(self._networks[org_id], unfiltered=unfiltered)
 
             # Fetch from API
             await self._acquire_rate_limit(org_id, "getOrganizationNetworks")
@@ -347,7 +393,7 @@ class OrganizationInventory:
             )
             networks = cast(list[dict[str, Any]], networks_result)
 
-            # Update cache
+            # Update cache (full, unfiltered list — filter applies on read)
             self._networks[org_id] = networks
             self._network_timestamps[org_id] = current_time
             self._cache_size.labels(org_id=org_id, cache_type="networks").set(len(networks))
@@ -358,13 +404,15 @@ class OrganizationInventory:
                 network_count=len(networks),
             )
 
-            return networks
+            return self._maybe_filter_networks(networks, unfiltered=unfiltered)
 
     async def get_devices(
         self,
         org_id: str,
         network_id: str | None = None,
         force_refresh: bool = False,
+        *,
+        unfiltered: bool = False,
     ) -> list[dict[str, Any]]:
         """Get devices for an organization with caching.
 
@@ -376,11 +424,16 @@ class OrganizationInventory:
             If provided, filter devices to this network.
         force_refresh : bool
             If True, bypass cache and fetch fresh data.
+        unfiltered : bool
+            If True, return all cached devices ignoring any configured
+            :class:`NetworkFilter`. Defaults to False — devices in
+            excluded networks are dropped.
 
         Returns
         -------
         list[dict[str, Any]]
-            List of device data for the organization.
+            List of device data for the organization (filter applied
+            unless ``unfiltered=True``).
 
         """
         current_time = time.time()
@@ -439,12 +492,25 @@ class OrganizationInventory:
         if network_id:
             devices = [d for d in devices if d.get("networkId") == network_id]
 
+        # Apply NetworkFilter — drops devices whose networkId is excluded.
+        if not unfiltered and self._network_filter and self._network_filter.is_active:
+            networks = self._networks.get(org_id)
+            if networks is None:
+                # Cache miss for networks — fetch unfiltered so the resolved
+                # set is correct. This is rare in practice because warm_cache
+                # populates networks first, but be defensive.
+                networks = await self.get_networks(org_id, unfiltered=True)
+            allowed_ids = self._network_filter.resolved_ids(networks)
+            devices = [d for d in devices if d.get("networkId") in allowed_ids]
+
         return devices
 
     async def get_device_availabilities(
         self,
         org_id: str,
         force_refresh: bool = False,
+        *,
+        unfiltered: bool = False,
     ) -> list[dict[str, Any]]:
         """Get device availabilities for an organization with caching.
 
@@ -457,11 +523,16 @@ class OrganizationInventory:
             Organization ID.
         force_refresh : bool
             If True, bypass cache and fetch fresh data.
+        unfiltered : bool
+            If True, return all cached availability records ignoring any
+            configured :class:`NetworkFilter`. Defaults to False —
+            availability records for excluded networks are dropped.
 
         Returns
         -------
         list[dict[str, Any]]
-            List of device availability data for the organization.
+            List of device availability data for the organization (filter
+            applied unless ``unfiltered=True``).
 
         """
         current_time = time.time()
@@ -479,7 +550,9 @@ class OrganizationInventory:
                 org_id=org_id,
                 cache_age_seconds=current_time - cache_timestamp,
             )
-            return self._device_availabilities[org_id]
+            return await self._maybe_filter_availabilities(
+                org_id, self._device_availabilities[org_id], unfiltered=unfiltered
+            )
 
         # Cache miss - fetch from API
         self._cache_misses += 1
@@ -493,7 +566,9 @@ class OrganizationInventory:
                 and org_id in self._device_availabilities
                 and not self._is_expired(cache_timestamp, self.TTL_AVAILABILITY)
             ):
-                return self._device_availabilities[org_id]
+                return await self._maybe_filter_availabilities(
+                    org_id, self._device_availabilities[org_id], unfiltered=unfiltered
+                )
 
             # Fetch from API
             await self._acquire_rate_limit(org_id, "getOrganizationDevicesAvailabilities")
@@ -505,7 +580,7 @@ class OrganizationInventory:
             )
             availabilities = cast(list[dict[str, Any]], availabilities_result)
 
-            # Update cache
+            # Update cache (full, unfiltered list — filter applies on read)
             self._device_availabilities[org_id] = availabilities
             self._availability_timestamps[org_id] = current_time
             self._cache_size.labels(org_id=org_id, cache_type="availabilities").set(
@@ -518,7 +593,37 @@ class OrganizationInventory:
                 device_count=len(availabilities),
             )
 
+            return await self._maybe_filter_availabilities(
+                org_id, availabilities, unfiltered=unfiltered
+            )
+
+    async def _maybe_filter_availabilities(
+        self,
+        org_id: str,
+        availabilities: list[dict[str, Any]],
+        *,
+        unfiltered: bool,
+    ) -> list[dict[str, Any]]:
+        """Apply network filter to availability records.
+
+        Availability records expose ``networkId`` either directly or via a
+        nested ``network.id`` key, depending on the SDK response shape.
+        """
+        if unfiltered or self._network_filter is None or not self._network_filter.is_active:
             return availabilities
+
+        networks = self._networks.get(org_id)
+        if networks is None:
+            networks = await self.get_networks(org_id, unfiltered=True)
+        allowed_ids = self._network_filter.resolved_ids(networks)
+
+        def _net_id(record: dict[str, Any]) -> str | None:
+            if "networkId" in record:
+                return record.get("networkId")
+            net = record.get("network") or {}
+            return net.get("id")
+
+        return [a for a in availabilities if _net_id(a) in allowed_ids]
 
     async def invalidate(self, org_id: str | None = None) -> None:
         """Invalidate cache for an organization or all organizations.
