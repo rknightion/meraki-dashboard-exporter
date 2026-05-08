@@ -6,7 +6,7 @@ import asyncio
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
-from ...core.error_handling import ErrorCategory, with_error_handling
+from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -110,18 +110,11 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                     interval=300,
                 )
 
-            # Handle different API response formats
-            if isinstance(memory_response, dict) and "items" in memory_response:
-                memory_data = memory_response["items"]
-            elif isinstance(memory_response, list):
-                memory_data = memory_response
-            else:
-                logger.warning(
-                    "Unexpected memory data format",
-                    org_id=org_id,
-                    response_type=type(memory_response).__name__,
-                )
-                memory_data = []
+            memory_data = validate_response_format(
+                memory_response,
+                expected_type=list,
+                operation="getOrganizationDevicesSystemMemoryUsageHistoryByInterval",
+            )
 
             if memory_data:
                 logger.debug(
@@ -129,6 +122,14 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                     org_id=org_id,
                     device_count=len(memory_data),
                 )
+
+            # Resolve allowed network IDs for filter enforcement on org-wide responses.
+            allowed_network_ids = (
+                await self.parent.inventory.get_allowed_network_ids(org_id)
+                if self.parent.inventory is not None
+                else None
+            )
+            skipped = 0
 
             # Process each device's memory data
             for device_data in memory_data:
@@ -140,6 +141,13 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                 network_info = device_data.get("network", {})
                 device_data["networkId"] = network_info.get("id", "")
                 device_data["networkName"] = network_info.get("name", device_data["networkId"])
+
+                if (
+                    allowed_network_ids is not None
+                    and device_data["networkId"] not in allowed_network_ids
+                ):
+                    skipped += 1
+                    continue
 
                 # Create standard device labels
                 labels = create_device_labels(device_data, org_id=org_id, org_name=org_name)
@@ -198,6 +206,13 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                                 free_labels,
                                 free_stats["minimum"] * 1024,  # Convert KB to bytes
                             )
+
+            if skipped:
+                logger.debug(
+                    "Memory metrics: skipped rows outside network filter",
+                    org_id=org_id,
+                    skipped_count=skipped,
+                )
 
         except Exception:
             logger.exception(

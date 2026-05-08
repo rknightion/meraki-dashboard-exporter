@@ -209,24 +209,19 @@ class MRClientsCollector:
                     org_id,
                     total_pages="all",
                 )
-                client_overview = validate_response_format(
+                client_data = validate_response_format(
                     client_overview,
                     expected_type=list,
                     operation="getOrganizationWirelessClientsOverviewByDevice",
                 )
 
-            # Handle different API response formats
-            if isinstance(client_overview, dict) and "items" in client_overview:
-                client_data = client_overview["items"]
-            elif isinstance(client_overview, list):
-                client_data = client_overview
-            else:
-                logger.warning(
-                    "Unexpected client overview format",
-                    org_id=org_id,
-                    response_type=type(client_overview).__name__,
-                )
-                client_data = []
+            # Resolve allowed network IDs for filter enforcement on org-wide responses.
+            allowed_network_ids = (
+                await self.parent.inventory.get_allowed_network_ids(org_id)
+                if self.parent.inventory is not None
+                else None
+            )
+            skipped = 0
 
             # Process each device's client data
             for device_data in client_data:
@@ -234,6 +229,10 @@ class MRClientsCollector:
                 network = device_data.get("network", {})
                 network_id = network.get("id", "")
                 network_name = network.get("name", network_id)
+
+                if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                    skipped += 1
+                    continue
 
                 # Get online client count
                 counts = device_data.get("counts", {})
@@ -255,6 +254,13 @@ class MRClientsCollector:
                     self._ap_clients,
                     labels,
                     online_clients,
+                )
+
+            if skipped:
+                logger.debug(
+                    "MR clients: skipped rows outside network filter",
+                    org_id=org_id,
+                    skipped_count=skipped,
                 )
 
         except Exception:

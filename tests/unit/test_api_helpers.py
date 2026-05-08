@@ -191,6 +191,45 @@ class TestAPIHelper:
         assert len(result) == 1
         assert result[0]["model"] == "MR36"
 
+    async def test_get_organization_devices_with_product_types_respects_network_filter(
+        self, api_helper, mock_collector
+    ):
+        """When inventory exists and product_types is set, NetworkFilter still applies.
+
+        Previously, supplying product_types caused a direct API call that
+        bypassed the inventory's NetworkFilter. Now product_types is applied
+        locally on the inventory-cached (and filter-applied) list.
+        """
+        from unittest.mock import AsyncMock
+
+        # Inventory returns only the filter-allowed devices (the inventory enforces
+        # NetworkFilter on its read path; we simulate that here by returning only
+        # devices in the allowed network).
+        inventory_devices = [
+            {
+                "serial": "Q-IN-WIFI",
+                "model": "MR36",
+                "productType": "wireless",
+                "networkId": "N_INCLUDED",
+            },
+            {
+                "serial": "Q-IN-SWITCH",
+                "model": "MS225",
+                "productType": "switch",
+                "networkId": "N_INCLUDED",
+            },
+        ]
+        mock_collector.inventory = MagicMock()
+        mock_collector.inventory.get_devices = AsyncMock(return_value=inventory_devices)
+
+        result = await api_helper.get_organization_devices("123", product_types=["wireless"])
+
+        # Direct SDK call must NOT be issued (would bypass NetworkFilter).
+        mock_collector.api.organizations.getOrganizationDevices.assert_not_called()
+        # product_types applied locally — only wireless device returned.
+        assert len(result) == 1
+        assert result[0]["serial"] == "Q-IN-WIFI"
+
     async def test_process_in_batches_basic(self, api_helper):
         """Test basic batch processing."""
         items = list(range(25))  # 25 items with batch size 10 = 3 batches

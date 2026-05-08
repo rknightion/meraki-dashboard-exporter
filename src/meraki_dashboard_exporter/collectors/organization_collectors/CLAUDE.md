@@ -6,7 +6,9 @@ Organization-level collectors for Meraki Dashboard Exporter - Handles metrics th
 - **Inherit from `BaseOrganizationCollector`** (in `base.py`) for consistent organization patterns
 - **SLOW update tier**: Most org metrics change infrequently (900s interval)
 - **Manual registration**: Sub-collectors registered in `OrganizationCollector` coordinator
-- **Inventory integration**: Access shared cache via `self.inventory = getattr(parent, "inventory", None)`
+- **Inventory integration (mandatory for networks)**: Access shared cache via `self.inventory = getattr(parent, "inventory", None)`. For network reads, call `await self.inventory.get_networks(org_id)` — never `getOrganizationNetworks` directly. The inventory is the single enforcement point for `NetworkFilter`.
+- **Org-wide SDK responses**: When iterating responses that span all networks (e.g., `getOrganizationDevices` with `networkId` per row), call `await self.inventory.get_allowed_network_ids(org_id)` and skip rows whose `networkId` is excluded.
+- **Wrap fetcher responses** with `validate_response_format` from `core.error_handling`.
 </critical_notes>
 
 <file_map>
@@ -21,6 +23,7 @@ Organization-level collectors for Meraki Dashboard Exporter - Handles metrics th
 ## ORGANIZATION COLLECTOR PATTERN
 ```python
 from .base import BaseOrganizationCollector
+
 
 class MyOrgCollector(BaseOrganizationCollector):
     def _initialize_metrics(self) -> None:
@@ -47,4 +50,5 @@ class MyOrgCollector(BaseOrganizationCollector):
 <fatal_implications>
 - **NEVER aggregate across organizations** without proper labeling
 - **NEVER skip timespan validation** for endpoints with specific requirements
+- **NEVER call `getOrganizationNetworks` directly** - use `self.inventory.get_networks(org_id)` so `NetworkFilter` applies
 </fatal_implications>

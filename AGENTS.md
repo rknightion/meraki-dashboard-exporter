@@ -11,6 +11,8 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **Memory**: Be mindful of API rate limits and implement proper error handling
 - **Use parallel tasks/agents** when suitable use the parallel tasks and agents available to you
 - **Never issue git commands** the user will handle all 'git' commands
+- **Network fetches go through inventory**: Collectors must call `OrganizationInventory.get_networks(org_id)` so the `NetworkFilter` (`core/network_filter.py`) is enforced. Direct `getOrganizationNetworks` SDK calls in collectors are forbidden; `core/discovery.py::EnvironmentDiscovery` is the documented audit-only exception.
+- **Wrap new fetchers** with `core.error_handling.validate_response_format` to normalize the SDK exhausted-retry error shape.
 </critical_notes>
 
 <file_map>
@@ -41,8 +43,11 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 ### Key Principles
 - **Enum-based naming**: Use MetricName and LabelName enums for consistency
 - **Domain models**: Pydantic validation for all API responses
-- **Error handling**: Decorators for consistent error management
-- **Update tiers**: FAST (60s), MEDIUM (300s), SLOW (900s) based on volatility
+- **Error handling**: Decorators for consistent error management; wrap fetchers with `validate_response_format`
+- **Update tiers**: FAST (60s), MEDIUM (300s), SLOW (900s) based on volatility (default collector timeout: 240s)
+- **Inventory cache (mandatory for networks)**: Use `OrganizationInventory.get_networks(org_id)` — single enforcement point for `NetworkFilter`.
+- **Meraki SDK 3.1.0**: New `APISettings.validate_kwargs` flag (default off, recommended on for dev/CI).
+- **Web endpoints**: `app.py` exposes `/metrics`, the UI, and a `/status` health dashboard endpoint.
 </paved_path>
 
 <workflow>
@@ -96,6 +101,7 @@ Navigate to specific subdirectories for detailed implementation patterns:
 - **NEVER modify tests to match incorrect implementations**
 - **NEVER commit without running linters and type checks**
 - **NEVER work in subdirectories without consulting their `CLAUDE.md`**
+- **NEVER call `getOrganizationNetworks` directly from a collector** - route through `OrganizationInventory.get_networks(org_id)` so `NetworkFilter` is enforced. Only `core/discovery.py::EnvironmentDiscovery` may bypass.
 </fatal_implications>
 
 <hatch>

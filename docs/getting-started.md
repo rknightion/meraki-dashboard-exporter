@@ -29,7 +29,10 @@ docker run -d \
 - `http://localhost:9099/metrics` exposes Prometheus metrics, including exporter
   health metrics (`meraki_exporter_*`), always enabled.
 - `curl http://localhost:9099/health` should return `{"status": "healthy"}`.
-- Cardinality reports appear after the first full collection cycle (defaults to 15 minutes).
+- `http://localhost:9099/status` shows the exporter self-health dashboard
+  (collector tiers, last run results, network filter resolution, etc.).
+- `http://localhost:9099/cardinality` reports appear after the first full
+  collection cycle (defaults to 15 minutes).
 
 Next read the [Configuration](config.md) guide for all settings and the
 [Metrics Reference](metrics/metrics.md) for available metrics.

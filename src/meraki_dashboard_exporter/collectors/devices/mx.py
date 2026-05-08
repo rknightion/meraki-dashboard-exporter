@@ -67,6 +67,11 @@ class MXCollector(BaseDeviceCollector):
         """Delegate metric setting to the parent DeviceCollector."""
         return self.parent._set_metric(*args, **kwargs)
 
+    @property
+    def inventory(self) -> Any:
+        """Expose the parent DeviceCollector's inventory cache to sub-collectors."""
+        return self.parent.inventory
+
     def update_api(self, api: Any) -> None:
         """Update the API client and propagate to sub-collectors.
 
@@ -135,10 +140,22 @@ class MXCollector(BaseDeviceCollector):
         # (status is a label, so status transitions leave old series at 1)
         self._mx_uplink_info._metrics.clear()
 
+        # Resolve allowed network IDs for filter enforcement on org-wide responses.
+        allowed_network_ids = (
+            await self.parent.inventory.get_allowed_network_ids(org_id)
+            if self.parent.inventory is not None
+            else None
+        )
+        skipped = 0
+
         for appliance in uplink_statuses:
             serial = appliance.get("serial", "")
             device_info = device_lookup.get(serial, {})
             network_id = appliance.get("networkId", device_info.get("network_id", ""))
+
+            if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                skipped += 1
+                continue
 
             device_data = {
                 "serial": serial,
@@ -167,4 +184,5 @@ class MXCollector(BaseDeviceCollector):
             "Collected MX uplink statuses",
             org_id=org_id,
             appliance_count=len(uplink_statuses),
+            skipped_count=skipped,
         )

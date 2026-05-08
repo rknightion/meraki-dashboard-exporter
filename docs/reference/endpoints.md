@@ -17,6 +17,8 @@ This page lists HTTP endpoints exposed by the exporter.
 | `GET` | `/clients` | Client data visualization endpoint. | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `GET` | `/health` | Health check endpoint. |  |
 | `GET` | `/metrics` | Prometheus metrics endpoint. |  |
+| `GET` | `/ready` | Readiness probe - returns 200 when initial collection is complete. |  |
+| `GET` | `/status` | Exporter self-health status dashboard. |  |
 
 ## Notes
 

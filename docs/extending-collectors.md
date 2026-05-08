@@ -16,9 +16,9 @@ Collectors gather metrics from the Meraki API. New collectors live in `src/merak
 1. Create a new module under `collectors/` and add it to the import list in `collectors/manager.py`.
 2. Define a class inheriting from `MetricCollector` (or the relevant base) and decorate it with `@register_collector(UpdateTier.X)`.
 3. Define metrics in `_initialize_metrics()` using `_create_gauge/_create_counter/_create_histogram/_create_info` and MetricName/LabelName enums.
-4. Implement `_collect_impl()` with proper error handling (`with_error_handling`) and response validation (`validate_response_format` or Pydantic models).
+4. Implement `_collect_impl()` with proper error handling (`with_error_handling`) and response validation (`validate_response_format` or Pydantic models). `validate_response_format` also normalises the Meraki SDK 3.x exhausted-retry error envelope, so prefer it for any new fetcher.
 5. Use shared services:
-   - `self.inventory` for org/network/device lookups to reuse cache.
+   - `self.inventory` for org/network/device lookups. **Network fetches must go through `inventory.get_networks(org_id)`** (or `self.parent.inventory.get_networks(org_id)` from sub-collectors). Calling `getOrganizationNetworks` directly bypasses the configured `NetworkFilter` (`core/network_filter.py`).
    - `ManagedTaskGroup` with `settings.api.concurrency_limit` for bounded parallelism.
    - `_set_metric()` to ensure metric expiration tracking is applied.
 6. Add metric enums to `core/constants/metrics_constants.py` and tests under `tests/`.
@@ -88,7 +88,8 @@ log unexpected shapes.
 ## Collection patterns
 - **Bounded concurrency**: use `ManagedTaskGroup` with `settings.api.concurrency_limit`.
 - **Batching**: respect `*_BATCH_SIZE` and `BATCH_DELAY` when iterating large lists.
-- **Inventory caching**: fetch orgs/networks/devices through `self.inventory`.
+- **Inventory caching**: fetch orgs/networks/devices through `self.inventory`. The inventory is the single enforcement point for `NetworkFilter`; pass `unfiltered=True` only for explicit audit/diagnostic flows.
+- **Per-collector timeout**: defaults to 240s (`CollectorSettings.collector_timeout`); plan work to fit, or split into smaller collectors.
 - **Metric lifecycle**: call `_set_metric()` (or `_set_metric_value()` in sub-collectors).
 
 ## Testing

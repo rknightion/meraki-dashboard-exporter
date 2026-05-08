@@ -14,12 +14,12 @@ Meraki Dashboard Exporter - Main source package containing core infrastructure, 
 - `collectors/` - All metric collectors and collection logic - See `collectors/CLAUDE.md`
 - `api/` - Meraki API client wrapper - See `api/CLAUDE.md`
 - `services/` - Supporting services:
-  - `inventory.py` - Shared organization/device/network cache with TTL-based invalidation
+  - `inventory.py` - `OrganizationInventory`: shared org/device/network cache with TTL-based invalidation. Holds the `NetworkFilter` and is the single enforcement point for it on the read path (`get_networks`, `get_devices`, `get_device_availabilities`); pass `unfiltered=True` only for audit/diagnostic flows.
   - `client_store.py` - Client data storage
   - `dns_resolver.py` - DNS resolution service
 - `models/` - Shared data models (`webhook.py`)
 - `templates/` - HTML templates for web UI (index, cardinality, clients pages)
-- `app.py` - FastAPI application with web UI and metrics endpoint
+- `app.py` - FastAPI application with web UI, `/metrics`, and `/status` health dashboard endpoints
 - `__main__.py` - CLI entry point for running the exporter
 - `__version__.py` - Version information (reads from pyproject.toml)
 </file_map>

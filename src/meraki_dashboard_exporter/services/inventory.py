@@ -186,6 +186,37 @@ class OrganizationInventory:
             return None
         return self._network_filter.resolved_ids(full)
 
+    async def get_allowed_network_ids(
+        self, org_id: str, *, force_refresh: bool = False
+    ) -> set[str] | None:
+        """Return network IDs that pass the configured filter, or None.
+
+        Unlike :meth:`_resolved_network_ids` (sync, may return ``None`` on
+        cache miss), this awaits the network cache populate path so callers
+        always receive a usable answer when a filter is active. Collectors
+        that iterate org-wide SDK responses should use this as an allow-list
+        to skip rows whose ``networkId`` falls outside the filter.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        force_refresh : bool
+            If True, bypass the network cache when populating.
+
+        Returns
+        -------
+        set[str] | None
+            Allowed network IDs, or ``None`` when no filter is active —
+            callers should treat ``None`` as "filtering disabled, accept
+            every row".
+
+        """
+        if self._network_filter is None or not self._network_filter.is_active:
+            return None
+        networks = await self.get_networks(org_id, force_refresh=force_refresh, unfiltered=True)
+        return self._network_filter.resolved_ids(networks)
+
     def _is_expired(self, timestamp: float, ttl: float) -> bool:
         """Check if a cached entry has expired with jitter.
 

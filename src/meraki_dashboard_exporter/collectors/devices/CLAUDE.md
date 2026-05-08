@@ -7,6 +7,8 @@ Device-specific collectors for Meraki Dashboard Exporter - Handles metrics colle
 - **Product type filtering**: Use `product_types` parameter when fetching devices
 - **Manual registration**: Device collectors are registered in `DeviceCollector` coordinator
 - **Metric creation**: Use `self.parent._create_gauge()` (not direct `Gauge()` construction)
+- **Network lookups via inventory**: When a sub-collector needs the network list, use `await self.parent.inventory.get_networks(org_id)` (see `devices/ms.py`, `devices/mr/wireless.py`). Direct `getOrganizationNetworks` calls bypass `NetworkFilter` and are forbidden.
+- **Wrap fetcher responses** with `validate_response_format` from `core.error_handling`.
 </critical_notes>
 
 <file_map>
@@ -31,6 +33,7 @@ Device-specific collectors for Meraki Dashboard Exporter - Handles metrics colle
 ## DEVICE COLLECTOR PATTERN
 ```python
 from ..devices.base import BaseDeviceCollector
+
 
 class MyDeviceCollector(BaseDeviceCollector):
     def _initialize_metrics(self) -> None:

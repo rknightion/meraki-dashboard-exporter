@@ -646,3 +646,67 @@ class TestOrganizationInventoryValidation:
         result = await inventory_service.get_login_security("ORG")
         assert result == {}
         assert "ORG" not in inventory_service._login_security
+
+
+class TestOrganizationInventoryAllowedIds:
+    """`get_allowed_network_ids` exposes the filter-resolved network set to collectors."""
+
+    async def test_returns_none_when_no_filter(self, mock_api, mock_settings) -> None:
+        """Without a NetworkFilter the helper returns None (filtering disabled)."""
+        inventory = OrganizationInventory(mock_api, mock_settings, network_filter=None)
+        assert await inventory.get_allowed_network_ids("ORG") is None
+
+    async def test_returns_none_when_filter_inactive(self, mock_api, mock_settings) -> None:
+        """An empty NetworkFilter is inactive and the helper returns None."""
+        from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+        from meraki_dashboard_exporter.core.network_filter import NetworkFilter
+
+        nf = NetworkFilter(NetworkFilterSettings())  # no rules → inactive
+        inventory = OrganizationInventory(mock_api, mock_settings, network_filter=nf)
+        assert await inventory.get_allowed_network_ids("ORG") is None
+
+    async def test_returns_filtered_set(self, mock_api, mock_settings) -> None:
+        """Active filter returns the resolved set of allowed network IDs."""
+        from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+        from meraki_dashboard_exporter.core.network_filter import NetworkFilter
+
+        mock_api.organizations.getOrganizationNetworks.return_value = [
+            {"id": "L_1", "name": "prod", "tags": []},
+            {"id": "L_2", "name": "lab", "tags": ["lab"]},
+            {"id": "L_3", "name": "prod-2", "tags": []},
+        ]
+        nf = NetworkFilter(NetworkFilterSettings(exclude_tags=["lab"]))
+        inventory = OrganizationInventory(mock_api, mock_settings, network_filter=nf)
+
+        allowed = await inventory.get_allowed_network_ids("ORG")
+        assert allowed == {"L_1", "L_3"}
+
+    async def test_populates_network_cache_once(self, mock_api, mock_settings) -> None:
+        """Repeated calls reuse the cached network list — no extra API call."""
+        from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+        from meraki_dashboard_exporter.core.network_filter import NetworkFilter
+
+        mock_api.organizations.getOrganizationNetworks.return_value = [
+            {"id": "L_1", "name": "prod", "tags": []}
+        ]
+        nf = NetworkFilter(NetworkFilterSettings(exclude_tags=["lab"]))
+        inventory = OrganizationInventory(mock_api, mock_settings, network_filter=nf)
+
+        await inventory.get_allowed_network_ids("ORG")
+        await inventory.get_allowed_network_ids("ORG")
+        assert mock_api.organizations.getOrganizationNetworks.call_count == 1
+
+    async def test_force_refresh_bumps_api_call(self, mock_api, mock_settings) -> None:
+        """force_refresh=True bypasses the cache and fetches a fresh list."""
+        from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+        from meraki_dashboard_exporter.core.network_filter import NetworkFilter
+
+        mock_api.organizations.getOrganizationNetworks.return_value = [
+            {"id": "L_1", "name": "prod", "tags": []}
+        ]
+        nf = NetworkFilter(NetworkFilterSettings(exclude_tags=["lab"]))
+        inventory = OrganizationInventory(mock_api, mock_settings, network_filter=nf)
+
+        await inventory.get_allowed_network_ids("ORG")
+        await inventory.get_allowed_network_ids("ORG", force_refresh=True)
+        assert mock_api.organizations.getOrganizationNetworks.call_count == 2

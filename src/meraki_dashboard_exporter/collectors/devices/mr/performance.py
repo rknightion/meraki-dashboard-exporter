@@ -456,24 +456,25 @@ class MRPerformanceCollector:
                     org_id,
                 )
 
-            # Handle different API response formats
-            if isinstance(ethernet_statuses, dict) and "items" in ethernet_statuses:
-                ethernet_data = ethernet_statuses["items"]
-            elif isinstance(ethernet_statuses, list):
-                ethernet_data = ethernet_statuses
-            else:
-                logger.warning(
-                    "Unexpected ethernet status format",
-                    org_id=org_id,
-                    response_type=type(ethernet_statuses).__name__,
-                )
-                ethernet_data = []
+            ethernet_data = validate_response_format(
+                ethernet_statuses,
+                expected_type=list,
+                operation="getOrganizationWirelessDevicesEthernetStatuses",
+            )
 
             logger.debug(
                 "Successfully fetched MR ethernet status",
                 org_id=org_id,
                 device_count=len(ethernet_data) if ethernet_data else 0,
             )
+
+            # Resolve allowed network IDs for filter enforcement on org-wide responses.
+            allowed_network_ids = (
+                await self.parent.inventory.get_allowed_network_ids(org_id)
+                if self.parent.inventory is not None
+                else None
+            )
+            skipped = 0
 
             # Process each device's ethernet status
             for device_status in ethernet_data:
@@ -486,6 +487,13 @@ class MRPerformanceCollector:
                 device_info["networkName"] = network_info.get(
                     "name", device_info.get("networkId", "")
                 )
+
+                if (
+                    allowed_network_ids is not None
+                    and device_info["networkId"] not in allowed_network_ids
+                ):
+                    skipped += 1
+                    continue
                 device_info["name"] = device_info.get("name") or device_status.get("name", serial)
                 device_info["orgId"] = org_id
                 device_info["orgName"] = org_name
@@ -598,6 +606,13 @@ class MRPerformanceCollector:
                         total_speed,
                     )
 
+            if skipped:
+                logger.debug(
+                    "MR ethernet status: skipped rows outside network filter",
+                    org_id=org_id,
+                    skipped_count=skipped,
+                )
+
         except Exception:
             logger.exception(
                 "Failed to collect ethernet status",
@@ -636,10 +651,22 @@ class MRPerformanceCollector:
                 )
                 return
 
+            # Resolve allowed network IDs for filter enforcement on org-wide responses.
+            allowed_network_ids = (
+                await self.parent.inventory.get_allowed_network_ids(org_id)
+                if self.parent.inventory is not None
+                else None
+            )
+            skipped_networks = 0
+
             # Process network-level packet loss
             for network_data in network_packet_loss:
                 network_id = network_data.get("networkId", "")
                 network_name = network_data.get("networkName", network_id)
+
+                if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                    skipped_networks += 1
+                    continue
 
                 # Create network labels
                 network_labels = create_network_labels(
@@ -770,6 +797,13 @@ class MRPerformanceCollector:
                                 device_labels,
                                 dev_total_loss_percent,
                             )
+
+            if skipped_networks:
+                logger.debug(
+                    "MR packet loss: skipped networks outside filter",
+                    org_id=org_id,
+                    skipped_count=skipped_networks,
+                )
 
         except Exception:
             logger.exception(

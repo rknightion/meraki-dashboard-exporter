@@ -3,11 +3,13 @@ Meraki Dashboard Exporter Collectors - All metric collection logic organized by 
 </system_context>
 
 <critical_notes>
-- **Follow update tiers**: FAST (60s), MEDIUM (300s), SLOW (900s) based on data volatility
+- **Follow update tiers**: FAST (60s), MEDIUM (300s), SLOW (900s) based on data volatility (default per-collector timeout: 240s, configurable via `CollectorSettings.collector_timeout`)
 - **Main collectors**: Use `@register_collector()` decorator for auto-registration
 - **Sub-collectors**: Manual registration in parent coordinator's `__init__`
 - **Inherit from appropriate base**: `MetricCollector`, `BaseDeviceCollector`, etc.
 - **Implement required methods**: `_initialize_metrics()`, `_collect_impl()`
+- **Network fetches MUST go through inventory**: Always use `await self.inventory.get_networks(org_id)` (or `self.parent.inventory.get_networks(org_id)` from sub-collectors). Never call `self.api.organizations.getOrganizationNetworks` directly — that bypasses the configured `NetworkFilter`. All four prior direct call sites have been migrated.
+- **Validate fetcher responses**: New API fetchers must wrap responses with `validate_response_format` from `core.error_handling` to normalize the SDK exhausted-retry error shape.
 </critical_notes>
 
 <file_map>
@@ -43,13 +45,12 @@ from ..core.registry import register_collector
 from ..core.collector import MetricCollector
 from ..core.constants.device_constants import UpdateTier
 
+
 @register_collector(UpdateTier.MEDIUM)
 class MyCollector(MetricCollector):
-    def _initialize_metrics(self) -> None:
-        ...
+    def _initialize_metrics(self) -> None: ...
 
-    async def _collect_impl(self) -> None:
-        ...
+    async def _collect_impl(self) -> None: ...
 ```
 
 ### Sub-collector (Manual registration in parent coordinator)
@@ -82,4 +83,6 @@ Sub-collectors are instantiated in their parent coordinator's `__init__` and cal
 - **NEVER skip error handling** for API calls - use decorators
 - **NEVER forget to register collectors** - use decorator or manual registration
 - **NEVER block the event loop** - use `asyncio.to_thread()` for sync operations
+- **NEVER call `self.api.organizations.getOrganizationNetworks` directly** - always go through `self.inventory.get_networks(org_id)` so `NetworkFilter` is enforced. The only sanctioned bypass is `core/discovery.py::EnvironmentDiscovery` (audit-only).
+- **NEVER iterate org-wide SDK responses without filtering by `get_allowed_network_ids`** - rows referencing networks outside the filter must be skipped.
 </fatal_implications>

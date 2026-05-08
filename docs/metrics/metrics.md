@@ -5,9 +5,9 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 188
-- **Gauges:** 166
-- **Counters:** 16
+- **Total metrics:** 209
+- **Gauges:** 185
+- **Counters:** 18
 - **Histograms:** 5
 - **Info metrics:** 1
 
@@ -78,10 +78,6 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_device_memory_used_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `stat` | Device memory used in bytes |  |
 | `meraki_device_status_info` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `status` | Device status information |  |
 | `meraki_device_up` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Device online status (1 = online, 0 = offline) |  |
-| `meraki_ms_ports_active_total` | gauge | `org_id`, `org_name` | Total number of active switch ports |  |
-| `meraki_ms_ports_by_link_speed_total` | gauge | `org_id`, `org_name`, `media`, `link_speed` | Total number of active switch ports by link speed |  |
-| `meraki_ms_ports_by_media_total` | gauge | `org_id`, `org_name`, `media`, `status` | Total number of switch ports by media type |  |
-| `meraki_ms_ports_inactive_total` | gauge | `org_id`, `org_name` | Total number of inactive switch ports |  |
 
 ### MRClientsCollector
 
@@ -162,8 +158,19 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_ms_port_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `link_speed`, `duplex` | Switch port status (1 = connected, 0 = disconnected) |  |
 | `meraki_ms_port_traffic_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Switch port traffic rate in bytes per second (averaged over 1 hour) |  |
 | `meraki_ms_port_usage_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Switch port data usage in bytes over the last 1 hour |  |
+| `meraki_ms_ports_active_total` | gauge | `org_id`, `org_name` | Total number of active switch ports |  |
+| `meraki_ms_ports_by_link_speed_total` | gauge | `org_id`, `org_name`, `media`, `link_speed` | Total number of active switch ports by link speed |  |
+| `meraki_ms_ports_by_media_total` | gauge | `org_id`, `org_name`, `media`, `status` | Total number of switch ports by media type |  |
+| `meraki_ms_ports_inactive_total` | gauge | `org_id`, `org_name` | Total number of inactive switch ports |  |
 | `meraki_ms_power_usage_watts` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Switch power usage in watts |  |
 | `meraki_ms_stp_priority` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Switch STP (Spanning Tree Protocol) priority |  |
+
+### MSStackCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_ms_stack_member_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `stack_id`, `serial`, `role` | Switch stack member status (1=present/online, 0=absent/offline) |  |
+| `meraki_ms_stack_members_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `stack_id` | Total number of members in switch stack |  |
 
 ### MTSensorCollector
 
@@ -194,12 +201,31 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_mx_uplink_info` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `interface`, `status` | MX appliance uplink status info (1 = present) |  |
 
+### MXFirewallCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_mx_firewall_default_policy` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Firewall default policy for L3 rules (1=allow, 0=deny) |  |
+| `meraki_mx_firewall_rules_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `rule_type` | Total number of user-defined firewall rules by type (excludes default rule) |  |
+| `meraki_mx_security_events_total` | gauge | `org_id`, `org_name`, `event_type` | Total security events by type (reserved for future use) |  |
+
+### MXVpnCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_mx_vpn_jitter_ms` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id`, `peer_type` | VPN peer jitter in milliseconds |  |
+| `meraki_mx_vpn_latency_ms` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id`, `peer_type` | VPN peer round-trip latency in milliseconds |  |
+| `meraki_mx_vpn_packet_loss_ratio` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id`, `peer_type` | VPN peer packet loss ratio (0.0–1.0) |  |
+| `meraki_mx_vpn_peer_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id`, `peer_type` | VPN peer reachability status (1=reachable, 0=unreachable) |  |
+| `meraki_mx_vpn_peers_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Total number of VPN peers configured for a network |  |
+
 ### NetworkHealthCollector
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
 | `meraki_ap_channel_utilization_2_4ghz_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `utilization_type` | 2.4GHz channel utilization percentage per AP |  |
 | `meraki_ap_channel_utilization_5ghz_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `utilization_type` | 5GHz channel utilization percentage per AP |  |
+| `meraki_mr_ssid_failed_connections_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `ssid`, `failure_step` | Failed wireless connections by SSID and failure step over the last hour |  |
 | `meraki_network_bluetooth_clients_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Total number of Bluetooth clients detected by MR devices in the last 5 minutes |  |
 | `meraki_network_channel_utilization_2_4ghz_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `utilization_type` | Network-wide average 2.4GHz channel utilization percentage |  |
 | `meraki_network_channel_utilization_5ghz_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `utilization_type` | Network-wide average 5GHz channel utilization percentage |  |
@@ -211,6 +237,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
+| `meraki_exporter_org_collection_status` | gauge | `org_id`, `org_name` | Organization collection status (1=success, 0=failed or in backoff) |  |
 | `meraki_org` | info | `org_id`, `org_name` | Organization information |  |
 | `meraki_org_api_requests_by_status` | gauge | `org_id`, `org_name`, `status_code` | API requests by HTTP status code in the last hour |  |
 | `meraki_org_api_requests_total` | gauge | `org_id`, `org_name` | Total API requests made by the organization in the last hour |  |
@@ -230,6 +257,14 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_org_usage_downstream_kb` | gauge | `org_id`, `org_name` | Downstream data usage in KB for the 1-hour window |  |
 | `meraki_org_usage_total_kb` | gauge | `org_id`, `org_name` | Total data usage in KB for the 1-hour window |  |
 | `meraki_org_usage_upstream_kb` | gauge | `org_id`, `org_name` | Upstream data usage in KB for the 1-hour window |  |
+
+### WebhookMetricsCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_webhook_events_total` | counter | — | Total webhook events received |  |
+| `meraki_webhook_last_event_timestamp` | gauge | — | Unix timestamp of last webhook event |  |
+| `meraki_webhook_processing_errors_total` | counter | — | Total webhook processing errors |  |
 
 ## Internal & Platform Metrics
 
@@ -257,6 +292,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
 | `meraki_exporter_collection_errors_total` | counter | `collector`, `tier`, `error_type` | Total number of collection errors by collector and phase |  |
+| `meraki_exporter_collection_utilization_ratio` | gauge | `collector`, `tier` | Fraction of the tier interval consumed by actual collection (0=instant, 1=full interval) |  |
 | `meraki_exporter_collection_wait_seconds` | histogram | `collector`, `org_id` | Time an organization spends waiting for semaphore slot before collection starts |  |
 | `meraki_exporter_collections_active` | gauge | `collector`, `tier` | Number of parallel organization collections currently active |  |
 | `meraki_exporter_collector_failure_streak` | gauge | `collector`, `tier` | Consecutive failures for each collector since last success |  |
@@ -278,6 +314,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
 | `meraki_exporter_cache_size_tracked_metrics` | gauge | `collector` | Number of metrics currently tracked for expiration |  |
+| `meraki_exporter_cardinality_limit_reached` | gauge | `collector` | 1 if cardinality shedding is active for this collector, 0 otherwise |  |
 | `meraki_exporter_collection_errors_total_expired` | counter | `collector`, `tier` | Total number of metrics expired due to TTL |  |
 
 ### OrgRateLimiter
@@ -287,6 +324,15 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_exporter_api_rate_limiter_throttled_total` | counter | `org_id`, `endpoint` | Total number of client-side rate limiter waits |  |
 | `meraki_exporter_api_rate_limiter_tokens` | gauge | `org_id` | Estimated remaining tokens in client-side rate limiter bucket |  |
 | `meraki_exporter_api_rate_limiter_wait_seconds` | histogram | `org_id`, `endpoint` | Seconds spent waiting for client-side rate limiter |  |
+
+### OrganizationInventory
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_exporter_inventory_cache_size` | gauge | — | Number of entries in inventory cache |  |
+| `meraki_network_filter_match` | gauge | — | 1 if the network passes the configured network filter, 0 otherwise. |  |
+| `meraki_network_filter_resolved` | gauge | — | Number of networks included by the configured network filter. |  |
+| `meraki_network_filter_total` | gauge | — | Total number of networks in the organization (pre-filter). |  |
 
 ### WebhookHandler
 
