@@ -392,3 +392,142 @@ class TestOrganizationInventoryMetrics:
         assert stats["cache_misses"] == 2
         assert stats["cache_hits"] == 0
         assert stats["cached_networks"] == 2  # Two orgs cached
+
+
+class TestOrganizationInventoryNetworkFilter:
+    """Network-filter behaviour at the inventory read path."""
+
+    async def test_get_networks_applies_filter(self, mock_api, mock_settings) -> None:
+        """get_networks returns only filtered networks; cache stores the full list."""
+        from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+        from meraki_dashboard_exporter.core.network_filter import NetworkFilter
+
+        mock_api.organizations.getOrganizationNetworks.return_value = [
+            {"id": "L_1", "name": "prod-a", "tags": ["production"]},
+            {"id": "L_2", "name": "lab-a", "tags": ["lab"]},
+        ]
+        nf = NetworkFilter(NetworkFilterSettings(exclude_tags=["lab"]))
+        inv = OrganizationInventory(mock_api, mock_settings, network_filter=nf)
+
+        result = await inv.get_networks("ORG")
+        assert [n["id"] for n in result] == ["L_1"]
+
+        # Cache contains the full unfiltered list.
+        assert [n["id"] for n in inv._networks["ORG"]] == ["L_1", "L_2"]
+
+        # unfiltered=True returns the full list.
+        full = await inv.get_networks("ORG", unfiltered=True)
+        assert [n["id"] for n in full] == ["L_1", "L_2"]
+
+    async def test_get_networks_no_filter_returns_all(self, mock_api, mock_settings) -> None:
+        """When no filter is supplied, get_networks returns all networks."""
+        mock_api.organizations.getOrganizationNetworks.return_value = [
+            {"id": "L_1", "name": "x", "tags": []},
+            {"id": "L_2", "name": "y", "tags": []},
+        ]
+        inv = OrganizationInventory(mock_api, mock_settings, network_filter=None)
+
+        result = await inv.get_networks("ORG")
+        assert [n["id"] for n in result] == ["L_1", "L_2"]
+
+    async def test_get_networks_filter_applies_on_cache_hit(self, mock_api, mock_settings) -> None:
+        """Regression: filter must apply on cache-hit returns, not just cache-miss.
+
+        The cache-hit path is the production-warm path — missing it is a silent
+        regression. This test exercises both pre-lock and post-lock cache hits.
+        """
+        from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+        from meraki_dashboard_exporter.core.network_filter import NetworkFilter
+
+        mock_api.organizations.getOrganizationNetworks.return_value = [
+            {"id": "L_1", "name": "prod", "tags": []},
+            {"id": "L_2", "name": "lab", "tags": ["lab"]},
+        ]
+        nf = NetworkFilter(NetworkFilterSettings(exclude_tags=["lab"]))
+        inv = OrganizationInventory(mock_api, mock_settings, network_filter=nf)
+
+        # First call populates the cache.
+        first = await inv.get_networks("ORG")
+        assert [n["id"] for n in first] == ["L_1"]
+
+        # Second call must hit the cache AND still apply the filter.
+        second = await inv.get_networks("ORG")
+        assert [n["id"] for n in second] == ["L_1"]
+
+        # Confirm the SDK was only called once — second call was a cache hit.
+        assert mock_api.organizations.getOrganizationNetworks.call_count == 1
+
+    async def test_get_devices_drops_devices_in_excluded_networks(
+        self, mock_api, mock_settings
+    ) -> None:
+        """Devices whose networkId is excluded are dropped from get_devices."""
+        from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+        from meraki_dashboard_exporter.core.network_filter import NetworkFilter
+
+        mock_api.organizations.getOrganizationNetworks.return_value = [
+            {"id": "L_1", "name": "prod", "tags": []},
+            {"id": "L_2", "name": "lab", "tags": ["lab"]},
+        ]
+        mock_api.organizations.getOrganizationDevices.return_value = [
+            {"serial": "Q1", "networkId": "L_1"},
+            {"serial": "Q2", "networkId": "L_2"},
+            {"serial": "Q3", "networkId": "L_1"},
+        ]
+        nf = NetworkFilter(NetworkFilterSettings(exclude_tags=["lab"]))
+        inv = OrganizationInventory(mock_api, mock_settings, network_filter=nf)
+        # Populate networks cache first so the filter has a list to resolve against.
+        await inv.get_networks("ORG")
+
+        result = await inv.get_devices("ORG")
+        assert sorted(d["serial"] for d in result) == ["Q1", "Q3"]
+
+        # Underlying cache still has all devices.
+        assert {d["serial"] for d in inv._devices["ORG"]} == {"Q1", "Q2", "Q3"}
+
+        # unfiltered returns all.
+        all_devices = await inv.get_devices("ORG", unfiltered=True)
+        assert sorted(d["serial"] for d in all_devices) == ["Q1", "Q2", "Q3"]
+
+    async def test_get_device_availabilities_filters_by_network(
+        self, mock_api, mock_settings
+    ) -> None:
+        """Device availability records for excluded networks are dropped."""
+        from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+        from meraki_dashboard_exporter.core.network_filter import NetworkFilter
+
+        mock_api.organizations.getOrganizationNetworks.return_value = [
+            {"id": "L_1", "name": "prod", "tags": []},
+            {"id": "L_2", "name": "lab", "tags": ["lab"]},
+        ]
+        mock_api.organizations.getOrganizationDevicesAvailabilities.return_value = [
+            {"serial": "Q1", "network": {"id": "L_1"}, "status": "online"},
+            {"serial": "Q2", "network": {"id": "L_2"}, "status": "online"},
+        ]
+        nf = NetworkFilter(NetworkFilterSettings(exclude_tags=["lab"]))
+        inv = OrganizationInventory(mock_api, mock_settings, network_filter=nf)
+        await inv.get_networks("ORG")
+
+        result = await inv.get_device_availabilities("ORG")
+        assert [a["serial"] for a in result] == ["Q1"]
+
+    async def test_get_device_availabilities_filters_flat_network_id_shape(
+        self, mock_api, mock_settings
+    ) -> None:
+        """Filter handles availability records with flat networkId field too."""
+        from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+        from meraki_dashboard_exporter.core.network_filter import NetworkFilter
+
+        mock_api.organizations.getOrganizationNetworks.return_value = [
+            {"id": "L_1", "name": "prod", "tags": []},
+            {"id": "L_2", "name": "lab", "tags": ["lab"]},
+        ]
+        mock_api.organizations.getOrganizationDevicesAvailabilities.return_value = [
+            {"serial": "Q1", "networkId": "L_1", "status": "online"},
+            {"serial": "Q2", "networkId": "L_2", "status": "online"},
+        ]
+        nf = NetworkFilter(NetworkFilterSettings(exclude_tags=["lab"]))
+        inv = OrganizationInventory(mock_api, mock_settings, network_filter=nf)
+        await inv.get_networks("ORG")
+
+        result = await inv.get_device_availabilities("ORG")
+        assert [a["serial"] for a in result] == ["Q1"]
