@@ -210,12 +210,24 @@ class MRWirelessCollector:
                     operation="getOrganizationWirelessSsidsStatusesByDevice",
                 )
 
+            # Resolve allowed network IDs for filter enforcement on org-wide responses.
+            allowed_network_ids = (
+                await self.parent.inventory.get_allowed_network_ids(org_id)
+                if self.parent.inventory is not None
+                else None
+            )
+            skipped = 0
+
             # Process SSID status for each device
             for device_status in ssid_statuses:
                 serial = device_status.get("serial", "")
                 network = device_status.get("network", {})
                 network_id = network.get("id", "")
                 network_name = network.get("name", network_id)
+
+                if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                    skipped += 1
+                    continue
 
                 # Get basic device info
                 basic_info = device_status.get("basicServiceSets", [])
@@ -277,6 +289,13 @@ class MRWirelessCollector:
                             radio_labels,
                             power,
                         )
+
+            if skipped:
+                logger.debug(
+                    "MR SSID status: skipped rows outside network filter",
+                    org_id=org_id,
+                    skipped_count=skipped,
+                )
 
         except Exception:
             logger.exception(

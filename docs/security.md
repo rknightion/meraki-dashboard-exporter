@@ -57,7 +57,24 @@ cosign verify-attestation ghcr.io/rknightion/meraki-dashboard-exporter:latest \
 
 When deploying this exporter:
 
-1. **API Key Security**: Never commit API keys to version control. Use environment variables or secrets management.
+1. **API Key Security**: Never commit API keys to version control. Use environment variables or secrets management. Where possible, generate a Meraki Dashboard API key for an account with read-only access scoped to the organisations being exported.
 2. **Network Security**: Run the exporter in a private network, expose only to authorized Prometheus instances.
 3. **Resource Limits**: Apply appropriate CPU and memory limits to prevent resource exhaustion.
 4. **Regular Updates**: Keep the exporter updated to receive security patches.
+
+### Webhook receiver
+
+If you enable the optional Meraki webhook receiver
+(`MERAKI_EXPORTER_WEBHOOKS__ENABLED=true`), the exporter will accept JSON
+POSTs at `/api/webhooks/meraki`. By default it requires a shared secret
+(`MERAKI_EXPORTER_WEBHOOKS__REQUIRE_SECRET=true`); configure
+`MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET` to match the value set in your
+Meraki Dashboard webhook configuration. Disabling the secret check is
+intended for local testing only. Payloads larger than
+`MERAKI_EXPORTER_WEBHOOKS__MAX_PAYLOAD_SIZE` (default 1 MB) are rejected.
+
+### API key handling
+
+API keys are loaded as Pydantic `SecretStr` values and are not logged or
+serialised in the `/status`, `/metrics`, or web UI surfaces. Treat the
+container environment that holds `MERAKI_API_KEY` as sensitive.

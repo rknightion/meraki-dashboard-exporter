@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from prometheus_client import Gauge
@@ -32,6 +32,8 @@ class TestMRCollector:
         parent.api = mock_api
         parent.settings = MagicMock()
         parent.rate_limiter = None
+        # No inventory means no NetworkFilter — collectors emit all rows.
+        parent.inventory = None
 
         # Create actual gauges for metrics
         gauges = {}
@@ -282,3 +284,154 @@ class TestMRCollector:
         mock_api.wireless.getOrganizationWirelessDevicesEthernetStatuses.assert_called_once_with(
             org_id
         )
+
+    async def test_collect_wireless_clients_respects_network_filter(
+        self,
+        mr_collector: MRCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Wireless client metrics for excluded networks must be skipped."""
+        mock_api.wireless.getOrganizationWirelessClientsOverviewByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q-IN",
+                    "network": {"id": "N_INCLUDED", "name": "Prod"},
+                    "counts": {"byStatus": {"online": 5}},
+                },
+                {
+                    "serial": "Q-OUT",
+                    "network": {"id": "N_EXCLUDED", "name": "Lab"},
+                    "counts": {"byStatus": {"online": 7}},
+                },
+            ]
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_INCLUDED"})
+
+        await mr_collector.collect_wireless_clients("org1", "Test Org", {})
+
+        ap_clients_calls = [
+            call
+            for call in mock_parent._set_metric.call_args_list
+            if call[0][0] is mr_collector._ap_clients
+        ]
+        assert len(ap_clients_calls) == 1
+        _, labels, value = ap_clients_calls[0][0]
+        assert labels["network_id"] == "N_INCLUDED"
+        assert value == 5
+
+    async def test_collect_ssid_status_respects_network_filter(
+        self,
+        mr_collector: MRCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """SSID radio metrics for excluded networks must be skipped."""
+        mock_api.wireless.getOrganizationWirelessSsidsStatusesByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q-IN",
+                    "network": {"id": "N_INCLUDED", "name": "Prod"},
+                    "basicServiceSets": [
+                        {"radio": {"band": "5", "index": 0, "isBroadcasting": True}},
+                    ],
+                },
+                {
+                    "serial": "Q-OUT",
+                    "network": {"id": "N_EXCLUDED", "name": "Lab"},
+                    "basicServiceSets": [
+                        {"radio": {"band": "5", "index": 0, "isBroadcasting": True}},
+                    ],
+                },
+            ]
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_INCLUDED"})
+
+        await mr_collector.collect_ssid_status("org1", "Test Org", {})
+
+        for call in mock_parent._set_metric.call_args_list:
+            _, labels, _ = call[0]
+            assert labels.get("network_id") != "N_EXCLUDED"
+
+    async def test_collect_packet_loss_respects_network_filter(
+        self,
+        mr_collector: MRCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Packet-loss network rows outside the filter must be skipped (incl. nested devices)."""
+        mock_api.wireless.getOrganizationWirelessDevicesPacketLossByNetwork = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_INCLUDED",
+                    "networkName": "Prod",
+                    "downstream": {"total": 1000, "lost": 5, "lossPercentage": 0.5},
+                    "upstream": {"total": 800, "lost": 4, "lossPercentage": 0.5},
+                    "devices": [
+                        {
+                            "serial": "Q-IN",
+                            "downstream": {"total": 500, "lost": 2, "lossPercentage": 0.4},
+                            "upstream": {"total": 400, "lost": 2, "lossPercentage": 0.5},
+                        }
+                    ],
+                },
+                {
+                    "networkId": "N_EXCLUDED",
+                    "networkName": "Lab",
+                    "downstream": {"total": 999, "lost": 99, "lossPercentage": 9.9},
+                    "upstream": {"total": 999, "lost": 99, "lossPercentage": 9.9},
+                    "devices": [
+                        {
+                            "serial": "Q-OUT",
+                            "downstream": {"total": 999, "lost": 99, "lossPercentage": 9.9},
+                            "upstream": {"total": 999, "lost": 99, "lossPercentage": 9.9},
+                        }
+                    ],
+                },
+            ]
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_INCLUDED"})
+
+        await mr_collector.collect_packet_loss("org1", "Test Org", {})
+
+        # No N_EXCLUDED metrics — neither network-level nor nested device-level.
+        for call in mock_parent._set_metric.call_args_list:
+            _, labels, _ = call[0]
+            assert labels.get("network_id") != "N_EXCLUDED"
+            assert labels.get("serial") != "Q-OUT"
+
+    async def test_collect_ethernet_status_respects_network_filter(
+        self,
+        mr_collector: MRCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Ethernet status rows for excluded networks must be skipped."""
+        mock_api.wireless.getOrganizationWirelessDevicesEthernetStatuses = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q-IN",
+                    "name": "AP-IN",
+                    "network": {"id": "N_INCLUDED", "name": "Prod"},
+                    "power": {"mode": "ac", "ac": {"isConnected": True}},
+                },
+                {
+                    "serial": "Q-OUT",
+                    "name": "AP-OUT",
+                    "network": {"id": "N_EXCLUDED", "name": "Lab"},
+                    "power": {"mode": "ac", "ac": {"isConnected": True}},
+                },
+            ]
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_INCLUDED"})
+
+        await mr_collector.collect_ethernet_status("org1", "Test Org", {})
+
+        for call in mock_parent._set_metric.call_args_list:
+            _, labels, _ = call[0]
+            assert labels.get("network_id") != "N_EXCLUDED"
+            assert labels.get("serial") != "Q-OUT"

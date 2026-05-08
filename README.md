@@ -12,7 +12,8 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 - **Device-specific metrics**: Status, performance, sensor readings, port statistics
 - **Webhook receiver**: Real-time event processing from Meraki Dashboard alerts
 - **Client tracking**: Optional DNS-enhanced client identification and monitoring (disabled by default)
-- **Cardinality monitoring**: Built-in `/cardinality` UI and `/api/metrics/cardinality` JSON API
+- **Network filtering**: Restrict scraping to specific networks by name glob, ID, or tag (inactive by default)
+- **Status dashboard**: Built-in `/status` health UI alongside `/cardinality` UI and `/api/metrics/cardinality` JSON API
 
 ### Performance & Reliability
 - **High-performance collection**: Parallel organization processing with bounded concurrency
@@ -25,7 +26,7 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 - **Distributed tracing**: Full request tracing with OpenTelemetry instrumentation
 - **Structured logging**: logfmt output with trace correlation and contextual information
 - **Cardinality monitoring**: Built-in tracking and warning metrics for metric growth
-- **Health monitoring**: Collector health metrics with success rates, failure streaks, and last success timestamps
+- **Health monitoring**: `/health` and `/ready` probes plus a `/status` HTML dashboard summarising collector success rates, failure streaks, and last success timestamps
 
 ### Deployment
 - Docker support with health checks and multi-stage builds
@@ -181,6 +182,8 @@ All configuration is done via environment variables. See `.env.example` for all 
 - `MERAKI_EXPORTER_API__MAX_RETRIES`: Maximum API request retries (default: 3)
 - `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT`: Max parallel collector/org work (default: 5)
 - `MERAKI_EXPORTER_API__BATCH_SIZE`: Default batch size for API operations (default: 20)
+- `MERAKI_EXPORTER_API__VALIDATE_KWARGS`: Enable Meraki SDK kwarg validation warnings (default: false; recommended for dev/CI)
+- `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT`: Per-run collector timeout budget in seconds (default: 240)
 - `MERAKI_EXPORTER_CLIENTS__ENABLED`: Enable client collector and DNS resolution (default: false)
 - `MERAKI_EXPORTER_WEBHOOKS__ENABLED`: Enable Meraki webhook receiver (default: false)
 
@@ -205,6 +208,7 @@ MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_TAGS=production,critical
 
 # Exclude rules (applied AFTER includes)
 MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_NAMES=*-test
+MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_IDS=L_999999
 MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_TAGS=lab
 ```
 
@@ -212,7 +216,7 @@ MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_TAGS=lab
 
 **Devices** in excluded networks are not scraped either. **Organization-level** metrics (license counts, API usage) are unaffected.
 
-**Observability.** Live filter state is published as `meraki_network_filter_match{org_id,network_id,included}`, `meraki_network_filter_resolved{org_id}`, and `meraki_network_filter_total{org_id}` so dashboards and alerts can verify filter scope.
+**Observability.** Live filter state is published as `meraki_network_filter_match{org_id,network_id}` (value 1 if included, 0 if excluded), `meraki_network_filter_resolved{org_id}`, and `meraki_network_filter_total{org_id}` so dashboards and alerts can verify filter scope.
 
 ### Regional API Endpoints
 
@@ -245,8 +249,9 @@ See the generated [metrics reference](https://m7kni.io/meraki-dashboard-exporter
 
 - **Bounded concurrency**: ManagedTaskGroup keeps parallel collectors/orgs within `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT`
 - **Tiered scheduling**: FAST/MEDIUM/SLOW tiers align with data volatility (60s/300s/900s by default)
-- **Inventory caching**: Organization/network/device lookups cached per tier with TTL to reduce duplicate API calls
+- **Inventory-routed lookups**: Collectors fetch network/device data through the shared `OrganizationInventory` cache (per-tier TTLs) to suppress duplicate API calls
 - **Batch controls**: Tunable batch sizes and delays (`MERAKI_EXPORTER_API__*BATCH_SIZE`, `MERAKI_EXPORTER_API__BATCH_DELAY`)
+- **Adaptive smoothing**: Per-collector batch smoothing spreads work across the interval, capped at 30% of `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` so a single collector cannot starve the run budget
 - **Metric lifecycle**: Automatic expiration cleans up stale series when devices disappear or go offline
 
 ## Development

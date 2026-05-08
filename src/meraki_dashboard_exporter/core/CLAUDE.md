@@ -14,8 +14,9 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 ## CORE COMPONENTS
 ### Configuration
 - `config.py` - `Settings` class (Pydantic BaseSettings) with nested config models
-- `config_models.py` - Nested config models (APISettings, CollectorSettings, OTelSettings, etc.)
+- `config_models.py` - Nested config models (`APISettings` including `validate_kwargs` for Meraki SDK 3.1.0, `CollectorSettings` with default `collector_timeout=240`, `OTelSettings`, `NetworkFilterSettings`, etc.)
 - `config_logger.py` - Configuration-aware logging setup
+- `network_filter.py` - `NetworkFilter` resolver for include/exclude rules across name (glob), id, and tag. Pure logic; applied at the inventory read path in `services/inventory.py`. `EnvironmentDiscovery` is the documented exception that bypasses the filter.
 
 ### Logging
 - `logging.py` - Structured logging setup (`get_logger()`)
@@ -29,7 +30,7 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 - `exemplars.py` - OpenTelemetry exemplar support
 
 ### Error Handling
-- `error_handling.py` - `@with_error_handling()` decorator, `ErrorCategory` enum, custom exceptions
+- `error_handling.py` - `@with_error_handling()` decorator, `ErrorCategory` enum, custom exceptions, and `validate_response_format(response, expected_type, operation)` helper. New API fetchers must call `validate_response_format` to normalize the SDK's exhausted-retry error shape (a dict with `errors` key) and unwrap `{"items": [...]}` responses where applicable.
 
 ### Domain Models
 - `api_models.py` - Basic API response models (`Organization`, `Network`, `Device`)
@@ -53,7 +54,7 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 
 ### Other
 - `cardinality.py` - Metric cardinality tracking and management
-- `discovery.py` - Device/network discovery
+- `discovery.py` - `EnvironmentDiscovery`: one-time startup environment audit. Deliberately bypasses `NetworkFilter` (calls `getOrganizationNetworks` directly) so operators see the full pre-filter inventory in startup diagnostics. This is the only sanctioned bypass.
 - `webhook_handler.py` - Webhook event processing and validation
 
 ### Constants (`constants/` subdirectory)
@@ -81,7 +82,12 @@ self._port_status = self.parent._create_gauge(
 
 ## ERROR HANDLING PATTERN
 ```python
-from ..core.error_handling import with_error_handling, ErrorCategory
+from ..core.error_handling import (
+    ErrorCategory,
+    validate_response_format,
+    with_error_handling,
+)
+
 
 @with_error_handling(
     operation="Fetch devices",
@@ -89,7 +95,14 @@ from ..core.error_handling import with_error_handling, ErrorCategory
     error_category=ErrorCategory.API_SERVER_ERROR,
 )
 async def _fetch_devices(self, org_id: str) -> list[Device] | None:
-    ...
+    raw = await asyncio.to_thread(
+        self.api.organizations.getOrganizationDevices, org_id, total_pages="all"
+    )
+    # Mandatory: normalize the SDK exhausted-retry error shape and unwrap
+    # {"items": [...]} responses. Raises RetryableAPIError / DataValidationError
+    # so the decorator can categorize correctly.
+    devices = validate_response_format(raw, expected_type=list, operation="getOrganizationDevices")
+    return [Device.model_validate(d) for d in devices]
 ```
 
 ## CONFIGURATION ACCESS
@@ -107,6 +120,7 @@ from ..core.logging_helpers import LogContext
 from ..core.logging_decorators import log_api_call
 
 logger = get_logger(__name__)
+
 
 @log_api_call("getOrganizationDevices")
 async def _fetch_devices(self, org_id: str) -> list[Device]:
@@ -129,4 +143,6 @@ async def _fetch_devices(self, org_id: str) -> list[Device]:
 - **NEVER skip domain model validation** - always use `model_validate()`
 - **NEVER log sensitive data** - API keys, tokens, etc.
 - **NEVER ignore error handling** - use decorators for consistent behavior
+- **NEVER skip `validate_response_format`** for new fetchers - the SDK can return error-shaped dicts after retry exhaustion
+- **NEVER bypass `NetworkFilter`** outside `core/discovery.py::EnvironmentDiscovery` - all collector network reads go through `OrganizationInventory.get_networks(org_id)`
 </fatal_implications>

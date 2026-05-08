@@ -8,6 +8,8 @@ Meraki Dashboard Exporter Test Suite - Comprehensive testing infrastructure with
 - **Mock with `MockAPIBuilder`** for cleaner API response mocking
 - **Assert metrics** with `MetricAssertions` for clear verification
 - **Test error scenarios** with `.with_error()` method on mocks
+- **Network filter coverage**: When testing collectors that read networks, prefer asserting against the inventory (`OrganizationInventory.get_networks`) so `NetworkFilter` behavior is exercised end-to-end. Tests must not patch out the filter or call `getOrganizationNetworks` directly.
+- **Validate-response-format coverage**: For new fetchers, add a test that simulates the SDK exhausted-retry error shape (a dict with an `errors` key) and asserts `validate_response_format` raises `RetryableAPIError`/`DataValidationError` as appropriate.
 </critical_notes>
 
 <file_map>

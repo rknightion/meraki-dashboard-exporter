@@ -11,6 +11,8 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **Memory**: Be mindful of API rate limits and implement proper error handling
 - **Use parallel tasks/agents** when suitable use the parallel tasks and agents available to you
 - **Never issue git commands** the user will handle all 'git' commands
+- **Network fetches go through inventory**: All collectors must use `OrganizationInventory.get_networks(org_id)` so the configured `NetworkFilter` is enforced uniformly. Direct `getOrganizationNetworks` SDK calls in collectors are forbidden. `EnvironmentDiscovery` (`core/discovery.py`) deliberately bypasses the filter for audit purposes.
+- **Wrap fetchers with `validate_response_format`**: New API fetchers that may receive the SDK exhausted-retry error shape must use `core.error_handling.validate_response_format` to normalize the response.
 </critical_notes>
 
 <file_map>
@@ -43,11 +45,13 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **Domain-specific metric enums**: Use `OrgMetricName`, `DeviceMetricName`, `MSMetricName`, `MRMetricName`, etc. from `core/constants/metrics_constants.py`
 - **Label enums**: Use `LabelName` enum from `core/metrics.py`
 - **Domain models**: Pydantic validation for all API responses
-- **Error handling**: Decorators from `core/error_handling.py`
-- **Update tiers**: FAST (60s), MEDIUM (300s), SLOW (900s) based on volatility
+- **Error handling**: Decorators from `core/error_handling.py`; wrap fetchers with `validate_response_format` to normalize the SDK exhausted-retry error shape
+- **Update tiers**: FAST (60s), MEDIUM (300s), SLOW (900s) based on volatility (default per-collector timeout: 240s)
 - **Parallel collection**: Use `ManagedTaskGroup` for bounded concurrency
-- **Inventory caching**: Leverage shared `OrganizationInventory` service to reduce API calls
+- **Inventory caching (mandatory for networks)**: All network fetches go through `OrganizationInventory.get_networks(org_id)`; this is the single enforcement point for the configured `NetworkFilter` (`core/network_filter.py`, `NetworkFilterSettings` in `core/config_models.py`).
+- **Meraki SDK 3.1.0**: New `validate_kwargs` setting (`core/config_models.py` `APISettings.validate_kwargs`); recommended for dev/CI, off by default in production.
 - **Metric lifecycle**: Track and expire metrics for offline/removed devices
+- **Web endpoints**: `app.py` exposes `/metrics`, the web UI, and a `/status` health dashboard endpoint.
 
 </paved_path>
 
@@ -89,5 +93,6 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **NEVER work in subdirectories without consulting their `CLAUDE.md`**
 - **NEVER use unbounded parallelism** - always use ManagedTaskGroup with max_concurrency
 - **NEVER bypass inventory service** - use cached data when available
+- **NEVER call `getOrganizationNetworks` directly from a collector** - go through `OrganizationInventory.get_networks(org_id)` so `NetworkFilter` is enforced. Only `core/discovery.py::EnvironmentDiscovery` is permitted to bypass for audit logging.
 - **NEVER forget metric tracking** - use `parent._set_metric()` for automatic expiration
 </fatal_implications>

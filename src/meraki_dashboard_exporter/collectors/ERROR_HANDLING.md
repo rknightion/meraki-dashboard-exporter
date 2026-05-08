@@ -26,8 +26,7 @@ In these cases, still use the decorator on the outer method and manual handling 
     continue_on_error=True,
     error_category=ErrorCategory.API_CLIENT_ERROR,
 )
-async def _fetch_devices(self, org_id: str) -> list | None:
-    ...
+async def _fetch_devices(self, org_id: str) -> list | None: ...
 ```
 
 ### Manual (404 recovery):

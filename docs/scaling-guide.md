@@ -61,6 +61,34 @@ Recommendations for deploying the Meraki Dashboard Exporter at different scales.
 - Use `meraki_exporter_cardinality_limit_reached` to detect metric shedding
 - Monitor `meraki_exporter_org_collection_status` for per-org health
 - Consider disabling non-critical collectors (clients, alerts) if rate limited
+- The shared inventory cache feeds all collectors with network/device lookups,
+  so filtering at the inventory layer (see Network Filter below) immediately
+  reduces downstream API call volume across every tier.
+
+## Reducing API Call Volume with the Network Filter
+
+For large or multi-tenant organisations where you only care about a subset of
+networks, the **Network Filter** is the most effective single lever for cutting
+API usage. It applies at the inventory layer, so excluded networks (and their
+devices) are skipped by every collector.
+
+Configure via include/exclude rules on name globs, IDs, or tags:
+
+```bash
+MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_NAMES=prod-*,staging-*
+MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_TAGS=production,critical
+MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_NAMES=*-test,*-sandbox
+```
+
+Resolution semantics: if any `INCLUDE_*` is set, networks must match at least
+one include rule; any `EXCLUDE_*` match drops the network (excludes win). The
+filter is inactive by default. If a configured filter resolves to zero
+networks across all orgs at startup, the exporter exits with an error so
+typos fail loudly.
+
+Live filter state is observable via `meraki_network_filter_match`,
+`meraki_network_filter_resolved`, and `meraki_network_filter_total`. See
+`.env.example` for the full set of fields.
 
 ## Key Metrics to Monitor
 

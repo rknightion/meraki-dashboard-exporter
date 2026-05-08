@@ -6,7 +6,9 @@ Meraki API Client - Provides authenticated access to Cisco Meraki Dashboard API 
 - **Use `asyncio.to_thread()`** for all API calls - Meraki SDK is synchronous
 - **Rate limiting**: 5 calls per second per organization
 - **Authentication**: API key stored securely, never logged
-- **Error handling**: Network timeouts and API errors are common - always use decorators
+- **Error handling**: Network timeouts and API errors are common - always use decorators, and wrap responses with `validate_response_format` to normalize the SDK exhausted-retry error shape
+- **Meraki SDK 3.1.0** (upgraded from 2.2.0): `MerakiClient` honors `APISettings.validate_kwargs` (default `False`); set to `True` in dev/CI to surface unrecognized kwargs warnings from the SDK.
+- **Network fetches**: Collectors must NOT call the SDK's `getOrganizationNetworks` directly — go through `OrganizationInventory.get_networks(org_id)` so `NetworkFilter` is applied. The wrapper's `AsyncMerakiClient.get_networks` exists for inventory's own use.
 </critical_notes>
 
 <file_map>
@@ -28,16 +30,23 @@ Meraki API Client - Provides authenticated access to Cisco Meraki Dashboard API 
 ```python
 import asyncio
 from ..core.logging_decorators import log_api_call
-from ..core.error_handling import with_error_handling
+from ..core.error_handling import (
+    validate_response_format,
+    with_error_handling,
+)
+
 
 @with_error_handling("Fetch devices", continue_on_error=True)
 @log_api_call("getOrganizationDevices")
 async def _fetch_devices(self, org_id: str) -> list[Device]:
     self._track_api_call("getOrganizationDevices")
-    devices_data = await asyncio.to_thread(
+    raw = await asyncio.to_thread(
         self.api.organizations.getOrganizationDevices,
         org_id,
         total_pages="all",
+    )
+    devices_data = validate_response_format(
+        raw, expected_type=list, operation="getOrganizationDevices"
     )
     return [Device.model_validate(device) for device in devices_data]
 ```
@@ -58,12 +67,15 @@ async def _fetch_devices(self, org_id: str) -> list[Device]:
 3. **Add decorators**: `@log_api_call()` and `@with_error_handling()`
 4. **Add tracking**: `self._track_api_call()`
 5. **Handle pagination**: Use `total_pages="all"` if supported
-6. **Validate responses**: Use domain models with `model_validate()`
+6. **Normalize responses**: Wrap with `validate_response_format(...)` before parsing — handles `{"items": [...]}` and surfaces SDK retry-exhausted errors as `RetryableAPIError`/`DataValidationError`.
+7. **Validate responses**: Use domain models with `model_validate()`
+8. **For network-scoped fetches**: Get the network list from `OrganizationInventory.get_networks(org_id)` — never call `getOrganizationNetworks` directly.
 </workflow>
 
 <fatal_implications>
 - **NEVER call API synchronously** - always use `asyncio.to_thread()`
 - **NEVER log API keys** or sensitive authentication data
 - **NEVER skip error handling** - API calls frequently fail
-- **NEVER assume response format** - validate structure before processing
+- **NEVER assume response format** - validate with `validate_response_format` before processing
+- **NEVER call `getOrganizationNetworks` from a collector** - go through `OrganizationInventory.get_networks(org_id)` so `NetworkFilter` is enforced
 </fatal_implications>

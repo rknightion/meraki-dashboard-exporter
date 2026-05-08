@@ -32,9 +32,12 @@ Sampling behavior:
 
 ## Instrumented Components
 
-- **Meraki SDK (requests)**: API call timing, status, rate-limit headers
+- **Meraki SDK (requests)**: API call timing, status, rate-limit headers. The
+  Meraki Python SDK still uses `requests` under the hood, so every Dashboard API
+  call produces a span via `RequestsInstrumentor`.
 - **httpx**: Any httpx usage is traced
-- **FastAPI**: All endpoints except `/health` and `/metrics`
+- **FastAPI**: All endpoints except `/health` and `/metrics` (the `/status`
+  health-dashboard page is traced)
 - **Threading**: `asyncio.to_thread()` operations
 - **Logging**: Trace IDs added to logfmt output
 

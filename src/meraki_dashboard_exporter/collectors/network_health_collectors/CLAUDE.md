@@ -8,6 +8,8 @@ Network health collectors for Meraki Dashboard Exporter - Handles network-level 
 - **Manual registration**: Sub-collectors registered in `NetworkHealthCollector` coordinator
 - **MEDIUM update tier**: Network health data changes regularly (300s interval)
 - **Wireless-only**: Many network health APIs only work with wireless networks - check `network.product_types`
+- **Network list via inventory (mandatory)**: Get the org's network list with `await self.inventory.get_networks(org_id)` (see `network_health.py::_get_networks_for_org`). Never call `getOrganizationNetworks` directly — that bypasses `NetworkFilter`.
+- **Wrap fetcher responses** with `validate_response_format` from `core.error_handling`.
 </critical_notes>
 
 <file_map>
@@ -24,6 +26,7 @@ Network health collectors for Meraki Dashboard Exporter - Handles network-level 
 ## NETWORK HEALTH COLLECTOR PATTERN
 ```python
 from .base import BaseNetworkHealthCollector
+
 
 class MyNetworkHealthCollector(BaseNetworkHealthCollector):
     def _initialize_metrics(self) -> None:
@@ -53,4 +56,5 @@ class MyNetworkHealthCollector(BaseNetworkHealthCollector):
 - **NEVER assume all networks support wireless metrics** - check product types
 - **NEVER aggregate metrics across different network types** without proper labeling
 - **NEVER ignore timespan constraints** for network health endpoints
+- **NEVER call `getOrganizationNetworks` directly** - use `self.inventory.get_networks(org_id)` so `NetworkFilter` is enforced
 </fatal_implications>

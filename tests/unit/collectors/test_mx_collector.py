@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from prometheus_client import Gauge
@@ -31,6 +31,8 @@ class TestMXCollector:
         parent.api = mock_api
         parent.settings = MagicMock()
         parent.rate_limiter = None
+        # No inventory means no NetworkFilter — collectors emit all rows.
+        parent.inventory = None
 
         def create_gauge(name, description, labelnames):
             return Gauge(name.value, description, labelnames)
@@ -371,3 +373,38 @@ class TestMXCollector:
         await mx_collector.collect_uplink_statuses("org1", "Test Org", {})
 
         mock_parent._set_metric.assert_not_called()
+
+    async def test_collect_uplink_statuses_respects_network_filter(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Devices in excluded networks must not emit uplink metrics."""
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q-IN",
+                    "networkId": "N_INCLUDED",
+                    "model": "MX68",
+                    "uplinks": [{"interface": "wan1", "status": "active"}],
+                },
+                {
+                    "serial": "Q-OUT",
+                    "networkId": "N_EXCLUDED",
+                    "model": "MX68",
+                    "uplinks": [{"interface": "wan1", "status": "active"}],
+                },
+            ]
+        )
+        # Wire an inventory that allows only N_INCLUDED.
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_INCLUDED"})
+
+        await mx_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        # Only the included network's uplink should produce a metric.
+        assert mock_parent._set_metric.call_count == 1
+        _, labels, _ = mock_parent._set_metric.call_args_list[0][0]
+        assert labels["network_id"] == "N_INCLUDED"
+        assert labels["serial"] == "Q-IN"

@@ -41,10 +41,24 @@ The compose file ships only the exporter container; integrate the scrape job int
     Align your Prometheus scrape interval with the exporter’s update tiers to avoid unnecessary load (see [Metrics Overview](metrics/overview.md)).
 
 ## Dashboards
-Pre-built Grafana dashboards can be found in the [dashboards directory](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/dashboards). Import them to get instant visibility into your organisation.
+Pre-built Grafana dashboards live in the [dashboards directory](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/dashboards). Import them to get instant visibility into your organisation. Bundled dashboards include:
+
+- `organization-overview.json` – org-wide rollup
+- `network-overview.json` – network inventory and status
+- `network-health-performance.json` – network health, RF, and performance
+- `mr-access-points.json` – MR (wireless) APs
+- `ms-switches.json` – MS switches
+- `mx-security-appliances.json` – MX appliances and uplinks
+- `mt-sensors.json` – MT environmental sensors
+- `mv-security-cameras.json` – MV cameras
+- `mg-cellular-gateways.json` – MG cellular gateways
+- `client-overview.json` – client tracking
+- `assurance-alerts.json` – alerts and assurance
+- `api-usage-licensing.json` – API usage and licensing
+- `exporter-monitoring.json` – self-monitoring of the exporter
 
 ## Alerting
-Use PromQL rules with metrics such as `meraki_device_up` or `meraki_collector_errors_total` to trigger alerts.
+Use PromQL rules with metrics such as `meraki_device_up` or `meraki_exporter_collection_errors_total` to trigger alerts.
 
 For more metrics see the [Metrics Reference](metrics/metrics.md).
 Configuration options are documented in the [Configuration](config.md) guide.

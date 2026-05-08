@@ -183,9 +183,7 @@ class APIHelper:
 
             networks_list = NetworkFilter(nf_settings).apply(networks_list)
 
-        logger.debug(
-            "Successfully fetched networks", org_id=org_id, count=len(networks_list)
-        )
+        logger.debug("Successfully fetched networks", org_id=org_id, count=len(networks_list))
         return networks_list
 
     async def get_organization_devices(
@@ -213,12 +211,16 @@ class APIHelper:
             List of device dictionaries.
 
         """
-        # Use inventory cache if available (note: inventory doesn't support product_types filter)
-        if self.collector.inventory and not product_types:
+        # Always prefer inventory when available so the configured NetworkFilter is
+        # enforced. product_types is applied as a local filter on the cached result
+        # rather than passed through to the SDK, which would bypass the filter.
+        if self.collector.inventory:
             logger.debug("Using inventory cache for devices", org_id=org_id)
             devices = await self.collector.inventory.get_devices(org_id)
+            if product_types:
+                devices = [d for d in devices if d.get("productType") in product_types]
         else:
-            # Fallback to direct API call (required when product_types filter is used)
+            # Fallback when inventory is not configured (programming bug in production).
             result = await self._fetch_devices_direct(org_id, product_types)
             devices = result if result is not None else []
 

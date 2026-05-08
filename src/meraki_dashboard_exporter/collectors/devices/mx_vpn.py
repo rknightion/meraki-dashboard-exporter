@@ -6,7 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants.metrics_constants import MXMetricName
-from ...core.error_handling import ErrorCategory, with_error_handling
+from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.metrics import LabelName
@@ -131,17 +131,27 @@ class MXVpnCollector(SubCollectorMixin):
             total_pages="all",
         )
 
-        if not isinstance(vpn_statuses, list):
-            logger.warning(
-                "Unexpected VPN statuses response format",
-                org_id=org_id,
-                response_type=type(vpn_statuses).__name__,
-            )
-            return
+        vpn_statuses = validate_response_format(
+            vpn_statuses,
+            expected_type=list,
+            operation="getOrganizationApplianceVpnStatuses",
+        )
+
+        # Resolve allowed network IDs for filter enforcement on org-wide responses.
+        allowed_network_ids = (
+            await self.parent.inventory.get_allowed_network_ids(org_id)
+            if self.parent.inventory is not None
+            else None
+        )
+        skipped = 0
 
         for status in vpn_statuses:
             network_id = status.get("networkId", "")
             network_name = status.get("networkName", network_id)
+
+            if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                skipped += 1
+                continue
 
             # Combine Meraki and third-party VPN peers
             meraki_peers: list[dict[str, Any]] = status.get("merakiVpnPeers", [])
@@ -219,4 +229,5 @@ class MXVpnCollector(SubCollectorMixin):
             "Collected VPN statuses",
             org_id=org_id,
             network_count=len(vpn_statuses),
+            skipped_count=skipped,
         )

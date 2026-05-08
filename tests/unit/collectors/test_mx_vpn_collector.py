@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from prometheus_client import Gauge
@@ -37,6 +37,8 @@ class TestMXVpnCollector:
         parent.api = mock_api
         parent.settings = MagicMock()
         parent.rate_limiter = None
+        # No inventory means no NetworkFilter — collector emits all rows.
+        parent.inventory = None
         # _create_gauge returns a real Gauge so metric initialisation works
         parent._create_gauge = MagicMock(side_effect=_make_gauge)
         return parent
@@ -511,3 +513,40 @@ class TestMXVpnCollector:
             _, labels, _ = call[0]
             assert labels["org_id"] == "org-abc"
             assert labels["org_name"] == "My Org"
+
+    async def test_collect_vpn_statuses_respects_network_filter(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """VPN metrics for excluded networks must be skipped."""
+        mock_api.appliance.getOrganizationApplianceVpnStatuses = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_INCLUDED",
+                    "networkName": "Prod",
+                    "merakiVpnPeers": [{"networkId": "N_PEER", "reachability": "reachable"}],
+                    "thirdPartyVpnPeers": [],
+                },
+                {
+                    "networkId": "N_EXCLUDED",
+                    "networkName": "Lab",
+                    "merakiVpnPeers": [{"networkId": "N_PEER", "reachability": "reachable"}],
+                    "thirdPartyVpnPeers": [],
+                },
+            ]
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_INCLUDED"})
+
+        await vpn_collector.collect("org-abc", "My Org")
+
+        # No metric for N_EXCLUDED should be emitted.
+        for call in mock_parent._set_metric.call_args_list:
+            _, labels, _ = call[0]
+            assert labels.get("network_id") != "N_EXCLUDED"
+        assert any(
+            call[0][1].get("network_id") == "N_INCLUDED"
+            for call in mock_parent._set_metric.call_args_list
+        )

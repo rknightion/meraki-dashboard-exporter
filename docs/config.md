@@ -54,7 +54,10 @@ Configuration for Meraki API interactions
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_API__MAX_RETRIES` | `int` | `3` | Maximum number of retries for API requests (min: 0, max: 10) |
 | `MERAKI_EXPORTER_API__TIMEOUT` | `int` | `30` | API request timeout in seconds (min: 10, max: 300) |
-| `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT` | `int` | `5` | Maximum concurrent API requests (min: 1, max: 20) |
+| `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT` | `int` | `5` | Maximum concurrent API requests (global fallback) (min: 1, max: 20) |
+| `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_FAST` | `int` | `5` | Maximum concurrent API requests for FAST tier collectors (min: 1, max: 20) |
+| `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_MEDIUM` | `int` | `3` | Maximum concurrent API requests for MEDIUM tier collectors (min: 1, max: 20) |
+| `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_SLOW` | `int` | `2` | Maximum concurrent API requests for SLOW tier collectors (min: 1, max: 20) |
 | `MERAKI_EXPORTER_API__BATCH_SIZE` | `int` | `20` | Default batch size for API operations (min: 1, max: 100) |
 | `MERAKI_EXPORTER_API__DEVICE_BATCH_SIZE` | `int` | `20` | Batch size for device operations (min: 1, max: 100) |
 | `MERAKI_EXPORTER_API__NETWORK_BATCH_SIZE` | `int` | `30` | Batch size for network operations (min: 1, max: 100) |
@@ -62,6 +65,7 @@ Configuration for Meraki API interactions
 | `MERAKI_EXPORTER_API__BATCH_DELAY` | `float` | `0.5` | Delay between batches in seconds (min: 0.0, max: 5.0) |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_RETRY_WAIT` | `int` | `5` | Wait time in seconds when rate limited (min: 1, max: 60) |
 | `MERAKI_EXPORTER_API__ACTION_BATCH_RETRY_WAIT` | `int` | `10` | Wait time for action batch retries (min: 1, max: 60) |
+| `MERAKI_EXPORTER_API__VALIDATE_KWARGS` | `bool` | `False` | When True, the Meraki SDK logs warnings if API methods are called with unrecognized kwargs. Recommended for dev/CI; off by default in production. |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_ENABLED` | `bool` | `True` | Enable client-side rate limiting to smooth API calls |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_REQUESTS_PER_SECOND` | `float` | `10.0` | Target requests per second per organization (min: 1.0, max: 50.0) |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_BURST` | `int` | `20` | Token bucket burst capacity per organization (min: 1, max: 100) |
@@ -133,6 +137,7 @@ Internal monitoring and alerting configuration
 | `MERAKI_EXPORTER_MONITORING__HISTOGRAM_BUCKETS` | `list[float]` | `[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0]` | Histogram buckets for collector duration metrics |
 | `MERAKI_EXPORTER_MONITORING__LICENSE_EXPIRATION_WARNING_DAYS` | `int` | `30` | Days before license expiration to start warning (min: 7, max: 90) |
 | `MERAKI_EXPORTER_MONITORING__METRIC_TTL_MULTIPLIER` | `float` | `2.0` | Multiplier for metric TTL (collection_interval * multiplier) (min: 1.0, max: 10.0) |
+| `MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR` | `int` | `10000` | Maximum number of tracked label sets per collector before shedding oldest (min: 100, max: 1000000) |
 
 ## Collector Settings
 
@@ -142,7 +147,7 @@ Enable/disable specific metric collectors
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set[str]` | `["alerts", "clients", "config", "device", "mtsensor", "networkhealth", "organization"]` | Enabled collector names |
 | `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` | `set[str]` | `[]` | Explicitly disabled collectors (overrides enabled) |
-| `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` | `int` | `120` | Timeout for individual collector runs in seconds (min: 30, max: 600) |
+| `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` | `int` | `240` | Timeout for individual collector runs in seconds (min: 30, max: 600) |
 
 ## Client Settings
 
