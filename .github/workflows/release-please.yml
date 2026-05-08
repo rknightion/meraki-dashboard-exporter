@@ -24,6 +24,28 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+  prepend-release-warning:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Prepend limited-testing warning to release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          warning=$(cat <<'EOF'
+          > [!WARNING]
+          > **Limited testing.** I no longer have access to a Meraki network with anything other than MT (sensor) devices. Changes affecting other device types (MS, MR, MX, MG, MV) are best-effort — vibecoded from publicly available API documentation and SDK references rather than tested against live hardware.
+          EOF
+          )
+          current_body=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body)
+          printf '%s\n\n%s' "$warning" "$current_body" \
+            | gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file -
+
   docker-release:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
