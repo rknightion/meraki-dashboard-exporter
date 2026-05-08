@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from pydantic_settings import NoDecode
 
 
 class APISettings(BaseModel):
@@ -416,27 +419,30 @@ class NetworkFilterSettings(BaseModel):
     - Names use glob patterns via fnmatch (case-sensitive).
     """
 
-    include_names: list[str] = Field(
+    # NoDecode disables pydantic-settings JSON-parsing of complex types so the
+    # raw env-var string reaches our _split_csv validator. Without it, a value
+    # like "prod-*,staging-*" raises SettingsError because it's not valid JSON.
+    include_names: Annotated[list[str], NoDecode] = Field(
         default_factory=list,
         description="Network name globs to include. Supports * and ? wildcards.",
     )
-    include_ids: list[str] = Field(
+    include_ids: Annotated[list[str], NoDecode] = Field(
         default_factory=list,
         description="Exact network IDs (e.g. L_xxx) to include.",
     )
-    include_tags: list[str] = Field(
+    include_tags: Annotated[list[str], NoDecode] = Field(
         default_factory=list,
         description=("Network tags to include. A network matches if it carries any of these tags."),
     )
-    exclude_names: list[str] = Field(
+    exclude_names: Annotated[list[str], NoDecode] = Field(
         default_factory=list,
         description="Network name globs to exclude. Applied AFTER includes.",
     )
-    exclude_ids: list[str] = Field(
+    exclude_ids: Annotated[list[str], NoDecode] = Field(
         default_factory=list,
         description="Exact network IDs to exclude.",
     )
-    exclude_tags: list[str] = Field(
+    exclude_tags: Annotated[list[str], NoDecode] = Field(
         default_factory=list,
         description="Network tags to exclude.",
     )

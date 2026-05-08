@@ -56,3 +56,25 @@ def test_settings_with_custom_values(monkeypatch):
     assert settings.update_intervals.medium == 300
     assert settings.update_intervals.slow == 900
     assert settings.logging.level == "DEBUG"
+
+
+def test_network_filter_env_parsing(monkeypatch):
+    """Network filter env vars parse as comma-separated lists."""
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+    monkeypatch.setenv("MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_NAMES", "prod-*,staging-*")
+    monkeypatch.setenv("MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_TAGS", "lab")
+
+    settings = Settings()
+    assert settings.network_filter.include_names == ["prod-*", "staging-*"]
+    assert settings.network_filter.exclude_tags == ["lab"]
+    assert settings.network_filter.is_active is True
+
+
+def test_network_filter_inactive_by_default(monkeypatch):
+    """When no filter env vars are set, the filter is inactive."""
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+    monkeypatch.delenv("MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_NAMES", raising=False)
+
+    settings = Settings()
+    assert settings.network_filter.is_active is False
+    assert settings.network_filter.include_names == []
