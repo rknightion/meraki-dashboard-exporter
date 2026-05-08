@@ -89,6 +89,13 @@ class APISettings(BaseModel):
         le=60,
         description="Wait time for action batch retries",
     )
+    validate_kwargs: bool = Field(
+        False,
+        description=(
+            "When True, the Meraki SDK logs warnings if API methods are called with "
+            "unrecognized kwargs. Recommended for dev/CI; off by default in production."
+        ),
+    )
     rate_limit_enabled: bool = Field(
         True,
         description="Enable client-side rate limiting to smooth API calls",
