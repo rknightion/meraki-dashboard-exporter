@@ -113,11 +113,89 @@ async def test_filter_match_metric_emitted() -> None:
 
     included_l1 = REGISTRY.get_sample_value(
         "meraki_network_filter_match",
-        {"org_id": "ORG", "network_id": "L_1", "included": "true"},
+        {"org_id": "ORG", "network_id": "L_1"},
     )
     excluded_l2 = REGISTRY.get_sample_value(
         "meraki_network_filter_match",
-        {"org_id": "ORG", "network_id": "L_2", "included": "false"},
+        {"org_id": "ORG", "network_id": "L_2"},
     )
     assert included_l1 == 1.0
-    assert excluded_l2 == 1.0
+    assert excluded_l2 == 0.0
+
+
+async def test_filter_match_metric_one_for_all_when_filter_inactive() -> None:
+    """When no filter is active, every network's gauge is 1.0."""
+    from meraki_dashboard_exporter.services.inventory import OrganizationInventory
+
+    api = MagicMock()
+    api.organizations.getOrganizationNetworks = MagicMock(
+        return_value=[
+            {"id": "L_A", "name": "alpha", "tags": []},
+            {"id": "L_B", "name": "beta", "tags": []},
+        ]
+    )
+    inv = OrganizationInventory(api, MagicMock(), network_filter=None)
+    await inv.get_networks("ORG2")
+
+    a = REGISTRY.get_sample_value(
+        "meraki_network_filter_match", {"org_id": "ORG2", "network_id": "L_A"}
+    )
+    b = REGISTRY.get_sample_value(
+        "meraki_network_filter_match", {"org_id": "ORG2", "network_id": "L_B"}
+    )
+    assert a == 1.0
+    assert b == 1.0
+
+
+async def test_filter_match_metric_no_stale_labels_after_filter_change() -> None:
+    """A subsequent refresh under a different filter must not leave stale series.
+
+    Without the value-as-1/0 fix, the same (org_id, network_id) could carry
+    both ``included=true`` and ``included=false`` series at value 1 after a
+    filter swap. With the fix, exactly one series exists per network and its
+    value tracks the current filter.
+    """
+    from meraki_dashboard_exporter.core.network_filter import NetworkFilter
+    from meraki_dashboard_exporter.services.inventory import OrganizationInventory
+
+    api = MagicMock()
+    api.organizations.getOrganizationNetworks = MagicMock(
+        return_value=[
+            {"id": "L_X", "name": "prod", "tags": []},
+            {"id": "L_Y", "name": "lab", "tags": ["lab"]},
+        ]
+    )
+
+    nf_excl = NetworkFilter(NetworkFilterSettings(exclude_tags=["lab"]))
+    inv = OrganizationInventory(api, MagicMock(), network_filter=nf_excl)
+    await inv.get_networks("ORG3")
+
+    assert (
+        REGISTRY.get_sample_value(
+            "meraki_network_filter_match", {"org_id": "ORG3", "network_id": "L_X"}
+        )
+        == 1.0
+    )
+    assert (
+        REGISTRY.get_sample_value(
+            "meraki_network_filter_match", {"org_id": "ORG3", "network_id": "L_Y"}
+        )
+        == 0.0
+    )
+
+    # Swap the filter (simulating a config reload) and force a refresh.
+    inv._network_filter = NetworkFilter(NetworkFilterSettings(include_tags=["lab"]))
+    await inv.get_networks("ORG3", force_refresh=True)
+
+    assert (
+        REGISTRY.get_sample_value(
+            "meraki_network_filter_match", {"org_id": "ORG3", "network_id": "L_X"}
+        )
+        == 0.0
+    )
+    assert (
+        REGISTRY.get_sample_value(
+            "meraki_network_filter_match", {"org_id": "ORG3", "network_id": "L_Y"}
+        )
+        == 1.0
+    )
