@@ -23,25 +23,38 @@ logger = get_logger(__name__)
 class RFHealthCollector(BaseNetworkHealthCollector):
     """Collector for wireless RF health metrics including channel utilization."""
 
-    @log_api_call("getOrganizationDevices")
     async def _fetch_organization_devices(
         self, org_id: str, network_id: str
     ) -> list[dict[str, Any]]:
-        """Fetch organization devices for RF health.
+        """Fetch devices for a network via the shared inventory cache.
+
+        Uses the parent collector's inventory service so that the per-org
+        device list is fetched at most once per cache TTL and reused across
+        all networks in the org. Falls back to a direct API call only if
+        inventory is unavailable.
 
         Parameters
         ----------
         org_id : str
             Organization ID.
         network_id : str
-            Network ID.
+            Network ID to filter by.
 
         Returns
         -------
         list[dict[str, Any]]
-            List of devices.
+            Devices belonging to ``network_id``.
 
         """
+        inventory = self.parent.inventory
+        self._track_api_call("getOrganizationDevices")
+
+        if inventory is not None:
+            return cast(
+                list[dict[str, Any]],
+                await inventory.get_devices(org_id, network_id=network_id),
+            )
+
         devices = await asyncio.to_thread(
             self.api.organizations.getOrganizationDevices,
             org_id,
