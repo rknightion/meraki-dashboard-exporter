@@ -531,3 +531,118 @@ class TestOrganizationInventoryNetworkFilter:
 
         result = await inv.get_device_availabilities("ORG")
         assert [a["serial"] for a in result] == ["Q1"]
+
+
+class TestOrganizationInventoryValidation:
+    """Reject SDK responses with the exhausted-retry error shape before caching.
+
+    The Meraki SDK returns a ``{"errors": [...]}`` dict on retry exhaustion or
+    semantic validation failures. Inventory must surface those via
+    ``validate_response_format`` so downstream collectors don't iterate over
+    error dicts.
+    """
+
+    async def test_get_organizations_rejects_error_shape(self, mock_api, mock_settings) -> None:
+        """Reject SDK error-shape responses for getOrganizations and skip caching."""
+        from meraki_dashboard_exporter.core.error_handling import DataValidationError
+
+        mock_settings.meraki.org_id = None
+        mock_api.organizations.getOrganizations.return_value = {"errors": ["something broke"]}
+        inventory = OrganizationInventory(mock_api, mock_settings)
+
+        with pytest.raises(DataValidationError):
+            await inventory.get_organizations()
+
+        # Cache must remain unpopulated.
+        assert inventory._organizations is None
+        assert inventory._org_timestamp == 0.0
+
+    async def test_get_organizations_rate_limit_in_body_raises_retryable(
+        self, mock_api, mock_settings
+    ) -> None:
+        """Rate-limit errors in the body raise RetryableAPIError so retries kick in."""
+        from meraki_dashboard_exporter.core.error_handling import RetryableAPIError
+
+        mock_settings.meraki.org_id = None
+        mock_api.organizations.getOrganizations.return_value = {
+            "errors": ["API rate limit exceeded for organization"]
+        }
+        inventory = OrganizationInventory(mock_api, mock_settings)
+
+        with pytest.raises(RetryableAPIError):
+            await inventory.get_organizations()
+        assert inventory._organizations is None
+
+    async def test_get_networks_rejects_error_shape(self, mock_api, inventory_service) -> None:
+        """Reject SDK error-shape responses for getOrganizationNetworks and skip caching."""
+        from meraki_dashboard_exporter.core.error_handling import DataValidationError
+
+        mock_api.organizations.getOrganizationNetworks.return_value = {
+            "errors": ["network fetch failed"]
+        }
+
+        with pytest.raises(DataValidationError):
+            await inventory_service.get_networks("ORG")
+
+        assert "ORG" not in inventory_service._networks
+
+    async def test_get_networks_rejects_unexpected_dict(self, mock_api, inventory_service) -> None:
+        """A bare dict where a list is expected raises DataValidationError."""
+        from meraki_dashboard_exporter.core.error_handling import DataValidationError
+
+        # A dict (not list, not "items"-wrapped, not "errors"-shaped) is invalid.
+        mock_api.organizations.getOrganizationNetworks.return_value = {"id": "L_1"}
+
+        with pytest.raises(DataValidationError):
+            await inventory_service.get_networks("ORG")
+        assert "ORG" not in inventory_service._networks
+
+    async def test_get_devices_rejects_error_shape(self, mock_api, inventory_service) -> None:
+        """Reject SDK error-shape responses for getOrganizationDevices and skip caching."""
+        from meraki_dashboard_exporter.core.error_handling import DataValidationError
+
+        mock_api.organizations.getOrganizationDevices.return_value = {
+            "errors": ["device fetch failed"]
+        }
+
+        with pytest.raises(DataValidationError):
+            await inventory_service.get_devices("ORG")
+        assert "ORG" not in inventory_service._devices
+
+    async def test_get_device_availabilities_rejects_error_shape(
+        self, mock_api, inventory_service
+    ) -> None:
+        """Reject SDK error-shape responses for getOrganizationDevicesAvailabilities."""
+        from meraki_dashboard_exporter.core.error_handling import DataValidationError
+
+        mock_api.organizations.getOrganizationDevicesAvailabilities.return_value = {
+            "errors": ["availability fetch failed"]
+        }
+
+        with pytest.raises(DataValidationError):
+            await inventory_service.get_device_availabilities("ORG")
+        assert "ORG" not in inventory_service._device_availabilities
+
+    async def test_get_licenses_overview_swallows_validation_error(
+        self, mock_api, inventory_service
+    ) -> None:
+        """Best-effort endpoint catches validation errors and returns empty dict."""
+        mock_api.organizations.getOrganizationLicensesOverview.return_value = {
+            "errors": ["unsupported"]
+        }
+
+        result = await inventory_service.get_licenses_overview("ORG")
+        assert result == {}
+        assert "ORG" not in inventory_service._licenses_overview
+
+    async def test_get_login_security_swallows_validation_error(
+        self, mock_api, inventory_service
+    ) -> None:
+        """Best-effort endpoint catches validation errors and returns empty dict."""
+        mock_api.organizations.getOrganizationLoginSecurity.return_value = {
+            "errors": ["unsupported"]
+        }
+
+        result = await inventory_service.get_login_security("ORG")
+        assert result == {}
+        assert "ORG" not in inventory_service._login_security

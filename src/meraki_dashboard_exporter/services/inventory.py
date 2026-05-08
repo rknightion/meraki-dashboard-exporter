@@ -19,6 +19,7 @@ from prometheus_client import Counter, Gauge
 
 from ..api.client import AsyncMerakiClient
 from ..core.constants import UpdateTier
+from ..core.error_handling import validate_response_format
 from ..core.network_filter import NetworkFilter
 
 if TYPE_CHECKING:
@@ -327,6 +328,9 @@ class OrganizationInventory:
                     "getOrganizations",
                     self.api.organizations.getOrganizations,
                 )
+                orgs_result = validate_response_format(
+                    orgs_result, expected_type=list, operation="getOrganizations"
+                )
                 organizations = cast(list[dict[str, Any]], orgs_result)
 
             # Update cache
@@ -408,6 +412,9 @@ class OrganizationInventory:
                 self.api.organizations.getOrganizationNetworks,
                 org_id,
                 total_pages="all",
+            )
+            networks_result = validate_response_format(
+                networks_result, expected_type=list, operation="getOrganizationNetworks"
             )
             networks = cast(list[dict[str, Any]], networks_result)
 
@@ -519,6 +526,9 @@ class OrganizationInventory:
                         org_id,
                         total_pages="all",
                     )
+                    devices_result = validate_response_format(
+                        devices_result, expected_type=list, operation="getOrganizationDevices"
+                    )
                     devices = cast(list[dict[str, Any]], devices_result)
 
                     # Update cache
@@ -621,6 +631,11 @@ class OrganizationInventory:
                 self.api.organizations.getOrganizationDevicesAvailabilities,
                 org_id,
                 total_pages="all",
+            )
+            availabilities_result = validate_response_format(
+                availabilities_result,
+                expected_type=list,
+                operation="getOrganizationDevicesAvailabilities",
             )
             availabilities = cast(list[dict[str, Any]], availabilities_result)
 
@@ -931,6 +946,11 @@ class OrganizationInventory:
                     self.api.organizations.getOrganizationLicensesOverview,
                     org_id,
                 )
+                overview_result = validate_response_format(
+                    overview_result,
+                    expected_type=dict,
+                    operation="getOrganizationLicensesOverview",
+                )
                 overview = cast(dict[str, Any], overview_result)
 
                 # Update cache
@@ -1011,6 +1031,11 @@ class OrganizationInventory:
                     "getOrganizationLoginSecurity",
                     self.api.organizations.getOrganizationLoginSecurity,
                     org_id,
+                )
+                security_result = validate_response_format(
+                    security_result,
+                    expected_type=dict,
+                    operation="getOrganizationLoginSecurity",
                 )
                 security = cast(dict[str, Any], security_result)
 
