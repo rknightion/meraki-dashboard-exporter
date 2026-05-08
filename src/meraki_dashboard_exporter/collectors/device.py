@@ -973,6 +973,11 @@ class DeviceCollector(MetricCollector):
             List of networks (filtered by the configured NetworkFilter).
 
         """
+        if self.inventory is None:
+            raise RuntimeError(
+                "Inventory service not configured for DeviceCollector. "
+                "POE aggregation requires inventory to apply the network filter."
+            )
         with LogContext(org_id=org_id):
             return await self.inventory.get_networks(org_id)
 

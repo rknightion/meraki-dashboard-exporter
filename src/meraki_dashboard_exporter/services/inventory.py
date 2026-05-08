@@ -130,6 +130,24 @@ class OrganizationInventory:
             ["org_id", "cache_type"],
         )
 
+        # Network-filter observability gauges. ``network_name`` is deliberately
+        # omitted from labels to avoid orphan time series on rename.
+        self._filter_match_gauge = Gauge(
+            "meraki_network_filter_match",
+            "Whether a network passes the configured network filter (1 per row).",
+            ["org_id", "network_id", "included"],
+        )
+        self._filter_resolved_gauge = Gauge(
+            "meraki_network_filter_resolved",
+            "Number of networks included by the configured network filter.",
+            ["org_id"],
+        )
+        self._filter_total_gauge = Gauge(
+            "meraki_network_filter_total",
+            "Total number of networks in the organization (pre-filter).",
+            ["org_id"],
+        )
+
         logger.info(
             "Initialized organization inventory cache",
             ttl_seconds=self._ttl,
@@ -397,6 +415,7 @@ class OrganizationInventory:
             self._networks[org_id] = networks
             self._network_timestamps[org_id] = current_time
             self._cache_size.labels(org_id=org_id, cache_type="networks").set(len(networks))
+            self._emit_filter_metrics(org_id, networks)
 
             logger.info(
                 "Updated network cache",
@@ -405,6 +424,32 @@ class OrganizationInventory:
             )
 
             return self._maybe_filter_networks(networks, unfiltered=unfiltered)
+
+    def _emit_filter_metrics(self, org_id: str, networks: list[dict[str, Any]]) -> None:
+        """Emit per-network filter-match metrics and summary gauges.
+
+        Called once per cache refresh. When the filter is inactive, only
+        the totals are populated and ``included="true"`` is set for every
+        network so dashboards work uniformly across filtered/unfiltered
+        deployments.
+        """
+        total = len(networks)
+        if self._network_filter is not None and self._network_filter.is_active:
+            allowed_ids = self._network_filter.resolved_ids(networks)
+        else:
+            allowed_ids = {n.get("id", "") for n in networks if n.get("id")}
+
+        self._filter_total_gauge.labels(org_id=org_id).set(total)
+        self._filter_resolved_gauge.labels(org_id=org_id).set(len(allowed_ids))
+
+        for n in networks:
+            nid = n.get("id", "")
+            if not nid:
+                continue
+            included = "true" if nid in allowed_ids else "false"
+            self._filter_match_gauge.labels(org_id=org_id, network_id=nid, included=included).set(
+                1.0
+            )
 
     async def get_devices(
         self,

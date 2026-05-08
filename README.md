@@ -189,6 +189,31 @@ All configuration is done via environment variables. See `.env.example` for all 
 - `MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM`: Medium tier interval in seconds (default: 300, range: 300-1800)
 - `MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW`: Slow tier interval in seconds (default: 900, range: 600-3600)
 
+### Network Filter
+
+Restrict the exporter to a subset of networks. All fields are optional comma-separated lists; if every field is empty, every network in every configured organisation is scraped (the default).
+
+```bash
+# Include only networks whose name matches a glob (case-sensitive)
+MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_NAMES=prod-*,staging-*
+
+# Or by exact network ID
+MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_IDS=L_123,L_456
+
+# Or by network tag (any match wins)
+MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_TAGS=production,critical
+
+# Exclude rules (applied AFTER includes)
+MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_NAMES=*-test
+MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_TAGS=lab
+```
+
+**Semantics.** If any `INCLUDE_*` field is set, a network must match at least one include rule (across name OR id OR tag) to be considered. Then any matching `EXCLUDE_*` rule drops it. Empty resolution at startup fails fast.
+
+**Devices** in excluded networks are not scraped either. **Organization-level** metrics (license counts, API usage) are unaffected.
+
+**Observability.** Live filter state is published as `meraki_network_filter_match{org_id,network_id,included}`, `meraki_network_filter_resolved{org_id}`, and `meraki_network_filter_total{org_id}` so dashboards and alerts can verify filter scope.
+
 ### Regional API Endpoints
 
 For users in specific regions, use the appropriate API base URL:

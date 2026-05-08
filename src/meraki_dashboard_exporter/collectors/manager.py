@@ -60,11 +60,15 @@ class CollectorManager:
             UpdateTier.SLOW: [],
         }
 
-        # Initialize shared inventory service for caching org/network/device data
+        # Initialize shared inventory service for caching org/network/device data.
+        # Pass a NetworkFilter so excluded networks are dropped at the read path.
+        from ..core.network_filter import NetworkFilter
+
         self.inventory = OrganizationInventory(
             api=self.client.api,
             settings=self.settings,
             rate_limiter=self.rate_limiter,
+            network_filter=NetworkFilter(self.settings.network_filter),
         )
 
         # Per-organization health tracking for graceful degradation
@@ -412,6 +416,10 @@ class CollectorManager:
         except Exception:
             logger.exception("Inventory cache warming failed, continuing with cold cache")
 
+        # Validate the network filter resolves to at least one network somewhere.
+        if self.settings.network_filter.is_active:
+            await self._validate_network_filter()
+
         # Collect tier by tier to reduce API load during startup
         for tier in [UpdateTier.FAST, UpdateTier.MEDIUM, UpdateTier.SLOW]:
             try:
@@ -424,6 +432,41 @@ class CollectorManager:
                     tier=tier,
                 )
                 # Continue with next tier even if this one fails
+
+    async def _validate_network_filter(self) -> None:
+        """Verify the configured network filter resolves to at least one network.
+
+        Logs an ERROR per organisation that resolves to zero networks (visible
+        in default log filters), and raises :class:`RuntimeError` only if the
+        filter resolves to zero across **all** configured organisations —
+        multi-org operators may legitimately have empty intersections for some
+        orgs while the deployment still has work to do elsewhere.
+        """
+        organizations = await self.inventory.get_organizations()
+        total_resolved = 0
+        for org in organizations:
+            org_id = org.get("id", "")
+            if not org_id:
+                continue
+            full = await self.inventory.get_networks(org_id, unfiltered=True)
+            resolved = await self.inventory.get_networks(org_id)
+            total_resolved += len(resolved)
+            if not resolved:
+                logger.error(
+                    "Network filter resolved to zero networks for organization",
+                    org_id=org_id,
+                    org_name=org.get("name"),
+                    total_networks_in_org=len(full),
+                    configured_filter=self.settings.network_filter.model_dump(),
+                )
+
+        if total_resolved == 0:
+            raise RuntimeError(
+                "Configured network filter resolved to zero networks across "
+                "all organizations after warm-up. Check filter configuration: "
+                f"{self.settings.network_filter.model_dump()}"
+            )
+        logger.info("Network filter active", resolved_total=total_resolved)
 
     @trace_method("collect.tier")
     async def collect_tier(self, tier: UpdateTier) -> None:
