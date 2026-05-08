@@ -134,7 +134,7 @@ readinessProbe:
   # -- Enable readiness probe
   enabled: true
   httpGet:
-    path: /ready
+    path: /health
     port: http
   # -- Number of seconds after container start before first probe.
   # Set high to allow initial collection cycle to complete.
@@ -156,6 +156,12 @@ tolerations: []
 
 # -- Affinity rules for pod scheduling
 affinity: {}
+
+# -- Extra Envs
+# extraEnv:
+#  - name: MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT
+#    value: 100
+extraEnv: []
 
 # Prometheus Operator ServiceMonitor
 serviceMonitor:
