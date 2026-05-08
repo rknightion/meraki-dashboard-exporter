@@ -84,10 +84,18 @@ class RFHealthCollector(BaseNetworkHealthCollector):
             Channel utilization data.
 
         """
-        return await asyncio.to_thread(
+        response = await asyncio.to_thread(
             self.api.networks.getNetworkNetworkHealthChannelUtilization,
             network_id,
             total_pages="all",
+        )
+        return cast(
+            list[dict[str, Any]],
+            validate_response_format(
+                response,
+                expected_type=list,
+                operation="getNetworkNetworkHealthChannelUtilization",
+            ),
         )
 
     async def collect(self, network: dict[str, Any]) -> None:
@@ -327,8 +335,15 @@ class RFHealthCollector(BaseNetworkHealthCollector):
 
         except Exception as e:
             # Log at debug level if it's just not available (400/404 errors)
+            # or if the API exhausted retries on a rate limit (caught by
+            # validate_response_format as RetryableAPIError).
             error_str = str(e)
-            if "400" in error_str or "404" in error_str or "Bad Request" in error_str:
+            if (
+                "400" in error_str
+                or "404" in error_str
+                or "Bad Request" in error_str
+                or "rate limit" in error_str.lower()
+            ):
                 logger.debug(
                     "Channel utilization not available",
                     network_id=network_id,

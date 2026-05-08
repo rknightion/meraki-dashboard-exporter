@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -36,10 +37,18 @@ class APIUsageCollector(BaseOrganizationCollector):
 
         """
         self._track_api_call("getOrganizationApiRequestsOverview")
-        return await asyncio.to_thread(
+        response = await asyncio.to_thread(
             self.api.organizations.getOrganizationApiRequestsOverview,
             org_id,
             timespan=3600,  # Last 1 hour
+        )
+        return cast(
+            dict[str, Any],
+            validate_response_format(
+                response,
+                expected_type=dict,
+                operation="getOrganizationApiRequestsOverview",
+            ),
         )
 
     async def collect(self, org_id: str, org_name: str) -> None:

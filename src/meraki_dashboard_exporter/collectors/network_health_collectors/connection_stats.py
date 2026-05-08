@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ...core.domain_models import ConnectionStats, NetworkConnectionStats
+from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -41,10 +42,18 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
 
         """
         _ = org_id  # Included for logging/rate limiting context
-        return await asyncio.to_thread(
+        response = await asyncio.to_thread(
             self.api.wireless.getNetworkWirelessConnectionStats,
             network_id,
             timespan=1800,  # 30 minutes
+        )
+        return cast(
+            dict[str, Any],
+            validate_response_format(
+                response,
+                expected_type=dict,
+                operation="getNetworkWirelessConnectionStats",
+            ),
         )
 
     async def collect(self, network: dict[str, Any]) -> None:
@@ -97,8 +106,14 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
 
         except Exception as e:
             # Log at debug level if it's just not available (400/404 errors)
+            # or if the API exhausted retries on a rate limit.
             error_str = str(e)
-            if "400" in error_str or "404" in error_str or "Bad Request" in error_str:
+            if (
+                "400" in error_str
+                or "404" in error_str
+                or "Bad Request" in error_str
+                or "rate limit" in error_str.lower()
+            ):
                 logger.debug(
                     "Network connection stats not available",
                     network_id=network_id,

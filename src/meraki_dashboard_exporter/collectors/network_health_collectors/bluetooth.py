@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -35,12 +36,20 @@ class BluetoothCollector(BaseNetworkHealthCollector):
             List of Bluetooth clients.
 
         """
-        return await asyncio.to_thread(
+        response = await asyncio.to_thread(
             self.api.networks.getNetworkBluetoothClients,
             network_id,
             timespan=300,  # 5 minutes
             perPage=1000,
             total_pages="all",
+        )
+        return cast(
+            list[dict[str, Any]],
+            validate_response_format(
+                response,
+                expected_type=list,
+                operation="getNetworkBluetoothClients",
+            ),
         )
 
     async def collect(self, network: dict[str, Any]) -> None:
@@ -81,8 +90,14 @@ class BluetoothCollector(BaseNetworkHealthCollector):
 
         except Exception as e:
             # Log at debug level if it's just not available (400/404 errors)
+            # or if the API exhausted retries on a rate limit.
             error_str = str(e)
-            if "400" in error_str or "404" in error_str or "Bad Request" in error_str:
+            if (
+                "400" in error_str
+                or "404" in error_str
+                or "Bad Request" in error_str
+                or "rate limit" in error_str.lower()
+            ):
                 logger.debug(
                     "Bluetooth clients API not available",
                     network_id=network_id,
