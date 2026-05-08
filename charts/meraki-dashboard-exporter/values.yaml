@@ -134,7 +134,7 @@ readinessProbe:
   # -- Enable readiness probe
   enabled: true
   httpGet:
-    path: /ready
+    path: /health
     port: http
   # -- Number of seconds after container start before first probe.
   # Set high to allow initial collection cycle to complete.
