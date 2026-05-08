@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ..core.api_helpers import create_api_helper
 from ..core.async_utils import ManagedTaskGroup
 from ..core.collector import MetricCollector
 from ..core.constants import OrgMetricName, UpdateTier
 from ..core.constants.metrics_constants import CollectorMetricName
-from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ..core.error_handling import (
+    DataValidationError,
+    ErrorCategory,
+    validate_response_format,
+    with_error_handling,
+)
 from ..core.label_helpers import create_org_labels
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call, log_batch_operation
@@ -475,10 +480,21 @@ class OrganizationCollector(MetricCollector):
         """
         try:
             with LogContext(org_id=org_id, org_name=org_name):
+                # This endpoint can return either the direct object or one wrapped
+                # in {"items": [...]}, so we cannot use validate_response_format
+                # (which unwraps "items"). Detect the SDK's exhausted-retry error
+                # shape inline and let the existing shape branches below handle the
+                # rest.
                 overview = await asyncio.to_thread(
                     self.api.organizations.getOrganizationDevicesOverviewByModel,
                     org_id,
                 )
+                if isinstance(overview, dict) and "errors" in overview:
+                    raise DataValidationError(
+                        "getOrganizationDevicesOverviewByModel: API returned errors: "
+                        f"{overview['errors']}",
+                        {"errors": overview["errors"]},
+                    )
 
             # Response can be either the direct object or wrapped in {"items": []}
             if isinstance(overview, dict) and "items" in overview:
@@ -554,10 +570,18 @@ class OrganizationCollector(MetricCollector):
                     logger.debug(
                         "Inventory not available, fetching availabilities directly", org_id=org_id
                     )
-                    availabilities = await asyncio.to_thread(
+                    availabilities_response = await asyncio.to_thread(
                         self.api.organizations.getOrganizationDevicesAvailabilities,
                         org_id,
                         total_pages="all",
+                    )
+                    availabilities = cast(
+                        list[dict[str, Any]],
+                        validate_response_format(
+                            availabilities_response,
+                            expected_type=list,
+                            operation="getOrganizationDevicesAvailabilities",
+                        ),
                     )
 
             # Group by status and product type
@@ -622,12 +646,21 @@ class OrganizationCollector(MetricCollector):
         """
         try:
             with LogContext(org_id=org_id, org_name=org_name):
-                # Use perPage=3 to minimize data transfer while still getting the meta counts
+                # Use perPage=3 to minimize data transfer while still getting the meta counts.
+                # Note: this endpoint returns {"items": [...], "meta": {...}}, so we cannot
+                # use validate_response_format (which unwraps "items"). Check for the
+                # SDK's exhausted-retry error shape inline instead.
                 response = await asyncio.to_thread(
                     self.api.organizations.getOrganizationDevicesPacketCaptureCaptures,
                     org_id,
                     perPage=3,
                 )
+                if isinstance(response, dict) and "errors" in response:
+                    raise DataValidationError(
+                        "getOrganizationDevicesPacketCaptureCaptures: API returned errors: "
+                        f"{response['errors']}",
+                        {"errors": response["errors"]},
+                    )
 
             # Extract meta counts
             if isinstance(response, dict) and "meta" in response and "counts" in response["meta"]:
@@ -740,10 +773,18 @@ class OrganizationCollector(MetricCollector):
         try:
             with LogContext(org_id=org_id, org_name=org_name):
                 # Call API with quantity=1000 and no timespan
-                response = await asyncio.to_thread(
+                raw_response = await asyncio.to_thread(
                     self.api.organizations.getOrganizationSummaryTopApplicationsCategoriesByUsage,
                     org_id,
                     quantity=1000,
+                )
+                response = cast(
+                    list[dict[str, Any]],
+                    validate_response_format(
+                        raw_response,
+                        expected_type=list,
+                        operation="getOrganizationSummaryTopApplicationsCategoriesByUsage",
+                    ),
                 )
 
             # Process each category

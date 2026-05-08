@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from ...core.error_handling import ErrorCategory, with_error_handling
+from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -46,9 +46,17 @@ class LicenseCollector(BaseOrganizationCollector):
 
         # Fallback to direct API call
         self._track_api_call("getOrganizationLicensesOverview")
-        return await asyncio.to_thread(
+        response = await asyncio.to_thread(
             self.api.organizations.getOrganizationLicensesOverview,
             org_id,
+        )
+        return cast(
+            dict[str, Any],
+            validate_response_format(
+                response,
+                expected_type=dict,
+                operation="getOrganizationLicensesOverview",
+            ),
         )
 
     @log_api_call("getOrganizationLicenses")
@@ -67,10 +75,18 @@ class LicenseCollector(BaseOrganizationCollector):
 
         """
         self._track_api_call("getOrganizationLicenses")
-        return await asyncio.to_thread(
+        response = await asyncio.to_thread(
             self.api.organizations.getOrganizationLicenses,
             org_id,
             total_pages="all",
+        )
+        return cast(
+            list[dict[str, Any]],
+            validate_response_format(
+                response,
+                expected_type=list,
+                operation="getOrganizationLicenses",
+            ),
         )
 
     @with_error_handling(

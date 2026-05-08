@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -897,13 +897,21 @@ class ClientsCollector(MetricCollector):
                 rate_limiter = getattr(self, "rate_limiter", None)
                 if rate_limiter is not None and i > 0:
                     await rate_limiter.acquire(org_id, "getNetworkClientsApplicationUsage")
-                usage_data = await asyncio.to_thread(
+                usage_response = await asyncio.to_thread(
                     self.api.networks.getNetworkClientsApplicationUsage,
                     network_id,
                     clients=",".join(batch_ids),
                     timespan=3600,  # 1 hour as requested
                     perPage=1000,
                     total_pages="all",
+                )
+                usage_data = cast(
+                    list[dict[str, Any]],
+                    validate_response_format(
+                        usage_response,
+                        expected_type=list,
+                        operation="getNetworkClientsApplicationUsage",
+                    ),
                 )
 
                 # Process usage data for each client
@@ -1033,12 +1041,20 @@ class ClientsCollector(MetricCollector):
         for client in wireless_clients:
             try:
                 self._track_api_call("getNetworkWirelessSignalQualityHistory")
-                signal_data = await asyncio.to_thread(
+                signal_response = await asyncio.to_thread(
                     self.api.wireless.getNetworkWirelessSignalQualityHistory,
                     network_id,
                     clientId=client.id,
                     timespan=300,  # 5 minutes as required
                     resolution=300,  # 5 minutes as required
+                )
+                signal_data = cast(
+                    list[dict[str, Any]],
+                    validate_response_format(
+                        signal_response,
+                        expected_type=list,
+                        operation="getNetworkWirelessSignalQualityHistory",
+                    ),
                 )
 
                 if not signal_data:

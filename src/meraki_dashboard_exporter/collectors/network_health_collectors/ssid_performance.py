@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -41,10 +42,18 @@ class SSIDPerformanceCollector(BaseNetworkHealthCollector):
             List of failed connection entries grouped by SSID and failure step.
 
         """
-        return await asyncio.to_thread(
+        response = await asyncio.to_thread(
             self.api.wireless.getNetworkWirelessFailedConnections,
             network_id,
             timespan=3600,  # 1 hour
+        )
+        return cast(
+            list[dict[str, Any]],
+            validate_response_format(
+                response,
+                expected_type=list,
+                operation="getNetworkWirelessFailedConnections",
+            ),
         )
 
     async def collect(self, network: dict[str, Any]) -> None:
@@ -99,7 +108,12 @@ class SSIDPerformanceCollector(BaseNetworkHealthCollector):
 
         except Exception as e:
             error_str = str(e)
-            if "400" in error_str or "404" in error_str or "Bad Request" in error_str:
+            if (
+                "400" in error_str
+                or "404" in error_str
+                or "Bad Request" in error_str
+                or "rate limit" in error_str.lower()
+            ):
                 logger.debug(
                     "SSID failed connections API not available",
                     network_id=network_id,
