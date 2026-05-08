@@ -47,11 +47,16 @@ spec:
             - configMapRef:
                 name: {{ include "meraki-dashboard-exporter.fullname" . }}
           env:
+            {{- if .Values.meraki.existingSecret }}
             - name: MERAKI_EXPORTER_MERAKI__API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.meraki.existingSecret | default (include "meraki-dashboard-exporter.secretName" .) }}
+                  name: {{ .Values.meraki.existingSecret }}
                   key: {{ .Values.meraki.existingSecretKey | default "api-key" }}
+            {{- end }}
+            {{- if .Values.extraEnv }}
+            {{- toYaml .Values.extraEnv | nindent 12 }}
+            {{- end }}
           {{- if .Values.livenessProbe.enabled }}
           livenessProbe:
             httpGet:
