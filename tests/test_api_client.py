@@ -30,6 +30,7 @@ def mock_settings() -> Settings:
     settings.api.max_retries = 3
     settings.api.action_batch_retry_wait = 10
     settings.api.rate_limit_retry_wait = 5
+    settings.api.validate_kwargs = False
 
     return settings
 
@@ -103,6 +104,7 @@ class TestAsyncMerakiClientInitialization:
             wait_on_rate_limit=True,
             retry_4xx_error=False,
             caller="merakidashboardexporter rknightion",
+            validate_kwargs=False,
         )
 
     @patch("meraki_dashboard_exporter.api.client.meraki.DashboardAPI")
