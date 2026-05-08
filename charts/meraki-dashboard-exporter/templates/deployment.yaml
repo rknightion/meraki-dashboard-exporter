@@ -46,8 +46,12 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "meraki-dashboard-exporter.fullname" . }}
-            - secretRef:
-                name: {{ include "meraki-dashboard-exporter.secretName" . }}
+          env:
+            - name: MERAKI_EXPORTER_MERAKI__API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.meraki.existingSecret | default (include "meraki-dashboard-exporter.secretName" .) }}
+                  key: {{ .Values.meraki.existingSecretKey | default "api-key" }}
           {{- if .Values.livenessProbe.enabled }}
           livenessProbe:
             httpGet:
