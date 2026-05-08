@@ -300,6 +300,13 @@ class MRWirelessCollector:
         """
         ssid_to_networks: dict[str, list[dict[str, str]]] = {}
 
+        if self.parent.inventory is None:
+            logger.warning(
+                "Inventory service not configured; SSID-to-network mapping skipped",
+                org_id=org_id,
+            )
+            return ssid_to_networks
+
         try:
             # Fetch networks via the shared inventory cache so the network
             # filter applies. SSID metrics will only be emitted for networks
