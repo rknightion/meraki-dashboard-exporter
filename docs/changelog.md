@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.30.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.29.0...v0.30.0) (2026-05-08)
+
+
+### Features
+
+* **config:** add NetworkFilterSettings model ([d768050](https://github.com/rknightion/meraki-dashboard-exporter/commit/d7680501333374b597fd4daf47e0ad136904f029))
+* **config:** wire network_filter into Settings ([bed4c59](https://github.com/rknightion/meraki-dashboard-exporter/commit/bed4c59c9b6af291cb963f0b49e8c14fef0bfd14))
+* **core:** add NetworkFilter resolver ([d11209f](https://github.com/rknightion/meraki-dashboard-exporter/commit/d11209f1a9dd1102b6e9904d526754e16f906588))
+* **inventory:** apply NetworkFilter at the read path ([e2bc90f](https://github.com/rknightion/meraki-dashboard-exporter/commit/e2bc90fdc5898b6d9b4aa15a8e1a39d38432d6ca))
+* **network-filter:** wire startup, fail-fast, metrics, and docs ([87f7619](https://github.com/rknightion/meraki-dashboard-exporter/commit/87f7619a84faa484a86745ebfbd0df45649cf94a))
+
+
+### Bug Fixes
+
+* **collectors:** apply NetworkFilter to org-wide device endpoints ([2c21787](https://github.com/rknightion/meraki-dashboard-exporter/commit/2c21787e2025fe2fbabb1ef9f1d7b8745f927e85))
+* **inventory:** validate SDK responses before caching ([7392b61](https://github.com/rknightion/meraki-dashboard-exporter/commit/7392b61f0c7ee2d38fbb2b2424109228fbe8ef9a))
+* **metric:** use binary value instead of label for network_filter_match ([a4c9436](https://github.com/rknightion/meraki-dashboard-exporter/commit/a4c943655a65390fe8bf7438712e1cdc41ecfc34))
+* validate API responses to handle SDK exhausted-retry error shape ([6d769f7](https://github.com/rknightion/meraki-dashboard-exporter/commit/6d769f7cb07da1691063025af6eb52ecf567c7c6))
+
+
+### Code Refactoring
+
+* **collectors:** route network fetches through inventory ([c92803a](https://github.com/rknightion/meraki-dashboard-exporter/commit/c92803a8ebb74452e87ff2aac8aedc39d2ead6bb))
+* route network health device/network lookups through inventory cache ([8ed0969](https://github.com/rknightion/meraki-dashboard-exporter/commit/8ed09691d1e222d2a974d92ba3dfd99c892ae642))
+
+
+### Documentation
+
+* add limited-testing warning to readme, docs site, and release notes ([7032af1](https://github.com/rknightion/meraki-dashboard-exporter/commit/7032af11d1318986eed3a510a592f2f985e83c04))
+
 ## [0.29.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.28.2...v0.29.0) (2026-04-15)
 
 
