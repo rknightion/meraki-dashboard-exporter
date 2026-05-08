@@ -25,6 +25,11 @@ def mock_collector():
     collector.settings.api = MagicMock()
     collector.settings.api.batch_size = 10
     collector.settings.api.batch_delay = 0.0
+    # Inactive network filter so the direct-fetch fallback returns the
+    # raw API list unchanged. NetworkFilterSettings() is inactive by default.
+    from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+
+    collector.settings.network_filter = NetworkFilterSettings()
 
     # No inventory cache - tests expect direct API calls
     collector.inventory = None

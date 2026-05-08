@@ -955,9 +955,12 @@ class DeviceCollector(MetricCollector):
                 device["uptimeInSeconds"],
             )
 
-    @log_api_call("getOrganizationNetworks")
     async def _fetch_networks_for_poe(self, org_id: str) -> list[dict[str, Any]]:
-        """Fetch networks for POE aggregation.
+        """Fetch networks for POE aggregation via the shared inventory cache.
+
+        Going through inventory ensures the configured network filter is
+        applied and that the per-org network list is fetched at most once
+        per cache TTL.
 
         Parameters
         ----------
@@ -967,16 +970,11 @@ class DeviceCollector(MetricCollector):
         Returns
         -------
         list[dict[str, Any]]
-            List of networks.
+            List of networks (filtered by the configured NetworkFilter).
 
         """
         with LogContext(org_id=org_id):
-            networks = await asyncio.to_thread(
-                self.api.organizations.getOrganizationNetworks,
-                org_id,
-                total_pages="all",
-            )
-            return cast(list[dict[str, Any]], networks)
+            return await self.inventory.get_networks(org_id)
 
     async def _aggregate_network_poe(
         self, org_id: str, org_name: str, devices: list[dict[str, Any]]

@@ -1,0 +1,125 @@
+"""Integration regression tests proving the network filter covers all paths.
+
+Each test pins one collector's network-fetch path to go through inventory
+(or to apply NetworkFilter on a fallback). If any future refactor
+re-introduces a direct SDK call that bypasses the filter, these tests
+fail fast.
+"""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+pytestmark = pytest.mark.asyncio
+
+
+async def test_network_health_uses_inventory() -> None:
+    """NetworkHealthCollector._fetch_networks_for_health goes via inventory."""
+    from meraki_dashboard_exporter.collectors.network_health import (
+        NetworkHealthCollector,
+    )
+
+    collector = NetworkHealthCollector.__new__(NetworkHealthCollector)
+    collector.inventory = AsyncMock()
+    collector.inventory.get_networks.return_value = [{"id": "L_1", "name": "x"}]
+    collector._track_api_call = MagicMock()
+
+    result = await collector._fetch_networks_for_health("ORG")
+
+    collector.inventory.get_networks.assert_awaited_once_with("ORG")
+    assert result == [{"id": "L_1", "name": "x"}]
+
+
+async def test_device_poe_uses_inventory() -> None:
+    """DeviceCollector._fetch_networks_for_poe goes via inventory."""
+    from meraki_dashboard_exporter.collectors.device import DeviceCollector
+
+    collector = DeviceCollector.__new__(DeviceCollector)
+    collector.inventory = AsyncMock()
+    collector.inventory.get_networks.return_value = [{"id": "L_1", "name": "x"}]
+
+    result = await collector._fetch_networks_for_poe("ORG")
+
+    collector.inventory.get_networks.assert_awaited_once_with("ORG")
+    assert result == [{"id": "L_1", "name": "x"}]
+
+
+async def test_ms_stp_uses_parent_inventory() -> None:
+    """MSCollector.collect_stp_priorities fetches via parent.inventory."""
+    from meraki_dashboard_exporter.collectors.devices.ms import MSCollector
+
+    collector = MSCollector.__new__(MSCollector)
+    parent = MagicMock()
+    parent.inventory = AsyncMock()
+    # Return a network list that contains no switches so the rest of the
+    # method short-circuits and we only verify the network fetch path.
+    parent.inventory.get_networks.return_value = []
+    collector.parent = parent
+
+    await collector.collect_stp_priorities("ORG", "Org Name", device_lookup={})
+
+    parent.inventory.get_networks.assert_awaited_once_with("ORG")
+
+
+async def test_mr_wireless_ssid_mapping_uses_parent_inventory() -> None:
+    """MRWirelessCollector._build_ssid_to_network_mapping uses parent.inventory."""
+    from meraki_dashboard_exporter.collectors.devices.mr.wireless import (
+        MRWirelessCollector,
+    )
+
+    collector = MRWirelessCollector.__new__(MRWirelessCollector)
+    parent = MagicMock()
+    parent.inventory = AsyncMock()
+    parent.inventory.get_networks.return_value = []  # no wireless networks
+    collector.parent = parent
+
+    result = await collector._build_ssid_to_network_mapping("ORG")
+
+    parent.inventory.get_networks.assert_awaited_once_with("ORG")
+    assert result == {}
+
+
+async def test_alerts_direct_fallback_applies_filter() -> None:
+    """AlertsCollector._fetch_networks_direct applies the filter."""
+    from meraki_dashboard_exporter.collectors.alerts import AlertsCollector
+    from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+
+    collector = AlertsCollector.__new__(AlertsCollector)
+    collector.api = MagicMock()
+    collector.api.organizations.getOrganizationNetworks = MagicMock(
+        return_value=[
+            {"id": "L_1", "name": "prod", "tags": []},
+            {"id": "L_2", "name": "lab", "tags": ["lab"]},
+        ]
+    )
+    settings = MagicMock()
+    settings.network_filter = NetworkFilterSettings(exclude_tags=["lab"])
+    collector.settings = settings
+
+    result = await collector._fetch_networks_direct("ORG")
+    assert result is not None
+    assert [n["id"] for n in result] == ["L_1"]
+
+
+async def test_api_helpers_direct_fallback_applies_filter() -> None:
+    """api_helpers._fetch_networks_direct applies the filter when inventory missing."""
+    from meraki_dashboard_exporter.core.api_helpers import APIHelper
+    from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+
+    helper = APIHelper.__new__(APIHelper)
+    helper.api = MagicMock()
+    helper.api.organizations.getOrganizationNetworks = MagicMock(
+        return_value=[
+            {"id": "L_1", "name": "prod", "tags": []},
+            {"id": "L_2", "name": "lab", "tags": ["lab"]},
+        ]
+    )
+    helper.collector = MagicMock()
+    helper.collector.settings.network_filter = NetworkFilterSettings(exclude_tags=["lab"])
+    helper.collector._track_api_call = MagicMock()
+    helper._acquire_rate_limit = AsyncMock()
+
+    result = await helper._fetch_networks_direct("ORG")
+    assert [n["id"] for n in result] == ["L_1"]

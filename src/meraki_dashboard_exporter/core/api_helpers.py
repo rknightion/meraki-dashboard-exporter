@@ -152,6 +152,10 @@ class APIHelper:
     async def _fetch_networks_direct(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch networks directly from API (fallback when inventory unavailable).
 
+        Even on this fallback path the configured NetworkFilter is applied
+        so excluded networks do not leak into collectors that go through
+        ``api_helper.get_organization_networks`` when inventory is missing.
+
         Parameters
         ----------
         org_id : str
@@ -160,7 +164,7 @@ class APIHelper:
         Returns
         -------
         list[dict[str, Any]]
-            List of network dictionaries.
+            List of network dictionaries (filtered).
 
         """
         logger.debug("Fetching networks directly (no inventory cache)", org_id=org_id)
@@ -171,8 +175,18 @@ class APIHelper:
             org_id,
             total_pages="all",
         )
-        logger.debug("Successfully fetched networks", org_id=org_id, count=len(networks))
-        return cast(list[dict[str, Any]], networks)
+        networks_list = cast(list[dict[str, Any]], networks)
+
+        nf_settings = self.collector.settings.network_filter
+        if nf_settings.is_active:
+            from .network_filter import NetworkFilter
+
+            networks_list = NetworkFilter(nf_settings).apply(networks_list)
+
+        logger.debug(
+            "Successfully fetched networks", org_id=org_id, count=len(networks_list)
+        )
+        return networks_list
 
     async def get_organization_devices(
         self,

@@ -301,11 +301,11 @@ class MRWirelessCollector:
         ssid_to_networks: dict[str, list[dict[str, str]]] = {}
 
         try:
+            # Fetch networks via the shared inventory cache so the network
+            # filter applies. SSID metrics will only be emitted for networks
+            # that pass the filter.
             with LogContext(org_id=org_id):
-                networks = await asyncio.to_thread(
-                    self.api.organizations.getOrganizationNetworks,
-                    org_id,
-                )
+                networks = await self.parent.inventory.get_networks(org_id)
 
             # Filter for wireless networks
             wireless_networks = [n for n in networks if "wireless" in n.get("productTypes", [])]

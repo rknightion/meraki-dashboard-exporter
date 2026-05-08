@@ -720,7 +720,6 @@ class MSCollector(BaseDeviceCollector):
         self._switch_power.labels(**device_labels).set(total_poe_consumption)
         self._mark_port_usage_collected(serial)
 
-    @log_api_call("getOrganizationNetworks")
     @with_error_handling(
         operation="Collect STP priorities",
         continue_on_error=True,
@@ -743,13 +742,10 @@ class MSCollector(BaseDeviceCollector):
         from ...core.domain_models import STPConfiguration
 
         try:
-            # First, fetch all networks in the organization
+            # Fetch networks via the shared inventory cache so the network
+            # filter applies and we share the result with sibling collectors.
             with LogContext(org_id=org_id):
-                networks = await asyncio.to_thread(
-                    self.api.organizations.getOrganizationNetworks,
-                    org_id,
-                    total_pages="all",
-                )
+                networks = await self.parent.inventory.get_networks(org_id)
 
             # Filter to only networks with switches
             switch_networks = [n for n in networks if "switch" in n.get("productTypes", [])]
