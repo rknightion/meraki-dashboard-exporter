@@ -380,3 +380,12 @@ class WebhookMetricName(StrEnum):
     WEBHOOK_EVENTS_TOTAL = "meraki_webhook_events_total"
     WEBHOOK_LAST_EVENT_TIMESTAMP = "meraki_webhook_last_event_timestamp"
     WEBHOOK_PROCESSING_ERRORS_TOTAL = "meraki_webhook_processing_errors_total"
+
+class MXWanMetricName(str, Enum):
+    """Metric names for the MX WAN uplink collector."""
+
+    WAN_UPLINK_STATUS     = "meraki_mx_wan_uplink_status"
+    WAN_UPLINK_SENT_BYTES = "meraki_mx_wan_uplink_sent_bytes"
+    WAN_UPLINK_RECV_BYTES = "meraki_mx_wan_uplink_recv_bytes"
+    WAN_UPLINK_LATENCY_MS = "meraki_mx_wan_uplink_latency_ms"
+    WAN_UPLINK_LOSS_PCT   = "meraki_mx_wan_uplink_loss_pct"

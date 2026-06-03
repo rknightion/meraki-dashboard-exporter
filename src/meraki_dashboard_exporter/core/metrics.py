@@ -117,7 +117,10 @@ class LabelName(StrEnum):
     # Switch stack labels
     STACK_ID = "stack_id"
     ROLE = "role"
-
+    
+    # MS Wan Labels
+    WAN_INTERFACE = "wan_interface"
+    
     # Firewall labels
     RULE_TYPE = "rule_type"
     EVENT_TYPE = "event_type"
