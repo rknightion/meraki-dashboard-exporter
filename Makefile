@@ -93,6 +93,38 @@ coverage-report: test-cov ## Generate and open coverage report
 check: lint typecheck test ## Run all checks (lint, typecheck, test)
 	@echo "$(GREEN)All checks passed!$(NC)"
 
+# API drift detection (vendored Meraki OpenAPI spec vs live)
+MERAKI_SPEC_URL := https://raw.githubusercontent.com/meraki/openapi/master/openapi/spec3.json
+
+.PHONY: refresh-meraki-spec
+refresh-meraki-spec: ## Re-vendor the Meraki OpenAPI baseline spec
+	@echo "$(BLUE)Fetching live Meraki OpenAPI spec...$(NC)"
+	curl -fsSL "$(MERAKI_SPEC_URL)" -o /tmp/meraki-spec3.json
+	@python3 -c "import json; print('info.version =', json.load(open('/tmp/meraki-spec3.json'))['info']['version'])"
+	gzip -9 -c /tmp/meraki-spec3.json > spec/meraki-openapi.json.gz
+	@echo "$(GREEN)Vendored spec/meraki-openapi.json.gz — update the version note in spec/README.md$(NC)"
+
+.PHONY: api-drift
+api-drift: ## Run the drift tool locally against the live Meraki spec
+	PYTHONPATH=src:tools uv run python -m apidrift \
+		--baseline spec/meraki-openapi.json.gz \
+		--live-url "$(MERAKI_SPEC_URL)" \
+		--src src --format md
+
+.PHONY: api-conformance
+api-conformance: ## Run the offline model-conformance check against the vendored spec
+	PYTHONPATH=src:tools uv run python -m apidrift \
+		--baseline spec/meraki-openapi.json.gz \
+		--live spec/meraki-openapi.json.gz \
+		--src src --conformance-only --format md
+
+.PHONY: api-suggest
+api-suggest: ## Suggest source operations for unmapped Pydantic models (review aid)
+	PYTHONPATH=src:tools uv run python -m apidrift \
+		--baseline spec/meraki-openapi.json.gz \
+		--live spec/meraki-openapi.json.gz \
+		--src src --suggest
+
 # Docker BuildKit Commands
 .PHONY: docker-build
 docker-build: ## Build Docker image for current architecture

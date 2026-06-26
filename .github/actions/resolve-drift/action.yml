@@ -1,0 +1,21 @@
+name: resolve-drift
+description: Auto-close open api-drift issues when a run comes back clean.
+inputs:
+  lane-label:
+    required: true
+    description: Issue marker label (e.g. api-drift)
+runs:
+  using: composite
+  steps:
+    - name: Close tracking issues
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        INPUTS_LANE_LABEL: ${{ inputs.lane-label }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        set -euo pipefail
+        for n in $(gh issue list --label "${INPUTS_LANE_LABEL}" --state open --json number -q '.[].number'); do
+          gh issue comment "$n" --body "Lane \`${INPUTS_LANE_LABEL}\` is green again — closing automatically. See ${RUN_URL}"
+          gh issue close "$n" --reason completed
+        done
