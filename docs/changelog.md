@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.30.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.30.0...v0.30.1) (2026-06-26)
+
+
+### Bug Fixes
+
+* **docker:** build multi-arch images on native runners ([487ee51](https://github.com/rknightion/meraki-dashboard-exporter/commit/487ee5192f583b8e2663ff3db1a618387707c055)), closes [#221](https://github.com/rknightion/meraki-dashboard-exporter/issues/221)
+* **docs:** remove glightbox slide_effect option (rejected by zensical 0.0.44) ([8e1aecd](https://github.com/rknightion/meraki-dashboard-exporter/commit/8e1aecd3ae38c31f3dc1bed09cc6b8f47cfc244a))
+
 ## [0.30.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.29.0...v0.30.0) (2026-05-08)
 
 
