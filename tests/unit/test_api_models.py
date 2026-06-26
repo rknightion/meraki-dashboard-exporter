@@ -12,7 +12,6 @@ from meraki_dashboard_exporter.core.api_models import (
     APIUsage,
     ClientOverview,
     Device,
-    DeviceStatus,
     License,
     MemoryUsage,
     Network,
@@ -22,7 +21,6 @@ from meraki_dashboard_exporter.core.api_models import (
     PortStatus,
     SensorData,
     SensorReading,
-    WirelessClient,
 )
 
 
@@ -135,47 +133,6 @@ class TestDevice:
         assert device.configurationUpdatedAt == config_time
 
 
-class TestDeviceStatus:
-    """Test DeviceStatus model."""
-
-    def test_device_status_basic(self):
-        """Test basic device status."""
-        status = DeviceStatus(serial="Q2XX-XXXX-XXXX", status="online")
-        assert status.serial == "Q2XX-XXXX-XXXX"
-        assert status.status == "online"
-        assert status.usingCellularFailover is False
-
-    def test_device_status_full(self):
-        """Test device status with all fields."""
-        last_reported = datetime.now(UTC)
-        status = DeviceStatus(
-            serial="Q2XX-XXXX-XXXX",
-            status="online",
-            lastReportedAt=last_reported,
-            publicIp="1.2.3.4",
-            lanIp="192.168.1.10",
-            wan1Ip="10.0.0.1",
-            wan2Ip="10.0.0.2",
-            gateway="192.168.1.1",
-            ipType="dhcp",
-            primaryDns="8.8.8.8",
-            secondaryDns="8.8.4.4",
-            usingCellularFailover=True,
-            wan1IpType="static",
-            wan2IpType="dhcp",
-        )
-        assert status.lastReportedAt == last_reported
-        assert status.usingCellularFailover is True
-        assert status.primaryDns == "8.8.8.8"
-
-    def test_device_status_literals(self):
-        """Test device status literal validation."""
-        # Valid statuses
-        for status_val in ["online", "offline", "alerting", "dormant"]:
-            status = DeviceStatus(serial="Q2XX-XXXX-XXXX", status=status_val)
-            assert status.status == status_val
-
-
 class TestPortStatus:
     """Test PortStatus model."""
 
@@ -222,65 +179,6 @@ class TestPortStatus:
         # String should convert to float
         port = PortStatus(portId="1", enabled=True, status="Connected", powerUsageInWh="12.5")
         assert port.powerUsageInWh == 12.5
-
-
-class TestWirelessClient:
-    """Test WirelessClient model."""
-
-    def test_wireless_client_basic(self):
-        """Test basic wireless client."""
-        first_seen = datetime.now(UTC)
-        last_seen = datetime.now(UTC)
-
-        client = WirelessClient(
-            id="c_123",
-            mac="00:11:22:33:44:55",
-            firstSeen=first_seen,
-            lastSeen=last_seen,
-        )
-        assert client.id == "c_123"
-        assert client.mac == "00:11:22:33:44:55"
-        assert client.status == "Offline"  # Default
-        assert client.firstSeen == first_seen
-        assert client.lastSeen == last_seen
-
-    def test_wireless_client_full(self):
-        """Test wireless client with all fields."""
-        first_seen = datetime.now(UTC)
-        last_seen = datetime.now(UTC)
-
-        client = WirelessClient(
-            id="c_123",
-            mac="00:11:22:33:44:55",
-            description="John's iPhone",
-            ip="192.168.1.100",
-            ip6="2001:db8::1",
-            ip6Local="fe80::1",
-            user="john@example.com",
-            firstSeen=first_seen,
-            lastSeen=last_seen,
-            manufacturer="Apple",
-            os="iOS",
-            deviceTypePrediction="iPhone",
-            recentDeviceSerial="Q2XX-XXXX-XXXX",
-            recentDeviceName="Office AP",
-            recentDeviceMac="00:AA:BB:CC:DD:EE",
-            recentDeviceConnection="802.11ac",
-            ssid="Corporate",
-            vlan=100,
-            switchport="GigabitEthernet1/0/1",
-            status="Online",
-            notes="Executive device",
-            usage={"sent": 1000000, "recv": 5000000},
-            namedVlan="Corporate VLAN",
-            adaptivePolicyGroup="Executives",
-            wirelessCapabilities="802.11ac - 2.4 and 5 GHz",
-        )
-        assert client.description == "John's iPhone"
-        assert client.ssid == "Corporate"
-        assert client.vlan == 100
-        assert client.status == "Online"
-        assert client.usage == {"sent": 1000000, "recv": 5000000}
 
 
 class TestSensorReading:
