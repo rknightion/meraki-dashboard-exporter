@@ -16,7 +16,14 @@ inputs:
     description: >
       Anthropic API key. Passed explicitly (not via job env) so it is introduced only at
       this post-classification report step and never shares an environment with the fetched
-      upstream spec data. Empty => Claude enrichment is skipped.
+      upstream spec data. Empty => use the OAuth token, or skip enrichment if both are empty.
+  claude-code-oauth-token:
+    required: false
+    default: ""
+    description: >
+      Claude Pro/Max OAuth token (generate locally with `claude setup-token`). Alternative
+      to anthropic-api-key — lets enrichment run against a Claude subscription instead of
+      pay-per-use API credits. Same security boundary: introduced only at this step.
 runs:
   using: composite
   steps:
@@ -36,10 +43,11 @@ runs:
           gh issue create --label "${INPUTS_LANE_LABEL}" --title "${INPUTS_TITLE}" --body-file "${INPUTS_REPORT_PATH}"
         fi
     - name: Claude enrichment
-      if: ${{ inputs.anthropic-api-key != '' }}
+      if: ${{ inputs.anthropic-api-key != '' || inputs.claude-code-oauth-token != '' }}
       uses: anthropics/claude-code-action@eee73e2ae5399c561de4ff038aa7b36a7aa991a7 # v1.0.143
       with:
         anthropic_api_key: ${{ inputs.anthropic-api-key }}
+        claude_code_oauth_token: ${{ inputs.claude-code-oauth-token }}
         prompt: |
           A scheduled CI lane detected Cisco Meraki API drift on operations this exporter consumes.
 
