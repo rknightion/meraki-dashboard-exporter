@@ -11,6 +11,17 @@ on:
   release:
     types: [published]
   workflow_call:
+    inputs:
+      release_tag:
+        description: >-
+          Release tag (e.g. v0.30.1) to publish semver + latest image tags for.
+          Set by release-please's docker-release job. When invoked via
+          workflow_call the github context is the caller's push/main event, so
+          the semver tags cannot be derived from the git ref and must be passed
+          in explicitly.
+        type: string
+        required: false
+        default: ''
 
 env:
   REGISTRY: ghcr.io
@@ -177,14 +188,20 @@ jobs:
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
+            # Branch + commit-sha tags (push to main)
             type=ref,event=branch
-            type=ref,event=pr
+            type=sha,prefix={{branch}}-,enable={{is_default_branch}}
+            # Semver tags from a direct git tag push (v*)
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            # Only add 'latest' tag for semver tags (releases)
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=sha,prefix={{branch}}-,enable={{is_default_branch}}
+            # Semver tags when invoked by release-please via workflow_call: the
+            # github ref is main, so the version is supplied from inputs.release_tag
+            type=semver,pattern={{version}},value=${{ inputs.release_tag }},enable=${{ inputs.release_tag != '' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.release_tag }},enable=${{ inputs.release_tag != '' }}
+            type=semver,pattern={{major}},value=${{ inputs.release_tag }},enable=${{ inputs.release_tag != '' }}
+            # 'latest' on a direct v* tag push OR a release-please invocation
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != '' }}
 
       - name: Log into registry ${{ env.REGISTRY }}
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0

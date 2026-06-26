@@ -59,4 +59,8 @@ jobs:
       attestations: write
       security-events: write
     uses: ./.github/workflows/docker-build.yml # zizmor: ignore[secrets-inherit] local trusted same-repo reusable workflow
+    with:
+      # Pass the release tag so docker-build can publish semver + latest image
+      # tags (the workflow_call github context is the caller's push/main event).
+      release_tag: ${{ needs.release-please.outputs.tag_name }}
     secrets: inherit # zizmor: ignore[secrets-inherit] switch to explicit secrets once docker-build.yml declares workflow_call.secrets (in-flight refactor)
