@@ -84,7 +84,10 @@ jobs:
           lane-label: api-drift
           title: "Meraki OpenAPI drift on consumed operations"
           report-path: /tmp/drift.md
+          # Provide EITHER: ANTHROPIC_API_KEY (pay-per-use) or CLAUDE_CODE_OAUTH_TOKEN
+          # (Claude Pro/Max subscription, via `claude setup-token`). Both empty => skip.
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
       - name: Resolve tracking issue on clean run
         if: steps.drift.outputs.code == '0' && steps.oasdiff.outputs.code == '0'
