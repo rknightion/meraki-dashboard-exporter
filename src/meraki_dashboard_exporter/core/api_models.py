@@ -15,6 +15,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class Organization(BaseModel):
     """Meraki organization model."""
 
+    # apidrift: source operation(s) whose response schema this model parses.
+    __meraki_op__ = "getOrganizations"
+
     id: str
     name: str
     url: str | None = None
@@ -27,6 +30,8 @@ class Organization(BaseModel):
 
 class Network(BaseModel):
     """Meraki network model."""
+
+    __meraki_op__ = "getOrganizationNetworks"
 
     id: str
     organizationId: str
@@ -44,6 +49,14 @@ class Network(BaseModel):
 
 class Device(BaseModel):
     """Meraki device model."""
+
+    # apidrift: Device aggregates fields populated from several endpoints, so it
+    # conforms to the UNION of these ops' response schemas.
+    __meraki_op__ = [
+        "getOrganizationDevices",
+        "getNetworkDevices",
+        "getOrganizationDevicesAvailabilities",
+    ]
 
     serial: str
     name: str | None = None
@@ -67,29 +80,10 @@ class Device(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-class DeviceStatus(BaseModel):
-    """Device status information."""
-
-    serial: str
-    status: Literal["online", "offline", "alerting", "dormant"]
-    lastReportedAt: datetime | None = None
-    publicIp: str | None = None
-    lanIp: str | None = None
-    wan1Ip: str | None = None
-    wan2Ip: str | None = None
-    gateway: str | None = None
-    ipType: str | None = None
-    primaryDns: str | None = None
-    secondaryDns: str | None = None
-    usingCellularFailover: bool = False
-    wan1IpType: str | None = None
-    wan2IpType: str | None = None
-
-    model_config = ConfigDict(extra="allow")
-
-
 class PortStatus(BaseModel):
     """Switch port status model."""
+
+    __meraki_op__ = "getDeviceSwitchPortsStatuses"
 
     portId: str
     enabled: bool
@@ -118,40 +112,11 @@ class PortStatus(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-class WirelessClient(BaseModel):
-    """Wireless client model."""
-
-    id: str
-    mac: str
-    description: str | None = None
-    ip: str | None = None
-    ip6: str | None = None
-    ip6Local: str | None = None
-    user: str | None = None
-    firstSeen: datetime
-    lastSeen: datetime
-    manufacturer: str | None = None
-    os: str | None = None
-    deviceTypePrediction: str | None = None
-    recentDeviceSerial: str | None = None
-    recentDeviceName: str | None = None
-    recentDeviceMac: str | None = None
-    recentDeviceConnection: str | None = None
-    ssid: str | None = None
-    vlan: int | None = None
-    switchport: str | None = None
-    status: Literal["Online", "Offline"] | str = "Offline"
-    notes: str | None = None
-    usage: dict[str, int] | None = None
-    namedVlan: str | None = None
-    adaptivePolicyGroup: str | None = None
-    wirelessCapabilities: str | None = None
-
-    model_config = ConfigDict(extra="allow")
-
-
 class SensorReading(BaseModel):
     """Sensor reading model."""
+
+    # apidrift: computed sub-shape of SensorData.readings, not a raw API response.
+    __meraki_derived__ = True
 
     ts: datetime
     metric: str
@@ -169,6 +134,8 @@ class SensorReading(BaseModel):
 class SensorData(BaseModel):
     """Sensor data response model."""
 
+    __meraki_op__ = "getOrganizationSensorReadingsLatest"
+
     serial: str
     network: dict[str, str] | None = None
     readings: list[SensorReading] = Field(default_factory=list)
@@ -178,6 +145,8 @@ class SensorData(BaseModel):
 
 class APIUsage(BaseModel):
     """API usage statistics model."""
+
+    __meraki_op__ = "getOrganizationApiRequests"
 
     method: str
     host: str
@@ -193,6 +162,8 @@ class APIUsage(BaseModel):
 
 class License(BaseModel):
     """License information model."""
+
+    __meraki_op__ = "getOrganizationLicenses"
 
     id: str | None = None
     licenseType: str
@@ -215,6 +186,8 @@ class License(BaseModel):
 
 class ClientOverview(BaseModel):
     """Client overview statistics model."""
+
+    __meraki_op__ = "getOrganizationClientsOverview"
 
     counts: dict[str, int]
     usages: dict[str, dict[str, int]]
@@ -245,6 +218,8 @@ class ClientOverview(BaseModel):
 class Alert(BaseModel):
     """Assurance alert model."""
 
+    __meraki_op__ = "getOrganizationAssuranceAlerts"
+
     id: str
     categoryType: str
     alertType: str
@@ -260,6 +235,10 @@ class Alert(BaseModel):
 
 class MemoryUsage(BaseModel):
     """Device memory usage model."""
+
+    # apidrift: computed from getOrganizationDevicesSystemMemoryUsageHistoryByInterval
+    # interval buckets, not a direct response object.
+    __meraki_derived__ = True
 
     ts: datetime
     percentage: float | None = None
@@ -278,6 +257,8 @@ class MemoryUsage(BaseModel):
 
 class NetworkClient(BaseModel):
     """Network client model for client-level metrics."""
+
+    __meraki_op__ = "getNetworkClients"
 
     id: str
     mac: str
@@ -327,6 +308,9 @@ class NetworkClient(BaseModel):
 # Response wrapper models
 class PaginatedResponse(BaseModel):
     """Paginated API response wrapper."""
+
+    # apidrift: generic pagination wrapper, not a single Meraki response object.
+    __meraki_derived__ = True
 
     items: list[dict[str, Any]]
     meta: dict[str, Any] | None = None

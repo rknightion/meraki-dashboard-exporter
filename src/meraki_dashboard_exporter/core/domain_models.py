@@ -17,6 +17,9 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validat
 class RFHealthData(BaseModel):
     """RF health data for wireless networks."""
 
+    # apidrift: transformed RF-health shape, not a direct API response object.
+    __meraki_derived__ = True
+
     serial: str
     apName: str | None = None
     model: str
@@ -39,6 +42,8 @@ class RFHealthData(BaseModel):
 class ConnectionStats(BaseModel):
     """Wireless connection statistics."""
 
+    __meraki_op__ = "getNetworkWirelessConnectionStats"
+
     assoc: int = 0
     auth: int = 0
     dhcp: int = 0
@@ -57,6 +62,9 @@ class ConnectionStats(BaseModel):
 class NetworkConnectionStats(BaseModel):
     """Network-wide connection statistics response."""
 
+    # apidrift: wrapper composing ConnectionStats, not a single API response.
+    __meraki_derived__ = True
+
     networkId: str
     connectionStats: ConnectionStats
 
@@ -65,6 +73,9 @@ class NetworkConnectionStats(BaseModel):
 
 class DataRate(BaseModel):
     """Wireless data rate information."""
+
+    # apidrift: computed rate model (download/upload kbps), not a raw response.
+    __meraki_derived__ = True
 
     total: int = 0
     sent: int = 0
@@ -97,6 +108,10 @@ class DataRate(BaseModel):
 class SwitchPort(BaseModel):
     """Enhanced switch port model with POE and traffic data."""
 
+    # apidrift: enhanced/derived port-config shape (sourced from a switch-port
+    # config endpoint not in the consumed read path), not a single live response.
+    __meraki_derived__ = True
+
     portId: str
     name: str | None = None
     enabled: bool = True
@@ -119,6 +134,9 @@ class SwitchPort(BaseModel):
 
 class SwitchPortPOE(BaseModel):
     """Switch port POE status and configuration."""
+
+    # apidrift: computed POE model (utilization_percent), not a raw response.
+    __meraki_derived__ = True
 
     portId: str
     isAllocated: bool = False
@@ -144,6 +162,8 @@ class SwitchPortPOE(BaseModel):
 class STPConfiguration(BaseModel):
     """Spanning Tree Protocol configuration for switches."""
 
+    __meraki_op__ = "getNetworkSwitchStp"
+
     rstpEnabled: bool = True
     stpBridgePriority: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -164,6 +184,9 @@ class STPConfiguration(BaseModel):
 
 class MRDeviceStats(BaseModel):
     """MR (Access Point) specific statistics."""
+
+    # apidrift: aggregated/computed AP stats from several wireless endpoints.
+    __meraki_derived__ = True
 
     serial: str
     clientCount: int = 0
@@ -201,6 +224,9 @@ class MRDeviceStats(BaseModel):
 class MRRadioStatus(BaseModel):
     """MR radio status information."""
 
+    # apidrift: transformed radio-status shape, not a single raw response.
+    __meraki_derived__ = True
+
     serial: str
     radioIndex: int
     operatingChannel: int | None = None
@@ -226,6 +252,8 @@ class MRRadioStatus(BaseModel):
 class ConfigurationChange(BaseModel):
     """Configuration change event."""
 
+    __meraki_op__ = "getOrganizationConfigurationChanges"
+
     ts: datetime
     adminId: str | None = None
     adminName: str | None = None
@@ -245,6 +273,9 @@ class ConfigurationChange(BaseModel):
 
 class SensorMeasurement(BaseModel):
     """Individual sensor measurement."""
+
+    # apidrift: computed measurement shape (normalized_unit), not a raw response.
+    __meraki_derived__ = True
 
     metric: Literal[
         "temperature",
@@ -308,6 +339,9 @@ class SensorMeasurement(BaseModel):
 class MTSensorReading(BaseModel):
     """MT sensor reading with all measurements."""
 
+    # apidrift: transformed MT reading composing SensorMeasurement list.
+    __meraki_derived__ = True
+
     serial: str
     networkId: str
     timestamp: datetime
@@ -321,6 +355,9 @@ class MTSensorReading(BaseModel):
 
 class OrganizationSummary(BaseModel):
     """Organization summary with device and network counts."""
+
+    # apidrift: computed cross-endpoint aggregate, not a single API response.
+    __meraki_derived__ = True
 
     id: str
     name: str
@@ -351,6 +388,10 @@ class OrganizationSummary(BaseModel):
 
 class ClientData(BaseModel):
     """Enhanced client data with resolved hostname."""
+
+    # apidrift: enriched getNetworkClients shape; DNS/derived fields surface as
+    # INFO model-extra (expected), real upstream drift still caught by oasdiff.
+    __meraki_op__ = "getNetworkClients"
 
     id: str
     mac: str
