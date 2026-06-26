@@ -40,6 +40,15 @@ jobs:
       - name: Type-check (mypy)
         run: uv run mypy .
 
+      - name: Meraki model conformance (offline, vs vendored spec)
+        env:
+          PYTHONPATH: src:tools
+        run: |
+          uv run python -m apidrift \
+            --baseline spec/meraki-openapi.json.gz \
+            --live spec/meraki-openapi.json.gz \
+            --src src --conformance-only --format md
+
       - name: Run tests
         env:
           PYTHONPATH: src
