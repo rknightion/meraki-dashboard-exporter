@@ -6,13 +6,16 @@ on:
       - main
   workflow_dispatch:
 
+# Minimal default; write scopes are granted per-job only where needed.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write       # create release + tag
+      pull-requests: write  # open/maintain the release PR
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
@@ -55,5 +58,5 @@ jobs:
       id-token: write
       attestations: write
       security-events: write
-    uses: ./.github/workflows/docker-build.yml
-    secrets: inherit
+    uses: ./.github/workflows/docker-build.yml # zizmor: ignore[secrets-inherit] local trusted same-repo reusable workflow
+    secrets: inherit # zizmor: ignore[secrets-inherit] switch to explicit secrets once docker-build.yml declares workflow_call.secrets (in-flight refactor)

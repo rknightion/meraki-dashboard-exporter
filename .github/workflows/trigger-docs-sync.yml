@@ -10,6 +10,9 @@ on:
       - 'scripts/**'
   workflow_dispatch:
 
+# Dispatch is authenticated with DOCS_SYNC_PAT, not GITHUB_TOKEN — no token scopes needed.
+permissions: {}
+
 concurrency:
   group: docs-sync-${{ github.repository }}
   cancel-in-progress: true
