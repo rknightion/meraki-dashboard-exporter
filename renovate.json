@@ -13,6 +13,7 @@
   },
   "automergeType": "pr",
   "platformAutomerge": true,
+  "internalChecksAsSuccess": true,
   "packageRules": [
     {
       "description": "Automerge GitHub Actions",
