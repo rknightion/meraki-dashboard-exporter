@@ -1,78 +1,16 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "vulnerabilityAlerts": {
-    "automerge": true
-  },
-  "extends": [
-    "config:recommended",
-    "helpers:pinGitHubActionDigests"
-  ],
-  "lockFileMaintenance": {
-    "enabled": true,
-    "automerge": true
-  },
-  "automergeType": "pr",
-  "platformAutomerge": true,
-  "internalChecksAsSuccess": true,
   "packageRules": [
     {
-      "description": "Never automerge release-please PRs - manual review required",
-      "matchFileNames": [
-        ".release-please-*.json"
-      ],
-      "automerge": false
-    },
-    {
-      "description": "Automerge GitHub Actions",
-      "matchManagers": [
-        "github-actions"
-      ],
-      "labels": [
-        "dep:gha"
-      ],
-      "automerge": true,
+      "description": "Rebase GitHub Actions PRs only when conflicted (override the fleet default)",
+      "matchManagers": ["github-actions"],
       "rebaseWhen": "conflicted"
-    },
-    {
-      "description": "Automerge patch and minor updates for low risk",
-      "matchUpdateTypes": [
-        "patch",
-        "minor"
-      ],
-      "automerge": true,
-      "labels": [
-        "dep:low-risk"
-      ]
-    },
-    {
-      "description": "Automerge pin updates",
-      "matchUpdateTypes": [
-        "pin"
-      ],
-      "automerge": true,
-      "labels": [
-        "dep:low-risk"
-      ]
-    },
-    {
-      "description": "Automerge digest updates (Docker, etc)",
-      "matchUpdateTypes": [
-        "digest"
-      ],
-      "automerge": true,
-      "labels": [
-        "dep:low-risk"
-      ]
     },
     {
       "description": "Track OpenTelemetry pre-release versions",
       "ignoreUnstable": false,
-      "labels": [
-        "dep:opentelemetry"
-      ],
-      "matchPackageNames": [
-        "/^opentelemetry/"
-      ]
+      "labels": ["dep:opentelemetry"],
+      "matchPackageNames": ["/^opentelemetry/"]
     }
   ]
 }
