@@ -124,9 +124,11 @@ jobs:
 
       - name: Export digest
         if: github.event_name != 'merge_group'
+        env:
+          BUILD_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           mkdir -p "${{ runner.temp }}/digests"
-          digest="${{ steps.build.outputs.digest }}"
+          digest="$BUILD_DIGEST"
           touch "${{ runner.temp }}/digests/${digest#sha256:}"
 
       - name: Upload digest
@@ -259,7 +261,7 @@ jobs:
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
           DIGEST: ${{ steps.digest.outputs.digest }}
-        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+        run: echo "${TAGS}" | xargs -I {} cosign sign --yes "{}@${DIGEST}"
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
@@ -284,15 +286,17 @@ jobs:
       - name: Build summary
         if: always()
         run: |
-          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Platforms** | linux/amd64, linux/arm64 (native runners) |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Tags** | ${STEPS_META_OUTPUTS_TAGS} |" >> $GITHUB_STEP_SUMMARY
-          if [[ "${STEPS_DIGEST_OUTPUTS_DIGEST}" != "" ]]; then
-            echo "| **Digest** | \`${STEPS_DIGEST_OUTPUTS_DIGEST}\` |" >> $GITHUB_STEP_SUMMARY
-          fi
+          {
+            echo "## Build Summary"
+            echo ""
+            echo "| Property | Value |"
+            echo "|----------|-------|"
+            echo "| **Platforms** | linux/amd64, linux/arm64 (native runners) |"
+            echo "| **Tags** | ${STEPS_META_OUTPUTS_TAGS} |"
+            if [[ "${STEPS_DIGEST_OUTPUTS_DIGEST}" != "" ]]; then
+              echo "| **Digest** | \`${STEPS_DIGEST_OUTPUTS_DIGEST}\` |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
         env:
           STEPS_META_OUTPUTS_TAGS: ${{ steps.meta.outputs.tags }}
           STEPS_DIGEST_OUTPUTS_DIGEST: ${{ steps.digest.outputs.digest }}
