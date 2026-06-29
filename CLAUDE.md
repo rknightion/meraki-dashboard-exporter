@@ -10,7 +10,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **Security**: Never log or expose API keys, use read-only when possible
 - **Memory**: Be mindful of API rate limits and implement proper error handling
 - **Use parallel tasks/agents** when suitable use the parallel tasks and agents available to you
-- **Never issue git commands** the user will handle all 'git' commands
+- **Git commands are allowed** — committing and pushing (including straight to `main`) is fine when the task calls for it
 - **Network fetches go through inventory**: All collectors must use `OrganizationInventory.get_networks(org_id)` so the configured `NetworkFilter` is enforced uniformly. Direct `getOrganizationNetworks` SDK calls in collectors are forbidden. `EnvironmentDiscovery` (`core/discovery.py`) deliberately bypasses the filter for audit purposes.
 - **Wrap fetchers with `validate_response_format`**: New API fetchers that may receive the SDK exhausted-retry error shape must use `core.error_handling.validate_response_format` to normalize the response.
 </critical_notes>

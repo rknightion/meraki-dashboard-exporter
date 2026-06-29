@@ -11,6 +11,11 @@
       "ignoreUnstable": false,
       "labels": ["dep:opentelemetry"],
       "matchPackageNames": ["/^opentelemetry/"]
+    },
+    {
+      "description": "OpenTelemetry Python packages (api, sdk, exporter-otlp, instrumentation-*) release in lockstep — group them into one PR.",
+      "matchPackageNames": ["/^opentelemetry/"],
+      "groupName": "opentelemetry"
     }
   ]
 }
