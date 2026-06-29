@@ -1,0 +1,15 @@
+---
+# Codacy repository configuration (https://docs.codacy.com/repositories-configure/codacy-configuration-file/)
+# Repo-LOCAL config only. Tools and patterns are governed by the org coding standard
+# "rknightion-standard" (id 159741) — do not redefine engines/tools here.
+# This file only narrows WHAT gets analysed, to reduce noise. Codacy Cloud reads it
+# from the default branch.
+exclude_paths:
+  - "docs/**"
+  - "test/**"
+  - "tests/**"
+  - "**/tests/**"
+  - "**/*_test.go"
+  - "vendor/**"
+  - "generated/**"
+  - "**/generated/**"
