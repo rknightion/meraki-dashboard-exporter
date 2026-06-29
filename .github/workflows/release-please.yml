@@ -54,14 +54,35 @@ jobs:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     permissions:
-      contents: read
+      contents: write
       packages: write
       id-token: write
       attestations: write
       security-events: write
-    uses: ./.github/workflows/docker-build.yml # zizmor: ignore[secrets-inherit] local trusted same-repo reusable workflow
+    uses: ./.github/workflows/publish.yml
     with:
-      # Pass the release tag so docker-build can publish semver + latest image
-      # tags (the workflow_call github context is the caller's push/main event).
+      # Pass the release tag so publish can emit semver + latest image tags
+      # (the workflow_call github context is the caller's push/main event).
       release_tag: ${{ needs.release-please.outputs.tag_name }}
-    secrets: inherit # zizmor: ignore[secrets-inherit] switch to explicit secrets once docker-build.yml declares workflow_call.secrets (in-flight refactor)
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  # Edge build on every non-release push to main: publishes :main multi-arch image
+  # + a main-snapshot Helm chart (replaces the removed docker-build.yml push:main path).
+  # release_created gates this vs docker-release, so they never both run on one push.
+  edge:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created != 'true' }}
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    uses: ./.github/workflows/publish.yml
+    with:
+      release_tag: ""
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
