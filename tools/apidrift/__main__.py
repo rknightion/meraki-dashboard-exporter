@@ -14,6 +14,7 @@ import sys
 import urllib.request
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from apidrift.conformance import Finding, check_models
 from apidrift.reducer import index_operations, reduce_spec
@@ -24,9 +25,14 @@ from apidrift.spec import load_spec, load_spec_bytes
 
 def _load_live(args: argparse.Namespace) -> dict[str, Any]:
     if args.live_url:
-        if not str(args.live_url).startswith("https://"):
-            raise ValueError("--live-url must be https")
-        with urllib.request.urlopen(args.live_url, timeout=60) as resp:  # noqa: S310
+        parsed = urlparse(str(args.live_url))
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("--live-url must be an absolute https:// URL")
+        # Reconstruct the URL from validated, parsed components rather than passing
+        # the raw argument straight through, so only the https scheme can ever reach
+        # urlopen (defence-in-depth against scheme smuggling, e.g. file:/ftp:).
+        safe_url = parsed.geturl()
+        with urllib.request.urlopen(safe_url, timeout=60) as resp:  # noqa: S310
             return load_spec_bytes(resp.read())
     return load_spec(args.live)
 
