@@ -1,0 +1,39 @@
+{
+  "summary": {
+    "enabledPatterns": { "before": null, "after": null },
+    "enabledTools": { "before": 14, "after": 14 },
+    "issues": { "before": 21, "after": 21 },
+    "analysisRuntime": { "before": null, "after": null }
+  },
+  "mode": "repo-local-only",
+  "note": "Repository is on Codacy Cloud and assigned to org coding standard 'rknightion-standard' (id 159741). Per explicit guardrails, no org standard, tool, or pattern changes were made and the repo was not unassigned. Tuning was limited to repo-local file exclusions via a committed .codacy.yaml, which Codacy Cloud honours from the default branch.",
+  "toolChanges": [],
+  "patternChanges": [],
+  "fileExclusions": {
+    "global": [
+      "docs/**",
+      "test/**",
+      "tests/**",
+      "**/tests/**",
+      "**/*_test.go",
+      "vendor/**",
+      "generated/**",
+      "**/generated/**"
+    ],
+    "perTool": {}
+  },
+  "securityCoverage": {
+    "deduplication": [],
+    "newCoverage": [],
+    "noisyButKept": []
+  },
+  "keyImprovements": [
+    "Added repo-local .codacy.yaml excluding docs, test/tests dirs (incl. nested), vendor, and generated paths — matches the rknightion cross-repo convention and removes the largest noise sources (mkdocs markdown, test code) from analysis on Cloud.",
+    "Confirmed the org standard already enforces the modern toolset (Ruff, ESLint9, Opengrep, Bandit, Trivy, Lizard, Hadolint, ShellCheck, Stylelint, markdownlint) with no legacy linters re-enabled — left untouched.",
+    "No org coding standard, tool, or pattern was modified, and the repo remains assigned to rknightion-standard (id 159741)."
+  ],
+  "localConfigTools": [],
+  "codacyYaml": "---\n# Codacy repository configuration (https://docs.codacy.com/repositories-configure/codacy-configuration-file/)\n# Repo-LOCAL config only. Tools and patterns are governed by the org coding standard\n# \"rknightion-standard\" (id 159741) — do not redefine engines/tools here.\n# This file only narrows WHAT gets analysed, to reduce noise. Codacy Cloud reads it\n# from the default branch.\nexclude_paths:\n  - \"docs/**\"\n  - \"test/**\"\n  - \"tests/**\"\n  - \"**/tests/**\"\n  - \"**/*_test.go\"\n  - \"vendor/**\"\n  - \"generated/**\"\n  - \"**/generated/**\"\n",
+  "importResults": null,
+  "cloudVerification": null
+}
