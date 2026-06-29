@@ -27,7 +27,6 @@ dependencies = [
   "psutil>=5.9",
   "pydantic>=2.10",
   "pydantic-settings>=2.6",
-  "safety>=3.2.9",
   "structlog>=24.4",
   "uvicorn[standard]>=0.32",
 ]
