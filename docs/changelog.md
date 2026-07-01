@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.31.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.30.1...v0.31.0) (2026-06-30)
+
+
+### Features
+
+* **apidrift:** detect Meraki API drift on consumed operations ([bc07e1a](https://github.com/rknightion/meraki-dashboard-exporter/commit/bc07e1a9fd315c34e898bc01241c6429ea9caad1))
+* Meraki API drift detection ([1aa88c4](https://github.com/rknightion/meraki-dashboard-exporter/commit/1aa88c4373661368a907fd7a3031e0d57fcb27ed))
+
+
+### Bug Fixes
+
+* **security:** harden apidrift live-url against SSRF; repair invalid .snyk policy ([56f7435](https://github.com/rknightion/meraki-dashboard-exporter/commit/56f74354267433c4b98f260742f8a1a9174bd453))
+
+
+### Code Refactoring
+
+* **models:** map models to source ops, fix vlan type, drop dead models ([3b4f96a](https://github.com/rknightion/meraki-dashboard-exporter/commit/3b4f96ac3f703d0d4706157b0e7d943a5b5819f9))
+
+
+### Dependencies
+
+* drop unused 'safety' runtime dependency (removes vulnerable nltk) ([f711738](https://github.com/rknightion/meraki-dashboard-exporter/commit/f711738f12f6d586d0a25b7e237249aa4e97ced9))
+
 ## [0.30.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.30.0...v0.30.1) (2026-06-26)
 
 
