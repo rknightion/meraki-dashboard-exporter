@@ -3,26 +3,23 @@ Meraki API Client - Provides authenticated access to Cisco Meraki Dashboard API 
 </system_context>
 
 <critical_notes>
-- **Use `asyncio.to_thread()`** for all API calls - Meraki SDK is synchronous
-- **Rate limiting**: 5 calls per second per organization
-- **Authentication**: API key stored securely, never logged
+- **Use `asyncio.to_thread()`** for all API calls - Meraki SDK is synchronous. This is true whether calling through the raw `meraki.DashboardAPI` (the paved path below) or through `AsyncMerakiClient`'s own methods (which do the same internally, inside `_request()`).
+- **Rate limiting is two independent layers**, neither hardcoded to "5/s":
+  1. **SDK-native**: `_create_api_client()` passes `wait_on_rate_limit=True`, so the synchronous SDK call itself blocks/retries on a 429 before returning.
+  2. **This project's client-side pre-throttle**: `core/rate_limiter.py::OrgRateLimiter`, a per-org token bucket gated via `APIHelper`/`collector.rate_limiter.acquire(org_id, endpoint)` (see `core/api_helpers.py`) — **not** part of this module. Defaults come from `APISettings`: `rate_limit_requests_per_second=10.0`, `rate_limit_burst=20`, `rate_limit_shared_fraction=1.0`, `rate_limit_jitter_ratio=0.1`; toggle via `rate_limit_enabled`.
+  `AsyncMerakiClient._request()` (this module) additionally has its own exponential-backoff-with-jitter retry loop on 429s, but that path is only exercised by the wrapper's own convenience methods (see file_map) — most collectors never go through it.
+- **Authentication**: `MerakiSettings.api_key` is a Pydantic `SecretStr`; `.get_secret_value()` is only ever called once, inside `_create_api_client()`. Never log it. `api_base_url` defaults to `https://api.meraki.com/api/v1` but supports regional endpoints.
 - **Error handling**: Network timeouts and API errors are common - always use decorators, and wrap responses with `validate_response_format` to normalize the SDK exhausted-retry error shape
-- **Meraki SDK 3.1.0** (upgraded from 2.2.0): `MerakiClient` honors `APISettings.validate_kwargs` (default `False`); set to `True` in dev/CI to surface unrecognized kwargs warnings from the SDK.
-- **Network fetches**: Collectors must NOT call the SDK's `getOrganizationNetworks` directly — go through `OrganizationInventory.get_networks(org_id)` so `NetworkFilter` is applied. The wrapper's `AsyncMerakiClient.get_networks` exists for inventory's own use.
+- **Meraki SDK 3.2.0** (`pyproject.toml`; upgraded 2.2.0 -> 3.1.0 -> 3.2.0): `_create_api_client()` passes `validate_kwargs=settings.api.validate_kwargs` (`APISettings.validate_kwargs`, default `False`); set `True` in dev/CI to surface SDK warnings about unrecognized kwargs.
+- **Network fetches**: Collectors must NOT call the SDK's `getOrganizationNetworks` directly — go through `OrganizationInventory.get_networks(org_id)` so `NetworkFilter` is applied. `AsyncMerakiClient.get_networks`/`get_organization_networks` exist but are not actually called by `inventory.py` (it uses the raw `self.api.organizations.getOrganizationNetworks` under its own decorators) or any collector today.
 </critical_notes>
 
 <file_map>
 ## API COMPONENTS
-- `client.py` - Main `MerakiClient` wrapper with authentication and monitoring
-- Official Meraki SDK controllers accessed via client instance:
-  - `wireless` - MR device operations
-  - `switch` - MS device operations
-  - `appliance` - MX device operations
-  - `sensor` - MT sensor operations
-  - `cellularGateway` - MG gateway operations
-  - `camera` - MV camera operations
-  - `organizations` - Organization-level operations
-  - `networks` - Network-level operations
+- `client.py` - `AsyncMerakiClient` (not `MerakiClient` - there is no class by that name). It does two distinct things:
+  1. **Thread-safe lazy construction** of the real `meraki.DashboardAPI` instance (`_get_api_client()`/`_create_api_client()`, exposed via the `.api` property). `app.py` creates one `AsyncMerakiClient` per process and hands its `.api` (the raw SDK client) to every collector as `MetricCollector.api` - this is what nearly all collectors and `services/inventory.py` actually call through, directly, via `asyncio.to_thread()` (see paved path below).
+  2. **Its own higher-level async methods** - `get_organizations`, `get_networks`, `get_devices`, `get_licenses`, `get_api_requests`, `get_switch_port_statuses`, `get_wireless_status`, `get_sensor_readings_latest`, plus thin aliases `get_organization_networks`/`get_network_devices`/`get_organization_devices` - each routed through `_request()` for built-in retry/metrics/tracing. **Only `get_sensor_readings_latest` is used in production** (called from `collectors/devices/mt.py`, which constructs its own separate `AsyncMerakiClient(self.settings)` for that one call); the rest are exercised only by `tests/test_api_client.py`. `api_call_context()` is explicit legacy compatibility, also test-only.
+- Official Meraki SDK controllers actually exercised via `self.api.<controller>...` in collectors today: `organizations`, `networks`, `wireless` (MR), `switch` (MS), `appliance` (MX), `sensor` (MT). `cellularGateway` (MG) and `camera` (MV) are valid controllers on the SDK client but currently unused - `mg.py`/`mv.py` are no-op stub collectors (see `collectors/devices/CLAUDE.md`).
 </file_map>
 
 <paved_path>

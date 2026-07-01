@@ -11,7 +11,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **Memory**: Be mindful of API rate limits and implement proper error handling
 - **Use parallel tasks/agents** when suitable use the parallel tasks and agents available to you
 - **Git commands are allowed** — committing and pushing (including straight to `main`) is fine when the task calls for it
-- **Network fetches go through inventory**: All collectors must use `OrganizationInventory.get_networks(org_id)` so the configured `NetworkFilter` is enforced uniformly. Direct `getOrganizationNetworks` SDK calls in collectors are forbidden. `EnvironmentDiscovery` (`core/discovery.py`) deliberately bypasses the filter for audit purposes.
+- **Network fetches go through inventory**: All collectors must use `OrganizationInventory.get_networks(org_id)` so the configured `NetworkFilter` is enforced uniformly. Direct `getOrganizationNetworks` SDK calls in collectors are forbidden. `DiscoveryService` (`core/discovery.py`) deliberately bypasses the filter for audit purposes; `AlertsCollector._fetch_networks_direct` (`collectors/alerts.py`) is the one other sanctioned direct call, used only as a fallback when `self.inventory` is `None`, and it manually reapplies `NetworkFilter` itself.
 - **Wrap fetchers with `validate_response_format`**: New API fetchers that may receive the SDK exhausted-retry error shape must use `core.error_handling.validate_response_format` to normalize the response.
 </critical_notes>
 
@@ -23,12 +23,16 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - `src/meraki_dashboard_exporter/collectors/devices/` - Device collectors - See `src/meraki_dashboard_exporter/collectors/devices/CLAUDE.md`
 - `src/meraki_dashboard_exporter/collectors/organization_collectors/` - Organization collectors - See `src/meraki_dashboard_exporter/collectors/organization_collectors/CLAUDE.md`
 - `src/meraki_dashboard_exporter/collectors/network_health_collectors/` - Network health - See `src/meraki_dashboard_exporter/collectors/network_health_collectors/CLAUDE.md`
+- `src/meraki_dashboard_exporter/services/` - Inventory cache, client store, DNS resolver, status service - See `src/meraki_dashboard_exporter/services/CLAUDE.md`
 - `src/meraki_dashboard_exporter/api/` - API client wrapper - See `src/meraki_dashboard_exporter/api/CLAUDE.md`
 - `tests/` - Test suite and patterns - See `tests/CLAUDE.md`
 - `pyproject.toml` - Project dependencies and configuration
-- `dashboards/` - Grafana dashboard JSON exports
-- `docs/` - MkDocs documentation site
-- `scripts/` - Code generation and documentation scripts
+- `dashboards/` - Grafana dashboard JSON exports (hand-maintained, no generator)
+- `docs/` - Zensical documentation site (NOT MkDocs, despite Make target names) - See `docs/CLAUDE.md`
+- `scripts/` - Code generation and documentation scripts - See `scripts/CLAUDE.md`
+- `charts/meraki-dashboard-exporter/` - Helm chart - See `charts/meraki-dashboard-exporter/CLAUDE.md`
+- `tools/apidrift/` - Standalone Meraki API drift-detection CLI - See `tools/apidrift/CLAUDE.md`
+- `.github/` - CI workflows and composite actions - See `.github/CLAUDE.md`
 </file_map>
 
 <paved_path>
@@ -37,8 +41,11 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 ### Collector Organization
 - **Core Infrastructure**: Logging, config, metrics, error handling -> `src/meraki_dashboard_exporter/core/CLAUDE.md`
 - **Collector Pattern**: Auto-registration, update tiers, base classes -> `src/meraki_dashboard_exporter/collectors/CLAUDE.md`
-- **Device-Specific**: MR, MS, MX, MT, MG, MV collectors -> `src/meraki_dashboard_exporter/collectors/devices/CLAUDE.md`
+- **Device-Specific**: MR, MS, MX, MT, MG, MV collectors -> `src/meraki_dashboard_exporter/collectors/devices/CLAUDE.md` (MR's own subpackage has a further nested `devices/mr/CLAUDE.md`)
+- **Network Health**: Bluetooth, connection stats, data rates, RF health, SSID performance -> `src/meraki_dashboard_exporter/collectors/network_health_collectors/CLAUDE.md`
+- **Organization-Level**: API usage, licensing, client overview -> `src/meraki_dashboard_exporter/collectors/organization_collectors/CLAUDE.md`
 - **API Integration**: Async wrapper for Meraki SDK -> `src/meraki_dashboard_exporter/api/CLAUDE.md`
+- **Services**: Inventory cache (NetworkFilter enforcement), client store, DNS resolver, status -> `src/meraki_dashboard_exporter/services/CLAUDE.md`
 - **Testing**: Factories, mocks, assertions -> `tests/CLAUDE.md`
 
 ### Key Principles
@@ -49,7 +56,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **Update tiers**: FAST (60s), MEDIUM (300s), SLOW (900s) based on volatility (default per-collector timeout: 240s)
 - **Parallel collection**: Use `ManagedTaskGroup` for bounded concurrency
 - **Inventory caching (mandatory for networks)**: All network fetches go through `OrganizationInventory.get_networks(org_id)`; this is the single enforcement point for the configured `NetworkFilter` (`core/network_filter.py`, `NetworkFilterSettings` in `core/config_models.py`).
-- **Meraki SDK 3.1.0**: New `validate_kwargs` setting (`core/config_models.py` `APISettings.validate_kwargs`); recommended for dev/CI, off by default in production.
+- **Meraki SDK 3.2.0** (`pyproject.toml`; upgraded 2.2.0 -> 3.1.0 -> 3.2.0): `validate_kwargs` setting (`core/config_models.py` `APISettings.validate_kwargs`); recommended for dev/CI, off by default in production.
 - **Metric lifecycle**: Track and expire metrics for offline/removed devices
 - **Web endpoints**: `app.py` exposes `/metrics`, the web UI, and a `/status` health dashboard endpoint.
 
@@ -93,6 +100,6 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **NEVER work in subdirectories without consulting their `CLAUDE.md`**
 - **NEVER use unbounded parallelism** - always use ManagedTaskGroup with max_concurrency
 - **NEVER bypass inventory service** - use cached data when available
-- **NEVER call `getOrganizationNetworks` directly from a collector** - go through `OrganizationInventory.get_networks(org_id)` so `NetworkFilter` is enforced. Only `core/discovery.py::EnvironmentDiscovery` is permitted to bypass for audit logging.
+- **NEVER call `getOrganizationNetworks` directly from a collector** - go through `OrganizationInventory.get_networks(org_id)` so `NetworkFilter` is enforced. Only `core/discovery.py::DiscoveryService` (audit logging) and `collectors/alerts.py::AlertsCollector._fetch_networks_direct` (inventory-unavailable fallback, reapplies `NetworkFilter` manually) are permitted to bypass.
 - **NEVER forget metric tracking** - use `parent._set_metric()` for automatic expiration
 </fatal_implications>

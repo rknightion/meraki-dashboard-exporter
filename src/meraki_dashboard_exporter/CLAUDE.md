@@ -13,15 +13,12 @@ Meraki Dashboard Exporter - Main source package containing core infrastructure, 
 - `core/` - Core infrastructure (logging, config, models, metrics, error handling, OTel) - See `core/CLAUDE.md`
 - `collectors/` - All metric collectors and collection logic - See `collectors/CLAUDE.md`
 - `api/` - Meraki API client wrapper - See `api/CLAUDE.md`
-- `services/` - Supporting services:
-  - `inventory.py` - `OrganizationInventory`: shared org/device/network cache with TTL-based invalidation. Holds the `NetworkFilter` and is the single enforcement point for it on the read path (`get_networks`, `get_devices`, `get_device_availabilities`); pass `unfiltered=True` only for audit/diagnostic flows.
-  - `client_store.py` - Client data storage
-  - `dns_resolver.py` - DNS resolution service
-- `models/` - Shared data models (`webhook.py`)
-- `templates/` - HTML templates for web UI (index, cardinality, clients pages)
-- `app.py` - FastAPI application with web UI, `/metrics`, and `/status` health dashboard endpoints
-- `__main__.py` - CLI entry point for running the exporter
-- `__version__.py` - Version information (reads from pyproject.toml)
+- `services/` - Supporting services (`OrganizationInventory`, `ClientStore`, `DNSResolver`, `StatusService`) - See `services/CLAUDE.md`
+- `models/` - Shared Pydantic data models: `webhook.py` (`WebhookPayload`, alias-based camelCase mapping for the raw Meraki webhook JSON)
+- `templates/` - Jinja2 HTML templates for the web UI, wired via `Jinja2Templates`/`TemplateResponse` in `app.py`: `index.html` (landing page + collector table + manual-trigger button), `status.html` (`/status` health dashboard), `clients.html` (`/clients` page + DNS-cache-clear button), `cardinality.html`, `cardinality_all_labels.html`, `cardinality_all_metrics.html` (cardinality drill-down pages, served by `core/cardinality.py`'s `setup_cardinality_endpoint`). Each template is a fully self-contained file (inline `<style>`/`<script>`, no `{% extends %}`/`{% include %}`/macros, no shared base or asset build step) — edit each page directly.
+- `app.py` - `ExporterApp`: builds `FastAPI` app via `create_app()`/`ExporterApp.create_app()`. Owns the `lifespan` (runs `DiscoveryService`, starts `MetricExpirationManager`, kicks off `_startup_collections`/tiered loops, periodic cardinality analysis) and registers routes: `/` (index), `/health`, `/ready` (readiness gated on FAST+MEDIUM tiers only, not SLOW), `/metrics`, `/clients`, `/status` (HTML, add `?format=json` for `StatusSnapshot.to_dict()`), `POST /api/clients/clear-dns-cache`, `POST /api/collectors/trigger` (manual on-demand collector run), `POST /api/webhooks/meraki` (validates content-type/size/JSON, delegates to `core/webhook_handler.py`'s `WebhookHandler`)
+- `__main__.py` - `main()`: CLI entry point; prints `--help`, surfaces a friendly error when `MERAKI_API_KEY` is missing, then builds `Settings()` and runs `uvicorn.run(create_app(), ...)`
+- `__version__.py` - `get_version()`: reads `version` from `pyproject.toml` at runtime (repo-root-relative path), falls back to `importlib.metadata`, then `"0.0.0+dev"`
 </file_map>
 
 <paved_path>
@@ -34,4 +31,8 @@ python -m meraki_dashboard_exporter
 from meraki_dashboard_exporter.app import create_app
 app = create_app()
 ```
+
+`create_app()` (module-level, in `app.py`) memoizes a single global `FastAPI` instance
+(`_app_instance`) — calling it twice returns the same app rather than re-initializing
+`ExporterApp` (and re-running `Settings()`/logging/tracing setup) a second time.
 </paved_path>
