@@ -250,16 +250,20 @@ class TestMetricsIntegration:
         mock_api_client.api.organizations.getOrganizationDevices.assert_called()
         mock_api_client.api.organizations.getOrganizationAssuranceAlerts.assert_called()
 
-        # Sensor collector is FAST tier, so it's not called during initial collection
-        mock_api_client.api.sensor.getOrganizationSensorReadingsLatest.assert_not_called()
+        # collect_initial() iterates FAST, MEDIUM, and SLOW tiers, so the FAST-tier
+        # MTSensorCollector has already run and hit the shared API client directly
+        # (#249: it used to construct its own throwaway AsyncMerakiClient and silently
+        # swallow the resulting network error, so this call was never actually observed).
+        mock_api_client.api.sensor.getOrganizationSensorReadingsLatest.assert_called_once_with(
+            "123456", serials=["Q2MT-XXXX"], total_pages="all"
+        )
 
-        # Now collect FAST tier to verify sensor collector
+        # Now collect FAST tier again to verify repeat collection also works
         from meraki_dashboard_exporter.core.constants import UpdateTier
 
         await manager.collect_tier(UpdateTier.FAST)
 
-        # Sensor collector uses getOrganizationDevices with productTypes=["sensor"]
-        # Just verify the FAST tier ran without errors
+        assert mock_api_client.api.sensor.getOrganizationSensorReadingsLatest.call_count == 2
 
     @pytest.mark.asyncio
     async def test_tiered_collection(self, mock_api_client, mock_settings, monkeypatch):

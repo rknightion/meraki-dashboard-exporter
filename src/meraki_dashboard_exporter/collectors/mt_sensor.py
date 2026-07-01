@@ -157,6 +157,51 @@ class MTSensorCollector(MetricCollector):
             ],
         )
 
+        self._sensor_no2 = self._create_gauge(
+            MTMetricName.MT_NO2_PPB,
+            "NO2 (nitrogen dioxide) concentration in parts per billion",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
+        )
+
+        self._sensor_o3 = self._create_gauge(
+            MTMetricName.MT_O3_PPB,
+            "O3 (ozone) concentration in parts per billion",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
+        )
+
+        self._sensor_pm10 = self._create_gauge(
+            MTMetricName.MT_PM10_UG_M3,
+            "PM10 particulate matter in micrograms per cubic meter",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
+        )
+
         self._sensor_noise = self._create_gauge(
             MTMetricName.MT_NOISE_DB,
             "Noise level in decibels",

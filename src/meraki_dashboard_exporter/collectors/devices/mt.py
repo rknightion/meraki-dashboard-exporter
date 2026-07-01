@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from ...core.config import Settings
     from ..device import DeviceCollector
 
-from ...api.client import AsyncMerakiClient
 from ...core.constants import (
     DeviceType,
     ProductType,
@@ -20,6 +19,7 @@ from ...core.constants import (
     UpdateTier,
 )
 from ...core.domain_models import SensorMeasurement
+from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -257,9 +257,17 @@ class MTCollector(BaseDeviceCollector):
                     d["orgName"] = org_name or org_id
                     device_map[d["serial"]] = d
 
-                # Use async client for batch sensor reading
-                client = AsyncMerakiClient(self.settings)
-                readings = await client.get_sensor_readings_latest(org_id, sensor_serials)
+                # Use the shared API client (respects the global concurrency limit)
+                # instead of constructing a new AsyncMerakiClient per cycle (#249).
+                raw = await asyncio.to_thread(
+                    self.api.sensor.getOrganizationSensorReadingsLatest,
+                    org_id,
+                    serials=sensor_serials,
+                    total_pages="all",
+                )
+                readings = validate_response_format(
+                    raw, expected_type=list, operation="getOrganizationSensorReadingsLatest"
+                )
 
                 # Process readings
                 self.collect_batch(readings, device_map)
@@ -408,7 +416,14 @@ class MTCollector(BaseDeviceCollector):
         elif metric_type == SensorMetricType.WATER:
             is_present = metric_data.get(SensorDataField.PRESENT, False)
             return 1 if is_present else 0
-        elif metric_type in {SensorMetricType.CO2, SensorMetricType.TVOC, SensorMetricType.PM25}:
+        elif metric_type in {
+            SensorMetricType.CO2,
+            SensorMetricType.TVOC,
+            SensorMetricType.PM25,
+            SensorMetricType.NO2,
+            SensorMetricType.O3,
+            SensorMetricType.PM10,
+        }:
             return metric_data.get(SensorDataField.CONCENTRATION)
         elif metric_type == SensorMetricType.NOISE:
             ambient = metric_data.get(SensorDataField.AMBIENT, {})
@@ -461,6 +476,9 @@ class MTCollector(BaseDeviceCollector):
             SensorMetricType.CO2: "_sensor_co2",
             SensorMetricType.TVOC: "_sensor_tvoc",
             SensorMetricType.PM25: "_sensor_pm25",
+            SensorMetricType.NO2: "_sensor_no2",
+            SensorMetricType.O3: "_sensor_o3",
+            SensorMetricType.PM10: "_sensor_pm10",
             SensorMetricType.NOISE: "_sensor_noise",
             SensorMetricType.BATTERY: "_sensor_battery",
             SensorMetricType.INDOOR_AIR_QUALITY: "_sensor_air_quality",
@@ -583,6 +601,33 @@ class MTCollector(BaseDeviceCollector):
                 if concentration is not None:
                     self._set_metric_value(
                         "_sensor_pm25",
+                        labels,
+                        concentration,
+                    )
+
+            elif metric_type == SensorMetricType.NO2:
+                concentration = metric_data.get(SensorDataField.CONCENTRATION)
+                if concentration is not None:
+                    self._set_metric_value(
+                        "_sensor_no2",
+                        labels,
+                        concentration,
+                    )
+
+            elif metric_type == SensorMetricType.O3:
+                concentration = metric_data.get(SensorDataField.CONCENTRATION)
+                if concentration is not None:
+                    self._set_metric_value(
+                        "_sensor_o3",
+                        labels,
+                        concentration,
+                    )
+
+            elif metric_type == SensorMetricType.PM10:
+                concentration = metric_data.get(SensorDataField.CONCENTRATION)
+                if concentration is not None:
+                    self._set_metric_value(
+                        "_sensor_pm10",
                         labels,
                         concentration,
                     )

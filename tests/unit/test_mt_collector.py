@@ -9,6 +9,7 @@ import pytest
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.collectors.mt_sensor import MTSensorCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
+from meraki_dashboard_exporter.core.domain_models import SensorMeasurement
 from tests.helpers.base import BaseCollectorTest
 
 
@@ -326,3 +327,146 @@ class TestMTCollector(BaseCollectorTest):
         # Verify debug log for skipped rawTemperature - check that a log was made
         # The exact message might vary based on implementation
         assert mock_logger.debug.called
+
+    # --- Issue #246: no2 / o3 / pm10 sensor metrics ---
+
+    def test_process_no2_metric(self, mt_collector, test_device):
+        """Test processing of NO2 concentration metric (fallback direct-processing path)."""
+        mock_metric = MagicMock()
+        mt_collector.parent._sensor_no2 = mock_metric
+
+        mt_collector._process_metric(
+            device=test_device,
+            metric_type="no2",
+            metric_data={"concentration": 12},
+        )
+
+        expected_labels = {
+            "serial": test_device["serial"],
+            "name": test_device["name"],
+            "model": test_device["model"],
+            "org_id": test_device["orgId"],
+            "org_name": test_device["orgName"],
+            "network_id": test_device["networkId"],
+            "network_name": test_device["networkName"],
+            "device_type": "MT",
+        }
+        mock_metric.labels.assert_called_once_with(**expected_labels)
+        mock_metric.labels().set.assert_called_once_with(12)
+
+    def test_process_o3_metric(self, mt_collector, test_device):
+        """Test processing of O3 concentration metric (fallback direct-processing path)."""
+        mock_metric = MagicMock()
+        mt_collector.parent._sensor_o3 = mock_metric
+
+        mt_collector._process_metric(
+            device=test_device,
+            metric_type="o3",
+            metric_data={"concentration": 34},
+        )
+
+        expected_labels = {
+            "serial": test_device["serial"],
+            "name": test_device["name"],
+            "model": test_device["model"],
+            "org_id": test_device["orgId"],
+            "org_name": test_device["orgName"],
+            "network_id": test_device["networkId"],
+            "network_name": test_device["networkName"],
+            "device_type": "MT",
+        }
+        mock_metric.labels.assert_called_once_with(**expected_labels)
+        mock_metric.labels().set.assert_called_once_with(34)
+
+    def test_process_pm10_metric(self, mt_collector, test_device):
+        """Test processing of PM10 concentration metric (fallback direct-processing path)."""
+        mock_metric = MagicMock()
+        mt_collector.parent._sensor_pm10 = mock_metric
+
+        mt_collector._process_metric(
+            device=test_device,
+            metric_type="pm10",
+            metric_data={"concentration": 5},
+        )
+
+        expected_labels = {
+            "serial": test_device["serial"],
+            "name": test_device["name"],
+            "model": test_device["model"],
+            "org_id": test_device["orgId"],
+            "org_name": test_device["orgName"],
+            "network_id": test_device["networkId"],
+            "network_name": test_device["networkName"],
+            "device_type": "MT",
+        }
+        mock_metric.labels.assert_called_once_with(**expected_labels)
+        mock_metric.labels().set.assert_called_once_with(5)
+
+    def test_extract_metric_value_no2_o3_pm10(self, mt_collector):
+        """#246: no2/o3/pm10 read from the `concentration` field like co2/tvoc/pm25."""
+        assert mt_collector._extract_metric_value("no2", {"concentration": 12}) == 12
+        assert mt_collector._extract_metric_value("o3", {"concentration": 34}) == 34
+        assert mt_collector._extract_metric_value("pm10", {"concentration": 5}) == 5
+
+    def test_process_validated_metric_no2(self, mt_collector, test_device):
+        """#246: validated SensorMeasurement path routes no2 to its own gauge."""
+        mock_metric = MagicMock()
+        mt_collector.parent._sensor_no2 = mock_metric
+
+        mt_collector._process_validated_metric(
+            device=test_device,
+            measurement=SensorMeasurement(metric="no2", value=12.0),
+        )
+
+        mock_metric.labels().set.assert_called_once_with(12.0)
+
+    def test_process_validated_metric_o3(self, mt_collector, test_device):
+        """#246: validated SensorMeasurement path routes o3 to its own gauge."""
+        mock_metric = MagicMock()
+        mt_collector.parent._sensor_o3 = mock_metric
+
+        mt_collector._process_validated_metric(
+            device=test_device,
+            measurement=SensorMeasurement(metric="o3", value=34.0),
+        )
+
+        mock_metric.labels().set.assert_called_once_with(34.0)
+
+    def test_process_validated_metric_pm10(self, mt_collector, test_device):
+        """#246: validated SensorMeasurement path routes pm10 to its own gauge."""
+        mock_metric = MagicMock()
+        mt_collector.parent._sensor_pm10 = mock_metric
+
+        mt_collector._process_validated_metric(
+            device=test_device,
+            measurement=SensorMeasurement(metric="pm10", value=5.0),
+        )
+
+        mock_metric.labels().set.assert_called_once_with(5.0)
+
+    # --- Issue #249: _collect_org_sensors must use the shared API client ---
+
+    async def test_collect_org_sensors_uses_shared_api_client(self, mt_collector, test_device):
+        """_collect_org_sensors must call self.api.sensor directly, not build a new client."""
+        devices = [dict(test_device)]
+        mt_collector.api.organizations.getOrganizationDevices = MagicMock(return_value=devices)
+
+        readings = [
+            {
+                "serial": test_device["serial"],
+                "network": {
+                    "id": test_device["networkId"],
+                    "name": test_device["networkName"],
+                },
+                "readings": [{"metric": "temperature", "celsius": 21.0}],
+            }
+        ]
+        mt_collector.api.sensor.getOrganizationSensorReadingsLatest = MagicMock(
+            return_value=readings
+        )
+
+        await mt_collector._collect_org_sensors("123456", "Test Org")
+
+        mt_collector.api.sensor.getOrganizationSensorReadingsLatest.assert_called_once_with(
+            "123456", serials=[test_device["serial"]], total_pages="all"
+        )
