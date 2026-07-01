@@ -134,11 +134,20 @@ readinessProbe:
   # -- Enable readiness probe
   enabled: true
   httpGet:
-    path: /health
+    # -- /ready returns 200 once the FAST+MEDIUM collector tiers have completed
+    # their first cycle, and 503 until then, so Kubernetes only routes traffic
+    # once the exporter has real data. Do not point this at /health (which is
+    # always 200) or the readiness gate becomes a no-op.
+    path: /ready
     port: http
-  # -- Number of seconds after container start before first probe.
-  # Set high to allow initial collection cycle to complete.
-  initialDelaySeconds: 300
+  # -- Number of seconds after container start before first probe. Kept small
+  # because /ready itself gates on collector state -- there's no need to guess
+  # how long a full cycle takes. A large org can legitimately take minutes to
+  # complete its first cycle; the pod will just report not-ready (and be left
+  # out of Service endpoints) until then, which is the desired behaviour and
+  # will not restart the pod (readinessProbe failures never trigger a restart,
+  # only livenessProbe does -- see livenessProbe above, which stays on /health).
+  initialDelaySeconds: 15
   # -- Probe interval in seconds
   periodSeconds: 10
   # -- Probe timeout in seconds
