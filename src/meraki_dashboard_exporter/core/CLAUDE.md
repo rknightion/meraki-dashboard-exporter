@@ -14,9 +14,9 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 ## CORE COMPONENTS
 ### Configuration
 - `config.py` - `Settings` class (Pydantic BaseSettings) with nested config models
-- `config_models.py` - Nested config models (`APISettings` including `validate_kwargs` for Meraki SDK 3.1.0, `CollectorSettings` with default `collector_timeout=240`, `OTelSettings`, `NetworkFilterSettings`, etc.)
+- `config_models.py` - Nested config models (`APISettings` including `validate_kwargs` for Meraki SDK 3.2.0, `CollectorSettings` with default `collector_timeout=240`, `OTelSettings`, `NetworkFilterSettings`, etc.)
 - `config_logger.py` - Configuration-aware logging setup
-- `network_filter.py` - `NetworkFilter` resolver for include/exclude rules across name (glob), id, and tag. Pure logic; applied at the inventory read path in `services/inventory.py`. `EnvironmentDiscovery` is the documented exception that bypasses the filter.
+- `network_filter.py` - `NetworkFilter` resolver for include/exclude rules across name (glob), id, and tag. Pure logic; applied at the inventory read path in `services/inventory.py`. `discovery.py::DiscoveryService` is the documented exception that bypasses the filter.
 
 ### Logging
 - `logging.py` - Structured logging setup (`get_logger()`)
@@ -43,9 +43,9 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 - `batch_processing.py` - Batch operation helpers
 
 ### API Helpers
-- `api_helpers.py` - API wrapper utilities
-- `rate_limiter.py` - API rate limiting
-- `type_definitions.py` - Shared type hints and protocols
+- `api_helpers.py` - `APIHelper` class (`create_api_helper(collector)` factory) wrapping common per-collector API call patterns
+- `rate_limiter.py` - `OrgRateLimiter`: per-organization client-side token-bucket rate limiting
+- `type_definitions.py` - Shared `TypedDict`s (e.g. `DeviceStatusInfo`, `PortStatusData`, `AlertData`) and type aliases (`OrganizationId`, `NetworkId`, etc.) for common API dict shapes. (The `CollectorProtocol` lives in `collector.py`, not here.)
 
 ### Observability
 - `otel_logging.py` - OpenTelemetry log integration
@@ -53,16 +53,18 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 - `span_metrics.py` - Span-level metrics
 
 ### Other
-- `cardinality.py` - Metric cardinality tracking and management
-- `discovery.py` - `EnvironmentDiscovery`: one-time startup environment audit. Deliberately bypasses `NetworkFilter` (calls `getOrganizationNetworks` directly) so operators see the full pre-filter inventory in startup diagnostics. This is the only sanctioned bypass.
-- `webhook_handler.py` - Webhook event processing and validation
+- `cardinality.py` - `CardinalityMonitor` + `setup_cardinality_endpoint(app, monitor)`: metric cardinality tracking and the `/status/cardinality*` HTML endpoints
+- `discovery.py` - `DiscoveryService`: one-time startup environment audit (`run_discovery()`). Deliberately bypasses `NetworkFilter` (calls `getOrganizationNetworks` directly) so operators see the full pre-filter inventory in startup diagnostics. This is the only sanctioned bypass.
+- `webhook_handler.py` - `WebhookHandler`: webhook event processing and validation
+- `org_health.py` - `OrgHealthTracker`/`OrgHealth`: per-organization exponential-backoff tracker for graceful degradation. After N consecutive failures (default 5) an org is backed off (default 60s, capped at 3600s) while collection continues normally for healthy orgs; used by `collectors/organization.py` and `collectors/manager.py`, surfaced on `/status` via `services/status.py`.
 
 ### Constants (`constants/` subdirectory)
-- `metrics_constants.py` - Domain-specific metric enums: `OrgMetricName`, `DeviceMetricName`, `NetworkMetricName`, `MSMetricName`, `MRMetricName`, `MXMetricName`, `MVMetricName`, `MTMetricName`, `AlertMetricName`, `ConfigMetricName`, `NetworkHealthMetricName`, `ClientMetricName`, `CollectorMetricName`, `WebhookMetricName`
-- `api_constants.py` - API-related constants
-- `config_constants.py` - Configuration constants
-- `device_constants.py` - Device types, `UpdateTier` enum
-- `sensor_constants.py` - Sensor type constants
+- `metrics_constants.py` - Domain-specific metric enums: `OrgMetricName`, `DeviceMetricName`, `NetworkMetricName`, `MSMetricName`, `MRMetricName`, `MXMetricName`, `MVMetricName`, `MTMetricName`, `AlertMetricName`, `ConfigMetricName`, `NetworkHealthMetricName`, `ClientMetricName`, `CollectorMetricName`, `WebhookMetricName`. Two prefix families: `meraki_*` for Meraki network/device data, `meraki_exporter_*` for the exporter's own instrumentation (`CollectorMetricName`). `ConfigMetricName` is currently an empty enum (`pass`) - config-change metrics live under `OrgMetricName`; don't assume it needs populating.
+- `api_constants.py` - `APIField` (common response field-name enum), `APITimespan`, `LicenseState`, `PortState`, `RFBand`
+- `config_constants.py` - `APIConfig`/`RegionalURLs`/`MerakiAPIConfig` dataclasses and derived `MERAKI_API_BASE_URL*` constants (legacy; prefer `Settings`/`APISettings` in `config.py`/`config_models.py` for runtime config)
+- `device_constants.py` - `DeviceType`, `DeviceStatus`, `ProductType`, `UpdateTier` enums
+- `sensor_constants.py` - `SensorMetricType`, `SensorDataField` enums
+- All exported together via `constants/__init__.py`'s `__all__`; new enum members go in the domain file, not a new top-level file - see "ADDING NEW METRICS" below.
 </file_map>
 
 <paved_path>
@@ -144,5 +146,5 @@ async def _fetch_devices(self, org_id: str) -> list[Device]:
 - **NEVER log sensitive data** - API keys, tokens, etc.
 - **NEVER ignore error handling** - use decorators for consistent behavior
 - **NEVER skip `validate_response_format`** for new fetchers - the SDK can return error-shaped dicts after retry exhaustion
-- **NEVER bypass `NetworkFilter`** outside `core/discovery.py::EnvironmentDiscovery` - all collector network reads go through `OrganizationInventory.get_networks(org_id)`
+- **NEVER bypass `NetworkFilter`** outside `core/discovery.py::DiscoveryService` - all collector network reads go through `OrganizationInventory.get_networks(org_id)`
 </fatal_implications>
