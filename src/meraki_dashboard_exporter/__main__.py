@@ -29,11 +29,11 @@ def main() -> None:
             "  --help, -h    Show this help message\n"
             "\n"
             "Environment Variables:\n"
-            "  MERAKI_API_KEY                     Meraki Dashboard API key (required)\n"
-            "  MERAKI_EXPORTER_ORG_ID            Organization ID (optional)\n"
-            "  MERAKI_EXPORTER_HOST              Host to bind to (default: 0.0.0.0)\n"
-            "  MERAKI_EXPORTER_PORT              Port to bind to (default: 9099)\n"
-            "  MERAKI_EXPORTER_LOG_LEVEL         Log level (default: INFO)\n"
+            "  MERAKI_EXPORTER_MERAKI__API_KEY    Meraki Dashboard API key (required)\n"
+            "  MERAKI_EXPORTER_MERAKI__ORG_ID     Organization ID (optional)\n"
+            "  MERAKI_EXPORTER_SERVER__HOST       Host to bind to (default: 0.0.0.0)\n"
+            "  MERAKI_EXPORTER_SERVER__PORT       Port to bind to (default: 9099)\n"
+            "  MERAKI_EXPORTER_LOGGING__LEVEL     Log level (default: INFO)\n"
             "\n"
             "For more information, visit: https://github.com/rknightion/meraki-dashboard-exporter\n"
         )
@@ -42,15 +42,18 @@ def main() -> None:
     try:
         settings = Settings()
     except ValidationError as e:
-        # Check if it's specifically the API key that's missing
+        # Check if it's specifically the API key that's missing. The `meraki` field is a
+        # required nested model (MerakiSettings), so a missing API key surfaces as either
+        # loc == ("meraki",) (the whole nested model is absent) or
+        # loc == ("meraki", "api_key") (the model is partially populated).
         for error in e.errors():
-            if error["loc"] == ("api_key",) and error["type"] == "missing":
+            if error["loc"] and error["loc"][0] == "meraki" and error["type"] == "missing":
                 print(
                     "\n❌ ERROR: Meraki API key is required but not found!\n"
-                    "\nPlease set the MERAKI_API_KEY environment variable:\n"
-                    "  export MERAKI_API_KEY='your-api-key-here'\n"
+                    "\nPlease set the MERAKI_EXPORTER_MERAKI__API_KEY environment variable:\n"
+                    "  export MERAKI_EXPORTER_MERAKI__API_KEY='your-api-key-here'\n"
                     "\nOr create a .env file with:\n"
-                    "  MERAKI_API_KEY=your-api-key-here\n"
+                    "  MERAKI_EXPORTER_MERAKI__API_KEY=your-api-key-here\n"
                     "\nYou can obtain an API key from the Meraki Dashboard:\n"
                     "  1. Log in to https://dashboard.meraki.com\n"
                     "  2. Go to Organization > Settings > Dashboard API access\n"
