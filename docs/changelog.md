@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.32.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.31.0...v0.32.0) (2026-07-01)
+
+
+### Features
+
+* **devices:** close M2 device-coverage gaps (MG/MV/MS/MX) ([0a21fec](https://github.com/rknightion/meraki-dashboard-exporter/commit/0a21fec06a61c335bb4260c5002e80b4f8c2191a)), closes [#252](https://github.com/rknightion/meraki-dashboard-exporter/issues/252) [#253](https://github.com/rknightion/meraki-dashboard-exporter/issues/253) [#254](https://github.com/rknightion/meraki-dashboard-exporter/issues/254) [#255](https://github.com/rknightion/meraki-dashboard-exporter/issues/255) [#256](https://github.com/rknightion/meraki-dashboard-exporter/issues/256) [#257](https://github.com/rknightion/meraki-dashboard-exporter/issues/257) [#258](https://github.com/rknightion/meraki-dashboard-exporter/issues/258)
+* **ms:** surface port errors/warnings from existing port-status data ([79c4fc5](https://github.com/rknightion/meraki-dashboard-exporter/commit/79c4fc5c9d67a8d7e5e2530e8d0b80eb8eea194f)), closes [#245](https://github.com/rknightion/meraki-dashboard-exporter/issues/245)
+* **mt:** add no2/o3/pm10 sensor metrics; share client for sensor reads ([86ced18](https://github.com/rknightion/meraki-dashboard-exporter/commit/86ced181da071305b9ef78048f1a2f5e34dd169f)), closes [#246](https://github.com/rknightion/meraki-dashboard-exporter/issues/246) [#249](https://github.com/rknightion/meraki-dashboard-exporter/issues/249)
+* **mx:** populate MX_SECURITY_EVENTS_TOTAL from appliance security events ([4705139](https://github.com/rknightion/meraki-dashboard-exporter/commit/470513940d23a66037e4a6a92c56bf0ecbb9aa95)), closes [#244](https://github.com/rknightion/meraki-dashboard-exporter/issues/244)
+
+
+### Bug Fixes
+
+* **alerts:** bound AlertsCollector fan-out with process_in_batches_with_errors ([b27c276](https://github.com/rknightion/meraki-dashboard-exporter/commit/b27c27630ca247bb0c09701c6efcdc377169cc88)), closes [#248](https://github.com/rknightion/meraki-dashboard-exporter/issues/248)
+* **chart:** point readinessProbe at /ready instead of /health ([8639c1b](https://github.com/rknightion/meraki-dashboard-exporter/commit/8639c1bf2f33c72b65ec248e9b1e62a9e4d34407)), closes [#243](https://github.com/rknightion/meraki-dashboard-exporter/issues/243)
+* **chart:** wire the chart-managed API key secret into the Deployment ([e47a7cc](https://github.com/rknightion/meraki-dashboard-exporter/commit/e47a7cc1c16177b4ae3c2d64fe37743afb22692a))
+* **cli:** repair first-run missing-API-key error path and --help env vars ([dff23c8](https://github.com/rknightion/meraki-dashboard-exporter/commit/dff23c8245a775effa657bfc98bd17fb62bc6b11)), closes [#242](https://github.com/rknightion/meraki-dashboard-exporter/issues/242)
+* **otel:** use dynamic package version for service.version ([640dafe](https://github.com/rknightion/meraki-dashboard-exporter/commit/640dafebca7858bcb94744b16c317682e4a6e335)), closes [#247](https://github.com/rknightion/meraki-dashboard-exporter/issues/247)
+
+
+### Documentation
+
+* add roadmap-task workflow to CLAUDE.md; drop superseded planning docs ([935f66b](https://github.com/rknightion/meraki-dashboard-exporter/commit/935f66b70fc836a88dcdecdfa881fe677559b8a1))
+* audit and refresh CLAUDE.md files repo-wide ([719609f](https://github.com/rknightion/meraki-dashboard-exporter/commit/719609f295cc754a4bee51354ea8fcef72550187))
+* regenerate metrics/collector reference for M1 ([a6af126](https://github.com/rknightion/meraki-dashboard-exporter/commit/a6af1266cbb652def6e407788dc78e8f7e051e72))
+
 ## [0.31.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.30.1...v0.31.0) (2026-06-30)
 
 
