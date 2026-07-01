@@ -27,6 +27,7 @@ from opentelemetry.sdk.trace.sampling import (
 )
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
+from ..__version__ import get_version
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -71,7 +72,7 @@ class TracingConfig:
             # Create resource with service information
             resource = Resource.create({
                 "service.name": self.settings.otel.service_name,
-                "service.version": "0.8.0",
+                "service.version": get_version(),
                 "service.instance.id": os.getenv("HOSTNAME", "unknown"),
                 "deployment.environment": self.settings.otel.resource_attributes.get(
                     "environment", "production"

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from meraki_dashboard_exporter.__version__ import get_version
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.otel_tracing import TracingConfig
 
@@ -71,6 +72,41 @@ class TestTracingConfigSetup:
             config.setup_tracing()
 
         assert config._initialized
+
+
+class TestTracingConfigResourceVersion:
+    """Test the OTel Resource is tagged with the real package version."""
+
+    @pytest.fixture
+    def mock_settings(self) -> MagicMock:
+        """Create mock settings with OTEL enabled and an endpoint configured."""
+        settings = MagicMock(spec=Settings)
+        settings.otel = MagicMock()
+        settings.otel.enabled = True
+        settings.otel.endpoint = "http://otel:4317"
+        settings.otel.service_name = "test-service"
+        settings.otel.resource_attributes = {}
+        return settings
+
+    def test_resource_service_version_matches_package_version(
+        self, mock_settings: MagicMock
+    ) -> None:
+        """The Resource's service.version must be the real, dynamic package version."""
+        config = TracingConfig(mock_settings)
+
+        with (
+            patch("meraki_dashboard_exporter.core.otel_tracing.Resource.create") as mock_resource,
+            patch("meraki_dashboard_exporter.core.otel_tracing.TracerProvider"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.OTLPSpanExporter"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.BatchSpanProcessor"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.trace.set_tracer_provider"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.set_global_textmap"),
+        ):
+            config.setup_tracing()
+
+        resource_attrs = mock_resource.call_args[0][0]
+        assert resource_attrs["service.version"] == get_version()
+        assert resource_attrs["service.version"] != "0.8.0"
 
 
 class TestTracingConfigSettings:
