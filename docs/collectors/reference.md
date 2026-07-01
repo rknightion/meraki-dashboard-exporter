@@ -15,7 +15,7 @@ Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_
 | `ClientsCollector` | MEDIUM | Collector for client-level metrics across all networks. | 21 | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `ConfigCollector` | SLOW | Collector for configuration and security settings. | 14 |  |
 | `DeviceCollector` | MEDIUM | Collector for device-level metrics. | 6 |  |
-| `MTSensorCollector` | FAST | Collector for fast-moving sensor metrics (MT devices). | 18 |  |
+| `MTSensorCollector` | FAST | Collector for fast-moving sensor metrics (MT devices). | 21 |  |
 | `NetworkHealthCollector` | MEDIUM | Collector for medium-moving network health metrics. | 9 |  |
 | `OrganizationCollector` | MEDIUM | Collector for organization-level metrics. | 20 |  |
 

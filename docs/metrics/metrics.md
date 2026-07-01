@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 209
-- **Gauges:** 185
+- **Total metrics:** 214
+- **Gauges:** 190
 - **Counters:** 18
 - **Histograms:** 5
 - **Info metrics:** 1
@@ -141,6 +141,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_ms_poe_port_power_watthours` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name` | Per-port POE power consumption in watt-hours (Wh) over the last 1 hour |  |
 | `meraki_ms_poe_total_power_watthours` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Total POE power consumption for switch in watt-hours (Wh) |  |
 | `meraki_ms_port_client_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name` | Number of clients connected to switch port |  |
+| `meraki_ms_port_errors_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `error_type` | Active switch port errors (1 = currently active for this error_type) |  |
 | `meraki_ms_port_packets_broadcast` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Broadcast packets on switch port (5-minute window) |  |
 | `meraki_ms_port_packets_collisions` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Collision packets on switch port (5-minute window) |  |
 | `meraki_ms_port_packets_crcerrors` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | CRC align error packets on switch port (5-minute window) |  |
@@ -158,6 +159,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_ms_port_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `link_speed`, `duplex` | Switch port status (1 = connected, 0 = disconnected) |  |
 | `meraki_ms_port_traffic_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Switch port traffic rate in bytes per second (averaged over 1 hour) |  |
 | `meraki_ms_port_usage_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Switch port data usage in bytes over the last 1 hour |  |
+| `meraki_ms_port_warnings_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `warning_type` | Active switch port warnings (1 = currently active for this warning_type) |  |
 | `meraki_ms_ports_active_total` | gauge | `org_id`, `org_name` | Total number of active switch ports |  |
 | `meraki_ms_ports_by_link_speed_total` | gauge | `org_id`, `org_name`, `media`, `link_speed` | Total number of active switch ports by link speed |  |
 | `meraki_ms_ports_by_media_total` | gauge | `org_id`, `org_name`, `media`, `status` | Total number of switch ports by media type |  |
@@ -185,7 +187,10 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mt_frequency_hz` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Frequency in hertz |  |
 | `meraki_mt_humidity_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Humidity percentage |  |
 | `meraki_mt_indoor_air_quality_score` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Indoor air quality score (0-100) |  |
+| `meraki_mt_no2_ppb` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | NO2 (nitrogen dioxide) concentration in parts per billion |  |
 | `meraki_mt_noise_db` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Noise level in decibels |  |
+| `meraki_mt_o3_ppb` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | O3 (ozone) concentration in parts per billion |  |
+| `meraki_mt_pm10_ug_m3` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | PM10 particulate matter in micrograms per cubic meter |  |
 | `meraki_mt_pm25_ug_m3` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | PM2.5 particulate matter in micrograms per cubic meter |  |
 | `meraki_mt_power_factor_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Power factor percentage |  |
 | `meraki_mt_real_power_watts` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Real power in watts |  |
@@ -207,7 +212,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_mx_firewall_default_policy` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Firewall default policy for L3 rules (1=allow, 0=deny) |  |
 | `meraki_mx_firewall_rules_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `rule_type` | Total number of user-defined firewall rules by type (excludes default rule) |  |
-| `meraki_mx_security_events_total` | gauge | `org_id`, `org_name`, `event_type` | Total security events by type (reserved for future use) |  |
+| `meraki_mx_security_events_total` | gauge | `org_id`, `org_name`, `event_type` | Total security events by type |  |
 
 ### MXVpnCollector
 
