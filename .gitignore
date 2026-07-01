@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Scratch plans/specs (superpowers) - never enter git history
+docs/superpowers/
+
 # Snyk files
 .snyk.d/
 .dccache
