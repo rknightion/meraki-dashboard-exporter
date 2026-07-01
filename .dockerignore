@@ -90,8 +90,6 @@ examples/
 Makefile
 
 # Security/scanning config
-.snyk
-*.sarif.json
 .secrets.baseline
 
 # Release/CI config (not needed in image)

@@ -6,13 +6,6 @@ __pycache__/
 # Scratch plans/specs (superpowers) - never enter git history
 docs/superpowers/
 
-# Snyk files
-.snyk.d/
-.dccache
-snyk-*.json
-snyk-*.log
-!snyk.sarif.json
-
 # C extensions
 *.so
 

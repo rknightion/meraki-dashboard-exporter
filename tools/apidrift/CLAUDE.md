@@ -33,9 +33,6 @@ sibling tailscale2otel repo's apidrift tool; exit-code contract is intentionally
   AST-match `<receiver>.<controller>.<method>` calls. If Meraki's SDK adds a new controller
   section that this exporter starts consuming, add it here or the scanner silently misses those
   ops (false negative, not a crash).
-- **`.snyk` carries a scoped, expiring exception** for a path-traversal finding on
-  `--emit-reduced` (operator-supplied output dir, hardcoded filenames within it — no trust
-  boundary crossed). Expires 2027-06-29; don't let it silently lapse into a hard Snyk failure.
 </critical_notes>
 
 <file_map>

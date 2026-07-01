@@ -1,7 +1,7 @@
 <system_context>
 CI/CD for the repo: 16 workflows + 2 composite actions implementing an elaborate but consistent
-security/release pipeline — release automation, container + Helm chart publishing, four
-independent security scanners (CodeQL, zizmor, Snyk, docker-security), dependency-review,
+security/release pipeline — release automation, container + Helm chart publishing, three
+independent security scanners (CodeQL, zizmor, docker-security), dependency-review,
 OSSF Scorecard, a scheduled Meraki-API-drift lane, and Claude-based issue triage. Most
 security-scanner workflows are thin wrappers that `uses:` a **shared reusable workflow** from the
 sibling `rknightion/.github` repo rather than defining the job inline.
@@ -50,12 +50,6 @@ sibling `rknightion/.github` repo rather than defining the job inline.
   `[test, docker-build-test]`). `slow-tests` (schedule-only) is deliberately NOT in that `needs`
   list so it doesn't block PRs. When adding a new required CI job, add it to `ci-success`'s
   `needs:`, or it silently won't gate merges/Renovate automerge.
-- **`snyk.yml` is non-gating by design** ("Reports ... via the shared reusable workflow.
-  Non-gating (does not block CI / Renovate automerge)" — see its own header comment) — covers SCA +
-  SAST (Python) + container (built image) but explicitly `run-iac: false`.
-- **`.snyk` policy file** at repo root holds scoped, *expiring* accepted-risk entries (currently one,
-  for `tools/apidrift`'s `--emit-reduced` path-traversal finding, expiring 2027-06-29) — don't let
-  Renovate/Snyk config changes silently widen this without a fresh justification+expiry.
 - **`trigger-docs-sync.yml`** fires a `repository_dispatch` to a *different* repo
   (`rknightion/m7kni-net-site`) on `docs/**`/`zensical.toml`/`scripts/**` changes, authenticated
   with `secrets.DOCS_SYNC_PAT` (not `GITHUB_TOKEN` — cross-repo dispatch needs a PAT).
@@ -82,9 +76,9 @@ sibling `rknightion/.github` repo rather than defining the job inline.
 - `api-drift.yml` - daily (06:17 UTC) + manual; see `tools/apidrift/CLAUDE.md` for the tool itself.
   Fetches the live Meraki spec over HTTPS, runs `apidrift`, then `tufin/oasdiff breaking` on the
   reduced specs; opens/closes a tracking issue via the two composite actions below.
-- `codeql.yml` / `zizmor.yml` / `actionlint.yml` / `dependency-review.yml` / `docker-security.yml` /
-  `snyk.yml` - thin wrappers around `rknightion/.github` shared reusables (see pinning note above);
-  each grants only the specific `permissions:` its job needs, workflow-level `permissions: {}`.
+- `codeql.yml` / `zizmor.yml` / `actionlint.yml` / `dependency-review.yml` / `docker-security.yml` -
+  thin wrappers around `rknightion/.github` shared reusables (see pinning note above); each grants
+  only the specific `permissions:` its job needs, workflow-level `permissions: {}`.
 - `scorecard.yml` - OSSF Scorecard, self-contained (not a shared reusable) — the standard
   `ossf/scorecard-action` template with `harden-runner`, uploads SARIF to code scanning.
 - `issue-triage.yml` - Claude-based issue classifier -> `issue-triage.yml`'s `apply` job maps the
@@ -123,5 +117,4 @@ sibling `rknightion/.github` repo rather than defining the job inline.
   secret-holding Claude action without the untrusted-data framing** already used in
   `issue-triage.yml` and `report-drift/action.yml`.
 - **NEVER let a new required CI job go unadded to `ci-success`'s `needs:`** — it silently won't gate.
-- **NEVER widen a `.snyk` ignore rule without a fresh justification + expiry date.**
 </fatal_implications>
