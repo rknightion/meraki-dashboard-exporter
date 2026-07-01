@@ -32,6 +32,8 @@ from .devices import (
     MVCollector,
     MXCollector,
 )
+from .devices.ms_power import MSPowerCollector
+from .devices.mx_uplink_health import MXUplinkHealthCollector
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -159,6 +161,9 @@ class DeviceCollector(MetricCollector):
         self.mt_collector = MTCollector.as_subcollector(self)
         self.mv_collector = MVCollector(self)
         self.mx_collector = MXCollector(self)
+        # Org-wide standalone sub-collectors (not per-device-type dispatched)
+        self.mx_uplink_health_collector = MXUplinkHealthCollector(self)
+        self.ms_power_collector = MSPowerCollector(self)
 
         # Map device type strings to collectors
         self._device_collectors = {
@@ -184,6 +189,8 @@ class DeviceCollector(MetricCollector):
         for collector in self._device_collectors.values():
             collector.update_api(self.api)
         self.ms_stack_collector.update_api(self.api)
+        self.mx_uplink_health_collector.update_api(self.api)
+        self.ms_power_collector.update_api(self.api)
 
     def _initialize_metrics(self) -> None:
         """Initialize device metrics."""
@@ -623,6 +630,10 @@ class DeviceCollector(MetricCollector):
             ):
                 await self._collect_mx_specific_metrics(org_id, org_name, device_lookup)
 
+            # Collect MG-specific metrics
+            if any(d for d in devices if d.get("model", "").startswith(DeviceType.MG)):
+                await self._collect_mg_specific_metrics(org_id, org_name, device_lookup)
+
         except Exception as e:
             logger.exception(
                 "Failed to collect devices for organization",
@@ -781,6 +792,12 @@ class DeviceCollector(MetricCollector):
                 await self.ms_stack_collector.collect_for_org(org_id, org_name, networks)
             except Exception:
                 logger.exception("Failed to collect switch stack metrics")
+
+            # Collect power-supply module status (org-wide, single call)
+            try:
+                await self.ms_power_collector.collect_power_modules(org_id, org_name, device_lookup)
+            except Exception:
+                logger.exception("Failed to collect MS power module statuses")
         except Exception:
             logger.exception(
                 "Failed to collect MS-specific metrics",
@@ -812,6 +829,14 @@ class DeviceCollector(MetricCollector):
                 await self.mx_collector.collect_uplink_statuses(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect MX uplink statuses")
+
+            # Collect per-uplink WAN loss & latency (org-wide, single call)
+            try:
+                await self.mx_uplink_health_collector.collect_uplink_loss_latency(
+                    org_id, org_name, device_lookup
+                )
+            except Exception:
+                logger.exception("Failed to collect MX uplink loss and latency")
 
             # Collect VPN health metrics
             try:
@@ -857,6 +882,33 @@ class DeviceCollector(MetricCollector):
         except Exception:
             logger.exception(
                 "Failed to collect MX-specific metrics",
+                org_id=org_id,
+            )
+
+    @trace_method("collect.mg_metrics")
+    async def _collect_mg_specific_metrics(
+        self,
+        org_id: str,
+        org_name: str,
+        device_lookup: dict[str, dict[str, Any]],
+    ) -> None:
+        """Collect MG-specific organization-wide metrics.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        device_lookup : dict[str, dict[str, Any]]
+            Device lookup table keyed by serial.
+
+        """
+        try:
+            await self.mg_collector.collect_uplink_statuses(org_id, org_name, device_lookup)
+        except Exception:
+            logger.exception(
+                "Failed to collect MG-specific metrics",
                 org_id=org_id,
             )
 

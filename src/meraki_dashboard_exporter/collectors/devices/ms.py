@@ -244,6 +244,62 @@ class MSCollector(BaseDeviceCollector):
             ],
         )
 
+        # Per-port STP state (from the port status payload's spanningTree.statuses)
+        self._switch_port_stp_state = self.parent._create_gauge(
+            MSMetricName.MS_PORT_STP_STATE,
+            "Switch port STP state (1 = currently active for this state)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+                LabelName.PORT_ID,
+                LabelName.PORT_NAME,
+                LabelName.STATE,
+            ],
+        )
+
+        # Per-port 802.1X / secure-port authentication (from the port status
+        # payload's securePort object)
+        self._switch_port_8021x_status = self.parent._create_gauge(
+            MSMetricName.MS_PORT_8021X_STATUS,
+            "Switch port 802.1X authentication status (1 = currently active for this status)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+                LabelName.PORT_ID,
+                LabelName.PORT_NAME,
+                LabelName.STATUS,
+            ],
+        )
+
+        self._switch_port_8021x_active = self.parent._create_gauge(
+            MSMetricName.MS_PORT_8021X_ACTIVE,
+            "Switch port secure-port (802.1X) active state (1 = active, 0 = inactive)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+                LabelName.PORT_ID,
+                LabelName.PORT_NAME,
+            ],
+        )
+
         # Packet count metrics (5-minute window)
         packet_labels = [
             LabelName.ORG_ID.value,
@@ -479,6 +535,72 @@ class MSCollector(BaseDeviceCollector):
                 MSMetricName.MS_PORT_WARNINGS_TOTAL.value,
             )
 
+    def _emit_port_stp_8021x_metrics(
+        self,
+        device: dict[str, Any],
+        port: dict[str, Any],
+        org_id: str,
+        org_name: str,
+    ) -> None:
+        """Emit gauges for a port's STP state and 802.1X/secure-port auth status.
+
+        Extracted from the same port-status payload already processed by
+        ``_emit_port_error_warning_metrics`` - no additional API call. Emission
+        goes through ``parent._set_metric`` so that a state/status which stops
+        appearing in the API response expires automatically. Ports with no
+        ``spanningTree``/``securePort`` data emit nothing.
+
+        Parameters
+        ----------
+        device : dict[str, Any]
+            Device (or device-like) data used for label construction.
+        port : dict[str, Any]
+            Port status data from the API, potentially containing
+            ``spanningTree`` and ``securePort`` objects.
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        spanning = port.get("spanningTree") or {}
+        statuses = spanning.get("statuses") or []
+        for state in statuses:
+            stp_labels = create_port_labels(
+                device, port, org_id=org_id, org_name=org_name, state=state
+            )
+            self.parent._set_metric(
+                self._switch_port_stp_state,
+                stp_labels,
+                1,
+                MSMetricName.MS_PORT_STP_STATE.value,
+            )
+
+        secure = port.get("securePort") or {}
+        if not secure:
+            return
+
+        active = secure.get("active", False)
+        active_labels = create_port_labels(device, port, org_id=org_id, org_name=org_name)
+        self.parent._set_metric(
+            self._switch_port_8021x_active,
+            active_labels,
+            1 if active else 0,
+            MSMetricName.MS_PORT_8021X_ACTIVE.value,
+        )
+
+        auth = secure.get("authenticationStatus")
+        if auth:
+            status_labels = create_port_labels(
+                device, port, org_id=org_id, org_name=org_name, status=auth
+            )
+            self.parent._set_metric(
+                self._switch_port_8021x_status,
+                status_labels,
+                1,
+                MSMetricName.MS_PORT_8021X_STATUS.value,
+            )
+
     @log_api_call("getOrganizationSwitchPortsStatusesBySwitch")
     @with_error_handling(
         operation="Collect MS switch port statuses (org)",
@@ -561,6 +683,7 @@ class MSCollector(BaseDeviceCollector):
                 self._switch_port_status.labels(**port_labels).set(is_connected)
 
                 self._emit_port_error_warning_metrics(device_data, port, org_id, org_name)
+                self._emit_port_stp_8021x_metrics(device_data, port, org_id, org_name)
 
         return True
 
@@ -616,6 +739,9 @@ class MSCollector(BaseDeviceCollector):
 
                 # Active port errors/warnings (expire automatically once cleared)
                 self._emit_port_error_warning_metrics(device, port, org_id, org_name)
+
+                # STP state and 802.1X/secure-port auth status (same payload)
+                self._emit_port_stp_8021x_metrics(device, port, org_id, org_name)
 
                 # Traffic counters (rate in bytes per second)
                 if "trafficInKbps" in port:

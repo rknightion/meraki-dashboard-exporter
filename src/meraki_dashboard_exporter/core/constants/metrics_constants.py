@@ -109,6 +109,14 @@ class MSMetricName(StrEnum):
 
     # STP metrics
     MS_STP_PRIORITY = "meraki_ms_stp_priority"
+    MS_PORT_STP_STATE = "meraki_ms_port_stp_state"
+
+    # 802.1X / secure-port authentication (from securePort object in port status)
+    MS_PORT_8021X_STATUS = "meraki_ms_port_8021x_status"
+    MS_PORT_8021X_ACTIVE = "meraki_ms_port_8021x_active"
+
+    # Power supply / power module status (org-wide powerModules endpoint)
+    MS_POWER_SUPPLY_STATUS = "meraki_ms_power_supply_status"
 
     # Additional port metrics
     MS_PORT_USAGE_BYTES = "meraki_ms_port_usage_bytes"
@@ -202,6 +210,10 @@ class MXMetricName(StrEnum):
 
     MX_UPLINK_INFO = "meraki_mx_uplink_info"
 
+    # Per-uplink WAN-link quality (org-wide uplinksLossAndLatency endpoint)
+    MX_UPLINK_LOSS_PERCENT = "meraki_mx_uplink_loss_percent"
+    MX_UPLINK_LATENCY_MS = "meraki_mx_uplink_latency_ms"
+
     # VPN health metrics
     MX_VPN_PEER_STATUS = "meraki_mx_vpn_peer_status"
     MX_VPN_LATENCY_MS = "meraki_mx_vpn_latency_ms"
@@ -215,11 +227,27 @@ class MXMetricName(StrEnum):
     MX_SECURITY_EVENTS_TOTAL = "meraki_mx_security_events_total"
 
 
+class MGMetricName(StrEnum):
+    """MG (Cellular Gateway) specific metric names."""
+
+    # Per-uplink cellular status (org-wide cellularGateway uplink statuses endpoint)
+    MG_UPLINK_STATUS_INFO = "meraki_mg_uplink_status_info"
+    MG_UPLINK_SIGNAL_RSRP_DBM = "meraki_mg_uplink_signal_rsrp_dbm"
+    MG_UPLINK_SIGNAL_RSRQ_DB = "meraki_mg_uplink_signal_rsrq_db"
+    MG_UPLINK_ROAMING = "meraki_mg_uplink_roaming"
+
+
 class MVMetricName(StrEnum):
     """MV (Camera) specific metric names."""
 
     MV_ANALYTICS_ZONES = "meraki_mv_analytics_zones"
     MV_PEOPLE_COUNT = "meraki_mv_people_count"
+
+    # Quality & retention config (info + boolean gauges)
+    MV_MOTION_BASED_RETENTION_ENABLED = "meraki_mv_motion_based_retention_enabled"
+    MV_AUDIO_RECORDING_ENABLED = "meraki_mv_audio_recording_enabled"
+    MV_RESTRICTED_BANDWIDTH_MODE_ENABLED = "meraki_mv_restricted_bandwidth_mode_enabled"
+    MV_QUALITY_RETENTION_INFO = "meraki_mv_quality_retention_info"
 
 
 class MTMetricName(StrEnum):

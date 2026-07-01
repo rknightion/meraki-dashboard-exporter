@@ -720,3 +720,202 @@ class TestMSCollector:
 
         clean_labels = {**labels, "port_id": "2", "port_name": "Port 2"}
         assert REGISTRY.get_sample_value("meraki_ms_port_errors_total", clean_labels) is None
+
+    async def test_collect_emits_stp_and_8021x_metrics(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """Test that collect() surfaces STP state and 802.1X auth status per port.
+
+        A port with a ``spanningTree`` status must emit
+        ``meraki_ms_port_stp_state`` with a ``state`` label per reported state;
+        a port with a ``securePort`` block must emit both
+        ``meraki_ms_port_8021x_active`` (0/1) and, when an
+        ``authenticationStatus`` is present, ``meraki_ms_port_8021x_status``
+        with a ``status`` label.
+        """
+        device = {
+            "serial": "Q123-456-789",
+            "name": "Test Switch",
+            "model": "MS250-48",
+            "networkId": "net1",
+            "networkName": "Test Network",
+            "orgId": "org1",
+            "orgName": "Org One",
+        }
+
+        mock_api.switch.getDeviceSwitchPortsStatuses = MagicMock(
+            return_value=[
+                {
+                    "portId": "1",
+                    "name": "Port 1",
+                    "status": "Connected",
+                    "spanningTree": {"statuses": ["forwarding"]},
+                    "securePort": {
+                        "enabled": True,
+                        "active": True,
+                        "authenticationStatus": "Authentication successful",
+                    },
+                },
+                {
+                    "portId": "2",
+                    "name": "Port 2",
+                    "status": "Connected",
+                    "securePort": {
+                        "enabled": True,
+                        "active": False,
+                    },
+                },
+                {
+                    "portId": "3",
+                    "name": "Port 3",
+                    "status": "Connected",
+                    # No spanningTree/securePort at all.
+                },
+            ]
+        )
+
+        await ms_collector.collect(device)
+
+        base_labels = {
+            "org_id": "org1",
+            "org_name": "Org One",
+            "network_id": "net1",
+            "network_name": "Test Network",
+            "serial": "Q123-456-789",
+            "name": "Test Switch",
+            "model": "MS250-48",
+            "device_type": "MS",
+        }
+
+        stp_labels = {
+            **base_labels,
+            "port_id": "1",
+            "port_name": "Port 1",
+            "state": "forwarding",
+        }
+        assert REGISTRY.get_sample_value("meraki_ms_port_stp_state", stp_labels) == 1.0
+
+        active_labels_port1 = {**base_labels, "port_id": "1", "port_name": "Port 1"}
+        assert REGISTRY.get_sample_value("meraki_ms_port_8021x_active", active_labels_port1) == 1.0
+
+        status_labels = {
+            **base_labels,
+            "port_id": "1",
+            "port_name": "Port 1",
+            "status": "Authentication successful",
+        }
+        assert REGISTRY.get_sample_value("meraki_ms_port_8021x_status", status_labels) == 1.0
+
+        # Port 2: active=False -> 0, and no authenticationStatus -> no status series.
+        active_labels_port2 = {**base_labels, "port_id": "2", "port_name": "Port 2"}
+        assert REGISTRY.get_sample_value("meraki_ms_port_8021x_active", active_labels_port2) == 0.0
+        status_labels_port2 = {
+            **base_labels,
+            "port_id": "2",
+            "port_name": "Port 2",
+            "status": "Authentication successful",
+        }
+        assert REGISTRY.get_sample_value("meraki_ms_port_8021x_status", status_labels_port2) is None
+        stp_labels_port2 = {
+            **base_labels,
+            "port_id": "2",
+            "port_name": "Port 2",
+            "state": "forwarding",
+        }
+        assert REGISTRY.get_sample_value("meraki_ms_port_stp_state", stp_labels_port2) is None
+
+        # Port 3: no spanningTree/securePort at all -> nothing emitted for any of these.
+        active_labels_port3 = {**base_labels, "port_id": "3", "port_name": "Port 3"}
+        assert REGISTRY.get_sample_value("meraki_ms_port_8021x_active", active_labels_port3) is None
+        stp_labels_port3 = {
+            **base_labels,
+            "port_id": "3",
+            "port_name": "Port 3",
+            "state": "forwarding",
+        }
+        assert REGISTRY.get_sample_value("meraki_ms_port_stp_state", stp_labels_port3) is None
+
+    async def test_collect_port_statuses_by_switch_emits_stp_and_8021x(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """Test that the org-level status collection also surfaces STP/802.1X."""
+        devices = [
+            {
+                "serial": "Q2XX-XXXX-XXXX",
+                "networkId": "net1",
+                "networkName": "Test Network",
+                "name": "Test Switch",
+                "model": "MS250-48",
+            }
+        ]
+
+        mock_api.switch.getOrganizationSwitchPortsStatusesBySwitch = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-XXXX-XXXX",
+                    "name": "Test Switch",
+                    "model": "MS250-48",
+                    "network": {"id": "net1", "name": "Test Network"},
+                    "ports": [
+                        {
+                            "portId": "1",
+                            "name": "Port 1",
+                            "status": "Connected",
+                            "spanningTree": {"statuses": ["blocking"]},
+                            "securePort": {
+                                "enabled": True,
+                                "active": True,
+                                "authenticationStatus": "Authentication successful",
+                            },
+                        },
+                        {
+                            "portId": "2",
+                            "name": "Port 2",
+                            "status": "Connected",
+                        },
+                    ],
+                }
+            ]
+        )
+
+        result = await ms_collector.collect_port_statuses_by_switch("org1", "Org One", devices)
+
+        assert result is True
+
+        base_labels = {
+            "org_id": "org1",
+            "org_name": "Org One",
+            "network_id": "net1",
+            "network_name": "Test Network",
+            "serial": "Q2XX-XXXX-XXXX",
+            "name": "Test Switch",
+            "model": "MS250-48",
+            "device_type": "MS",
+        }
+
+        stp_labels = {
+            **base_labels,
+            "port_id": "1",
+            "port_name": "Port 1",
+            "state": "blocking",
+        }
+        assert REGISTRY.get_sample_value("meraki_ms_port_stp_state", stp_labels) == 1.0
+
+        active_labels = {**base_labels, "port_id": "1", "port_name": "Port 1"}
+        assert REGISTRY.get_sample_value("meraki_ms_port_8021x_active", active_labels) == 1.0
+
+        status_labels = {
+            **base_labels,
+            "port_id": "1",
+            "port_name": "Port 1",
+            "status": "Authentication successful",
+        }
+        assert REGISTRY.get_sample_value("meraki_ms_port_8021x_status", status_labels) == 1.0
+
+        # Port 2 had no spanningTree/securePort -> nothing emitted.
+        clean_active_labels = {**base_labels, "port_id": "2", "port_name": "Port 2"}
+        assert REGISTRY.get_sample_value("meraki_ms_port_8021x_active", clean_active_labels) is None

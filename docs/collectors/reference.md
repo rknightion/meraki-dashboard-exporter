@@ -4,7 +4,7 @@ This page summarizes the collectors that ship with the exporter.
 
 Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_INTERVALS__*`. See the Metrics Overview for tier definitions.
 
-**Total collector classes:** 31
+**Total collector classes:** 33
 **Auto-registered collectors:** 7
 
 ## Main Collectors (auto-registered)
@@ -21,7 +21,7 @@ Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_
 
 ## Coordinator Relationships
 
-- **DeviceCollector** → MGCollector, MRCollector, MSCollector, MSStackCollector, MVCollector, MXCollector
+- **DeviceCollector** → MGCollector, MRCollector, MSCollector, MSStackCollector, MVCollector, MXCollector, MXUplinkHealthCollector, MSPowerCollector
 - **MRCollector** → MRClientsCollector, MRPerformanceCollector, MRWirelessCollector
 - **MXCollector** → MXVpnCollector, MXFirewallCollector
 - **NetworkHealthCollector** → RFHealthCollector, ConnectionStatsCollector, DataRatesCollector, BluetoothCollector, SSIDPerformanceCollector
@@ -38,11 +38,13 @@ Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_
 - `MRPerformanceCollector` — Collector for MR wireless performance metrics.
 - `MRWirelessCollector` — Collector for MR wireless radio and SSID metrics.
 - `MSCollector` — Collector for Meraki MS (Switch) devices.
+- `MSPowerCollector` — Collector for MS rackmount switch power-supply (PSU) module status.
 - `MSStackCollector` — Collector for MS switch stack health metrics.
 - `MTCollector` — Collector for Meraki MT (Sensor) devices.
 - `MVCollector` — Collector for MV security camera metrics.
 - `MXCollector` — Collector for MX security appliance metrics.
 - `MXFirewallCollector` — Collector for MX firewall rules and security policy metrics.
+- `MXUplinkHealthCollector` — Collector for MX per-uplink WAN loss/latency health metrics.
 - `MXVpnCollector` — Collector for MX VPN/WAN health metrics.
 
 ### Network Health Sub-collectors

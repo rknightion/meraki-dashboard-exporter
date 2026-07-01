@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 214
-- **Gauges:** 190
+- **Total metrics:** 230
+- **Gauges:** 206
 - **Counters:** 18
 - **Histograms:** 5
 - **Info metrics:** 1
@@ -79,6 +79,15 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_device_status_info` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `status` | Device status information |  |
 | `meraki_device_up` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Device online status (1 = online, 0 = offline) |  |
 
+### MGCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_mg_uplink_roaming` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `interface` | MG cellular gateway uplink roaming status (1 = roaming, 0 = home) |  |
+| `meraki_mg_uplink_signal_rsrp_dbm` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `interface` | MG cellular gateway uplink RSRP signal strength in dBm |  |
+| `meraki_mg_uplink_signal_rsrq_db` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `interface` | MG cellular gateway uplink RSRQ signal quality in dB |  |
+| `meraki_mg_uplink_status_info` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `interface`, `status`, `provider`, `connection_type`, `signal_type`, `roaming_status`, `apn`, `ip` | MG cellular gateway uplink status info (1 = present) |  |
+
 ### MRClientsCollector
 
 | Metric | Type | Labels | Description | Notes |
@@ -140,6 +149,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_ms_poe_network_total_watthours` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Total POE power consumption for all switches in network in watt-hours (Wh) |  |
 | `meraki_ms_poe_port_power_watthours` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name` | Per-port POE power consumption in watt-hours (Wh) over the last 1 hour |  |
 | `meraki_ms_poe_total_power_watthours` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Total POE power consumption for switch in watt-hours (Wh) |  |
+| `meraki_ms_port_8021x_active` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name` | Switch port secure-port (802.1X) active state (1 = active, 0 = inactive) |  |
+| `meraki_ms_port_8021x_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `status` | Switch port 802.1X authentication status (1 = currently active for this status) |  |
 | `meraki_ms_port_client_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name` | Number of clients connected to switch port |  |
 | `meraki_ms_port_errors_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `error_type` | Active switch port errors (1 = currently active for this error_type) |  |
 | `meraki_ms_port_packets_broadcast` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Broadcast packets on switch port (5-minute window) |  |
@@ -157,6 +168,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_ms_port_packets_topologychanges` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Topology change packets on switch port (5-minute window) |  |
 | `meraki_ms_port_packets_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Total packets on switch port (5-minute window) |  |
 | `meraki_ms_port_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `link_speed`, `duplex` | Switch port status (1 = connected, 0 = disconnected) |  |
+| `meraki_ms_port_stp_state` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `state` | Switch port STP state (1 = currently active for this state) |  |
 | `meraki_ms_port_traffic_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Switch port traffic rate in bytes per second (averaged over 1 hour) |  |
 | `meraki_ms_port_usage_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Switch port data usage in bytes over the last 1 hour |  |
 | `meraki_ms_port_warnings_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `warning_type` | Active switch port warnings (1 = currently active for this warning_type) |  |
@@ -166,6 +178,12 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_ms_ports_inactive_total` | gauge | `org_id`, `org_name` | Total number of inactive switch ports |  |
 | `meraki_ms_power_usage_watts` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Switch power usage in watts |  |
 | `meraki_ms_stp_priority` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Switch STP (Spanning Tree Protocol) priority |  |
+
+### MSPowerCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_ms_power_supply_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `slot`, `psu_serial`, `status` | MS/rackmount power-supply module status (1 = reported this cycle) |  |
 
 ### MSStackCollector
 
@@ -200,6 +218,17 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mt_voltage_volts` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Voltage in volts |  |
 | `meraki_mt_water_detected` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Water detection status (1 = detected, 0 = not detected) |  |
 
+### MVCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_mv_analytics_zones` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Number of configured analytics zones on the MV camera |  |
+| `meraki_mv_audio_recording_enabled` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Whether audio recording is enabled (1 = enabled) |  |
+| `meraki_mv_motion_based_retention_enabled` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Whether motion-based retention is enabled (1 = enabled) |  |
+| `meraki_mv_people_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `zone_id`, `zone_name` | Current person count reported by MV camera analytics zone |  |
+| `meraki_mv_quality_retention_info` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `quality`, `resolution`, `profile_id` | MV camera quality and retention configuration info (1 = present) |  |
+| `meraki_mv_restricted_bandwidth_mode_enabled` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Whether restricted bandwidth mode is enabled (1 = enabled) |  |
+
 ### MXCollector
 
 | Metric | Type | Labels | Description | Notes |
@@ -213,6 +242,13 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mx_firewall_default_policy` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Firewall default policy for L3 rules (1=allow, 0=deny) |  |
 | `meraki_mx_firewall_rules_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `rule_type` | Total number of user-defined firewall rules by type (excludes default rule) |  |
 | `meraki_mx_security_events_total` | gauge | `org_id`, `org_name`, `event_type` | Total security events by type |  |
+
+### MXUplinkHealthCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_mx_uplink_latency_ms` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `interface` | MX per-uplink WAN latency in milliseconds (latest sample) |  |
+| `meraki_mx_uplink_loss_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `interface` | MX per-uplink WAN loss percent (latest sample) |  |
 
 ### MXVpnCollector
 

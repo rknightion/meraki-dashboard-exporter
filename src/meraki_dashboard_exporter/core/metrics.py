@@ -124,6 +124,24 @@ class LabelName(StrEnum):
     EVENT_TYPE = "event_type"
     DEFAULT_POLICY = "default_policy"
 
+    # MG cellular gateway labels
+    PROVIDER = "provider"  # Cellular carrier/provider name
+    ROAMING_STATUS = "roaming_status"  # home/roaming/unknown
+    CONNECTION_TYPE = "connection_type"  # Radio access type (LTE/5G/etc)
+    SIGNAL_TYPE = "signal_type"  # Cellular signal type
+    APN = "apn"  # Access point name
+
+    # MV camera labels
+    ZONE_ID = "zone_id"  # Camera analytics zone ID
+    ZONE_NAME = "zone_name"  # Camera analytics zone label/name
+    QUALITY = "quality"  # Camera video quality (Standard/Enhanced/High)
+    RESOLUTION = "resolution"  # Camera video resolution
+    PROFILE_ID = "profile_id"  # Camera quality-and-retention profile ID
+
+    # Power supply / power module labels
+    SLOT = "slot"  # PSU/power-module slot number
+    PSU_SERIAL = "psu_serial"  # Power supply's own serial (distinct from device serial)
+
 
 MetricType = Literal["gauge", "counter", "histogram", "info"]
 
