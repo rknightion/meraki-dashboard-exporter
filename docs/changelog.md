@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.31.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.31.0...v0.31.1) (2026-07-01)
+
+
+### Bug Fixes
+
+* **chart:** wire the chart-managed API key secret into the Deployment ([f03c8b7](https://github.com/rknightion/meraki-dashboard-exporter/commit/f03c8b727406a8cb9e63d77a9ae8c7d7f64f290f))
+
+
+### Documentation
+
+* audit and refresh CLAUDE.md files repo-wide ([2579dc2](https://github.com/rknightion/meraki-dashboard-exporter/commit/2579dc2f70262cad48d2048938e9ec6c8e7cea73))
+
 ## [0.31.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.30.1...v0.31.0) (2026-06-30)
 
 
