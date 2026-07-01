@@ -6,7 +6,8 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants.metrics_constants import MXMetricName
-from ...core.error_handling import ErrorCategory, with_error_handling
+from ...core.domain_models import ApplianceSecurityEvent
+from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.metrics import LabelName
@@ -68,7 +69,7 @@ class MXFirewallCollector(SubCollectorMixin):
         )
         self._security_events_total = self.parent._create_gauge(
             MXMetricName.MX_SECURITY_EVENTS_TOTAL,
-            "Total security events by type (reserved for future use)",
+            "Total security events by type",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -161,4 +162,89 @@ class MXFirewallCollector(SubCollectorMixin):
             network_id=network_id,
             l3_user_rules=len(user_l3_rules),
             l7_rules=len(l7_rules),
+        )
+
+    @log_api_call("getOrganizationApplianceSecurityEvents")
+    @with_error_handling(
+        operation="Collect MX security events",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def collect_org_security_events(self, org_id: str, org_name: str) -> None:
+        """Collect aggregated MX security event counts for an organization.
+
+        Fetches org-wide IDS/IPS and AMP security events (``getOrganizationApplianceSecurityEvents``)
+        in a single call per organization and aggregates the count of events by ``eventType``
+        (e.g. "IDS Alert", "File Scanned") over the current collection window.
+
+        The ``timespan`` is bounded to the MEDIUM update-tier interval
+        (``settings.update_intervals.medium``, default 300s) because this method is invoked once
+        per MEDIUM-tier collection cycle from ``DeviceCollector._collect_mx_specific_metrics``.
+        Bounding the timespan to the poll interval means each cycle's counts reflect only events
+        detected since the previous cycle, avoiding double-counting events across cycles.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        timespan = self.settings.update_intervals.medium
+
+        self._track_api_call("getOrganizationApplianceSecurityEvents")
+        events_response = await asyncio.to_thread(
+            self.api.appliance.getOrganizationApplianceSecurityEvents,
+            org_id,
+            total_pages="all",
+            timespan=timespan,
+        )
+
+        events_response = validate_response_format(
+            events_response,
+            expected_type=list,
+            operation="getOrganizationApplianceSecurityEvents",
+        )
+
+        # Resolve allowed network IDs for filter enforcement on this org-wide response.
+        allowed_network_ids = (
+            await self.parent.inventory.get_allowed_network_ids(org_id)
+            if self.parent.inventory is not None
+            else None
+        )
+        skipped = 0
+        counts: dict[str, int] = {}
+
+        for raw_event in events_response:
+            network_id = raw_event.get("networkId", "")
+            if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                skipped += 1
+                continue
+
+            event = ApplianceSecurityEvent.model_validate(raw_event)
+            event_type = event.eventType or "unknown"
+            counts[event_type] = counts.get(event_type, 0) + 1
+
+        # Clear previous label series so event types with zero events this cycle expire
+        # instead of holding a stale non-zero value indefinitely.
+        self._security_events_total._metrics.clear()
+
+        for event_type, count in counts.items():
+            self.parent._set_metric(
+                self._security_events_total,
+                {
+                    LabelName.ORG_ID: org_id,
+                    LabelName.ORG_NAME: org_name,
+                    LabelName.EVENT_TYPE: event_type,
+                },
+                float(count),
+            )
+
+        logger.debug(
+            "Collected MX security events",
+            org_id=org_id,
+            event_count=len(events_response),
+            event_types=len(counts),
+            skipped_count=skipped,
         )

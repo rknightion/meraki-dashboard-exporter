@@ -819,6 +819,14 @@ class DeviceCollector(MetricCollector):
             except Exception:
                 logger.exception("Failed to collect MX VPN metrics")
 
+            # Collect security events (org-wide, single call per org)
+            try:
+                await self.mx_collector.firewall_collector.collect_org_security_events(
+                    org_id, org_name
+                )
+            except Exception:
+                logger.exception("Failed to collect MX security events")
+
             # Collect firewall rules (SLOW tier: per-network API calls)
             try:
                 networks: list[dict[str, Any]] = []

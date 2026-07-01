@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from prometheus_client import Gauge
@@ -36,7 +36,10 @@ class TestMXFirewallCollector:
         parent = MagicMock()
         parent.api = mock_api
         parent.settings = MagicMock()
+        parent.settings.update_intervals.medium = 300
         parent.rate_limiter = None
+        # No inventory means no NetworkFilter — collector emits all rows.
+        parent.inventory = None
         parent._create_gauge = MagicMock(side_effect=_make_gauge)
         return parent
 
@@ -453,3 +456,209 @@ class TestMXFirewallCollector:
         ]
         rule_types = {c[0][1]["rule_type"] for c in rule_calls}
         assert rule_types == {"L3", "L7"}
+
+    # ------------------------------------------------------------------
+    # Org-wide security events (getOrganizationApplianceSecurityEvents)
+    # ------------------------------------------------------------------
+
+    async def test_security_events_aggregated_by_event_type(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Events must be aggregated into per-eventType counts."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=[
+                {"eventType": "IDS Alert", "networkId": "N_1", "ts": "2026-07-01T00:00:00Z"},
+                {"eventType": "IDS Alert", "networkId": "N_1", "ts": "2026-07-01T00:01:00Z"},
+                {"eventType": "File Scanned", "networkId": "N_1", "ts": "2026-07-01T00:02:00Z"},
+            ]
+        )
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        calls = {
+            c[0][1]["event_type"]: c[0][2]
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is firewall_collector._security_events_total
+        }
+        assert calls == {"IDS Alert": 2.0, "File Scanned": 1.0}
+
+    async def test_security_events_respects_network_filter(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Events referencing a network outside the filter must be dropped."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=[
+                {"eventType": "IDS Alert", "networkId": "N_INCLUDED"},
+                {"eventType": "IDS Alert", "networkId": "N_EXCLUDED"},
+                {"eventType": "IDS Alert", "networkId": "N_EXCLUDED"},
+            ]
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_INCLUDED"})
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        calls = {
+            c[0][1]["event_type"]: c[0][2]
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is firewall_collector._security_events_total
+        }
+        # Only the single in-filter event should be counted.
+        assert calls == {"IDS Alert": 1.0}
+
+    async def test_security_events_uses_medium_interval_as_timespan(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """timespan must be bounded to settings.update_intervals.medium."""
+        mock_parent.settings.update_intervals.medium = 300
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(return_value=[])
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        _, kwargs = mock_api.appliance.getOrganizationApplianceSecurityEvents.call_args
+        assert kwargs["timespan"] == 300
+        assert kwargs["total_pages"] == "all"
+
+    async def test_security_events_empty_response_clears_stale_series(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An empty events response must not set any metric but must clear old series."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(return_value=[])
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        assert not any(
+            c[0][0] is firewall_collector._security_events_total
+            for c in mock_parent._set_metric.call_args_list
+        )
+        assert len(firewall_collector._security_events_total._metrics) == 0
+
+    async def test_security_events_stale_event_type_expires(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An event type present in one cycle but absent in the next must not linger.
+
+        ``mock_parent._set_metric`` is itself a mock (doesn't write through to the
+        real ``Gauge``), so this exercises the real gauge's label-series clearing
+        directly: pre-populate a stale series, run a cycle with a *different*
+        event type, and confirm the stale series was cleared rather than left
+        behind (which would happen if the collector only ever called
+        ``.labels(...).set(...)`` for types present in the current response).
+        """
+        firewall_collector._security_events_total.labels(
+            org_id="org1", org_name="Test Org", event_type="Old Type"
+        ).set(5)
+        assert len(firewall_collector._security_events_total._metrics) == 1
+
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=[{"eventType": "File Scanned", "networkId": "N_1"}]
+        )
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        # The stale "Old Type" series must be gone from the real gauge.
+        assert len(firewall_collector._security_events_total._metrics) == 0
+
+        # And the new event type must have been passed to _set_metric.
+        calls = {
+            c[0][1]["event_type"]: c[0][2]
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is firewall_collector._security_events_total
+        }
+        assert calls == {"File Scanned": 1.0}
+
+    async def test_security_events_api_error_handled_gracefully(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An API exception must not propagate – @with_error_handling absorbs it."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            side_effect=Exception("connection reset by peer")
+        )
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        assert not any(
+            c[0][0] is firewall_collector._security_events_total
+            for c in mock_parent._set_metric.call_args_list
+        )
+
+    async def test_security_events_invalid_response_shape_handled_gracefully(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The SDK exhausted-retry error shape (dict with 'errors') must be handled, not raised."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value={"errors": ["internal server error"]}
+        )
+
+        # Should not raise – validate_response_format raises internally, and
+        # @with_error_handling absorbs it.
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        assert not any(
+            c[0][0] is firewall_collector._security_events_total
+            for c in mock_parent._set_metric.call_args_list
+        )
+
+    async def test_security_events_org_labels_propagated(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """org_id and org_name labels must appear on every emitted series."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=[{"eventType": "IDS Alert", "networkId": "N_1"}]
+        )
+
+        await firewall_collector.collect_org_security_events("org-abc", "My Org")
+
+        calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is firewall_collector._security_events_total
+        ]
+        assert len(calls) == 1
+        _, labels, _ = calls[0][0]
+        assert labels["org_id"] == "org-abc"
+        assert labels["org_name"] == "My Org"
+        assert labels["event_type"] == "IDS Alert"
+
+    async def test_security_events_missing_event_type_defaults_to_unknown(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A row without eventType must be aggregated under 'unknown' rather than dropped."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=[{"networkId": "N_1"}]
+        )
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        calls = {
+            c[0][1]["event_type"]: c[0][2]
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is firewall_collector._security_events_total
+        }
+        assert calls == {"unknown": 1.0}
