@@ -103,3 +103,46 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **NEVER call `getOrganizationNetworks` directly from a collector** - go through `OrganizationInventory.get_networks(org_id)` so `NetworkFilter` is enforced. Only `core/discovery.py::DiscoveryService` (audit logging) and `collectors/alerts.py::AlertsCollector._fetch_networks_direct` (inventory-unavailable fallback, reapplies `NetworkFilter` manually) are permitted to bypass.
 - **NEVER forget metric tracking** - use `parent._set_metric()` for automatic expiration
 </fatal_implications>
+
+<roadmap_workflow>
+## IMPLEMENTING A ROADMAP TASK
+
+The prioritised backlog lives in the **GitHub Project** "meraki-dashboard-exporter roadmap"
+(https://github.com/users/rknightion/projects/2). Each task is a labelled GitHub **issue** whose body
+is a self-contained spec. Point an agent at one issue and follow this exact workflow.
+
+### 1. Load the task
+- `gh issue view <N>` (or `gh issue view <N> --json title,body,labels`) to read the full spec.
+- The body states: goal/data unlocked, the exact Meraki API endpoint(s) + SDK method, files to touch,
+  cardinality/rate-limit notes, and acceptance criteria. Treat those as the contract.
+- Read the `CLAUDE.md` of every subdirectory you will touch **before** editing (fatal rule).
+
+### 2. Verify assumptions against reality (do NOT trust the issue blindly)
+- Confirm the SDK method exists in the installed `meraki` version: introspect `self.api.<controller>`.
+- Confirm the endpoint/response shape against the OpenAPI spec if unsure — the spec may have moved on
+  since the issue was written. If the issue is stale, fix the approach and note it in the issue.
+- Check whether the metric/enum already exists (several issues wire up *already-declared* enums).
+
+### 3. Implement (strict TDD)
+- Failing test first (see `tests/CLAUDE.md`: factories, mock API, metric assertions) → watch it fail →
+  minimal implementation → green → refactor.
+- **Metrics:** domain enums only (`OrgMetricName`/`MRMetricName`/… in `core/constants/metrics_constants.py`),
+  `LabelName` enums (`core/metrics.py`), Pydantic domain model for the response, wrap the fetcher with
+  `core.error_handling.validate_response_format`, emit via `parent._set_metric()` for expiration.
+- **Networks:** fetch only via `OrganizationInventory.get_networks(org_id)` (NetworkFilter enforcement).
+- **Concurrency:** `ManagedTaskGroup` / `process_in_batches_with_errors` — never raw `asyncio.gather`.
+- **Tier:** pick FAST/MEDIUM/SLOW by volatility and justify it; prefer org-wide bulk endpoints over
+  per-device/per-network loops to protect the rate-limit budget.
+- **Cardinality:** never label by client MAC, raw SSID/BSSID, per-request rows, or other unbounded/
+  attacker-influenced values — aggregate to bounded label sets.
+
+### 4. Verify & close
+- `make check` (ruff + mypy + pytest) must be green — evidence, not assertion.
+- Regenerate docs if metrics/config changed (`make docgen`).
+- Reference the issue from the commit (`Closes #<N>`) so the board updates automatically.
+
+### Adding new roadmap tasks
+Create an issue with the same body template + labels (`roadmap`, one `area:*`, one `P0`–`P3`), add it to
+Project #2, and set the Priority/Area/Effort/Type/Status fields. Priority + milestone express **ordering
+only** — there are deliberately no calendar due-dates.
+</roadmap_workflow>
