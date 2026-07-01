@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import threading
+import time
+from typing import Any
 from unittest.mock import MagicMock
 
+from meraki_dashboard_exporter.collectors import alerts as alerts_module
 from meraki_dashboard_exporter.collectors.alerts import AlertsCollector
+from meraki_dashboard_exporter.core.batch_processing import process_in_batches_with_errors
 from meraki_dashboard_exporter.core.constants import AlertMetricName, UpdateTier
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import AlertFactory, DeviceFactory, NetworkFactory, OrganizationFactory
@@ -539,3 +544,170 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Verify success
         self.assert_collector_success(collector, metrics)
+
+    async def test_fan_outs_use_bounded_batching(self, collector, mock_api_builder, metrics):
+        """Org alerts, sensor-alert networks, and health-alert networks must all be.
+
+        Driven through ``process_in_batches_with_errors`` (bounded concurrency),
+        never a raw ``asyncio.gather`` fan-out, per issue #248.
+        """
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        networks = [
+            NetworkFactory.create(network_id=f"N_{i}", name=f"Network {i}") for i in range(5)
+        ]
+        sensor_devices = [
+            DeviceFactory.create_mt(network_id="N_0", productType="sensor", serial="Q2MT-XXXX-0001")
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_devices(sensor_devices, org_id="123")
+            .with_custom_response("getOrganizationAssuranceAlerts", [])
+            .with_custom_response("getOrganizationNetworks", networks)
+            .with_custom_response("getNetworkSensorAlertsOverviewByMetric", [])
+            .with_custom_response("getNetworkHealthAlerts", [])
+            .build()
+        )
+        collector.api = api
+
+        # Use a small batch size so bounding is observable, and record every call
+        # made to the shared batching helper so we can assert it was actually used
+        # (and with what batch size / delay) for each of the three fan-out sites.
+        collector.settings.api.network_batch_size = 2
+        collector.settings.api.batch_delay = 0.0
+
+        calls: list[dict[str, Any]] = []
+
+        async def spying_batches(items, process_func, **kwargs):
+            calls.append({"items": list(items), "batch_size": kwargs.get("batch_size")})
+            return await process_in_batches_with_errors(items, process_func, **kwargs)
+
+        original = alerts_module.process_in_batches_with_errors
+        alerts_module.process_in_batches_with_errors = spying_batches
+        try:
+            await self.run_collector(collector)
+        finally:
+            alerts_module.process_in_batches_with_errors = original
+
+        # Verify success and that all networks were still processed / metrics emitted
+        self.assert_collector_success(collector, metrics)
+        self.assert_api_call_tracked(collector, metrics, "getOrganizationAssuranceAlerts")
+
+        # One call for org alerts (1 org), one for sensor-alert networks (1 network
+        # with sensors), one for health-alert networks (all 5 networks).
+        assert len(calls) == 3, f"expected 3 batched fan-outs, got {len(calls)}: {calls}"
+        for call in calls:
+            assert call["batch_size"] == 2
+
+        # Calls are awaited strictly sequentially in _collect_impl, in this order:
+        # org alerts, then sensor-alert networks, then health-alert networks.
+        org_call, sensor_call, health_call = calls
+        assert org_call["items"] == ["123"]
+        assert len(sensor_call["items"]) == 1
+        assert sensor_call["items"][0]["id"] == "N_0"
+        assert len(health_call["items"]) == 5
+
+    async def test_health_alert_concurrency_bounded_to_batch_size(
+        self, collector, mock_api_builder, metrics
+    ):
+        """Verify health-alert concurrency stays within the configured batch size.
+
+        With more networks than the configured batch size, no more than
+        ``network_batch_size`` health-alert calls should be in flight concurrently,
+        and every network must still get its metrics emitted.
+        """
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network_count = 6
+        batch_size = 2
+        networks = [
+            NetworkFactory.create(network_id=f"N_{i}", name=f"Network {i}")
+            for i in range(network_count)
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_devices([], org_id="123")
+            .with_custom_response("getOrganizationAssuranceAlerts", [])
+            .with_custom_response("getOrganizationNetworks", networks)
+            .build()
+        )
+
+        lock = threading.Lock()
+        state = {"current": 0, "max_seen": 0}
+
+        def get_network_health_alerts(network_id, **kwargs):
+            with lock:
+                state["current"] += 1
+                state["max_seen"] = max(state["max_seen"], state["current"])
+            try:
+                # Hold the "connection" open briefly so overlapping calls, if any,
+                # are observed by a concurrent invocation incrementing state above.
+                time.sleep(0.05)
+            finally:
+                with lock:
+                    state["current"] -= 1
+            return [
+                {
+                    "category": "connectivity",
+                    "severity": "warning",
+                    "closedAt": None,
+                }
+            ]
+
+        api.networks.getNetworkHealthAlerts = MagicMock(side_effect=get_network_health_alerts)
+        collector.api = api
+        collector.settings.api.network_batch_size = batch_size
+        collector.settings.api.batch_delay = 0.0
+
+        await self.run_collector(collector)
+
+        self.assert_collector_success(collector, metrics)
+        assert state["max_seen"] <= batch_size, (
+            f"observed {state['max_seen']} concurrent health-alert calls, "
+            f"expected at most batch_size={batch_size}"
+        )
+
+        # All networks must still have metrics emitted, not just the first batch.
+        for i in range(network_count):
+            metrics.assert_gauge_value(
+                AlertMetricName.NETWORK_HEALTH_ALERTS_TOTAL,
+                1,
+                org_id="123",
+                org_name="Test Org",
+                network_id=f"N_{i}",
+                network_name=f"Network {i}",
+                category="connectivity",
+                severity="warning",
+            )
+
+    async def test_fetch_networks_direct_still_applies_network_filter(
+        self, mock_api_builder, settings, isolated_registry
+    ):
+        """Regression guard for the inventory-unavailable fallback.
+
+        ``_fetch_networks_direct`` must remain untouched by the batching change
+        and keep manually reapplying the configured NetworkFilter.
+        """
+        allowed = NetworkFactory.create(network_id="N_allowed", name="Allowed")
+        excluded = NetworkFactory.create(network_id="N_excluded", name="Excluded")
+
+        settings.network_filter.include_ids = ["N_allowed"]
+
+        collector = AlertsCollector(
+            api=mock_api_builder.build(), settings=settings, registry=isolated_registry
+        )
+        # No inventory service configured -> forces the direct-fetch fallback path.
+        collector.inventory = None
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationNetworks", [allowed, excluded]
+        ).build()
+        collector.api = api
+
+        networks = await collector._fetch_networks_direct("123")
+
+        assert networks is not None
+        network_ids = {n["id"] for n in networks}
+        assert network_ids == {"N_allowed"}

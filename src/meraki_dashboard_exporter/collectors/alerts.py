@@ -6,6 +6,7 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any, cast
 
+from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import AlertMetricName, UpdateTier
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -153,15 +154,21 @@ class AlertsCollector(MetricCollector):
                 org_ids = [org["id"] for org in orgs_data]
                 org_names = {org["id"]: org.get("name", "unknown") for org in orgs_data}
 
-            # Collect alerts for each organization
-            tasks = [
-                self._collect_org_alerts(org_id, org_names.get(org_id, "unknown"))
-                for org_id in org_ids
-            ]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Collect alerts for each organization (bounded concurrency)
+            org_results = await process_in_batches_with_errors(
+                org_ids,
+                lambda org_id: self._collect_org_alerts(org_id, org_names.get(org_id, "unknown")),
+                batch_size=self.settings.api.network_batch_size,
+                delay_between_batches=self.settings.api.batch_delay,
+                item_description="organization alerts",
+                error_context_func=lambda org_id: {
+                    "org_id": org_id,
+                    "org_name": org_names.get(org_id, "unknown"),
+                },
+            )
 
             # Count successful collections
-            for result in results:
+            for _, result in org_results:
                 if not isinstance(result, Exception):
                     api_calls_made += 1
 
@@ -202,25 +209,41 @@ class AlertsCollector(MetricCollector):
                     total_networks=len(all_networks),
                     networks_with_sensors=len(sensor_networks),
                 )
-                sensor_tasks = [
-                    self._collect_network_sensor_alerts(network) for network in sensor_networks
-                ]
-                sensor_results = await asyncio.gather(*sensor_tasks, return_exceptions=True)
+                sensor_results = await process_in_batches_with_errors(
+                    sensor_networks,
+                    self._collect_network_sensor_alerts,
+                    batch_size=self.settings.api.network_batch_size,
+                    delay_between_batches=self.settings.api.batch_delay,
+                    item_description="sensor alert network",
+                    error_context_func=lambda network: {
+                        "org_id": network.get("orgId"),
+                        "network_id": network.get("id"),
+                        "network_name": network.get("name"),
+                    },
+                )
 
                 # Count successful sensor alert collections
-                for result in sensor_results:
+                for _, result in sensor_results:
                     if not isinstance(result, Exception):
                         api_calls_made += 1
 
             # Collect network health alerts for all networks
             if all_networks:
-                health_alert_tasks = [
-                    self._collect_network_health_alerts(network) for network in all_networks
-                ]
-                health_results = await asyncio.gather(*health_alert_tasks, return_exceptions=True)
+                health_results = await process_in_batches_with_errors(
+                    all_networks,
+                    self._collect_network_health_alerts,
+                    batch_size=self.settings.api.network_batch_size,
+                    delay_between_batches=self.settings.api.batch_delay,
+                    item_description="health alert network",
+                    error_context_func=lambda network: {
+                        "org_id": network.get("orgId"),
+                        "network_id": network.get("id"),
+                        "network_name": network.get("name"),
+                    },
+                )
 
                 # Count successful network health alert collections
-                for result in health_results:
+                for _, result in health_results:
                     if not isinstance(result, Exception):
                         api_calls_made += 1
 
