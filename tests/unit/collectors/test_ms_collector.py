@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
-from prometheus_client import Gauge
+from prometheus_client import REGISTRY, Gauge
 
 from meraki_dashboard_exporter.collectors.devices.ms import MSCollector
 
@@ -37,7 +37,14 @@ class TestMSCollector:
         def create_gauge(name, description, labelnames):
             return Gauge(name.value, description, labelnames)
 
+        # Mock _set_metric to behave like the real MetricCollector helper (minus
+        # expiration tracking, which is exercised elsewhere) so gauge values set
+        # via parent._set_metric are actually observable in the registry.
+        def set_metric(metric, labels, value, metric_name=None):
+            metric.labels(**labels).set(value)
+
         parent._create_gauge = MagicMock(side_effect=create_gauge)
+        parent._set_metric = MagicMock(side_effect=set_metric)
         return parent
 
     @pytest.fixture
@@ -560,3 +567,156 @@ class TestMSCollector:
         mock_api.switch.getDeviceSwitchPortsStatusesPackets.assert_called_once_with(
             "Q111", timespan=300
         )
+
+    async def test_collect_emits_port_errors_and_warnings(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """Test that collect() surfaces active per-port errors/warnings.
+
+        A port with active errors/warnings must emit
+        meraki_ms_port_errors_total/meraki_ms_port_warnings_total with the raw
+        Meraki error/warning string as error_type/warning_type; a clean port
+        must emit no series at all for either metric.
+        """
+        device = {
+            "serial": "Q123-456-789",
+            "name": "Test Switch",
+            "model": "MS250-48",
+            "networkId": "net1",
+            "networkName": "Test Network",
+            "orgId": "org1",
+            "orgName": "Org One",
+        }
+
+        mock_api.switch.getDeviceSwitchPortsStatuses = MagicMock(
+            return_value=[
+                {
+                    "portId": "1",
+                    "name": "Port 1",
+                    "status": "Connected",
+                    "errors": ["PoE overload"],
+                    "warnings": ["Port flapping"],
+                },
+                {
+                    "portId": "2",
+                    "name": "Port 2",
+                    "status": "Connected",
+                    "errors": [],
+                    "warnings": [],
+                },
+            ]
+        )
+
+        await ms_collector.collect(device)
+
+        base_labels = {
+            "org_id": "org1",
+            "org_name": "Org One",
+            "network_id": "net1",
+            "network_name": "Test Network",
+            "serial": "Q123-456-789",
+            "name": "Test Switch",
+            "model": "MS250-48",
+            "device_type": "MS",
+        }
+
+        error_labels = {
+            **base_labels,
+            "port_id": "1",
+            "port_name": "Port 1",
+            "error_type": "PoE overload",
+        }
+        warning_labels = {
+            **base_labels,
+            "port_id": "1",
+            "port_name": "Port 1",
+            "warning_type": "Port flapping",
+        }
+
+        assert REGISTRY.get_sample_value("meraki_ms_port_errors_total", error_labels) == 1.0
+        assert REGISTRY.get_sample_value("meraki_ms_port_warnings_total", warning_labels) == 1.0
+
+        # The clean port must not have emitted any error/warning series.
+        clean_error_labels = {
+            **base_labels,
+            "port_id": "2",
+            "port_name": "Port 2",
+            "error_type": "PoE overload",
+        }
+        clean_warning_labels = {
+            **base_labels,
+            "port_id": "2",
+            "port_name": "Port 2",
+            "warning_type": "Port flapping",
+        }
+        assert REGISTRY.get_sample_value("meraki_ms_port_errors_total", clean_error_labels) is None
+        assert (
+            REGISTRY.get_sample_value("meraki_ms_port_warnings_total", clean_warning_labels) is None
+        )
+
+    async def test_collect_port_statuses_by_switch_emits_errors_and_warnings(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """Test that the org-level status collection also surfaces errors/warnings."""
+        devices = [
+            {
+                "serial": "Q2XX-XXXX-XXXX",
+                "networkId": "net1",
+                "networkName": "Test Network",
+                "name": "Test Switch",
+                "model": "MS250-48",
+            }
+        ]
+
+        mock_api.switch.getOrganizationSwitchPortsStatusesBySwitch = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-XXXX-XXXX",
+                    "name": "Test Switch",
+                    "model": "MS250-48",
+                    "network": {"id": "net1", "name": "Test Network"},
+                    "ports": [
+                        {
+                            "portId": "1",
+                            "name": "Port 1",
+                            "status": "Connected",
+                            "errors": ["Duplex mismatch"],
+                            "warnings": [],
+                        },
+                        {
+                            "portId": "2",
+                            "name": "Port 2",
+                            "status": "Connected",
+                            "errors": [],
+                            "warnings": [],
+                        },
+                    ],
+                }
+            ]
+        )
+
+        result = await ms_collector.collect_port_statuses_by_switch("org1", "Org One", devices)
+
+        assert result is True
+
+        labels = {
+            "org_id": "org1",
+            "org_name": "Org One",
+            "network_id": "net1",
+            "network_name": "Test Network",
+            "serial": "Q2XX-XXXX-XXXX",
+            "name": "Test Switch",
+            "model": "MS250-48",
+            "device_type": "MS",
+            "port_id": "1",
+            "port_name": "Port 1",
+            "error_type": "Duplex mismatch",
+        }
+        assert REGISTRY.get_sample_value("meraki_ms_port_errors_total", labels) == 1.0
+
+        clean_labels = {**labels, "port_id": "2", "port_name": "Port 2"}
+        assert REGISTRY.get_sample_value("meraki_ms_port_errors_total", clean_labels) is None

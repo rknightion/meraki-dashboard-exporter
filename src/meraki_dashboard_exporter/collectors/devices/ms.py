@@ -117,6 +117,42 @@ class MSCollector(BaseDeviceCollector):
             ],
         )
 
+        self._switch_port_errors = self.parent._create_gauge(
+            MSMetricName.MS_PORT_ERRORS_TOTAL,
+            "Active switch port errors (1 = currently active for this error_type)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+                LabelName.PORT_ID,
+                LabelName.PORT_NAME,
+                LabelName.ERROR_TYPE,
+            ],
+        )
+
+        self._switch_port_warnings = self.parent._create_gauge(
+            MSMetricName.MS_PORT_WARNINGS_TOTAL,
+            "Active switch port warnings (1 = currently active for this warning_type)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+                LabelName.PORT_ID,
+                LabelName.PORT_NAME,
+                LabelName.WARNING_TYPE,
+            ],
+        )
+
         # Switch power metrics
         self._switch_power = self.parent._create_gauge(
             MSMetricName.MS_POWER_USAGE_WATTS,
@@ -392,6 +428,57 @@ class MSCollector(BaseDeviceCollector):
     def _mark_packet_stats_collected(self, serial: str) -> None:
         self._last_packet_stats[serial] = time.time()
 
+    def _emit_port_error_warning_metrics(
+        self,
+        device: dict[str, Any],
+        port: dict[str, Any],
+        org_id: str,
+        org_name: str,
+    ) -> None:
+        """Emit gauges for a port's currently active errors/warnings.
+
+        Only strings present in the port's ``errors``/``warnings`` arrays *this*
+        collection cycle are emitted (value 1). Emission goes through
+        ``parent._set_metric`` (not ``.labels().set()``) so that an error/warning
+        which clears (i.e. stops appearing in the API response) expires
+        automatically via the metric expiration manager instead of leaving a
+        stale series behind. Ports with no errors/warnings emit nothing.
+
+        Parameters
+        ----------
+        device : dict[str, Any]
+            Device (or device-like) data used for label construction.
+        port : dict[str, Any]
+            Port status data from the API, potentially containing ``errors``
+            and ``warnings`` string arrays.
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        for error_type in port.get("errors") or []:
+            error_labels = create_port_labels(
+                device, port, org_id=org_id, org_name=org_name, error_type=error_type
+            )
+            self.parent._set_metric(
+                self._switch_port_errors,
+                error_labels,
+                1,
+                MSMetricName.MS_PORT_ERRORS_TOTAL.value,
+            )
+
+        for warning_type in port.get("warnings") or []:
+            warning_labels = create_port_labels(
+                device, port, org_id=org_id, org_name=org_name, warning_type=warning_type
+            )
+            self.parent._set_metric(
+                self._switch_port_warnings,
+                warning_labels,
+                1,
+                MSMetricName.MS_PORT_WARNINGS_TOTAL.value,
+            )
+
     @log_api_call("getOrganizationSwitchPortsStatusesBySwitch")
     @with_error_handling(
         operation="Collect MS switch port statuses (org)",
@@ -473,6 +560,8 @@ class MSCollector(BaseDeviceCollector):
                 is_connected = 1 if port.get("status") == "Connected" else 0
                 self._switch_port_status.labels(**port_labels).set(is_connected)
 
+                self._emit_port_error_warning_metrics(device_data, port, org_id, org_name)
+
         return True
 
     @trace_method("process.device")
@@ -524,6 +613,9 @@ class MSCollector(BaseDeviceCollector):
                 # Port status with speed and duplex
                 is_connected = 1 if port.get("status") == "Connected" else 0
                 self._switch_port_status.labels(**port_labels).set(is_connected)
+
+                # Active port errors/warnings (expire automatically once cleared)
+                self._emit_port_error_warning_metrics(device, port, org_id, org_name)
 
                 # Traffic counters (rate in bytes per second)
                 if "trafficInKbps" in port:
