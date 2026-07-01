@@ -74,6 +74,12 @@ typecheck: ## Run type checking with mypy
 	@echo "$(BLUE)Running type checker...$(NC)"
 	uv run mypy .
 
+.PHONY: ty
+ty: ## Advisory type check with astral ty (preview; NOT part of `make check`, mypy is the gate)
+	@echo "$(BLUE)Running astral ty (advisory/preview - diagnostics are informational)...$(NC)"
+	-uv run ty check src
+	@echo "$(YELLOW)ty is advisory only - mypy (make typecheck) remains the source of truth.$(NC)"
+
 .PHONY: test
 test: ## Run tests with pytest
 	@echo "$(BLUE)Running tests...$(NC)"
