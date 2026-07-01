@@ -2,7 +2,8 @@
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Frknightion%2Fmeraki-dashboard-exporter.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Frknightion%2Fmeraki-dashboard-exporter?ref=badge_shield)
 
 > [!WARNING]
-> **Limited testing.** I no longer have access to a Meraki network with anything other than MT (sensor) devices. Changes affecting other device types (MS, MR, MX, MG, MV) are best-effort — vibecoded from publicly available API documentation and SDK references rather than tested against live hardware.
+> I no longer have access to a Meraki network with anything other than MT, MR & MS devices. Changes affecting other device types (MX, MG, MV) are best-effort and driven from publicly available API documentation and SDK references rather than tested against live hardware.
+> If you are willing to work with myself to boost support for other device types or add coverage please reach out!
 
 A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry tracing support.
 
