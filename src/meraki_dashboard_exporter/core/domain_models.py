@@ -286,6 +286,9 @@ class SensorMeasurement(BaseModel):
         "co2",
         "noise",
         "pm25",
+        "no2",
+        "o3",
+        "pm10",
         "indoorAirQuality",
         "battery",
         "voltage",
@@ -321,6 +324,9 @@ class SensorMeasurement(BaseModel):
             "co2": "ppm",
             "noise": "dB",
             "pm25": "ug/m3",
+            "no2": "ppb",
+            "o3": "ppb",
+            "pm10": "ug/m3",
             "indoorAirQuality": "score",
             "battery": "percent",
             "voltage": "volts",
@@ -346,6 +352,26 @@ class MTSensorReading(BaseModel):
     networkId: str
     timestamp: datetime
     measurements: list[SensorMeasurement]
+
+    model_config = ConfigDict(extra="allow")
+
+
+# Appliance Security Models
+
+
+class ApplianceSecurityEvent(BaseModel):
+    """A single MX appliance security event (IDS/IPS or AMP).
+
+    The Meraki security-events endpoint returns loosely-typed rows
+    (the OpenAPI schema is ``additionalProperties: true``), so this model pins
+    only the fields we aggregate on and permits extras.
+    """
+
+    __meraki_op__ = "getOrganizationApplianceSecurityEvents"
+
+    ts: datetime | None = None
+    eventType: str | None = None
+    networkId: str | None = None
 
     model_config = ConfigDict(extra="allow")
 

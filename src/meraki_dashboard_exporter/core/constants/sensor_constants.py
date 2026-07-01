@@ -14,6 +14,9 @@ SensorMetricTypeStr = Literal[
     "co2",
     "tvoc",
     "pm25",
+    "no2",
+    "o3",
+    "pm10",
     "noise",
     "battery",
     "indoorAirQuality",
@@ -39,6 +42,9 @@ class SensorMetricType(StrEnum):
     CO2 = "co2"
     TVOC = "tvoc"
     PM25 = "pm25"
+    NO2 = "no2"
+    O3 = "o3"
+    PM10 = "pm10"
     NOISE = "noise"
     INDOOR_AIR_QUALITY = "indoorAirQuality"
 

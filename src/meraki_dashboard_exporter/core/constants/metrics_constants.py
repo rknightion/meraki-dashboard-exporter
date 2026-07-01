@@ -114,6 +114,10 @@ class MSMetricName(StrEnum):
     MS_PORT_USAGE_BYTES = "meraki_ms_port_usage_bytes"
     MS_PORT_CLIENT_COUNT = "meraki_ms_port_client_count"
 
+    # Port error/warning metrics (from the errors/warnings arrays in port status)
+    MS_PORT_ERRORS_TOTAL = "meraki_ms_port_errors_total"
+    MS_PORT_WARNINGS_TOTAL = "meraki_ms_port_warnings_total"
+
     # Packet metrics (with 5-minute window)
     MS_PORT_PACKETS_TOTAL = "meraki_ms_port_packets_total"
     MS_PORT_PACKETS_BROADCAST = "meraki_ms_port_packets_broadcast"
@@ -142,7 +146,6 @@ class MRMetricName(StrEnum):
 
     # Basic metrics
     MR_CLIENTS_CONNECTED = "meraki_mr_clients_connected"
-    MR_SIGNAL_QUALITY = "meraki_mr_signal_quality"
     MR_CONNECTION_STATS = "meraki_mr_connection_stats_total"
 
     # Power and port metrics
@@ -152,17 +155,10 @@ class MRMetricName(StrEnum):
     MR_PORT_POE_INFO = "meraki_mr_port_poe_info"
     MR_PORT_LINK_NEGOTIATION_INFO = "meraki_mr_port_link_negotiation_info"
     MR_PORT_LINK_NEGOTIATION_SPEED_MBPS = "meraki_mr_port_link_negotiation_speed_mbps"
-    MR_CABLE_LENGTH_METERS = "meraki_mr_cable_length_meters"
 
     # Aggregation metrics
     MR_AGGREGATION_SPEED_MBPS = "meraki_mr_aggregation_speed_mbps"
-    MR_AGGREGATION_FULL_DUPLEX = "meraki_mr_aggregation_full_duplex"
     MR_AGGREGATION_ENABLED = "meraki_mr_aggregation_enabled"
-
-    # Uplink and signal metrics
-    MR_UPLINK_INFO = "meraki_mr_uplink_info"
-    MR_SIGNAL_QUALITY_PERCENT = "meraki_mr_signal_quality_percent"
-    MR_SIGNAL_NOISE_RATIO_DB = "meraki_mr_signal_noise_ratio_db"
 
     # Packet loss metrics - Device level
     MR_PACKETS_DOWNSTREAM_TOTAL = "meraki_mr_packets_downstream_total"
@@ -187,7 +183,6 @@ class MRMetricName(StrEnum):
     MR_NETWORK_PACKET_LOSS_TOTAL_PERCENT = "meraki_mr_network_packet_loss_total_percent"
 
     # Other metrics
-    MR_NETWORK_TRAFFIC_KBPS = "meraki_mr_network_traffic_kbps"
     MR_CPU_LOAD_5MIN = "meraki_mr_cpu_load_5min"
     MR_RADIO_BROADCASTING = "meraki_mr_radio_broadcasting"
     MR_RADIO_CHANNEL = "meraki_mr_radio_channel"
@@ -223,7 +218,6 @@ class MXMetricName(StrEnum):
 class MVMetricName(StrEnum):
     """MV (Camera) specific metric names."""
 
-    MV_RECORDING_STATUS = "meraki_mv_recording_status"
     MV_ANALYTICS_ZONES = "meraki_mv_analytics_zones"
     MV_PEOPLE_COUNT = "meraki_mv_people_count"
 
@@ -239,6 +233,9 @@ class MTMetricName(StrEnum):
     MT_CO2_PPM = "meraki_mt_co2_ppm"
     MT_TVOC_PPB = "meraki_mt_tvoc_ppb"
     MT_PM25_UG_M3 = "meraki_mt_pm25_ug_m3"
+    MT_NO2_PPB = "meraki_mt_no2_ppb"
+    MT_O3_PPB = "meraki_mt_o3_ppb"
+    MT_PM10_UG_M3 = "meraki_mt_pm10_ug_m3"
     MT_NOISE_DB = "meraki_mt_noise_db"
     MT_INDOOR_AIR_QUALITY_SCORE = "meraki_mt_indoor_air_quality_score"
 

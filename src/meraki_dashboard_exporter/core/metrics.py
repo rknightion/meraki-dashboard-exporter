@@ -53,6 +53,7 @@ class LabelName(StrEnum):
     CATEGORY = "category"
     CATEGORY_TYPE = "category_type"
     ERROR_TYPE = "error_type"
+    WARNING_TYPE = "warning_type"
 
     # License labels
     LICENSE_TYPE = "license_type"
