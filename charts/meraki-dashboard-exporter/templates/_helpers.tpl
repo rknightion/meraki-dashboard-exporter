@@ -80,6 +80,6 @@ Return the key within the Secret that holds the API key value.
 {{- if .Values.meraki.existingSecret }}
 {{- .Values.meraki.existingSecretKey }}
 {{- else }}
-{{- "api-key" }}
+{{- "MERAKI_EXPORTER_MERAKI__API_KEY" }}
 {{- end }}
 {{- end }}
