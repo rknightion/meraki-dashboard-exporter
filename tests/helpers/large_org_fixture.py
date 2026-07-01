@@ -276,7 +276,7 @@ class LargeOrgFixture:
 
     @property
     def all_networks(self) -> list[dict[str, Any]]:
-        """Get all networks across all organizations."""
+        """All networks across all organizations."""
         networks = []
         for net_list in self.networks_by_org.values():
             networks.extend(net_list)
@@ -284,7 +284,7 @@ class LargeOrgFixture:
 
     @property
     def all_devices(self) -> list[dict[str, Any]]:
-        """Get all devices across all organizations."""
+        """All devices across all organizations."""
         devices = []
         for dev_list in self.devices_by_org.values():
             devices.extend(dev_list)

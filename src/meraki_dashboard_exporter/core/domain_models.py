@@ -170,7 +170,7 @@ class STPConfiguration(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def switch_priorities(self) -> dict[str, int]:
-        """Get a mapping of switch serial to STP priority."""
+        """Mapping of switch serial to STP priority."""
         result = {}
         for priority_group in self.stpBridgePriority:
             priority = priority_group.get("stpPriority", 32768)  # Default STP priority

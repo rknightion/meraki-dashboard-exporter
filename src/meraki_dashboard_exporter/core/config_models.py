@@ -346,7 +346,7 @@ class CollectorSettings(BaseModel):
 
     @property
     def active_collectors(self) -> set[str]:
-        """Get the final set of active collectors."""
+        """The final set of active collectors."""
         return self.enabled_collectors - self.disable_collectors
 
 

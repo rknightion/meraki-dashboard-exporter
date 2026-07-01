@@ -50,7 +50,7 @@ class DeviceCollector(MetricCollector):
 
     @property
     def api(self) -> DashboardAPI:
-        """Return the current API client."""
+        """The current API client."""
         return self._api
 
     @api.setter

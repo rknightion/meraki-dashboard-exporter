@@ -42,6 +42,14 @@ def register_collector(tier: UpdateTier | None = None) -> Callable[[T], T]:
     callable
         Decorator function that registers the collector.
 
+    Notes
+    -----
+    - Registration happens at import time when the module is loaded
+    - The CollectorManager discovers collectors by importing all modules
+    - Collectors are instantiated only when the manager starts
+    - Each collector can only be registered once per tier
+    - Sub-collectors should NOT use this decorator
+
     Examples
     --------
     Basic usage with explicit tier:
@@ -74,14 +82,6 @@ def register_collector(tier: UpdateTier | None = None) -> Callable[[T], T]:
     ...     async def _collect_impl(self) -> None:
     ...         changes = await self._fetch_config_changes()
     ...         self._config_changes.inc(len(changes))
-
-    Notes
-    -----
-    - Registration happens at import time when the module is loaded
-    - The CollectorManager discovers collectors by importing all modules
-    - Collectors are instantiated only when the manager starts
-    - Each collector can only be registered once per tier
-    - Sub-collectors should NOT use this decorator
 
     How it Works
     ------------

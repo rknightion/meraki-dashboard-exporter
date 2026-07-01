@@ -378,7 +378,7 @@ class DNSResolver:
 
     @property
     def cache_size(self) -> int:
-        """Get current cache size."""
+        """Current cache size."""
         return len(self._cache)
 
     def get_cache_stats(self) -> dict[str, int]:

@@ -35,6 +35,13 @@ class ManagedTaskGroup:
     - vs asyncio.TaskGroup (3.11+): Works on older Python versions
     - vs manual tracking: Automatic cleanup prevents orphaned tasks
 
+    Notes
+    -----
+    - Tasks are cancelled on exception but not on normal exit
+    - Task exceptions are propagated after all tasks complete
+    - Memory usage scales with number of concurrent tasks
+    - Use for I/O-bound operations, not CPU-bound work
+
     Examples
     --------
     Basic parallel API calls:
@@ -83,13 +90,6 @@ class ManagedTaskGroup:
     - CPU-bound operations (use ProcessPoolExecutor)
     - Fire-and-forget tasks (use asyncio.create_task)
     - When you need return values (use gather or as_completed)
-
-    Notes
-    -----
-    - Tasks are cancelled on exception but not on normal exit
-    - Task exceptions are propagated after all tasks complete
-    - Memory usage scales with number of concurrent tasks
-    - Use for I/O-bound operations, not CPU-bound work
 
     """
 
@@ -369,7 +369,7 @@ class ManagedTaskGroup:
         return tasks
 
 
-async def with_timeout(
+async def with_timeout[T](
     coro: Coroutine[Any, Any, T],
     timeout: float,
     operation: str = "operation",
@@ -408,7 +408,7 @@ async def with_timeout(
 
 
 @asynccontextmanager
-async def managed_resource(
+async def managed_resource[T](
     resource_factory: Callable[[], Coroutine[Any, Any, T]],
     cleanup_func: Callable[[T], Coroutine[Any, Any, None]] | None = None,
     resource_name: str = "resource",

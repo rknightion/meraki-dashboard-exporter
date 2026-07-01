@@ -36,7 +36,7 @@ class MerakiAPIConfig:
 
     @property
     def base_url(self) -> str:
-        """Get the default base URL."""
+        """The default base URL."""
         return self.regional_urls.default
 
 

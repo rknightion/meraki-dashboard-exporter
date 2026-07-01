@@ -13,7 +13,10 @@ def conformance_models() -> list[type]:
     """
     from pydantic import BaseModel
 
-    from meraki_dashboard_exporter.core import api_models, domain_models
+    # Explicit submodule imports: mypy rejects `from ...core import api_models`
+    # (attr-defined) because the submodules aren't re-exported from core/__init__.
+    import meraki_dashboard_exporter.core.api_models as api_models  # noqa: PLR0402
+    import meraki_dashboard_exporter.core.domain_models as domain_models  # noqa: PLR0402
 
     models: list[type] = []
     for module in (api_models, domain_models):

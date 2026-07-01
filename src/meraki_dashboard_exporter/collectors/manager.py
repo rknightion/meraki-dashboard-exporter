@@ -381,7 +381,7 @@ class CollectorManager:
 
     @property
     def is_ready(self) -> bool:
-        """Return True when FAST and MEDIUM tiers have completed their first collection.
+        """Whether the FAST and MEDIUM tiers have completed their first collection.
 
         SLOW tier is excluded since it may take up to 900s and Kubernetes readiness
         probes should not block that long.

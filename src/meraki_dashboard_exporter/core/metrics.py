@@ -140,7 +140,7 @@ class MetricDefinition:
 
     @property
     def full_name(self) -> str:
-        """Get the full metric name with unit suffix if applicable."""
+        """The full metric name with unit suffix if applicable."""
         if self.unit and not self.name.endswith(f"_{self.unit}"):
             return f"{self.name}_{self.unit}"
         return self.name

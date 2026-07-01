@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Callable, Coroutine
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 from .logging import get_logger
 
@@ -18,11 +18,8 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-T = TypeVar("T")
-R = TypeVar("R")
 
-
-async def process_in_batches_with_errors(
+async def process_in_batches_with_errors[T, R](
     items: list[T],
     process_func: Callable[[T], Coroutine[Any, Any, R]],
     batch_size: int = 10,
@@ -127,7 +124,7 @@ async def process_in_batches_with_errors(
     return results
 
 
-async def process_grouped_items(
+async def process_grouped_items[T, R](
     items_by_group: dict[str, list[T]],
     process_func: Callable[[T], Coroutine[Any, Any, R]],
     batch_size: int = 10,

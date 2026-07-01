@@ -91,6 +91,8 @@ lint.ignore = [
   "PLR2004", # magic value used in comparison
   "PLR6301", # method could be function/class method/static method
   "PLW0603", # using global statement
+  "PLW0717", # too-many-statements-in-try-clause - conflicts with our deliberate
+             # try:<fetch+validate+transform+cache> except:<categorize> API idiom
   "W293",    # blank line contains whitespace
 ]
 lint.per-file-ignores."scripts/*.py" = [ "C414", "PLR0916", "PLR6201", "PLW1514", "PTH123" ]

@@ -188,7 +188,7 @@ class AsyncMerakiClient:
 
     @property
     def api(self) -> meraki.DashboardAPI:
-        """Get the API client instance (synchronous property for compatibility).
+        """The API client instance (synchronous property for compatibility).
 
         Returns
         -------
