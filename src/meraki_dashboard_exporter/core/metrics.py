@@ -142,6 +142,16 @@ class LabelName(StrEnum):
     SLOT = "slot"  # PSU/power-module slot number
     PSU_SERIAL = "psu_serial"  # Power supply's own serial (distinct from device serial)
 
+    # Wireless latency labels
+    TRAFFIC_CLASS = "traffic_class"  # background/best_effort/video/voice traffic class
+
+    # Admin / security-posture labels
+    AUTHENTICATION_METHOD = "authentication_method"  # Admin auth method (Email/Cisco SecureX Sign-On)
+    ACCOUNT_STATUS = "account_status"  # Admin account status (ok/locked/pending/unverified)
+
+    # Sensor-gateway connectivity labels
+    GATEWAY_SERIAL = "gateway_serial"  # MT sensor's paired gateway serial
+
 
 MetricType = Literal["gauge", "counter", "histogram", "info"]
 

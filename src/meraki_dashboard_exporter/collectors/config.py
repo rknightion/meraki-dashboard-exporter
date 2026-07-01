@@ -114,6 +114,24 @@ class ConfigCollector(MetricCollector):
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
+        # Admin accounts & 2FA/SSO posture (aggregated, no per-admin PII)
+        self._org_admins_total = self._create_gauge(
+            OrgMetricName.ORG_ADMINS_TOTAL,
+            "Number of org dashboard admins by authentication method and account status",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.AUTHENTICATION_METHOD,
+                LabelName.ACCOUNT_STATUS,
+            ],
+        )
+
+        self._org_admins_two_factor_enabled_total = self._create_gauge(
+            OrgMetricName.ORG_ADMINS_TWO_FACTOR_ENABLED_TOTAL,
+            "Number of org dashboard admins with two-factor auth enabled",
+            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+        )
+
     async def _get_organizations(self) -> list[dict[str, Any]]:
         """Get organizations from inventory cache or direct API.
 
@@ -153,8 +171,8 @@ class ConfigCollector(MetricCollector):
             # Count successful collections
             for result in results:
                 if not isinstance(result, Exception):
-                    # Each org makes 2 API calls (login security + config changes)
-                    api_calls_made += 2
+                    # Each org makes 3 API calls (login security + admins + config changes)
+                    api_calls_made += 3
 
             # Log collection summary
             duration = time.time() - start_time
@@ -218,6 +236,9 @@ class ConfigCollector(MetricCollector):
         try:
             logger.debug("Collecting login security configuration", org_id=org_id)
             await self._collect_login_security(org_id, org_name)
+
+            logger.debug("Collecting admin accounts", org_id=org_id)
+            await self._collect_admins(org_id, org_name)
 
             logger.debug("Collecting configuration changes", org_id=org_id)
             await self._collect_configuration_changes(org_id, org_name)
@@ -323,6 +344,74 @@ class ConfigCollector(MetricCollector):
         except Exception:
             logger.exception(
                 "Failed to collect login security metrics",
+                org_id=org_id,
+                org_name=org_name,
+            )
+
+    # Known values as of the M3 roadmap spec; any unrecognized value observed on an
+    # admin record is still counted (the pre-zero pass just won't have covered it).
+    _KNOWN_AUTHENTICATION_METHODS: tuple[str, ...] = ("Email", "Cisco SecureX Sign-On")
+    _KNOWN_ACCOUNT_STATUSES: tuple[str, ...] = ("ok", "locked", "pending", "unverified")
+
+    @log_api_call("getOrganizationAdmins")
+    async def _collect_admins(self, org_id: str, org_name: str) -> None:
+        """Collect admin account & 2FA/SSO posture metrics.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        try:
+            with LogContext(org_id=org_id, org_name=org_name):
+                admins = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationAdmins,
+                    org_id,
+                )
+                admins = validate_response_format(
+                    admins, expected_type=list, operation="getOrganizationAdmins"
+                )
+
+            # Pre-zero the full bounded cross product so a combo that drops to zero
+            # this cycle is reported as 0 rather than left stale or missing.
+            for auth_method in self._KNOWN_AUTHENTICATION_METHODS:
+                for account_status in self._KNOWN_ACCOUNT_STATUSES:
+                    self._org_admins_total.labels(
+                        org_id, org_name, auth_method, account_status
+                    ).set(0)
+
+            counts: dict[tuple[str, str], int] = {}
+            two_factor_count = 0
+
+            for admin in admins:
+                auth_method = admin.get("authenticationMethod", "")
+                account_status = admin.get("accountStatus", "")
+                key = (auth_method, account_status)
+                counts[key] = counts.get(key, 0) + 1
+
+                if admin.get("twoFactorAuthEnabled", False):
+                    two_factor_count += 1
+
+            for (auth_method, account_status), count in counts.items():
+                self._org_admins_total.labels(org_id, org_name, auth_method, account_status).set(
+                    count
+                )
+
+            self._org_admins_two_factor_enabled_total.labels(org_id, org_name).set(two_factor_count)
+
+            logger.debug(
+                "Successfully collected admin account metrics",
+                org_id=org_id,
+                admin_count=len(admins),
+                two_factor_count=two_factor_count,
+            )
+
+        except Exception:
+            logger.exception(
+                "Failed to collect admin account metrics",
                 org_id=org_id,
                 org_name=org_name,
             )

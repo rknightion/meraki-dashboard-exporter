@@ -374,6 +374,109 @@ class TestMXCollector:
 
         mock_parent._set_metric.assert_not_called()
 
+    def test_mx_performance_score_metric_created(
+        self,
+        mx_collector: MXCollector,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Test that the MX performance score gauge metric is created on init."""
+        assert mx_collector._mx_performance_score is not None
+
+    async def test_collect_performance_score_basic(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Test that a device's performance score is emitted."""
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={"perfScore": 87})
+
+        device = {
+            "serial": "Q2AB-1234-5678",
+            "name": "Office MX",
+            "model": "MX68",
+            "networkId": "N_111",
+            "networkName": "Office Network",
+            "orgId": "org1",
+            "orgName": "Test Org",
+        }
+
+        await mx_collector.collect(device)
+
+        assert mock_parent._set_metric.call_count == 1
+        gauge, labels, value, metric_name = mock_parent._set_metric.call_args_list[0][0]
+        assert gauge is mx_collector._mx_performance_score
+        assert labels["serial"] == "Q2AB-1234-5678"
+        assert labels["org_id"] == "org1"
+        assert labels["org_name"] == "Test Org"
+        assert labels["network_id"] == "N_111"
+        assert value == 87.0
+        assert metric_name == "meraki_mx_performance_score"
+
+    async def test_collect_performance_score_missing_perf_score_skips_emission(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Test that a missing perfScore field results in no metric emission."""
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={})
+
+        device = {
+            "serial": "Q2AB-1234-5678",
+            "name": "Office MX",
+            "model": "MX68",
+            "networkId": "N_111",
+            "networkName": "Office Network",
+            "orgId": "org1",
+            "orgName": "Test Org",
+        }
+
+        await mx_collector.collect(device)
+
+        mock_parent._set_metric.assert_not_called()
+
+    async def test_collect_performance_score_org_name_falls_back_to_org_id(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Test that org_name falls back to org_id when not present on the device."""
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={"perfScore": 50})
+
+        device = {
+            "serial": "Q2AB-1234-5678",
+            "name": "Office MX",
+            "model": "MX68",
+            "networkId": "N_111",
+            "networkName": "Office Network",
+            "orgId": "org1",
+        }
+
+        await mx_collector.collect(device)
+
+        _, labels, _, _ = mock_parent._set_metric.call_args_list[0][0]
+        assert labels["org_name"] == "org1"
+
+    async def test_collect_performance_score_api_error_handled_gracefully(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Test that API errors are handled gracefully by the error decorator."""
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(
+            side_effect=Exception("API connection failed")
+        )
+
+        device = {"serial": "Q2AB-1234-5678", "orgId": "org1"}
+
+        # Should not raise - @with_error_handling(continue_on_error=True) catches it
+        await mx_collector.collect(device)
+
+        mock_parent._set_metric.assert_not_called()
+
     async def test_collect_uplink_statuses_respects_network_filter(
         self,
         mx_collector: MXCollector,

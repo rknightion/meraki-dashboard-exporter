@@ -24,7 +24,13 @@ from ..core.metrics import LabelName
 from ..core.org_health import OrgHealthTracker
 from ..core.otel_tracing import trace_method
 from ..core.registry import register_collector
-from .organization_collectors import APIUsageCollector, ClientOverviewCollector, LicenseCollector
+from .organization_collectors import (
+    APIUsageCollector,
+    ClientOverviewCollector,
+    DeviceAvailabilityHistoryCollector,
+    FirmwareCollector,
+    LicenseCollector,
+)
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -64,6 +70,8 @@ class OrganizationCollector(MetricCollector):
         self.api_usage_collector = APIUsageCollector(self)
         self.license_collector = LicenseCollector(self)
         self.client_overview_collector = ClientOverviewCollector(self)
+        self.firmware_collector = FirmwareCollector(self)
+        self.device_availability_history_collector = DeviceAvailabilityHistoryCollector(self)
 
     def _initialize_metrics(self) -> None:
         """Initialize organization metrics."""
@@ -122,6 +130,40 @@ class OrganizationCollector(MetricCollector):
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
                 LabelName.STATUS,
+                LabelName.PRODUCT_TYPE,
+            ],
+        )
+
+        # Device availability change history (windowed transition counts per poll)
+        self._org_devices_availability_changes_total = self._create_gauge(
+            OrgMetricName.ORG_DEVICES_AVAILABILITY_CHANGES_TOTAL,
+            "Number of device availability transitions in the last collection window "
+            "by product type and new status",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.PRODUCT_TYPE,
+                LabelName.STATUS,
+            ],
+        )
+
+        # Firmware upgrade tracking
+        self._org_firmware_upgrades_total = self._create_gauge(
+            OrgMetricName.ORG_FIRMWARE_UPGRADES_TOTAL,
+            "Number of firmware upgrade events by product type and status",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.PRODUCT_TYPE,
+                LabelName.STATUS,
+            ],
+        )
+        self._org_firmware_upgrades_pending_total = self._create_gauge(
+            OrgMetricName.ORG_FIRMWARE_UPGRADES_PENDING_TOTAL,
+            "Number of pending/in-flight firmware upgrade events by product type",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
                 LabelName.PRODUCT_TYPE,
             ],
         )
@@ -334,6 +376,8 @@ class OrganizationCollector(MetricCollector):
                 await self._collect_device_metrics(org_id, org_name)
                 await self._collect_device_counts_by_model(org_id, org_name)
                 await self._collect_device_availability_metrics(org_id, org_name)
+                await self._collect_device_availability_changes_metrics(org_id, org_name)
+                await self._collect_firmware_metrics(org_id, org_name)
                 await self._collect_license_metrics(org_id, org_name)
                 await self._collect_client_overview(org_id, org_name)
                 await self._collect_packet_capture_metrics(org_id, org_name)
@@ -370,6 +414,44 @@ class OrganizationCollector(MetricCollector):
 
         """
         await self.api_usage_collector.collect(org_id, org_name)
+
+    @with_error_handling(
+        operation="Collect firmware upgrade metrics",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _collect_firmware_metrics(self, org_id: str, org_name: str) -> None:
+        """Collect firmware upgrade status metrics.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        await self.firmware_collector.collect(org_id, org_name)
+
+    @with_error_handling(
+        operation="Collect device availability change history metrics",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _collect_device_availability_changes_metrics(
+        self, org_id: str, org_name: str
+    ) -> None:
+        """Collect device availability change-history (flap) metrics.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        await self.device_availability_history_collector.collect(org_id, org_name)
 
     @with_error_handling(
         operation="Collect network metrics",

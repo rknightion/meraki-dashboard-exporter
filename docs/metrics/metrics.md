@@ -5,13 +5,22 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 230
-- **Gauges:** 206
+- **Total metrics:** 253
+- **Gauges:** 229
 - **Counters:** 18
 - **Histograms:** 5
 - **Info metrics:** 1
 
 ## Collector Metrics
+
+### AirMarshalCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_mr_air_marshal_bssids_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Total number of BSSIDs across all Air Marshal SSID entries |  |
+| `meraki_mr_air_marshal_contained_bssids_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Number of Air Marshal BSSIDs currently contained |  |
+| `meraki_mr_air_marshal_rogue_ssids_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Number of rogue/spoofed SSID entries detected by Air Marshal |  |
+| `meraki_mr_air_marshal_wired_detected_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Number of Air Marshal SSID entries also detected on the wired network |  |
 
 ### AlertsCollector
 
@@ -53,6 +62,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
+| `meraki_org_admins_total` | gauge | `org_id`, `org_name`, `authentication_method`, `account_status` | Number of org dashboard admins by authentication method and account status |  |
+| `meraki_org_admins_two_factor_enabled_total` | gauge | `org_id`, `org_name` | Number of org dashboard admins with two-factor auth enabled |  |
 | `meraki_org_configuration_changes_total` | gauge | `org_id`, `org_name` | Total number of configuration changes in the last 24 hours |  |
 | `meraki_org_login_security_account_lockout_attempts` | gauge | `org_id`, `org_name` | Number of failed login attempts before lockout (0 if not set) |  |
 | `meraki_org_login_security_account_lockout_enabled` | gauge | `org_id`, `org_name` | Whether account lockout is enforced (1=enabled, 0=disabled) |  |
@@ -78,6 +89,13 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_device_memory_used_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `stat` | Device memory used in bytes |  |
 | `meraki_device_status_info` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `status` | Device status information |  |
 | `meraki_device_up` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Device online status (1 = online, 0 = offline) |  |
+
+### LatencyStatsCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_mr_device_latency_ms` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `traffic_class` | MR access point average wireless latency in milliseconds by traffic class |  |
+| `meraki_mr_network_client_latency_ms` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `traffic_class` | Network-wide average wireless client latency in milliseconds by traffic class |  |
 
 ### MGCollector
 
@@ -192,6 +210,12 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_ms_stack_member_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `stack_id`, `serial`, `role` | Switch stack member status (1=present/online, 0=absent/offline) |  |
 | `meraki_ms_stack_members_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `stack_id` | Total number of members in switch stack |  |
 
+### MTSensorAlertsCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_mt_alerting_sensors_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `metric` | Count of currently-alerting MT sensors per network per metric |  |
+
 ### MTSensorCollector
 
 | Metric | Type | Labels | Description | Notes |
@@ -203,6 +227,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mt_door_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Door sensor status (1 = open, 0 = closed) |  |
 | `meraki_mt_downstream_power_enabled` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Downstream power status (1 = enabled, 0 = disabled) |  |
 | `meraki_mt_frequency_hz` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Frequency in hertz |  |
+| `meraki_mt_gateway_last_connected_timestamp_seconds` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `sensor_serial`, `sensor_name`, `gateway_serial` | MT sensor-to-gateway last-connected Unix timestamp (seconds) |  |
+| `meraki_mt_gateway_rssi` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `sensor_serial`, `sensor_name`, `gateway_serial` | MT sensor-to-gateway RSSI (dBm) |  |
 | `meraki_mt_humidity_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Humidity percentage |  |
 | `meraki_mt_indoor_air_quality_score` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Indoor air quality score (0-100) |  |
 | `meraki_mt_no2_ppb` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | NO2 (nitrogen dioxide) concentration in parts per billion |  |
@@ -233,6 +259,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
+| `meraki_mx_performance_score` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | MX appliance performance score (0-100) |  |
 | `meraki_mx_uplink_info` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `interface`, `status` | MX appliance uplink status info (1 = present) |  |
 
 ### MXFirewallCollector
@@ -243,12 +270,27 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mx_firewall_rules_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `rule_type` | Total number of user-defined firewall rules by type (excludes default rule) |  |
 | `meraki_mx_security_events_total` | gauge | `org_id`, `org_name`, `event_type` | Total security events by type |  |
 
+### MXHACollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_mx_ha_enabled` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Whether MX warm spare high availability is enabled for a network (1 = enabled) |  |
+| `meraki_mx_ha_mode` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `mode` | MX warm spare high availability mode info (1 = present) |  |
+| `meraki_mx_ha_role` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial` | MX warm spare designation priority for a device |  |
+
 ### MXUplinkHealthCollector
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
 | `meraki_mx_uplink_latency_ms` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `interface` | MX per-uplink WAN latency in milliseconds (latest sample) |  |
 | `meraki_mx_uplink_loss_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `interface` | MX per-uplink WAN loss percent (latest sample) |  |
+
+### MXUplinkUsageCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_mx_uplink_recv_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `interface` | MX per-uplink WAN bytes received (last 5 minutes) |  |
+| `meraki_mx_uplink_sent_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `interface` | MX per-uplink WAN bytes sent (last 5 minutes) |  |
 
 ### MXVpnCollector
 
@@ -259,6 +301,9 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mx_vpn_packet_loss_ratio` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id`, `peer_type` | VPN peer packet loss ratio (0.0–1.0) |  |
 | `meraki_mx_vpn_peer_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id`, `peer_type` | VPN peer reachability status (1=reachable, 0=unreachable) |  |
 | `meraki_mx_vpn_peers_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Total number of VPN peers configured for a network |  |
+| `meraki_mx_vpn_stats_avg_latency_ms` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id` | Average VPN latency in milliseconds to a peer network, averaged across all sender/receiver uplink combinations |  |
+| `meraki_mx_vpn_usage_recv_kb` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id` | VPN usage received in kilobytes over the collection window, per peer network |  |
+| `meraki_mx_vpn_usage_sent_kb` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id` | VPN usage sent in kilobytes over the collection window, per peer network |  |
 
 ### NetworkHealthCollector
 
@@ -287,9 +332,12 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_org_application_usage_total_mb` | gauge | `org_id`, `org_name`, `category` | Total application usage in MB by category |  |
 | `meraki_org_application_usage_upstream_mb` | gauge | `org_id`, `org_name`, `category` | Upstream application usage in MB by category |  |
 | `meraki_org_clients_total` | gauge | `org_id`, `org_name` | Total number of active clients in the organization (1-hour window) |  |
+| `meraki_org_devices_availability_changes_total` | gauge | `org_id`, `org_name`, `product_type`, `status` | Number of device availability transitions in the last collection window by product type and new status |  |
 | `meraki_org_devices_availability_total` | gauge | `org_id`, `org_name`, `status`, `product_type` | Total number of devices by availability status and product type |  |
 | `meraki_org_devices_by_model_total` | gauge | `org_id`, `org_name`, `model` | Total number of devices by specific model |  |
 | `meraki_org_devices_total` | gauge | `org_id`, `org_name`, `device_type` | Total number of devices in the organization |  |
+| `meraki_org_firmware_upgrades_pending_total` | gauge | `org_id`, `org_name`, `product_type` | Number of pending/in-flight firmware upgrade events by product type |  |
+| `meraki_org_firmware_upgrades_total` | gauge | `org_id`, `org_name`, `product_type`, `status` | Number of firmware upgrade events by product type and status |  |
 | `meraki_org_licenses_expiring` | gauge | `org_id`, `org_name`, `license_type` | Number of licenses expiring within 30 days |  |
 | `meraki_org_licenses_total` | gauge | `org_id`, `org_name`, `license_type`, `status` | Total number of licenses |  |
 | `meraki_org_networks_total` | gauge | `org_id`, `org_name` | Total number of networks in the organization |  |

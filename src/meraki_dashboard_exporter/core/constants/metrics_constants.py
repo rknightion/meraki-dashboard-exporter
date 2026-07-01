@@ -69,6 +69,17 @@ class OrgMetricName(StrEnum):
     )
     ORG_LOGIN_SECURITY_MINIMUM_PASSWORD_LENGTH = "meraki_org_login_security_minimum_password_length"
 
+    # Admin accounts & 2FA/SSO posture (getOrganizationAdmins; aggregated, no per-admin PII)
+    ORG_ADMINS_TOTAL = "meraki_org_admins_total"
+    ORG_ADMINS_TWO_FACTOR_ENABLED_TOTAL = "meraki_org_admins_two_factor_enabled_total"
+
+    # Firmware upgrade status & staged rollout tracking (getOrganizationFirmwareUpgrades)
+    ORG_FIRMWARE_UPGRADES_TOTAL = "meraki_org_firmware_upgrades_total"
+    ORG_FIRMWARE_UPGRADES_PENDING_TOTAL = "meraki_org_firmware_upgrades_pending_total"
+
+    # Device availability change history (getOrganizationDevicesAvailabilitiesChangeHistory)
+    ORG_DEVICES_AVAILABILITY_CHANGES_TOTAL = "meraki_org_devices_availability_changes_total"
+
 
 class NetworkMetricName(StrEnum):
     """Network-level metric names."""
@@ -226,6 +237,23 @@ class MXMetricName(StrEnum):
     MX_FIREWALL_DEFAULT_POLICY = "meraki_mx_firewall_default_policy"
     MX_SECURITY_EVENTS_TOTAL = "meraki_mx_security_events_total"
 
+    # Per-uplink WAN bandwidth usage (org-wide uplinks usage byNetwork endpoint; windowed totals)
+    MX_UPLINK_SENT_BYTES = "meraki_mx_uplink_sent_bytes"
+    MX_UPLINK_RECV_BYTES = "meraki_mx_uplink_recv_bytes"
+
+    # Appliance performance score (per-device getDeviceAppliancePerformance; 0-100)
+    MX_PERFORMANCE_SCORE = "meraki_mx_performance_score"
+
+    # HA / warm-spare redundancy (org-wide devices redundancy byNetwork endpoint)
+    MX_HA_ENABLED = "meraki_mx_ha_enabled"
+    MX_HA_MODE = "meraki_mx_ha_mode"
+    MX_HA_ROLE = "meraki_mx_ha_role"
+
+    # VPN history stats (org-wide vpn/stats endpoint; complements point-in-time vpn statuses)
+    MX_VPN_USAGE_SENT_KB = "meraki_mx_vpn_usage_sent_kb"
+    MX_VPN_USAGE_RECV_KB = "meraki_mx_vpn_usage_recv_kb"
+    MX_VPN_STATS_AVG_LATENCY_MS = "meraki_mx_vpn_stats_avg_latency_ms"
+
 
 class MGMetricName(StrEnum):
     """MG (Cellular Gateway) specific metric names."""
@@ -278,6 +306,13 @@ class MTMetricName(StrEnum):
     MT_DOWNSTREAM_POWER_ENABLED = "meraki_mt_downstream_power_enabled"
     MT_REMOTE_LOCKOUT_STATUS = "meraki_mt_remote_lockout_status"
 
+    # Network-wide currently-alerting sensors (getNetworkSensorAlertsCurrentOverviewByMetric)
+    MT_ALERTING_SENSORS_COUNT = "meraki_mt_alerting_sensors_count"
+
+    # Sensor-to-gateway connectivity (getOrganizationSensorGatewaysConnectionsLatest)
+    MT_GATEWAY_RSSI = "meraki_mt_gateway_rssi"
+    MT_GATEWAY_LAST_CONNECTED_TIMESTAMP = "meraki_mt_gateway_last_connected_timestamp_seconds"
+
 
 class AlertMetricName(StrEnum):
     """Alert metric names."""
@@ -318,6 +353,16 @@ class NetworkHealthMetricName(StrEnum):
 
     # Per-SSID performance metrics (Phase 4.4)
     MR_SSID_FAILED_CONNECTIONS_TOTAL = "meraki_mr_ssid_failed_connections_total"
+
+    # Wireless latency stats (per-AP + network-aggregate client), by traffic class
+    MR_DEVICE_LATENCY_MS = "meraki_mr_device_latency_ms"
+    MR_NETWORK_CLIENT_LATENCY_MS = "meraki_mr_network_client_latency_ms"
+
+    # Air Marshal rogue AP / SSID-spoofing detection (network-level bounded counts)
+    MR_AIR_MARSHAL_ROGUE_SSIDS_TOTAL = "meraki_mr_air_marshal_rogue_ssids_total"
+    MR_AIR_MARSHAL_BSSIDS_TOTAL = "meraki_mr_air_marshal_bssids_total"
+    MR_AIR_MARSHAL_CONTAINED_BSSIDS_TOTAL = "meraki_mr_air_marshal_contained_bssids_total"
+    MR_AIR_MARSHAL_WIRED_DETECTED_TOTAL = "meraki_mr_air_marshal_wired_detected_total"
 
 
 class ClientMetricName(StrEnum):

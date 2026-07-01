@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
@@ -24,6 +25,7 @@ from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
+from ...core.metrics import create_labels
 from .base import BaseDeviceCollector
 
 logger = get_logger(__name__)
@@ -149,6 +151,7 @@ class MTCollector(BaseDeviceCollector):
                         current_org_name = await self._get_org_name(organization_id)
 
                     await self._collect_org_sensors(organization_id, current_org_name)
+                    await self._collect_org_gateway_connections(organization_id, current_org_name)
                 except Exception:
                     logger.exception(
                         "Failed to collect sensors for organization",
@@ -277,6 +280,122 @@ class MTCollector(BaseDeviceCollector):
                 "Failed to collect sensors for organization",
                 org_id=org_id,
             )
+
+    @log_api_call("getOrganizationSensorGatewaysConnectionsLatest")
+    async def _fetch_gateway_connections(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch latest sensor-to-gateway connectivity for an organization.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of sensor-to-gateway connection data.
+
+        """
+        if self.api is None:
+            raise RuntimeError("API client not initialized")
+        raw = await asyncio.to_thread(
+            self.api.sensor.getOrganizationSensorGatewaysConnectionsLatest,
+            org_id,
+            total_pages="all",
+        )
+        return cast(
+            list[dict[str, Any]],
+            validate_response_format(
+                raw,
+                expected_type=list,
+                operation="getOrganizationSensorGatewaysConnectionsLatest",
+            ),
+        )
+
+    async def _collect_org_gateway_connections(
+        self, org_id: str, org_name: str | None = None
+    ) -> None:
+        """Collect sensor-to-gateway connectivity for an organization.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str | None
+            Organization name.
+
+        """
+        try:
+            if not self.api:
+                logger.error("API client not initialized")
+                return
+
+            with LogContext(org_id=org_id):
+                connections = await self._fetch_gateway_connections(org_id)
+
+            if not connections:
+                return
+
+            # Org-wide endpoint - enforce NetworkFilter (rows may reference networks
+            # outside the configured filter).
+            allowed_network_ids = (
+                await self.parent.inventory.get_allowed_network_ids(org_id)
+                if self.parent is not None and self.parent.inventory is not None
+                else None
+            )
+
+            for item in connections:
+                sensor = item.get("sensor", {})
+                gateway = item.get("gateway", {})
+                network = item.get("network", {})
+                network_id = network.get("id", "")
+
+                if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                    continue
+
+                labels = create_labels(
+                    org_id=org_id,
+                    org_name=org_name or org_id,
+                    network_id=network_id,
+                    network_name=network.get("name", ""),
+                    sensor_serial=sensor.get("serial", ""),
+                    sensor_name=sensor.get("name", ""),
+                    gateway_serial=gateway.get("serial", ""),
+                )
+
+                self._set_metric_value("_sensor_gateway_rssi", labels, item.get("rssi"))
+
+                epoch = self._parse_iso_timestamp(item.get("lastConnectedAt"))
+                self._set_metric_value("_sensor_gateway_last_connected", labels, epoch)
+
+        except Exception:
+            logger.exception(
+                "Failed to collect sensor gateway connections for organization",
+                org_id=org_id,
+            )
+
+    @staticmethod
+    def _parse_iso_timestamp(value: str | None) -> float | None:
+        """Parse an ISO-8601 timestamp string into epoch seconds.
+
+        Parameters
+        ----------
+        value : str | None
+            ISO-8601 timestamp, e.g. "2024-01-01T00:00:00Z".
+
+        Returns
+        -------
+        float | None
+            Epoch seconds, or None if the value is missing/unparseable.
+
+        """
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        except ValueError, TypeError:
+            logger.debug("Failed to parse gateway connection timestamp", value=value)
+            return None
 
     def _set_metric_value(
         self, metric_name: str, labels: dict[str, str], value: float | None

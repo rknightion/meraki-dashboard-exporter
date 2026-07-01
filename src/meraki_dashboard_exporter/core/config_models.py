@@ -328,6 +328,7 @@ class CollectorSettings(BaseModel):
             "config",
             "device",
             "mtsensor",
+            "mtsensoralerts",
             "networkhealth",
             "organization",
         },

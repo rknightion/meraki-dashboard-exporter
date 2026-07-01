@@ -57,8 +57,8 @@ class TestMXVpnCollector:
         vpn_collector: MXVpnCollector,
         mock_parent: MagicMock,
     ) -> None:
-        """All five VPN gauge metrics must be created during __init__."""
-        assert mock_parent._create_gauge.call_count == 5
+        """All eight VPN gauge metrics must be created during __init__."""
+        assert mock_parent._create_gauge.call_count == 8
 
         created_names = {call.args[0] for call in mock_parent._create_gauge.call_args_list}
         assert MXMetricName.MX_VPN_PEER_STATUS in created_names
@@ -66,6 +66,9 @@ class TestMXVpnCollector:
         assert MXMetricName.MX_VPN_JITTER_MS in created_names
         assert MXMetricName.MX_VPN_PACKET_LOSS_RATIO in created_names
         assert MXMetricName.MX_VPN_PEERS_TOTAL in created_names
+        assert MXMetricName.MX_VPN_USAGE_SENT_KB in created_names
+        assert MXMetricName.MX_VPN_USAGE_RECV_KB in created_names
+        assert MXMetricName.MX_VPN_STATS_AVG_LATENCY_MS in created_names
 
     def test_initialisation_stores_parent_api_settings(
         self,
@@ -545,6 +548,316 @@ class TestMXVpnCollector:
         # No metric for N_EXCLUDED should be emitted.
         for call in mock_parent._set_metric.call_args_list:
             _, labels, _ = call[0]
+            assert labels.get("network_id") != "N_EXCLUDED"
+        assert any(
+            call[0][1].get("network_id") == "N_INCLUDED"
+            for call in mock_parent._set_metric.call_args_list
+        )
+
+
+class TestMXVpnStatsCollector:
+    """Test MXVpnCollector.collect_vpn_stats (historical usage/latency)."""
+
+    @pytest.fixture
+    def mock_api(self) -> MagicMock:
+        """Create a mock Meraki DashboardAPI client."""
+        api = MagicMock()
+        api.appliance = MagicMock()
+        return api
+
+    @pytest.fixture
+    def mock_parent(self, mock_api: MagicMock) -> MagicMock:
+        """Create a mock parent collector (MXCollector) instance."""
+        parent = MagicMock()
+        parent.api = mock_api
+        parent.settings = MagicMock()
+        parent.rate_limiter = None
+        # No inventory means no NetworkFilter — collector emits all rows.
+        parent.inventory = None
+        # _create_gauge returns a real Gauge so metric initialisation works
+        parent._create_gauge = MagicMock(side_effect=_make_gauge)
+        return parent
+
+    @pytest.fixture
+    def vpn_collector(self, mock_parent: MagicMock) -> MXVpnCollector:
+        """Create an MXVpnCollector instance backed by mock parent."""
+        return MXVpnCollector(mock_parent)
+
+    async def test_empty_response(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An empty list response should not call _set_metric."""
+        mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(return_value=[])
+
+        await vpn_collector.collect_vpn_stats("org1", "Test Org")
+
+        mock_parent._set_metric.assert_not_called()
+
+    async def test_invalid_response_type(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A non-list response should be handled gracefully without raising."""
+        mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(return_value=None)
+
+        await vpn_collector.collect_vpn_stats("org1", "Test Org")
+
+        mock_parent._set_metric.assert_not_called()
+
+    async def test_api_error_absorbed(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An API exception must not propagate – @with_error_handling absorbs it."""
+        mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(
+            side_effect=Exception("network timeout")
+        )
+
+        await vpn_collector.collect_vpn_stats("org1", "Test Org")
+
+        mock_parent._set_metric.assert_not_called()
+
+    async def test_usage_sent_and_received_emitted(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Usage sent/received kilobytes must be emitted per peer pair."""
+        mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "networkName": "HQ",
+                    "merakiVpnPeers": [
+                        {
+                            "networkId": "N_2",
+                            "networkName": "Branch",
+                            "usageSummary": {
+                                "sentInKilobytes": 123.4,
+                                "receivedInKilobytes": 567.8,
+                            },
+                            "latencySummaries": [],
+                        }
+                    ],
+                }
+            ]
+        )
+
+        await vpn_collector.collect_vpn_stats("org1", "Test Org")
+
+        calls_by_metric = {c[0][0]: c[0] for c in mock_parent._set_metric.call_args_list}
+
+        sent_call = calls_by_metric[vpn_collector._vpn_usage_sent_kb]
+        assert sent_call[2] == 123.4
+        assert sent_call[1] == {
+            "org_id": "org1",
+            "org_name": "Test Org",
+            "network_id": "N_1",
+            "network_name": "HQ",
+            "peer_network_id": "N_2",
+        }
+
+        recv_call = calls_by_metric[vpn_collector._vpn_usage_recv_kb]
+        assert recv_call[2] == 567.8
+
+        # No latency samples -> latency metric must not be emitted.
+        assert vpn_collector._vpn_stats_avg_latency_ms not in calls_by_metric
+
+    async def test_latency_averaged_across_summaries(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """avgLatencyMs across multiple latencySummaries entries must be averaged."""
+        mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "networkName": "HQ",
+                    "merakiVpnPeers": [
+                        {
+                            "networkId": "N_2",
+                            "networkName": "Branch",
+                            "usageSummary": None,
+                            "latencySummaries": [
+                                {
+                                    "senderUplink": "wan1",
+                                    "receiverUplink": "wan1",
+                                    "avgLatencyMs": 10.0,
+                                },
+                                {
+                                    "senderUplink": "wan1",
+                                    "receiverUplink": "wan2",
+                                    "avgLatencyMs": 20.0,
+                                },
+                                {
+                                    "senderUplink": "wan2",
+                                    "receiverUplink": "wan1",
+                                    "avgLatencyMs": None,
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ]
+        )
+
+        await vpn_collector.collect_vpn_stats("org1", "Test Org")
+
+        latency_call = next(
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is vpn_collector._vpn_stats_avg_latency_ms
+        )
+        labels, value = latency_call[0][1], latency_call[0][2]
+        # Mean of 10.0 and 20.0 (the None entry is ignored) = 15.0
+        assert value == 15.0
+        assert labels["peer_network_id"] == "N_2"
+        # Only ONE latency metric emitted per peer pair — no sender x receiver cross product.
+        latency_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is vpn_collector._vpn_stats_avg_latency_ms
+        ]
+        assert len(latency_calls) == 1
+
+    async def test_null_usage_summary_handled(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A peer with usageSummary=None must not raise and must not emit usage metrics."""
+        mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "networkName": "HQ",
+                    "merakiVpnPeers": [
+                        {
+                            "networkId": "N_2",
+                            "networkName": "Branch",
+                            "usageSummary": None,
+                            "latencySummaries": [],
+                        }
+                    ],
+                }
+            ]
+        )
+
+        await vpn_collector.collect_vpn_stats("org1", "Test Org")
+
+        mock_parent._set_metric.assert_not_called()
+
+    async def test_multiple_peers_emit_separate_series(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Multiple peers under one network must each get their own labelled series."""
+        mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "networkName": "HQ",
+                    "merakiVpnPeers": [
+                        {
+                            "networkId": "N_2",
+                            "networkName": "Branch1",
+                            "usageSummary": {
+                                "sentInKilobytes": 10.0,
+                                "receivedInKilobytes": 20.0,
+                            },
+                            "latencySummaries": [{"avgLatencyMs": 5.0}],
+                        },
+                        {
+                            "networkId": "N_3",
+                            "networkName": "Branch2",
+                            "usageSummary": {
+                                "sentInKilobytes": 30.0,
+                                "receivedInKilobytes": 40.0,
+                            },
+                            "latencySummaries": [{"avgLatencyMs": 8.0}],
+                        },
+                    ],
+                }
+            ]
+        )
+
+        await vpn_collector.collect_vpn_stats("org1", "Test Org")
+
+        sent_calls = {
+            c[0][1]["peer_network_id"]: c[0][2]
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is vpn_collector._vpn_usage_sent_kb
+        }
+        assert sent_calls == {"N_2": 10.0, "N_3": 30.0}
+
+        latency_calls = {
+            c[0][1]["peer_network_id"]: c[0][2]
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is vpn_collector._vpn_stats_avg_latency_ms
+        }
+        assert latency_calls == {"N_2": 5.0, "N_3": 8.0}
+
+    async def test_network_filter_skips_excluded_network(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Rows for networks outside the configured filter must be skipped."""
+        mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_INCLUDED",
+                    "networkName": "Prod",
+                    "merakiVpnPeers": [
+                        {
+                            "networkId": "N_PEER",
+                            "networkName": "Peer",
+                            "usageSummary": {
+                                "sentInKilobytes": 1.0,
+                                "receivedInKilobytes": 2.0,
+                            },
+                            "latencySummaries": [],
+                        }
+                    ],
+                },
+                {
+                    "networkId": "N_EXCLUDED",
+                    "networkName": "Lab",
+                    "merakiVpnPeers": [
+                        {
+                            "networkId": "N_PEER",
+                            "networkName": "Peer",
+                            "usageSummary": {
+                                "sentInKilobytes": 99.0,
+                                "receivedInKilobytes": 99.0,
+                            },
+                            "latencySummaries": [],
+                        }
+                    ],
+                },
+            ]
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_INCLUDED"})
+
+        await vpn_collector.collect_vpn_stats("org1", "My Org")
+
+        for call in mock_parent._set_metric.call_args_list:
+            labels = call[0][1]
             assert labels.get("network_id") != "N_EXCLUDED"
         assert any(
             call[0][1].get("network_id") == "N_INCLUDED"

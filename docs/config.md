@@ -145,7 +145,7 @@ Enable/disable specific metric collectors
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set[str]` | `["alerts", "clients", "config", "device", "mtsensor", "networkhealth", "organization"]` | Enabled collector names |
+| `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set[str]` | `["alerts", "clients", "config", "device", "mtsensor", "mtsensoralerts", "networkhealth", "organization"]` | Enabled collector names |
 | `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` | `set[str]` | `[]` | Explicitly disabled collectors (overrides enabled) |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` | `int` | `240` | Timeout for individual collector runs in seconds (min: 30, max: 600) |
 

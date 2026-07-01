@@ -680,6 +680,34 @@ class AsyncMerakiClient:
         )
         return cast(list[dict[str, Any]], result)
 
+    async def get_sensor_gateway_connections_latest(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch latest sensor-to-gateway connectivity for an organization.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of sensor-to-gateway connection data.
+
+        """
+        api_client = await self._get_api_client()
+        result = await self._request(
+            "getOrganizationSensorGatewaysConnectionsLatest",
+            api_client.sensor.getOrganizationSensorGatewaysConnectionsLatest,
+            org_id,
+            total_pages="all",
+        )
+        logger.debug(
+            "Successfully fetched sensor gateway connections",
+            org_id=org_id,
+            connection_count=len(result),
+        )
+        return cast(list[dict[str, Any]], result)
+
     async def get_organization_networks(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch networks for an organization.
 

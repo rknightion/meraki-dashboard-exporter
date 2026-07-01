@@ -9,7 +9,7 @@ from ...core.constants.metrics_constants import MXMetricName
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
-from ...core.metrics import LabelName
+from ...core.metrics import LabelName, create_labels
 from ..subcollector_mixin import SubCollectorMixin
 
 if TYPE_CHECKING:
@@ -102,6 +102,32 @@ class MXVpnCollector(SubCollectorMixin):
                 LabelName.NETWORK_ID,
                 LabelName.NETWORK_NAME,
             ],
+        )
+
+        # Historical VPN usage/latency stats (getOrganizationApplianceVpnStats),
+        # aggregated per (network, peer network) pair to keep cardinality bounded.
+        vpn_stats_labelnames = [
+            LabelName.ORG_ID,
+            LabelName.ORG_NAME,
+            LabelName.NETWORK_ID,
+            LabelName.NETWORK_NAME,
+            LabelName.PEER_NETWORK_ID,
+        ]
+        self._vpn_usage_sent_kb = self.parent._create_gauge(
+            MXMetricName.MX_VPN_USAGE_SENT_KB,
+            "VPN usage sent in kilobytes over the collection window, per peer network",
+            labelnames=vpn_stats_labelnames,
+        )
+        self._vpn_usage_recv_kb = self.parent._create_gauge(
+            MXMetricName.MX_VPN_USAGE_RECV_KB,
+            "VPN usage received in kilobytes over the collection window, per peer network",
+            labelnames=vpn_stats_labelnames,
+        )
+        self._vpn_stats_avg_latency_ms = self.parent._create_gauge(
+            MXMetricName.MX_VPN_STATS_AVG_LATENCY_MS,
+            "Average VPN latency in milliseconds to a peer network, averaged across all "
+            "sender/receiver uplink combinations",
+            labelnames=vpn_stats_labelnames,
         )
 
     @log_api_call("getOrganizationApplianceVpnStatuses")
@@ -230,4 +256,118 @@ class MXVpnCollector(SubCollectorMixin):
             org_id=org_id,
             network_count=len(vpn_statuses),
             skipped_count=skipped,
+        )
+
+    @log_api_call("getOrganizationApplianceVpnStats")
+    @with_error_handling(
+        operation="Collect VPN usage and latency stats",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def collect_vpn_stats(self, org_id: str, org_name: str) -> None:
+        """Collect historical VPN usage and latency stats for an organization.
+
+        Complements :meth:`collect`'s point-in-time VPN peer status with historical
+        per-peer-network usage volume (sent/received kilobytes) and average latency
+        using the getOrganizationApplianceVpnStats endpoint. To keep cardinality
+        bounded, data is aggregated to one series per (network, peer network) pair —
+        the sender/receiver uplink cross-product within ``latencySummaries`` is never
+        used as a label; instead the average latency across all uplink combinations
+        is emitted.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        self._track_api_call("getOrganizationApplianceVpnStats")
+        resp = await asyncio.to_thread(
+            self.api.appliance.getOrganizationApplianceVpnStats,
+            org_id,
+            total_pages="all",
+            timespan=300,
+        )
+
+        rows = validate_response_format(
+            resp,
+            expected_type=list,
+            operation="getOrganizationApplianceVpnStats",
+        )
+
+        # Resolve allowed network IDs for filter enforcement on org-wide responses.
+        allowed_network_ids = (
+            await self.parent.inventory.get_allowed_network_ids(org_id)
+            if self.parent.inventory is not None
+            else None
+        )
+        skipped = 0
+        emitted = 0
+
+        for row in rows:
+            network_id = row.get("networkId", "")
+            network_name = row.get("networkName", network_id)
+
+            if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                skipped += 1
+                continue
+
+            peers: list[dict[str, Any]] = row.get("merakiVpnPeers", [])
+
+            for peer in peers:
+                peer_id = peer.get("networkId", "")
+
+                labels = create_labels(
+                    org_id=org_id,
+                    org_name=org_name,
+                    network_id=network_id,
+                    network_name=network_name,
+                    peer_network_id=peer_id,
+                )
+
+                usage: dict[str, Any] = peer.get("usageSummary") or {}
+
+                sent = usage.get("sentInKilobytes")
+                if sent is not None:
+                    self.parent._set_metric(
+                        self._vpn_usage_sent_kb,
+                        labels,
+                        float(sent),
+                        MXMetricName.MX_VPN_USAGE_SENT_KB.value,
+                    )
+                    emitted += 1
+
+                received = usage.get("receivedInKilobytes")
+                if received is not None:
+                    self.parent._set_metric(
+                        self._vpn_usage_recv_kb,
+                        labels,
+                        float(received),
+                        MXMetricName.MX_VPN_USAGE_RECV_KB.value,
+                    )
+                    emitted += 1
+
+                latency_summaries: list[dict[str, Any]] = peer.get("latencySummaries") or []
+                latency_values = [
+                    float(summary["avgLatencyMs"])
+                    for summary in latency_summaries
+                    if summary.get("avgLatencyMs") is not None
+                ]
+                if latency_values:
+                    self.parent._set_metric(
+                        self._vpn_stats_avg_latency_ms,
+                        labels,
+                        sum(latency_values) / len(latency_values),
+                        MXMetricName.MX_VPN_STATS_AVG_LATENCY_MS.value,
+                    )
+                    emitted += 1
+
+        logger.debug(
+            "Collected MX VPN usage/latency stats",
+            org_id=org_id,
+            network_count=len(rows),
+            skipped_count=skipped,
+            emitted_count=emitted,
         )

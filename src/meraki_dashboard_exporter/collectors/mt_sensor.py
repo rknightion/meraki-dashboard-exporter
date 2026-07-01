@@ -367,6 +367,35 @@ class MTSensorCollector(MetricCollector):
             ],
         )
 
+        # Sensor-to-gateway connectivity (#269)
+        self._sensor_gateway_rssi = self._create_gauge(
+            MTMetricName.MT_GATEWAY_RSSI,
+            "MT sensor-to-gateway RSSI (dBm)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SENSOR_SERIAL,
+                LabelName.SENSOR_NAME,
+                LabelName.GATEWAY_SERIAL,
+            ],
+        )
+
+        self._sensor_gateway_last_connected = self._create_gauge(
+            MTMetricName.MT_GATEWAY_LAST_CONNECTED_TIMESTAMP,
+            "MT sensor-to-gateway last-connected Unix timestamp (seconds)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SENSOR_SERIAL,
+                LabelName.SENSOR_NAME,
+                LabelName.GATEWAY_SERIAL,
+            ],
+        )
+
     @with_error_handling(
         operation="Collect MT sensor metrics",
         continue_on_error=True,

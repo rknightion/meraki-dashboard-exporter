@@ -33,7 +33,9 @@ from .devices import (
     MXCollector,
 )
 from .devices.ms_power import MSPowerCollector
+from .devices.mx_ha import MXHACollector
 from .devices.mx_uplink_health import MXUplinkHealthCollector
+from .devices.mx_uplink_usage import MXUplinkUsageCollector
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -163,6 +165,8 @@ class DeviceCollector(MetricCollector):
         self.mx_collector = MXCollector(self)
         # Org-wide standalone sub-collectors (not per-device-type dispatched)
         self.mx_uplink_health_collector = MXUplinkHealthCollector(self)
+        self.mx_uplink_usage_collector = MXUplinkUsageCollector(self)
+        self.mx_ha_collector = MXHACollector(self)
         self.ms_power_collector = MSPowerCollector(self)
 
         # Map device type strings to collectors
@@ -190,6 +194,8 @@ class DeviceCollector(MetricCollector):
             collector.update_api(self.api)
         self.ms_stack_collector.update_api(self.api)
         self.mx_uplink_health_collector.update_api(self.api)
+        self.mx_uplink_usage_collector.update_api(self.api)
+        self.mx_ha_collector.update_api(self.api)
         self.ms_power_collector.update_api(self.api)
 
     def _initialize_metrics(self) -> None:
@@ -838,11 +844,31 @@ class DeviceCollector(MetricCollector):
             except Exception:
                 logger.exception("Failed to collect MX uplink loss and latency")
 
-            # Collect VPN health metrics
+            # Collect per-uplink WAN bandwidth usage (org-wide, single call)
+            try:
+                await self.mx_uplink_usage_collector.collect_uplink_usage(
+                    org_id, org_name, device_lookup
+                )
+            except Exception:
+                logger.exception("Failed to collect MX uplink usage")
+
+            # Collect HA / warm-spare redundancy status (org-wide, paginated)
+            try:
+                await self.mx_ha_collector.collect_redundancy(org_id, org_name, device_lookup)
+            except Exception:
+                logger.exception("Failed to collect MX HA redundancy")
+
+            # Collect VPN health metrics (point-in-time statuses)
             try:
                 await self.mx_collector.vpn_collector.collect(org_id, org_name)
             except Exception:
                 logger.exception("Failed to collect MX VPN metrics")
+
+            # Collect VPN history stats (usage volume + per-peer-pair latency)
+            try:
+                await self.mx_collector.vpn_collector.collect_vpn_stats(org_id, org_name)
+            except Exception:
+                logger.exception("Failed to collect MX VPN stats")
 
             # Collect security events (org-wide, single call per org)
             try:

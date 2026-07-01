@@ -54,6 +54,21 @@ class MXCollector(BaseDeviceCollector):
             ],
         )
 
+        self._mx_performance_score = self.parent._create_gauge(
+            MXMetricName.MX_PERFORMANCE_SCORE,
+            "MX appliance performance score (0-100)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.ORG_NAME,
+                LabelName.NETWORK_ID,
+                LabelName.NETWORK_NAME,
+                LabelName.SERIAL,
+                LabelName.NAME,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+            ],
+        )
+
     def _create_gauge(self, *args: Any, **kwargs: Any) -> Any:
         """Delegate gauge creation to the parent DeviceCollector.
 
@@ -91,14 +106,64 @@ class MXCollector(BaseDeviceCollector):
         Common device metrics (device_up, status_info, uptime) are handled
         by DeviceCollector._collect_common_metrics() before this is called.
 
+        Runs at the parent DeviceCollector's MEDIUM (300s) per-device cadence.
+        The roadmap issue for this metric suggested a SLOW tier, but there is
+        no separate SLOW per-device pipeline for MX appliances -- collect() is
+        only ever invoked from the existing bounded MEDIUM-tier per-device
+        fan-out, so MEDIUM is what this metric actually gets. That cadence is
+        acceptable for a performance score.
+
+        Uplink statuses are collected separately via collect_uplink_statuses().
+
         Parameters
         ----------
         device : dict[str, Any]
             Device data.
 
         """
-        # MX per-device metrics can be added here
-        # Uplink statuses are collected separately via collect_uplink_statuses()
+        await self._collect_performance_score(device)
+
+    @log_api_call("getDeviceAppliancePerformance")
+    @with_error_handling(
+        operation="Collect MX performance score",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _collect_performance_score(self, device: dict[str, Any]) -> None:
+        """Collect the appliance performance score for a single MX device.
+
+        Parameters
+        ----------
+        device : dict[str, Any]
+            Device data.
+
+        """
+        serial = device.get("serial", "")
+
+        resp = await asyncio.to_thread(
+            self.api.appliance.getDeviceAppliancePerformance,
+            serial,
+        )
+
+        resp = validate_response_format(
+            resp,
+            expected_type=dict,
+            operation="getDeviceAppliancePerformance",
+        )
+
+        perf = resp.get("perfScore")
+        if perf is not None:
+            labels = create_device_labels(
+                device,
+                org_id=device.get("orgId", ""),
+                org_name=device.get("orgName", device.get("orgId", "")),
+            )
+            self.parent._set_metric(
+                self._mx_performance_score,
+                labels,
+                float(perf),
+                MXMetricName.MX_PERFORMANCE_SCORE.value,
+            )
 
     @log_api_call("getOrganizationApplianceUplinkStatuses")
     @with_error_handling(

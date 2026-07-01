@@ -16,9 +16,11 @@ from ..core.logging_helpers import log_metric_collection_summary
 from ..core.metrics import LabelName
 from ..core.otel_tracing import trace_method
 from ..core.registry import register_collector
+from .network_health_collectors.air_marshal import AirMarshalCollector
 from .network_health_collectors.bluetooth import BluetoothCollector
 from .network_health_collectors.connection_stats import ConnectionStatsCollector
 from .network_health_collectors.data_rates import DataRatesCollector
+from .network_health_collectors.latency_stats import LatencyStatsCollector
 from .network_health_collectors.rf_health import RFHealthCollector
 from .network_health_collectors.ssid_performance import SSIDPerformanceCollector
 
@@ -55,6 +57,8 @@ class NetworkHealthCollector(MetricCollector):
         self.data_rates_collector = DataRatesCollector(self)
         self.bluetooth_collector = BluetoothCollector(self)
         self.ssid_performance_collector = SSIDPerformanceCollector(self)
+        self.latency_stats_collector = LatencyStatsCollector(self)
+        self.air_marshal_collector = AirMarshalCollector(self)
 
     def _initialize_metrics(self) -> None:
         """Initialize network health metrics."""
@@ -325,6 +329,8 @@ class NetworkHealthCollector(MetricCollector):
         await self._collect_network_data_rates(network)
         await self._collect_network_bluetooth_clients(network)
         await self._collect_network_ssid_performance(network)
+        await self._collect_network_latency_stats(network)
+        await self._collect_network_air_marshal(network)
 
     async def _fetch_networks_for_health(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch networks for health collection via shared inventory cache.
@@ -408,3 +414,25 @@ class NetworkHealthCollector(MetricCollector):
 
         """
         await self.ssid_performance_collector.collect(network)
+
+    async def _collect_network_latency_stats(self, network: dict[str, Any]) -> None:
+        """Collect network-wide wireless latency stats (per-AP + client aggregate).
+
+        Parameters
+        ----------
+        network : dict[str, Any]
+            Network data.
+
+        """
+        await self.latency_stats_collector.collect(network)
+
+    async def _collect_network_air_marshal(self, network: dict[str, Any]) -> None:
+        """Collect Air Marshal rogue-AP / SSID-spoofing detection counts for a network.
+
+        Parameters
+        ----------
+        network : dict[str, Any]
+            Network data.
+
+        """
+        await self.air_marshal_collector.collect(network)
