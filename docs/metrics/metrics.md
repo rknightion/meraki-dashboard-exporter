@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 248
-- **Gauges:** 226
+- **Total metrics:** 245
+- **Gauges:** 223
 - **Counters:** 18
 - **Histograms:** 3
 - **Info metrics:** 1
@@ -296,9 +296,6 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_mx_vpn_jitter_ms` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id`, `peer_type` | VPN peer jitter in milliseconds |  |
-| `meraki_mx_vpn_latency_ms` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id`, `peer_type` | VPN peer round-trip latency in milliseconds |  |
-| `meraki_mx_vpn_packet_loss_ratio` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id`, `peer_type` | VPN peer packet loss ratio (0.0–1.0) |  |
 | `meraki_mx_vpn_peer_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id`, `peer_type` | VPN peer reachability status (1=reachable, 0=unreachable) |  |
 | `meraki_mx_vpn_peers_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Total number of VPN peers configured for a network |  |
 | `meraki_mx_vpn_stats_avg_latency_ms` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id` | Average VPN latency in milliseconds to a peer network, averaged across all sender/receiver uplink combinations |  |

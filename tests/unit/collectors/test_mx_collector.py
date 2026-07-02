@@ -457,6 +457,59 @@ class TestMXCollector:
         _, labels, _, _ = mock_parent._set_metric.call_args_list[0][0]
         assert labels["org_name"] == "org1"
 
+    async def test_collect_skips_performance_score_for_z_series_teleworker_gateway(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Z-series teleworker gateways must not trigger getDeviceAppliancePerformance.
+
+        Meraki documents the appliance performance-score endpoint as unavailable
+        on Z-series teleworker gateways (and vMX); calling it anyway wastes API
+        budget and logs an error every cycle (F-066).
+        """
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={"perfScore": 87})
+
+        device = {
+            "serial": "Q2ZZ-0001",
+            "name": "Home Teleworker Gateway",
+            "model": "Z3",
+            "networkId": "N_111",
+            "networkName": "Remote",
+            "orgId": "org1",
+            "orgName": "Test Org",
+        }
+
+        await mx_collector.collect(device)
+
+        mock_api.appliance.getDeviceAppliancePerformance.assert_not_called()
+        mock_parent._set_metric.assert_not_called()
+
+    async def test_collect_skips_performance_score_for_vmx(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Virtual MX (vMX) devices must not trigger getDeviceAppliancePerformance."""
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={"perfScore": 87})
+
+        device = {
+            "serial": "Q2VV-0001",
+            "name": "Cloud vMX",
+            "model": "vMX100",
+            "networkId": "N_111",
+            "networkName": "Cloud",
+            "orgId": "org1",
+            "orgName": "Test Org",
+        }
+
+        await mx_collector.collect(device)
+
+        mock_api.appliance.getDeviceAppliancePerformance.assert_not_called()
+        mock_parent._set_metric.assert_not_called()
+
     async def test_collect_performance_score_api_error_handled_gracefully(
         self,
         mx_collector: MXCollector,
@@ -468,7 +521,9 @@ class TestMXCollector:
             side_effect=Exception("API connection failed")
         )
 
-        device = {"serial": "Q2AB-1234-5678", "orgId": "org1"}
+        # model must indicate physical MX hardware so the perf call is actually
+        # attempted (and thus actually exercises the error-handling decorator).
+        device = {"serial": "Q2AB-1234-5678", "model": "MX68", "orgId": "org1"}
 
         # Should not raise - @with_error_handling(continue_on_error=True) catches it
         await mx_collector.collect(device)

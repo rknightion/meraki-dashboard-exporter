@@ -23,9 +23,12 @@ logger = get_logger(__name__)
 class MXVpnCollector(SubCollectorMixin):
     """Collector for MX VPN/WAN health metrics.
 
-    Collects site-to-site VPN peer status and per-peer performance data
-    (latency, jitter, packet loss) at the organization level using the
-    getOrganizationApplianceVpnStatuses endpoint.
+    Collects site-to-site VPN peer reachability status at the organization level
+    using the getOrganizationApplianceVpnStatuses endpoint. Per-peer performance
+    data (usage volume, average latency) is collected separately by
+    :meth:`collect_vpn_stats` from the getOrganizationApplianceVpnStats endpoint —
+    the statuses endpoint's ``merakiVpnPeers``/``thirdPartyVpnPeers`` items carry
+    no latency/jitter/loss fields to parse.
     """
 
     def __init__(self, parent: Any) -> None:
@@ -48,42 +51,6 @@ class MXVpnCollector(SubCollectorMixin):
         self._vpn_peer_status = self.parent._create_gauge(
             MXMetricName.MX_VPN_PEER_STATUS,
             "VPN peer reachability status (1=reachable, 0=unreachable)",
-            labelnames=[
-                LabelName.ORG_ID,
-                LabelName.ORG_NAME,
-                LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
-                LabelName.PEER_NETWORK_ID,
-                LabelName.PEER_TYPE,
-            ],
-        )
-        self._vpn_latency_ms = self.parent._create_gauge(
-            MXMetricName.MX_VPN_LATENCY_MS,
-            "VPN peer round-trip latency in milliseconds",
-            labelnames=[
-                LabelName.ORG_ID,
-                LabelName.ORG_NAME,
-                LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
-                LabelName.PEER_NETWORK_ID,
-                LabelName.PEER_TYPE,
-            ],
-        )
-        self._vpn_jitter_ms = self.parent._create_gauge(
-            MXMetricName.MX_VPN_JITTER_MS,
-            "VPN peer jitter in milliseconds",
-            labelnames=[
-                LabelName.ORG_ID,
-                LabelName.ORG_NAME,
-                LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
-                LabelName.PEER_NETWORK_ID,
-                LabelName.PEER_TYPE,
-            ],
-        )
-        self._vpn_packet_loss_ratio = self.parent._create_gauge(
-            MXMetricName.MX_VPN_PACKET_LOSS_RATIO,
-            "VPN peer packet loss ratio (0.0–1.0)",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -137,10 +104,10 @@ class MXVpnCollector(SubCollectorMixin):
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
     async def collect(self, org_id: str, org_name: str) -> None:
-        """Collect VPN status and performance metrics for an organization.
+        """Collect VPN peer status metrics for an organization.
 
         Fetches the VPN peer status for every network in the organization and
-        records per-peer reachability, latency, jitter, and packet-loss data.
+        records per-peer reachability and the total peer count per network.
 
         Parameters
         ----------
@@ -220,35 +187,6 @@ class MXVpnCollector(SubCollectorMixin):
                     peer_labels,
                     1.0 if reachability == "reachable" else 0.0,
                 )
-
-                # Performance statistics are nested under usageSummary or directly on the peer
-                # depending on the API version; check both locations.
-                stats: dict[str, Any] = peer.get("usageSummary", peer)
-
-                latency = stats.get("latencyMs") or stats.get("avgLatencyMs")
-                if latency is not None:
-                    self.parent._set_metric(
-                        self._vpn_latency_ms,
-                        peer_labels,
-                        float(latency),
-                    )
-
-                jitter = stats.get("jitterMs") or stats.get("avgJitterMs")
-                if jitter is not None:
-                    self.parent._set_metric(
-                        self._vpn_jitter_ms,
-                        peer_labels,
-                        float(jitter),
-                    )
-
-                loss = stats.get("lossPercent") or stats.get("avgLossPercent")
-                if loss is not None:
-                    # Convert from percentage (0–100) to ratio (0.0–1.0)
-                    self.parent._set_metric(
-                        self._vpn_packet_loss_ratio,
-                        peer_labels,
-                        float(loss) / 100.0,
-                    )
 
         logger.debug(
             "Collected VPN statuses",

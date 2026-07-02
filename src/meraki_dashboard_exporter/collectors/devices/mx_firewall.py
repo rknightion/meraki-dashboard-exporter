@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants.metrics_constants import MXMetricName
@@ -25,8 +26,14 @@ class MXFirewallCollector(SubCollectorMixin):
     """Collector for MX firewall rules and security policy metrics.
 
     Collects L3 and L7 firewall rule counts per network, plus the default
-    policy setting for each appliance network. Uses SLOW tier (900s) as
-    firewall configuration changes infrequently.
+    policy setting for each appliance network. Intended to run at the SLOW
+    cadence (900s) as firewall configuration changes infrequently, but
+    ``collect_for_network`` is actually dispatched every MEDIUM-tier (300s)
+    cycle by ``DeviceCollector._collect_mx_specific_metrics`` — there is no
+    separate SLOW-tier scheduling loop for this fan-out. The SLOW cadence is
+    therefore self-enforced inside ``collect_for_network`` via
+    ``_should_collect_firewall_rules``/``_mark_firewall_rules_collected``,
+    keyed on ``settings.update_intervals.slow`` (see F-085).
     """
 
     def __init__(self, parent: Any) -> None:
@@ -42,7 +49,30 @@ class MXFirewallCollector(SubCollectorMixin):
         self.parent = parent
         self.api: DashboardAPI = parent.api
         self.settings: Settings = parent.settings
+        # Tracks the last time firewall rules were collected per network_id so the
+        # SLOW-tier cadence can be enforced even though collect_for_network is
+        # dispatched every MEDIUM-tier cycle by DeviceCollector (see F-085).
+        self._last_firewall_collection: dict[str, float] = {}
         self._initialize_metrics()
+
+    def _should_collect_firewall_rules(self, network_id: str) -> bool:
+        """Return whether enough time has elapsed to (re)collect firewall rules.
+
+        Mirrors the ``_should_collect_port_usage``/``_mark_port_usage_collected``
+        throttle pattern in ``ms.py``, keyed on ``settings.update_intervals.slow``
+        instead of a dedicated interval setting, since this collector is meant to
+        run at the SLOW cadence (900s default) but is invoked every MEDIUM-tier
+        (300s) cycle by ``DeviceCollector._collect_mx_specific_metrics``.
+        """
+        interval = self.settings.update_intervals.slow
+        if interval <= 0:
+            return True
+        last = self._last_firewall_collection.get(network_id, 0.0)
+        return (time.time() - last) >= interval
+
+    def _mark_firewall_rules_collected(self, network_id: str) -> None:
+        """Record that firewall rules were just collected for this network."""
+        self._last_firewall_collection[network_id] = time.time()
 
     def _initialize_metrics(self) -> None:
         """Initialize firewall-related Prometheus gauge metrics."""
@@ -108,6 +138,15 @@ class MXFirewallCollector(SubCollectorMixin):
             Human-readable network name.
 
         """
+        if not self._should_collect_firewall_rules(network_id):
+            logger.debug(
+                "Skipping firewall rules collection (SLOW-tier cadence not yet elapsed)",
+                org_id=org_id,
+                network_id=network_id,
+                interval_seconds=self.settings.update_intervals.slow,
+            )
+            return
+
         base_labels = {
             LabelName.ORG_ID: org_id,
             LabelName.ORG_NAME: org_name,
@@ -155,6 +194,8 @@ class MXFirewallCollector(SubCollectorMixin):
             float(len(l7_rules)),
         )
 
+        self._mark_firewall_rules_collected(network_id)
+
         logger.debug(
             "Collected firewall rules",
             org_id=org_id,
@@ -197,6 +238,7 @@ class MXFirewallCollector(SubCollectorMixin):
             org_id,
             total_pages="all",
             timespan=timespan,
+            perPage=1000,
         )
 
         events_response = validate_response_format(

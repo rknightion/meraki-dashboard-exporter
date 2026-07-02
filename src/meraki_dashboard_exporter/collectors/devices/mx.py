@@ -121,7 +121,34 @@ class MXCollector(BaseDeviceCollector):
             Device data.
 
         """
-        await self._collect_performance_score(device)
+        if self._is_physical_mx_hardware(device):
+            await self._collect_performance_score(device)
+
+    @staticmethod
+    def _is_physical_mx_hardware(device: dict[str, Any]) -> bool:
+        """Return True only for physical MX hardware (not Z-series or vMX).
+
+        ``getDeviceAppliancePerformance`` (the org's per-device performance score)
+        is documented by Meraki as unavailable on Z-series teleworker gateways
+        (Z3/Z3C/Z4) and on virtual MX (vMX) -- calling it for those anyway burns
+        API budget and logs an error every collection cycle. Real MX hardware
+        models are named e.g. "MX68"/"MX250"; Z-series models are named "Z3"/
+        "Z4"/etc; vMX models are named "vMX100"/"vMX-S"/"vMX-M"/"vMX-L" (which do
+        NOT start with "MX", so the same prefix check excludes them too).
+
+        Parameters
+        ----------
+        device : dict[str, Any]
+            Device data.
+
+        Returns
+        -------
+        bool
+            True if the device's model indicates physical MX hardware.
+
+        """
+        model = str(device.get("model", ""))
+        return model.upper().startswith("MX")
 
     @log_api_call("getDeviceAppliancePerformance")
     @with_error_handling(

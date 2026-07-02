@@ -57,14 +57,17 @@ class TestMXVpnCollector:
         vpn_collector: MXVpnCollector,
         mock_parent: MagicMock,
     ) -> None:
-        """All eight VPN gauge metrics must be created during __init__."""
-        assert mock_parent._create_gauge.call_count == 8
+        """All five VPN gauge metrics must be created during __init__.
+
+        Note: getOrganizationApplianceVpnStatuses' merakiVpnPeers/thirdPartyVpnPeers
+        items carry no latency/jitter/loss fields (per the vendored OpenAPI spec), so
+        no gauges are created for those — per-peer performance data instead comes
+        from collect_vpn_stats (MX_VPN_USAGE_SENT_KB/RECV_KB/STATS_AVG_LATENCY_MS).
+        """
+        assert mock_parent._create_gauge.call_count == 5
 
         created_names = {call.args[0] for call in mock_parent._create_gauge.call_args_list}
         assert MXMetricName.MX_VPN_PEER_STATUS in created_names
-        assert MXMetricName.MX_VPN_LATENCY_MS in created_names
-        assert MXMetricName.MX_VPN_JITTER_MS in created_names
-        assert MXMetricName.MX_VPN_PACKET_LOSS_RATIO in created_names
         assert MXMetricName.MX_VPN_PEERS_TOTAL in created_names
         assert MXMetricName.MX_VPN_USAGE_SENT_KB in created_names
         assert MXMetricName.MX_VPN_USAGE_RECV_KB in created_names
@@ -391,57 +394,31 @@ class TestMXVpnCollector:
         assert totals_by_network["N_2"] == 0.0
 
     # ------------------------------------------------------------------
-    # Performance metrics (latency, jitter, packet loss)
+    # Performance data is NOT parsed from getOrganizationApplianceVpnStatuses
     # ------------------------------------------------------------------
 
-    async def test_performance_metrics_set_when_present(
+    async def test_status_response_extra_fields_are_ignored(
         self,
         vpn_collector: MXVpnCollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """Latency, jitter, and packet-loss metrics should be set when present."""
+        """Verify performance fields are never parsed from the statuses response.
+
+        Per the vendored OpenAPI spec, merakiVpnPeers items only ever carry
+        networkId/networkName/reachability/priority (thirdPartyVpnPeers only
+        name/publicIp/reachability) — no latency/jitter/loss fields exist on this
+        endpoint's response. Only peer_status and peers_total should be emitted,
+        even if extra unexpected fields are present on a peer.
+        """
         mock_api.appliance.getOrganizationApplianceVpnStatuses = MagicMock(
             return_value=[
                 {
                     "networkId": "N_1",
                     "networkName": "HQ",
                     "merakiVpnPeers": [
-                        {
-                            "networkId": "N_2",
-                            "reachability": "reachable",
-                            "latencyMs": 20.5,
-                            "jitterMs": 3.1,
-                            "lossPercent": 0.5,
-                        }
+                        {"networkId": "N_2", "reachability": "reachable", "priority": 1},
                     ],
-                    "thirdPartyVpnPeers": [],
-                }
-            ]
-        )
-
-        await vpn_collector.collect("org1", "Test Org")
-
-        calls_by_metric = {c[0][0]: c[0][2] for c in mock_parent._set_metric.call_args_list}
-
-        assert calls_by_metric[vpn_collector._vpn_latency_ms] == 20.5
-        assert calls_by_metric[vpn_collector._vpn_jitter_ms] == 3.1
-        # lossPercent 0.5 % -> ratio 0.005
-        assert abs(calls_by_metric[vpn_collector._vpn_packet_loss_ratio] - 0.005) < 1e-9
-
-    async def test_performance_metrics_not_set_when_absent(
-        self,
-        vpn_collector: MXVpnCollector,
-        mock_api: MagicMock,
-        mock_parent: MagicMock,
-    ) -> None:
-        """Performance metrics must not be set when data is absent from the peer."""
-        mock_api.appliance.getOrganizationApplianceVpnStatuses = MagicMock(
-            return_value=[
-                {
-                    "networkId": "N_1",
-                    "networkName": "HQ",
-                    "merakiVpnPeers": [{"networkId": "N_2", "reachability": "reachable"}],
                     "thirdPartyVpnPeers": [],
                 }
             ]
@@ -450,43 +427,7 @@ class TestMXVpnCollector:
         await vpn_collector.collect("org1", "Test Org")
 
         set_metrics = {c[0][0] for c in mock_parent._set_metric.call_args_list}
-        assert vpn_collector._vpn_latency_ms not in set_metrics
-        assert vpn_collector._vpn_jitter_ms not in set_metrics
-        assert vpn_collector._vpn_packet_loss_ratio not in set_metrics
-
-    async def test_packet_loss_converted_from_percent_to_ratio(
-        self,
-        vpn_collector: MXVpnCollector,
-        mock_api: MagicMock,
-        mock_parent: MagicMock,
-    ) -> None:
-        """lossPercent=100 must produce a packet_loss_ratio of 1.0."""
-        mock_api.appliance.getOrganizationApplianceVpnStatuses = MagicMock(
-            return_value=[
-                {
-                    "networkId": "N_1",
-                    "networkName": "HQ",
-                    "merakiVpnPeers": [
-                        {
-                            "networkId": "N_2",
-                            "reachability": "unreachable",
-                            "lossPercent": 100.0,
-                        }
-                    ],
-                    "thirdPartyVpnPeers": [],
-                }
-            ]
-        )
-
-        await vpn_collector.collect("org1", "Test Org")
-
-        loss_call = next(
-            c
-            for c in mock_parent._set_metric.call_args_list
-            if c[0][0] is vpn_collector._vpn_packet_loss_ratio
-        )
-        _, _, value = loss_call[0]
-        assert value == 1.0
+        assert set_metrics == {vpn_collector._vpn_peer_status, vpn_collector._vpn_peers_total}
 
     # ------------------------------------------------------------------
     # Label correctness

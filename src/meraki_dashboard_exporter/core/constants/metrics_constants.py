@@ -231,9 +231,6 @@ class MXMetricName(StrEnum):
 
     # VPN health metrics
     MX_VPN_PEER_STATUS = "meraki_mx_vpn_peer_status"
-    MX_VPN_LATENCY_MS = "meraki_mx_vpn_latency_ms"
-    MX_VPN_JITTER_MS = "meraki_mx_vpn_jitter_ms"
-    MX_VPN_PACKET_LOSS_RATIO = "meraki_mx_vpn_packet_loss_ratio"
     MX_VPN_PEERS_TOTAL = "meraki_mx_vpn_peers_total"
 
     # Firewall metrics
