@@ -81,4 +81,39 @@ intended for local testing only. Payloads larger than
 
 API keys are loaded as Pydantic `SecretStr` values and are not logged or
 serialised in the `/status`, `/metrics`, or web UI surfaces. Treat the
-container environment that holds `MERAKI_API_KEY` as sensitive.
+container environment that holds `MERAKI_EXPORTER_MERAKI__API_KEY` as sensitive.
+
+### Endpoint authentication
+
+The exporter serves two categories of HTTP endpoint (see the
+[HTTP Endpoints reference](reference/endpoints.md) for the full list):
+
+- **Read-only `GET` endpoints** (`/metrics`, `/status`, `/health`, `/ready`,
+  `/clients`, `/cardinality`, ...) are **always unauthenticated**. They expose
+  operational metrics and health data but no secrets and no control surface.
+- **State-changing `POST` control endpoints** — `/api/collectors/trigger`
+  (force an on-demand collector run) and `/api/clients/clear-dns-cache` — can
+  optionally be protected by a bearer token.
+
+Set `MERAKI_EXPORTER_SERVER__API_TOKEN` to require callers of those two POSTs to
+send `Authorization: Bearer <token>`. When it is unset (the default), those
+POSTs are unauthenticated. The webhook receiver
+(`POST /api/webhooks/meraki`) is gated separately by its own shared secret
+(`MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET`), not by this token.
+
+**Recommended posture.** Because all GETs are unauthenticated and the control
+POSTs default to open, bind the exporter to a trusted interface / private
+network and expose only `/metrics` to your Prometheus scraper. Set
+`MERAKI_EXPORTER_SERVER__API_TOKEN` if the control POSTs are reachable from any
+network segment you do not fully trust.
+
+### Beta API surface
+
+A forthcoming v1 flag (`MERAKI_EXPORTER_BETA_API__ENABLED`, landing with the
+support-matrix work) opts the exporter into Meraki's **beta / early-access**
+Dashboard API endpoints. Enabling it broadens the data collected but carries
+production risk: beta endpoints are unversioned, can change response shape or be
+withdrawn without notice, and may carry different rate-limit and stability
+guarantees than the GA `/api/v1` surface. Leave it disabled (the default) for
+production deployments unless you specifically need a beta-only metric and
+accept that it may break on any Meraki-side change.

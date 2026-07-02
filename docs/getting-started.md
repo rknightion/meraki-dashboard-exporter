@@ -37,5 +37,9 @@ docker run -d \
 - `http://localhost:9099/cardinality` reports appear after the first full
   collection cycle (defaults to 15 minutes).
 
+The endpoints above are the common ones; see the
+[HTTP Endpoints reference](reference/endpoints.md) for the complete list
+(method, path, and which config flag gates each one).
+
 Next read the [Configuration](config.md) guide for all settings and the
 [Metrics Reference](metrics/metrics.md) for available metrics.

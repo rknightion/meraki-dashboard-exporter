@@ -69,6 +69,18 @@ docker run -d \
   meraki-dashboard-exporter
 ```
 
+> [!NOTE]
+> A locally-built image reports its version as `0.0.0+dev` (and commit `unknown`)
+> on `/status`, the web UI, and `meraki_exporter_build_info`. Real version/commit
+> values are baked in only by CI-published images (via the `APP_VERSION` /
+> `GIT_COMMIT` build-args); pass `--build-arg APP_VERSION=<v> --build-arg GIT_COMMIT=<sha>`
+> to `docker build` if you want them on a local build.
+>
+> The bundled `docker-compose.yml` healthcheck polls `/health`, which includes a
+> dead-man switch: it returns 503 (marking the container unhealthy) if no
+> collector has completed a successful run within the staleness threshold, so a
+> wedged exporter is restarted rather than left serving stale metrics.
+
 ### Using Helm (Kubernetes)
 
 A Helm chart is published to the GHCR OCI registry alongside every release, from
@@ -208,6 +220,8 @@ All configuration is done via environment variables. See `.env.example` for all 
 - `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT`: Per-run collector timeout budget in seconds (default: 240)
 - `MERAKI_EXPORTER_CLIENTS__ENABLED`: Enable client collector and DNS resolution (default: false)
 - `MERAKI_EXPORTER_WEBHOOKS__ENABLED`: Enable Meraki webhook receiver (default: false)
+- `MERAKI_EXPORTER_SERVER__API_TOKEN`: Optional bearer token guarding the two state-changing control POSTs (`/api/collectors/trigger`, `/api/clients/clear-dns-cache`). When unset (default) those POSTs are unauthenticated and all GET endpoints (`/metrics`, `/status`, `/health`, ...) are always unauthenticated — bind the exporter to a trusted network. See [security.md](docs/security.md#endpoint-authentication).
+- `MERAKI_EXPORTER_BETA_API__ENABLED` (forthcoming v1 flag): opts into Meraki's beta / early-access Dashboard API endpoints. Off by default; beta endpoints are unversioned and can change or be withdrawn without notice, so keep it disabled in production. See [security.md](docs/security.md#beta-api-surface).
 
 ### Update Intervals
 - `MERAKI_EXPORTER_UPDATE_INTERVALS__FAST`: Fast tier interval in seconds (default: 60, range: 30-300)
@@ -254,6 +268,14 @@ Example:
 ```bash
 export MERAKI_EXPORTER_MERAKI__API_BASE_URL="https://api.meraki.ca/api/v1"  # For Canada region
 ```
+
+## HTTP Endpoints
+
+The exporter exposes `/metrics`, health/readiness probes (`/health`, `/ready`), a
+`/status` dashboard, the client and cardinality UIs, and a few control/webhook
+POSTs. See the generated [HTTP Endpoints reference](https://m7kni.io/meraki-dashboard-exporter/reference/endpoints/)
+for the authoritative list (method, path, and which config flag gates each one),
+kept in sync via `uv run python scripts/generate_endpoints_docs.py`.
 
 ## Metrics
 
