@@ -47,14 +47,18 @@ class RFHealthCollector(BaseNetworkHealthCollector):
 
         """
         inventory = self.parent.inventory
-        self._track_api_call("getOrganizationDevices")
 
         if inventory is not None:
+            # Served from the inventory cache — do NOT count it as an API call
+            # (the cache accounts for its own real upstream calls); counting cache
+            # hits here inflated the exporter's API-budget telemetry.
             return cast(
                 list[dict[str, Any]],
                 await inventory.get_devices(org_id, network_id=network_id),
             )
 
+        # Fallback: real direct API call — this one is genuinely a request.
+        self._track_api_call("getOrganizationDevices")
         devices = await asyncio.to_thread(
             self.api.organizations.getOrganizationDevices,
             org_id,

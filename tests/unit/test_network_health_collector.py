@@ -30,7 +30,8 @@ class TestNetworkHealthCollector(BaseCollectorTest):
 
         # Verify success
         self.assert_collector_success(collector, metrics)
-        self.assert_api_call_tracked(collector, metrics, "getOrganizations")
+        # getOrganizations is served from the inventory cache and is deliberately
+        # NOT counted as a collector API call (F-063 — no cache-hit inflation).
 
     async def test_collect_channel_utilization(self, collector, mock_api_builder, metrics):
         """Test collection of channel utilization metrics."""
@@ -103,8 +104,9 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         # Verify success
         self.assert_collector_success(collector, metrics)
 
-        # Verify API calls were tracked
-        self.assert_api_call_tracked(collector, metrics, "getOrganizationDevices")
+        # Verify API calls were tracked. getOrganizationDevices is served from the
+        # inventory cache here, so it is deliberately NOT counted as a collector API
+        # call (F-063 — no cache-hit inflation); only the real network call is tracked.
         self.assert_api_call_tracked(
             collector, metrics, "getNetworkNetworkHealthChannelUtilization"
         )

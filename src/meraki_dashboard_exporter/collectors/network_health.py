@@ -261,7 +261,9 @@ class NetworkHealthCollector(MetricCollector):
                 "This is a programming error - collectors must be initialized with inventory service."
             )
 
-        self._track_api_call("getOrganizations")
+        # No _track_api_call here: inventory.get_organizations() is served from the
+        # inventory cache (the cache accounts for its own real upstream calls);
+        # counting it here inflated the exporter's API-budget telemetry on cache hits.
         return await self.inventory.get_organizations()
 
     @trace_method("process.organization")
@@ -357,7 +359,9 @@ class NetworkHealthCollector(MetricCollector):
                 "This is a programming error - collectors must be initialized with inventory service."
             )
 
-        self._track_api_call("getOrganizationNetworks")
+        # No _track_api_call here: inventory.get_networks() is served from the
+        # inventory cache (the cache accounts for its own real upstream calls);
+        # counting it here inflated the exporter's API-budget telemetry on cache hits.
         return await self.inventory.get_networks(org_id)
 
     async def _collect_network_rf_health(self, network: dict[str, Any]) -> None:
