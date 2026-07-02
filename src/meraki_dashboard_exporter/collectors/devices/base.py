@@ -108,6 +108,7 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                     org_id,
                     timespan=300,
                     interval=300,
+                    total_pages="all",
                 )
 
             memory_data = validate_response_format(
