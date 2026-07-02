@@ -454,6 +454,8 @@ class MRPerformanceCollector:
                 ethernet_statuses = await asyncio.to_thread(
                     self.api.wireless.getOrganizationWirelessDevicesEthernetStatuses,
                     org_id,
+                    total_pages="all",
+                    perPage=1000,
                 )
 
             ethernet_data = validate_response_format(
@@ -659,10 +661,15 @@ class MRPerformanceCollector:
             )
             skipped_networks = 0
 
-            # Process network-level packet loss
+            # Process network-level packet loss.
+            # getOrganizationWirelessDevicesPacketLossByNetwork nests the network
+            # under a "network" object ({"id": ..., "name": ...}); there is no
+            # top-level networkId/networkName and no per-device "devices" array
+            # (device rows come from the separate ...PacketLossByDevice op).
             for network_data in network_packet_loss:
-                network_id = network_data.get("networkId", "")
-                network_name = network_data.get("networkName", network_id)
+                network = network_data.get("network", {})
+                network_id = network.get("id", "")
+                network_name = network.get("name", network_id)
 
                 if allowed_network_ids is not None and network_id not in allowed_network_ids:
                     skipped_networks += 1
@@ -731,73 +738,6 @@ class MRPerformanceCollector:
                             total_loss_percent,
                         )
 
-                # Process device-level packet loss
-                for device_data in network_data.get("devices", []):
-                    serial = device_data.get("serial", "")
-                    device_info = device_lookup.get(serial, {"serial": serial})
-                    device_info["networkId"] = network_id
-                    device_info["networkName"] = network_name
-                    device_info["orgId"] = org_id
-                    device_info["orgName"] = org_name
-
-                    device_labels = create_device_labels(
-                        device_info, org_id=org_id, org_name=org_name
-                    )
-
-                    # Device downstream metrics
-                    dev_downstream = device_data.get("downstream", {})
-                    dev_downstream_total = dev_downstream.get("total")
-                    dev_downstream_lost = dev_downstream.get("lost")
-                    dev_downstream_loss_percent = dev_downstream.get("lossPercentage")
-
-                    self._set_packet_metric_value(
-                        "_mr_packets_downstream_total", device_labels, dev_downstream_total
-                    )
-                    self._set_packet_metric_value(
-                        "_mr_packets_downstream_lost", device_labels, dev_downstream_lost
-                    )
-                    self._set_packet_metric_value(
-                        "_mr_packet_loss_downstream_percent",
-                        device_labels,
-                        dev_downstream_loss_percent,
-                    )
-
-                    # Device upstream metrics
-                    dev_upstream = device_data.get("upstream", {})
-                    dev_upstream_total = dev_upstream.get("total")
-                    dev_upstream_lost = dev_upstream.get("lost")
-                    dev_upstream_loss_percent = dev_upstream.get("lossPercentage")
-
-                    self._set_packet_metric_value(
-                        "_mr_packets_upstream_total", device_labels, dev_upstream_total
-                    )
-                    self._set_packet_metric_value(
-                        "_mr_packets_upstream_lost", device_labels, dev_upstream_lost
-                    )
-                    self._set_packet_metric_value(
-                        "_mr_packet_loss_upstream_percent", device_labels, dev_upstream_loss_percent
-                    )
-
-                    # Device combined metrics
-                    if dev_downstream_total is not None and dev_upstream_total is not None:
-                        dev_total_packets = dev_downstream_total + dev_upstream_total
-                        dev_total_lost = (dev_downstream_lost or 0) + (dev_upstream_lost or 0)
-
-                        self._set_packet_metric_value(
-                            "_mr_packets_total", device_labels, dev_total_packets
-                        )
-                        self._set_packet_metric_value(
-                            "_mr_packets_lost_total", device_labels, dev_total_lost
-                        )
-
-                        if dev_total_packets > 0:
-                            dev_total_loss_percent = (dev_total_lost / dev_total_packets) * 100
-                            self._set_packet_metric_value(
-                                "_mr_packet_loss_total_percent",
-                                device_labels,
-                                dev_total_loss_percent,
-                            )
-
             if skipped_networks:
                 logger.debug(
                     "MR packet loss: skipped networks outside filter",
@@ -805,11 +745,163 @@ class MRPerformanceCollector:
                     skipped_count=skipped_networks,
                 )
 
+            # Device-level packet loss comes from a distinct endpoint
+            # (...PacketLossByDevice); the ByNetwork response carries no per-device
+            # rows. Fetch and process it separately so the meraki_mr_packets_* /
+            # meraki_mr_packet_loss_* device gauges are actually populated.
+            await self._collect_device_packet_loss(
+                org_id, org_name, device_lookup, allowed_network_ids
+            )
+
         except Exception:
             logger.exception(
                 "Failed to collect packet loss metrics",
                 org_id=org_id,
             )
+
+    async def _collect_device_packet_loss(
+        self,
+        org_id: str,
+        org_name: str,
+        device_lookup: dict[str, dict[str, Any]],
+        allowed_network_ids: set[str] | None,
+    ) -> None:
+        """Collect per-device MR packet-loss metrics.
+
+        Uses getOrganizationWirelessDevicesPacketLossByDevice, whose rows are
+        ``{"downstream": ..., "upstream": ..., "network": {"id", "name"}, "device": {...}}``.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        device_lookup : dict[str, dict[str, Any]]
+            Device lookup table for device info.
+        allowed_network_ids : set[str] | None
+            Allowed network IDs from the configured NetworkFilter, or None when
+            no inventory/filter is available (emit all rows).
+
+        """
+        device_packet_loss = await self._fetch_device_packet_loss(org_id)
+        if not device_packet_loss:
+            return
+
+        skipped_devices = 0
+        for device_data in device_packet_loss:
+            network = device_data.get("network", {})
+            network_id = network.get("id", "")
+            network_name = network.get("name", network_id)
+
+            if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                skipped_devices += 1
+                continue
+
+            device_obj = device_data.get("device", {})
+            serial = device_obj.get("serial", "")
+            device_info = device_lookup.get(serial, {"serial": serial})
+            device_info["serial"] = serial
+            device_info["networkId"] = network_id
+            device_info["networkName"] = network_name
+            device_info["name"] = device_info.get("name") or device_obj.get("name", serial)
+            device_info["orgId"] = org_id
+            device_info["orgName"] = org_name
+
+            device_labels = create_device_labels(device_info, org_id=org_id, org_name=org_name)
+
+            # Device downstream metrics
+            dev_downstream = device_data.get("downstream", {})
+            dev_downstream_total = dev_downstream.get("total")
+            dev_downstream_lost = dev_downstream.get("lost")
+            dev_downstream_loss_percent = dev_downstream.get("lossPercentage")
+
+            self._set_packet_metric_value(
+                "_mr_packets_downstream_total", device_labels, dev_downstream_total
+            )
+            self._set_packet_metric_value(
+                "_mr_packets_downstream_lost", device_labels, dev_downstream_lost
+            )
+            self._set_packet_metric_value(
+                "_mr_packet_loss_downstream_percent",
+                device_labels,
+                dev_downstream_loss_percent,
+            )
+
+            # Device upstream metrics
+            dev_upstream = device_data.get("upstream", {})
+            dev_upstream_total = dev_upstream.get("total")
+            dev_upstream_lost = dev_upstream.get("lost")
+            dev_upstream_loss_percent = dev_upstream.get("lossPercentage")
+
+            self._set_packet_metric_value(
+                "_mr_packets_upstream_total", device_labels, dev_upstream_total
+            )
+            self._set_packet_metric_value(
+                "_mr_packets_upstream_lost", device_labels, dev_upstream_lost
+            )
+            self._set_packet_metric_value(
+                "_mr_packet_loss_upstream_percent", device_labels, dev_upstream_loss_percent
+            )
+
+            # Device combined metrics
+            if dev_downstream_total is not None and dev_upstream_total is not None:
+                dev_total_packets = dev_downstream_total + dev_upstream_total
+                dev_total_lost = (dev_downstream_lost or 0) + (dev_upstream_lost or 0)
+
+                self._set_packet_metric_value("_mr_packets_total", device_labels, dev_total_packets)
+                self._set_packet_metric_value(
+                    "_mr_packets_lost_total", device_labels, dev_total_lost
+                )
+
+                if dev_total_packets > 0:
+                    dev_total_loss_percent = (dev_total_lost / dev_total_packets) * 100
+                    self._set_packet_metric_value(
+                        "_mr_packet_loss_total_percent",
+                        device_labels,
+                        dev_total_loss_percent,
+                    )
+
+        if skipped_devices:
+            logger.debug(
+                "MR device packet loss: skipped devices outside filter",
+                org_id=org_id,
+                skipped_count=skipped_devices,
+            )
+
+    @log_api_call("getOrganizationWirelessDevicesPacketLossByDevice")
+    @with_error_handling(
+        operation="Fetch MR device packet loss",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _fetch_device_packet_loss(self, org_id: str) -> list[dict[str, Any]] | None:
+        """Fetch per-device packet loss data.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]] | None
+            Per-device packet-loss rows, or None on error.
+
+        """
+        with LogContext(org_id=org_id):
+            packet_loss = await asyncio.to_thread(
+                self.api.wireless.getOrganizationWirelessDevicesPacketLossByDevice,
+                org_id,
+                total_pages="all",
+                timespan=300,  # 5 minutes
+            )
+        result: list[dict[str, Any]] = validate_response_format(
+            packet_loss,
+            expected_type=list,
+            operation="getOrganizationWirelessDevicesPacketLossByDevice",
+        )
+        return result
 
     async def _fetch_network_packet_loss(self, org_id: str) -> Any:
         """Fetch network packet loss data.
@@ -939,6 +1031,8 @@ class MRPerformanceCollector:
                     org_id,
                     serials=serials,
                     timespan=300,  # 5 minutes
+                    total_pages="all",
+                    perPage=20,  # SDK max; batches are batch_size serials (default 20)
                 )
                 cpu_data = cast(
                     list[dict[str, Any]],

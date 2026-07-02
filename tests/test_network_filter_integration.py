@@ -63,8 +63,15 @@ async def test_ms_stp_uses_parent_inventory() -> None:
     parent.inventory.get_networks.assert_awaited_once_with("ORG")
 
 
-async def test_mr_wireless_ssid_mapping_uses_parent_inventory() -> None:
-    """MRWirelessCollector._build_ssid_to_network_mapping uses parent.inventory."""
+async def test_mr_ssid_usage_does_not_fetch_per_network() -> None:
+    """MRWirelessCollector.collect_ssid_usage no longer walks every network.
+
+    The org-wide getOrganizationSummaryTopSsidsByUsage row is emitted at
+    org+SSID level, so there is no per-network SSID mapping and therefore no
+    per-network getNetworkWirelessSsids fan-out (F-035) and no per-network
+    replication of the org total (F-082). This guards against a regression that
+    re-introduces the mapping.
+    """
     from meraki_dashboard_exporter.collectors.devices.mr.wireless import (
         MRWirelessCollector,
     )
@@ -72,13 +79,36 @@ async def test_mr_wireless_ssid_mapping_uses_parent_inventory() -> None:
     collector = MRWirelessCollector.__new__(MRWirelessCollector)
     parent = MagicMock()
     parent.inventory = AsyncMock()
-    parent.inventory.get_networks.return_value = []  # no wireless networks
+    parent._set_metric = MagicMock()
+    parent.rate_limiter = None  # avoid the decorator's async rate-limiter path
     collector.parent = parent
+    collector.api = MagicMock()
+    collector.api.organizations.getOrganizationSummaryTopSsidsByUsage = MagicMock(
+        return_value=[
+            {"name": "Corp", "usage": {"total": 100.0}, "clients": {"counts": {"total": 3}}},
+        ]
+    )
+    # Attach the SSID gauges the emission path touches.
+    for attr in (
+        "_ssid_usage_total_mb",
+        "_ssid_usage_downstream_mb",
+        "_ssid_usage_upstream_mb",
+        "_ssid_usage_percentage",
+        "_ssid_client_count",
+    ):
+        setattr(collector, attr, MagicMock())
 
-    result = await collector._build_ssid_to_network_mapping("ORG")
+    await collector.collect_ssid_usage("ORG", "Org Name")
 
-    parent.inventory.get_networks.assert_awaited_once_with("ORG")
-    assert result == {}
+    # The mapping method is gone and no per-network calls happen.
+    assert not hasattr(collector, "_build_ssid_to_network_mapping")
+    parent.inventory.get_networks.assert_not_awaited()
+    collector.api.wireless.getNetworkWirelessSsids.assert_not_called()
+    # Emitted labels are org+SSID only — never a network label.
+    assert parent._set_metric.call_count == 5
+    for call in parent._set_metric.call_args_list:
+        labels = call[0][1]
+        assert set(labels) == {"org_id", "org_name", "ssid"}
 
 
 async def test_alerts_direct_fallback_applies_filter() -> None:

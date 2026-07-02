@@ -19,7 +19,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_mr_air_marshal_bssids_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Total number of BSSIDs across all Air Marshal SSID entries |  |
 | `meraki_mr_air_marshal_contained_bssids_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Number of Air Marshal BSSIDs currently contained |  |
-| `meraki_mr_air_marshal_rogue_ssids_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Number of rogue/spoofed SSID entries detected by Air Marshal |  |
+| `meraki_mr_air_marshal_ssids_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Number of foreign SSID entries observed by Air Marshal over the scan window |  |
 | `meraki_mr_air_marshal_wired_detected_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Number of Air Marshal SSID entries also detected on the wired network |  |
 
 ### AlertsCollector
@@ -153,11 +153,11 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mr_radio_channel` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `band`, `radio_index` | Access point radio channel number |  |
 | `meraki_mr_radio_channel_width_mhz` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `band`, `radio_index` | Access point radio channel width in MHz |  |
 | `meraki_mr_radio_power_dbm` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `band`, `radio_index` | Access point radio transmit power in dBm |  |
-| `meraki_mr_ssid_client_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `ssid` | Number of clients connected to SSID over the last day |  |
-| `meraki_mr_ssid_usage_downstream_mb` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `ssid` | Downstream data usage in MB by SSID over the last day |  |
-| `meraki_mr_ssid_usage_percentage` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `ssid` | Percentage of total organization data usage by SSID over the last day |  |
-| `meraki_mr_ssid_usage_total_mb` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `ssid` | Total data usage in MB by SSID over the last day |  |
-| `meraki_mr_ssid_usage_upstream_mb` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `ssid` | Upstream data usage in MB by SSID over the last day |  |
+| `meraki_mr_ssid_client_count` | gauge | `org_id`, `org_name`, `ssid` | Number of clients connected to SSID over the last day |  |
+| `meraki_mr_ssid_usage_downstream_mb` | gauge | `org_id`, `org_name`, `ssid` | Downstream data usage in MB by SSID over the last day |  |
+| `meraki_mr_ssid_usage_percentage` | gauge | `org_id`, `org_name`, `ssid` | Percentage of total organization data usage by SSID over the last day |  |
+| `meraki_mr_ssid_usage_total_mb` | gauge | `org_id`, `org_name`, `ssid` | Total data usage in MB by SSID over the last day |  |
+| `meraki_mr_ssid_usage_upstream_mb` | gauge | `org_id`, `org_name`, `ssid` | Upstream data usage in MB by SSID over the last day |  |
 
 ### MSCollector
 
@@ -327,10 +327,10 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_org` | info | `org_id`, `org_name` | Organization information |  |
 | `meraki_org_api_requests_by_status` | gauge | `org_id`, `org_name`, `status_code` | API requests by HTTP status code in the last hour |  |
 | `meraki_org_api_requests_total` | gauge | `org_id`, `org_name` | Total API requests made by the organization in the last hour |  |
-| `meraki_org_application_usage_downstream_mb` | gauge | `org_id`, `org_name`, `category` | Downstream application usage in MB by category |  |
-| `meraki_org_application_usage_percentage` | gauge | `org_id`, `org_name`, `category` | Application usage percentage by category |  |
-| `meraki_org_application_usage_total_mb` | gauge | `org_id`, `org_name`, `category` | Total application usage in MB by category |  |
-| `meraki_org_application_usage_upstream_mb` | gauge | `org_id`, `org_name`, `category` | Upstream application usage in MB by category |  |
+| `meraki_org_application_usage_downstream_mb` | gauge | `org_id`, `org_name`, `category` | Downstream application usage in MB by category over the trailing 1-day window |  |
+| `meraki_org_application_usage_percentage` | gauge | `org_id`, `org_name`, `category` | Application usage percentage by category over the trailing 1-day window |  |
+| `meraki_org_application_usage_total_mb` | gauge | `org_id`, `org_name`, `category` | Total application usage in MB by category over the trailing 1-day window |  |
+| `meraki_org_application_usage_upstream_mb` | gauge | `org_id`, `org_name`, `category` | Upstream application usage in MB by category over the trailing 1-day window |  |
 | `meraki_org_clients_total` | gauge | `org_id`, `org_name` | Total number of active clients in the organization (1-hour window) |  |
 | `meraki_org_devices_availability_changes_total` | gauge | `org_id`, `org_name`, `product_type`, `status` | Number of device availability transitions in the last collection window by product type and new status |  |
 | `meraki_org_devices_availability_total` | gauge | `org_id`, `org_name`, `status`, `product_type` | Total number of devices by availability status and product type |  |

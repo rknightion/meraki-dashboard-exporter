@@ -114,15 +114,15 @@ class MRWirelessCollector:
             ],
         )
 
-        # SSID usage metrics (now with network labels)
+        # SSID usage metrics. getOrganizationSummaryTopSsidsByUsage reports one
+        # org-wide row per SSID name, so these are labelled at org+SSID level only
+        # (no network labels — replicating the org total per network inflated sums).
         self._ssid_usage_total_mb = self.parent._create_gauge(
             MRMetricName.MR_SSID_USAGE_TOTAL_MB,
             "Total data usage in MB by SSID over the last day",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
-                LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SSID,
             ],
         )
@@ -133,8 +133,6 @@ class MRWirelessCollector:
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
-                LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SSID,
             ],
         )
@@ -145,8 +143,6 @@ class MRWirelessCollector:
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
-                LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SSID,
             ],
         )
@@ -157,8 +153,6 @@ class MRWirelessCollector:
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
-                LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SSID,
             ],
         )
@@ -169,8 +163,6 @@ class MRWirelessCollector:
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
-                LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SSID,
             ],
         )
@@ -303,77 +295,6 @@ class MRWirelessCollector:
                 org_id=org_id,
             )
 
-    async def _build_ssid_to_network_mapping(self, org_id: str) -> dict[str, list[dict[str, str]]]:
-        """Build mapping of SSID names to networks.
-
-        Parameters
-        ----------
-        org_id : str
-            Organization ID.
-
-        Returns
-        -------
-        dict[str, list[dict[str, str]]]
-            Mapping of SSID names to list of networks with that SSID.
-
-        """
-        ssid_to_networks: dict[str, list[dict[str, str]]] = {}
-
-        if self.parent.inventory is None:
-            logger.warning(
-                "Inventory service not configured; SSID-to-network mapping skipped",
-                org_id=org_id,
-            )
-            return ssid_to_networks
-
-        try:
-            # Fetch networks via the shared inventory cache so the network
-            # filter applies. SSID metrics will only be emitted for networks
-            # that pass the filter.
-            with LogContext(org_id=org_id):
-                networks = await self.parent.inventory.get_networks(org_id)
-
-            # Filter for wireless networks
-            wireless_networks = [n for n in networks if "wireless" in n.get("productTypes", [])]
-
-            # Get SSIDs for each network
-            for network in wireless_networks:
-                network_id = network.get("id", "")
-                network_name = network.get("name", network_id)
-
-                try:
-                    with LogContext(network_id=network_id):
-                        ssids = await asyncio.to_thread(
-                            self.api.wireless.getNetworkWirelessSsids,
-                            network_id,
-                        )
-
-                    for ssid in ssids:
-                        ssid_name = ssid.get("name", "")
-                        if ssid_name:
-                            if ssid_name not in ssid_to_networks:
-                                ssid_to_networks[ssid_name] = []
-                            ssid_to_networks[ssid_name].append({
-                                "id": network_id,
-                                "name": network_name,
-                            })
-
-                except Exception:
-                    logger.exception(
-                        "Failed to get SSIDs for network",
-                        network_id=network_id,
-                    )
-                    continue
-
-            return ssid_to_networks
-
-        except Exception:
-            logger.exception(
-                "Failed to build SSID to network mapping",
-                org_id=org_id,
-            )
-            return {}
-
     @log_api_call("getOrganizationSummaryTopSsidsByUsage")
     @with_error_handling(
         operation="Collect SSID usage",
@@ -393,9 +314,12 @@ class MRWirelessCollector:
         """
         try:
             with LogContext(org_id=org_id):
+                # quantity=50 is the endpoint maximum (default is only top 10),
+                # so orgs with up to 50 SSIDs get stable per-SSID series.
                 ssid_usage = await asyncio.to_thread(
                     self.api.organizations.getOrganizationSummaryTopSsidsByUsage,
                     org_id,
+                    quantity=50,
                 )
                 ssid_usage = validate_response_format(
                     ssid_usage,
@@ -403,10 +327,9 @@ class MRWirelessCollector:
                     operation="getOrganizationSummaryTopSsidsByUsage",
                 )
 
-            # Build SSID to network mapping for better labeling
-            ssid_to_networks = await self._build_ssid_to_network_mapping(org_id)
-
-            # Process SSID usage data
+            # Process SSID usage data. Each row is an org-wide total for one SSID
+            # name, so we emit exactly one org-level series per SSID (no per-network
+            # replication, which previously inflated sum-by-org totals N-fold).
             for ssid_data in ssid_usage:
                 ssid_name = ssid_data.get("name", "") or ssid_data.get("ssidName", "")
                 if not ssid_name:
@@ -423,102 +346,42 @@ class MRWirelessCollector:
                 clients = ssid_data.get("clients", {})
                 client_count = clients.get("counts", {}).get("total", clients.get("total", 0))
 
-                # Get networks for this SSID
-                networks = ssid_to_networks.get(ssid_name, [])
-                if not networks:
-                    networks = [{"id": "", "name": "unknown"}]
+                ssid_labels = {
+                    "org_id": org_id,
+                    "org_name": org_name,
+                    "ssid": ssid_name,
+                }
 
-                if networks:
-                    # Set metrics for each network with this SSID
-                    for network in networks:
-                        network_id = network.get("id", "")
-                        network_name = network.get("name", network_id)
+                # Set SSID usage metrics - using P3.2 pattern
+                self.parent._set_metric(
+                    self._ssid_usage_total_mb,
+                    ssid_labels,
+                    total_mb,
+                )
 
-                        # Create labels
-                        ssid_labels = {
-                            "org_id": org_id,
-                            "org_name": org_name,
-                            "network_id": network_id,
-                            "network_name": network_name,
-                            "ssid": ssid_name,
-                        }
+                self.parent._set_metric(
+                    self._ssid_usage_downstream_mb,
+                    ssid_labels,
+                    downstream_mb,
+                )
 
-                        # Set SSID usage metrics - using P3.2 pattern
-                        self.parent._set_metric(
-                            self._ssid_usage_total_mb,
-                            ssid_labels,
-                            total_mb,
-                        )
+                self.parent._set_metric(
+                    self._ssid_usage_upstream_mb,
+                    ssid_labels,
+                    upstream_mb,
+                )
 
-                        self.parent._set_metric(
-                            self._ssid_usage_downstream_mb,
-                            ssid_labels,
-                            downstream_mb,
-                        )
+                self.parent._set_metric(
+                    self._ssid_usage_percentage,
+                    ssid_labels,
+                    usage_percentage,
+                )
 
-                        self.parent._set_metric(
-                            self._ssid_usage_upstream_mb,
-                            ssid_labels,
-                            upstream_mb,
-                        )
-
-                        self.parent._set_metric(
-                            self._ssid_usage_percentage,
-                            ssid_labels,
-                            usage_percentage,
-                        )
-
-                        self.parent._set_metric(
-                            self._ssid_client_count,
-                            ssid_labels,
-                            client_count,
-                        )
-                else:
-                    # No network mapping found, use generic labels
-                    logger.debug(
-                        "No network mapping found for SSID",
-                        ssid=ssid_name,
-                        org_id=org_id,
-                    )
-
-                    # Set metrics with empty network info
-                    ssid_labels = {
-                        "org_id": org_id,
-                        "org_name": org_name,
-                        "network_id": "",
-                        "network_name": "",
-                        "ssid": ssid_name,
-                    }
-
-                    self.parent._set_metric(
-                        self._ssid_usage_total_mb,
-                        ssid_labels,
-                        total_mb,
-                    )
-
-                    self.parent._set_metric(
-                        self._ssid_usage_downstream_mb,
-                        ssid_labels,
-                        downstream_mb,
-                    )
-
-                    self.parent._set_metric(
-                        self._ssid_usage_upstream_mb,
-                        ssid_labels,
-                        upstream_mb,
-                    )
-
-                    self.parent._set_metric(
-                        self._ssid_usage_percentage,
-                        ssid_labels,
-                        usage_percentage,
-                    )
-
-                    self.parent._set_metric(
-                        self._ssid_client_count,
-                        ssid_labels,
-                        client_count,
-                    )
+                self.parent._set_metric(
+                    self._ssid_client_count,
+                    ssid_labels,
+                    client_count,
+                )
 
         except Exception:
             logger.exception(

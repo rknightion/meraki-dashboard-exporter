@@ -31,9 +31,9 @@ logger = get_logger(__name__)
 class AirMarshalCollector(BaseNetworkHealthCollector):
     """Collector for Air Marshal rogue AP / SSID-spoofing detection counts.
 
-    Collects bounded network-level counts (rogue SSID entries seen, total
-    BSSIDs across those entries, contained BSSIDs, and entries with a wired
-    detection) via getNetworkWirelessAirMarshal.
+    Collects bounded network-level counts (foreign SSID entries observed,
+    total BSSIDs across those entries, contained BSSIDs, and entries with a
+    wired detection) via getNetworkWirelessAirMarshal.
     """
 
     def __init__(self, parent: Any) -> None:
@@ -57,9 +57,9 @@ class AirMarshalCollector(BaseNetworkHealthCollector):
             LabelName.NETWORK_ID,
             LabelName.NETWORK_NAME,
         ]
-        self._air_marshal_rogue_ssids_total = self.parent._create_gauge(
-            NetworkHealthMetricName.MR_AIR_MARSHAL_ROGUE_SSIDS_TOTAL,
-            "Number of rogue/spoofed SSID entries detected by Air Marshal",
+        self._air_marshal_ssids_total = self.parent._create_gauge(
+            NetworkHealthMetricName.MR_AIR_MARSHAL_SSIDS_TOTAL,
+            "Number of foreign SSID entries observed by Air Marshal over the scan window",
             labelnames=labelnames,
         )
         self._air_marshal_bssids_total = self.parent._create_gauge(
@@ -129,7 +129,7 @@ class AirMarshalCollector(BaseNetworkHealthCollector):
         if entries is None:
             return
 
-        rogue_ssids_total = len(entries)
+        ssids_total = len(entries)
         bssids_total = 0
         contained_bssids_total = 0
         wired_detected_total = 0
@@ -145,10 +145,10 @@ class AirMarshalCollector(BaseNetworkHealthCollector):
         labels = create_network_labels(network, org_id=org_id, org_name=org_name)
 
         self.parent._set_metric(
-            self._air_marshal_rogue_ssids_total,
+            self._air_marshal_ssids_total,
             labels,
-            float(rogue_ssids_total),
-            NetworkHealthMetricName.MR_AIR_MARSHAL_ROGUE_SSIDS_TOTAL.value,
+            float(ssids_total),
+            NetworkHealthMetricName.MR_AIR_MARSHAL_SSIDS_TOTAL.value,
         )
         self.parent._set_metric(
             self._air_marshal_bssids_total,

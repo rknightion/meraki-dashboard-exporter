@@ -66,7 +66,7 @@ class TestAirMarshalCollector:
     def test_gauges_created(self, collector: AirMarshalCollector, mock_parent: MagicMock) -> None:
         """Test that all four Air Marshal gauges are created on init."""
         assert mock_parent._create_gauge.call_count == 4
-        assert collector._air_marshal_rogue_ssids_total is not None
+        assert collector._air_marshal_ssids_total is not None
         assert collector._air_marshal_bssids_total is not None
         assert collector._air_marshal_contained_bssids_total is not None
         assert collector._air_marshal_wired_detected_total is not None
@@ -118,7 +118,7 @@ class TestAirMarshalCollector:
 
         assert mock_parent._set_metric.call_count == 4
         emitted = {call[0][0]: call[0][2] for call in mock_parent._set_metric.call_args_list}
-        assert emitted[collector._air_marshal_rogue_ssids_total] == 3.0
+        assert emitted[collector._air_marshal_ssids_total] == 3.0
         assert emitted[collector._air_marshal_bssids_total] == 6.0
         assert emitted[collector._air_marshal_contained_bssids_total] == 3.0
         assert emitted[collector._air_marshal_wired_detected_total] == 1.0
@@ -161,7 +161,7 @@ class TestAirMarshalCollector:
 
         metric_names = {call[0][3] for call in mock_parent._set_metric.call_args_list}
         assert metric_names == {
-            "meraki_mr_air_marshal_rogue_ssids_total",
+            "meraki_mr_air_marshal_ssids_total",
             "meraki_mr_air_marshal_bssids_total",
             "meraki_mr_air_marshal_contained_bssids_total",
             "meraki_mr_air_marshal_wired_detected_total",
@@ -199,7 +199,7 @@ class TestAirMarshalCollector:
 
         assert mock_parent._set_metric.call_count == 4
         emitted = {call[0][0]: call[0][2] for call in mock_parent._set_metric.call_args_list}
-        assert emitted[collector._air_marshal_rogue_ssids_total] == 1.0
+        assert emitted[collector._air_marshal_ssids_total] == 1.0
         assert emitted[collector._air_marshal_bssids_total] == 0.0
         assert emitted[collector._air_marshal_contained_bssids_total] == 0.0
         assert emitted[collector._air_marshal_wired_detected_total] == 0.0

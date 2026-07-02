@@ -363,7 +363,7 @@ class NetworkHealthMetricName(StrEnum):
     MR_NETWORK_CLIENT_LATENCY_MS = "meraki_mr_network_client_latency_ms"
 
     # Air Marshal rogue AP / SSID-spoofing detection (network-level bounded counts)
-    MR_AIR_MARSHAL_ROGUE_SSIDS_TOTAL = "meraki_mr_air_marshal_rogue_ssids_total"
+    MR_AIR_MARSHAL_SSIDS_TOTAL = "meraki_mr_air_marshal_ssids_total"
     MR_AIR_MARSHAL_BSSIDS_TOTAL = "meraki_mr_air_marshal_bssids_total"
     MR_AIR_MARSHAL_CONTAINED_BSSIDS_TOTAL = "meraki_mr_air_marshal_contained_bssids_total"
     MR_AIR_MARSHAL_WIRED_DETECTED_TOTAL = "meraki_mr_air_marshal_wired_detected_total"
