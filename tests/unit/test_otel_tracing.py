@@ -195,6 +195,43 @@ class TestTracingConfigSampling:
         assert isinstance(config._create_sampler(), ParentBased)
 
 
+class TestTracingConfigExporterTLS:
+    """F-110: the OTLP exporter's insecure flag is driven by settings."""
+
+    def _settings(self, insecure: bool) -> MagicMock:
+        settings = MagicMock(spec=Settings)
+        settings.otel = MagicMock()
+        settings.otel.enabled = True
+        settings.otel.endpoint = "http://otel:4317"
+        settings.otel.service_name = "test-service"
+        settings.otel.resource_attributes = {}
+        settings.otel.insecure = insecure
+        return settings
+
+    def _run_setup(self, settings: MagicMock) -> MagicMock:
+        config = TracingConfig(settings)
+        with (
+            patch("meraki_dashboard_exporter.core.otel_tracing.Resource.create"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.TracerProvider"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.OTLPSpanExporter") as mock_exporter,
+            patch("meraki_dashboard_exporter.core.otel_tracing.BatchSpanProcessor"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.trace.set_tracer_provider"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.set_global_textmap"),
+        ):
+            config.setup_tracing()
+        return mock_exporter
+
+    def test_insecure_true_flows_to_exporter(self) -> None:
+        """insecure=True (default) yields a non-TLS exporter channel."""
+        mock_exporter = self._run_setup(self._settings(insecure=True))
+        assert mock_exporter.call_args.kwargs["insecure"] is True
+
+    def test_insecure_false_flows_to_exporter(self) -> None:
+        """insecure=False yields a TLS/system-trust exporter channel."""
+        mock_exporter = self._run_setup(self._settings(insecure=False))
+        assert mock_exporter.call_args.kwargs["insecure"] is False
+
+
 class TestTracingConfigReinitialization:
     """Test TracingConfig handles reinitialization correctly."""
 

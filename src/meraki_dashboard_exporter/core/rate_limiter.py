@@ -137,6 +137,32 @@ class OrgRateLimiter:
 
             await asyncio.sleep(wait_time)
 
+    def get_total_throttled(self) -> int:
+        """Return the total number of client-side rate-limiter throttle events.
+
+        Sums the shared ``_throttled_total`` counter across every
+        org_id/endpoint label combination. This is the real throttle count
+        surfaced on ``/status`` (F-028/F-074), replacing the hardcoded ``0``.
+
+        Returns
+        -------
+        int
+            Total throttle events across all label combinations, or 0 if the
+            counter has not been initialised yet.
+
+        """
+        counter = OrgRateLimiter._throttled_total
+        if counter is None:
+            return 0
+        total = 0.0
+        for metric in counter.collect():
+            for sample in metric.samples:
+                # Skip the Counter's `_created` timestamp gauge sample.
+                if sample.name.endswith("_created"):
+                    continue
+                total += sample.value
+        return int(total)
+
     def _apply_jitter(self, wait_time: float) -> float:
         if wait_time <= 0:
             return 0.0

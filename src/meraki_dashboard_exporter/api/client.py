@@ -179,6 +179,34 @@ class AsyncMerakiClient:
             self._api = self._create_api_client()
         return self._api
 
+    def get_total_api_requests(self) -> int:
+        """Return the total number of Meraki API requests recorded so far.
+
+        Sums the shared ``_api_requests_total`` counter (incremented by
+        ``services/inventory.py::_make_api_call``) across every
+        endpoint/method/status_code label combination. This is the real request
+        count surfaced on ``/status`` (F-028/F-074); the legacy
+        ``_api_call_count`` attribute was initialised to 0 and never incremented.
+
+        Returns
+        -------
+        int
+            Total requests across all label combinations, or 0 if the counter
+            has not been initialised yet.
+
+        """
+        counter = type(self)._api_requests_total
+        if counter is None:
+            return 0
+        total = 0.0
+        for metric in counter.collect():
+            for sample in metric.samples:
+                # Skip the Counter's `_created` timestamp gauge sample.
+                if sample.name.endswith("_created"):
+                    continue
+                total += sample.value
+        return int(total)
+
     async def close(self) -> None:
         """Close the API client."""
         logger.debug("Closing AsyncMerakiClient")

@@ -22,13 +22,19 @@ class DataRatesCollector(BaseNetworkHealthCollector):
     """Collector for network-wide wireless data rate metrics."""
 
     @log_api_call("getNetworkWirelessDataRateHistory")
-    async def _fetch_data_rate_history(self, network_id: str) -> list[dict[str, Any]]:
+    async def _fetch_data_rate_history(
+        self, network_id: str, org_id: str | None = None
+    ) -> list[dict[str, Any]]:
         """Fetch network wireless data rate history.
 
         Parameters
         ----------
         network_id : str
             Network ID.
+        org_id : str | None
+            Organization ID for logging and rate-limiting context (F-170). The
+            @log_api_call decorator reads it from kwargs so the client-side rate
+            limiter keys by the owning org instead of the shared "global" bucket.
 
         Returns
         -------
@@ -36,6 +42,7 @@ class DataRatesCollector(BaseNetworkHealthCollector):
             Data rate history.
 
         """
+        _ = org_id  # Consumed by the @log_api_call decorator for rate-limit keying.
         response = await asyncio.to_thread(
             self.api.wireless.getNetworkWirelessDataRateHistory,
             network_id,
@@ -69,7 +76,7 @@ class DataRatesCollector(BaseNetworkHealthCollector):
             with LogContext(network_id=network_id, network_name=network_name, org_id=org_id):
                 # Use 300 second (5 minute) resolution with recent timespan
                 # Using timespan of 300 seconds to get the most recent 5-minute data block
-                data_rate_history = await self._fetch_data_rate_history(network_id)
+                data_rate_history = await self._fetch_data_rate_history(network_id, org_id=org_id)
 
             # Handle empty response
             if not data_rate_history:

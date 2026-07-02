@@ -148,3 +148,28 @@ class TestClientLifecycle:
         # Close should clear the API instance
         await client.close()
         assert client._api is None
+
+
+class TestApiRequestTotalAccessor:
+    """F-028/F-074: expose the real Meraki API request total for /status."""
+
+    def test_get_total_api_requests_reflects_increments(self, mock_settings: Settings) -> None:
+        """The accessor sums the shared request counter across all labels.
+
+        The legacy ``_api_call_count`` attribute was never incremented, so
+        /status always reported zero. ``get_total_api_requests`` reads the real
+        ``_api_requests_total`` counter that inventory increments per call.
+        """
+        client = AsyncMerakiClient(mock_settings)
+
+        before = client.get_total_api_requests()
+
+        assert AsyncMerakiClient._api_requests_total is not None
+        AsyncMerakiClient._api_requests_total.labels(
+            endpoint="getOrganizations", method="GET", status_code="200"
+        ).inc()
+        AsyncMerakiClient._api_requests_total.labels(
+            endpoint="getOrganizationDevices", method="GET", status_code="200"
+        ).inc(2)
+
+        assert client.get_total_api_requests() == before + 3

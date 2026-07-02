@@ -22,13 +22,19 @@ class BluetoothCollector(BaseNetworkHealthCollector):
     """Collector for Bluetooth clients detected by MR devices in a network."""
 
     @log_api_call("getNetworkBluetoothClients")
-    async def _fetch_bluetooth_clients(self, network_id: str) -> list[dict[str, Any]]:
+    async def _fetch_bluetooth_clients(
+        self, network_id: str, org_id: str | None = None
+    ) -> list[dict[str, Any]]:
         """Fetch Bluetooth clients for a network.
 
         Parameters
         ----------
         network_id : str
             Network ID.
+        org_id : str | None
+            Organization ID for logging and rate-limiting context (F-170). The
+            @log_api_call decorator reads it from kwargs so the client-side rate
+            limiter keys by the owning org instead of the shared "global" bucket.
 
         Returns
         -------
@@ -36,6 +42,7 @@ class BluetoothCollector(BaseNetworkHealthCollector):
             List of Bluetooth clients.
 
         """
+        _ = org_id  # Consumed by the @log_api_call decorator for rate-limit keying.
         response = await asyncio.to_thread(
             self.api.networks.getNetworkBluetoothClients,
             network_id,
@@ -69,7 +76,7 @@ class BluetoothCollector(BaseNetworkHealthCollector):
         try:
             with LogContext(network_id=network_id, network_name=network_name, org_id=org_id):
                 # Get Bluetooth clients for the last 5 minutes with page size 1000
-                bluetooth_clients = await self._fetch_bluetooth_clients(network_id)
+                bluetooth_clients = await self._fetch_bluetooth_clients(network_id, org_id=org_id)
 
             # Count the total number of Bluetooth clients
             client_count = len(bluetooth_clients) if bluetooth_clients else 0

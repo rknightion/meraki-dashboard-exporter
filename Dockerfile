@@ -86,11 +86,20 @@ COPY --link --from=builder --chown=1000:1000 /app/meraki_dashboard_exporter ./me
 # Copy entrypoint script
 COPY --link --chown=1000:1000 docker-entrypoint.py ./
 
+# Bake the build-time version into the image (F-118). The repo pyproject.toml is
+# not present in the runtime stage and deps are installed with
+# `uv sync --no-install-project`, so both of get_version()'s local sources miss;
+# MERAKI_EXPORTER_VERSION is the runtime fallback surfaced in /status, the web UI,
+# and the OTel service.version resource attribute. Passed via
+# `--build-arg APP_VERSION=<version>` (see CI wiring); defaults to the dev sentinel.
+ARG APP_VERSION=0.0.0+dev
+
 # Environment setup - use the venv Python
 # Note: PYTHONDONTWRITEBYTECODE removed since we pre-compile bytecode
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    PYTHONFAULTHANDLER=1
+    PYTHONFAULTHANDLER=1 \
+    MERAKI_EXPORTER_VERSION=${APP_VERSION}
 
 # Switch to non-root user
 USER exporter

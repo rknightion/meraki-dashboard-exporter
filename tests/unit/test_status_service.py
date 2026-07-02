@@ -181,7 +181,10 @@ class TestStatusService:
         mock_manager.org_health_tracker._orgs = {}
         mock_manager.rate_limiter._tokens = {"123": 5.0}
         mock_manager.rate_limiter.enabled = True
-        mock_client._api_call_count = 42
+        # F-028/F-074: total_calls comes from the real request counter accessor,
+        # throttle_events from the rate limiter's throttled-total accessor.
+        mock_manager.rate_limiter.get_total_throttled.return_value = 7
+        mock_client.get_total_api_requests.return_value = 42
         mock_expiration.get_stats.return_value = {
             "total_tracked": 500,
             "by_collector": {"DeviceCollector": 200},
@@ -200,6 +203,7 @@ class TestStatusService:
         assert snapshot.collectors[0].staleness == "ok"
         assert snapshot.collectors[0].last_success_ago == "50s ago"
         assert snapshot.api_health.total_calls == 42
+        assert snapshot.api_health.throttle_events == 7
         assert snapshot.api_health.per_org_rate_limits == [
             {"org_id": "123", "tokens_remaining": 5.0}
         ]
@@ -235,7 +239,8 @@ class TestStatusService:
         mock_manager.org_health_tracker._orgs = {}
         mock_manager.rate_limiter._tokens = {}
         mock_manager.rate_limiter.enabled = True
-        mock_client._api_call_count = 0
+        mock_manager.rate_limiter.get_total_throttled.return_value = 0
+        mock_client.get_total_api_requests.return_value = 0
         mock_expiration.get_stats.return_value = {
             "total_tracked": 0,
             "by_collector": {},
@@ -270,7 +275,8 @@ class TestStatusService:
         }
         mock_manager.rate_limiter._tokens = {}
         mock_manager.rate_limiter.enabled = True
-        mock_client._api_call_count = 0
+        mock_manager.rate_limiter.get_total_throttled.return_value = 0
+        mock_client.get_total_api_requests.return_value = 0
         mock_expiration.get_stats.return_value = {
             "total_tracked": 0,
             "by_collector": {},

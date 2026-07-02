@@ -28,13 +28,19 @@ class SSIDPerformanceCollector(BaseNetworkHealthCollector):
     """
 
     @log_api_call("getNetworkWirelessFailedConnections")
-    async def _fetch_failed_connections(self, network_id: str) -> list[dict[str, Any]]:
+    async def _fetch_failed_connections(
+        self, network_id: str, org_id: str | None = None
+    ) -> list[dict[str, Any]]:
         """Fetch failed wireless connections for a network.
 
         Parameters
         ----------
         network_id : str
             Network ID.
+        org_id : str | None
+            Organization ID for logging and rate-limiting context (F-170). The
+            @log_api_call decorator reads it from kwargs so the client-side rate
+            limiter keys by the owning org instead of the shared "global" bucket.
 
         Returns
         -------
@@ -42,6 +48,7 @@ class SSIDPerformanceCollector(BaseNetworkHealthCollector):
             List of failed connection entries grouped by SSID and failure step.
 
         """
+        _ = org_id  # Consumed by the @log_api_call decorator for rate-limit keying.
         response = await asyncio.to_thread(
             self.api.wireless.getNetworkWirelessFailedConnections,
             network_id,
@@ -72,7 +79,7 @@ class SSIDPerformanceCollector(BaseNetworkHealthCollector):
 
         try:
             with LogContext(network_id=network_id, network_name=network_name, org_id=org_id):
-                failed_connections = await self._fetch_failed_connections(network_id)
+                failed_connections = await self._fetch_failed_connections(network_id, org_id=org_id)
 
             if not failed_connections:
                 return

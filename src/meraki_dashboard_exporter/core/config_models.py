@@ -168,6 +168,21 @@ class APISettings(BaseModel):
         le=3600,
         description="Minimum seconds between client application usage refreshes",
     )
+    client_signal_quality_interval: int = Field(
+        600,
+        ge=0,
+        le=3600,
+        description="Minimum seconds between per-client wireless signal-quality refreshes",
+    )
+    client_signal_quality_max_clients: int = Field(
+        200,
+        ge=0,
+        le=5000,
+        description=(
+            "Maximum wireless clients queried for signal quality per network per cycle "
+            "(0 disables the cap). Bounds the sequential per-client API fan-out."
+        ),
+    )
 
 
 class UpdateIntervals(BaseModel):
@@ -274,6 +289,13 @@ class OTelSettings(BaseModel):
     endpoint: str | None = Field(
         None,
         description="OpenTelemetry collector endpoint (OTLP gRPC)",
+    )
+    insecure: bool = Field(
+        True,
+        description=(
+            "Send OTLP traces over an insecure (non-TLS) channel. Set False to use "
+            "TLS/system-trust-store transport to the collector endpoint."
+        ),
     )
     service_name: str = Field(
         "meraki-dashboard-exporter",

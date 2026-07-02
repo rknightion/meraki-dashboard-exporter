@@ -250,9 +250,12 @@ class StatusService:
             for org_id, tokens in rate_limiter._tokens.items():
                 per_org.append({"org_id": org_id, "tokens_remaining": round(tokens, 1)})
 
+        # F-028/F-074: source real counters — total_calls from the Meraki request
+        # counter (the old `_api_call_count` was never incremented) and
+        # throttle_events from the rate limiter's throttled total (was hardcoded 0).
         api_health = ApiHealthStatus(
-            total_calls=self._client._api_call_count,
-            throttle_events=0,
+            total_calls=self._client.get_total_api_requests(),
+            throttle_events=rate_limiter.get_total_throttled(),
             per_org_rate_limits=per_org,
         )
 

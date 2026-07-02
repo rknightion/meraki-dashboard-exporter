@@ -88,10 +88,13 @@ class TracingConfig:
                 sampler=sampler,
             )
 
-            # Configure OTLP exporter
+            # Configure OTLP exporter. The transport is driven by settings
+            # (F-110): insecure=True (default) uses a plaintext gRPC channel;
+            # insecure=False makes the OTLP exporter build a TLS channel using
+            # the system trust store.
             otlp_exporter = OTLPSpanExporter(
                 endpoint=self.settings.otel.endpoint,
-                insecure=True,  # For non-TLS endpoints
+                insecure=self.settings.otel.insecure,
             )
 
             # Add span processor with batching

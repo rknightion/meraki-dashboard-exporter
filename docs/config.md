@@ -79,6 +79,8 @@ Configuration for Meraki API interactions
 | `MERAKI_EXPORTER_API__MS_PORT_USAGE_INTERVAL` | `int` | `600` | Minimum seconds between per-switch port usage/POE refreshes (min: 0, max: 3600) |
 | `MERAKI_EXPORTER_API__MS_PACKET_STATS_INTERVAL` | `int` | `600` | Minimum seconds between per-switch packet stats refreshes (min: 0, max: 3600) |
 | `MERAKI_EXPORTER_API__CLIENT_APP_USAGE_INTERVAL` | `int` | `600` | Minimum seconds between client application usage refreshes (min: 0, max: 3600) |
+| `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_INTERVAL` | `int` | `600` | Minimum seconds between per-client wireless signal-quality refreshes (min: 0, max: 3600) |
+| `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_MAX_CLIENTS` | `int` | `200` | Maximum wireless clients queried for signal quality per network per cycle (0 disables the cap). Bounds the sequential per-client API fan-out. (min: 0, max: 5000) |
 
 ## Update Intervals
 
@@ -125,6 +127,7 @@ OpenTelemetry observability configuration
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_OTEL__ENABLED` | `bool` | `False` | Enable OpenTelemetry tracing |
 | `MERAKI_EXPORTER_OTEL__ENDPOINT` | `str | None` | `_(none)_` | OpenTelemetry collector endpoint (OTLP gRPC) |
+| `MERAKI_EXPORTER_OTEL__INSECURE` | `bool` | `True` | Send OTLP traces over an insecure (non-TLS) channel. Set False to use TLS/system-trust-store transport to the collector endpoint. |
 | `MERAKI_EXPORTER_OTEL__SERVICE_NAME` | `str` | `meraki-dashboard-exporter` | Service name for OpenTelemetry tracing |
 | `MERAKI_EXPORTER_OTEL__SAMPLING_RATE` | `float` | `0.1` | Trace sampling rate (0.0-1.0). 0 disables sampling, 1 samples every trace, values in between use ratio-based parent sampling. (min: 0.0, max: 1.0) |
 | `MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES` | `dict[str, str]` | `{}` | Additional resource attributes for OpenTelemetry |
