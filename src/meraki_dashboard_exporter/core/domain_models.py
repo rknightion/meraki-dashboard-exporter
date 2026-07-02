@@ -558,6 +558,196 @@ class SensorGatewayConnection(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+# Cellular Gateway (MG) Models (F-029)
+
+
+class CellularGatewayUplinkSignalStat(BaseModel):
+    """Signal strength readings for a single MG cellular uplink.
+
+    ``rsrp``/``rsrq`` are typically numeric strings (e.g. ``"-90"``) but may be
+    empty or non-numeric; the collector does its own float parsing/tolerance,
+    so these are kept loosely typed here.
+    """
+
+    rsrp: Any = None
+    rsrq: Any = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class CellularGatewayUplinkRoaming(BaseModel):
+    """Roaming status object for a single MG cellular uplink."""
+
+    status: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class CellularGatewayUplink(BaseModel):
+    """A single uplink entry within a cellular gateway uplink-status row."""
+
+    interface: str = ""
+    status: str = "not connected"
+    provider: str | None = None
+    connectionType: str | None = None
+    signalType: str | None = None
+    roaming: CellularGatewayUplinkRoaming | None = None
+    apn: str | None = None
+    ip: str | None = None
+    signalStat: CellularGatewayUplinkSignalStat | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class CellularGatewayUplinkStatus(BaseModel):
+    """Per-device MG cellular gateway uplink status row.
+
+    Source: ``getOrganizationCellularGatewayUplinkStatuses``.
+    """
+
+    __meraki_op__ = "getOrganizationCellularGatewayUplinkStatuses"
+
+    serial: str = ""
+    model: str | None = None
+    networkId: str | None = None
+    uplinks: list[CellularGatewayUplink] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+# Switch (MS) Power Module Models (F-029)
+
+
+class PowerModuleNetworkRef(BaseModel):
+    """A network reference nested within a power-module-status row."""
+
+    id: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class PowerModuleSlot(BaseModel):
+    """A single power-supply slot entry within a power-module-status row."""
+
+    number: int | str | None = None
+    serial: str | None = None
+    model: str | None = None
+    status: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class DevicePowerModuleStatus(BaseModel):
+    """Per-device MS/rackmount power-module status row.
+
+    Source: ``getOrganizationDevicesPowerModulesStatusesByDevice``.
+    """
+
+    __meraki_op__ = "getOrganizationDevicesPowerModulesStatusesByDevice"
+
+    serial: str | None = None
+    name: str | None = None
+    model: str | None = None
+    network: PowerModuleNetworkRef | None = None
+    slots: list[PowerModuleSlot] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+# Appliance (MX) Uplink Loss/Latency Models (F-029)
+
+
+class UplinkLossLatencyTimeSeriesPoint(BaseModel):
+    """A single timestamped loss/latency sample within an uplink health row."""
+
+    ts: str | None = None
+    lossPercent: float | None = None
+    latencyMs: float | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class DeviceUplinkLossLatency(BaseModel):
+    """Per-(device, uplink, destination-ip) WAN loss/latency row.
+
+    Source: ``getOrganizationDevicesUplinksLossAndLatency``.
+    """
+
+    __meraki_op__ = "getOrganizationDevicesUplinksLossAndLatency"
+
+    networkId: str | None = None
+    serial: str | None = None
+    uplink: str | None = None
+    ip: str | None = None
+    timeSeries: list[UplinkLossLatencyTimeSeriesPoint] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+# Camera (MV) Models (F-029)
+
+
+class CameraAnalyticsZone(BaseModel):
+    """A single configured analytics zone on an MV camera.
+
+    Source: ``getDeviceCameraAnalyticsZones``.
+    """
+
+    __meraki_op__ = "getDeviceCameraAnalyticsZones"
+
+    id: str | int | None = None
+    label: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class CameraAnalyticsLiveZoneData(BaseModel):
+    """Live per-zone analytics counts within a live-analytics response."""
+
+    person: int = 0
+
+    @field_validator("person", mode="before")
+    @classmethod
+    def validate_person(cls, v: Any) -> int:
+        """Ensure person count is a non-negative integer."""
+        if v is None:
+            return 0
+        return max(0, int(v))
+
+    model_config = ConfigDict(extra="allow")
+
+
+class CameraAnalyticsLive(BaseModel):
+    """Live analytics response for an MV camera.
+
+    Source: ``getDeviceCameraAnalyticsLive``.
+    """
+
+    __meraki_op__ = "getDeviceCameraAnalyticsLive"
+
+    zones: dict[str, CameraAnalyticsLiveZoneData] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class CameraQualityAndRetention(BaseModel):
+    """Quality/retention configuration for an MV camera.
+
+    Source: ``getDeviceCameraQualityAndRetention``.
+    """
+
+    __meraki_op__ = "getDeviceCameraQualityAndRetention"
+
+    motionBasedRetentionEnabled: bool | None = None
+    audioRecordingEnabled: bool | None = None
+    restrictedBandwidthModeEnabled: bool | None = None
+    quality: str | None = None
+    resolution: str | None = None
+    profileId: str | int | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
 # Organization Models
 
 
@@ -623,7 +813,7 @@ class ClientData(BaseModel):
     vlan: str | None = None
     switchport: str | None = None
     status: Literal["Online", "Offline"] | str = "Offline"
-    usage: dict[str, int] | None = None
+    usage: dict[str, float] | None = None
     notes: str | None = None
     groupPolicy8021x: str | None = None
     adaptivePolicyGroup: str | None = None

@@ -6,6 +6,7 @@ import time
 from datetime import UTC, datetime
 
 import pytest
+from structlog.testing import capture_logs
 
 from meraki_dashboard_exporter.core.api_models import NetworkClient
 from meraki_dashboard_exporter.core.config import Settings
@@ -71,6 +72,24 @@ def test_is_network_stale_and_cleanup(store):
     removed = store.cleanup_stale_networks()
     assert removed == 1
     assert store.get_network_clients("N1") == []
+
+
+def test_update_clients_per_network_log_is_debug(store, force_debug_log_capture):
+    """F-171: the per-network "Updated client data" line must be debug-level.
+
+    At ~100 networks this fired once per network per cycle at INFO, flooding
+    logs (~2,400 lines/hour). It is demoted to debug.
+    """
+    c1 = _make_client("c1", "10.0.0.1")
+
+    with capture_logs() as caps:
+        store.update_clients("N1", [c1], network_name="Net1", org_id="O1")
+
+    updated_events = [e for e in caps if e.get("event") == "Updated client data"]
+    assert updated_events, "expected an 'Updated client data' log event"
+    assert all(e["log_level"] == "debug" for e in updated_events), (
+        f"'Updated client data' must be debug-level, got: {updated_events}"
+    )
 
 
 def test_get_statistics(store):

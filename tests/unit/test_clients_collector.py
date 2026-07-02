@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from structlog.testing import capture_logs
 
 from meraki_dashboard_exporter.collectors.clients import ClientsCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
@@ -521,6 +522,168 @@ class TestClientsCollector(BaseCollectorTest):
             # Error tracking might not be implemented in the collector
             # This is acceptable since the main functionality handles errors gracefully
             pass
+
+    async def test_collect_network_with_fractional_usage_not_dropped(
+        self, collector, mock_api_builder, metrics
+    ):
+        """F-112: a client with fractional (float) usage must not drop the network."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+
+        clients = [
+            ClientFactory.create(
+                client_id="c1",
+                mac="aa:bb:cc:dd:ee:01",
+                ip="10.0.0.1",
+                status="Online",
+                ssid="Corporate",
+                # Live API returns floats for KB usage.
+                usage={"sent": 225.6, "recv": 852.5, "total": 1078.1},
+            ),
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_custom_response("getNetworkClients", clients)
+            .build()
+        )
+        self._update_collector_api(collector, api)
+
+        with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
+            mock_resolve.return_value = {}
+            await self.run_collector(collector)
+
+        # Network was processed (not dropped by a ValidationError).
+        metrics.assert_gauge_value("meraki_client_status", 1, client_id="c1", ssid="Corporate")
+        metrics.assert_gauge_value("meraki_client_usage_sent_kb", 225.6, client_id="c1")
+        metrics.assert_gauge_value("meraki_client_usage_recv_kb", 852.5, client_id="c1")
+
+    async def test_signal_quality_respects_max_clients_and_rate_limiter(
+        self, collector, mock_api_builder, metrics
+    ):
+        """F-060: signal-quality fan-out is capped and acquires the rate limiter."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+
+        clients = [
+            ClientFactory.create(
+                client_id=f"c{i}",
+                mac=f"aa:bb:cc:dd:ee:{i:02d}",
+                recentDeviceConnection="Wireless",
+                ssid="Corporate",
+            )
+            for i in range(5)
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_custom_response("getNetworkClients", clients)
+            .build()
+        )
+        api.wireless.getNetworkWirelessSignalQualityHistory = MagicMock(
+            return_value=[{"rssi": -50, "snr": 40}]
+        )
+        self._update_collector_api(collector, api)
+
+        # Cap to 2 wireless clients per network and attach a rate limiter.
+        # acquire() returns the seconds waited (0.0 here), mirroring OrgRateLimiter.
+        collector.settings.api.client_signal_quality_max_clients = 2
+        collector.rate_limiter = AsyncMock()
+        collector.rate_limiter.acquire = AsyncMock(return_value=0.0)
+
+        with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
+            mock_resolve.return_value = {}
+            await self.run_collector(collector)
+
+        # Only the capped number of clients were queried (not all 5).
+        assert api.wireless.getNetworkWirelessSignalQualityHistory.call_count == 2
+        # The shared rate limiter was engaged for the per-client fan-out.
+        assert collector.rate_limiter.acquire.await_count >= 1
+        collector.rate_limiter.acquire.assert_any_await(
+            "123", "getNetworkWirelessSignalQualityHistory"
+        )
+
+    async def test_signal_quality_interval_gates_repeat_collection(
+        self, collector, mock_api_builder, metrics
+    ):
+        """F-060: a second immediate collection is skipped by the interval gate."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+
+        clients = [
+            ClientFactory.create(
+                client_id="c1",
+                mac="aa:bb:cc:dd:ee:01",
+                recentDeviceConnection="Wireless",
+                ssid="Corporate",
+            ),
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_custom_response("getNetworkClients", clients)
+            .build()
+        )
+        api.wireless.getNetworkWirelessSignalQualityHistory = MagicMock(
+            return_value=[{"rssi": -50, "snr": 40}]
+        )
+        self._update_collector_api(collector, api)
+
+        # Default interval is 600s > 0, so the second run should be gated out.
+        collector.settings.api.client_signal_quality_interval = 600
+
+        with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
+            mock_resolve.return_value = {}
+            await self.run_collector(collector)
+            first_calls = api.wireless.getNetworkWirelessSignalQualityHistory.call_count
+            await self.run_collector(collector)
+            second_calls = api.wireless.getNetworkWirelessSignalQualityHistory.call_count
+
+        assert first_calls == 1
+        # No additional signal-quality calls on the immediate second cycle.
+        assert second_calls == first_calls
+
+    async def test_per_network_fetch_log_is_debug(
+        self, collector, mock_api_builder, metrics, force_debug_log_capture
+    ):
+        """F-171: per-network "Fetched client data" is debug; an INFO summary is emitted."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+        clients = [ClientFactory.create(client_id="c1", mac="aa:bb:cc:dd:ee:01")]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_custom_response("getNetworkClients", clients)
+            .build()
+        )
+        self._update_collector_api(collector, api)
+
+        with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
+            mock_resolve.return_value = {}
+            with capture_logs() as caps:
+                await self.run_collector(collector)
+
+        fetched = [e for e in caps if e.get("event") == "Fetched client data"]
+        assert fetched, "expected a 'Fetched client data' log event"
+        assert all(e["log_level"] == "debug" for e in fetched), (
+            f"'Fetched client data' must be debug-level, got: {fetched}"
+        )
+
+        # An aggregate INFO summary is emitted once for the collection.
+        summaries = [
+            e
+            for e in caps
+            if e.get("event") == "Completed client data collection" and e["log_level"] == "info"
+        ]
+        assert summaries, f"expected an INFO collection summary, captured: {caps}"
 
     async def test_large_client_batch_handling(self, collector, mock_api_builder, metrics):
         """Test handling of large numbers of clients for application usage."""

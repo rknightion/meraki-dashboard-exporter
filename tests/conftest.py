@@ -45,3 +45,25 @@ def isolated_registry():
     registry = CollectorRegistry()
     yield registry
     # Registry will be garbage collected after test
+
+
+@pytest.fixture
+def force_debug_log_capture():
+    """Force structlog to emit DEBUG events so ``capture_logs()`` can record them.
+
+    Other tests invoke the app's ``setup_logging`` (an INFO-filtering bound
+    logger) whose config leaks globally, dropping ``logger.debug()`` calls
+    before ``structlog.testing.capture_logs`` sees them. This snapshots the
+    current config, installs a DEBUG-level bound logger for the test, and
+    restores the prior config afterwards so nothing leaks onward.
+    """
+    import logging
+
+    import structlog
+
+    prev = structlog.get_config()
+    structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(logging.DEBUG))
+    try:
+        yield
+    finally:
+        structlog.configure(**prev)

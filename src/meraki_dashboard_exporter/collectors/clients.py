@@ -66,6 +66,11 @@ class ClientsCollector(MetricCollector):
         # Initialize DNS stats tracking
         self._last_dns_stats: dict[str, int] | None = None
         self._last_app_usage_by_network: dict[str, float] = {}
+        # Per-network throttle for the sequential signal-quality fan-out (F-060).
+        self._last_signal_quality_by_network: dict[str, float] = {}
+        # Per-collection aggregate counters for the INFO summary (F-171).
+        self._collection_networks = 0
+        self._collection_clients = 0
 
     def _initialize_metrics(self) -> None:
         """Initialize Prometheus metrics for client data."""
@@ -313,6 +318,10 @@ class ClientsCollector(MetricCollector):
             logger.debug("Client collection is disabled, skipping")
             return
 
+        # Reset per-collection aggregate counters (F-171 INFO summary).
+        self._collection_networks = 0
+        self._collection_clients = 0
+
         organizations = await self.api_helper.get_organizations()
 
         if not organizations:
@@ -331,6 +340,14 @@ class ClientsCollector(MetricCollector):
             # Process networks directly without batching to avoid lambda issues
             # Since we're already processing one org at a time, this is fine
             await self._process_network_batch(org_id, org_name, networks)
+
+        # Aggregate INFO summary for the whole collection (F-171): the per-network
+        # "Fetched client data" / "Updated client data" lines are debug-level.
+        logger.info(
+            "Completed client data collection",
+            networks_processed=self._collection_networks,
+            total_clients=self._collection_clients,
+        )
 
         # Update DNS cache and client store metrics after all collections
         self._update_cache_metrics()
@@ -449,7 +466,12 @@ class ClientsCollector(MetricCollector):
         # Parse client data
         clients = [NetworkClient.model_validate(c) for c in clients_data]
 
-        logger.info(
+        # Accumulate for the aggregate INFO summary emitted by _collect_impl (F-171).
+        self._collection_networks += 1
+        self._collection_clients += len(clients)
+
+        # F-171: per-network line demoted to debug to keep log volume bounded at scale.
+        logger.debug(
             "Fetched client data",
             org_id=org_id,
             network_id=network_id,
@@ -1021,6 +1043,19 @@ class ClientsCollector(MetricCollector):
             Resolved hostnames by IP.
 
         """
+        # F-060: gate the whole per-client fan-out behind an interval, mirroring
+        # application-usage collection, so we don't drain the shared org rate-limit
+        # budget on every MEDIUM-tier cycle.
+        interval = self.settings.api.client_signal_quality_interval
+        last_run = self._last_signal_quality_by_network.get(network_id, 0.0)
+        if interval > 0 and (time.time() - last_run) < interval:
+            logger.debug(
+                "Skipping client signal quality collection",
+                network_id=network_id,
+                interval_seconds=interval,
+            )
+            return
+
         # Filter to only wireless clients
         wireless_clients = [
             client for client in clients if client.recentDeviceConnection == "Wireless"
@@ -1030,19 +1065,39 @@ class ClientsCollector(MetricCollector):
             logger.debug("No wireless clients found in network", network_id=network_id)
             return
 
+        # F-060: cap the number of clients queried per network to bound the
+        # sequential per-client fan-out (0 disables the cap).
+        max_clients = self.settings.api.client_signal_quality_max_clients
+        clients_to_query = wireless_clients
+        if max_clients > 0 and len(wireless_clients) > max_clients:
+            logger.warning(
+                "Truncating wireless clients for signal quality collection",
+                network_id=network_id,
+                total_wireless_clients=len(wireless_clients),
+                limit=max_clients,
+            )
+            clients_to_query = wireless_clients[:max_clients]
+
         logger.debug(
             "Fetching wireless signal quality data",
             network_id=network_id,
-            wireless_client_count=len(wireless_clients),
+            wireless_client_count=len(clients_to_query),
         )
+
+        rate_limiter = getattr(self, "rate_limiter", None)
 
         # Process each wireless client individually. One API call per client; the
         # @log_api_call decorator already counts the first, so only track the rest
         # to avoid an off-by-one overcount (mirrors the batched pattern elsewhere).
-        for idx, client in enumerate(wireless_clients):
+        for idx, client in enumerate(clients_to_query):
             try:
                 if idx > 0:
                     self._track_api_call("getNetworkWirelessSignalQualityHistory")
+                # F-060: throttle the fan-out through the shared org rate limiter
+                # (mirrors application-usage; the first call is already accounted
+                # for by @log_api_call).
+                if rate_limiter is not None and idx > 0:
+                    await rate_limiter.acquire(org_id, "getNetworkWirelessSignalQualityHistory")
                 signal_response = await asyncio.to_thread(
                     self.api.wireless.getNetworkWirelessSignalQualityHistory,
                     network_id,
@@ -1134,10 +1189,13 @@ class ClientsCollector(MetricCollector):
                 # Continue with next client
                 continue
 
-        logger.info(
+        # Record the run so the interval gate can throttle the next cycle (F-060).
+        self._last_signal_quality_by_network[network_id] = time.time()
+
+        logger.debug(
             "Completed wireless signal quality collection",
             network_id=network_id,
-            wireless_client_count=len(wireless_clients),
+            wireless_client_count=len(clients_to_query),
         )
 
     def _update_cache_metrics(self) -> None:

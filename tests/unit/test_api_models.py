@@ -488,6 +488,36 @@ class TestNetworkClient:
         )
         assert client.vlan is None
 
+    def test_network_client_fractional_usage(self):
+        """Regression (F-112): live API returns float KB usage; must not raise.
+
+        The Meraki API returns ``usage.sent``/``usage.recv`` as floats (e.g.
+        ``225.6``). Typing ``usage`` as ``dict[str, int]`` made
+        ``model_validate`` raise ``ValidationError`` on a fractional value,
+        which - under ``@with_error_handling(continue_on_error=True)`` - dropped
+        the whole network's client collection for that cycle.
+        """
+        now = datetime.now(UTC)
+
+        client = NetworkClient(
+            id="c_123",
+            mac="00:11:22:33:44:55",
+            firstSeen=now,
+            lastSeen=now,
+            usage={"sent": 225.6, "recv": 852.5, "total": 1078.1},
+        )
+        assert client.usage == {"sent": 225.6, "recv": 852.5, "total": 1078.1}
+
+        # Integer usage still round-trips (floats accept ints).
+        client_int = NetworkClient(
+            id="c_124",
+            mac="00:11:22:33:44:66",
+            firstSeen=now,
+            lastSeen=now,
+            usage={"sent": 1000, "recv": 2000},
+        )
+        assert client_int.usage == {"sent": 1000, "recv": 2000}
+
     def test_network_client_full(self):
         """Test network client with all fields."""
         first_seen = datetime.now(UTC)

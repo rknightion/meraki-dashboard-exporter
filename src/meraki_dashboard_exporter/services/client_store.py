@@ -175,7 +175,10 @@ class ClientStore:
         # Update timestamp
         self._last_update[network_id] = time.time()
 
-        logger.info(
+        # F-171: per-network line demoted to debug to avoid ~2,400 INFO lines/hour
+        # at ~100 networks; the aggregate collection summary is emitted at INFO by
+        # ClientsCollector instead.
+        logger.debug(
             "Updated client data",
             network_id=network_id,
             network_name=network_name,

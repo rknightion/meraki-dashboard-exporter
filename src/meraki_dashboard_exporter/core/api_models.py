@@ -279,7 +279,10 @@ class NetworkClient(BaseModel):
     ssid: str | None = None
     vlan: str | None = None  # Can be string or None in API
     switchport: str | None = None
-    usage: dict[str, int] | None = None
+    # Live API returns FLOAT kilobyte values (e.g. {"sent": 225.6, "recv": 852.5});
+    # typing this as int made model_validate raise on fractional usage and drop the
+    # whole network's client collection for that cycle. Floats accept ints too.
+    usage: dict[str, float] | None = None
     status: Literal["Online", "Offline"] | str = "Offline"
     notes: str | None = None
     groupPolicy8021x: str | None = None
