@@ -6,6 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants.metrics_constants import MXMetricName
+from ...core.domain_models import DeviceUplinkLossLatency, UplinkLossLatencyTimeSeriesPoint
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
@@ -122,13 +123,14 @@ class MXUplinkHealthCollector(SubCollectorMixin):
         # We label only by interface (not destination ip, which is unbounded), so
         # if multiple IP rows share an uplink, last-write-wins is acceptable here.
         for row in rows:
-            network_id = row.get("networkId", "")
+            entry = DeviceUplinkLossLatency.model_validate(row)
+            network_id = entry.networkId or ""
 
             if allowed_network_ids is not None and network_id not in allowed_network_ids:
                 skipped += 1
                 continue
 
-            serial = row.get("serial", "")
+            serial = entry.serial or ""
             device_info = device_lookup.get(serial, {})
             network_id = network_id or device_info.get("network_id", "")
 
@@ -140,8 +142,8 @@ class MXUplinkHealthCollector(SubCollectorMixin):
                 "networkName": device_info.get("network_name", network_id),
             }
 
-            interface = row.get("uplink", "")
-            time_series: list[dict[str, Any]] = row.get("timeSeries", [])
+            interface = entry.uplink or ""
+            time_series = entry.timeSeries
 
             loss_value = self._latest_non_null(time_series, "lossPercent")
             latency_value = self._latest_non_null(time_series, "latencyMs")
@@ -183,15 +185,17 @@ class MXUplinkHealthCollector(SubCollectorMixin):
         )
 
     @staticmethod
-    def _latest_non_null(time_series: list[dict[str, Any]], field: str) -> float | None:
+    def _latest_non_null(
+        time_series: list[UplinkLossLatencyTimeSeriesPoint], field: str
+    ) -> float | None:
         """Return the value of the latest non-null sample for ``field`` in a time series.
 
         Parameters
         ----------
-        time_series : list[dict[str, Any]]
-            List of time series points, each potentially containing ``field``.
+        time_series : list[UplinkLossLatencyTimeSeriesPoint]
+            List of validated time series points, each potentially having ``field`` set.
         field : str
-            Field name to look up (e.g. ``"lossPercent"`` or ``"latencyMs"``).
+            Attribute name to look up (e.g. ``"lossPercent"`` or ``"latencyMs"``).
 
         Returns
         -------
@@ -200,7 +204,7 @@ class MXUplinkHealthCollector(SubCollectorMixin):
 
         """
         for point in reversed(time_series):
-            value = point.get(field)
+            value = getattr(point, field, None)
             if value is not None:
                 return float(value)
         return None

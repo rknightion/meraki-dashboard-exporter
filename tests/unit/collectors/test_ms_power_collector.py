@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from prometheus_client import Gauge
 
 from meraki_dashboard_exporter.collectors.devices.ms_power import MSPowerCollector
+from meraki_dashboard_exporter.core.domain_models import DevicePowerModuleStatus
 
 if TYPE_CHECKING:
     pass
@@ -344,3 +345,80 @@ class TestMSPowerCollector:
         # org2's series must survive — org1's collection must not wipe the shared gauge.
         assert len(gauge._metrics) == 1
         assert mock_parent._set_metric.call_count == 1
+
+    # ------------------------------------------------------------------
+    # Pydantic domain-model validation (F-029)
+    # ------------------------------------------------------------------
+
+    async def test_collect_power_modules_validates_rows_via_domain_model(
+        self,
+        ms_power_collector: MSPowerCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Each raw row must be validated via DevicePowerModuleStatus.model_validate."""
+        row = {
+            "name": "Switch 1",
+            "serial": "Q2SW-1111-2222",
+            "network": {"id": "N_111"},
+            "model": "MS250-48",
+            "slots": [
+                {"number": 1, "serial": "PSU-SERIAL-1", "model": "PWR-350WAC", "status": "powering"}
+            ],
+        }
+        mock_api.organizations.getOrganizationDevicesPowerModulesStatusesByDevice = MagicMock(
+            return_value=[row]
+        )
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.ms_power.DevicePowerModuleStatus"
+            ".model_validate",
+            wraps=DevicePowerModuleStatus.model_validate,
+        ) as spy:
+            await ms_power_collector.collect_power_modules("org1", "Test Org", {})
+
+        spy.assert_called_once_with(row)
+
+    async def test_collect_power_modules_tolerates_missing_and_extra_fields(
+        self,
+        ms_power_collector: MSPowerCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Missing optional fields and unexpected extra fields must not raise."""
+        mock_api.organizations.getOrganizationDevicesPowerModulesStatusesByDevice = MagicMock(
+            return_value=[
+                {
+                    # "name"/"model" intentionally omitted
+                    "serial": "Q2SW-1111-2222",
+                    "network": {"id": "N_111", "someFutureField": "x"},
+                    "someBrandNewField": 42,
+                    "slots": [
+                        {
+                            "number": 1,
+                            "serial": "PSU-SERIAL-1",
+                            "status": "powering",
+                            "aFutureApiField": "unexpected",
+                        }
+                    ],
+                }
+            ]
+        )
+
+        device_lookup = {
+            "Q2SW-1111-2222": {
+                "name": "Switch From Lookup",
+                "model": "MS250-48-FROM-LOOKUP",
+                "network_id": "N_111",
+                "network_name": "Office Network",
+            }
+        }
+
+        await ms_power_collector.collect_power_modules("org1", "Test Org", device_lookup)
+
+        assert mock_parent._set_metric.call_count == 1
+        _, labels, value, *_ = mock_parent._set_metric.call_args_list[0][0]
+        assert value == 1
+        assert labels["name"] == "Switch From Lookup"
+        assert labels["model"] == "MS250-48-FROM-LOOKUP"
+        assert labels["psu_serial"] == "PSU-SERIAL-1"

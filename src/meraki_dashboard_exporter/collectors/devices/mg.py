@@ -6,6 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants import MGMetricName
+from ...core.domain_models import CellularGatewayUplinkStatus
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
@@ -180,27 +181,35 @@ class MGCollector(BaseDeviceCollector):
         uplink_count = 0
 
         for row in uplink_statuses:
-            serial = row.get("serial", "")
+            gateway = CellularGatewayUplinkStatus.model_validate(row)
+            serial = gateway.serial
             device_info = device_lookup.get(serial, {})
-            network_id = row.get("networkId", device_info.get("network_id", ""))
+            network_id = (
+                gateway.networkId
+                if gateway.networkId is not None
+                else device_info.get("network_id", "")
+            )
 
             if allowed_network_ids is not None and network_id not in allowed_network_ids:
                 skipped += 1
                 continue
 
+            gateway_model = (
+                gateway.model if gateway.model is not None else device_info.get("model", "")
+            )
             device_data = {
                 "serial": serial,
                 "name": device_info.get("name", serial),
-                "model": row.get("model", device_info.get("model", "")),
+                "model": gateway_model,
                 "networkId": network_id,
                 "networkName": device_info.get("network_name", network_id),
             }
 
-            for uplink in row.get("uplinks", []):
+            for uplink in gateway.uplinks:
                 uplink_count += 1
-                interface = uplink.get("interface", "")
-                status = uplink.get("status", "not connected")
-                roaming = uplink.get("roaming") or {}
+                interface = uplink.interface
+                status = uplink.status
+                roaming = uplink.roaming
 
                 info_labels = create_device_labels(
                     device_data,
@@ -208,12 +217,12 @@ class MGCollector(BaseDeviceCollector):
                     org_name=org_name,
                     interface=interface,
                     status=status,
-                    provider=uplink.get("provider", ""),
-                    connection_type=uplink.get("connectionType", ""),
-                    signal_type=uplink.get("signalType", ""),
-                    roaming_status=roaming.get("status", ""),
-                    apn=uplink.get("apn", ""),
-                    ip=uplink.get("ip", ""),
+                    provider=uplink.provider or "",
+                    connection_type=uplink.connectionType or "",
+                    signal_type=uplink.signalType or "",
+                    roaming_status=(roaming.status or "") if roaming is not None else "",
+                    apn=uplink.apn or "",
+                    ip=uplink.ip or "",
                 )
                 self.parent._set_metric(
                     self._mg_uplink_status_info,
@@ -229,8 +238,8 @@ class MGCollector(BaseDeviceCollector):
                     interface=interface,
                 )
 
-                signal = uplink.get("signalStat") or {}
-                rsrp = _parse_float(signal.get("rsrp"))
+                signal = uplink.signalStat
+                rsrp = _parse_float(signal.rsrp) if signal is not None else None
                 if rsrp is not None:
                     self.parent._set_metric(
                         self._mg_uplink_signal_rsrp,
@@ -239,7 +248,7 @@ class MGCollector(BaseDeviceCollector):
                         MGMetricName.MG_UPLINK_SIGNAL_RSRP_DBM.value,
                     )
 
-                rsrq = _parse_float(signal.get("rsrq"))
+                rsrq = _parse_float(signal.rsrq) if signal is not None else None
                 if rsrq is not None:
                     self.parent._set_metric(
                         self._mg_uplink_signal_rsrq,
@@ -248,8 +257,10 @@ class MGCollector(BaseDeviceCollector):
                         MGMetricName.MG_UPLINK_SIGNAL_RSRQ_DB.value,
                     )
 
-                if "roaming" in uplink:
-                    roaming_value = 1.0 if roaming.get("status") == "roaming" else 0.0
+                if "roaming" in uplink.model_fields_set:
+                    roaming_value = (
+                        1.0 if (roaming is not None and roaming.status == "roaming") else 0.0
+                    )
                     self.parent._set_metric(
                         self._mg_uplink_roaming,
                         signal_labels,

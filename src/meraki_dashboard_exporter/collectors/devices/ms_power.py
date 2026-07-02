@@ -6,6 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants.metrics_constants import MSMetricName
+from ...core.domain_models import DevicePowerModuleStatus
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
@@ -123,17 +124,21 @@ class MSPowerCollector(SubCollectorMixin):
         emitted = 0
 
         for row in rows:
-            serial = row.get("serial", "")
+            device = DevicePowerModuleStatus.model_validate(row)
+            serial = device.serial or ""
             device_info = device_lookup.get(serial, {})
-            network = row.get("network") or {}
-            network_id = network.get("id", device_info.get("network_id", ""))
+            network_id = (
+                device.network.id
+                if device.network is not None and device.network.id is not None
+                else device_info.get("network_id", "")
+            )
 
             if allowed_network_ids is not None and network_id not in allowed_network_ids:
                 skipped += 1
                 continue
 
-            name = row.get("name", device_info.get("name", serial))
-            model = row.get("model", device_info.get("model", ""))
+            name = device.name if device.name is not None else device_info.get("name", serial)
+            model = device.model if device.model is not None else device_info.get("model", "")
 
             device_data = {
                 "serial": serial,
@@ -143,11 +148,11 @@ class MSPowerCollector(SubCollectorMixin):
                 "networkName": device_info.get("network_name", network_id),
             }
 
-            for slot in row.get("slots") or []:
-                slot_number = str(slot.get("number", ""))
-                psu_serial = slot.get("serial") or ""
-                psu_model = slot.get("model") or ""
-                status = slot.get("status", "")
+            for slot in device.slots:
+                slot_number = str(slot.number) if slot.number is not None else ""
+                psu_serial = slot.serial or ""
+                psu_model = slot.model or ""
+                status = slot.status or ""
 
                 labels = create_device_labels(
                     device_data,

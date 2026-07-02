@@ -7,6 +7,11 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants import MVMetricName
+from ...core.domain_models import (
+    CameraAnalyticsLive,
+    CameraAnalyticsZone,
+    CameraQualityAndRetention,
+)
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
@@ -217,16 +222,17 @@ class MVCollector(BaseDeviceCollector):
         zones = validate_response_format(
             zones, expected_type=list, operation="getDeviceCameraAnalyticsZones"
         )
+        zone_models = [CameraAnalyticsZone.model_validate(zone) for zone in zones]
 
         device_labels = create_device_labels(device, org_id=org_id, org_name=org_name)
         self.parent._set_metric(
             self._mv_analytics_zones,
             device_labels,
-            len(zones),
+            len(zone_models),
             MVMetricName.MV_ANALYTICS_ZONES.value,
         )
 
-        return {str(zone.get("id")): zone.get("label", "") for zone in zones}
+        return {str(zone.id): (zone.label or "") for zone in zone_models}
 
     @log_api_call("getDeviceCameraAnalyticsLive")
     @with_error_handling(
@@ -265,9 +271,10 @@ class MVCollector(BaseDeviceCollector):
         live = validate_response_format(
             live, expected_type=dict, operation="getDeviceCameraAnalyticsLive"
         )
+        live_model = CameraAnalyticsLive.model_validate(live)
 
-        for zone_id, zone_data in live.get("zones", {}).items():
-            person_count = zone_data.get("person", 0)
+        for zone_id, zone_data in live_model.zones.items():
+            person_count = zone_data.person
             labels = create_device_labels(
                 device,
                 org_id=org_id,
@@ -314,25 +321,26 @@ class MVCollector(BaseDeviceCollector):
             expected_type=dict,
             operation="getDeviceCameraQualityAndRetention",
         )
+        qr_model = CameraQualityAndRetention.model_validate(quality_retention)
 
         device_labels = create_device_labels(device, org_id=org_id, org_name=org_name)
 
         self.parent._set_metric(
             self._mv_motion_based_retention_enabled,
             device_labels,
-            1.0 if quality_retention.get("motionBasedRetentionEnabled") else 0.0,
+            1.0 if qr_model.motionBasedRetentionEnabled else 0.0,
             MVMetricName.MV_MOTION_BASED_RETENTION_ENABLED.value,
         )
         self.parent._set_metric(
             self._mv_audio_recording_enabled,
             device_labels,
-            1.0 if quality_retention.get("audioRecordingEnabled") else 0.0,
+            1.0 if qr_model.audioRecordingEnabled else 0.0,
             MVMetricName.MV_AUDIO_RECORDING_ENABLED.value,
         )
         self.parent._set_metric(
             self._mv_restricted_bandwidth_mode_enabled,
             device_labels,
-            1.0 if quality_retention.get("restrictedBandwidthModeEnabled") else 0.0,
+            1.0 if qr_model.restrictedBandwidthModeEnabled else 0.0,
             MVMetricName.MV_RESTRICTED_BANDWIDTH_MODE_ENABLED.value,
         )
 
@@ -344,9 +352,9 @@ class MVCollector(BaseDeviceCollector):
             device,
             org_id=org_id,
             org_name=org_name,
-            quality=str(quality_retention.get("quality") or ""),
-            resolution=str(quality_retention.get("resolution") or ""),
-            profile_id=str(quality_retention.get("profileId") or ""),
+            quality=str(qr_model.quality or ""),
+            resolution=str(qr_model.resolution or ""),
+            profile_id=str(qr_model.profileId or ""),
         )
         self.parent._set_metric(
             self._mv_quality_retention_info,

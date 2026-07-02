@@ -9,6 +9,11 @@ import pytest
 from prometheus_client import Gauge
 
 from meraki_dashboard_exporter.collectors.devices.mv import MVCollector
+from meraki_dashboard_exporter.core.domain_models import (
+    CameraAnalyticsLive,
+    CameraAnalyticsZone,
+    CameraQualityAndRetention,
+)
 
 if TYPE_CHECKING:
     pass
@@ -623,3 +628,154 @@ class TestMVCollector:
 
         assert mock_api.camera.getDeviceCameraAnalyticsZones.call_count == 2
         assert mock_api.camera.getDeviceCameraQualityAndRetention.call_count == 2
+
+    # ------------------------------------------------------------------
+    # Pydantic domain-model validation (F-029)
+    # ------------------------------------------------------------------
+
+    async def test_collect_validates_zones_via_domain_model(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """Each zone row must be validated via CameraAnalyticsZone.model_validate."""
+        zone_row = {"id": "0", "label": "Entrance", "type": ["person"]}
+        mock_api.camera.getDeviceCameraAnalyticsZones = MagicMock(return_value=[zone_row])
+        mock_api.camera.getDeviceCameraAnalyticsLive = MagicMock(
+            return_value={"ts": "2026-07-01T00:00:00Z", "zones": {}}
+        )
+        mock_api.camera.getDeviceCameraQualityAndRetention = MagicMock(
+            return_value={
+                "motionBasedRetentionEnabled": True,
+                "audioRecordingEnabled": False,
+                "restrictedBandwidthModeEnabled": False,
+                "quality": "Standard",
+                "resolution": "1280x720",
+                "profileId": "123",
+            }
+        )
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mv.CameraAnalyticsZone.model_validate",
+            wraps=CameraAnalyticsZone.model_validate,
+        ) as spy:
+            await mv_collector.collect(device)
+
+        spy.assert_called_once_with(zone_row)
+
+    async def test_collect_validates_live_analytics_via_domain_model(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """The live-analytics response must be validated via CameraAnalyticsLive.model_validate."""
+        live_response = {
+            "ts": "2026-07-01T00:00:00Z",
+            "zones": {"0": {"person": 3}},
+        }
+        mock_api.camera.getDeviceCameraAnalyticsZones = MagicMock(
+            return_value=[{"id": "0", "label": "Entrance", "type": ["person"]}]
+        )
+        mock_api.camera.getDeviceCameraAnalyticsLive = MagicMock(return_value=live_response)
+        mock_api.camera.getDeviceCameraQualityAndRetention = MagicMock(
+            return_value={
+                "motionBasedRetentionEnabled": True,
+                "audioRecordingEnabled": False,
+                "restrictedBandwidthModeEnabled": False,
+                "quality": "Standard",
+                "resolution": "1280x720",
+                "profileId": "123",
+            }
+        )
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mv.CameraAnalyticsLive.model_validate",
+            wraps=CameraAnalyticsLive.model_validate,
+        ) as spy:
+            await mv_collector.collect(device)
+
+        spy.assert_called_once_with(live_response)
+
+    async def test_collect_validates_quality_retention_via_domain_model(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """The quality/retention response must be validated via CameraQualityAndRetention."""
+        qr_response = {
+            "motionBasedRetentionEnabled": True,
+            "audioRecordingEnabled": False,
+            "restrictedBandwidthModeEnabled": False,
+            "quality": "Standard",
+            "resolution": "1280x720",
+            "profileId": "123",
+        }
+        mock_api.camera.getDeviceCameraAnalyticsZones = MagicMock(return_value=[])
+        mock_api.camera.getDeviceCameraAnalyticsLive = MagicMock(
+            return_value={"ts": "2026-07-01T00:00:00Z", "zones": {}}
+        )
+        mock_api.camera.getDeviceCameraQualityAndRetention = MagicMock(return_value=qr_response)
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mv."
+            "CameraQualityAndRetention.model_validate",
+            wraps=CameraQualityAndRetention.model_validate,
+        ) as spy:
+            await mv_collector.collect(device)
+
+        spy.assert_called_once_with(qr_response)
+
+    async def test_collect_tolerates_missing_and_extra_fields(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """Missing optional fields and unexpected extra fields must not raise."""
+        mock_api.camera.getDeviceCameraAnalyticsZones = MagicMock(
+            return_value=[{"id": "0", "someBrandNewField": "x"}]  # "label" omitted
+        )
+        mock_api.camera.getDeviceCameraAnalyticsLive = MagicMock(
+            return_value={
+                "ts": "2026-07-01T00:00:00Z",
+                "zones": {"0": {"person": 2, "aFutureApiField": "unexpected"}},
+                "anotherFutureField": True,
+            }
+        )
+        mock_api.camera.getDeviceCameraQualityAndRetention = MagicMock(
+            return_value={
+                # motionBasedRetentionEnabled/audioRecordingEnabled/
+                # restrictedBandwidthModeEnabled intentionally omitted
+                "quality": "Standard",
+                "yetAnotherFutureField": 1,
+            }
+        )
+
+        await mv_collector.collect(device)
+
+        people_calls = [
+            call
+            for call in mock_parent._set_metric.call_args_list
+            if call[0][0] is mv_collector._mv_people_count
+        ]
+        assert len(people_calls) == 1
+        _, labels, value = people_calls[0][0][:3]
+        assert value == 2
+        assert labels["zone_name"] == ""  # noqa: PLC1901  (must be "", not merely falsey/None)
+
+        def value_for(gauge):
+            for call in mock_parent._set_metric.call_args_list:
+                if call[0][0] is gauge:
+                    return call[0][2]
+            raise AssertionError("gauge not set")
+
+        assert value_for(mv_collector._mv_motion_based_retention_enabled) == 0.0
+        assert value_for(mv_collector._mv_audio_recording_enabled) == 0.0
+        assert value_for(mv_collector._mv_restricted_bandwidth_mode_enabled) == 0.0

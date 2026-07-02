@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from prometheus_client import Gauge
 
 from meraki_dashboard_exporter.collectors.devices.mg import MGCollector
+from meraki_dashboard_exporter.core.domain_models import CellularGatewayUplinkStatus
 
 if TYPE_CHECKING:
     pass
@@ -472,3 +473,85 @@ class TestMGCollector:
         # org2's series must survive — org1's collection must not wipe the shared gauges.
         assert len(info_gauge._metrics) == 1
         assert len(roaming_gauge._metrics) == 1
+
+    # ------------------------------------------------------------------
+    # Pydantic domain-model validation (F-029)
+    # ------------------------------------------------------------------
+
+    async def test_collect_uplink_statuses_validates_rows_via_domain_model(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Each raw row must be validated via CellularGatewayUplinkStatus.model_validate."""
+        row = {
+            "networkId": "N_1",
+            "serial": "Q2XX-1",
+            "model": "MG21",
+            "uplinks": [{"interface": "cellular", "status": "active"}],
+        }
+        mock_api.cellularGateway.getOrganizationCellularGatewayUplinkStatuses = MagicMock(
+            return_value=[row]
+        )
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mg.CellularGatewayUplinkStatus"
+            ".model_validate",
+            wraps=CellularGatewayUplinkStatus.model_validate,
+        ) as spy:
+            await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        spy.assert_called_once_with(row)
+
+    async def test_collect_uplink_statuses_tolerates_missing_and_extra_fields(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Missing optional fields and unexpected extra fields must not raise.
+
+        Mirrors the tolerance raw `.get()` chains previously had: a row missing
+        `model` still falls back to the device lookup, and a row/uplink carrying
+        unrecognized extra API fields (schema drift) is still processed.
+        """
+        mock_api.cellularGateway.getOrganizationCellularGatewayUplinkStatuses = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "serial": "Q2XX-1",
+                    # "model" intentionally omitted
+                    "someBrandNewField": {"nested": True},
+                    "uplinks": [
+                        {
+                            "interface": "cellular",
+                            "status": "active",
+                            "aFutureApiField": "unexpected",
+                        }
+                    ],
+                }
+            ]
+        )
+
+        device_lookup = {
+            "Q2XX-1": {
+                "name": "Gateway 1",
+                "model": "MG21-FROM-LOOKUP",
+                "network_id": "N_1",
+                "network_name": "Main Network",
+            }
+        }
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", device_lookup)
+
+        info_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_uplink_status_info
+        ]
+        assert len(info_calls) == 1
+        _, labels, value, *_ = info_calls[0][0]
+        assert value == 1
+        assert labels["model"] == "MG21-FROM-LOOKUP"
+        assert labels["serial"] == "Q2XX-1"
