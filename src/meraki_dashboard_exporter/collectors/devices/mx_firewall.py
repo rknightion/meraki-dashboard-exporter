@@ -97,9 +97,9 @@ class MXFirewallCollector(SubCollectorMixin):
                 LabelName.NETWORK_NAME,
             ],
         )
-        self._security_events_total = self.parent._create_gauge(
-            MXMetricName.MX_SECURITY_EVENTS_TOTAL,
-            "Total security events by type",
+        self._security_events_count = self.parent._create_gauge(
+            MXMetricName.MX_SECURITY_EVENTS_COUNT,
+            "Security events by type in the current collection window (not a monotonic total)",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -274,7 +274,7 @@ class MXFirewallCollector(SubCollectorMixin):
 
         for event_type, count in counts.items():
             self.parent._set_metric(
-                self._security_events_total,
+                self._security_events_count,
                 {
                     LabelName.ORG_ID: org_id,
                     LabelName.ORG_NAME: org_name,

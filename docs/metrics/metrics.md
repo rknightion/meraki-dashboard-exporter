@@ -170,7 +170,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_ms_port_8021x_active` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name` | Switch port secure-port (802.1X) active state (1 = active, 0 = inactive) |  |
 | `meraki_ms_port_8021x_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `status` | Switch port 802.1X authentication status (1 = currently active for this status) |  |
 | `meraki_ms_port_client_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name` | Number of clients connected to switch port |  |
-| `meraki_ms_port_errors_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `error_type` | Active switch port errors (1 = currently active for this error_type) |  |
+| `meraki_ms_port_error_active` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `error_type` | Active switch port errors (1 = currently active for this error_type) |  |
 | `meraki_ms_port_packets_broadcast` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Broadcast packets on switch port (5-minute window) |  |
 | `meraki_ms_port_packets_collisions` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Collision packets on switch port (5-minute window) |  |
 | `meraki_ms_port_packets_crcerrors` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | CRC align error packets on switch port (5-minute window) |  |
@@ -189,7 +189,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_ms_port_stp_state` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `state` | Switch port STP state (1 = currently active for this state) |  |
 | `meraki_ms_port_traffic_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Switch port traffic rate in bytes per second (averaged over 1 hour) |  |
 | `meraki_ms_port_usage_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `direction` | Switch port data usage in bytes over the last 1 hour |  |
-| `meraki_ms_port_warnings_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `warning_type` | Active switch port warnings (1 = currently active for this warning_type) |  |
+| `meraki_ms_port_warning_active` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `port_id`, `port_name`, `warning_type` | Active switch port warnings (1 = currently active for this warning_type) |  |
 | `meraki_ms_ports_active_total` | gauge | `org_id`, `org_name` | Total number of active switch ports |  |
 | `meraki_ms_ports_by_link_speed_total` | gauge | `org_id`, `org_name`, `media`, `link_speed` | Total number of active switch ports by link speed |  |
 | `meraki_ms_ports_by_media_total` | gauge | `org_id`, `org_name`, `media`, `status` | Total number of switch ports by media type |  |
@@ -201,7 +201,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_ms_power_supply_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `slot`, `psu_serial`, `status` | MS/rackmount power-supply module status (1 = reported this cycle) |  |
+| `meraki_ms_power_supply_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `slot`, `psu_serial`, `psu_model`, `status` | MS/rackmount power-supply module status (1 = reported this cycle) |  |
 
 ### MSStackCollector
 
@@ -268,7 +268,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_mx_firewall_default_policy` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Firewall default policy for L3 rules (1=allow, 0=deny) |  |
 | `meraki_mx_firewall_rules_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `rule_type` | Total number of user-defined firewall rules by type (excludes default rule) |  |
-| `meraki_mx_security_events_total` | gauge | `org_id`, `org_name`, `event_type` | Total security events by type |  |
+| `meraki_mx_security_events_count` | gauge | `org_id`, `org_name`, `event_type` | Security events by type in the current collection window (not a monotonic total) |  |
 
 ### MXHACollector
 

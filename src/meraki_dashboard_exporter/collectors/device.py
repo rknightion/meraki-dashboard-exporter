@@ -622,8 +622,16 @@ class DeviceCollector(MetricCollector):
                 # Use MR collector for all MR-specific metrics
                 await self._collect_mr_specific_metrics(org_id, org_name, devices, device_lookup)
 
-            # Collect MS-specific metrics
-            if any(d for d in devices if d.get("model", "").startswith(DeviceType.MS)):
+            # Collect MS-specific metrics. Gate on productType == "switch" in addition
+            # to the "MS"-prefixed model check so Meraki-managed Catalyst switches
+            # (productType "switch", model not prefixed "MS", e.g. "C9300-48P") are
+            # not silently skipped for the org-wide MS block (STP priorities,
+            # ms_stack, port overview, PSU/power-supply collector) - see F-030.
+            if any(
+                d
+                for d in devices
+                if d.get("model", "").startswith(DeviceType.MS) or d.get("productType") == "switch"
+            ):
                 # Use MS collector for all MS-specific metrics
                 await self._collect_ms_specific_metrics(org_id, org_name, devices, device_lookup)
 

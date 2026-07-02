@@ -65,6 +65,7 @@ class MSPowerCollector(SubCollectorMixin):
                 LabelName.DEVICE_TYPE,
                 LabelName.SLOT,
                 LabelName.PSU_SERIAL,
+                LabelName.PSU_MODEL,
                 LabelName.STATUS,
             ],
         )
@@ -145,6 +146,7 @@ class MSPowerCollector(SubCollectorMixin):
             for slot in row.get("slots") or []:
                 slot_number = str(slot.get("number", ""))
                 psu_serial = slot.get("serial") or ""
+                psu_model = slot.get("model") or ""
                 status = slot.get("status", "")
 
                 labels = create_device_labels(
@@ -153,6 +155,7 @@ class MSPowerCollector(SubCollectorMixin):
                     org_name=org_name,
                     slot=slot_number,
                     psu_serial=psu_serial,
+                    psu_model=psu_model,
                     status=status,
                 )
 

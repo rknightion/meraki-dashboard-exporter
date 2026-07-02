@@ -112,6 +112,8 @@ class TestMSPowerCollector:
         assert labels["network_id"] == "N_111"
         assert labels["network_name"] == "Office Network"
         assert labels["model"] == "MS250-48"
+        assert labels["psu_model"] == "PWR-350WAC"
+        assert labels["psu_model"] != labels["model"]
 
     async def test_collect_power_modules_multiple_slots(
         self,
@@ -188,6 +190,7 @@ class TestMSPowerCollector:
         assert mock_parent._set_metric.call_count == 1
         _, labels, _, *_ = mock_parent._set_metric.call_args_list[0][0]
         assert not labels["psu_serial"]
+        assert not labels["psu_model"]
         assert labels["slot"] == "2"
         assert labels["status"] == "not connected"
 
@@ -289,6 +292,7 @@ class TestMSPowerCollector:
             device_type="MS",
             slot="1",
             psu_serial="PSU-OTHER",
+            psu_model="PWR-OTHER",
             status="powering",
         ).set(1)
 

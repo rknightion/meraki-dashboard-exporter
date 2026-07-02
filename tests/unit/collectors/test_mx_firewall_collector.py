@@ -64,7 +64,7 @@ class TestMXFirewallCollector:
         created_names = {call.args[0] for call in mock_parent._create_gauge.call_args_list}
         assert MXMetricName.MX_FIREWALL_RULES_TOTAL in created_names
         assert MXMetricName.MX_FIREWALL_DEFAULT_POLICY in created_names
-        assert MXMetricName.MX_SECURITY_EVENTS_TOTAL in created_names
+        assert MXMetricName.MX_SECURITY_EVENTS_COUNT in created_names
 
     def test_initialisation_stores_parent_api_settings(
         self,
@@ -482,7 +482,7 @@ class TestMXFirewallCollector:
         calls = {
             c[0][1]["event_type"]: c[0][2]
             for c in mock_parent._set_metric.call_args_list
-            if c[0][0] is firewall_collector._security_events_total
+            if c[0][0] is firewall_collector._security_events_count
         }
         assert calls == {"IDS Alert": 2.0, "File Scanned": 1.0}
 
@@ -508,7 +508,7 @@ class TestMXFirewallCollector:
         calls = {
             c[0][1]["event_type"]: c[0][2]
             for c in mock_parent._set_metric.call_args_list
-            if c[0][0] is firewall_collector._security_events_total
+            if c[0][0] is firewall_collector._security_events_count
         }
         # Only the single in-filter event should be counted.
         assert calls == {"IDS Alert": 1.0}
@@ -543,7 +543,7 @@ class TestMXFirewallCollector:
         expiration manager instead.
         """
         # Seed a series for another org — a global clear() would wipe it.
-        firewall_collector._security_events_total.labels(
+        firewall_collector._security_events_count.labels(
             org_id="org2", org_name="Other Org", event_type="IDS Alert"
         ).set(3)
 
@@ -552,11 +552,11 @@ class TestMXFirewallCollector:
         await firewall_collector.collect_org_security_events("org1", "Test Org")
 
         assert not any(
-            c[0][0] is firewall_collector._security_events_total
+            c[0][0] is firewall_collector._security_events_count
             for c in mock_parent._set_metric.call_args_list
         )
         # org2's series must survive org1's empty-response collection.
-        assert len(firewall_collector._security_events_total._metrics) == 1
+        assert len(firewall_collector._security_events_count._metrics) == 1
 
     async def test_security_events_does_not_wipe_other_orgs(
         self,
@@ -571,10 +571,10 @@ class TestMXFirewallCollector:
         pre-seeded for a *different* org must survive org1's collection cycle, and
         the current cycle's event type must still be passed to _set_metric.
         """
-        firewall_collector._security_events_total.labels(
+        firewall_collector._security_events_count.labels(
             org_id="org2", org_name="Other Org", event_type="Old Type"
         ).set(5)
-        assert len(firewall_collector._security_events_total._metrics) == 1
+        assert len(firewall_collector._security_events_count._metrics) == 1
 
         mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
             return_value=[{"eventType": "File Scanned", "networkId": "N_1"}]
@@ -582,13 +582,13 @@ class TestMXFirewallCollector:
         await firewall_collector.collect_org_security_events("org1", "Test Org")
 
         # org2's series must NOT have been wiped by org1's collection.
-        assert len(firewall_collector._security_events_total._metrics) == 1
+        assert len(firewall_collector._security_events_count._metrics) == 1
 
         # And the new event type must have been passed to _set_metric.
         calls = {
             c[0][1]["event_type"]: c[0][2]
             for c in mock_parent._set_metric.call_args_list
-            if c[0][0] is firewall_collector._security_events_total
+            if c[0][0] is firewall_collector._security_events_count
         }
         assert calls == {"File Scanned": 1.0}
 
@@ -606,7 +606,7 @@ class TestMXFirewallCollector:
         await firewall_collector.collect_org_security_events("org1", "Test Org")
 
         assert not any(
-            c[0][0] is firewall_collector._security_events_total
+            c[0][0] is firewall_collector._security_events_count
             for c in mock_parent._set_metric.call_args_list
         )
 
@@ -626,7 +626,7 @@ class TestMXFirewallCollector:
         await firewall_collector.collect_org_security_events("org1", "Test Org")
 
         assert not any(
-            c[0][0] is firewall_collector._security_events_total
+            c[0][0] is firewall_collector._security_events_count
             for c in mock_parent._set_metric.call_args_list
         )
 
@@ -646,7 +646,7 @@ class TestMXFirewallCollector:
         calls = [
             c
             for c in mock_parent._set_metric.call_args_list
-            if c[0][0] is firewall_collector._security_events_total
+            if c[0][0] is firewall_collector._security_events_count
         ]
         assert len(calls) == 1
         _, labels, _ = calls[0][0]
@@ -691,7 +691,7 @@ class TestMXFirewallCollector:
         calls = {
             c[0][1]["event_type"]: c[0][2]
             for c in mock_parent._set_metric.call_args_list
-            if c[0][0] is firewall_collector._security_events_total
+            if c[0][0] is firewall_collector._security_events_count
         }
         assert calls == {"unknown": 1.0}
 

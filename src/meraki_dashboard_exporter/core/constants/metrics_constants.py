@@ -137,9 +137,12 @@ class MSMetricName(StrEnum):
     MS_PORT_USAGE_BYTES = "meraki_ms_port_usage_bytes"
     MS_PORT_CLIENT_COUNT = "meraki_ms_port_client_count"
 
-    # Port error/warning metrics (from the errors/warnings arrays in port status)
-    MS_PORT_ERRORS_TOTAL = "meraki_ms_port_errors_total"
-    MS_PORT_WARNINGS_TOTAL = "meraki_ms_port_warnings_total"
+    # Port error/warning metrics (from the errors/warnings arrays in port status).
+    # These are presence-flag Gauges (always 1 when active), not Counters, so they
+    # deliberately do NOT carry a `_total` suffix (reserved by Prometheus convention
+    # for counters safe under rate()/increase()) - see bug-bash finding F-091.
+    MS_PORT_ERROR_ACTIVE = "meraki_ms_port_error_active"
+    MS_PORT_WARNING_ACTIVE = "meraki_ms_port_warning_active"
 
     # Packet metrics (with 5-minute window)
     MS_PORT_PACKETS_TOTAL = "meraki_ms_port_packets_total"
@@ -236,7 +239,10 @@ class MXMetricName(StrEnum):
     # Firewall metrics
     MX_FIREWALL_RULES_TOTAL = "meraki_mx_firewall_rules_total"
     MX_FIREWALL_DEFAULT_POLICY = "meraki_mx_firewall_default_policy"
-    MX_SECURITY_EVENTS_TOTAL = "meraki_mx_security_events_total"
+    # Windowed event count (resets each collection cycle), not a monotonic
+    # Counter, so it deliberately does NOT carry a `_total` suffix - see
+    # bug-bash finding F-091.
+    MX_SECURITY_EVENTS_COUNT = "meraki_mx_security_events_count"
 
     # Per-uplink WAN bandwidth usage (org-wide uplinks usage byNetwork endpoint; windowed totals)
     MX_UPLINK_SENT_BYTES = "meraki_mx_uplink_sent_bytes"

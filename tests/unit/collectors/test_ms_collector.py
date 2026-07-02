@@ -660,7 +660,7 @@ class TestMSCollector:
         """Test that collect() surfaces active per-port errors/warnings.
 
         A port with active errors/warnings must emit
-        meraki_ms_port_errors_total/meraki_ms_port_warnings_total with the raw
+        meraki_ms_port_error_active/meraki_ms_port_warning_active with the raw
         Meraki error/warning string as error_type/warning_type; a clean port
         must emit no series at all for either metric.
         """
@@ -719,8 +719,8 @@ class TestMSCollector:
             "warning_type": "Port flapping",
         }
 
-        assert REGISTRY.get_sample_value("meraki_ms_port_errors_total", error_labels) == 1.0
-        assert REGISTRY.get_sample_value("meraki_ms_port_warnings_total", warning_labels) == 1.0
+        assert REGISTRY.get_sample_value("meraki_ms_port_error_active", error_labels) == 1.0
+        assert REGISTRY.get_sample_value("meraki_ms_port_warning_active", warning_labels) == 1.0
 
         # The clean port must not have emitted any error/warning series.
         clean_error_labels = {
@@ -735,9 +735,9 @@ class TestMSCollector:
             "port_name": "Port 2",
             "warning_type": "Port flapping",
         }
-        assert REGISTRY.get_sample_value("meraki_ms_port_errors_total", clean_error_labels) is None
+        assert REGISTRY.get_sample_value("meraki_ms_port_error_active", clean_error_labels) is None
         assert (
-            REGISTRY.get_sample_value("meraki_ms_port_warnings_total", clean_warning_labels) is None
+            REGISTRY.get_sample_value("meraki_ms_port_warning_active", clean_warning_labels) is None
         )
 
     async def test_collect_port_statuses_by_switch_emits_errors_and_warnings(
@@ -800,10 +800,10 @@ class TestMSCollector:
             "port_name": "Port 1",
             "error_type": "Duplex mismatch",
         }
-        assert REGISTRY.get_sample_value("meraki_ms_port_errors_total", labels) == 1.0
+        assert REGISTRY.get_sample_value("meraki_ms_port_error_active", labels) == 1.0
 
         clean_labels = {**labels, "port_id": "2", "port_name": "Port 2"}
-        assert REGISTRY.get_sample_value("meraki_ms_port_errors_total", clean_labels) is None
+        assert REGISTRY.get_sample_value("meraki_ms_port_error_active", clean_labels) is None
 
     async def test_collect_emits_stp_and_8021x_metrics(
         self,

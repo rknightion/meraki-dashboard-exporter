@@ -160,7 +160,7 @@ class MSCollector(BaseDeviceCollector):
         )
 
         self._switch_port_errors = self.parent._create_gauge(
-            MSMetricName.MS_PORT_ERRORS_TOTAL,
+            MSMetricName.MS_PORT_ERROR_ACTIVE,
             "Active switch port errors (1 = currently active for this error_type)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -178,7 +178,7 @@ class MSCollector(BaseDeviceCollector):
         )
 
         self._switch_port_warnings = self.parent._create_gauge(
-            MSMetricName.MS_PORT_WARNINGS_TOTAL,
+            MSMetricName.MS_PORT_WARNING_ACTIVE,
             "Active switch port warnings (1 = currently active for this warning_type)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -563,7 +563,7 @@ class MSCollector(BaseDeviceCollector):
                 self._switch_port_errors,
                 error_labels,
                 1,
-                MSMetricName.MS_PORT_ERRORS_TOTAL.value,
+                MSMetricName.MS_PORT_ERROR_ACTIVE.value,
             )
 
         for warning_type in port.get("warnings") or []:
@@ -574,7 +574,7 @@ class MSCollector(BaseDeviceCollector):
                 self._switch_port_warnings,
                 warning_labels,
                 1,
-                MSMetricName.MS_PORT_WARNINGS_TOTAL.value,
+                MSMetricName.MS_PORT_WARNING_ACTIVE.value,
             )
 
     def _remove_stale_label_series(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
@@ -540,3 +540,49 @@ class TestDeviceCollector(BaseCollectorTest):
 
         # Verify API calls were tracked
         self.assert_api_call_tracked(collector, metrics, "getOrganizationDevices", count=1)
+
+    async def test_catalyst_switch_triggers_ms_specific_metrics(
+        self, collector, mock_api_builder, metrics
+    ):
+        """A Meraki-managed Catalyst switch must still trigger the MS org-wide block.
+
+        Catalyst switches report productType == "switch" but their model does not
+        start with "MS" (e.g. "C9300-48P"). The MS-specific org-wide block (STP
+        priorities, switch-stack metrics, and the PSU/power-supply collector) must
+        still run for an org containing ONLY such devices - regression test for
+        F-030 (the gate previously only matched a model.startswith("MS") prefix).
+        """
+        org = OrganizationFactory.create(org_id="123456")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network")
+        catalyst_switch = DeviceFactory.create(
+            serial="Q2CAT-0001",
+            name="Catalyst Switch",
+            model="C9300-48P",
+            productType="switch",
+            network_id=network["id"],
+        )
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_devices([catalyst_switch], org_id=org["id"])
+            .with_device_statuses([], org_id=org["id"])
+            .build()
+        )
+        collector.api = api
+        collector.inventory.api = api
+        collector.ms_collector.api = api
+        collector.ms_stack_collector.api = api
+        collector.ms_power_collector.api = api
+
+        # The device type gets remapped to MS via the productType override
+        # (_get_device_type), so the per-device MS path already worked before
+        # F-030; what's under test here is only the org-wide gate.
+        collector._collect_ms_specific_metrics = AsyncMock(
+            wraps=collector._collect_ms_specific_metrics
+        )
+
+        await collector._collect_org_devices(org["id"], org.get("name", "Test Org"))
+
+        collector._collect_ms_specific_metrics.assert_called_once()
