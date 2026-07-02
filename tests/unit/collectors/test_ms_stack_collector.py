@@ -48,7 +48,15 @@ class TestMSStackCollector:
         def create_gauge(name: MSMetricName, description: str, labelnames: list[Any]) -> Gauge:
             return Gauge(name.value, description, labelnames, registry=registry)
 
+        # Mirror the real MetricCollector._set_metric helper (minus expiration
+        # tracking, exercised elsewhere) so values set via parent._set_metric are
+        # observable in the registry while still recording the call for F-175
+        # routing assertions.
+        def set_metric(metric, labels, value, metric_name=None):  # type: ignore[no-untyped-def]
+            metric.labels(**labels).set(value)
+
         parent._create_gauge = MagicMock(side_effect=create_gauge)
+        parent._set_metric = MagicMock(side_effect=set_metric)
         return parent
 
     @pytest.fixture
@@ -219,6 +227,45 @@ class TestMSStackCollector:
         total_samples = _get_samples(registry, MSMetricName.MS_STACK_MEMBERS_TOTAL)
         assert len(total_samples) == 1
         assert total_samples[0].value == 3.0
+
+    async def test_stack_metrics_route_through_set_metric_for_expiration(
+        self,
+        stack_collector: MSStackCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """F-175: stack member/total series must emit via parent._set_metric.
+
+        Routing through ``_set_metric`` is what registers the series with the
+        MetricExpirationManager so a removed stack member/stack expires instead
+        of leaving a stale series behind (same class as F-084/F-113). Assert the
+        collector never bypasses it with a raw ``.labels().set()`` and that both
+        metric names are tracked.
+        """
+        mock_api.switch.getNetworkSwitchStacks = MagicMock(
+            return_value=[
+                {
+                    "id": "stack-1",
+                    "serials": ["QAAA-0001-0001", "QAAA-0001-0002"],
+                    "members": [
+                        {"serial": "QAAA-0001-0001", "role": "active"},
+                        {"serial": "QAAA-0001-0002", "role": "standby"},
+                    ],
+                }
+            ]
+        )
+
+        await stack_collector.collect_for_network(
+            org_id="org1",
+            org_name="Org One",
+            network_id="net1",
+            network_name="Net One",
+        )
+
+        tracked_metric_names = [call.args[3] for call in mock_parent._set_metric.call_args_list]
+        # One members-total + two member-status emissions, all routed for expiry.
+        assert tracked_metric_names.count(MSMetricName.MS_STACK_MEMBERS_TOTAL.value) == 1
+        assert tracked_metric_names.count(MSMetricName.MS_STACK_MEMBER_STATUS.value) == 2
 
     async def test_collect_for_network_empty_stacks(
         self,

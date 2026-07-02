@@ -280,15 +280,10 @@ class TestMSCollector:
 
         # Verify metrics were actually set on the real Gauge/registry.
         #
-        # NOTE: production's device_info = devices.get(switch_serial, {...})
-        # (ms.py collect_stp_priorities) returns the device_lookup entry as-is
-        # when a match is found, and that entry (as built by DeviceCollector's
-        # real _device_lookup, and in this fixture) does not itself carry a
-        # "serial" key -- only "name"/"model" -- so create_device_labels()
-        # falls back to serial="" for switches resolved via the lookup. This
-        # is a pre-existing behavior (unrelated to F-157/F-037) reflected here
-        # rather than fixed, since it is out of this finding's scope; flagged
-        # separately in the bug-bash brief.
+        # F-174: every meraki_ms_stp_priority series must carry the switch's
+        # REAL serial (the key of the STP switch_priorities map), not serial=""
+        # -- device_lookup entries carry name/model but no "serial" key, so the
+        # collector now always stamps the real serial before building labels.
         net1_labels = {
             "org_id": "org123",
             "org_name": "Org 123",
@@ -296,19 +291,18 @@ class TestMSCollector:
             "network_name": "Network 1",
             "model": "MS250",
             "device_type": "MS",
-            "serial": "",
         }
         assert (
             REGISTRY.get_sample_value(
                 "meraki_ms_stp_priority",
-                {**net1_labels, "name": "Switch 1"},
+                {**net1_labels, "name": "Switch 1", "serial": "Q2MW-42Z2-JE5T"},
             )
             == 8192.0
         )
         assert (
             REGISTRY.get_sample_value(
                 "meraki_ms_stp_priority",
-                {**net1_labels, "name": "Switch 2"},
+                {**net1_labels, "name": "Switch 2", "serial": "Q2BX-Q43Y-RR5C"},
             )
             == 32768.0
         )
@@ -320,22 +314,83 @@ class TestMSCollector:
             "network_name": "Network 2",
             "model": "MS350",
             "device_type": "MS",
-            "serial": "",
         }
         assert (
             REGISTRY.get_sample_value(
                 "meraki_ms_stp_priority",
-                {**net2_labels, "name": "Switch 3"},
+                {**net2_labels, "name": "Switch 3", "serial": "Q2HP-F6VX-M24J"},
             )
             == 32768.0
         )
         assert (
             REGISTRY.get_sample_value(
                 "meraki_ms_stp_priority",
-                {**net2_labels, "name": "Switch 4"},
+                {**net2_labels, "name": "Switch 4", "serial": "Q2HP-K4VW-87YT"},
             )
             == 32768.0
         )
+
+    async def test_collect_stp_priorities_same_name_distinct_serials(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """F-174 regression: two same-named switches in a network keep distinct series.
+
+        Previously lookup-matched switches emitted serial="" so two switches
+        sharing a name (or a blank name) in the same network collapsed onto a
+        single (network, name) series and overwrote each other. With the real
+        serial always present, each switch has its own series.
+        """
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_networks = AsyncMock(
+            return_value=[{"id": "net1", "name": "Network 1", "productTypes": ["switch"]}]
+        )
+
+        # Two switches that share the SAME name in the same network.
+        device_lookup = {
+            "Q2AA-1111-1111": {"name": "access-sw", "model": "MS120"},
+            "Q2BB-2222-2222": {"name": "access-sw", "model": "MS120"},
+        }
+
+        mock_api.switch.getNetworkSwitchStp = MagicMock(
+            return_value={
+                "rstpEnabled": True,
+                "stpBridgePriority": [
+                    {"switches": ["Q2AA-1111-1111"], "stpPriority": 4096},
+                    {"switches": ["Q2BB-2222-2222"], "stpPriority": 8192},
+                ],
+            }
+        )
+
+        ms_collector._last_stp_collection = 0.0
+        await ms_collector.collect_stp_priorities("org123", "Org 123", device_lookup)
+
+        base = {
+            "org_id": "org123",
+            "org_name": "Org 123",
+            "network_id": "net1",
+            "network_name": "Network 1",
+            "name": "access-sw",
+            "model": "MS120",
+            "device_type": "MS",
+        }
+        # Distinct series keyed by real serial, no collision/overwrite.
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_stp_priority", {**base, "serial": "Q2AA-1111-1111"}
+            )
+            == 4096.0
+        )
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_stp_priority", {**base, "serial": "Q2BB-2222-2222"}
+            )
+            == 8192.0
+        )
+        # The empty-serial collision series must not exist.
+        assert REGISTRY.get_sample_value("meraki_ms_stp_priority", {**base, "serial": ""}) is None
 
     async def test_collect_stp_handles_api_errors(
         self,
@@ -1195,3 +1250,210 @@ class TestMSCollector:
         # Immediately call again: the SLOW-interval gate should skip it.
         await ms_collector.collect_stp_priorities("org123", "Org One", {})
         assert mock_api.switch.getNetworkSwitchStp.call_count == 1
+
+    async def test_collect_port_usage_by_switch_emits_usage_poe_clients(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """F-168: org-wide usage/PoE path emits identical usage/traffic/PoE/client metrics.
+
+        Fetches the org-wide usage-history endpoint (per-port ``data.usage`` KB,
+        ``bandwidth.usage`` kbps, ``energy.usage.total`` Wh) plus the org-wide
+        clients-overview endpoint, aggregates the interval series, and emits the
+        same six metrics the per-device loop does.
+        """
+        devices = [
+            {
+                "serial": "Q2XX-0001",
+                "networkId": "net1",
+                "networkName": "Net One",
+                "name": "SW1",
+                "model": "MS250-48",
+            }
+        ]
+
+        mock_api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-0001",
+                    "name": "SW1",
+                    "model": "MS250-48",
+                    "network": {"id": "net1", "name": "Net One"},
+                    "ports": [
+                        {
+                            "portId": "1",
+                            "intervals": [
+                                {
+                                    "data": {
+                                        "usage": {
+                                            "total": 100,
+                                            "upstream": 40,
+                                            "downstream": 60,
+                                        }
+                                    },
+                                    "bandwidth": {
+                                        "usage": {
+                                            "total": 8.0,
+                                            "upstream": 3.0,
+                                            "downstream": 5.0,
+                                        }
+                                    },
+                                    "energy": {"usage": {"total": 2.0}},
+                                },
+                                {
+                                    "data": {
+                                        "usage": {
+                                            "total": 200,
+                                            "upstream": 60,
+                                            "downstream": 140,
+                                        }
+                                    },
+                                    "bandwidth": {
+                                        "usage": {
+                                            "total": 12.0,
+                                            "upstream": 5.0,
+                                            "downstream": 7.0,
+                                        }
+                                    },
+                                    "energy": {"usage": {"total": 3.0}},
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ]
+        )
+        mock_api.switch.getOrganizationSwitchPortsClientsOverviewByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-0001",
+                    "ports": [
+                        {"portId": "1", "counts": {"byStatus": {"online": 7}}},
+                    ],
+                }
+            ]
+        )
+
+        result = await ms_collector.collect_port_usage_by_switch("org1", "Org One", devices)
+        assert result is True
+
+        # Scoped the org query to the requested serials.
+        mock_api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval.assert_called_once()
+        _, kwargs = (
+            mock_api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval.call_args
+        )
+        assert kwargs["serials"] == ["Q2XX-0001"]
+
+        base = {
+            "org_id": "org1",
+            "org_name": "Org One",
+            "network_id": "net1",
+            "network_name": "Net One",
+            "serial": "Q2XX-0001",
+            "name": "SW1",
+            "model": "MS250-48",
+            "device_type": "MS",
+            "port_id": "1",
+            "port_name": "Port 1",
+        }
+
+        # Usage bytes: sum of interval KB * 1024.
+        assert (
+            REGISTRY.get_sample_value("meraki_ms_port_usage_bytes", {**base, "direction": "total"})
+            == 300 * 1024
+        )
+        assert (
+            REGISTRY.get_sample_value("meraki_ms_port_usage_bytes", {**base, "direction": "tx"})
+            == 100 * 1024
+        )
+        assert (
+            REGISTRY.get_sample_value("meraki_ms_port_usage_bytes", {**base, "direction": "rx"})
+            == 200 * 1024
+        )
+
+        # Traffic rate: averaged bandwidth kbps * 1000 / 8. up=(3+5)/2=4, down=(5+7)/2=6.
+        assert (
+            REGISTRY.get_sample_value("meraki_ms_port_traffic_bytes", {**base, "direction": "tx"})
+            == 4.0 * 1000 / 8
+        )
+        assert (
+            REGISTRY.get_sample_value("meraki_ms_port_traffic_bytes", {**base, "direction": "rx"})
+            == 6.0 * 1000 / 8
+        )
+
+        # PoE watt-hours: sum of interval energy = 5.0.
+        assert REGISTRY.get_sample_value("meraki_ms_poe_port_power_watthours", base) == 5.0
+
+        # Client count from the clients-overview lookup.
+        assert REGISTRY.get_sample_value("meraki_ms_port_client_count", base) == 7.0
+
+        # Switch-level PoE total + total power draw (both == summed energy).
+        device_labels = {
+            "org_id": "org1",
+            "org_name": "Org One",
+            "network_id": "net1",
+            "network_name": "Net One",
+            "serial": "Q2XX-0001",
+            "name": "SW1",
+            "model": "MS250-48",
+            "device_type": "MS",
+        }
+        assert (
+            REGISTRY.get_sample_value("meraki_ms_poe_total_power_watthours", device_labels) == 5.0
+        )
+        assert REGISTRY.get_sample_value("meraki_ms_power_usage_watts", device_labels) == 5.0
+
+    async def test_collect_port_usage_by_switch_defaults_absent_client_count_to_zero(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """F-168: ports absent from clients-overview emit client_count=0."""
+        devices = [{"serial": "Q2XX-0002", "networkId": "net1", "name": "SW2", "model": "MS120-8"}]
+        mock_api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-0002",
+                    "name": "SW2",
+                    "model": "MS120-8",
+                    "network": {"id": "net1", "name": "net1"},
+                    "ports": [{"portId": "3", "intervals": [{"energy": {"usage": {"total": 0}}}]}],
+                }
+            ]
+        )
+        # clients-overview lists no ports for this switch.
+        mock_api.switch.getOrganizationSwitchPortsClientsOverviewByDevice = MagicMock(
+            return_value=[]
+        )
+
+        result = await ms_collector.collect_port_usage_by_switch("org1", "Org One", devices)
+        assert result is True
+
+        base = {
+            "org_id": "org1",
+            "org_name": "Org One",
+            "network_id": "net1",
+            "network_name": "net1",
+            "serial": "Q2XX-0002",
+            "name": "SW2",
+            "model": "MS120-8",
+            "device_type": "MS",
+            "port_id": "3",
+            "port_name": "Port 3",
+        }
+        assert REGISTRY.get_sample_value("meraki_ms_port_client_count", base) == 0.0
+
+    async def test_collect_port_usage_by_switch_unsupported_returns_false(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """F-168: missing SDK endpoint -> returns False so caller falls back."""
+        # Use a spec-limited switch mock lacking the usage-history method so the
+        # hasattr() probe fails (a bare MagicMock auto-creates every attribute).
+        mock_api.switch = MagicMock(spec=["getOrganizationSwitchPortsClientsOverviewByDevice"])
+
+        devices = [{"serial": "Q2XX-0003", "networkId": "net1", "name": "SW3", "model": "MS120"}]
+        result = await ms_collector.collect_port_usage_by_switch("org1", "Org One", devices)
+        assert result is False

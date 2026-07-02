@@ -71,6 +71,8 @@ class MSCollector(BaseDeviceCollector):
         self._last_port_usage: dict[str, float] = {}
         self._last_packet_stats: dict[str, float] = {}
         self._org_port_status_supported: bool | None = None
+        # Cached probe for the org-wide port usage/PoE endpoints (F-168).
+        self._org_port_usage_supported: bool | None = None
         # Tracks which device serials were seen during the current collection cycle
         self._active_serials: set[str] = set()
         # Tracks the last emitted STP state(s) / 802.1X status(es) per
@@ -1149,6 +1151,263 @@ class MSCollector(BaseDeviceCollector):
         )
         self._mark_port_usage_collected(serial)
 
+    @log_api_call("getOrganizationSwitchPortsUsageHistoryByDeviceByInterval")
+    @with_error_handling(
+        operation="Collect MS switch port usage/PoE (org)",
+        continue_on_error=True,
+    )
+    async def collect_port_usage_by_switch(
+        self,
+        org_id: str,
+        org_name: str,
+        devices: list[dict[str, Any]],
+    ) -> bool:
+        """Collect per-port usage/traffic/PoE/client-count via org-wide endpoints.
+
+        Replaces the per-switch ``getDeviceSwitchPortsStatuses`` usage/PoE loop
+        with two org-wide bulk calls (F-168): the switch ports usage-history
+        endpoint (per-port ``data.usage`` KB, ``bandwidth.usage`` kbps and
+        ``energy.usage.total`` watt-hours - the PoE signal) and the switch ports
+        clients-overview endpoint (per-port online client counts). This cuts the
+        MS usage/PoE cost from ~1 call per switch to ~2 calls per org per cycle.
+
+        Emits exactly the same metrics/labels as the per-device fallback
+        (``collect_device_port_usage_metrics``): ``meraki_ms_port_traffic_bytes``,
+        ``meraki_ms_port_usage_bytes``, ``meraki_ms_port_client_count``,
+        ``meraki_ms_poe_port_power_watthours``,
+        ``meraki_ms_poe_total_power_watthours`` and ``meraki_ms_power_usage_watts``.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        devices : list[dict[str, Any]]
+            The MS devices to collect usage for (used to scope the org query via
+            ``serials=`` and to enrich labels when the response omits fields).
+
+        Returns
+        -------
+        bool
+            ``True`` when the org-wide path ran (and metrics were emitted);
+            ``False`` when the SDK lacks the usage-history endpoint, signalling
+            the coordinator to fall back to the per-device loop.
+
+        """
+        if self._org_port_usage_supported is None:
+            self._org_port_usage_supported = hasattr(
+                self.api.switch,
+                "getOrganizationSwitchPortsUsageHistoryByDeviceByInterval",
+            ) and hasattr(
+                self.api.switch,
+                "getOrganizationSwitchPortsClientsOverviewByDevice",
+            )
+            if not self._org_port_usage_supported:
+                logger.warning(
+                    "Org-level switch port usage endpoints not available in SDK; "
+                    "falling back to per-device usage collection",
+                    org_id=org_id,
+                )
+
+        if not self._org_port_usage_supported:
+            return False
+
+        device_lookup = {device.get("serial"): device for device in devices}
+        serials = [device.get("serial") for device in devices if device.get("serial")]
+        if not serials:
+            return True
+
+        with LogContext(org_id=org_id):
+            usage_response = await asyncio.to_thread(
+                self.api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval,
+                org_id,
+                serials=serials,
+                timespan=3600,
+                perPage=50,
+                total_pages="all",
+            )
+            usage_switches = validate_response_format(
+                usage_response,
+                expected_type=list,
+                operation="getOrganizationSwitchPortsUsageHistoryByDeviceByInterval",
+            )
+
+            clients_response = await asyncio.to_thread(
+                self.api.switch.getOrganizationSwitchPortsClientsOverviewByDevice,
+                org_id,
+                serials=serials,
+                timespan=3600,
+                perPage=20,
+                total_pages="all",
+            )
+            clients_switches = validate_response_format(
+                clients_response,
+                expected_type=list,
+                operation="getOrganizationSwitchPortsClientsOverviewByDevice",
+            )
+
+        # Build a (serial, port_id) -> online client count lookup. The
+        # clients-overview endpoint only lists ports with >=1 online client, so
+        # ports absent here default to 0 (matching the per-device behaviour).
+        client_counts: dict[tuple[str, str], int] = {}
+        for switch in clients_switches:
+            switch_serial = switch.get("serial")
+            if not switch_serial:
+                continue
+            for port in switch.get("ports", []) or []:
+                port_id = str(port.get("portId", ""))
+                online = (port.get("counts", {}) or {}).get("byStatus", {}).get("online", 0)
+                client_counts[(switch_serial, port_id)] = online
+
+        for switch in usage_switches:
+            serial = switch.get("serial")
+            if not serial:
+                continue
+
+            device_info = device_lookup.get(serial, {})
+            network = switch.get("network", {}) or {}
+            network_id = network.get("id", device_info.get("networkId", ""))
+            network_name = network.get("name", device_info.get("networkName", network_id))
+
+            device_data = {
+                "serial": serial,
+                "name": switch.get("name", device_info.get("name", serial)),
+                "model": switch.get("model", device_info.get("model", "")),
+                "networkId": network_id,
+                "networkName": network_name,
+                "orgId": org_id,
+                "orgName": org_name,
+            }
+            device_labels = create_device_labels(device_data, org_id=org_id, org_name=org_name)
+
+            total_poe_consumption: float = 0.0
+
+            for port in switch.get("ports", []) or []:
+                port_id = str(port.get("portId", ""))
+                intervals = port.get("intervals", []) or []
+
+                # Aggregate the per-interval series into the same shape the
+                # per-device endpoint returns as a single value: sum usage
+                # (KB) and energy (Wh) over the window, average bandwidth (kbps).
+                usage_up_kb = 0.0
+                usage_down_kb = 0.0
+                usage_total_kb = 0.0
+                have_usage = False
+                bw_up_samples: list[float] = []
+                bw_down_samples: list[float] = []
+                energy_wh = 0.0
+
+                for interval in intervals:
+                    data_usage = (interval.get("data", {}) or {}).get("usage")
+                    if data_usage:
+                        have_usage = True
+                        usage_up_kb += data_usage.get("upstream", 0) or 0
+                        usage_down_kb += data_usage.get("downstream", 0) or 0
+                        usage_total_kb += data_usage.get("total", 0) or 0
+
+                    bw_usage = (interval.get("bandwidth", {}) or {}).get("usage")
+                    if bw_usage:
+                        if bw_usage.get("upstream") is not None:
+                            bw_up_samples.append(bw_usage["upstream"])
+                        if bw_usage.get("downstream") is not None:
+                            bw_down_samples.append(bw_usage["downstream"])
+
+                    energy_usage = (interval.get("energy", {}) or {}).get("usage")
+                    if energy_usage:
+                        energy_wh += energy_usage.get("total", 0) or 0
+
+                # Traffic rate (bytes/sec), averaged over the window. upstream ==
+                # sent (tx), downstream == recv (rx). kbps -> bytes/sec = *1000/8.
+                if bw_down_samples:
+                    rx_labels = create_port_labels(
+                        device_data, port, org_id=org_id, org_name=org_name, direction="rx"
+                    )
+                    self.parent._set_metric(
+                        self._switch_port_traffic,
+                        rx_labels,
+                        (sum(bw_down_samples) / len(bw_down_samples)) * 1000 / 8,
+                        MSMetricName.MS_PORT_TRAFFIC_BYTES.value,
+                    )
+                if bw_up_samples:
+                    tx_labels = create_port_labels(
+                        device_data, port, org_id=org_id, org_name=org_name, direction="tx"
+                    )
+                    self.parent._set_metric(
+                        self._switch_port_traffic,
+                        tx_labels,
+                        (sum(bw_up_samples) / len(bw_up_samples)) * 1000 / 8,
+                        MSMetricName.MS_PORT_TRAFFIC_BYTES.value,
+                    )
+
+                # Usage bytes over the window. KB -> bytes = *1024.
+                if have_usage:
+                    rx_labels = create_port_labels(
+                        device_data, port, org_id=org_id, org_name=org_name, direction="rx"
+                    )
+                    self.parent._set_metric(
+                        self._switch_port_usage,
+                        rx_labels,
+                        usage_down_kb * 1024,
+                        MSMetricName.MS_PORT_USAGE_BYTES.value,
+                    )
+                    tx_labels = create_port_labels(
+                        device_data, port, org_id=org_id, org_name=org_name, direction="tx"
+                    )
+                    self.parent._set_metric(
+                        self._switch_port_usage,
+                        tx_labels,
+                        usage_up_kb * 1024,
+                        MSMetricName.MS_PORT_USAGE_BYTES.value,
+                    )
+                    total_labels = create_port_labels(
+                        device_data, port, org_id=org_id, org_name=org_name, direction="total"
+                    )
+                    self.parent._set_metric(
+                        self._switch_port_usage,
+                        total_labels,
+                        usage_total_kb * 1024,
+                        MSMetricName.MS_PORT_USAGE_BYTES.value,
+                    )
+
+                # Client count (default 0 for ports with no online clients).
+                port_labels_no_extra = create_port_labels(
+                    device_data, port, org_id=org_id, org_name=org_name
+                )
+                self.parent._set_metric(
+                    self._switch_port_client_count,
+                    port_labels_no_extra,
+                    client_counts.get((serial, port_id), 0),
+                    MSMetricName.MS_PORT_CLIENT_COUNT.value,
+                )
+
+                # Per-port PoE (watt-hours delivered over the window).
+                self.parent._set_metric(
+                    self._switch_poe_port_power,
+                    port_labels_no_extra,
+                    energy_wh,
+                    MSMetricName.MS_POE_PORT_POWER_WATTHOURS.value,
+                )
+                total_poe_consumption += energy_wh
+
+            # Switch-level PoE total and (approximated) total power draw.
+            self.parent._set_metric(
+                self._switch_poe_total_power,
+                device_labels,
+                total_poe_consumption,
+                MSMetricName.MS_POE_TOTAL_POWER_WATTHOURS.value,
+            )
+            self.parent._set_metric(
+                self._switch_power,
+                device_labels,
+                total_poe_consumption,
+                MSMetricName.MS_POWER_USAGE_WATTS.value,
+            )
+
+            self._mark_port_usage_collected(serial)
+
+        return True
+
     def _should_collect_stp_priorities(self) -> bool:
         """Return whether enough time has elapsed to (re)collect STP priorities.
 
@@ -1243,8 +1502,15 @@ class MSCollector(BaseDeviceCollector):
                     network_name = network.get("name", network_id)
 
                     for switch_serial, priority in switch_priorities.items():
-                        # Get switch details from device lookup
-                        device_info = devices.get(switch_serial, {"serial": switch_serial})
+                        # Get switch details from device lookup. Copy the entry
+                        # (never mutate the shared lookup) and always stamp the
+                        # real serial from the STP config: device_lookup entries
+                        # carry name/model but no "serial" key, so without this
+                        # create_device_labels would emit serial="" for
+                        # lookup-matched switches and two same-named switches in
+                        # a network would collide on (network, name) (F-174).
+                        device_info = dict(devices.get(switch_serial, {}))
+                        device_info["serial"] = switch_serial
                         device_info["networkId"] = network_id
                         device_info["networkName"] = network_name
                         device_info["orgId"] = org_id

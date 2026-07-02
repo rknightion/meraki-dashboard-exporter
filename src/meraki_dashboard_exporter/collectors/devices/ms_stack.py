@@ -133,42 +133,63 @@ class MSStackCollector(SubCollectorMixin):
             # Total member count for the stack — prefer the members array (has
             # per-member identity/role); fall back to serials for older/edge
             # responses that only include the plain serial list.
-            self._stack_members_total.labels(
-                org_id=org_id,
-                org_name=org_name,
-                network_id=network_id,
-                network_name=network_name,
-                stack_id=stack_id,
-            ).set(len(members) if members else len(serials))
+            #
+            # Emit via ``parent._set_metric`` (not raw ``.labels().set()``) so
+            # these series are tracked by the MetricExpirationManager and expire
+            # when a member/stack is removed instead of lingering forever (F-175).
+            self.parent._set_metric(
+                self._stack_members_total,
+                {
+                    "org_id": org_id,
+                    "org_name": org_name,
+                    "network_id": network_id,
+                    "network_name": network_name,
+                    "stack_id": stack_id,
+                },
+                len(members) if members else len(serials),
+                MSMetricName.MS_STACK_MEMBERS_TOTAL.value,
+            )
 
             if members:
                 # Per-member status using the API's own role (active/member/standby).
                 for member in members:
                     serial = member.get("serial", "")
                     role = member.get("role", "")
-                    self._stack_member_status.labels(
-                        org_id=org_id,
-                        org_name=org_name,
-                        network_id=network_id,
-                        network_name=network_name,
-                        stack_id=stack_id,
-                        serial=serial,
-                        role=role,
-                    ).set(1)  # Presence in stack response means the switch is online/active
+                    # Presence in stack response means the switch is online/active
+                    self.parent._set_metric(
+                        self._stack_member_status,
+                        {
+                            "org_id": org_id,
+                            "org_name": org_name,
+                            "network_id": network_id,
+                            "network_name": network_name,
+                            "stack_id": stack_id,
+                            "serial": serial,
+                            "role": role,
+                        },
+                        1,
+                        MSMetricName.MS_STACK_MEMBER_STATUS.value,
+                    )
             else:
                 # Defensive fallback for responses without a members array:
                 # positionally treat the first serial as primary.
                 for i, serial in enumerate(serials):
                     role = "primary" if i == 0 else "member"
-                    self._stack_member_status.labels(
-                        org_id=org_id,
-                        org_name=org_name,
-                        network_id=network_id,
-                        network_name=network_name,
-                        stack_id=stack_id,
-                        serial=serial,
-                        role=role,
-                    ).set(1)  # Presence in stack response means the switch is online/active
+                    # Presence in stack response means the switch is online/active
+                    self.parent._set_metric(
+                        self._stack_member_status,
+                        {
+                            "org_id": org_id,
+                            "org_name": org_name,
+                            "network_id": network_id,
+                            "network_name": network_name,
+                            "stack_id": stack_id,
+                            "serial": serial,
+                            "role": role,
+                        },
+                        1,
+                        MSMetricName.MS_STACK_MEMBER_STATUS.value,
+                    )
 
     async def collect_for_org(
         self,

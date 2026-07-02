@@ -527,18 +527,28 @@ class DeviceCollector(MetricCollector):
                         ]
 
                         if usage_devices:
-                            await process_in_batches_with_errors(
+                            # Prefer the org-wide usage/PoE endpoints (2 calls per
+                            # org) over the per-switch loop (~1 call per switch) -
+                            # F-168. Falls back to the per-device batched loop only
+                            # when the SDK lacks the org-wide endpoints.
+                            usage_result = await self.ms_collector.collect_port_usage_by_switch(
+                                org_id,
+                                org_name,
                                 usage_devices,
-                                self.ms_collector.collect_device_port_usage_metrics,
-                                batch_size=self.settings.api.device_batch_size,
-                                delay_between_batches=self.settings.api.batch_delay,
-                                spread_over_seconds=spread_window,
-                                initial_delay=self._get_smoothing_offset(f"{org_id}:ms_usage"),
-                                min_batch_delay=min_delay,
-                                max_batch_delay=max_delay,
-                                item_description="MS port usage",
-                                error_context_func=lambda device: {"serial": device["serial"]},
                             )
+                            if not usage_result:
+                                await process_in_batches_with_errors(
+                                    usage_devices,
+                                    self.ms_collector.collect_device_port_usage_metrics,
+                                    batch_size=self.settings.api.device_batch_size,
+                                    delay_between_batches=self.settings.api.batch_delay,
+                                    spread_over_seconds=spread_window,
+                                    initial_delay=self._get_smoothing_offset(f"{org_id}:ms_usage"),
+                                    min_batch_delay=min_delay,
+                                    max_batch_delay=max_delay,
+                                    item_description="MS port usage",
+                                    error_context_func=lambda device: {"serial": device["serial"]},
+                                )
                 else:
                     # Process devices in batches (configurable via device_batch_size)
                     used_fallback = True
