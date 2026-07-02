@@ -120,10 +120,11 @@ class MXHACollector(SubCollectorMixin):
         if not rows:
             return
 
-        # mode/serial are labels that can churn (mode changes, warm spare
-        # pairs are re-designated) so clear prior series before re-setting.
-        self._mx_ha_mode._metrics.clear()
-        self._mx_ha_role._metrics.clear()
+        # NB: do NOT clear the gauges here. collect_redundancy runs once per org
+        # (concurrently across orgs, sharing one gauge instance), so a global
+        # _metrics.clear() would wipe every other org's mode/role series mid-cycle.
+        # mode/serial label churn is reclaimed by the metric expiration manager via
+        # parent._set_metric tracking instead.
 
         allowed_network_ids = (
             await self.parent.inventory.get_allowed_network_ids(org_id)

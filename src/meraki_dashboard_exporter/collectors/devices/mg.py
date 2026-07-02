@@ -164,10 +164,11 @@ class MGCollector(BaseDeviceCollector):
         if not uplink_statuses:
             return
 
-        # Clear previous label series to avoid stale status/roaming values
-        # (status, provider, etc. are labels, so transitions leave old series behind)
-        self._mg_uplink_status_info._metrics.clear()
-        self._mg_uplink_roaming._metrics.clear()
+        # NB: do NOT clear the gauge's label series here. This runs once per org
+        # (concurrently across orgs, sharing one gauge instance), so a global
+        # _metrics.clear() would wipe every other org's series mid-cycle. Stale
+        # label series (status/provider transitions) are removed by the metric
+        # expiration manager via parent._set_metric tracking instead.
 
         # Resolve allowed network IDs for filter enforcement on org-wide responses.
         allowed_network_ids = (

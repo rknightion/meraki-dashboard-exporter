@@ -153,33 +153,37 @@ class TestMXHACollector:
         assert labels_1["mode"] == "disabled"
         assert value_1 == 1
 
-    async def test_clears_stale_mode_and_role_labels(
+    async def test_does_not_wipe_other_orgs_series(
         self,
         collector: MXHACollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """Test that stale mode/role label series are cleared on each collection.
+        """collect_redundancy must NOT clear the whole gauge.
 
-        mode and serial are labels that can churn (mode transitions, warm
-        spare re-designation) so the old label series must not persist.
+        The gauge instance is shared across concurrently-collected orgs, so a
+        global _metrics.clear() would wipe every other org's mode/role series
+        mid-cycle (the F-020 multi-org wipe bug). Stale label churn is delegated
+        to the metric expiration manager instead. Here we seed a series for a
+        *different* org and confirm collecting org1 leaves it intact.
         """
         mode_gauge = collector._mx_ha_mode
         role_gauge = collector._mx_ha_role
 
+        # Series belonging to another org (would be wiped by a global clear()).
         mode_gauge.labels(
-            org_id="org1",
-            org_name="Test Org",
-            network_id="N_111",
-            network_name="Office Network",
+            org_id="org2",
+            org_name="Other Org",
+            network_id="N_222",
+            network_name="Other Network",
             mode="active-passive",
         ).set(1)
         role_gauge.labels(
-            org_id="org1",
-            org_name="Test Org",
-            network_id="N_111",
-            network_name="Office Network",
-            serial="Q2AB-STALE",
+            org_id="org2",
+            org_name="Other Org",
+            network_id="N_222",
+            network_name="Other Network",
+            serial="Q2ZZ-OTHER",
         ).set(1)
 
         assert len(mode_gauge._metrics) == 1
@@ -199,10 +203,9 @@ class TestMXHACollector:
 
         await collector.collect_redundancy("org1", "Test Org", {})
 
-        # parent._set_metric is mocked so no new entries land in the real
-        # Gauge, but the pre-collection clear must have removed the stale ones.
-        assert len(mode_gauge._metrics) == 0
-        assert len(role_gauge._metrics) == 0
+        # org2's series must survive — org1's collection must not wipe the shared gauge.
+        assert len(mode_gauge._metrics) == 1
+        assert len(role_gauge._metrics) == 1
 
     async def test_designation_missing_priority_skipped(
         self,

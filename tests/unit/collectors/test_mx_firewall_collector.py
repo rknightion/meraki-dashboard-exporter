@@ -528,13 +528,24 @@ class TestMXFirewallCollector:
         assert kwargs["timespan"] == 300
         assert kwargs["total_pages"] == "all"
 
-    async def test_security_events_empty_response_clears_stale_series(
+    async def test_security_events_empty_response_sets_nothing(
         self,
         firewall_collector: MXFirewallCollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """An empty events response must not set any metric but must clear old series."""
+        """An empty events response must not set any metric.
+
+        It must also NOT wipe the shared gauge: the collector runs once per org
+        concurrently, so a global _metrics.clear() would erase every other org's
+        series (the F-087 multi-org wipe bug). Stale series are reclaimed by the
+        expiration manager instead.
+        """
+        # Seed a series for another org — a global clear() would wipe it.
+        firewall_collector._security_events_total.labels(
+            org_id="org2", org_name="Other Org", event_type="IDS Alert"
+        ).set(3)
+
         mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(return_value=[])
 
         await firewall_collector.collect_org_security_events("org1", "Test Org")
@@ -543,25 +554,24 @@ class TestMXFirewallCollector:
             c[0][0] is firewall_collector._security_events_total
             for c in mock_parent._set_metric.call_args_list
         )
-        assert len(firewall_collector._security_events_total._metrics) == 0
+        # org2's series must survive org1's empty-response collection.
+        assert len(firewall_collector._security_events_total._metrics) == 1
 
-    async def test_security_events_stale_event_type_expires(
+    async def test_security_events_does_not_wipe_other_orgs(
         self,
         firewall_collector: MXFirewallCollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """An event type present in one cycle but absent in the next must not linger.
+        """Collecting one org must not clear another org's series on the shared gauge.
 
-        ``mock_parent._set_metric`` is itself a mock (doesn't write through to the
-        real ``Gauge``), so this exercises the real gauge's label-series clearing
-        directly: pre-populate a stale series, run a cycle with a *different*
-        event type, and confirm the stale series was cleared rather than left
-        behind (which would happen if the collector only ever called
-        ``.labels(...).set(...)`` for types present in the current response).
+        ``mock_parent._set_metric`` is a mock (doesn't write through to the real
+        ``Gauge``), so this checks the real gauge is not globally cleared: a series
+        pre-seeded for a *different* org must survive org1's collection cycle, and
+        the current cycle's event type must still be passed to _set_metric.
         """
         firewall_collector._security_events_total.labels(
-            org_id="org1", org_name="Test Org", event_type="Old Type"
+            org_id="org2", org_name="Other Org", event_type="Old Type"
         ).set(5)
         assert len(firewall_collector._security_events_total._metrics) == 1
 
@@ -570,8 +580,8 @@ class TestMXFirewallCollector:
         )
         await firewall_collector.collect_org_security_events("org1", "Test Org")
 
-        # The stale "Old Type" series must be gone from the real gauge.
-        assert len(firewall_collector._security_events_total._metrics) == 0
+        # org2's series must NOT have been wiped by org1's collection.
+        assert len(firewall_collector._security_events_total._metrics) == 1
 
         # And the new event type must have been passed to _set_metric.
         calls = {

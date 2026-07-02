@@ -380,24 +380,31 @@ class TestMGCollector:
 
         mock_parent._set_metric.assert_not_called()
 
-    async def test_collect_uplink_statuses_clears_stale_labels(
+    async def test_collect_uplink_statuses_does_not_wipe_other_orgs(
         self,
         mg_collector: MGCollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """Test that stale label series are cleared on each collection."""
+        """collect_uplink_statuses must NOT clear the whole gauge.
+
+        The gauge instances are shared across concurrently-collected orgs, so a
+        global _metrics.clear() would wipe every other org's series mid-cycle
+        (the F-001 multi-org wipe bug). Stale status/roaming label churn is
+        delegated to the metric expiration manager instead. Seed series for a
+        *different* org and confirm org1's collection leaves them intact.
+        """
         info_gauge = mg_collector._mg_uplink_status_info
         roaming_gauge = mg_collector._mg_uplink_roaming
 
-        # Simulate stale entries from a previous collection cycle.
+        # Series belonging to another org (would be wiped by a global clear()).
         info_gauge.labels(
-            org_id="org1",
-            org_name="Test Org",
-            network_id="N_1",
-            network_name="Main Network",
-            serial="Q2XX-1",
-            name="Gateway 1",
+            org_id="org2",
+            org_name="Other Org",
+            network_id="N_2",
+            network_name="Other Network",
+            serial="Q2ZZ-OTHER",
+            name="Gateway 2",
             model="MG21",
             device_type="MG",
             interface="cellular",
@@ -407,31 +414,20 @@ class TestMGCollector:
             signal_type="4G",
             roaming_status="home",
             apn="vzwinternet",
-            ip="10.0.0.1",
+            ip="10.0.0.9",
         ).set(1)
         roaming_gauge.labels(
-            org_id="org1",
-            org_name="Test Org",
-            network_id="N_1",
-            network_name="Main Network",
-            serial="Q2XX-1",
-            name="Gateway 1",
+            org_id="org2",
+            org_name="Other Org",
+            network_id="N_2",
+            network_name="Other Network",
+            serial="Q2ZZ-OTHER",
+            name="Gateway 2",
             model="MG21",
             device_type="MG",
             interface="cellular",
         ).set(0)
 
-        assert len(info_gauge._metrics) == 1
-        assert len(roaming_gauge._metrics) == 1
-
-        mock_api.cellularGateway.getOrganizationCellularGatewayUplinkStatuses = MagicMock(
-            return_value=[]
-        )
-
-        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
-
-        # Empty response returns early, before clearing — so simulate a real cycle
-        # with data to confirm the clear-then-repopulate behavior separately.
         assert len(info_gauge._metrics) == 1
         assert len(roaming_gauge._metrics) == 1
 
@@ -450,7 +446,6 @@ class TestMGCollector:
 
         await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
 
-        # The stale entries should have been cleared before parent._set_metric
-        # (mocked, so it doesn't repopulate the real Gauge) was invoked.
-        assert len(info_gauge._metrics) == 0
-        assert len(roaming_gauge._metrics) == 0
+        # org2's series must survive — org1's collection must not wipe the shared gauges.
+        assert len(info_gauge._metrics) == 1
+        assert len(roaming_gauge._metrics) == 1

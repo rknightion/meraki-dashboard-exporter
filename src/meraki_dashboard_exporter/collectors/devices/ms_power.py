@@ -106,9 +106,11 @@ class MSPowerCollector(SubCollectorMixin):
         if not rows:
             return
 
-        # Clear previous label series to avoid stale status values
-        # (status is a label, so status transitions leave old series at 1).
-        self._ms_power_supply_status._metrics.clear()
+        # NB: do NOT clear the gauge's label series here. collect_power_modules runs
+        # once per org (concurrently across orgs, sharing one gauge instance), so a
+        # global _metrics.clear() would wipe every other org's series mid-cycle. Stale
+        # label series (status transitions) are removed by the metric expiration
+        # manager via parent._set_metric tracking instead.
 
         # Resolve allowed network IDs for filter enforcement on org-wide responses.
         allowed_network_ids = (

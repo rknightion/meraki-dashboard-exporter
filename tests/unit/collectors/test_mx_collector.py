@@ -296,37 +296,38 @@ class TestMXCollector:
         # create_device_labels derives device_type from model[:2]
         assert labels["device_type"] == "Z3"
 
-    async def test_collect_uplink_statuses_clears_stale_labels(
+    async def test_collect_uplink_statuses_does_not_wipe_other_orgs(
         self,
         mx_collector: MXCollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """Test that stale status label series are cleared on each collection.
+        """collect_uplink_statuses must NOT clear the whole gauge.
 
-        When status changes (e.g. active -> failed), the old label series
-        must not persist alongside the new one.
+        The gauge instance is shared across concurrently-collected orgs, so a
+        global _metrics.clear() would wipe every other org's series mid-cycle
+        (the F-001 multi-org wipe bug). Stale status-label churn is delegated to
+        the metric expiration manager instead. Seed a series for a *different* org
+        and confirm org1's collection leaves it intact.
         """
         gauge = mx_collector._mx_uplink_info
 
-        # Simulate a stale label entry from a previous collection cycle
+        # Series belonging to another org (would be wiped by a global clear()).
         gauge.labels(
-            org_id="org1",
-            org_name="Test Org",
-            network_id="N_111",
-            network_name="Office Network",
-            serial="Q2AB-1234-5678",
-            name="Office MX",
+            org_id="org2",
+            org_name="Other Org",
+            network_id="N_222",
+            network_name="Other Network",
+            serial="Q2ZZ-OTHER",
+            name="Other MX",
             model="MX68",
             device_type="MX",
             interface="wan1",
             status="active",
         ).set(1)
 
-        # Verify the stale entry exists
         assert len(gauge._metrics) == 1
 
-        # Now collect with the uplink having changed to "failed"
         mock_api.appliance.getOrganizationApplianceUplinkStatuses = MagicMock(
             return_value=[
                 {
@@ -352,11 +353,8 @@ class TestMXCollector:
 
         await mx_collector.collect_uplink_statuses("org1", "Test Org", device_lookup)
 
-        # The _metrics dict should have been cleared before re-setting,
-        # so the old "active" entry should not persist.
-        # parent._set_metric is mocked so no new entries are added to the Gauge,
-        # but the clear should have removed the stale entry.
-        assert len(gauge._metrics) == 0
+        # org2's series must survive — org1's collection must not wipe the shared gauge.
+        assert len(gauge._metrics) == 1
 
     async def test_collect_uplink_statuses_api_error(
         self,

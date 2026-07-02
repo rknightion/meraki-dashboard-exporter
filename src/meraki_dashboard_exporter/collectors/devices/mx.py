@@ -201,9 +201,11 @@ class MXCollector(BaseDeviceCollector):
         if not uplink_statuses:
             return
 
-        # Clear previous label series to avoid stale status values
-        # (status is a label, so status transitions leave old series at 1)
-        self._mx_uplink_info._metrics.clear()
+        # NB: do NOT clear the gauge's label series here. This runs once per org
+        # (concurrently across orgs, sharing one gauge instance), so a global
+        # _metrics.clear() would wipe every other org's series mid-cycle. Stale
+        # label series (status transitions) are removed by the metric expiration
+        # manager via parent._set_metric tracking instead.
 
         # Resolve allowed network IDs for filter enforcement on org-wide responses.
         allowed_network_ids = (

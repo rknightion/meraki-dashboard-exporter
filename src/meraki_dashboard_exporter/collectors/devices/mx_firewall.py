@@ -226,9 +226,11 @@ class MXFirewallCollector(SubCollectorMixin):
             event_type = event.eventType or "unknown"
             counts[event_type] = counts.get(event_type, 0) + 1
 
-        # Clear previous label series so event types with zero events this cycle expire
-        # instead of holding a stale non-zero value indefinitely.
-        self._security_events_total._metrics.clear()
+        # NB: do NOT clear the gauge here. collect_org_security_events runs once per
+        # org (concurrently across orgs, sharing one gauge instance), so a global
+        # _metrics.clear() would wipe every other org's series mid-cycle. Event types
+        # with zero events this cycle are reclaimed by the metric expiration manager
+        # via parent._set_metric tracking instead.
 
         for event_type, count in counts.items():
             self.parent._set_metric(

@@ -261,27 +261,34 @@ class TestMSPowerCollector:
 
         mock_parent._set_metric.assert_not_called()
 
-    async def test_collect_power_modules_clears_stale_labels(
+    async def test_collect_power_modules_does_not_wipe_other_orgs(
         self,
         ms_power_collector: MSPowerCollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """Stale status label series must be cleared before re-emitting each cycle."""
+        """collect_power_modules must NOT clear the whole gauge.
+
+        The gauge instance is shared across concurrently-collected orgs, so a
+        global _metrics.clear() would wipe every other org's series mid-cycle
+        (the F-001 multi-org wipe bug). Stale status-label churn is delegated to
+        the metric expiration manager instead. Seed a series for a *different* org
+        and confirm org1's collection leaves it intact.
+        """
         gauge = ms_power_collector._ms_power_supply_status
 
-        # Simulate a stale label entry from a previous collection cycle.
+        # Series belonging to another org (would be wiped by a global clear()).
         gauge.labels(
-            org_id="org1",
-            org_name="Test Org",
-            network_id="N_111",
-            network_name="Office Network",
-            serial="Q2SW-1111-2222",
-            name="Switch 1",
+            org_id="org2",
+            org_name="Other Org",
+            network_id="N_222",
+            network_name="Other Network",
+            serial="Q2SW-OTHER",
+            name="Switch 9",
             model="MS250-48",
             device_type="MS",
             slot="1",
-            psu_serial="PSU-SERIAL-1",
+            psu_serial="PSU-OTHER",
             status="powering",
         ).set(1)
 
@@ -307,7 +314,6 @@ class TestMSPowerCollector:
 
         await ms_power_collector.collect_power_modules("org1", "Test Org", {})
 
-        # parent._set_metric is mocked, so no new entries land on the real Gauge,
-        # but the pre-emit clear should have removed the stale entry.
-        assert len(gauge._metrics) == 0
+        # org2's series must survive — org1's collection must not wipe the shared gauge.
+        assert len(gauge._metrics) == 1
         assert mock_parent._set_metric.call_count == 1
