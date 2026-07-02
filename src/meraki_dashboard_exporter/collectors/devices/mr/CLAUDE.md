@@ -32,6 +32,18 @@ each own one metric domain.
   last non-zero value for any metric whose name contains `total` (but not `percent`) and reuses it when
   the API returns `None`/`0` for that same label set - avoids total-packet-count gauges dropping to zero
   on a transient empty response. Percent/loss metrics are never cached this way.
+- **NEVER wire `liveTools`/beta MR endpoints (e.g. `createDeviceLiveToolsPing`,
+  `createDeviceLiveToolsCableTest`, `createDeviceLiveToolsThroughputTest`, and similar
+  `createDeviceLiveTools*`/beta wireless surfaces) into any collector on this passive scrape path**
+  (`clients.py`, `performance.py`, `wireless.py`, `collector.py`). These are on-demand *action* APIs -
+  each call triggers a device-side test/action (ping, cable test, throughput test, etc.), not a read of
+  existing telemetry - and some sit on unstable beta surfaces. Wiring one into a scheduled collector
+  would fire that action on every scrape tier tick (FAST/MEDIUM/SLOW), which is both a functional bug
+  (repeatedly disrupting the device with test traffic) and a rate-limit/API-abuse risk. If a future
+  issue proposes exposing `liveTools` data, it must be an explicit, rate-limited, opt-in mechanism -
+  never folded into the regular per-device/org/network `collect_*` sweep. (#284; a dedicated top-level
+  beta-API section for this note is tracked for #278 Phase 4 - add a pointer there from the top-level
+  `CLAUDE.md` once that section exists.)
 </critical_notes>
 
 <file_map>
