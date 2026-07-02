@@ -415,7 +415,7 @@ class AlertsCollector(MetricCollector):
         # network_name/org_name join happens downstream via meraki_org_info /
         # meraki_network_info (NI-1, lane A).
         alert_counts: dict[tuple[str, str, str, str, str], int] = {}
-        severity_counts = {"critical": 0, "warning": 0, "informational": 0}
+        severity_counts = {"critical": 0, "warning": 0, "informational": 0, "other": 0}
         network_counts: dict[str, int] = {}
         health_alert_counts: dict[tuple[str, str, str], int] = {}
 
@@ -451,9 +451,11 @@ class AlertsCollector(MetricCollector):
             # Count alerts by composite key
             alert_counts[key] = alert_counts.get(key, 0) + 1
 
-            # Count by severity
-            if severity in severity_counts:
-                severity_counts[severity] += 1
+            # Count by severity, bucketing any unrecognized value into "other" so
+            # by-severity totals still reconcile with the overall alert count
+            # instead of silently dropping unknown severities (issue #524).
+            severity_bucket = severity if severity in severity_counts else "other"
+            severity_counts[severity_bucket] += 1
 
             # Count by network
             network_counts[network_id] = network_counts.get(network_id, 0) + 1

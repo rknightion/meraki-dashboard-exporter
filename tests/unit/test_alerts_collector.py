@@ -203,6 +203,77 @@ class TestAlertsCollector(BaseCollectorTest):
             severity="warning",
         )
 
+    async def test_collect_buckets_unknown_severity_as_other(
+        self, collector, mock_api_builder, metrics
+    ):
+        """Unknown severities land in an "other" bucket instead of being dropped (#524).
+
+        Without this, an unrecognized severity value would be silently excluded from
+        ALERTS_BY_SEVERITY entirely, so the by-severity totals would no longer
+        reconcile with the total number of active alerts.
+        """
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network")
+
+        alerts = [
+            AlertFactory.create(
+                alert_id="alert1",
+                alert_type="connectivity",
+                categoryType="network",
+                severity="critical",
+                deviceType="MR",
+                network=network,
+                dismissedAt=None,
+                resolvedAt=None,
+            ),
+            AlertFactory.create(
+                alert_id="alert2",
+                alert_type="performance",
+                categoryType="wireless",
+                severity="unheard_of_severity",
+                deviceType="MS",
+                network=network,
+                dismissedAt=None,
+                resolvedAt=None,
+            ),
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_devices([], org_id="123")
+            .with_custom_response("getOrganizationAssuranceAlerts", alerts)
+            .build()
+        )
+        collector.api = api
+
+        await self.run_collector(collector)
+
+        self.assert_collector_success(collector, metrics)
+
+        # The unrecognized severity is bucketed into "other" rather than dropped.
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_BY_SEVERITY,
+            1,
+            org_id="123",
+            severity="critical",
+        )
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_BY_SEVERITY,
+            1,
+            org_id="123",
+            severity="other",
+        )
+
+        # By-severity totals reconcile with the overall active-alert count.
+        by_severity_metric = metrics.get_metric(AlertMetricName.ALERTS_BY_SEVERITY.value)
+        by_severity_total = sum(
+            sample.value
+            for sample in by_severity_metric.samples
+            if sample.name == AlertMetricName.ALERTS_BY_SEVERITY.value
+        )
+        assert by_severity_total == len(alerts)
+
     async def test_collect_skips_dismissed_alerts(self, collector, mock_api_builder, metrics):
         """Test that dismissed alerts are skipped."""
         # Set up test data
