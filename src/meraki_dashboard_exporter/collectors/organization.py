@@ -537,7 +537,14 @@ class OrganizationCollector(MetricCollector):
                         org_data,
                         device_type=device_type,
                     )
-                    self._devices_total.labels(**labels).set(count)
+                    # Route through _set_metric for expiration tracking so device
+                    # types that disappear are removed instead of frozen forever.
+                    self._set_metric(
+                        self._devices_total,
+                        labels,
+                        count,
+                        OrgMetricName.ORG_DEVICES_TOTAL.value,
+                    )
             else:
                 logger.error("_devices_total metric not initialized")
 
@@ -605,7 +612,14 @@ class OrganizationCollector(MetricCollector):
                             org_data,
                             model=model,
                         )
-                        self._devices_by_model_total.labels(**labels).set(count)
+                        # Route through _set_metric so models that drop out of the
+                        # fleet expire instead of freezing at their last count.
+                        self._set_metric(
+                            self._devices_by_model_total,
+                            labels,
+                            count,
+                            OrgMetricName.ORG_DEVICES_BY_MODEL_TOTAL.value,
+                        )
                 else:
                     logger.error("_devices_by_model_total metric not initialized")
 
@@ -685,7 +699,14 @@ class OrganizationCollector(MetricCollector):
                         status=status,
                         product_type=product_type,
                     )
-                    self._devices_availability_total.labels(**labels).set(count)
+                    # Route through _set_metric so absent status/product-type combos
+                    # expire instead of holding a stale count forever.
+                    self._set_metric(
+                        self._devices_availability_total,
+                        labels,
+                        count,
+                        OrgMetricName.ORG_DEVICES_AVAILABILITY_TOTAL.value,
+                    )
             else:
                 logger.error("_devices_availability_total metric not initialized")
 

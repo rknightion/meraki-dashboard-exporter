@@ -17,6 +17,58 @@ class TestOrganizationCollector(BaseCollectorTest):
     collector_class = OrganizationCollector
     update_tier = UpdateTier.MEDIUM
 
+    async def test_device_count_gauges_participate_in_expiration(
+        self, mock_api, settings, isolated_registry, inventory
+    ):
+        """Org device-count gauges must participate in expiration tracking.
+
+        They must route through _set_metric so stale label combinations
+        (device_type / model / status+product_type) can be removed by the
+        expiration manager instead of freezing forever.
+        """
+        from meraki_dashboard_exporter.core.metric_expiration import MetricExpirationManager
+
+        manager = MetricExpirationManager(settings=settings)
+        collector = OrganizationCollector(
+            api=mock_api,
+            settings=settings,
+            registry=isolated_registry,
+            inventory=inventory,
+            expiration_manager=manager,
+        )
+
+        org_id, org_name = "999", "Expiry Org"
+
+        # Devices-by-type
+        async def _devices(_org_id: str):
+            return [{"model": "MS210-8"}, {"model": "MR36"}, {"model": "MS120-8"}]
+
+        collector.api_helper.get_organization_devices = _devices  # type: ignore[method-assign]
+        await collector._collect_device_metrics(org_id, org_name)
+
+        # Devices-by-model
+        collector.api.organizations.getOrganizationDevicesOverviewByModel.return_value = {
+            "counts": [{"model": "MR36", "total": 4}, {"model": "MS210-8", "total": 2}]
+        }
+        await collector._collect_device_counts_by_model(org_id, org_name)
+
+        # Devices availability (via inventory)
+        async def _avail(_org_id: str):
+            return [
+                {"status": "online", "productType": "wireless"},
+                {"status": "offline", "productType": "switch"},
+            ]
+
+        collector.inventory.get_device_availabilities = _avail  # type: ignore[method-assign]
+        await collector._collect_device_availability_metrics(org_id, org_name)
+
+        # Every one of the three gauge families must now be tracked WITH a Gauge
+        # reference so the expiration manager can actually remove stale series.
+        tracked_metric_names = {key[1] for key in manager._metric_series}
+        assert OrgMetricName.ORG_DEVICES_TOTAL.value in tracked_metric_names
+        assert OrgMetricName.ORG_DEVICES_BY_MODEL_TOTAL.value in tracked_metric_names
+        assert OrgMetricName.ORG_DEVICES_AVAILABILITY_TOTAL.value in tracked_metric_names
+
     async def test_collect_packet_capture_metrics(self, collector, mock_api_builder, metrics):
         """Test collection of packet capture metrics."""
         # Set up test data
