@@ -94,9 +94,12 @@ class DataRatesCollector(BaseNetworkHealthCollector):
                 )
                 latest_data = sorted_data[0]
 
-                # Extract download and upload rates
-                download_kbps = latest_data.get("downloadKbps", 0)
-                upload_kbps = latest_data.get("uploadKbps", 0)
+                # Extract download and upload rates. The API reports these fields
+                # (downloadKbps/uploadKbps) in kilobytes-per-second, not kilobits,
+                # per the OpenAPI spec (F-065) -- convert x1000 to bytes/second
+                # (#531 D5/APIDEV-03; NOT /8, this is not a bit conversion).
+                download_bytes_per_second = latest_data.get("downloadKbps", 0) * 1000
+                upload_bytes_per_second = latest_data.get("uploadKbps", 0) * 1000
 
                 # Create network labels using helper
                 labels = create_network_labels(
@@ -109,13 +112,13 @@ class DataRatesCollector(BaseNetworkHealthCollector):
                 self._set_metric_value(
                     "_network_wireless_download_kbps",
                     labels,
-                    download_kbps,
+                    download_bytes_per_second,
                 )
 
                 self._set_metric_value(
                     "_network_wireless_upload_kbps",
                     labels,
-                    upload_kbps,
+                    upload_bytes_per_second,
                 )
 
         except Exception as e:

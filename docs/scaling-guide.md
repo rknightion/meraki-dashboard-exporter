@@ -87,7 +87,7 @@ networks across all orgs at startup, the exporter exits with an error so
 typos fail loudly.
 
 Live filter state is observable via `meraki_network_filter_match`,
-`meraki_network_filter_resolved`, and `meraki_network_filter_total`. See
+`meraki_network_filter_resolved`, and `meraki_network_filter_networks`. See
 `.env.example` for the full set of fields.
 
 ## Key Metrics to Monitor

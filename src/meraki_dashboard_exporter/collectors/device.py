@@ -242,7 +242,7 @@ class DeviceCollector(MetricCollector):
         # Memory metrics - available via system memory usage history API
         self._device_memory_used_bytes = self._create_gauge(
             DeviceMetricName.DEVICE_MEMORY_USED_BYTES,
-            "Device memory used in bytes",
+            "Device memory used in bytes (derived from the API's binary KiB value x1024)",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -258,7 +258,7 @@ class DeviceCollector(MetricCollector):
 
         self._device_memory_free_bytes = self._create_gauge(
             DeviceMetricName.DEVICE_MEMORY_FREE_BYTES,
-            "Device memory free in bytes",
+            "Device memory free in bytes (derived from the API's binary KiB value x1024)",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -274,7 +274,7 @@ class DeviceCollector(MetricCollector):
 
         self._device_memory_total_bytes = self._create_gauge(
             DeviceMetricName.DEVICE_MEMORY_TOTAL_BYTES,
-            "Device memory total provisioned in bytes",
+            "Device memory total provisioned in bytes (derived from the API's binary KiB value x1024)",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,

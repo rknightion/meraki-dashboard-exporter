@@ -54,7 +54,7 @@ class MRClientsCollector:
         )
 
         self._ap_connection_stats = self.parent._create_gauge(
-            MRMetricName.MR_CONNECTION_STATS,
+            MRMetricName.MR_CONNECTION_STATS_COUNT,
             "Wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)",
             labelnames=[
                 LabelName.ORG_ID,

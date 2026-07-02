@@ -120,15 +120,15 @@ class TestClientOverviewCollector:
         # Check usage metrics
         total_usage_key = ("_usage_total_kb", (("org_id", org_id), ("org_name", org_name)))
         assert total_usage_key in parent._metrics
-        assert parent._metrics[total_usage_key] == 1048576
+        assert parent._metrics[total_usage_key] == 1048576000
 
         downstream_key = ("_usage_downstream_kb", (("org_id", org_id), ("org_name", org_name)))
         assert downstream_key in parent._metrics
-        assert parent._metrics[downstream_key] == 786432
+        assert parent._metrics[downstream_key] == 786432000
 
         upstream_key = ("_usage_upstream_kb", (("org_id", org_id), ("org_name", org_name)))
         assert upstream_key in parent._metrics
-        assert parent._metrics[upstream_key] == 262144
+        assert parent._metrics[upstream_key] == 262144000
 
         # Verify API call was tracked exactly once (by the @log_api_call decorator);
         # the redundant manual _track_api_call was removed (F-014, no double count).
@@ -144,7 +144,9 @@ class TestClientOverviewCollector:
         # First collection with non-zero values
         good_response = {
             "counts": {"total": 100},
-            "usage": {"overall": {"total": 500000, "downstream": 300000, "upstream": 200000}},
+            "usage": {
+                "overall": {"total": 500000, "downstream": 300000, "upstream": 200000}
+            },  # raw KB
         }
 
         api = mock_api_builder.with_custom_response(
@@ -159,9 +161,9 @@ class TestClientOverviewCollector:
         assert org_id in client_overview_collector._last_non_zero_values
         cached = client_overview_collector._last_non_zero_values[org_id]
         assert cached["total_clients"] == 100
-        assert cached["total_kb"] == 500000
-        assert cached["downstream_kb"] == 300000
-        assert cached["upstream_kb"] == 200000
+        assert cached["total_kb"] == 500000000
+        assert cached["downstream_kb"] == 300000000
+        assert cached["upstream_kb"] == 200000000
 
         # Second collection with all zeros
         zero_response = {
@@ -186,13 +188,13 @@ class TestClientOverviewCollector:
         assert parent._metrics[client_key] == 100  # Cached value
 
         total_usage_key = ("_usage_total_kb", (("org_id", org_id), ("org_name", org_name)))
-        assert parent._metrics[total_usage_key] == 500000  # Cached value
+        assert parent._metrics[total_usage_key] == 500000000  # Cached value
 
         downstream_key = ("_usage_downstream_kb", (("org_id", org_id), ("org_name", org_name)))
-        assert parent._metrics[downstream_key] == 300000  # Cached value
+        assert parent._metrics[downstream_key] == 300000000  # Cached value
 
         upstream_key = ("_usage_upstream_kb", (("org_id", org_id), ("org_name", org_name)))
-        assert parent._metrics[upstream_key] == 200000  # Cached value
+        assert parent._metrics[upstream_key] == 200000000  # Cached value
 
     async def test_collect_with_missing_fields(self, client_overview_collector, mock_api_builder):
         """Test handling of response with missing fields."""
@@ -331,7 +333,7 @@ class TestClientOverviewCollector:
 
         # Total usage should be set
         total_usage_key = ("_usage_total_kb", (("org_id", org_id), ("org_name", org_name)))
-        assert parent._metrics[total_usage_key] == 100000
+        assert parent._metrics[total_usage_key] == 100000000
 
         # Downstream and upstream should default to 0
         downstream_key = ("_usage_downstream_kb", (("org_id", org_id), ("org_name", org_name)))
@@ -378,11 +380,11 @@ class TestClientOverviewCollector:
         # Verify cached values are correct for each org
         cached1 = client_overview_collector._last_non_zero_values[org1_id]
         assert cached1["total_clients"] == 100
-        assert cached1["total_kb"] == 1000
+        assert cached1["total_kb"] == 1000000
 
         cached2 = client_overview_collector._last_non_zero_values[org2_id]
         assert cached2["total_clients"] == 200
-        assert cached2["total_kb"] == 2000
+        assert cached2["total_kb"] == 2000000
 
     async def test_fetch_client_overview_parameters(
         self, client_overview_collector, mock_api_builder

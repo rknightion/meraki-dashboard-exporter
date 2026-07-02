@@ -67,9 +67,9 @@ class TestOrganizationCollector(BaseCollectorTest):
         # Every one of the three gauge families must now be tracked WITH a Gauge
         # reference so the expiration manager can actually remove stale series.
         tracked_metric_names = {key[1] for key in manager._metric_series}
-        assert OrgMetricName.ORG_DEVICES_TOTAL.value in tracked_metric_names
-        assert OrgMetricName.ORG_DEVICES_BY_MODEL_TOTAL.value in tracked_metric_names
-        assert OrgMetricName.ORG_DEVICES_AVAILABILITY_TOTAL.value in tracked_metric_names
+        assert OrgMetricName.ORG_DEVICES.value in tracked_metric_names
+        assert OrgMetricName.ORG_DEVICES_BY_MODEL.value in tracked_metric_names
+        assert OrgMetricName.ORG_DEVICES_AVAILABILITY.value in tracked_metric_names
 
     async def test_collect_packet_capture_metrics(self, collector, mock_api_builder, metrics):
         """Test collection of packet capture metrics."""
@@ -141,7 +141,7 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Verify packet capture metrics
         metrics.assert_gauge_value(
-            OrgMetricName.ORG_PACKETCAPTURES_TOTAL,
+            OrgMetricName.ORG_PACKETCAPTURES,
             266,
             org_id="123",
             org_name="Test Org",
@@ -193,7 +193,7 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Verify packet capture metrics are set to 0
         metrics.assert_gauge_value(
-            OrgMetricName.ORG_PACKETCAPTURES_TOTAL,
+            OrgMetricName.ORG_PACKETCAPTURES,
             0,
             org_id="456",
             org_name="Empty Org",
@@ -237,7 +237,7 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Verify metrics are not set (due to error)
         metrics.assert_metric_not_set(
-            OrgMetricName.ORG_PACKETCAPTURES_TOTAL,
+            OrgMetricName.ORG_PACKETCAPTURES,
             org_id="789",
             org_name="Error Org",
         )
@@ -287,7 +287,7 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Verify metrics are not set (due to unexpected format)
         metrics.assert_metric_not_set(
-            OrgMetricName.ORG_PACKETCAPTURES_TOTAL,
+            OrgMetricName.ORG_PACKETCAPTURES,
             org_id="999",
             org_name="Weird Org",
         )
@@ -365,23 +365,23 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Verify application usage metrics for "Other" category
         metrics.assert_gauge_value(
-            OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_MB,
-            579131.5472021103,
+            OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
+            579131547202.1103,
             org_id="111",
             org_name="App Usage Org",
             category="other",
         )
 
         metrics.assert_gauge_value(
-            OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_MB,
-            364303.2155036926,
+            OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_BYTES,
+            364303215503.6926,
             org_id="111",
             org_name="App Usage Org",
             category="other",
         )
 
         metrics.assert_gauge_value(
-            OrgMetricName.ORG_APPLICATION_USAGE_PERCENTAGE,
+            OrgMetricName.ORG_APPLICATION_USAGE_PERCENT,
             97.1055882261812,
             org_id="111",
             org_name="App Usage Org",
@@ -390,8 +390,8 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Verify VoIP & video conferencing category (tests sanitization)
         metrics.assert_gauge_value(
-            OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_MB,
-            2.367426872253418,
+            OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
+            2367426.872253418,
             org_id="111",
             org_name="App Usage Org",
             category="voip_and_video_conferencing",
@@ -399,8 +399,8 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Verify upstream metric
         metrics.assert_gauge_value(
-            OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_MB,
-            0.5,
+            OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_BYTES,
+            500000.0,
             org_id="111",
             org_name="App Usage Org",
             category="voip_and_video_conferencing",
@@ -408,8 +408,8 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Verify Software & anti-virus updates (tests sanitization)
         metrics.assert_gauge_value(
-            OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_MB,
-            33.518364906311035,
+            OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
+            33518364.906311035,
             org_id="111",
             org_name="App Usage Org",
             category="software_and_anti_virus_updates",
@@ -524,7 +524,7 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         # Verify metrics are not set
         metrics.assert_metric_not_set(
-            OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_MB,
+            OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
             org_id="333",
             org_name="Error App Usage Org",
             category="other",
@@ -800,7 +800,7 @@ class TestOrganizationCollector(BaseCollectorTest):
         await collector._collect_device_counts_by_model(org_id, org_name)
 
         metrics.assert_gauge_value(
-            OrgMetricName.ORG_DEVICES_BY_MODEL_TOTAL,
+            OrgMetricName.ORG_DEVICES_BY_MODEL,
             5,
             org_id=org_id,
             org_name=org_name,
@@ -833,7 +833,7 @@ class TestOrganizationCollector(BaseCollectorTest):
     async def test_device_counts_by_model_applies_network_filter(self, collector, mock_api_builder):
         """Must scope by inventory.get_allowed_network_ids when a filter is active.
 
-        Matches its inventory-filtered sibling meraki_org_devices_total
+        Matches its inventory-filtered sibling meraki_org_devices
         (bug-bash F-098).
         """
         org_id, org_name = "555", "Filtered Org"

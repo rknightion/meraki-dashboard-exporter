@@ -306,8 +306,10 @@ class TestMRCollector:
         assert set(by_ssid) == {"Guest WiFi", "Corporate WiFi"}
         for _, labels, _ in by_ssid.values():
             assert set(labels) == {"org_id", "org_name", "ssid"}
-        assert by_ssid["Guest WiFi"][2] == 1536.75
-        assert by_ssid["Corporate WiFi"][2] == 3072.0
+        # Values are converted from MB (decimal) to bytes at the emit site
+        # (×1,000,000) per issue #531 APIDEV-03.
+        assert by_ssid["Guest WiFi"][2] == 1536.75 * 1_000_000
+        assert by_ssid["Corporate WiFi"][2] == 3072.0 * 1_000_000
 
         # Client-count series carries the nested clients.counts.total value.
         client_calls = {

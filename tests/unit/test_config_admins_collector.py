@@ -66,7 +66,7 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
         await self.run_collector(collector)
 
         metrics.assert_gauge_value(
-            "meraki_org_admins_total",
+            "meraki_org_admins",
             2,
             org_id="123",
             org_name="Test Org",
@@ -74,7 +74,7 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
             account_status="ok",
         )
         metrics.assert_gauge_value(
-            "meraki_org_admins_total",
+            "meraki_org_admins",
             1,
             org_id="123",
             org_name="Test Org",
@@ -103,7 +103,7 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
         await self.run_collector(collector)
 
         metrics.assert_gauge_value(
-            "meraki_org_admins_two_factor_enabled_total",
+            "meraki_org_admins_two_factor_enabled",
             2,
             org_id="123",
             org_name="Test Org",
@@ -129,7 +129,7 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
         await self.run_collector(collector)
 
         metrics.assert_gauge_value(
-            "meraki_org_admins_total",
+            "meraki_org_admins",
             0,
             org_id="123",
             org_name="Test Org",
@@ -137,7 +137,7 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
             account_status="locked",
         )
         metrics.assert_gauge_value(
-            "meraki_org_admins_total",
+            "meraki_org_admins",
             0,
             org_id="123",
             org_name="Test Org",
@@ -160,7 +160,7 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
         await self.run_collector(collector)
 
         metrics.assert_gauge_value(
-            "meraki_org_admins_total",
+            "meraki_org_admins",
             0,
             org_id="123",
             org_name="Test Org",
@@ -168,7 +168,7 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
             account_status="ok",
         )
         metrics.assert_gauge_value(
-            "meraki_org_admins_two_factor_enabled_total",
+            "meraki_org_admins_two_factor_enabled",
             0,
             org_id="123",
             org_name="Test Org",
@@ -198,7 +198,7 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
 
         # Values are still set correctly through the expiration-aware path.
         metrics.assert_gauge_value(
-            "meraki_org_admins_two_factor_enabled_total",
+            "meraki_org_admins_two_factor_enabled",
             1,
             org_id="123",
             org_name="Test Org",
@@ -228,7 +228,7 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
 
         await self.run_collector(collector)
 
-        metric = metrics.get_metric("meraki_org_admins_total")
+        metric = metrics.get_metric("meraki_org_admins")
         for sample in metric.samples:
             label_values = sample.labels.values()
             assert "secret-admin-id" not in label_values

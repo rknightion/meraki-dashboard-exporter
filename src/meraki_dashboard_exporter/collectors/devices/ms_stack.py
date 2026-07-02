@@ -62,8 +62,8 @@ class MSStackCollector(SubCollectorMixin):
             ],
         )
         self._stack_members_total = self.parent._create_gauge(
-            MSMetricName.MS_STACK_MEMBERS_TOTAL,
-            "Total number of members in switch stack",
+            MSMetricName.MS_STACK_MEMBERS,
+            "Number of members in switch stack",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -147,7 +147,7 @@ class MSStackCollector(SubCollectorMixin):
                     "stack_id": stack_id,
                 },
                 len(members) if members else len(serials),
-                MSMetricName.MS_STACK_MEMBERS_TOTAL.value,
+                MSMetricName.MS_STACK_MEMBERS.value,
             )
 
             if members:

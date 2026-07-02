@@ -118,8 +118,8 @@ class MRWirelessCollector:
         # org-wide row per SSID name, so these are labelled at org+SSID level only
         # (no network labels — replicating the org total per network inflated sums).
         self._ssid_usage_total_mb = self.parent._create_gauge(
-            MRMetricName.MR_SSID_USAGE_TOTAL_MB,
-            "Total data usage in MB by SSID over the last day",
+            MRMetricName.MR_SSID_USAGE_TOTAL_BYTES,
+            "Total data usage in bytes by SSID over the last day",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -128,8 +128,8 @@ class MRWirelessCollector:
         )
 
         self._ssid_usage_downstream_mb = self.parent._create_gauge(
-            MRMetricName.MR_SSID_USAGE_DOWNSTREAM_MB,
-            "Downstream data usage in MB by SSID over the last day",
+            MRMetricName.MR_SSID_USAGE_DOWNSTREAM_BYTES,
+            "Downstream data usage in bytes by SSID over the last day",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -138,8 +138,8 @@ class MRWirelessCollector:
         )
 
         self._ssid_usage_upstream_mb = self.parent._create_gauge(
-            MRMetricName.MR_SSID_USAGE_UPSTREAM_MB,
-            "Upstream data usage in MB by SSID over the last day",
+            MRMetricName.MR_SSID_USAGE_UPSTREAM_BYTES,
+            "Upstream data usage in bytes by SSID over the last day",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -148,7 +148,7 @@ class MRWirelessCollector:
         )
 
         self._ssid_usage_percentage = self.parent._create_gauge(
-            MRMetricName.MR_SSID_USAGE_PERCENTAGE,
+            MRMetricName.MR_SSID_USAGE_PERCENT,
             "Percentage of total organization data usage by SSID over the last day",
             labelnames=[
                 LabelName.ORG_ID,
@@ -335,11 +335,12 @@ class MRWirelessCollector:
                 if not ssid_name:
                     continue
 
-                # Get usage metrics
+                # Get usage metrics. API values are MB (decimal); convert to
+                # bytes at the emit site (×1,000,000) per issue #531 APIDEV-03.
                 usage = ssid_data.get("usage", {})
-                total_mb = usage.get("total", 0)
-                downstream_mb = usage.get("downstream", 0)
-                upstream_mb = usage.get("upstream", 0)
+                total_bytes = usage.get("total", 0) * 1_000_000
+                downstream_bytes = usage.get("downstream", 0) * 1_000_000
+                upstream_bytes = usage.get("upstream", 0) * 1_000_000
                 usage_percentage = usage.get("percentage", 0)
 
                 # Client count
@@ -356,19 +357,19 @@ class MRWirelessCollector:
                 self.parent._set_metric(
                     self._ssid_usage_total_mb,
                     ssid_labels,
-                    total_mb,
+                    total_bytes,
                 )
 
                 self.parent._set_metric(
                     self._ssid_usage_downstream_mb,
                     ssid_labels,
-                    downstream_mb,
+                    downstream_bytes,
                 )
 
                 self.parent._set_metric(
                     self._ssid_usage_upstream_mb,
                     ssid_labels,
-                    upstream_mb,
+                    upstream_bytes,
                 )
 
                 self.parent._set_metric(

@@ -181,7 +181,7 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
 
         # SSID 0, auth: 3 + 2 = 5
         metrics.assert_gauge_value(
-            "meraki_mr_ssid_failed_connections_total",
+            "meraki_mr_ssid_failed_connections_count",
             5,
             org_id=org["id"],
             org_name=org["name"],
@@ -192,7 +192,7 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
         )
         # SSID 1, dhcp: 5
         metrics.assert_gauge_value(
-            "meraki_mr_ssid_failed_connections_total",
+            "meraki_mr_ssid_failed_connections_count",
             5,
             org_id=org["id"],
             org_name=org["name"],
@@ -203,7 +203,7 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
         )
         # SSID 0, assoc: 1
         metrics.assert_gauge_value(
-            "meraki_mr_ssid_failed_connections_total",
+            "meraki_mr_ssid_failed_connections_count",
             1,
             org_id=org["id"],
             org_name=org["name"],
@@ -244,7 +244,7 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
         self.assert_collector_success(collector, metrics)
 
         # No failed connections metrics should be set
-        self.verify_no_metrics_set(metrics, ["meraki_mr_ssid_failed_connections_total"])
+        self.verify_no_metrics_set(metrics, ["meraki_mr_ssid_failed_connections_count"])
 
     async def test_collect_failed_connections_api_error_handled(
         self, collector, mock_api_builder, metrics
@@ -319,7 +319,7 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
 
         # Should use "unknown" as fallback for missing fields; both rows aggregate to 2
         metrics.assert_gauge_value(
-            "meraki_mr_ssid_failed_connections_total",
+            "meraki_mr_ssid_failed_connections_count",
             2,
             org_id=org["id"],
             org_name=org["name"],

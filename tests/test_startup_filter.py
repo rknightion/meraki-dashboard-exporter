@@ -107,7 +107,7 @@ async def test_filter_match_metric_emitted() -> None:
     await inv.get_networks("ORG")
 
     resolved = REGISTRY.get_sample_value("meraki_network_filter_resolved", {"org_id": "ORG"})
-    total = REGISTRY.get_sample_value("meraki_network_filter_total", {"org_id": "ORG"})
+    total = REGISTRY.get_sample_value("meraki_network_filter_networks", {"org_id": "ORG"})
     assert resolved == 1
     assert total == 2
 

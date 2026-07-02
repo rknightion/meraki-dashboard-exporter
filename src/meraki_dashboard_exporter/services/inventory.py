@@ -151,8 +151,8 @@ class OrganizationInventory:
             ["org_id"],
         )
         self._filter_total_gauge = Gauge(
-            NetworkMetricName.NETWORK_FILTER_TOTAL.value,
-            "Total number of networks in the organization (pre-filter).",
+            NetworkMetricName.NETWORK_FILTER_NETWORKS.value,
+            "Number of networks discovered before filtering.",
             ["org_id"],
         )
 

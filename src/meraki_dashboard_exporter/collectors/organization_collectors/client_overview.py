@@ -106,13 +106,15 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                 counts = client_overview.get("counts", {})
                 total_clients = counts.get("total", 0)
 
-                # Extract usage data (in KB)
+                # Extract usage data. The API returns decimal KB; convert to
+                # bytes (×1000) at the emit site so the gauges (renamed
+                # meraki_org_usage_*_bytes, issue #531) carry base-unit values.
                 usage = client_overview.get("usage", {})
                 overall_usage = usage.get("overall", {})
 
-                total_kb = overall_usage.get("total", 0)
-                downstream_kb = overall_usage.get("downstream", 0)
-                upstream_kb = overall_usage.get("upstream", 0)
+                total_kb = overall_usage.get("total", 0) * 1000
+                downstream_kb = overall_usage.get("downstream", 0) * 1000
+                upstream_kb = overall_usage.get("upstream", 0) * 1000
 
                 # Check if all values are zero (likely an API issue)
                 if total_clients == 0 and total_kb == 0 and downstream_kb == 0 and upstream_kb == 0:

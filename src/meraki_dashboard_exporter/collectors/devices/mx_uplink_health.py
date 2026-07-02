@@ -67,9 +67,9 @@ class MXUplinkHealthCollector(SubCollectorMixin):
             "MX per-uplink WAN loss percent (latest sample)",
             labelnames=labelnames,
         )
-        self._mx_uplink_latency_ms = self.parent._create_gauge(
-            MXMetricName.MX_UPLINK_LATENCY_MS,
-            "MX per-uplink WAN latency in milliseconds (latest sample)",
+        self._mx_uplink_latency_seconds = self.parent._create_gauge(
+            MXMetricName.MX_UPLINK_LATENCY_SECONDS,
+            "MX per-uplink WAN latency in seconds (latest sample)",
             labelnames=labelnames,
         )
 
@@ -169,10 +169,10 @@ class MXUplinkHealthCollector(SubCollectorMixin):
 
             if latency_value is not None:
                 self.parent._set_metric(
-                    self._mx_uplink_latency_ms,
+                    self._mx_uplink_latency_seconds,
                     labels,
-                    float(latency_value),
-                    MXMetricName.MX_UPLINK_LATENCY_MS.value,
+                    float(latency_value) / 1000,
+                    MXMetricName.MX_UPLINK_LATENCY_SECONDS.value,
                 )
                 emitted += 1
 

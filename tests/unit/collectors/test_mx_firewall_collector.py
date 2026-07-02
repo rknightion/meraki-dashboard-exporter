@@ -62,7 +62,7 @@ class TestMXFirewallCollector:
         assert mock_parent._create_gauge.call_count == 3
 
         created_names = {call.args[0] for call in mock_parent._create_gauge.call_args_list}
-        assert MXMetricName.MX_FIREWALL_RULES_TOTAL in created_names
+        assert MXMetricName.MX_FIREWALL_RULES in created_names
         assert MXMetricName.MX_FIREWALL_DEFAULT_POLICY in created_names
         assert MXMetricName.MX_SECURITY_EVENTS_COUNT in created_names
 

@@ -37,8 +37,8 @@ class ConfigCollector(MetricCollector):
         )
 
         self._login_security_password_expiration_days = self._create_gauge(
-            OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_DAYS,
-            "Number of days before password expires (0 if not set)",
+            OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_SECONDS,
+            "Seconds before password expires (0 if not set)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
@@ -85,8 +85,8 @@ class ConfigCollector(MetricCollector):
         )
 
         self._login_security_idle_timeout_minutes = self._create_gauge(
-            OrgMetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_MINUTES,
-            "Minutes before idle timeout (0 if not set)",
+            OrgMetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_SECONDS,
+            "Seconds before idle timeout (0 if not set)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
@@ -110,14 +110,14 @@ class ConfigCollector(MetricCollector):
 
         # Configuration change metrics
         self._configuration_changes_total = self._create_gauge(
-            OrgMetricName.ORG_CONFIGURATION_CHANGES_TOTAL,
-            "Total number of configuration changes in the last 24 hours",
+            OrgMetricName.ORG_CONFIGURATION_CHANGES_COUNT,
+            "Number of configuration changes observed in the last 24 hours (fetch timespan=86400s)",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         # Admin accounts & 2FA/SSO posture (aggregated, no per-admin PII)
         self._org_admins_total = self._create_gauge(
-            OrgMetricName.ORG_ADMINS_TOTAL,
+            OrgMetricName.ORG_ADMINS,
             "Number of org dashboard admins by authentication method and account status",
             labelnames=[
                 LabelName.ORG_ID,
@@ -128,7 +128,7 @@ class ConfigCollector(MetricCollector):
         )
 
         self._org_admins_two_factor_enabled_total = self._create_gauge(
-            OrgMetricName.ORG_ADMINS_TWO_FACTOR_ENABLED_TOTAL,
+            OrgMetricName.ORG_ADMINS_TWO_FACTOR_ENABLED,
             "Number of org dashboard admins with two-factor auth enabled",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
@@ -293,8 +293,10 @@ class ConfigCollector(MetricCollector):
                 1 if security.get("enforcePasswordExpiration", False) else 0
             )
 
+            # API value is in days; convert to seconds (x86400) for the renamed
+            # meraki_org_login_security_password_expiration_seconds (issue #531).
             self._login_security_password_expiration_days.labels(org_id, org_name).set(
-                security.get("passwordExpirationDays") or 0
+                (security.get("passwordExpirationDays") or 0) * 86400
             )
 
             # Different passwords
@@ -329,8 +331,10 @@ class ConfigCollector(MetricCollector):
                 1 if security.get("enforceIdleTimeout", False) else 0
             )
 
+            # API value is in minutes; convert to seconds (x60) for the renamed
+            # meraki_org_login_security_idle_timeout_seconds (issue #531).
             self._login_security_idle_timeout_minutes.labels(org_id, org_name).set(
-                security.get("idleTimeoutMinutes") or 0
+                (security.get("idleTimeoutMinutes") or 0) * 60
             )
 
             # Two-factor auth

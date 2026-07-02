@@ -218,7 +218,7 @@ class MTSensorCollector(MetricCollector):
         )
 
         self._sensor_battery = self._create_gauge(
-            MTMetricName.MT_BATTERY_PERCENTAGE,
+            MTMetricName.MT_BATTERY_PERCENT,
             "Battery level percentage",
             labelnames=[
                 LabelName.ORG_ID,

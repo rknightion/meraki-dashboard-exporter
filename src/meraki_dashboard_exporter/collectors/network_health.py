@@ -129,7 +129,7 @@ class NetworkHealthCollector(MetricCollector):
 
         # Network-wide wireless connection statistics
         self._network_connection_stats = self._create_gauge(
-            NetworkMetricName.NETWORK_WIRELESS_CONNECTION_STATS,
+            NetworkMetricName.NETWORK_WIRELESS_CONNECTION_STATS_COUNT,
             "Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -142,10 +142,11 @@ class NetworkHealthCollector(MetricCollector):
 
         # Network-wide wireless data rate metrics
         self._network_wireless_download_kbps = self._create_gauge(
-            NetworkHealthMetricName.NETWORK_WIRELESS_DOWNLOAD_KBPS,
+            NetworkHealthMetricName.NETWORK_WIRELESS_DOWNLOAD_BYTES_PER_SECOND,
             # The Meraki API reports this field (downloadKbps) in kilobytes-per-second,
-            # not kilobits, per the OpenAPI spec (F-065). Value is emitted unchanged.
-            "Network-wide wireless download bandwidth in kilobytes per second",
+            # not kilobits, per the OpenAPI spec (F-065). Value is converted x1000 to
+            # bytes/second at collection time (#531 D5/APIDEV-03).
+            "Network-wide wireless download bandwidth in bytes per second, 5-min bucket",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -155,10 +156,11 @@ class NetworkHealthCollector(MetricCollector):
         )
 
         self._network_wireless_upload_kbps = self._create_gauge(
-            NetworkHealthMetricName.NETWORK_WIRELESS_UPLOAD_KBPS,
+            NetworkHealthMetricName.NETWORK_WIRELESS_UPLOAD_BYTES_PER_SECOND,
             # The Meraki API reports this field (uploadKbps) in kilobytes-per-second,
-            # not kilobits, per the OpenAPI spec (F-065). Value is emitted unchanged.
-            "Network-wide wireless upload bandwidth in kilobytes per second",
+            # not kilobits, per the OpenAPI spec (F-065). Value is converted x1000 to
+            # bytes/second at collection time (#531 D5/APIDEV-03).
+            "Network-wide wireless upload bandwidth in bytes per second, 5-min bucket",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -169,8 +171,8 @@ class NetworkHealthCollector(MetricCollector):
 
         # Bluetooth clients detected by MR devices
         self._network_bluetooth_clients_total = self._create_gauge(
-            NetworkHealthMetricName.NETWORK_BLUETOOTH_CLIENTS_TOTAL,
-            "Total number of Bluetooth clients detected by MR devices in the last 5 minutes",
+            NetworkHealthMetricName.NETWORK_BLUETOOTH_CLIENTS_COUNT,
+            "Number of Bluetooth clients detected by MR devices in the last 5 minutes",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -181,7 +183,7 @@ class NetworkHealthCollector(MetricCollector):
 
         # Per-SSID failed connections (Phase 4.4)
         self._ssid_failed_connections = self._create_gauge(
-            NetworkHealthMetricName.MR_SSID_FAILED_CONNECTIONS_TOTAL,
+            NetworkHealthMetricName.MR_SSID_FAILED_CONNECTIONS_COUNT,
             "Failed wireless connections by SSID and failure step over the last hour",
             labelnames=[
                 LabelName.ORG_ID,

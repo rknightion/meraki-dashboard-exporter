@@ -56,8 +56,8 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
     def _initialize_metrics(self) -> None:
         """Initialize latency stats Prometheus gauge metrics."""
         self._mr_device_latency_ms = self.parent._create_gauge(
-            NetworkHealthMetricName.MR_DEVICE_LATENCY_MS,
-            "MR access point average wireless latency in milliseconds by traffic class",
+            NetworkHealthMetricName.MR_DEVICE_LATENCY_SECONDS,
+            "MR access point average wireless latency in seconds by traffic class, 1-h window",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -68,8 +68,8 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
             ],
         )
         self._mr_network_client_latency_ms = self.parent._create_gauge(
-            NetworkHealthMetricName.MR_NETWORK_CLIENT_LATENCY_MS,
-            "Network-wide average wireless client latency in milliseconds by traffic class",
+            NetworkHealthMetricName.MR_NETWORK_CLIENT_LATENCY_SECONDS,
+            "Network-wide average wireless client latency in seconds by traffic class, 1-h window",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -174,11 +174,12 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
                         continue
 
                     labels = {**device_labels_base, LabelName.TRAFFIC_CLASS: traffic_class}
+                    # API reports latency in milliseconds; convert to seconds (#531).
                     self.parent._set_metric(
                         self._mr_device_latency_ms,
                         labels,
-                        float(avg),
-                        NetworkHealthMetricName.MR_DEVICE_LATENCY_MS.value,
+                        float(avg) / 1000,
+                        NetworkHealthMetricName.MR_DEVICE_LATENCY_SECONDS.value,
                     )
 
         client_rows = await self._fetch_client_latency_stats(network_id)
@@ -198,9 +199,10 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
                     continue
 
                 labels = {**base_labels, LabelName.TRAFFIC_CLASS: traffic_class}
+                # API reports latency in milliseconds; convert to seconds (#531).
                 self.parent._set_metric(
                     self._mr_network_client_latency_ms,
                     labels,
-                    mean(values),
-                    NetworkHealthMetricName.MR_NETWORK_CLIENT_LATENCY_MS.value,
+                    mean(values) / 1000,
+                    NetworkHealthMetricName.MR_NETWORK_CLIENT_LATENCY_SECONDS.value,
                 )

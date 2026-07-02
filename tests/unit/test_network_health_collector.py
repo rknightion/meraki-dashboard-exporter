@@ -288,7 +288,7 @@ class TestNetworkHealthCollector(BaseCollectorTest):
 
         # Verify metrics were set
         metrics.assert_gauge_value(
-            "meraki_network_wireless_connection_stats_total",
+            "meraki_network_wireless_connection_stats_count",
             95,
             stat_type="assoc",
             network_id=network["id"],
@@ -341,10 +341,11 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         self.assert_collector_success(collector, metrics)
         self.assert_api_call_tracked(collector, metrics, "getNetworkWirelessDataRateHistory")
 
-        # Verify metrics were set (should use most recent data point)
+        # Verify metrics were set (should use most recent data point).
+        # API value is kilobytes/second; converted x1000 to bytes/second (#531 F-065).
         metrics.assert_gauge_value(
-            "meraki_network_wireless_download_kbps",
-            25000,
+            "meraki_network_wireless_download_bytes_per_second",
+            25000 * 1000,
             network_id=network["id"],
             network_name=network["name"],
         )
@@ -497,7 +498,7 @@ class TestNetworkHealthCollector(BaseCollectorTest):
 
         # The gauge must NOT have been set to a confident 0 for this cycle.
         metrics.assert_metric_not_set(
-            "meraki_network_bluetooth_clients_total",
+            "meraki_network_bluetooth_clients_count",
             org_id=org["id"],
             org_name=org["name"],
             network_id=network["id"],
@@ -669,7 +670,7 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         )
 
     async def test_data_rate_help_text_states_kilobytes(self, collector, mock_api_builder, metrics):
-        """F-065: help text must match the OpenAPI spec unit (kilobytes-per-second)."""
+        """F-065: API unit is kilobytes-per-second; value converted x1000 to bytes/second (#531)."""
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         network = NetworkFactory.create(
             network_id="N_123",
@@ -697,19 +698,19 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         await self.run_collector(collector)
         self.assert_collector_success(collector, metrics)
 
-        # Value is reported as-is from the API (no conversion).
+        # API value is kilobytes/second; converted x1000 to bytes/second (NOT bits, F-065).
         metrics.assert_gauge_value(
-            "meraki_network_wireless_download_kbps",
-            25000,
+            "meraki_network_wireless_download_bytes_per_second",
+            25000 * 1000,
             network_id=network["id"],
             network_name=network["name"],
         )
-        # Help text must state the real unit.
-        download = metrics.get_metric("meraki_network_wireless_download_kbps")
-        upload = metrics.get_metric("meraki_network_wireless_upload_kbps")
-        assert "kilobytes per second" in download.documentation.lower()
+        # Help text must state the real unit and the conversion basis.
+        download = metrics.get_metric("meraki_network_wireless_download_bytes_per_second")
+        upload = metrics.get_metric("meraki_network_wireless_upload_bytes_per_second")
+        assert "bytes per second" in download.documentation.lower()
         assert "kilobit" not in download.documentation.lower()
-        assert "kilobytes per second" in upload.documentation.lower()
+        assert "bytes per second" in upload.documentation.lower()
         assert "kilobit" not in upload.documentation.lower()
 
     def test_set_metric_value_handles_none(self, collector):

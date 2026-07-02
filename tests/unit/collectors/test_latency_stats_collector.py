@@ -100,18 +100,19 @@ class TestLatencyStatsCollector:
             call[0][1]["traffic_class"]: call[0][2]
             for call in mock_parent._set_metric.call_args_list
         }
+        # API reports milliseconds; converted /1000 to seconds (#531).
         assert emitted == {
-            "background": 10.0,
-            "best_effort": 20.0,
-            "video": 30.0,
-            "voice": 5.0,
+            "background": 0.01,
+            "best_effort": 0.02,
+            "video": 0.03,
+            "voice": 0.005,
         }
         for call in mock_parent._set_metric.call_args_list:
             gauge, labels, _value, metric_name = call[0]
             assert gauge is collector._mr_device_latency_ms
             assert labels["serial"] == "Q2AB-0001"
             assert labels["network_id"] == "N_1"
-            assert metric_name == "meraki_mr_device_latency_ms"
+            assert metric_name == "meraki_mr_device_latency_seconds"
 
     async def test_device_latency_null_avg_skipped(
         self,
@@ -183,18 +184,19 @@ class TestLatencyStatsCollector:
             call[0][1]["traffic_class"]: call[0][2]
             for call in mock_parent._set_metric.call_args_list
         }
+        # API reports milliseconds; converted /1000 to seconds (#531).
         assert emitted == {
-            "background": 20.0,
-            "best_effort": 30.0,
-            "video": 40.0,
-            "voice": 50.0,
+            "background": 0.02,
+            "best_effort": 0.03,
+            "video": 0.04,
+            "voice": 0.05,
         }
         for call in mock_parent._set_metric.call_args_list:
             gauge, labels, _value, metric_name = call[0]
             assert gauge is collector._mr_network_client_latency_ms
             assert "mac" not in labels
             assert "serial" not in labels
-            assert metric_name == "meraki_mr_network_client_latency_ms"
+            assert metric_name == "meraki_mr_network_client_latency_seconds"
 
     async def test_client_aggregate_skips_null_avg_per_client(
         self,
@@ -235,7 +237,7 @@ class TestLatencyStatsCollector:
         gauge, labels, value, _metric_name = mock_parent._set_metric.call_args_list[0][0]
         assert gauge is collector._mr_network_client_latency_ms
         assert labels["traffic_class"] == "background"
-        assert value == 20.0
+        assert value == 0.02
 
     async def test_no_client_rows_skips_aggregate(
         self,
@@ -278,7 +280,7 @@ class TestLatencyStatsCollector:
         gauge, labels, value, _metric_name = mock_parent._set_metric.call_args_list[0][0]
         assert gauge is collector._mr_network_client_latency_ms
         assert labels["traffic_class"] == "background"
-        assert value == 15.0
+        assert value == 0.015
 
     async def test_client_fetch_error_does_not_prevent_device_emission(
         self,
@@ -306,4 +308,4 @@ class TestLatencyStatsCollector:
         gauge, labels, value, _metric_name = mock_parent._set_metric.call_args_list[0][0]
         assert gauge is collector._mr_device_latency_ms
         assert labels["serial"] == "Q2AB-0001"
-        assert value == 12.0
+        assert value == 0.012

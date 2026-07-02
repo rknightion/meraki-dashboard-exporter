@@ -62,16 +62,16 @@ class TestMXVpnCollector:
         Note: getOrganizationApplianceVpnStatuses' merakiVpnPeers/thirdPartyVpnPeers
         items carry no latency/jitter/loss fields (per the vendored OpenAPI spec), so
         no gauges are created for those — per-peer performance data instead comes
-        from collect_vpn_stats (MX_VPN_USAGE_SENT_KB/RECV_KB/STATS_AVG_LATENCY_MS).
+        from collect_vpn_stats (MX_VPN_USAGE_SENT_BYTES/RECV_BYTES/STATS_AVG_LATENCY_SECONDS).
         """
         assert mock_parent._create_gauge.call_count == 5
 
         created_names = {call.args[0] for call in mock_parent._create_gauge.call_args_list}
         assert MXMetricName.MX_VPN_PEER_STATUS in created_names
-        assert MXMetricName.MX_VPN_PEERS_TOTAL in created_names
-        assert MXMetricName.MX_VPN_USAGE_SENT_KB in created_names
-        assert MXMetricName.MX_VPN_USAGE_RECV_KB in created_names
-        assert MXMetricName.MX_VPN_STATS_AVG_LATENCY_MS in created_names
+        assert MXMetricName.MX_VPN_PEERS in created_names
+        assert MXMetricName.MX_VPN_USAGE_SENT_BYTES in created_names
+        assert MXMetricName.MX_VPN_USAGE_RECV_BYTES in created_names
+        assert MXMetricName.MX_VPN_STATS_AVG_LATENCY_SECONDS in created_names
 
     def test_initialisation_stores_parent_api_settings(
         self,
@@ -571,7 +571,7 @@ class TestMXVpnStatsCollector:
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """Usage sent/received kilobytes must be emitted per peer pair."""
+        """Usage sent/received bytes (converted from kilobytes ×1000) must be emitted per peer pair."""
         mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(
             return_value=[
                 {
@@ -596,8 +596,8 @@ class TestMXVpnStatsCollector:
 
         calls_by_metric = {c[0][0]: c[0] for c in mock_parent._set_metric.call_args_list}
 
-        sent_call = calls_by_metric[vpn_collector._vpn_usage_sent_kb]
-        assert sent_call[2] == 123.4
+        sent_call = calls_by_metric[vpn_collector._vpn_usage_sent_bytes]
+        assert sent_call[2] == pytest.approx(123400.0)
         assert sent_call[1] == {
             "org_id": "org1",
             "org_name": "Test Org",
@@ -606,11 +606,11 @@ class TestMXVpnStatsCollector:
             "peer_network_id": "N_2",
         }
 
-        recv_call = calls_by_metric[vpn_collector._vpn_usage_recv_kb]
-        assert recv_call[2] == 567.8
+        recv_call = calls_by_metric[vpn_collector._vpn_usage_recv_bytes]
+        assert recv_call[2] == pytest.approx(567800.0)
 
         # No latency samples -> latency metric must not be emitted.
-        assert vpn_collector._vpn_stats_avg_latency_ms not in calls_by_metric
+        assert vpn_collector._vpn_stats_avg_latency_seconds not in calls_by_metric
 
     async def test_latency_averaged_across_summaries(
         self,
@@ -657,17 +657,17 @@ class TestMXVpnStatsCollector:
         latency_call = next(
             c
             for c in mock_parent._set_metric.call_args_list
-            if c[0][0] is vpn_collector._vpn_stats_avg_latency_ms
+            if c[0][0] is vpn_collector._vpn_stats_avg_latency_seconds
         )
         labels, value = latency_call[0][1], latency_call[0][2]
-        # Mean of 10.0 and 20.0 (the None entry is ignored) = 15.0
-        assert value == 15.0
+        # Mean of 10.0 and 20.0 ms (the None entry is ignored) = 15.0 ms = 0.015 s
+        assert value == pytest.approx(0.015)
         assert labels["peer_network_id"] == "N_2"
         # Only ONE latency metric emitted per peer pair — no sender x receiver cross product.
         latency_calls = [
             c
             for c in mock_parent._set_metric.call_args_list
-            if c[0][0] is vpn_collector._vpn_stats_avg_latency_ms
+            if c[0][0] is vpn_collector._vpn_stats_avg_latency_seconds
         ]
         assert len(latency_calls) == 1
 
@@ -740,16 +740,16 @@ class TestMXVpnStatsCollector:
         sent_calls = {
             c[0][1]["peer_network_id"]: c[0][2]
             for c in mock_parent._set_metric.call_args_list
-            if c[0][0] is vpn_collector._vpn_usage_sent_kb
+            if c[0][0] is vpn_collector._vpn_usage_sent_bytes
         }
-        assert sent_calls == {"N_2": 10.0, "N_3": 30.0}
+        assert sent_calls == {"N_2": pytest.approx(10000.0), "N_3": pytest.approx(30000.0)}
 
         latency_calls = {
             c[0][1]["peer_network_id"]: c[0][2]
             for c in mock_parent._set_metric.call_args_list
-            if c[0][0] is vpn_collector._vpn_stats_avg_latency_ms
+            if c[0][0] is vpn_collector._vpn_stats_avg_latency_seconds
         }
-        assert latency_calls == {"N_2": 5.0, "N_3": 8.0}
+        assert latency_calls == {"N_2": pytest.approx(0.005), "N_3": pytest.approx(0.008)}
 
     async def test_network_filter_skips_excluded_network(
         self,

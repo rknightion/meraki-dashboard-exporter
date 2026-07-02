@@ -133,7 +133,7 @@ class TestConfigCollectorResponseValidation(BaseCollectorTest):
 
         await self.run_collector(collector)
 
-        self.verify_no_metrics_set(metrics, ["meraki_org_configuration_changes_total"])
+        self.verify_no_metrics_set(metrics, ["meraki_org_configuration_changes_count"])
 
     async def test_configuration_changes_valid_empty_list_emits_zero(
         self, collector, mock_api_builder, metrics
@@ -151,7 +151,7 @@ class TestConfigCollectorResponseValidation(BaseCollectorTest):
         await self.run_collector(collector)
 
         metrics.assert_gauge_value(
-            "meraki_org_configuration_changes_total",
+            "meraki_org_configuration_changes_count",
             0,
             org_id="123",
             org_name="Test Org",

@@ -62,8 +62,8 @@ class MXVpnCollector(SubCollectorMixin):
             ],
         )
         self._vpn_peers_total = self.parent._create_gauge(
-            MXMetricName.MX_VPN_PEERS_TOTAL,
-            "Total number of VPN peers configured for a network",
+            MXMetricName.MX_VPN_PEERS,
+            "Number of VPN peers configured for a network",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -81,19 +81,19 @@ class MXVpnCollector(SubCollectorMixin):
             LabelName.NETWORK_NAME,
             LabelName.PEER_NETWORK_ID,
         ]
-        self._vpn_usage_sent_kb = self.parent._create_gauge(
-            MXMetricName.MX_VPN_USAGE_SENT_KB,
-            "VPN usage sent in kilobytes over the collection window, per peer network",
+        self._vpn_usage_sent_bytes = self.parent._create_gauge(
+            MXMetricName.MX_VPN_USAGE_SENT_BYTES,
+            "VPN usage sent in bytes over the collection window, per peer network",
             labelnames=vpn_stats_labelnames,
         )
-        self._vpn_usage_recv_kb = self.parent._create_gauge(
-            MXMetricName.MX_VPN_USAGE_RECV_KB,
-            "VPN usage received in kilobytes over the collection window, per peer network",
+        self._vpn_usage_recv_bytes = self.parent._create_gauge(
+            MXMetricName.MX_VPN_USAGE_RECV_BYTES,
+            "VPN usage received in bytes over the collection window, per peer network",
             labelnames=vpn_stats_labelnames,
         )
-        self._vpn_stats_avg_latency_ms = self.parent._create_gauge(
-            MXMetricName.MX_VPN_STATS_AVG_LATENCY_MS,
-            "Average VPN latency in milliseconds to a peer network, averaged across all "
+        self._vpn_stats_avg_latency_seconds = self.parent._create_gauge(
+            MXMetricName.MX_VPN_STATS_AVG_LATENCY_SECONDS,
+            "Average VPN latency in seconds to a peer network (5-min avg), averaged across all "
             "sender/receiver uplink combinations",
             labelnames=vpn_stats_labelnames,
         )
@@ -268,20 +268,20 @@ class MXVpnCollector(SubCollectorMixin):
                 sent = usage.sentInKilobytes if usage is not None else None
                 if sent is not None:
                     self.parent._set_metric(
-                        self._vpn_usage_sent_kb,
+                        self._vpn_usage_sent_bytes,
                         labels,
-                        float(sent),
-                        MXMetricName.MX_VPN_USAGE_SENT_KB.value,
+                        float(sent) * 1000,
+                        MXMetricName.MX_VPN_USAGE_SENT_BYTES.value,
                     )
                     emitted += 1
 
                 received = usage.receivedInKilobytes if usage is not None else None
                 if received is not None:
                     self.parent._set_metric(
-                        self._vpn_usage_recv_kb,
+                        self._vpn_usage_recv_bytes,
                         labels,
-                        float(received),
-                        MXMetricName.MX_VPN_USAGE_RECV_KB.value,
+                        float(received) * 1000,
+                        MXMetricName.MX_VPN_USAGE_RECV_BYTES.value,
                     )
                     emitted += 1
 
@@ -292,10 +292,10 @@ class MXVpnCollector(SubCollectorMixin):
                 ]
                 if latency_values:
                     self.parent._set_metric(
-                        self._vpn_stats_avg_latency_ms,
+                        self._vpn_stats_avg_latency_seconds,
                         labels,
-                        sum(latency_values) / len(latency_values),
-                        MXMetricName.MX_VPN_STATS_AVG_LATENCY_MS.value,
+                        (sum(latency_values) / len(latency_values)) / 1000,
+                        MXMetricName.MX_VPN_STATS_AVG_LATENCY_SECONDS.value,
                     )
                     emitted += 1
 

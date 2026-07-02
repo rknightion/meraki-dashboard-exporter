@@ -91,7 +91,7 @@ class TestMSStackCollector:
             network_name="Net One",
         )
 
-        samples = _get_samples(registry, MSMetricName.MS_STACK_MEMBERS_TOTAL)
+        samples = _get_samples(registry, MSMetricName.MS_STACK_MEMBERS)
         assert len(samples) == 1
         assert samples[0].labels["stack_id"] == "stack-1"
         assert samples[0].value == 2.0
@@ -189,7 +189,7 @@ class TestMSStackCollector:
             network_name="Net One",
         )
 
-        samples = _get_samples(registry, MSMetricName.MS_STACK_MEMBERS_TOTAL)
+        samples = _get_samples(registry, MSMetricName.MS_STACK_MEMBERS)
         assert len(samples) == 1
         assert samples[0].value == 2.0
 
@@ -224,7 +224,7 @@ class TestMSStackCollector:
         assert role_by_serial["QAAA-MEMBER1"] == "member"
         assert role_by_serial["QAAA-MEMBER2"] == "member"
 
-        total_samples = _get_samples(registry, MSMetricName.MS_STACK_MEMBERS_TOTAL)
+        total_samples = _get_samples(registry, MSMetricName.MS_STACK_MEMBERS)
         assert len(total_samples) == 1
         assert total_samples[0].value == 3.0
 
@@ -264,7 +264,7 @@ class TestMSStackCollector:
 
         tracked_metric_names = [call.args[3] for call in mock_parent._set_metric.call_args_list]
         # One members-total + two member-status emissions, all routed for expiry.
-        assert tracked_metric_names.count(MSMetricName.MS_STACK_MEMBERS_TOTAL.value) == 1
+        assert tracked_metric_names.count(MSMetricName.MS_STACK_MEMBERS.value) == 1
         assert tracked_metric_names.count(MSMetricName.MS_STACK_MEMBER_STATUS.value) == 2
 
     async def test_collect_for_network_empty_stacks(
@@ -284,7 +284,7 @@ class TestMSStackCollector:
             network_name="Net One",
         )
 
-        assert _get_samples(registry, MSMetricName.MS_STACK_MEMBERS_TOTAL) == []
+        assert _get_samples(registry, MSMetricName.MS_STACK_MEMBERS) == []
 
     async def test_collect_for_network_single_member_stack(
         self,
@@ -304,7 +304,7 @@ class TestMSStackCollector:
             network_name="Net One",
         )
 
-        total_samples = _get_samples(registry, MSMetricName.MS_STACK_MEMBERS_TOTAL)
+        total_samples = _get_samples(registry, MSMetricName.MS_STACK_MEMBERS)
         assert len(total_samples) == 1
         assert total_samples[0].value == 1.0
 
@@ -350,7 +350,7 @@ class TestMSStackCollector:
             network_name="Net One",
         )
 
-        total_samples = _get_samples(registry, MSMetricName.MS_STACK_MEMBERS_TOTAL)
+        total_samples = _get_samples(registry, MSMetricName.MS_STACK_MEMBERS)
         # Only the valid stack should produce a metric
         assert len(total_samples) == 1
         assert total_samples[0].labels["stack_id"] == "stack-valid"
@@ -372,7 +372,7 @@ class TestMSStackCollector:
             network_name="Net One",
         )
 
-        assert _get_samples(registry, MSMetricName.MS_STACK_MEMBERS_TOTAL) == []
+        assert _get_samples(registry, MSMetricName.MS_STACK_MEMBERS) == []
 
     # -----------------------------------------------------------------------
     # collect_for_org
@@ -434,7 +434,6 @@ class TestMSStackCollector:
         await stack_collector.collect_for_org("org1", "Org One", networks)
 
         stack_ids = {
-            s.labels["stack_id"]
-            for s in _get_samples(registry, MSMetricName.MS_STACK_MEMBERS_TOTAL)
+            s.labels["stack_id"] for s in _get_samples(registry, MSMetricName.MS_STACK_MEMBERS)
         }
         assert stack_ids == {"stack-a", "stack-b"}

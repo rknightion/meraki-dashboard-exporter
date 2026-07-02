@@ -77,8 +77,8 @@ class MXFirewallCollector(SubCollectorMixin):
     def _initialize_metrics(self) -> None:
         """Initialize firewall-related Prometheus gauge metrics."""
         self._firewall_rules_total = self.parent._create_gauge(
-            MXMetricName.MX_FIREWALL_RULES_TOTAL,
-            "Total number of user-defined firewall rules by type (excludes default rule)",
+            MXMetricName.MX_FIREWALL_RULES,
+            "Number of user-defined firewall rules by type (excludes default rule)",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,

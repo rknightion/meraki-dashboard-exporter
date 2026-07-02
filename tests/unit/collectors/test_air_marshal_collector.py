@@ -161,10 +161,10 @@ class TestAirMarshalCollector:
 
         metric_names = {call[0][3] for call in mock_parent._set_metric.call_args_list}
         assert metric_names == {
-            "meraki_mr_air_marshal_ssids_total",
-            "meraki_mr_air_marshal_bssids_total",
-            "meraki_mr_air_marshal_contained_bssids_total",
-            "meraki_mr_air_marshal_wired_detected_total",
+            "meraki_mr_air_marshal_ssids_count",
+            "meraki_mr_air_marshal_bssids_count",
+            "meraki_mr_air_marshal_contained_bssids_count",
+            "meraki_mr_air_marshal_wired_detected_count",
         }
 
     async def test_api_error_handled_gracefully(

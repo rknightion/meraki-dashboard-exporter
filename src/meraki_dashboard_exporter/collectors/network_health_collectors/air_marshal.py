@@ -58,23 +58,23 @@ class AirMarshalCollector(BaseNetworkHealthCollector):
             LabelName.NETWORK_NAME,
         ]
         self._air_marshal_ssids_total = self.parent._create_gauge(
-            NetworkHealthMetricName.MR_AIR_MARSHAL_SSIDS_TOTAL,
-            "Number of foreign SSID entries observed by Air Marshal over the scan window",
+            NetworkHealthMetricName.MR_AIR_MARSHAL_SSIDS_COUNT,
+            "Number of foreign SSID entries observed by Air Marshal over the last hour",
             labelnames=labelnames,
         )
         self._air_marshal_bssids_total = self.parent._create_gauge(
-            NetworkHealthMetricName.MR_AIR_MARSHAL_BSSIDS_TOTAL,
-            "Total number of BSSIDs across all Air Marshal SSID entries",
+            NetworkHealthMetricName.MR_AIR_MARSHAL_BSSIDS_COUNT,
+            "Total number of BSSIDs across all Air Marshal SSID entries, last hour",
             labelnames=labelnames,
         )
         self._air_marshal_contained_bssids_total = self.parent._create_gauge(
-            NetworkHealthMetricName.MR_AIR_MARSHAL_CONTAINED_BSSIDS_TOTAL,
-            "Number of Air Marshal BSSIDs currently contained",
+            NetworkHealthMetricName.MR_AIR_MARSHAL_CONTAINED_BSSIDS_COUNT,
+            "Number of Air Marshal BSSIDs currently contained, last hour",
             labelnames=labelnames,
         )
         self._air_marshal_wired_detected_total = self.parent._create_gauge(
-            NetworkHealthMetricName.MR_AIR_MARSHAL_WIRED_DETECTED_TOTAL,
-            "Number of Air Marshal SSID entries also detected on the wired network",
+            NetworkHealthMetricName.MR_AIR_MARSHAL_WIRED_DETECTED_COUNT,
+            "Number of Air Marshal SSID entries also detected on the wired network, last hour",
             labelnames=labelnames,
         )
 
@@ -148,23 +148,23 @@ class AirMarshalCollector(BaseNetworkHealthCollector):
             self._air_marshal_ssids_total,
             labels,
             float(ssids_total),
-            NetworkHealthMetricName.MR_AIR_MARSHAL_SSIDS_TOTAL.value,
+            NetworkHealthMetricName.MR_AIR_MARSHAL_SSIDS_COUNT.value,
         )
         self.parent._set_metric(
             self._air_marshal_bssids_total,
             labels,
             float(bssids_total),
-            NetworkHealthMetricName.MR_AIR_MARSHAL_BSSIDS_TOTAL.value,
+            NetworkHealthMetricName.MR_AIR_MARSHAL_BSSIDS_COUNT.value,
         )
         self.parent._set_metric(
             self._air_marshal_contained_bssids_total,
             labels,
             float(contained_bssids_total),
-            NetworkHealthMetricName.MR_AIR_MARSHAL_CONTAINED_BSSIDS_TOTAL.value,
+            NetworkHealthMetricName.MR_AIR_MARSHAL_CONTAINED_BSSIDS_COUNT.value,
         )
         self.parent._set_metric(
             self._air_marshal_wired_detected_total,
             labels,
             float(wired_detected_total),
-            NetworkHealthMetricName.MR_AIR_MARSHAL_WIRED_DETECTED_TOTAL.value,
+            NetworkHealthMetricName.MR_AIR_MARSHAL_WIRED_DETECTED_COUNT.value,
         )

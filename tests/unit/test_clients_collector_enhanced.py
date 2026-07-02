@@ -124,10 +124,12 @@ class TestClientsCollectorEnhanced(BaseCollectorTest):
             await self.run_collector(collector)
 
         # Verify zero usage is handled
-        metrics.assert_gauge_value("meraki_client_usage_total_kb", 0, client_id="c1")
+        metrics.assert_gauge_value("meraki_client_usage_total_bytes", 0, client_id="c1")
 
         # Verify large values are handled
-        metrics.assert_gauge_value("meraki_client_usage_total_kb", 19999999998, client_id="c2")
+        metrics.assert_gauge_value(
+            "meraki_client_usage_total_bytes", 19999999998000, client_id="c2"
+        )
 
     async def test_collect_with_special_characters_in_names(
         self, collector, mock_api_builder, metrics

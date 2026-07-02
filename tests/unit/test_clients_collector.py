@@ -192,9 +192,9 @@ class TestClientsCollector(BaseCollectorTest):
         metrics.assert_gauge_value("meraki_client_status", 0, client_id="c2", ssid="Guest")
 
         # Verify usage metrics
-        metrics.assert_gauge_value("meraki_client_usage_sent_kb", 1000, client_id="c1")
-        metrics.assert_gauge_value("meraki_client_usage_recv_kb", 2000, client_id="c1")
-        metrics.assert_gauge_value("meraki_client_usage_total_kb", 3000, client_id="c1")
+        metrics.assert_gauge_value("meraki_client_usage_sent_bytes", 1000000, client_id="c1")
+        metrics.assert_gauge_value("meraki_client_usage_recv_bytes", 2000000, client_id="c1")
+        metrics.assert_gauge_value("meraki_client_usage_total_bytes", 3000000, client_id="c1")
 
     async def test_collect_aggregated_metrics(self, collector, mock_api_builder, metrics):
         """Test collection of aggregated metrics (capabilities, SSID, VLAN counts)."""
@@ -340,42 +340,42 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Verify application usage metrics for client 1
         metrics.assert_gauge_value(
-            "meraki_client_application_usage_sent_kb",
-            2704,
+            "meraki_client_application_usage_sent_bytes",
+            2704000,
             client_id="c1",
             type="google_https",
         )
         metrics.assert_gauge_value(
-            "meraki_client_application_usage_recv_kb",
-            7197,
+            "meraki_client_application_usage_recv_bytes",
+            7197000,
             client_id="c1",
             type="google_https",
         )
         metrics.assert_gauge_value(
-            "meraki_client_application_usage_total_kb",
-            9901,  # 2704 + 7197
+            "meraki_client_application_usage_total_bytes",
+            9901000,  # (2704 + 7197) * 1000
             client_id="c1",
             type="google_https",
         )
 
         # Verify sanitization of application names
         metrics.assert_gauge_value(
-            "meraki_client_application_usage_sent_kb",
-            929591,
+            "meraki_client_application_usage_sent_bytes",
+            929591000,
             client_id="c1",
             type="non_web_tcp",
         )
 
         # Verify client 2 metrics
         metrics.assert_gauge_value(
-            "meraki_client_application_usage_sent_kb",
-            168068,
+            "meraki_client_application_usage_sent_bytes",
+            168068000,
             client_id="c2",
             type="udp",
         )
         metrics.assert_gauge_value(
-            "meraki_client_application_usage_sent_kb",
-            95770,
+            "meraki_client_application_usage_sent_bytes",
+            95770000,
             client_id="c2",
             type="encrypted_tcp_ssl",
         )
@@ -623,8 +623,8 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Network was processed (not dropped by a ValidationError).
         metrics.assert_gauge_value("meraki_client_status", 1, client_id="c1", ssid="Corporate")
-        metrics.assert_gauge_value("meraki_client_usage_sent_kb", 225.6, client_id="c1")
-        metrics.assert_gauge_value("meraki_client_usage_recv_kb", 852.5, client_id="c1")
+        metrics.assert_gauge_value("meraki_client_usage_sent_bytes", 225600.0, client_id="c1")
+        metrics.assert_gauge_value("meraki_client_usage_recv_bytes", 852500.0, client_id="c1")
 
     async def test_signal_quality_respects_max_clients_and_rate_limiter(
         self, collector, mock_api_builder, metrics
@@ -802,8 +802,11 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Verify some metrics were set
         metrics.assert_gauge_value(
-            "meraki_client_application_usage_sent_kb", 200, client_id="c0", type="test_app"
+            "meraki_client_application_usage_sent_bytes", 200000, client_id="c0", type="test_app"
         )
         metrics.assert_gauge_value(
-            "meraki_client_application_usage_sent_kb", 200, client_id="c2499", type="test_app"
+            "meraki_client_application_usage_sent_bytes",
+            200000,
+            client_id="c2499",
+            type="test_app",
         )

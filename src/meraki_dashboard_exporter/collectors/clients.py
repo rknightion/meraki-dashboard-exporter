@@ -105,8 +105,8 @@ class ClientsCollector(MetricCollector):
         # Client usage metrics - using Gauge since these are point-in-time measurements
         # that can go up or down (hourly usage windows from API)
         self.client_usage_sent = self._create_gauge(
-            ClientMetricName.CLIENT_USAGE_SENT_KB,
-            "Kilobytes sent by client in the last hour",
+            ClientMetricName.CLIENT_USAGE_SENT_BYTES,
+            "Bytes sent by client in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -121,8 +121,8 @@ class ClientsCollector(MetricCollector):
         )
 
         self.client_usage_recv = self._create_gauge(
-            ClientMetricName.CLIENT_USAGE_RECV_KB,
-            "Kilobytes received by client in the last hour",
+            ClientMetricName.CLIENT_USAGE_RECV_BYTES,
+            "Bytes received by client in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -137,8 +137,8 @@ class ClientsCollector(MetricCollector):
         )
 
         self.client_usage_total = self._create_gauge(
-            ClientMetricName.CLIENT_USAGE_TOTAL_KB,
-            "Total kilobytes transferred by client in the last hour",
+            ClientMetricName.CLIENT_USAGE_TOTAL_BYTES,
+            "Total bytes transferred by client in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -239,8 +239,8 @@ class ClientsCollector(MetricCollector):
 
         # Client application usage metrics
         self.client_app_usage_sent = self._create_gauge(
-            ClientMetricName.CLIENT_APPLICATION_USAGE_SENT_KB,
-            "Kilobytes sent by client per application in the last hour",
+            ClientMetricName.CLIENT_APPLICATION_USAGE_SENT_BYTES,
+            "Bytes sent by client per application in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -255,8 +255,8 @@ class ClientsCollector(MetricCollector):
         )
 
         self.client_app_usage_recv = self._create_gauge(
-            ClientMetricName.CLIENT_APPLICATION_USAGE_RECV_KB,
-            "Kilobytes received by client per application in the last hour",
+            ClientMetricName.CLIENT_APPLICATION_USAGE_RECV_BYTES,
+            "Bytes received by client per application in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -271,8 +271,8 @@ class ClientsCollector(MetricCollector):
         )
 
         self.client_app_usage_total = self._create_gauge(
-            ClientMetricName.CLIENT_APPLICATION_USAGE_TOTAL_KB,
-            "Total kilobytes transferred by client per application in the last hour",
+            ClientMetricName.CLIENT_APPLICATION_USAGE_TOTAL_BYTES,
+            "Total bytes transferred by client per application in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -798,10 +798,10 @@ class ClientsCollector(MetricCollector):
                 recv_kb = client.usage.get("recv", 0)
                 total_kb = client.usage.get("total", 0)
 
-                # Set gauge values
-                self.client_usage_sent.labels(**labels).set(float(sent_kb))
-                self.client_usage_recv.labels(**labels).set(float(recv_kb))
-                self.client_usage_total.labels(**labels).set(float(total_kb))
+                # Set gauge values (API returns decimal KB; convert to bytes, ×1000)
+                self.client_usage_sent.labels(**labels).set(float(sent_kb) * 1000)
+                self.client_usage_recv.labels(**labels).set(float(recv_kb) * 1000)
+                self.client_usage_total.labels(**labels).set(float(total_kb) * 1000)
 
             logger.debug(
                 "Updated client metrics",
@@ -995,10 +995,10 @@ class ClientsCollector(MetricCollector):
                             type=sanitized_app,
                         )
 
-                        # Set metrics
-                        self.client_app_usage_sent.labels(**labels).set(float(sent_kb))
-                        self.client_app_usage_recv.labels(**labels).set(float(received_kb))
-                        self.client_app_usage_total.labels(**labels).set(float(total_kb))
+                        # Set metrics (API returns decimal KB; convert to bytes, ×1000)
+                        self.client_app_usage_sent.labels(**labels).set(float(sent_kb) * 1000)
+                        self.client_app_usage_recv.labels(**labels).set(float(received_kb) * 1000)
+                        self.client_app_usage_total.labels(**labels).set(float(total_kb) * 1000)
 
                         logger.debug(
                             "Set application usage metrics",

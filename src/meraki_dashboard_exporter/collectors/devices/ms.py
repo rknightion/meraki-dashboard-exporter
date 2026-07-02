@@ -109,7 +109,7 @@ class MSCollector(BaseDeviceCollector):
         )
 
         self._switch_port_traffic = self.parent._create_gauge(
-            MSMetricName.MS_PORT_TRAFFIC_BYTES,
+            MSMetricName.MS_PORT_TRAFFIC_BYTES_PER_SECOND,
             "Switch port traffic rate in bytes per second (averaged over 1 hour)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -128,7 +128,7 @@ class MSCollector(BaseDeviceCollector):
 
         self._switch_port_usage = self.parent._create_gauge(
             MSMetricName.MS_PORT_USAGE_BYTES,
-            "Switch port data usage in bytes over the last 1 hour",
+            "Switch port data usage in bytes (decimal KB x1000) over the last 1 hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -215,8 +215,8 @@ class MSCollector(BaseDeviceCollector):
 
         # POE metrics
         self._switch_poe_port_power = self.parent._create_gauge(
-            MSMetricName.MS_POE_PORT_POWER_WATTHOURS,
-            "Per-port POE power consumption in watt-hours (Wh) over the last 1 hour",
+            MSMetricName.MS_POE_PORT_ENERGY_JOULES,
+            "Per-port POE energy consumption in joules over the last 1 hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -232,8 +232,8 @@ class MSCollector(BaseDeviceCollector):
         )
 
         self._switch_poe_total_power = self.parent._create_gauge(
-            MSMetricName.MS_POE_TOTAL_POWER_WATTHOURS,
-            "Total POE power consumption for switch in watt-hours (Wh)",
+            MSMetricName.MS_POE_TOTAL_ENERGY_JOULES,
+            "Total POE energy consumption for switch in joules",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -262,8 +262,8 @@ class MSCollector(BaseDeviceCollector):
         )
 
         self._switch_poe_network_total = self.parent._create_gauge(
-            MSMetricName.MS_POE_NETWORK_TOTAL_WATTHOURS,
-            "Total POE power consumption for all switches in network in watt-hours (Wh)",
+            MSMetricName.MS_POE_NETWORK_TOTAL_ENERGY_JOULES,
+            "Total POE energy consumption for all switches in network in joules",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -360,50 +360,50 @@ class MSCollector(BaseDeviceCollector):
         ]
 
         self._switch_port_packets_total = self.parent._create_gauge(
-            MSMetricName.MS_PORT_PACKETS_TOTAL,
+            MSMetricName.MS_PORT_PACKETS_COUNT,
             "Total packets on switch port (5-minute window)",
             labelnames=packet_labels,
         )
 
         self._switch_port_packets_broadcast = self.parent._create_gauge(
-            MSMetricName.MS_PORT_PACKETS_BROADCAST,
+            MSMetricName.MS_PORT_PACKETS_BROADCAST_COUNT,
             "Broadcast packets on switch port (5-minute window)",
             labelnames=packet_labels,
         )
 
         self._switch_port_packets_multicast = self.parent._create_gauge(
-            MSMetricName.MS_PORT_PACKETS_MULTICAST,
+            MSMetricName.MS_PORT_PACKETS_MULTICAST_COUNT,
             "Multicast packets on switch port (5-minute window)",
             labelnames=packet_labels,
         )
 
         self._switch_port_packets_crcerrors = self.parent._create_gauge(
-            MSMetricName.MS_PORT_PACKETS_CRCERRORS,
+            MSMetricName.MS_PORT_PACKETS_CRCERRORS_COUNT,
             "CRC align error packets on switch port (5-minute window)",
             labelnames=packet_labels,
         )
 
         self._switch_port_packets_fragments = self.parent._create_gauge(
-            MSMetricName.MS_PORT_PACKETS_FRAGMENTS,
+            MSMetricName.MS_PORT_PACKETS_FRAGMENTS_COUNT,
             "Fragment packets on switch port (5-minute window)",
             labelnames=packet_labels,
         )
 
         self._switch_port_packets_collisions = self.parent._create_gauge(
-            MSMetricName.MS_PORT_PACKETS_COLLISIONS,
+            MSMetricName.MS_PORT_PACKETS_COLLISIONS_COUNT,
             "Collision packets on switch port (5-minute window)",
             labelnames=packet_labels,
         )
 
         self._switch_port_packets_topologychanges = self.parent._create_gauge(
-            MSMetricName.MS_PORT_PACKETS_TOPOLOGYCHANGES,
+            MSMetricName.MS_PORT_PACKETS_TOPOLOGYCHANGES_COUNT,
             "Topology change packets on switch port (5-minute window)",
             labelnames=packet_labels,
         )
 
         # Packet rate metrics (packets per second)
         self._switch_port_packets_rate_total = self.parent._create_gauge(
-            MSMetricName.MS_PORT_PACKETS_RATE_TOTAL,
+            MSMetricName.MS_PORT_PACKETS_RATE,
             "Total packet rate on switch port (packets per second, 5-minute average)",
             labelnames=packet_labels,
         )
@@ -446,8 +446,8 @@ class MSCollector(BaseDeviceCollector):
 
         # Port overview metrics (org-level aggregates)
         self._ms_ports_active_total = self.parent._create_gauge(
-            MSMetricName.MS_PORTS_ACTIVE_TOTAL,
-            "Total number of active switch ports",
+            MSMetricName.MS_PORTS_ACTIVE,
+            "Number of active switch ports",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -455,8 +455,8 @@ class MSCollector(BaseDeviceCollector):
         )
 
         self._ms_ports_inactive_total = self.parent._create_gauge(
-            MSMetricName.MS_PORTS_INACTIVE_TOTAL,
-            "Total number of inactive switch ports",
+            MSMetricName.MS_PORTS_INACTIVE,
+            "Number of inactive switch ports",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -464,8 +464,8 @@ class MSCollector(BaseDeviceCollector):
         )
 
         self._ms_ports_by_media_total = self.parent._create_gauge(
-            MSMetricName.MS_PORTS_BY_MEDIA_TOTAL,
-            "Total number of switch ports by media type",
+            MSMetricName.MS_PORTS_BY_MEDIA,
+            "Number of switch ports by media type",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -475,8 +475,8 @@ class MSCollector(BaseDeviceCollector):
         )
 
         self._ms_ports_by_link_speed_total = self.parent._create_gauge(
-            MSMetricName.MS_PORTS_BY_LINK_SPEED_TOTAL,
-            "Total number of active switch ports by link speed",
+            MSMetricName.MS_PORTS_BY_LINK_SPEED,
+            "Number of active switch ports by link speed",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -884,7 +884,7 @@ class MSCollector(BaseDeviceCollector):
                             self._switch_port_traffic,
                             rx_labels,
                             traffic_counters["recv"] * 1000 / 8,  # Convert kbps to bytes/sec
-                            MSMetricName.MS_PORT_TRAFFIC_BYTES.value,
+                            MSMetricName.MS_PORT_TRAFFIC_BYTES_PER_SECOND.value,
                         )
 
                     if "sent" in traffic_counters:
@@ -895,7 +895,7 @@ class MSCollector(BaseDeviceCollector):
                             self._switch_port_traffic,
                             tx_labels,
                             traffic_counters["sent"] * 1000 / 8,  # Convert kbps to bytes/sec
-                            MSMetricName.MS_PORT_TRAFFIC_BYTES.value,
+                            MSMetricName.MS_PORT_TRAFFIC_BYTES_PER_SECOND.value,
                         )
 
                 # Usage counters (total bytes over timespan)
@@ -909,7 +909,8 @@ class MSCollector(BaseDeviceCollector):
                         self.parent._set_metric(
                             self._switch_port_usage,
                             rx_labels,
-                            usage_counters["recv"] * 1024,  # Convert KB to bytes
+                            usage_counters["recv"]
+                            * 1000,  # decimal KB->bytes (D5: x1000, not KiB x1024)
                             MSMetricName.MS_PORT_USAGE_BYTES.value,
                         )
 
@@ -920,7 +921,8 @@ class MSCollector(BaseDeviceCollector):
                         self.parent._set_metric(
                             self._switch_port_usage,
                             tx_labels,
-                            usage_counters["sent"] * 1024,  # Convert KB to bytes
+                            usage_counters["sent"]
+                            * 1000,  # decimal KB->bytes (D5: x1000, not KiB x1024)
                             MSMetricName.MS_PORT_USAGE_BYTES.value,
                         )
 
@@ -931,7 +933,8 @@ class MSCollector(BaseDeviceCollector):
                         self.parent._set_metric(
                             self._switch_port_usage,
                             total_labels,
-                            usage_counters["total"] * 1024,  # Convert KB to bytes
+                            usage_counters["total"]
+                            * 1000,  # decimal KB->bytes (D5: x1000, not KiB x1024)
                             MSMetricName.MS_PORT_USAGE_BYTES.value,
                         )
 
@@ -958,13 +961,16 @@ class MSCollector(BaseDeviceCollector):
                 # Check if port has POE data
                 poe_info = port.get("poe", {})
                 if poe_info.get("isAllocated", False):
-                    # Port is drawing POE power
+                    # Port is drawing POE power. API reports watt-hours (Wh);
+                    # keep total_poe_consumption in Wh (also feeds the watts
+                    # approximation below) and convert to joules (D3: x3600)
+                    # only at the energy-metric emit sites.
                     power_used = port.get("powerUsageInWh", 0)
                     self.parent._set_metric(
                         self._switch_poe_port_power,
                         port_labels,
-                        power_used,
-                        MSMetricName.MS_POE_PORT_POWER_WATTHOURS.value,
+                        power_used * 3600,  # Wh -> J
+                        MSMetricName.MS_POE_PORT_ENERGY_JOULES.value,
                     )
                     total_poe_consumption += power_used
                 else:
@@ -973,19 +979,21 @@ class MSCollector(BaseDeviceCollector):
                         self._switch_poe_port_power,
                         port_labels,
                         0,
-                        MSMetricName.MS_POE_PORT_POWER_WATTHOURS.value,
+                        MSMetricName.MS_POE_PORT_ENERGY_JOULES.value,
                     )
 
-            # Set switch-level POE total
+            # Set switch-level POE total (Wh -> J)
             self.parent._set_metric(
                 self._switch_poe_total_power,
                 device_labels,
-                total_poe_consumption,
-                MSMetricName.MS_POE_TOTAL_POWER_WATTHOURS.value,
+                total_poe_consumption * 3600,
+                MSMetricName.MS_POE_TOTAL_ENERGY_JOULES.value,
             )
 
             # Set total switch power usage (POE consumption is the main power draw)
-            # This is an approximation - actual switch base power consumption varies by model
+            # This is an approximation - actual switch base power consumption varies
+            # by model. Deliberately left unconverted (Wh treated as a watts stand-in,
+            # not an energy metric - MS_POWER_USAGE_WATTS is out of scope for #531).
             self.parent._set_metric(
                 self._switch_power,
                 device_labels,
@@ -1051,7 +1059,7 @@ class MSCollector(BaseDeviceCollector):
                         self._switch_port_traffic,
                         rx_labels,
                         traffic_counters["recv"] * 1000 / 8,
-                        MSMetricName.MS_PORT_TRAFFIC_BYTES.value,
+                        MSMetricName.MS_PORT_TRAFFIC_BYTES_PER_SECOND.value,
                     )
 
                 if "sent" in traffic_counters:
@@ -1062,7 +1070,7 @@ class MSCollector(BaseDeviceCollector):
                         self._switch_port_traffic,
                         tx_labels,
                         traffic_counters["sent"] * 1000 / 8,
-                        MSMetricName.MS_PORT_TRAFFIC_BYTES.value,
+                        MSMetricName.MS_PORT_TRAFFIC_BYTES_PER_SECOND.value,
                     )
 
             # Usage counters (total bytes over timespan)
@@ -1076,7 +1084,7 @@ class MSCollector(BaseDeviceCollector):
                     self.parent._set_metric(
                         self._switch_port_usage,
                         rx_labels,
-                        usage_counters["recv"] * 1024,
+                        usage_counters["recv"] * 1000,  # decimal KB x1000
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
                     )
 
@@ -1087,7 +1095,7 @@ class MSCollector(BaseDeviceCollector):
                     self.parent._set_metric(
                         self._switch_port_usage,
                         tx_labels,
-                        usage_counters["sent"] * 1024,
+                        usage_counters["sent"] * 1000,  # decimal KB x1000
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
                     )
 
@@ -1098,7 +1106,7 @@ class MSCollector(BaseDeviceCollector):
                     self.parent._set_metric(
                         self._switch_port_usage,
                         total_labels,
-                        usage_counters["total"] * 1024,
+                        usage_counters["total"] * 1000,  # decimal KB x1000
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
                     )
 
@@ -1121,12 +1129,15 @@ class MSCollector(BaseDeviceCollector):
             port_labels = create_port_labels(device, port, org_id=org_id, org_name=org_name)
             poe_info = port.get("poe", {})
             if poe_info.get("isAllocated", False):
+                # API reports watt-hours (Wh); keep total_poe_consumption in Wh
+                # (also feeds the watts approximation below) and convert to
+                # joules (D3: x3600) only at the energy-metric emit sites.
                 power_used = port.get("powerUsageInWh", 0)
                 self.parent._set_metric(
                     self._switch_poe_port_power,
                     port_labels,
-                    power_used,
-                    MSMetricName.MS_POE_PORT_POWER_WATTHOURS.value,
+                    power_used * 3600,  # Wh -> J
+                    MSMetricName.MS_POE_PORT_ENERGY_JOULES.value,
                 )
                 total_poe_consumption += power_used
             else:
@@ -1134,15 +1145,17 @@ class MSCollector(BaseDeviceCollector):
                     self._switch_poe_port_power,
                     port_labels,
                     0,
-                    MSMetricName.MS_POE_PORT_POWER_WATTHOURS.value,
+                    MSMetricName.MS_POE_PORT_ENERGY_JOULES.value,
                 )
 
         self.parent._set_metric(
             self._switch_poe_total_power,
             device_labels,
-            total_poe_consumption,
-            MSMetricName.MS_POE_TOTAL_POWER_WATTHOURS.value,
+            total_poe_consumption * 3600,  # Wh -> J
+            MSMetricName.MS_POE_TOTAL_ENERGY_JOULES.value,
         )
+        # Unconverted (Wh treated as a watts stand-in) - MS_POWER_USAGE_WATTS is
+        # out of scope for #531 (checked-OK, see spec §3).
         self.parent._set_metric(
             self._switch_power,
             device_labels,
@@ -1172,10 +1185,10 @@ class MSCollector(BaseDeviceCollector):
         MS usage/PoE cost from ~1 call per switch to ~2 calls per org per cycle.
 
         Emits exactly the same metrics/labels as the per-device fallback
-        (``collect_device_port_usage_metrics``): ``meraki_ms_port_traffic_bytes``,
+        (``collect_device_port_usage_metrics``): ``meraki_ms_port_traffic_bytes_per_second``,
         ``meraki_ms_port_usage_bytes``, ``meraki_ms_port_client_count``,
-        ``meraki_ms_poe_port_power_watthours``,
-        ``meraki_ms_poe_total_power_watthours`` and ``meraki_ms_power_usage_watts``.
+        ``meraki_ms_poe_port_energy_joules``,
+        ``meraki_ms_poe_total_energy_joules`` and ``meraki_ms_power_usage_watts``.
 
         Parameters
         ----------
@@ -1327,7 +1340,7 @@ class MSCollector(BaseDeviceCollector):
                         self._switch_port_traffic,
                         rx_labels,
                         (sum(bw_down_samples) / len(bw_down_samples)) * 1000 / 8,
-                        MSMetricName.MS_PORT_TRAFFIC_BYTES.value,
+                        MSMetricName.MS_PORT_TRAFFIC_BYTES_PER_SECOND.value,
                     )
                 if bw_up_samples:
                     tx_labels = create_port_labels(
@@ -1337,10 +1350,11 @@ class MSCollector(BaseDeviceCollector):
                         self._switch_port_traffic,
                         tx_labels,
                         (sum(bw_up_samples) / len(bw_up_samples)) * 1000 / 8,
-                        MSMetricName.MS_PORT_TRAFFIC_BYTES.value,
+                        MSMetricName.MS_PORT_TRAFFIC_BYTES_PER_SECOND.value,
                     )
 
-                # Usage bytes over the window. KB -> bytes = *1024.
+                # Usage bytes over the window. Decimal KB -> bytes = *1000 (D5:
+                # Meraki dashboard data-volume KB is decimal, not KiB).
                 if have_usage:
                     rx_labels = create_port_labels(
                         device_data, port, org_id=org_id, org_name=org_name, direction="rx"
@@ -1348,7 +1362,7 @@ class MSCollector(BaseDeviceCollector):
                     self.parent._set_metric(
                         self._switch_port_usage,
                         rx_labels,
-                        usage_down_kb * 1024,
+                        usage_down_kb * 1000,
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
                     )
                     tx_labels = create_port_labels(
@@ -1357,7 +1371,7 @@ class MSCollector(BaseDeviceCollector):
                     self.parent._set_metric(
                         self._switch_port_usage,
                         tx_labels,
-                        usage_up_kb * 1024,
+                        usage_up_kb * 1000,
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
                     )
                     total_labels = create_port_labels(
@@ -1366,7 +1380,7 @@ class MSCollector(BaseDeviceCollector):
                     self.parent._set_metric(
                         self._switch_port_usage,
                         total_labels,
-                        usage_total_kb * 1024,
+                        usage_total_kb * 1000,
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
                     )
 
@@ -1381,21 +1395,24 @@ class MSCollector(BaseDeviceCollector):
                     MSMetricName.MS_PORT_CLIENT_COUNT.value,
                 )
 
-                # Per-port PoE (watt-hours delivered over the window).
+                # Per-port PoE (Wh delivered over the window, converted to
+                # joules at emit time - D3: x3600). total_poe_consumption stays
+                # in Wh so it can also feed the watts approximation below.
                 self.parent._set_metric(
                     self._switch_poe_port_power,
                     port_labels_no_extra,
-                    energy_wh,
-                    MSMetricName.MS_POE_PORT_POWER_WATTHOURS.value,
+                    energy_wh * 3600,  # Wh -> J
+                    MSMetricName.MS_POE_PORT_ENERGY_JOULES.value,
                 )
                 total_poe_consumption += energy_wh
 
-            # Switch-level PoE total and (approximated) total power draw.
+            # Switch-level PoE total (Wh -> J) and (approximated, unconverted)
+            # total power draw - MS_POWER_USAGE_WATTS is out of scope for #531.
             self.parent._set_metric(
                 self._switch_poe_total_power,
                 device_labels,
-                total_poe_consumption,
-                MSMetricName.MS_POE_TOTAL_POWER_WATTHOURS.value,
+                total_poe_consumption * 3600,
+                MSMetricName.MS_POE_TOTAL_ENERGY_JOULES.value,
             )
             self.parent._set_metric(
                 self._switch_power,
@@ -1607,43 +1624,43 @@ class MSCollector(BaseDeviceCollector):
                 "Total": (
                     self._switch_port_packets_total,
                     self._switch_port_packets_rate_total,
-                    MSMetricName.MS_PORT_PACKETS_TOTAL.value,
-                    MSMetricName.MS_PORT_PACKETS_RATE_TOTAL.value,
+                    MSMetricName.MS_PORT_PACKETS_COUNT.value,
+                    MSMetricName.MS_PORT_PACKETS_RATE.value,
                 ),
                 "Broadcast": (
                     self._switch_port_packets_broadcast,
                     self._switch_port_packets_rate_broadcast,
-                    MSMetricName.MS_PORT_PACKETS_BROADCAST.value,
+                    MSMetricName.MS_PORT_PACKETS_BROADCAST_COUNT.value,
                     MSMetricName.MS_PORT_PACKETS_RATE_BROADCAST.value,
                 ),
                 "Multicast": (
                     self._switch_port_packets_multicast,
                     self._switch_port_packets_rate_multicast,
-                    MSMetricName.MS_PORT_PACKETS_MULTICAST.value,
+                    MSMetricName.MS_PORT_PACKETS_MULTICAST_COUNT.value,
                     MSMetricName.MS_PORT_PACKETS_RATE_MULTICAST.value,
                 ),
                 "CRC align errors": (
                     self._switch_port_packets_crcerrors,
                     self._switch_port_packets_rate_crcerrors,
-                    MSMetricName.MS_PORT_PACKETS_CRCERRORS.value,
+                    MSMetricName.MS_PORT_PACKETS_CRCERRORS_COUNT.value,
                     MSMetricName.MS_PORT_PACKETS_RATE_CRCERRORS.value,
                 ),
                 "Fragments": (
                     self._switch_port_packets_fragments,
                     self._switch_port_packets_rate_fragments,
-                    MSMetricName.MS_PORT_PACKETS_FRAGMENTS.value,
+                    MSMetricName.MS_PORT_PACKETS_FRAGMENTS_COUNT.value,
                     MSMetricName.MS_PORT_PACKETS_RATE_FRAGMENTS.value,
                 ),
                 "Collisions": (
                     self._switch_port_packets_collisions,
                     self._switch_port_packets_rate_collisions,
-                    MSMetricName.MS_PORT_PACKETS_COLLISIONS.value,
+                    MSMetricName.MS_PORT_PACKETS_COLLISIONS_COUNT.value,
                     MSMetricName.MS_PORT_PACKETS_RATE_COLLISIONS.value,
                 ),
                 "Topology changes": (
                     self._switch_port_packets_topologychanges,
                     self._switch_port_packets_rate_topologychanges,
-                    MSMetricName.MS_PORT_PACKETS_TOPOLOGYCHANGES.value,
+                    MSMetricName.MS_PORT_PACKETS_TOPOLOGYCHANGES_COUNT.value,
                     MSMetricName.MS_PORT_PACKETS_RATE_TOPOLOGYCHANGES.value,
                 ),
             }

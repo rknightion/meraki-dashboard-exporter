@@ -97,8 +97,8 @@ class OrganizationCollector(MetricCollector):
 
         # API metrics
         self._api_requests_total = self._create_gauge(
-            OrgMetricName.ORG_API_REQUESTS_TOTAL,
-            "Total API requests made by the organization in the last hour",
+            OrgMetricName.ORG_API_REQUESTS_COUNT,
+            "API requests made by the organization in the last hour",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
@@ -110,28 +110,28 @@ class OrganizationCollector(MetricCollector):
 
         # Network metrics
         self._networks_total = self._create_gauge(
-            OrgMetricName.ORG_NETWORKS_TOTAL,
-            "Total number of networks in the organization",
+            OrgMetricName.ORG_NETWORKS,
+            "Number of networks in the organization",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         # Device metrics
         self._devices_total = self._create_gauge(
-            OrgMetricName.ORG_DEVICES_TOTAL,
-            "Total number of devices in the organization",
+            OrgMetricName.ORG_DEVICES,
+            "Number of devices in the organization",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.DEVICE_TYPE],
         )
 
         self._devices_by_model_total = self._create_gauge(
-            OrgMetricName.ORG_DEVICES_BY_MODEL_TOTAL,
-            "Total number of devices by specific model",
+            OrgMetricName.ORG_DEVICES_BY_MODEL,
+            "Number of devices by specific model",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.MODEL],
         )
 
         # Device availability metrics (from new API)
         self._devices_availability_total = self._create_gauge(
-            OrgMetricName.ORG_DEVICES_AVAILABILITY_TOTAL,
-            "Total number of devices by availability status and product type",
+            OrgMetricName.ORG_DEVICES_AVAILABILITY,
+            "Number of devices by availability status and product type",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -142,9 +142,10 @@ class OrganizationCollector(MetricCollector):
 
         # Device availability change history (windowed transition counts per poll)
         self._org_devices_availability_changes_total = self._create_gauge(
-            OrgMetricName.ORG_DEVICES_AVAILABILITY_CHANGES_TOTAL,
-            "Number of device availability transitions in the last collection window "
-            "by product type and new status",
+            OrgMetricName.ORG_DEVICES_AVAILABILITY_CHANGES_COUNT,
+            "Number of device availability transitions observed in the collection window "
+            "(tied to the configured MEDIUM update interval, default 300s) by product type "
+            "and new status",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -155,7 +156,7 @@ class OrganizationCollector(MetricCollector):
 
         # Firmware upgrade tracking
         self._org_firmware_upgrades_total = self._create_gauge(
-            OrgMetricName.ORG_FIRMWARE_UPGRADES_TOTAL,
+            OrgMetricName.ORG_FIRMWARE_UPGRADES,
             "Number of firmware upgrade events by product type and status",
             labelnames=[
                 LabelName.ORG_ID,
@@ -165,7 +166,7 @@ class OrganizationCollector(MetricCollector):
             ],
         )
         self._org_firmware_upgrades_pending_total = self._create_gauge(
-            OrgMetricName.ORG_FIRMWARE_UPGRADES_PENDING_TOTAL,
+            OrgMetricName.ORG_FIRMWARE_UPGRADES_PENDING,
             "Number of pending/in-flight firmware upgrade events by product type",
             labelnames=[
                 LabelName.ORG_ID,
@@ -176,8 +177,8 @@ class OrganizationCollector(MetricCollector):
 
         # License metrics
         self._licenses_total = self._create_gauge(
-            OrgMetricName.ORG_LICENSES_TOTAL,
-            "Total number of licenses",
+            OrgMetricName.ORG_LICENSES,
+            "Number of licenses",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -194,34 +195,34 @@ class OrganizationCollector(MetricCollector):
 
         # Client metrics
         self._clients_total = self._create_gauge(
-            OrgMetricName.ORG_CLIENTS_TOTAL,
-            "Total number of active clients in the organization (1-hour window)",
+            OrgMetricName.ORG_CLIENTS_COUNT,
+            "Number of active clients in the organization in the last hour",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
-        # Usage metrics (in KB for the 1-hour window)
+        # Usage metrics (in bytes for the 1-hour window)
         self._usage_total_kb = self._create_gauge(
-            OrgMetricName.ORG_USAGE_TOTAL_KB,
-            "Total data usage in KB for the 1-hour window",
+            OrgMetricName.ORG_USAGE_TOTAL_BYTES,
+            "Total data usage in bytes for the 1-hour window",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._usage_downstream_kb = self._create_gauge(
-            OrgMetricName.ORG_USAGE_DOWNSTREAM_KB,
-            "Downstream data usage in KB for the 1-hour window",
+            OrgMetricName.ORG_USAGE_DOWNSTREAM_BYTES,
+            "Downstream data usage in bytes for the 1-hour window",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         self._usage_upstream_kb = self._create_gauge(
-            OrgMetricName.ORG_USAGE_UPSTREAM_KB,
-            "Upstream data usage in KB for the 1-hour window",
+            OrgMetricName.ORG_USAGE_UPSTREAM_BYTES,
+            "Upstream data usage in bytes for the 1-hour window",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
         # Packet capture metrics
         self._packetcaptures_total = self._create_gauge(
-            OrgMetricName.ORG_PACKETCAPTURES_TOTAL,
-            "Total number of packet captures in the organization",
+            OrgMetricName.ORG_PACKETCAPTURES,
+            "Number of packet captures in the organization",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
@@ -233,26 +234,26 @@ class OrganizationCollector(MetricCollector):
 
         # Application usage metrics (API default rolling window is 1 day)
         self._application_usage_total_mb = self._create_gauge(
-            OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_MB,
-            "Total application usage in MB by category over the trailing 1-day window",
+            OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
+            "Total application usage in bytes by category over the trailing 1-day window",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
         )
 
         self._application_usage_downstream_mb = self._create_gauge(
-            OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_MB,
-            "Downstream application usage in MB by category over the trailing 1-day window",
+            OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_BYTES,
+            "Downstream application usage in bytes by category over the trailing 1-day window",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
         )
 
         self._application_usage_upstream_mb = self._create_gauge(
-            OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_MB,
-            "Upstream application usage in MB by category over the trailing 1-day window",
+            OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_BYTES,
+            "Upstream application usage in bytes by category over the trailing 1-day window",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
         )
 
         self._application_usage_percentage = self._create_gauge(
-            OrgMetricName.ORG_APPLICATION_USAGE_PERCENTAGE,
-            "Application usage percentage by category over the trailing 1-day window",
+            OrgMetricName.ORG_APPLICATION_USAGE_PERCENT,
+            "Application usage percent by category over the trailing 1-day window",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
         )
 
@@ -633,7 +634,7 @@ class OrganizationCollector(MetricCollector):
                     self._devices_total,
                     labels,
                     count,
-                    OrgMetricName.ORG_DEVICES_TOTAL.value,
+                    OrgMetricName.ORG_DEVICES.value,
                 )
         else:
             logger.error("_devices_total metric not initialized")
@@ -649,7 +650,7 @@ class OrganizationCollector(MetricCollector):
 
         Scoped to the configured NetworkFilter (via ``networkIds``) so this
         metric stays consistent with its inventory-filtered sibling
-        ``meraki_org_devices_total`` instead of always covering the whole org
+        ``meraki_org_devices`` instead of always covering the whole org
         (bug-bash finding F-098).
 
         Parameters
@@ -722,7 +723,7 @@ class OrganizationCollector(MetricCollector):
                     self._devices_by_model_total,
                     labels,
                     count,
-                    OrgMetricName.ORG_DEVICES_BY_MODEL_TOTAL.value,
+                    OrgMetricName.ORG_DEVICES_BY_MODEL.value,
                 )
         else:
             logger.error("_devices_by_model_total metric not initialized")
@@ -810,7 +811,7 @@ class OrganizationCollector(MetricCollector):
                     self._devices_availability_total,
                     labels,
                     count,
-                    OrgMetricName.ORG_DEVICES_AVAILABILITY_TOTAL.value,
+                    OrgMetricName.ORG_DEVICES_AVAILABILITY.value,
                 )
         else:
             logger.error("_devices_availability_total metric not initialized")
@@ -1007,10 +1008,12 @@ class OrganizationCollector(MetricCollector):
             category = category_data.get("category", "Unknown")
             sanitized_category = self._sanitize_category_name(category)
 
-            # Convert MB to MB (values are already in MB based on the example)
-            total_mb = category_data.get("total", 0)
-            downstream_mb = category_data.get("downstream", 0)
-            upstream_mb = category_data.get("upstream", 0)
+            # API values are in MB; convert to bytes (x1,000,000) so the gauges
+            # (renamed meraki_org_application_usage_*_bytes, issue #531) carry
+            # base-unit values.
+            total_mb = category_data.get("total", 0) * 1_000_000
+            downstream_mb = category_data.get("downstream", 0) * 1_000_000
+            upstream_mb = category_data.get("upstream", 0) * 1_000_000
             percentage = category_data.get("percentage", 0)
 
             # Set metrics

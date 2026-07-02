@@ -1085,8 +1085,8 @@ class TestMSCollector:
         await ms_collector.collect_port_overview("org1", "Org One")
 
         org_labels = {"org_id": "org1", "org_name": "Org One"}
-        assert REGISTRY.get_sample_value("meraki_ms_ports_active_total", org_labels) == 42.0
-        assert REGISTRY.get_sample_value("meraki_ms_ports_inactive_total", org_labels) == 7.0
+        assert REGISTRY.get_sample_value("meraki_ms_ports_active", org_labels) == 42.0
+        assert REGISTRY.get_sample_value("meraki_ms_ports_inactive", org_labels) == 7.0
 
         # Now simulate the SDK exhausted-retry error shape.
         mock_api.switch.getOrganizationSwitchPortsOverview = MagicMock(
@@ -1097,8 +1097,8 @@ class TestMSCollector:
         # Values must be untouched (NOT reset to 0): validate_response_format
         # raises DataValidationError and with_error_handling(continue_on_error=True)
         # swallows it before .set() is ever reached.
-        assert REGISTRY.get_sample_value("meraki_ms_ports_active_total", org_labels) == 42.0
-        assert REGISTRY.get_sample_value("meraki_ms_ports_inactive_total", org_labels) == 7.0
+        assert REGISTRY.get_sample_value("meraki_ms_ports_active", org_labels) == 42.0
+        assert REGISTRY.get_sample_value("meraki_ms_ports_inactive", org_labels) == 7.0
 
     async def test_collect_sets_port_status_metric_via_set_metric(
         self,
@@ -1358,37 +1358,42 @@ class TestMSCollector:
             "port_name": "Port 1",
         }
 
-        # Usage bytes: sum of interval KB * 1024.
+        # Usage bytes: sum of interval decimal KB * 1000 (D5: not KiB x1024).
         assert (
             REGISTRY.get_sample_value("meraki_ms_port_usage_bytes", {**base, "direction": "total"})
-            == 300 * 1024
+            == 300 * 1000
         )
         assert (
             REGISTRY.get_sample_value("meraki_ms_port_usage_bytes", {**base, "direction": "tx"})
-            == 100 * 1024
+            == 100 * 1000
         )
         assert (
             REGISTRY.get_sample_value("meraki_ms_port_usage_bytes", {**base, "direction": "rx"})
-            == 200 * 1024
+            == 200 * 1000
         )
 
         # Traffic rate: averaged bandwidth kbps * 1000 / 8. up=(3+5)/2=4, down=(5+7)/2=6.
         assert (
-            REGISTRY.get_sample_value("meraki_ms_port_traffic_bytes", {**base, "direction": "tx"})
+            REGISTRY.get_sample_value(
+                "meraki_ms_port_traffic_bytes_per_second", {**base, "direction": "tx"}
+            )
             == 4.0 * 1000 / 8
         )
         assert (
-            REGISTRY.get_sample_value("meraki_ms_port_traffic_bytes", {**base, "direction": "rx"})
+            REGISTRY.get_sample_value(
+                "meraki_ms_port_traffic_bytes_per_second", {**base, "direction": "rx"}
+            )
             == 6.0 * 1000 / 8
         )
 
-        # PoE watt-hours: sum of interval energy = 5.0.
-        assert REGISTRY.get_sample_value("meraki_ms_poe_port_power_watthours", base) == 5.0
+        # PoE joules: sum of interval energy (5.0 Wh) converted x3600 (D3).
+        assert REGISTRY.get_sample_value("meraki_ms_poe_port_energy_joules", base) == 5.0 * 3600
 
         # Client count from the clients-overview lookup.
         assert REGISTRY.get_sample_value("meraki_ms_port_client_count", base) == 7.0
 
-        # Switch-level PoE total + total power draw (both == summed energy).
+        # Switch-level PoE total (Wh sum x3600 = joules) + total power draw
+        # (deliberately unconverted Wh-as-watts approximation, out of scope for #531).
         device_labels = {
             "org_id": "org1",
             "org_name": "Org One",
@@ -1400,7 +1405,8 @@ class TestMSCollector:
             "device_type": "MS",
         }
         assert (
-            REGISTRY.get_sample_value("meraki_ms_poe_total_power_watthours", device_labels) == 5.0
+            REGISTRY.get_sample_value("meraki_ms_poe_total_energy_joules", device_labels)
+            == 5.0 * 3600
         )
         assert REGISTRY.get_sample_value("meraki_ms_power_usage_watts", device_labels) == 5.0
 

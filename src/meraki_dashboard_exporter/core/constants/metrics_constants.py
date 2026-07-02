@@ -10,36 +10,37 @@ class OrgMetricName(StrEnum):
 
     # Basic organization metrics
     ORG_INFO = "meraki_org"
-    ORG_API_REQUESTS_TOTAL = "meraki_org_api_requests_total"
+    # Windowed count (1-hour window, resets each cycle) - not a monotonic Counter (#531)
+    ORG_API_REQUESTS_COUNT = "meraki_org_api_requests_count"
     ORG_API_REQUESTS_BY_STATUS = "meraki_org_api_requests_by_status"
-    ORG_NETWORKS_TOTAL = "meraki_org_networks_total"
-    ORG_DEVICES_TOTAL = "meraki_org_devices_total"
-    ORG_DEVICES_BY_MODEL_TOTAL = "meraki_org_devices_by_model_total"
-    ORG_DEVICES_AVAILABILITY_TOTAL = "meraki_org_devices_availability_total"
+    ORG_NETWORKS = "meraki_org_networks"
+    ORG_DEVICES = "meraki_org_devices"
+    ORG_DEVICES_BY_MODEL = "meraki_org_devices_by_model"
+    ORG_DEVICES_AVAILABILITY = "meraki_org_devices_availability"
 
     # License metrics
-    ORG_LICENSES_TOTAL = "meraki_org_licenses_total"
+    ORG_LICENSES = "meraki_org_licenses"
     ORG_LICENSES_EXPIRING = "meraki_org_licenses_expiring"
 
-    # Client and usage metrics
-    ORG_CLIENTS_TOTAL = "meraki_org_clients_total"
-    ORG_USAGE_TOTAL_KB = "meraki_org_usage_total_kb"
-    ORG_USAGE_DOWNSTREAM_KB = "meraki_org_usage_downstream_kb"
-    ORG_USAGE_UPSTREAM_KB = "meraki_org_usage_upstream_kb"
+    # Client and usage metrics (usage values emitted in bytes, decimal KB x1000)
+    ORG_CLIENTS_COUNT = "meraki_org_clients_count"
+    ORG_USAGE_TOTAL_BYTES = "meraki_org_usage_total_bytes"
+    ORG_USAGE_DOWNSTREAM_BYTES = "meraki_org_usage_downstream_bytes"
+    ORG_USAGE_UPSTREAM_BYTES = "meraki_org_usage_upstream_bytes"
 
     # Configuration and security metrics
-    ORG_CONFIGURATION_CHANGES_TOTAL = "meraki_org_configuration_changes_total"
+    ORG_CONFIGURATION_CHANGES_COUNT = "meraki_org_configuration_changes_count"
     ORG_LOGIN_SECURITY_ENABLED = "meraki_org_login_security_enabled"
 
     # Packet capture metrics
-    ORG_PACKETCAPTURES_TOTAL = "meraki_org_packetcaptures_total"
+    ORG_PACKETCAPTURES = "meraki_org_packetcaptures"
     ORG_PACKETCAPTURES_REMAINING = "meraki_org_packetcaptures_remaining"
 
-    # Application usage metrics
-    ORG_APPLICATION_USAGE_TOTAL_MB = "meraki_org_application_usage_total_mb"
-    ORG_APPLICATION_USAGE_DOWNSTREAM_MB = "meraki_org_application_usage_downstream_mb"
-    ORG_APPLICATION_USAGE_UPSTREAM_MB = "meraki_org_application_usage_upstream_mb"
-    ORG_APPLICATION_USAGE_PERCENTAGE = "meraki_org_application_usage_percentage"
+    # Application usage metrics (values emitted in bytes, decimal MB x1_000_000)
+    ORG_APPLICATION_USAGE_TOTAL_BYTES = "meraki_org_application_usage_total_bytes"
+    ORG_APPLICATION_USAGE_DOWNSTREAM_BYTES = "meraki_org_application_usage_downstream_bytes"
+    ORG_APPLICATION_USAGE_UPSTREAM_BYTES = "meraki_org_application_usage_upstream_bytes"
+    ORG_APPLICATION_USAGE_PERCENT = "meraki_org_application_usage_percent"
     ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED = (
         "meraki_org_login_security_strong_passwords_enabled"
     )
@@ -47,12 +48,12 @@ class OrgMetricName(StrEnum):
     ORG_LOGIN_SECURITY_IP_RESTRICTIONS_ENABLED = "meraki_org_login_security_ip_restrictions_enabled"
     ORG_LOGIN_SECURITY_IP_RANGES_ENABLED = "meraki_org_login_security_ip_ranges_enabled"
     ORG_LOGIN_SECURITY_IDLE_TIMEOUT_ENABLED = "meraki_org_login_security_idle_timeout_enabled"
-    ORG_LOGIN_SECURITY_IDLE_TIMEOUT_MINUTES = "meraki_org_login_security_idle_timeout_minutes"
+    ORG_LOGIN_SECURITY_IDLE_TIMEOUT_SECONDS = "meraki_org_login_security_idle_timeout_seconds"
     ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_ENABLED = (
         "meraki_org_login_security_password_expiration_enabled"
     )
-    ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_DAYS = (
-        "meraki_org_login_security_password_expiration_days"
+    ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_SECONDS = (
+        "meraki_org_login_security_password_expiration_seconds"
     )
     ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_ENABLED = (
         "meraki_org_login_security_different_passwords_enabled"
@@ -70,15 +71,15 @@ class OrgMetricName(StrEnum):
     ORG_LOGIN_SECURITY_MINIMUM_PASSWORD_LENGTH = "meraki_org_login_security_minimum_password_length"
 
     # Admin accounts & 2FA/SSO posture (getOrganizationAdmins; aggregated, no per-admin PII)
-    ORG_ADMINS_TOTAL = "meraki_org_admins_total"
-    ORG_ADMINS_TWO_FACTOR_ENABLED_TOTAL = "meraki_org_admins_two_factor_enabled_total"
+    ORG_ADMINS = "meraki_org_admins"
+    ORG_ADMINS_TWO_FACTOR_ENABLED = "meraki_org_admins_two_factor_enabled"
 
     # Firmware upgrade status & staged rollout tracking (getOrganizationFirmwareUpgrades)
-    ORG_FIRMWARE_UPGRADES_TOTAL = "meraki_org_firmware_upgrades_total"
-    ORG_FIRMWARE_UPGRADES_PENDING_TOTAL = "meraki_org_firmware_upgrades_pending_total"
+    ORG_FIRMWARE_UPGRADES = "meraki_org_firmware_upgrades"
+    ORG_FIRMWARE_UPGRADES_PENDING = "meraki_org_firmware_upgrades_pending"
 
     # Device availability change history (getOrganizationDevicesAvailabilitiesChangeHistory)
-    ORG_DEVICES_AVAILABILITY_CHANGES_TOTAL = "meraki_org_devices_availability_changes_total"
+    ORG_DEVICES_AVAILABILITY_CHANGES_COUNT = "meraki_org_devices_availability_changes_count"
 
 
 class NetworkMetricName(StrEnum):
@@ -87,11 +88,12 @@ class NetworkMetricName(StrEnum):
     NETWORK_CLIENTS_TOTAL = "meraki_network_clients_total"
     NETWORK_TRAFFIC_BYTES = "meraki_network_traffic_bytes"
     NETWORK_DEVICE_STATUS = "meraki_network_device_status"
-    NETWORK_WIRELESS_CONNECTION_STATS = "meraki_network_wireless_connection_stats_total"
+    NETWORK_WIRELESS_CONNECTION_STATS_COUNT = "meraki_network_wireless_connection_stats_count"
     # Network-filter observability (emitted by services/inventory.py)
     NETWORK_FILTER_MATCH = "meraki_network_filter_match"
     NETWORK_FILTER_RESOLVED = "meraki_network_filter_resolved"
-    NETWORK_FILTER_TOTAL = "meraki_network_filter_total"
+    # Pre-filter network count (networks discovered before filtering)
+    NETWORK_FILTER_NETWORKS = "meraki_network_filter_networks"
 
 
 class DeviceMetricName(StrEnum):
@@ -100,6 +102,7 @@ class DeviceMetricName(StrEnum):
     DEVICE_UP = "meraki_device_up"
     DEVICE_STATUS_INFO = "meraki_device_status_info"
     DEVICE_MEMORY_USAGE_PERCENT = "meraki_device_memory_usage_percent"
+    # Memory values are genuinely binary: API reports KiB, emitted as bytes (KiB x1024)
     DEVICE_MEMORY_USED_BYTES = "meraki_device_memory_used_bytes"
     DEVICE_MEMORY_FREE_BYTES = "meraki_device_memory_free_bytes"
     DEVICE_MEMORY_TOTAL_BYTES = "meraki_device_memory_total_bytes"
@@ -109,18 +112,20 @@ class MSMetricName(StrEnum):
     """MS (Switch) specific metric names."""
 
     MS_PORT_STATUS = "meraki_ms_port_status"
-    MS_PORT_TRAFFIC_BYTES = "meraki_ms_port_traffic_bytes"
+    # Rate, not a volume: API kbps converted x1000/8 to bytes/second (#531 D7)
+    MS_PORT_TRAFFIC_BYTES_PER_SECOND = "meraki_ms_port_traffic_bytes_per_second"
     MS_POWER_USAGE_WATTS = "meraki_ms_power_usage_watts"
-    MS_POE_PORT_POWER_WATTHOURS = "meraki_ms_poe_port_power_watthours"
-    MS_POE_TOTAL_POWER_WATTHOURS = "meraki_ms_poe_total_power_watthours"
+    # Energy over the reporting window: API watt-hours converted x3600 to joules (#531 D3)
+    MS_POE_PORT_ENERGY_JOULES = "meraki_ms_poe_port_energy_joules"
+    MS_POE_TOTAL_ENERGY_JOULES = "meraki_ms_poe_total_energy_joules"
     MS_POE_BUDGET_WATTS = "meraki_ms_poe_budget_watts"
-    MS_POE_NETWORK_TOTAL_WATTHOURS = "meraki_ms_poe_network_total_watthours"
+    MS_POE_NETWORK_TOTAL_ENERGY_JOULES = "meraki_ms_poe_network_total_energy_joules"
 
-    # Port overview metrics
-    MS_PORTS_ACTIVE_TOTAL = "meraki_ms_ports_active_total"
-    MS_PORTS_INACTIVE_TOTAL = "meraki_ms_ports_inactive_total"
-    MS_PORTS_BY_MEDIA_TOTAL = "meraki_ms_ports_by_media_total"
-    MS_PORTS_BY_LINK_SPEED_TOTAL = "meraki_ms_ports_by_link_speed_total"
+    # Port overview metrics (point-in-time snapshot gauges)
+    MS_PORTS_ACTIVE = "meraki_ms_ports_active"
+    MS_PORTS_INACTIVE = "meraki_ms_ports_inactive"
+    MS_PORTS_BY_MEDIA = "meraki_ms_ports_by_media"
+    MS_PORTS_BY_LINK_SPEED = "meraki_ms_ports_by_link_speed"
 
     # STP metrics
     MS_STP_PRIORITY = "meraki_ms_stp_priority"
@@ -133,7 +138,7 @@ class MSMetricName(StrEnum):
     # Power supply / power module status (org-wide powerModules endpoint)
     MS_POWER_SUPPLY_STATUS = "meraki_ms_power_supply_status"
 
-    # Additional port metrics
+    # Additional port metrics (usage emitted in bytes, decimal KB x1000)
     MS_PORT_USAGE_BYTES = "meraki_ms_port_usage_bytes"
     MS_PORT_CLIENT_COUNT = "meraki_ms_port_client_count"
 
@@ -144,21 +149,22 @@ class MSMetricName(StrEnum):
     MS_PORT_ERROR_ACTIVE = "meraki_ms_port_error_active"
     MS_PORT_WARNING_ACTIVE = "meraki_ms_port_warning_active"
 
-    # Packet metrics (with 5-minute window)
-    MS_PORT_PACKETS_TOTAL = "meraki_ms_port_packets_total"
-    MS_PORT_PACKETS_BROADCAST = "meraki_ms_port_packets_broadcast"
-    MS_PORT_PACKETS_MULTICAST = "meraki_ms_port_packets_multicast"
-    MS_PORT_PACKETS_CRCERRORS = "meraki_ms_port_packets_crcerrors"
-    MS_PORT_PACKETS_FRAGMENTS = "meraki_ms_port_packets_fragments"
-    MS_PORT_PACKETS_COLLISIONS = "meraki_ms_port_packets_collisions"
-    MS_PORT_PACKETS_TOPOLOGYCHANGES = "meraki_ms_port_packets_topologychanges"
+    # Packet metrics: windowed counts over a 5-minute window (reset each cycle),
+    # hence `_count` rather than the Counter-reserved `_total` suffix (#531 D1)
+    MS_PORT_PACKETS_COUNT = "meraki_ms_port_packets_count"
+    MS_PORT_PACKETS_BROADCAST_COUNT = "meraki_ms_port_packets_broadcast_count"
+    MS_PORT_PACKETS_MULTICAST_COUNT = "meraki_ms_port_packets_multicast_count"
+    MS_PORT_PACKETS_CRCERRORS_COUNT = "meraki_ms_port_packets_crcerrors_count"
+    MS_PORT_PACKETS_FRAGMENTS_COUNT = "meraki_ms_port_packets_fragments_count"
+    MS_PORT_PACKETS_COLLISIONS_COUNT = "meraki_ms_port_packets_collisions_count"
+    MS_PORT_PACKETS_TOPOLOGYCHANGES_COUNT = "meraki_ms_port_packets_topologychanges_count"
 
     # Stack metrics
     MS_STACK_MEMBER_STATUS = "meraki_ms_stack_member_status"
-    MS_STACK_MEMBERS_TOTAL = "meraki_ms_stack_members_total"
+    MS_STACK_MEMBERS = "meraki_ms_stack_members"
 
-    # Packet rate metrics (packets per second)
-    MS_PORT_PACKETS_RATE_TOTAL = "meraki_ms_port_packets_rate_total"
+    # Packet rate metrics (packets per second, averaged over the 5-minute window)
+    MS_PORT_PACKETS_RATE = "meraki_ms_port_packets_rate"
     MS_PORT_PACKETS_RATE_BROADCAST = "meraki_ms_port_packets_rate_broadcast"
     MS_PORT_PACKETS_RATE_MULTICAST = "meraki_ms_port_packets_rate_multicast"
     MS_PORT_PACKETS_RATE_CRCERRORS = "meraki_ms_port_packets_rate_crcerrors"
@@ -172,7 +178,8 @@ class MRMetricName(StrEnum):
 
     # Basic metrics
     MR_CLIENTS_CONNECTED = "meraki_mr_clients_connected"
-    MR_CONNECTION_STATS = "meraki_mr_connection_stats_total"
+    # Windowed count (30-minute window, resets each cycle) - not a Counter (#531)
+    MR_CONNECTION_STATS_COUNT = "meraki_mr_connection_stats_count"
 
     # Power and port metrics
     MR_POWER_INFO = "meraki_mr_power_info"
@@ -180,32 +187,33 @@ class MRMetricName(StrEnum):
     MR_POWER_POE_CONNECTED = "meraki_mr_power_poe_connected"
     MR_PORT_POE_INFO = "meraki_mr_port_poe_info"
     MR_PORT_LINK_NEGOTIATION_INFO = "meraki_mr_port_link_negotiation_info"
+    # Nominal link capacity - deliberately kept in Mbps (#531 D6 documented exception)
     MR_PORT_LINK_NEGOTIATION_SPEED_MBPS = "meraki_mr_port_link_negotiation_speed_mbps"
 
     # Aggregation metrics
     MR_AGGREGATION_SPEED_MBPS = "meraki_mr_aggregation_speed_mbps"
     MR_AGGREGATION_ENABLED = "meraki_mr_aggregation_enabled"
 
-    # Packet loss metrics - Device level
-    MR_PACKETS_DOWNSTREAM_TOTAL = "meraki_mr_packets_downstream_total"
-    MR_PACKETS_DOWNSTREAM_LOST = "meraki_mr_packets_downstream_lost"
+    # Packet loss metrics - Device level (windowed 5-minute counts, `_count` per #531 D1)
+    MR_PACKETS_DOWNSTREAM_COUNT = "meraki_mr_packets_downstream_count"
+    MR_PACKETS_DOWNSTREAM_LOST_COUNT = "meraki_mr_packets_downstream_lost_count"
     MR_PACKET_LOSS_DOWNSTREAM_PERCENT = "meraki_mr_packet_loss_downstream_percent"
-    MR_PACKETS_UPSTREAM_TOTAL = "meraki_mr_packets_upstream_total"
-    MR_PACKETS_UPSTREAM_LOST = "meraki_mr_packets_upstream_lost"
+    MR_PACKETS_UPSTREAM_COUNT = "meraki_mr_packets_upstream_count"
+    MR_PACKETS_UPSTREAM_LOST_COUNT = "meraki_mr_packets_upstream_lost_count"
     MR_PACKET_LOSS_UPSTREAM_PERCENT = "meraki_mr_packet_loss_upstream_percent"
-    MR_PACKETS_TOTAL = "meraki_mr_packets_total"
-    MR_PACKETS_LOST_TOTAL = "meraki_mr_packets_lost_total"
+    MR_PACKETS_COUNT = "meraki_mr_packets_count"
+    MR_PACKETS_LOST_COUNT = "meraki_mr_packets_lost_count"
     MR_PACKET_LOSS_TOTAL_PERCENT = "meraki_mr_packet_loss_total_percent"
 
-    # Packet loss metrics - Network level
-    MR_NETWORK_PACKETS_DOWNSTREAM_TOTAL = "meraki_mr_network_packets_downstream_total"
-    MR_NETWORK_PACKETS_DOWNSTREAM_LOST = "meraki_mr_network_packets_downstream_lost"
+    # Packet loss metrics - Network level (windowed 5-minute counts)
+    MR_NETWORK_PACKETS_DOWNSTREAM_COUNT = "meraki_mr_network_packets_downstream_count"
+    MR_NETWORK_PACKETS_DOWNSTREAM_LOST_COUNT = "meraki_mr_network_packets_downstream_lost_count"
     MR_NETWORK_PACKET_LOSS_DOWNSTREAM_PERCENT = "meraki_mr_network_packet_loss_downstream_percent"
-    MR_NETWORK_PACKETS_UPSTREAM_TOTAL = "meraki_mr_network_packets_upstream_total"
-    MR_NETWORK_PACKETS_UPSTREAM_LOST = "meraki_mr_network_packets_upstream_lost"
+    MR_NETWORK_PACKETS_UPSTREAM_COUNT = "meraki_mr_network_packets_upstream_count"
+    MR_NETWORK_PACKETS_UPSTREAM_LOST_COUNT = "meraki_mr_network_packets_upstream_lost_count"
     MR_NETWORK_PACKET_LOSS_UPSTREAM_PERCENT = "meraki_mr_network_packet_loss_upstream_percent"
-    MR_NETWORK_PACKETS_TOTAL = "meraki_mr_network_packets_total"
-    MR_NETWORK_PACKETS_LOST_TOTAL = "meraki_mr_network_packets_lost_total"
+    MR_NETWORK_PACKETS_COUNT = "meraki_mr_network_packets_count"
+    MR_NETWORK_PACKETS_LOST_COUNT = "meraki_mr_network_packets_lost_count"
     MR_NETWORK_PACKET_LOSS_TOTAL_PERCENT = "meraki_mr_network_packet_loss_total_percent"
 
     # Other metrics
@@ -215,11 +223,11 @@ class MRMetricName(StrEnum):
     MR_RADIO_CHANNEL_WIDTH_MHZ = "meraki_mr_radio_channel_width_mhz"
     MR_RADIO_POWER_DBM = "meraki_mr_radio_power_dbm"
 
-    # SSID usage metrics
-    MR_SSID_USAGE_TOTAL_MB = "meraki_mr_ssid_usage_total_mb"
-    MR_SSID_USAGE_DOWNSTREAM_MB = "meraki_mr_ssid_usage_downstream_mb"
-    MR_SSID_USAGE_UPSTREAM_MB = "meraki_mr_ssid_usage_upstream_mb"
-    MR_SSID_USAGE_PERCENTAGE = "meraki_mr_ssid_usage_percentage"
+    # SSID usage metrics (values emitted in bytes, decimal MB x1_000_000)
+    MR_SSID_USAGE_TOTAL_BYTES = "meraki_mr_ssid_usage_total_bytes"
+    MR_SSID_USAGE_DOWNSTREAM_BYTES = "meraki_mr_ssid_usage_downstream_bytes"
+    MR_SSID_USAGE_UPSTREAM_BYTES = "meraki_mr_ssid_usage_upstream_bytes"
+    MR_SSID_USAGE_PERCENT = "meraki_mr_ssid_usage_percent"
     MR_SSID_CLIENT_COUNT = "meraki_mr_ssid_client_count"
 
 
@@ -230,14 +238,15 @@ class MXMetricName(StrEnum):
 
     # Per-uplink WAN-link quality (org-wide uplinksLossAndLatency endpoint)
     MX_UPLINK_LOSS_PERCENT = "meraki_mx_uplink_loss_percent"
-    MX_UPLINK_LATENCY_MS = "meraki_mx_uplink_latency_ms"
+    # Latency emitted in seconds (API milliseconds / 1000)
+    MX_UPLINK_LATENCY_SECONDS = "meraki_mx_uplink_latency_seconds"
 
     # VPN health metrics
     MX_VPN_PEER_STATUS = "meraki_mx_vpn_peer_status"
-    MX_VPN_PEERS_TOTAL = "meraki_mx_vpn_peers_total"
+    MX_VPN_PEERS = "meraki_mx_vpn_peers"
 
     # Firewall metrics
-    MX_FIREWALL_RULES_TOTAL = "meraki_mx_firewall_rules_total"
+    MX_FIREWALL_RULES = "meraki_mx_firewall_rules"
     MX_FIREWALL_DEFAULT_POLICY = "meraki_mx_firewall_default_policy"
     # Windowed event count (resets each collection cycle), not a monotonic
     # Counter, so it deliberately does NOT carry a `_total` suffix - see
@@ -257,9 +266,10 @@ class MXMetricName(StrEnum):
     MX_HA_ROLE = "meraki_mx_ha_role"
 
     # VPN history stats (org-wide vpn/stats endpoint; complements point-in-time vpn statuses)
-    MX_VPN_USAGE_SENT_KB = "meraki_mx_vpn_usage_sent_kb"
-    MX_VPN_USAGE_RECV_KB = "meraki_mx_vpn_usage_recv_kb"
-    MX_VPN_STATS_AVG_LATENCY_MS = "meraki_mx_vpn_stats_avg_latency_ms"
+    # Usage emitted in bytes (decimal KB x1000); latency in seconds (ms / 1000)
+    MX_VPN_USAGE_SENT_BYTES = "meraki_mx_vpn_usage_sent_bytes"
+    MX_VPN_USAGE_RECV_BYTES = "meraki_mx_vpn_usage_recv_bytes"
+    MX_VPN_STATS_AVG_LATENCY_SECONDS = "meraki_mx_vpn_stats_avg_latency_seconds"
 
 
 class MGMetricName(StrEnum):
@@ -303,7 +313,7 @@ class MTMetricName(StrEnum):
     MT_INDOOR_AIR_QUALITY_SCORE = "meraki_mt_indoor_air_quality_score"
 
     # Power metrics
-    MT_BATTERY_PERCENTAGE = "meraki_mt_battery_percentage"
+    MT_BATTERY_PERCENT = "meraki_mt_battery_percent"
     MT_VOLTAGE_VOLTS = "meraki_mt_voltage_volts"
     MT_CURRENT_AMPS = "meraki_mt_current_amps"
     MT_REAL_POWER_WATTS = "meraki_mt_real_power_watts"
@@ -325,13 +335,15 @@ class AlertMetricName(StrEnum):
     """Alert metric names."""
 
     ALERTS_ACTIVE = "meraki_alerts_active"
-    ALERTS_TOTAL_BY_SEVERITY = "meraki_alerts_total_by_severity"
-    ALERTS_TOTAL_BY_NETWORK = "meraki_alerts_total_by_network"
-    SENSOR_ALERTS_TOTAL = "meraki_sensor_alerts_total"
+    # Point-in-time snapshot gauges of active alerts (#531 D2)
+    ALERTS_BY_SEVERITY = "meraki_alerts_by_severity"
+    ALERTS_BY_NETWORK = "meraki_alerts_by_network"
+    # Windowed count (resets each cycle) - not a Counter (#531 D1)
+    SENSOR_ALERTS_COUNT = "meraki_sensor_alerts_count"
 
     # Health alert metrics (Phase 4.1)
     ORGANIZATION_HEALTH_ALERTS_TOTAL = "meraki_organization_health_alerts_total"
-    NETWORK_HEALTH_ALERTS_TOTAL = "meraki_network_health_alerts_total"
+    NETWORK_HEALTH_ALERTS = "meraki_network_health_alerts"
     HEALTH_ALERT_INFO = "meraki_health_alert_info"
 
 
@@ -351,25 +363,27 @@ class NetworkHealthMetricName(StrEnum):
     NETWORK_CHANNEL_UTILIZATION_2_4GHZ_PERCENT = "meraki_network_channel_utilization_2_4ghz_percent"
     NETWORK_CHANNEL_UTILIZATION_5GHZ_PERCENT = "meraki_network_channel_utilization_5ghz_percent"
 
-    # Data rate metrics
-    NETWORK_WIRELESS_DOWNLOAD_KBPS = "meraki_network_wireless_download_kbps"
-    NETWORK_WIRELESS_UPLOAD_KBPS = "meraki_network_wireless_upload_kbps"
+    # Data rate metrics (API kiloBYTES/s converted x1000 to bytes/s - see F-065)
+    NETWORK_WIRELESS_DOWNLOAD_BYTES_PER_SECOND = "meraki_network_wireless_download_bytes_per_second"
+    NETWORK_WIRELESS_UPLOAD_BYTES_PER_SECOND = "meraki_network_wireless_upload_bytes_per_second"
 
-    # Bluetooth metrics
-    NETWORK_BLUETOOTH_CLIENTS_TOTAL = "meraki_network_bluetooth_clients_total"
+    # Bluetooth metrics (windowed 5-minute count, resets each cycle - #531 D1)
+    NETWORK_BLUETOOTH_CLIENTS_COUNT = "meraki_network_bluetooth_clients_count"
 
-    # Per-SSID performance metrics (Phase 4.4)
-    MR_SSID_FAILED_CONNECTIONS_TOTAL = "meraki_mr_ssid_failed_connections_total"
+    # Per-SSID performance metrics (Phase 4.4; windowed count)
+    MR_SSID_FAILED_CONNECTIONS_COUNT = "meraki_mr_ssid_failed_connections_count"
 
     # Wireless latency stats (per-AP + network-aggregate client), by traffic class
-    MR_DEVICE_LATENCY_MS = "meraki_mr_device_latency_ms"
-    MR_NETWORK_CLIENT_LATENCY_MS = "meraki_mr_network_client_latency_ms"
+    # Emitted in seconds (API milliseconds / 1000)
+    MR_DEVICE_LATENCY_SECONDS = "meraki_mr_device_latency_seconds"
+    MR_NETWORK_CLIENT_LATENCY_SECONDS = "meraki_mr_network_client_latency_seconds"
 
-    # Air Marshal rogue AP / SSID-spoofing detection (network-level bounded counts)
-    MR_AIR_MARSHAL_SSIDS_TOTAL = "meraki_mr_air_marshal_ssids_total"
-    MR_AIR_MARSHAL_BSSIDS_TOTAL = "meraki_mr_air_marshal_bssids_total"
-    MR_AIR_MARSHAL_CONTAINED_BSSIDS_TOTAL = "meraki_mr_air_marshal_contained_bssids_total"
-    MR_AIR_MARSHAL_WIRED_DETECTED_TOTAL = "meraki_mr_air_marshal_wired_detected_total"
+    # Air Marshal rogue AP / SSID-spoofing detection (network-level bounded counts,
+    # windowed over 1 hour - #531 D1)
+    MR_AIR_MARSHAL_SSIDS_COUNT = "meraki_mr_air_marshal_ssids_count"
+    MR_AIR_MARSHAL_BSSIDS_COUNT = "meraki_mr_air_marshal_bssids_count"
+    MR_AIR_MARSHAL_CONTAINED_BSSIDS_COUNT = "meraki_mr_air_marshal_contained_bssids_count"
+    MR_AIR_MARSHAL_WIRED_DETECTED_COUNT = "meraki_mr_air_marshal_wired_detected_count"
 
 
 class ClientMetricName(StrEnum):
@@ -378,10 +392,11 @@ class ClientMetricName(StrEnum):
     # Client status metrics
     CLIENT_STATUS = "meraki_client_status"
 
-    # Client usage metrics (gauges for point-in-time hourly measurements)
-    CLIENT_USAGE_SENT_KB = "meraki_client_usage_sent_kb"
-    CLIENT_USAGE_RECV_KB = "meraki_client_usage_recv_kb"
-    CLIENT_USAGE_TOTAL_KB = "meraki_client_usage_total_kb"
+    # Client usage metrics (gauges for point-in-time hourly measurements;
+    # values emitted in bytes, decimal KB x1000)
+    CLIENT_USAGE_SENT_BYTES = "meraki_client_usage_sent_bytes"
+    CLIENT_USAGE_RECV_BYTES = "meraki_client_usage_recv_bytes"
+    CLIENT_USAGE_TOTAL_BYTES = "meraki_client_usage_total_bytes"
 
     # Wireless client capability metrics
     WIRELESS_CLIENT_CAPABILITIES_COUNT = "meraki_wireless_client_capabilities_count"
@@ -390,10 +405,10 @@ class ClientMetricName(StrEnum):
     CLIENTS_PER_SSID_COUNT = "meraki_clients_per_ssid_count"
     CLIENTS_PER_VLAN_COUNT = "meraki_clients_per_vlan_count"
 
-    # Client application usage metrics
-    CLIENT_APPLICATION_USAGE_SENT_KB = "meraki_client_application_usage_sent_kb"
-    CLIENT_APPLICATION_USAGE_RECV_KB = "meraki_client_application_usage_recv_kb"
-    CLIENT_APPLICATION_USAGE_TOTAL_KB = "meraki_client_application_usage_total_kb"
+    # Client application usage metrics (values emitted in bytes, decimal KB x1000)
+    CLIENT_APPLICATION_USAGE_SENT_BYTES = "meraki_client_application_usage_sent_bytes"
+    CLIENT_APPLICATION_USAGE_RECV_BYTES = "meraki_client_application_usage_recv_bytes"
+    CLIENT_APPLICATION_USAGE_TOTAL_BYTES = "meraki_client_application_usage_total_bytes"
 
     # Wireless client signal quality metrics
     WIRELESS_CLIENT_RSSI = "meraki_wireless_client_rssi"

@@ -70,7 +70,7 @@ class TestMXUplinkHealthCollector:
         """Test that both loss and latency gauges are created on init."""
         assert mock_parent._create_gauge.call_count == 2
         assert collector._mx_uplink_loss_percent is not None
-        assert collector._mx_uplink_latency_ms is not None
+        assert collector._mx_uplink_latency_seconds is not None
 
     async def test_basic_emission_latest_point(
         self,
@@ -117,9 +117,9 @@ class TestMXUplinkHealthCollector:
         assert value_0 == 0.5
 
         gauge_1, labels_1, value_1, _ = mock_parent._set_metric.call_args_list[1][0]
-        assert gauge_1 is collector._mx_uplink_latency_ms
+        assert gauge_1 is collector._mx_uplink_latency_seconds
         assert labels_1["interface"] == "wan1"
-        assert value_1 == 12.5
+        assert value_1 == pytest.approx(0.0125)
 
     async def test_multiple_uplinks_per_device(
         self,
@@ -220,7 +220,7 @@ class TestMXUplinkHealthCollector:
         last_loss_call = mock_parent._set_metric.call_args_list[2][0]
         last_latency_call = mock_parent._set_metric.call_args_list[3][0]
         assert last_loss_call[2] == 3.0
-        assert last_latency_call[2] == 30.0
+        assert last_latency_call[2] == pytest.approx(0.030)
 
     async def test_null_trailing_timeseries_picks_last_non_null(
         self,
@@ -261,7 +261,7 @@ class TestMXUplinkHealthCollector:
         _, _, loss_value, _ = mock_parent._set_metric.call_args_list[0][0]
         _, _, latency_value, _ = mock_parent._set_metric.call_args_list[1][0]
         assert loss_value == 2.0
-        assert latency_value == 20.0
+        assert latency_value == pytest.approx(0.020)
 
     async def test_loss_and_latency_become_null_independently(
         self,
@@ -302,8 +302,8 @@ class TestMXUplinkHealthCollector:
         gauge_1, _, latency_value, _ = mock_parent._set_metric.call_args_list[1][0]
         assert gauge_0 is collector._mx_uplink_loss_percent
         assert loss_value == 1.0  # falls back to the earlier non-null loss sample
-        assert gauge_1 is collector._mx_uplink_latency_ms
-        assert latency_value == 25.0  # latest non-null latency sample
+        assert gauge_1 is collector._mx_uplink_latency_seconds
+        assert latency_value == pytest.approx(0.025)  # latest non-null latency sample
 
     async def test_empty_response(
         self,

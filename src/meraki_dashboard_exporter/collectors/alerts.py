@@ -71,15 +71,15 @@ class AlertsCollector(MetricCollector):
 
         # Total alerts by severity (simpler metric for quick dashboards)
         self._alerts_by_severity = self._create_gauge(
-            AlertMetricName.ALERTS_TOTAL_BY_SEVERITY,
-            "Total number of active alerts by severity",
+            AlertMetricName.ALERTS_BY_SEVERITY,
+            "Number of active alerts by severity",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.SEVERITY],
         )
 
         # Alerts by network (for network-level overview)
         self._alerts_by_network = self._create_gauge(
-            AlertMetricName.ALERTS_TOTAL_BY_NETWORK,
-            "Total number of active alerts per network",
+            AlertMetricName.ALERTS_BY_NETWORK,
+            "Number of active alerts per network",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -90,8 +90,8 @@ class AlertsCollector(MetricCollector):
 
         # Sensor alerts by metric type
         self._sensor_alerts_total = self._create_gauge(
-            AlertMetricName.SENSOR_ALERTS_TOTAL,
-            "Total number of sensor alerts in the last hour by metric type",
+            AlertMetricName.SENSOR_ALERTS_COUNT,
+            "Number of sensor alerts in the last hour by metric type",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -103,8 +103,8 @@ class AlertsCollector(MetricCollector):
 
         # Network health alerts (Phase 4.1)
         self._network_health_alerts_total = self._create_gauge(
-            AlertMetricName.NETWORK_HEALTH_ALERTS_TOTAL,
-            "Total number of active network health alerts by category and severity",
+            AlertMetricName.NETWORK_HEALTH_ALERTS,
+            "Number of active network health alerts by category and severity",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -494,7 +494,7 @@ class AlertsCollector(MetricCollector):
                     "severity": severity,
                 },
                 count,
-                AlertMetricName.ALERTS_TOTAL_BY_SEVERITY.value,
+                AlertMetricName.ALERTS_BY_SEVERITY.value,
             )
 
         # Set network summary metrics
@@ -508,7 +508,7 @@ class AlertsCollector(MetricCollector):
                     "network_name": network_name,
                 },
                 count,
-                AlertMetricName.ALERTS_TOTAL_BY_NETWORK.value,
+                AlertMetricName.ALERTS_BY_NETWORK.value,
             )
 
         # Set derived network health alert metrics (replaces the deprecated
@@ -525,7 +525,7 @@ class AlertsCollector(MetricCollector):
                     "severity": severity,
                 },
                 count,
-                AlertMetricName.NETWORK_HEALTH_ALERTS_TOTAL.value,
+                AlertMetricName.NETWORK_HEALTH_ALERTS.value,
             )
 
         logger.debug(
@@ -640,7 +640,7 @@ class AlertsCollector(MetricCollector):
                             self._sensor_alerts_total,
                             metric_labels,
                             ambient_value,
-                            AlertMetricName.SENSOR_ALERTS_TOTAL.value,
+                            AlertMetricName.SENSOR_ALERTS_COUNT.value,
                         )
                     elif isinstance(value, (int, float)):
                         # Process regular numeric values
@@ -649,7 +649,7 @@ class AlertsCollector(MetricCollector):
                             self._sensor_alerts_total,
                             metric_labels,
                             value,
-                            AlertMetricName.SENSOR_ALERTS_TOTAL.value,
+                            AlertMetricName.SENSOR_ALERTS_COUNT.value,
                         )
                     else:
                         logger.warning(

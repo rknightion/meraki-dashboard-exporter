@@ -25,3 +25,4 @@ This page lists HTTP endpoints exposed by the exporter.
 - `/metrics` and `/health` are always available.
 - The client UI and DNS cache endpoint are gated by client collection.
 - The webhook endpoint returns 404 when webhooks are disabled.
+

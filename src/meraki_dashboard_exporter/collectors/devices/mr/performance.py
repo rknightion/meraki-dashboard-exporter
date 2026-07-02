@@ -177,7 +177,7 @@ class MRPerformanceCollector:
 
         # MR packet loss metrics (per device, 5-minute window)
         self._mr_packets_downstream_total = self.parent._create_gauge(
-            MRMetricName.MR_PACKETS_DOWNSTREAM_TOTAL,
+            MRMetricName.MR_PACKETS_DOWNSTREAM_COUNT,
             "Total downstream packets transmitted by access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -192,7 +192,7 @@ class MRPerformanceCollector:
         )
 
         self._mr_packets_downstream_lost = self.parent._create_gauge(
-            MRMetricName.MR_PACKETS_DOWNSTREAM_LOST,
+            MRMetricName.MR_PACKETS_DOWNSTREAM_LOST_COUNT,
             "Downstream packets lost by access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -222,7 +222,7 @@ class MRPerformanceCollector:
         )
 
         self._mr_packets_upstream_total = self.parent._create_gauge(
-            MRMetricName.MR_PACKETS_UPSTREAM_TOTAL,
+            MRMetricName.MR_PACKETS_UPSTREAM_COUNT,
             "Total upstream packets received by access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -237,7 +237,7 @@ class MRPerformanceCollector:
         )
 
         self._mr_packets_upstream_lost = self.parent._create_gauge(
-            MRMetricName.MR_PACKETS_UPSTREAM_LOST,
+            MRMetricName.MR_PACKETS_UPSTREAM_LOST_COUNT,
             "Upstream packets lost by access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -268,7 +268,7 @@ class MRPerformanceCollector:
 
         # Combined packet metrics (calculated)
         self._mr_packets_total = self.parent._create_gauge(
-            MRMetricName.MR_PACKETS_TOTAL,
+            MRMetricName.MR_PACKETS_COUNT,
             "Total packets (upstream + downstream) for access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -283,7 +283,7 @@ class MRPerformanceCollector:
         )
 
         self._mr_packets_lost_total = self.parent._create_gauge(
-            MRMetricName.MR_PACKETS_LOST_TOTAL,
+            MRMetricName.MR_PACKETS_LOST_COUNT,
             "Total packets lost (upstream + downstream) for access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -314,7 +314,7 @@ class MRPerformanceCollector:
 
         # Network-level packet loss metrics (aggregated, 5-minute window)
         self._mr_network_packets_downstream_total = self.parent._create_gauge(
-            MRMetricName.MR_NETWORK_PACKETS_DOWNSTREAM_TOTAL,
+            MRMetricName.MR_NETWORK_PACKETS_DOWNSTREAM_COUNT,
             "Total downstream packets for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -325,7 +325,7 @@ class MRPerformanceCollector:
         )
 
         self._mr_network_packets_downstream_lost = self.parent._create_gauge(
-            MRMetricName.MR_NETWORK_PACKETS_DOWNSTREAM_LOST,
+            MRMetricName.MR_NETWORK_PACKETS_DOWNSTREAM_LOST_COUNT,
             "Downstream packets lost for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -347,7 +347,7 @@ class MRPerformanceCollector:
         )
 
         self._mr_network_packets_upstream_total = self.parent._create_gauge(
-            MRMetricName.MR_NETWORK_PACKETS_UPSTREAM_TOTAL,
+            MRMetricName.MR_NETWORK_PACKETS_UPSTREAM_COUNT,
             "Total upstream packets for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -358,7 +358,7 @@ class MRPerformanceCollector:
         )
 
         self._mr_network_packets_upstream_lost = self.parent._create_gauge(
-            MRMetricName.MR_NETWORK_PACKETS_UPSTREAM_LOST,
+            MRMetricName.MR_NETWORK_PACKETS_UPSTREAM_LOST_COUNT,
             "Upstream packets lost for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -380,7 +380,7 @@ class MRPerformanceCollector:
         )
 
         self._mr_network_packets_total = self.parent._create_gauge(
-            MRMetricName.MR_NETWORK_PACKETS_TOTAL,
+            MRMetricName.MR_NETWORK_PACKETS_COUNT,
             "Total packets (upstream + downstream) for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
@@ -391,7 +391,7 @@ class MRPerformanceCollector:
         )
 
         self._mr_network_packets_lost_total = self.parent._create_gauge(
-            MRMetricName.MR_NETWORK_PACKETS_LOST_TOTAL,
+            MRMetricName.MR_NETWORK_PACKETS_LOST_COUNT,
             "Total packets lost (upstream + downstream) for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,

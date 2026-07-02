@@ -171,14 +171,14 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Verify summary metrics
         metrics.assert_gauge_value(
-            AlertMetricName.ALERTS_TOTAL_BY_SEVERITY,
+            AlertMetricName.ALERTS_BY_SEVERITY,
             1,
             org_id="123",
             org_name="Test Org",
             severity="critical",
         )
         metrics.assert_gauge_value(
-            AlertMetricName.ALERTS_TOTAL_BY_SEVERITY,
+            AlertMetricName.ALERTS_BY_SEVERITY,
             1,
             org_id="123",
             org_name="Test Org",
@@ -417,35 +417,35 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Verify sensor alert metrics for network 1
         metrics.assert_gauge_value(
-            AlertMetricName.SENSOR_ALERTS_TOTAL,
+            AlertMetricName.SENSOR_ALERTS_COUNT,
             2,
             network_id="N_123",
             network_name="Test Network 1",
             metric="co2",
         )
         metrics.assert_gauge_value(
-            AlertMetricName.SENSOR_ALERTS_TOTAL,
+            AlertMetricName.SENSOR_ALERTS_COUNT,
             5,
             network_id="N_123",
             network_name="Test Network 1",
             metric="door",
         )
         metrics.assert_gauge_value(
-            AlertMetricName.SENSOR_ALERTS_TOTAL,
+            AlertMetricName.SENSOR_ALERTS_COUNT,
             7,
             network_id="N_123",
             network_name="Test Network 1",
             metric="temperature",
         )
         metrics.assert_gauge_value(
-            AlertMetricName.SENSOR_ALERTS_TOTAL,
+            AlertMetricName.SENSOR_ALERTS_COUNT,
             1,
             network_id="N_123",
             network_name="Test Network 1",
             metric="water",
         )
         metrics.assert_gauge_value(
-            AlertMetricName.SENSOR_ALERTS_TOTAL,
+            AlertMetricName.SENSOR_ALERTS_COUNT,
             3,
             network_id="N_123",
             network_name="Test Network 1",
@@ -454,28 +454,28 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Verify sensor alert metrics for network 2
         metrics.assert_gauge_value(
-            AlertMetricName.SENSOR_ALERTS_TOTAL,
+            AlertMetricName.SENSOR_ALERTS_COUNT,
             1,
             network_id="N_456",
             network_name="Test Network 2",
             metric="apparentPower",
         )
         metrics.assert_gauge_value(
-            AlertMetricName.SENSOR_ALERTS_TOTAL,
+            AlertMetricName.SENSOR_ALERTS_COUNT,
             2,
             network_id="N_456",
             network_name="Test Network 2",
             metric="current",
         )
         metrics.assert_gauge_value(
-            AlertMetricName.SENSOR_ALERTS_TOTAL,
+            AlertMetricName.SENSOR_ALERTS_COUNT,
             3,
             network_id="N_456",
             network_name="Test Network 2",
             metric="realPower",
         )
         metrics.assert_gauge_value(
-            AlertMetricName.SENSOR_ALERTS_TOTAL,
+            AlertMetricName.SENSOR_ALERTS_COUNT,
             1,
             network_id="N_456",
             network_name="Test Network 2",
@@ -484,7 +484,7 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # Verify zero-value metrics are still set
         metrics.assert_gauge_value(
-            AlertMetricName.SENSOR_ALERTS_TOTAL,
+            AlertMetricName.SENSOR_ALERTS_COUNT,
             0,
             network_id="N_123",
             network_name="Test Network 1",
@@ -662,7 +662,7 @@ class TestAlertsCollector(BaseCollectorTest):
         """Network health alerts must be derived from getOrganizationAssuranceAlerts.
 
         F-064 / issue #273: the deprecated per-network ``getNetworkHealthAlerts`` call
-        is gone; ``meraki_network_health_alerts_total`` is now aggregated (by network,
+        is gone; ``meraki_network_health_alerts`` is now aggregated (by network,
         categoryType, severity) from the same org-wide assurance alerts response used
         for the other alert metrics, with no per-network API calls at all.
         """
@@ -731,7 +731,7 @@ class TestAlertsCollector(BaseCollectorTest):
         api.networks.getNetworkHealthAlerts.assert_not_called()
 
         metrics.assert_gauge_value(
-            AlertMetricName.NETWORK_HEALTH_ALERTS_TOTAL,
+            AlertMetricName.NETWORK_HEALTH_ALERTS,
             2,
             org_id="123",
             org_name="Test Org",
@@ -741,7 +741,7 @@ class TestAlertsCollector(BaseCollectorTest):
             severity="warning",
         )
         metrics.assert_gauge_value(
-            AlertMetricName.NETWORK_HEALTH_ALERTS_TOTAL,
+            AlertMetricName.NETWORK_HEALTH_ALERTS,
             1,
             org_id="123",
             org_name="Test Org",
@@ -803,7 +803,7 @@ class TestAlertsCollector(BaseCollectorTest):
             network_name="Allowed Network",
         )
         metrics.assert_gauge_value(
-            AlertMetricName.ALERTS_TOTAL_BY_NETWORK,
+            AlertMetricName.ALERTS_BY_NETWORK,
             1,
             org_id=org_id,
             org_name=org_name,
@@ -824,7 +824,7 @@ class TestAlertsCollector(BaseCollectorTest):
             network_name="Excluded Network",
         )
         metrics.assert_metric_not_set(
-            AlertMetricName.ALERTS_TOTAL_BY_NETWORK,
+            AlertMetricName.ALERTS_BY_NETWORK,
             org_id=org_id,
             org_name=org_name,
             network_id="N_2",
@@ -833,14 +833,14 @@ class TestAlertsCollector(BaseCollectorTest):
 
         # By-severity summary must only count the allowed network's alert.
         metrics.assert_gauge_value(
-            AlertMetricName.ALERTS_TOTAL_BY_SEVERITY,
+            AlertMetricName.ALERTS_BY_SEVERITY,
             1,
             org_id=org_id,
             org_name=org_name,
             severity="critical",
         )
         metrics.assert_gauge_value(
-            AlertMetricName.ALERTS_TOTAL_BY_SEVERITY,
+            AlertMetricName.ALERTS_BY_SEVERITY,
             0,
             org_id=org_id,
             org_name=org_name,
@@ -936,10 +936,10 @@ class TestAlertsCollector(BaseCollectorTest):
 
         tracked_metric_names = {key[1] for key in manager._metric_series}
         assert AlertMetricName.ALERTS_ACTIVE.value in tracked_metric_names
-        assert AlertMetricName.ALERTS_TOTAL_BY_SEVERITY.value in tracked_metric_names
-        assert AlertMetricName.ALERTS_TOTAL_BY_NETWORK.value in tracked_metric_names
-        assert AlertMetricName.NETWORK_HEALTH_ALERTS_TOTAL.value in tracked_metric_names
-        assert AlertMetricName.SENSOR_ALERTS_TOTAL.value in tracked_metric_names
+        assert AlertMetricName.ALERTS_BY_SEVERITY.value in tracked_metric_names
+        assert AlertMetricName.ALERTS_BY_NETWORK.value in tracked_metric_names
+        assert AlertMetricName.NETWORK_HEALTH_ALERTS.value in tracked_metric_names
+        assert AlertMetricName.SENSOR_ALERTS_COUNT.value in tracked_metric_names
 
     async def test_resolved_alert_series_removed_after_ttl(
         self, mock_api_builder, settings, isolated_registry, inventory
