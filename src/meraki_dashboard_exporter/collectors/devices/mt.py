@@ -128,11 +128,18 @@ class MTCollector(BaseDeviceCollector):
 
         """
         try:
+            # Prefer the shared inventory cache (injected on the parent) over
+            # per-cycle API calls on the FAST 60s tier.
+            inventory = self.parent.inventory if self.parent is not None else None
+
             # Get organizations
             if org_id:
                 org_ids = [org_id]
             elif self.settings and self.settings.meraki.org_id:
                 org_ids = [self.settings.meraki.org_id]
+            elif inventory is not None:
+                orgs = await inventory.get_organizations()
+                org_ids = [org["id"] for org in orgs]
             else:
                 if not self.api:
                     logger.error("API client not initialized")
@@ -143,11 +150,11 @@ class MTCollector(BaseDeviceCollector):
             # Collect sensors for each organization
             for organization_id in org_ids:
                 try:
-                    # Get org name if not provided
-                    if org_name is None and organization_id == org_id:
+                    # Reuse a caller-provided org_name for the requested org;
+                    # otherwise resolve it (from the inventory cache when available).
+                    if org_name is not None and organization_id == org_id:
                         current_org_name = org_name
                     else:
-                        # Try to get org name from API
                         current_org_name = await self._get_org_name(organization_id)
 
                     await self._collect_org_sensors(organization_id, current_org_name)
@@ -175,7 +182,11 @@ class MTCollector(BaseDeviceCollector):
         if self.api is None:
             raise RuntimeError("API client not initialized")
         # Access the API - self.api should already be the DashboardAPI
-        return await asyncio.to_thread(self.api.organizations.getOrganizations)
+        raw = await asyncio.to_thread(self.api.organizations.getOrganizations)
+        return cast(
+            list[dict[str, Any]],
+            validate_response_format(raw, expected_type=list, operation="getOrganizations"),
+        )
 
     async def _get_org_name(self, org_id: str) -> str:
         """Get organization name.
@@ -192,6 +203,14 @@ class MTCollector(BaseDeviceCollector):
 
         """
         try:
+            # Prefer the shared inventory cache to avoid a per-cycle getOrganization
+            # call on the FAST tier.
+            inventory = self.parent.inventory if self.parent is not None else None
+            if inventory is not None:
+                for org in await inventory.get_organizations():
+                    if org.get("id") == org_id:
+                        return str(org.get("name", org_id))
+
             if self.api is None:
                 return org_id
             org = await asyncio.to_thread(self.api.organizations.getOrganization, org_id)
@@ -217,11 +236,15 @@ class MTCollector(BaseDeviceCollector):
         """
         if self.api is None:
             raise RuntimeError("API client not initialized")
-        return await asyncio.to_thread(
+        raw = await asyncio.to_thread(
             self.api.organizations.getOrganizationDevices,
             org_id,
             total_pages="all",
             productTypes=[ProductType.SENSOR],
+        )
+        return cast(
+            list[dict[str, Any]],
+            validate_response_format(raw, expected_type=list, operation="getOrganizationDevices"),
         )
 
     async def _collect_org_sensors(self, org_id: str, org_name: str | None = None) -> None:
@@ -240,26 +263,43 @@ class MTCollector(BaseDeviceCollector):
                 logger.error("API client not initialized")
                 return
 
-            # Get all MT devices
+            inventory = self.parent.inventory if self.parent is not None else None
+
+            # Get MT devices. Prefer the shared inventory cache (also enforces the
+            # configured NetworkFilter); fall back to a direct fetch when inventory
+            # is unavailable.
             with LogContext(org_id=org_id):
-                devices = await self._fetch_sensor_devices(org_id)
+                if inventory is not None:
+                    devices = await inventory.get_devices(org_id)
+                else:
+                    devices = await self._fetch_sensor_devices(org_id)
 
             if not devices:
                 return
 
-            # Extract sensor serials
-            sensor_serials = [
-                d["serial"] for d in devices if d.get("model", "").startswith(DeviceType.MT)
-            ]
+            # Org-wide device list may reference networks outside the configured
+            # NetworkFilter — resolve the allow-list and skip excluded rows.
+            allowed_network_ids = (
+                await inventory.get_allowed_network_ids(org_id) if inventory is not None else None
+            )
+
+            # Build device lookup map (with org info) for MT sensors only.
+            sensor_serials: list[str] = []
+            device_map: dict[str, dict[str, Any]] = {}
+            for d in devices:
+                if not d.get("model", "").startswith(DeviceType.MT):
+                    continue
+                if (
+                    allowed_network_ids is not None
+                    and d.get("networkId", "") not in allowed_network_ids
+                ):
+                    continue
+                d["orgId"] = org_id
+                d["orgName"] = org_name or org_id
+                device_map[d["serial"]] = d
+                sensor_serials.append(d["serial"])
 
             if sensor_serials:
-                # Create device lookup map with org info
-                device_map = {}
-                for d in devices:
-                    d["orgId"] = org_id
-                    d["orgName"] = org_name or org_id
-                    device_map[d["serial"]] = d
-
                 # Use the shared API client (respects the global concurrency limit)
                 # instead of constructing a new AsyncMerakiClient per cycle (#249).
                 raw = await asyncio.to_thread(
@@ -397,45 +437,12 @@ class MTCollector(BaseDeviceCollector):
             logger.debug("Failed to parse gateway connection timestamp", value=value)
             return None
 
-    def _set_metric_value(
-        self, metric_name: str, labels: dict[str, str], value: float | None
-    ) -> None:
-        """Safely set a metric value with validation.
-
-        Parameters
-        ----------
-        metric_name : str
-            Name of the metric attribute on parent.
-        labels : dict[str, str]
-            Labels to apply to the metric.
-        value : float | None
-            Value to set. If None, the metric will not be updated.
-
-        """
-        if value is None:
-            return
-
-        if not self.parent:
-            return
-
-        metric = getattr(self.parent, metric_name, None)
-        if metric is None:
-            logger.debug(
-                "Metric not available on parent collector",
-                metric_name=metric_name,
-                parent_type=type(self.parent).__name__,
-            )
-            return
-
-        try:
-            metric.labels(**labels).set(value)
-        except Exception:
-            logger.exception(
-                "Failed to set metric value",
-                metric_name=metric_name,
-                labels=labels,
-                value=value,
-            )
+    # NOTE: MTCollector intentionally does NOT override ``_set_metric_value``.
+    # It inherits ``SubCollectorMixin._set_metric_value`` (via BaseDeviceCollector),
+    # which delegates to ``self.parent._set_metric_value`` — i.e.
+    # ``MetricCollector._set_metric_value`` on the owning MTSensorCollector — so every
+    # MT sensor/gateway gauge is routed through ``_set_metric`` and registered with the
+    # expiration manager for automatic stale-series cleanup (issues #246 / #269).
 
     def collect_batch(
         self, sensor_readings: list[dict[str, Any]], device_map: dict[str, dict[str, Any]]

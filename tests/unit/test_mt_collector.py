@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
+from meraki_dashboard_exporter.collectors.devices.mt import MTCollector
 from meraki_dashboard_exporter.collectors.mt_sensor import MTSensorCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.domain_models import SensorMeasurement
+from meraki_dashboard_exporter.core.error_handling import RetryableAPIError
 from tests.helpers.base import BaseCollectorTest
 
 
@@ -470,3 +472,162 @@ class TestMTCollector(BaseCollectorTest):
         mt_collector.api.sensor.getOrganizationSensorReadingsLatest.assert_called_once_with(
             "123456", serials=[test_device["serial"]], total_pages="all"
         )
+
+    # --- F-061: validate_response_format on standalone fetchers ---
+
+    async def test_fetch_sensor_devices_validates_error_shape(self, mt_collector):
+        """F-061: SDK exhausted-retry error dict is normalized via validate_response_format."""
+        mt_collector.api.organizations.getOrganizationDevices = MagicMock(
+            return_value={"errors": ["rate limit exceeded"]}
+        )
+
+        with pytest.raises(RetryableAPIError):
+            await mt_collector._fetch_sensor_devices("123456")
+
+    async def test_fetch_organizations_validates_error_shape(self, mt_collector):
+        """F-061: SDK exhausted-retry error dict is normalized via validate_response_format."""
+        mt_collector.api.organizations.getOrganizations = MagicMock(
+            return_value={"errors": ["rate limit exceeded"]}
+        )
+
+        with pytest.raises(RetryableAPIError):
+            await mt_collector._fetch_organizations()
+
+    # --- F-031 / F-089: NetworkFilter enforcement on org-wide sensor readings ---
+
+    async def test_collect_org_sensors_applies_network_filter(self, mt_collector, test_device):
+        """F-031/F-089: devices in networks outside the filter are dropped before readings."""
+        dev_in = dict(test_device, serial="Q2MT-IN", networkId="N_2")
+        dev_out = dict(test_device, serial="Q2MT-OUT", networkId="N_1")
+
+        mock_inventory = MagicMock()
+        mock_inventory.get_devices = AsyncMock(return_value=[dev_in, dev_out])
+        mock_inventory.get_allowed_network_ids = AsyncMock(return_value={"N_2"})
+        mt_collector.parent.inventory = mock_inventory
+
+        mt_collector.api.sensor.getOrganizationSensorReadingsLatest = MagicMock(return_value=[])
+
+        await mt_collector._collect_org_sensors("123456", "Test Org")
+
+        mock_inventory.get_allowed_network_ids.assert_called_once_with("123456")
+        # Only the included-network sensor's serial is queried.
+        mt_collector.api.sensor.getOrganizationSensorReadingsLatest.assert_called_once_with(
+            "123456", serials=["Q2MT-IN"], total_pages="all"
+        )
+
+    async def test_collect_org_sensors_uses_inventory_device_cache(self, mt_collector, test_device):
+        """F-092: device listing goes through the injected inventory cache, not a raw fetch."""
+        mock_inventory = MagicMock()
+        mock_inventory.get_devices = AsyncMock(return_value=[dict(test_device)])
+        mock_inventory.get_allowed_network_ids = AsyncMock(return_value=None)
+        mt_collector.parent.inventory = mock_inventory
+        mt_collector.api.organizations.getOrganizationDevices = MagicMock()
+        mt_collector.api.sensor.getOrganizationSensorReadingsLatest = MagicMock(return_value=[])
+
+        await mt_collector._collect_org_sensors("123456", "Test Org")
+
+        mock_inventory.get_devices.assert_awaited_once_with("123456")
+        mt_collector.api.organizations.getOrganizationDevices.assert_not_called()
+
+    # --- F-069 / F-092: org-name reuse + inventory cache in collect_sensor_metrics ---
+
+    async def test_collect_sensor_metrics_reuses_provided_org_name(self, mt_collector):
+        """F-069: a provided org_name is reused instead of re-fetched from the API."""
+        mt_collector._collect_org_sensors = AsyncMock()
+        mt_collector._collect_org_gateway_connections = AsyncMock()
+        mt_collector._get_org_name = AsyncMock(return_value="FROM_API")
+
+        await mt_collector.collect_sensor_metrics(org_id="org1", org_name="Provided Org")
+
+        mt_collector._get_org_name.assert_not_called()
+        mt_collector._collect_org_sensors.assert_awaited_once_with("org1", "Provided Org")
+
+    async def test_collect_sensor_metrics_uses_inventory_org_list(self, mt_collector):
+        """F-092: org list comes from the inventory cache, not getOrganizations, when available."""
+        mock_inventory = MagicMock()
+        mock_inventory.get_organizations = AsyncMock(return_value=[{"id": "orgA", "name": "A"}])
+        mt_collector.parent.inventory = mock_inventory
+        mt_collector._collect_org_sensors = AsyncMock()
+        mt_collector._collect_org_gateway_connections = AsyncMock()
+        mt_collector._fetch_organizations = AsyncMock(return_value=[])
+        mt_collector._get_org_name = AsyncMock(return_value="A")
+
+        await mt_collector.collect_sensor_metrics()
+
+        mock_inventory.get_organizations.assert_awaited()
+        mt_collector._fetch_organizations.assert_not_called()
+        mt_collector._collect_org_sensors.assert_awaited_once_with("orgA", "A")
+
+    async def test_get_org_name_prefers_inventory_cache(self, mt_collector):
+        """F-092: org name is resolved from the inventory cache, not a per-cycle getOrganization."""
+        mock_inventory = MagicMock()
+        mock_inventory.get_organizations = AsyncMock(
+            return_value=[{"id": "orgA", "name": "Cached Org A"}]
+        )
+        mt_collector.parent.inventory = mock_inventory
+        mt_collector.api.organizations.getOrganization = MagicMock()
+
+        name = await mt_collector._get_org_name("orgA")
+
+        assert name == "Cached Org A"
+        mt_collector.api.organizations.getOrganization.assert_not_called()
+
+
+class TestMTExpirationTracking(BaseCollectorTest):
+    """F-088 / F-021: MT metrics must route through parent._set_metric expiration tracking."""
+
+    collector_class = MTSensorCollector
+    update_tier = UpdateTier.FAST
+
+    def test_no_local_set_metric_value_override(self) -> None:
+        """F-088: MTCollector must not shadow SubCollectorMixin's delegating _set_metric_value."""
+        assert "_set_metric_value" not in MTCollector.__dict__
+
+    def test_sensor_metric_routes_through_expiration(self, collector) -> None:
+        """F-088: emitting a sensor gauge records an expiration-tracking update."""
+        collector.expiration_manager = MagicMock()
+        mt = collector.mt_collector
+        device = {
+            "serial": "Q2MT-1",
+            "name": "S1",
+            "model": "MT10",
+            "networkId": "N_1",
+            "networkName": "Net1",
+            "orgId": "o1",
+            "orgName": "Org1",
+        }
+
+        mt._process_metric(device=device, metric_type="temperature", metric_data={"celsius": 21.0})
+
+        assert collector.expiration_manager.track_metric_update.called
+        names = {
+            c.kwargs["metric_name"]
+            for c in collector.expiration_manager.track_metric_update.call_args_list
+        }
+        assert "meraki_mt_temperature_celsius" in names
+
+    async def test_gateway_metric_routes_through_expiration(self, collector) -> None:
+        """F-021: emitting the gateway RSSI gauge records an expiration-tracking update."""
+        collector.expiration_manager = MagicMock()
+        mt = collector.mt_collector
+        mt.parent.inventory = None
+        connections = [
+            {
+                "rssi": -55,
+                "lastConnectedAt": "2024-01-01T00:00:00Z",
+                "network": {"id": "N_1", "name": "Net1"},
+                "sensor": {"serial": "Q2MT-1", "name": "S1"},
+                "gateway": {"serial": "Q2GW-1"},
+            }
+        ]
+        mt.api.sensor.getOrganizationSensorGatewaysConnectionsLatest = MagicMock(
+            return_value=connections
+        )
+
+        await mt._collect_org_gateway_connections("o1", "Org1")
+
+        names = {
+            c.kwargs["metric_name"]
+            for c in collector.expiration_manager.track_metric_update.call_args_list
+        }
+        assert "meraki_mt_gateway_rssi" in names
