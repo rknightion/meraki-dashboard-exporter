@@ -37,6 +37,15 @@ class CardinalityMonitor:
 
     """
 
+    #: Hard cap on the number of distinct values retained per label in the
+    #: persistent ``_label_value_distribution`` map (F-003). Without a cap the
+    #: structure accumulates every label value ever seen forever - an unbounded
+    #: memory leak driven by high-churn labels. Once a label reaches this many
+    #: distinct values further values are dropped from the distribution sample;
+    #: per-analysis cardinality counts (computed from live samples) are
+    #: unaffected, so reporting stays accurate for bounded labels.
+    _MAX_LABEL_VALUES_PER_LABEL: int = 1000
+
     def __init__(
         self,
         registry: CollectorRegistry | None = None,
@@ -344,11 +353,16 @@ class CardinalityMonitor:
 
                 # Track unique label values
                 for label_name, label_value in sample.labels.items():
-                    label_values[label_name].add(str(label_value))
-                    # Track label value distribution
-                    self._label_value_distribution[metric_family.name][label_name].add(
-                        str(label_value)
-                    )
+                    value_str = str(label_value)
+                    label_values[label_name].add(value_str)
+                    # Track label value distribution, bounded per label so the
+                    # persistent map cannot grow without limit (F-003).
+                    distribution = self._label_value_distribution[metric_family.name][label_name]
+                    if (
+                        value_str in distribution
+                        or len(distribution) < self._MAX_LABEL_VALUES_PER_LABEL
+                    ):
+                        distribution.add(value_str)
 
             if sample_count == 0:
                 return None

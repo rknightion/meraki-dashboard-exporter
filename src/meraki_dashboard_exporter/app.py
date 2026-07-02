@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import json
 import random
 import time
 from collections.abc import AsyncIterator
@@ -376,8 +377,12 @@ class ExporterApp:
                 tiers=list(self._tier_tasks.keys()),
             )
 
-            # Wait for first collection cycle to complete (no-op if already done)
-            asyncio.create_task(self._wait_for_first_collection())
+            # Wait for first collection cycle to complete (no-op if already done).
+            # Track the task so lifespan shutdown cancels it instead of leaking it
+            # (F-044) - mirrors the tier-loop / cardinality-loop bookkeeping.
+            wait_task = asyncio.create_task(self._wait_for_first_collection())
+            self._background_tasks.add(wait_task)
+            wait_task.add_done_callback(self._background_tasks.discard)
 
         except Exception:
             logger.exception("Failed during startup collections")
@@ -524,8 +529,9 @@ class ExporterApp:
 
             while not self._shutdown_event.is_set():
                 try:
-                    # Run cardinality analysis
-                    self.cardinality_monitor.analyze_cardinality()
+                    # Run cardinality analysis off the event loop - it iterates
+                    # the whole registry synchronously (F-026).
+                    await asyncio.to_thread(self.cardinality_monitor.analyze_cardinality)
                 except Exception:
                     logger.exception("Error during cardinality analysis")
 
@@ -617,8 +623,9 @@ class ExporterApp:
             # Get organization count (if available)
             org_count = 1 if exporter.settings.meraki.org_id else "All"
 
-            # Get real-time metrics stats
-            metrics_stats = exporter._get_metrics_stats()
+            # Get real-time metrics stats. This iterates the whole registry
+            # synchronously, so offload it to a worker thread (F-026).
+            metrics_stats = await asyncio.to_thread(exporter._get_metrics_stats)
             scheduling = exporter.collector_manager.get_scheduling_diagnostics()
 
             context = {
@@ -677,7 +684,10 @@ class ExporterApp:
         @app.get("/metrics", response_class=Response)
         async def metrics() -> Response:
             """Prometheus metrics endpoint."""
-            data = generate_latest(REGISTRY)
+            # Offload the synchronous registry serialization to a worker thread so
+            # a large registry does not block the event loop (F-026).
+            # prometheus_client's registry is thread-safe.
+            data = await asyncio.to_thread(generate_latest, REGISTRY)
 
             return Response(
                 content=data,
@@ -883,15 +893,25 @@ class ExporterApp:
                     detail="Content-Type must be application/json",
                 )
 
-            # Check payload size
+            # Read the body while enforcing a hard byte cap regardless of the
+            # Content-Length header (F-103). A chunked / Content-Length-absent
+            # request must not be able to buffer an unbounded body before the
+            # shared secret is validated, so we stream and abort the moment the
+            # accumulated size exceeds the configured maximum. The early
+            # Content-Length short-circuit below is a cheap fast-reject; the
+            # streaming counter is the authoritative guard.
+            max_size = exporter.settings.webhooks.max_payload_size
+
             content_length = request.headers.get("content-length")
             if content_length:
-                size = int(content_length)
-                max_size = exporter.settings.webhooks.max_payload_size
-                if size > max_size:
+                try:
+                    declared_size = int(content_length)
+                except ValueError:
+                    declared_size = 0
+                if declared_size > max_size:
                     logger.warning(
                         "Webhook payload too large",
-                        size=size,
+                        size=declared_size,
                         max_size=max_size,
                     )
                     exporter.webhook_handler.validation_failures.labels(
@@ -902,9 +922,26 @@ class ExporterApp:
                         detail=f"Payload too large (max: {max_size} bytes)",
                     )
 
-            # Parse JSON body
+            body = bytearray()
+            async for chunk in request.stream():
+                body.extend(chunk)
+                if len(body) > max_size:
+                    logger.warning(
+                        "Webhook payload too large",
+                        size=len(body),
+                        max_size=max_size,
+                    )
+                    exporter.webhook_handler.validation_failures.labels(
+                        validation_error="payload_too_large"
+                    ).inc()
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Payload too large (max: {max_size} bytes)",
+                    )
+
+            # Parse JSON body from the (size-capped) buffer.
             try:
-                payload_data = await request.json()
+                payload_data = json.loads(bytes(body))
             except Exception as e:
                 logger.error("Failed to parse webhook JSON", error=str(e))
                 exporter.webhook_handler.validation_failures.labels(
