@@ -7,6 +7,13 @@ description: Running the exporter in production
 
 This exporter is distributed as a container image, plus an official Helm chart for Kubernetes. Use the [Getting Started](getting-started.md) guide for initial setup and the provided [docker-compose.yml](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/docker-compose.yml) as a baseline for production deployments.
 
+## Distribution
+
+For v1, the exporter ships as a **container image + Helm chart only** — there is no PyPI
+package, and `pip install meraki-dashboard-exporter` is not a supported install path. If you
+need to run it outside a container, clone the repository and run it with `uv` as described in
+[Getting Started](getting-started.md).
+
 ## Kubernetes (Helm)
 
 A Helm chart ([`charts/meraki-dashboard-exporter`](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/charts/meraki-dashboard-exporter))

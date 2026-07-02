@@ -1,3 +1,7 @@
+# NOTE: v1 distribution is container image + Helm chart only (see #602 and
+# docs/deployment-operations.md). Publishing this package to PyPI is intentionally
+# out of scope for v1 — this metadata exists for build tooling only, not for a
+# `pip install meraki-dashboard-exporter` release.
 [project]
 name = "meraki-dashboard-exporter"
 version = "0.31.0"
