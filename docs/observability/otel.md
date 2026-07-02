@@ -23,10 +23,11 @@ export MERAKI_EXPORTER_OTEL__SERVICE_NAME=meraki-dashboard-exporter
 export MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES='{"environment":"production"}'
 ```
 
-- **Endpoint**: OTLP gRPC (`http://host:4317`). The exporter connects with
-  `insecure=True`, so a plaintext (non-TLS) gRPC endpoint is required. Terminate
-  TLS at a sidecar or local OpenTelemetry Collector if you need encryption in
-  transit.
+- **Endpoint**: OTLP gRPC (`http://host:4317`). By default the exporter connects
+  with `insecure=True` (plaintext, non-TLS). Set
+  `MERAKI_EXPORTER_OTEL__INSECURE=false` to use TLS (system trust store) when
+  talking to a collector endpoint that terminates TLS directly — no sidecar is
+  required for that case.
 - **Required**: `ENABLED=true` requires `ENDPOINT`; startup will fail without it.
 - **Resource attributes**: JSON string of key/value pairs. The
   `environment` key is promoted to the `deployment.environment` resource
@@ -42,10 +43,10 @@ configure sampling:
 export MERAKI_EXPORTER_OTEL__SAMPLING_RATE=0.1
 ```
 
-`SAMPLING_RATE` is read directly from the environment at tracer-provider
-initialization; it is not part of the pydantic settings schema, so it does not
-appear in `--help` output but the `MERAKI_EXPORTER_OTEL__` prefix is still
-required.
+`SAMPLING_RATE` is a normal pydantic settings field on `OTelSettings`
+(`sampling_rate`, range `0.0`-`1.0`, default `0.1`), so it is validated and
+documented the same as any other setting under the `MERAKI_EXPORTER_OTEL__`
+prefix.
 
 See [Tracing](tracing.md) for details on spans, sampling behavior, and
 instrumented components.
