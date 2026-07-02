@@ -161,9 +161,16 @@ class MXCollector(BaseDeviceCollector):
         """
         serial = device.get("serial", "")
 
+        # Pass an explicit timespan so the score reflects a fixed, deterministic
+        # window rather than drifting with whatever the API's undocumented
+        # default happens to be. 1800s (30 minutes) is the minimum accepted
+        # value (and also the SDK's documented default) -- it's the freshest
+        # window available and matches this collector's per-cycle granularity,
+        # so re-running collect() doesn't average over an ever-shifting range.
         resp = await asyncio.to_thread(
             self.api.appliance.getDeviceAppliancePerformance,
             serial,
+            timespan=1800,
         )
 
         resp = validate_response_format(

@@ -411,6 +411,12 @@ class TestMXCollector:
         assert value == 87.0
         assert metric_name == "meraki_mx_performance_score"
 
+        # An explicit timespan must be passed so the score is deterministic
+        # across runs rather than relying on the API's undocumented default.
+        mock_api.appliance.getDeviceAppliancePerformance.assert_called_once_with(
+            "Q2AB-1234-5678", timespan=1800
+        )
+
     async def test_collect_performance_score_missing_perf_score_skips_emission(
         self,
         mx_collector: MXCollector,
