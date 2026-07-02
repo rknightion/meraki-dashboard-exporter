@@ -43,7 +43,7 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 - `batch_processing.py` - Batch operation helpers
 
 ### API Helpers
-- `api_helpers.py` - `APIHelper` class (`create_api_helper(collector)` factory) wrapping common per-collector API call patterns
+- `api_helpers.py` - `APIHelper` class (`create_api_helper(collector)` factory) wrapping common per-collector API call patterns. `get_organization_networks()` prefers `self.collector.inventory.get_networks(org_id)` but falls back to `_fetch_networks_direct()` (a direct `getOrganizationNetworks` call that manually reapplies `NetworkFilter`) when `inventory` is `None` — a third sanctioned bypass site alongside `discovery.py` and `collectors/alerts.py`, reachable from production via `collectors/organization.py` and `collectors/clients.py`.
 - `rate_limiter.py` - `OrgRateLimiter`: per-organization client-side token-bucket rate limiting
 - `type_definitions.py` - Shared `TypedDict`s (e.g. `DeviceStatusInfo`, `PortStatusData`, `AlertData`) and type aliases (`OrganizationId`, `NetworkId`, etc.) for common API dict shapes. (The `CollectorProtocol` lives in `collector.py`, not here.)
 
@@ -53,13 +53,13 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 - `span_metrics.py` - Span-level metrics
 
 ### Other
-- `cardinality.py` - `CardinalityMonitor` + `setup_cardinality_endpoint(app, monitor)`: metric cardinality tracking and the `/status/cardinality*` HTML endpoints
-- `discovery.py` - `DiscoveryService`: one-time startup environment audit (`run_discovery()`). Deliberately bypasses `NetworkFilter` (calls `getOrganizationNetworks` directly) so operators see the full pre-filter inventory in startup diagnostics. This is the only sanctioned bypass.
+- `cardinality.py` - `CardinalityMonitor` + `setup_cardinality_endpoint(app, monitor)`: metric cardinality tracking and its endpoints (`/api/metrics/cardinality`, `/cardinality` HTML, `/cardinality/all-metrics`, `/cardinality/all-labels`, `/cardinality/export/json`, `/cardinality/label-values/{metric_name}`) — these are top-level routes, not nested under `/status`.
+- `discovery.py` - `DiscoveryService`: one-time startup environment audit (`run_discovery()`). Deliberately bypasses `NetworkFilter` (calls `getOrganizationNetworks` directly) so operators see the full pre-filter inventory in startup diagnostics. This is the only sanctioned *unfiltered* bypass; `collectors/alerts.py::AlertsCollector._fetch_networks_direct` and `api_helpers.py::APIHelper._fetch_networks_direct` are two further sanctioned *filtered* fallbacks (see below), used only when `self.inventory` is unavailable.
 - `webhook_handler.py` - `WebhookHandler`: webhook event processing and validation
 - `org_health.py` - `OrgHealthTracker`/`OrgHealth`: per-organization exponential-backoff tracker for graceful degradation. After N consecutive failures (default 5) an org is backed off (default 60s, capped at 3600s) while collection continues normally for healthy orgs; used by `collectors/organization.py` and `collectors/manager.py`, surfaced on `/status` via `services/status.py`.
 
 ### Constants (`constants/` subdirectory)
-- `metrics_constants.py` - Domain-specific metric enums: `OrgMetricName`, `DeviceMetricName`, `NetworkMetricName`, `MSMetricName`, `MRMetricName`, `MXMetricName`, `MVMetricName`, `MTMetricName`, `AlertMetricName`, `ConfigMetricName`, `NetworkHealthMetricName`, `ClientMetricName`, `CollectorMetricName`, `WebhookMetricName`. Two prefix families: `meraki_*` for Meraki network/device data, `meraki_exporter_*` for the exporter's own instrumentation (`CollectorMetricName`). `ConfigMetricName` is currently an empty enum (`pass`) - config-change metrics live under `OrgMetricName`; don't assume it needs populating.
+- `metrics_constants.py` - Domain-specific metric enums: `OrgMetricName`, `DeviceMetricName`, `NetworkMetricName`, `MSMetricName`, `MRMetricName`, `MXMetricName`, `MVMetricName`, `MTMetricName`, `MGMetricName`, `AlertMetricName`, `ConfigMetricName`, `NetworkHealthMetricName`, `ClientMetricName`, `CollectorMetricName`, `WebhookMetricName`. Two prefix families: `meraki_*` for Meraki network/device data, `meraki_exporter_*` for the exporter's own instrumentation (`CollectorMetricName`). `ConfigMetricName` is currently an empty enum (`pass`) - config-change metrics live under `OrgMetricName`; don't assume it needs populating.
 - `api_constants.py` - `APIField` (common response field-name enum), `APITimespan`, `LicenseState`, `PortState`, `RFBand`
 - `config_constants.py` - `APIConfig`/`RegionalURLs`/`MerakiAPIConfig` dataclasses and derived `MERAKI_API_BASE_URL*` constants (legacy; prefer `Settings`/`APISettings` in `config.py`/`config_models.py` for runtime config)
 - `device_constants.py` - `DeviceType`, `DeviceStatus`, `ProductType`, `UpdateTier` enums
@@ -146,5 +146,5 @@ async def _fetch_devices(self, org_id: str) -> list[Device]:
 - **NEVER log sensitive data** - API keys, tokens, etc.
 - **NEVER ignore error handling** - use decorators for consistent behavior
 - **NEVER skip `validate_response_format`** for new fetchers - the SDK can return error-shaped dicts after retry exhaustion
-- **NEVER bypass `NetworkFilter`** outside `core/discovery.py::DiscoveryService` - all collector network reads go through `OrganizationInventory.get_networks(org_id)`
+- **NEVER bypass `NetworkFilter` unfiltered** outside `core/discovery.py::DiscoveryService` - all collector network reads go through `OrganizationInventory.get_networks(org_id)`. Two sanctioned filtered fallbacks exist for when `inventory` is unavailable (`collectors/alerts.py::AlertsCollector._fetch_networks_direct`, `api_helpers.py::APIHelper._fetch_networks_direct`), each manually reapplying `NetworkFilter`.
 </fatal_implications>

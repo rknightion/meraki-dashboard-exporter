@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 <system_context>
-Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects metrics from Cisco Meraki Dashboard API and exposes them for monitoring. Supports OpenTelemetry mirroring and includes comprehensive collectors for devices, networks, organizations, and sensor data.
+Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects metrics from Cisco Meraki Dashboard API and exposes them for monitoring. Supports OpenTelemetry **tracing only** (spans, not a metrics mirror — Prometheus `/metrics` remains the sole metrics surface; see `core/otel_tracing.py` and `docs/observability/otel.md`) and includes comprehensive collectors for devices, networks, organizations, and sensor data.
 </system_context>
 
 <critical_notes>
@@ -11,7 +11,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **Memory**: Be mindful of API rate limits and implement proper error handling
 - **Use parallel tasks/agents** when suitable use the parallel tasks and agents available to you
 - **Git commands are allowed** — committing and pushing (including straight to `main`) is fine when the task calls for it
-- **Network fetches go through inventory**: All collectors must use `OrganizationInventory.get_networks(org_id)` so the configured `NetworkFilter` is enforced uniformly. Direct `getOrganizationNetworks` SDK calls in collectors are forbidden. `DiscoveryService` (`core/discovery.py`) deliberately bypasses the filter for audit purposes; `AlertsCollector._fetch_networks_direct` (`collectors/alerts.py`) is the one other sanctioned direct call, used only as a fallback when `self.inventory` is `None`, and it manually reapplies `NetworkFilter` itself.
+- **Network fetches go through inventory**: All collectors must use `OrganizationInventory.get_networks(org_id)` so the configured `NetworkFilter` is enforced uniformly. Direct `getOrganizationNetworks` SDK calls in collectors are forbidden. `DiscoveryService` (`core/discovery.py`) deliberately bypasses the filter for audit purposes (the only *unfiltered* bypass). Two other sanctioned direct calls exist, both filtered fallbacks used only when `self.inventory` is `None`, each manually reapplying `NetworkFilter` itself: `AlertsCollector._fetch_networks_direct` (`collectors/alerts.py`) and `APIHelper._fetch_networks_direct` (`core/api_helpers.py`, reached via `APIHelper.get_organization_networks`).
 - **Wrap fetchers with `validate_response_format`**: New API fetchers that may receive the SDK exhausted-retry error shape must use `core.error_handling.validate_response_format` to normalize the response.
 </critical_notes>
 
@@ -100,7 +100,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **NEVER work in subdirectories without consulting their `CLAUDE.md`**
 - **NEVER use unbounded parallelism** - always use ManagedTaskGroup with max_concurrency
 - **NEVER bypass inventory service** - use cached data when available
-- **NEVER call `getOrganizationNetworks` directly from a collector** - go through `OrganizationInventory.get_networks(org_id)` so `NetworkFilter` is enforced. Only `core/discovery.py::DiscoveryService` (audit logging) and `collectors/alerts.py::AlertsCollector._fetch_networks_direct` (inventory-unavailable fallback, reapplies `NetworkFilter` manually) are permitted to bypass.
+- **NEVER call `getOrganizationNetworks` directly from a collector** - go through `OrganizationInventory.get_networks(org_id)` so `NetworkFilter` is enforced. Only `core/discovery.py::DiscoveryService` (audit logging, unfiltered), `collectors/alerts.py::AlertsCollector._fetch_networks_direct`, and `core/api_helpers.py::APIHelper._fetch_networks_direct` (both inventory-unavailable fallbacks that reapply `NetworkFilter` manually) are permitted to bypass.
 - **NEVER forget metric tracking** - use `parent._set_metric()` for automatic expiration
 </fatal_implications>
 

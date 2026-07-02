@@ -72,9 +72,11 @@ container image — the chart is a recent addition (started publishing per the
 - `templates/servicemonitor.yaml` - optional Prometheus Operator `ServiceMonitor` (guarded by
   `serviceMonitor.enabled`).
 - `templates/NOTES.txt` - post-install help text (port-forward + curl examples, warns if no API
-  key is configured). Note: its readiness-endpoint hint (`/ready`) does not match the chart's own
-  default `readinessProbe.httpGet.path` (`/health`) — check `values.yaml` for the actual configured
-  path rather than trusting this string if it looks stale.
+  key is configured). Readiness hint is `/ready`, matching the chart's default
+  `readinessProbe.httpGet.path` (also `/ready` as of `8639c1b` / #243 — `/health` is always `200`,
+  which made the readiness gate a no-op, so don't point `readinessProbe` back at it; `livenessProbe`
+  is the one that stays on `/health`). Still worth cross-checking `values.yaml` if this file looks
+  like it's drifted, but the two agree today.
 </file_map>
 
 <paved_path>

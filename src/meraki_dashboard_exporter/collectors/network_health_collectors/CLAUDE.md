@@ -5,11 +5,11 @@ Network health collectors for Meraki Dashboard Exporter - Handles network-level 
 <critical_notes>
 - **Inherit from `BaseNetworkHealthCollector`** (in `base.py`) for the shared `parent`/`api`/`settings` wiring. The base class defines **no metrics itself** — every gauge is created once in the parent `NetworkHealthCollector._initialize_metrics()` (`../network_health.py`); sub-collectors only call `self._set_metric_value("_gauge_attr_name", labels, value)` (from `SubCollectorMixin`), which delegates to the parent's attribute of that name.
 - **MEDIUM update tier**: `NetworkHealthCollector` is `@register_collector(UpdateTier.MEDIUM)` (300s interval).
-- **Manual registration**: all 5 sub-collectors are instantiated in `NetworkHealthCollector.__init__` (`rf_health_collector`, `connection_stats_collector`, `data_rates_collector`, `bluetooth_collector`, `ssid_performance_collector`) and invoked per-network from `_collect_network_health_bundle`.
+- **Manual registration**: all 7 sub-collectors are instantiated in `NetworkHealthCollector.__init__` (`rf_health_collector`, `connection_stats_collector`, `data_rates_collector`, `bluetooth_collector`, `ssid_performance_collector`, `latency_stats_collector`, `air_marshal_collector`) and invoked per-network from `_collect_network_health_bundle`.
 - **Wireless-only filtering happens once, upstream**: `NetworkHealthCollector._collect_org_network_health` filters the org's networks down to `ProductType.WIRELESS in network["productTypes"]` *before* dispatching to any sub-collector — individual `collect()` methods do not (and don't need to) re-check `product_types`.
 - **Network list via inventory (mandatory)**: `NetworkHealthCollector._fetch_networks_for_health` calls `await self.inventory.get_networks(org_id)` — never call `getOrganizationNetworks` directly.
 - **`RFHealthCollector` also reads devices via inventory**: it calls `self.parent.inventory.get_devices(org_id, network_id=network_id)` to resolve AP serial → name for labels, falling back to a direct `getOrganizationDevices` call only when `inventory` is unset.
-- **Wrap fetcher responses** with `validate_response_format` from `core.error_handling` (all 5 sub-collectors do this on their SDK call).
+- **Wrap fetcher responses** with `validate_response_format` from `core.error_handling` (all 7 sub-collectors do this on their SDK call).
 </critical_notes>
 
 <file_map>
@@ -20,6 +20,8 @@ Network health collectors for Meraki Dashboard Exporter - Handles network-level 
 - `data_rates.py` - `DataRatesCollector`: network-wide wireless up/download kbps via `getNetworkWirelessDataRateHistory`
 - `rf_health.py` - `RFHealthCollector`: per-AP and network-average 2.4GHz/5GHz channel utilization via `getNetworkNetworkHealthChannelUtilization`
 - `ssid_performance.py` - `SSIDPerformanceCollector`: per-SSID failed connection counts by failure step (assoc/auth/dhcp/dns) via `getNetworkWirelessFailedConnections`
+- `latency_stats.py` - `LatencyStatsCollector`: per-AP-device latency stats via `getNetworkWirelessDevicesLatencyStats`, plus network-wide client latency stats via `getNetworkWirelessClientsLatencyStats`. Per-client rows are never labeled directly (bounded label sets only).
+- `air_marshal.py` - `AirMarshalCollector`: Air Marshal rogue AP/SSID-spoofing detection counts (rogue SSID entries seen, total BSSIDs, contained BSSIDs, wired-detection entries) via `getNetworkWirelessAirMarshal`.
 </file_map>
 
 <paved_path>
@@ -48,12 +50,16 @@ class MyNetworkHealthCollector(BaseNetworkHealthCollector):
 The gauge (`self._my_gauge_attr` in this example) is defined once in
 `NetworkHealthCollector._initialize_metrics()`, not in the sub-collector.
 
-## UNIFORM ERROR HANDLING
-All 5 collectors wrap `collect()` in `try/except Exception as e` and inspect `str(e)` for
+## ERROR HANDLING IS NOT UNIFORM ACROSS ALL 7
+The original 5 (`bluetooth.py`, `connection_stats.py`, `data_rates.py`, `rf_health.py`,
+`ssid_performance.py`) wrap `collect()` in `try/except Exception as e` and inspect `str(e)` for
 `"400"`, `"404"`, `"Bad Request"`, or `"rate limit"` (case-insensitive) to distinguish "API not
 available for this network" (logged at `debug`, collection continues) from a real failure
 (`logger.exception`). Only `BluetoothCollector` additionally sets its gauge to `0` in the
-not-available case; the others simply skip setting a value for that network.
+not-available case; the others simply skip setting a value for that network. The two newer
+sub-collectors, `latency_stats.py` and `air_marshal.py`, do **not** follow this string-inspection
+pattern at all — their fetcher methods are wrapped in `@with_error_handling(continue_on_error=True,
+...)` instead, delegating categorization to the shared decorator (see `core/error_handling.py`).
 </paved_path>
 
 <api_quirks>

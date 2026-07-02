@@ -8,7 +8,7 @@ Meraki Dashboard Exporter Collectors - All metric collection logic organized by 
 - **Sub-collectors**: Manual registration in parent coordinator's `__init__` (never decorated)
 - **Inherit from appropriate base**: `MetricCollector` (main), `BaseDeviceCollector`/`BaseNetworkHealthCollector`/`BaseOrganizationCollector` (sub, each mixing in `SubCollectorMixin`)
 - **Implement required methods**: `_initialize_metrics()`, `_collect_impl()` — both abstract on `MetricCollector`; never override `collect()` itself, it wraps `_collect_impl()` with tracing + duration/error/success metrics
-- **Network fetches MUST go through inventory**: Always use `await self.inventory.get_networks(org_id)` (or `self.parent.inventory.get_networks(org_id)` from sub-collectors). Never call `self.api.organizations.getOrganizationNetworks` directly — that bypasses the configured `NetworkFilter`. The one exception in this directory is `alerts.py::AlertsCollector._fetch_networks_direct`, a fallback used only when `self.inventory` is `None`; it manually reapplies `NetworkFilter` so filtering still holds.
+- **Network fetches MUST go through inventory**: Always use `await self.inventory.get_networks(org_id)` (or `self.parent.inventory.get_networks(org_id)` from sub-collectors). Never call `self.api.organizations.getOrganizationNetworks` directly — that bypasses the configured `NetworkFilter`. The one exception in this directory is `alerts.py::AlertsCollector._fetch_networks_direct`, a fallback used only when `self.inventory` is `None`; it manually reapplies `NetworkFilter` so filtering still holds. A second, sibling fallback lives outside this directory in `core/api_helpers.py::APIHelper._fetch_networks_direct` (reached via `APIHelper.get_organization_networks`, called from e.g. `organization.py`/`clients.py` when inventory is unavailable) — it also reapplies `NetworkFilter` manually.
 - **Validate fetcher responses**: New API fetchers must wrap responses with `validate_response_format` from `core.error_handling` to normalize the SDK exhausted-retry error shape.
 </critical_notes>
 
@@ -33,6 +33,7 @@ Meraki Dashboard Exporter Collectors - All metric collection logic organized by 
 - `alerts.py` - `AlertsCollector` (MEDIUM tier) - alert/event collection
 - `clients.py` - `ClientsCollector` (MEDIUM tier) - client device tracking
 - `mt_sensor.py` - `MTSensorCollector` (FAST tier) - standalone sensor data collection
+- `mt_alerts.py` - `MTSensorAlertsCollector` (MEDIUM tier) - MT sensor alert collection
 - `webhook_metrics.py` - `WebhookMetricsCollector` - event-driven webhook metric sink; a plain class (does NOT inherit `MetricCollector`, NOT `@register_collector`-decorated, NOT tier-registered); updated via inbound HTTP pushes from `core/webhook_handler.py`
 </file_map>
 
@@ -63,16 +64,17 @@ They never use `@register_collector`.
 
 ## DISCOVERY & INSTANTIATION (`CollectorManager`, `manager.py`)
 1. **Import-to-register**: `CollectorManager._initialize_collectors()` explicitly imports every
-   top-level collector module (`from . import alerts, clients, config, device, mt_sensor,
-   network_health, organization`) purely to execute their `@register_collector` decorators — this
-   is what triggers step 2. Sub-collector modules never need this since they aren't decorated.
+   top-level collector module (`from . import alerts, clients, config, device, mt_alerts,
+   mt_sensor, network_health, organization`) purely to execute their `@register_collector`
+   decorators — this is what triggers step 2. Sub-collector modules never need this since they
+   aren't decorated.
 2. **Read the registry**: calls `core/registry.py::get_registered_collectors()` to get the
    tier -> class mapping built in step 1.
 3. **Filter by name**: each class's short name (`ClassName.replace("Collector", "").lower()`, e.g.
    `NetworkHealthCollector` -> `networkhealth`) is checked against
    `settings.collectors.active_collectors` (`CollectorSettings.enabled_collectors -
-   disable_collectors`, default `{alerts, clients, config, device, mtsensor, networkhealth,
-   organization}` in `core/config_models.py`); non-matching classes are recorded in
+   disable_collectors`, default `{alerts, clients, config, device, mtsensor, mtsensoralerts,
+   networkhealth, organization}` in `core/config_models.py`); non-matching classes are recorded in
    `self.skipped_collectors` and skipped.
 4. **Instantiate**: each surviving class is constructed with `api`, `settings`, the shared
    `self.inventory` (`OrganizationInventory`), `expiration_manager`, and `rate_limiter`
@@ -115,6 +117,6 @@ in a coordinator's `_collect_impl()`.
 - **NEVER skip error handling** for API calls - use decorators
 - **NEVER forget to register collectors** - use decorator or manual registration
 - **NEVER block the event loop** - use `asyncio.to_thread()` for sync operations
-- **NEVER call `self.api.organizations.getOrganizationNetworks` directly** - always go through `self.inventory.get_networks(org_id)` so `NetworkFilter` is enforced. `core/discovery.py::DiscoveryService` is the only sanctioned unfiltered bypass (audit-only, startup diagnostics); `alerts.py::AlertsCollector._fetch_networks_direct` is a filtered fallback for when `self.inventory` is unavailable, not a bypass.
+- **NEVER call `self.api.organizations.getOrganizationNetworks` directly** - always go through `self.inventory.get_networks(org_id)` so `NetworkFilter` is enforced. `core/discovery.py::DiscoveryService` is the only sanctioned *unfiltered* bypass (audit-only, startup diagnostics); `alerts.py::AlertsCollector._fetch_networks_direct` and `core/api_helpers.py::APIHelper._fetch_networks_direct` are sanctioned *filtered* fallbacks for when `self.inventory` is unavailable (each manually reapplies `NetworkFilter`), not bypasses.
 - **NEVER iterate org-wide SDK responses without filtering by `get_allowed_network_ids`** - rows referencing networks outside the filter must be skipped.
 </fatal_implications>

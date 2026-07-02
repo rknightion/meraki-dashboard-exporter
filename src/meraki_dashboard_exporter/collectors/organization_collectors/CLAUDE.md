@@ -3,26 +3,31 @@ Organization-level collectors for Meraki Dashboard Exporter - Handles metrics th
 </system_context>
 
 <critical_notes>
-- **This directory only holds 3 of the ~9 org-level metric domains.** `api_usage.py`,
-  `license.py`, and `client_overview.py` are genuine `BaseOrganizationCollector` sub-collectors.
-  Networks-total, devices-total, devices-by-model, device availability, packet captures, and
-  application usage are all collected **directly inside the parent coordinator**
-  `../organization.py::OrganizationCollector` (its `_collect_network_metrics`,
-  `_collect_device_metrics`, `_collect_device_counts_by_model`,
-  `_collect_device_availability_metrics`, `_collect_packet_capture_metrics`,
-  `_collect_application_usage_metrics`) — not as modules here. Don't assume every org metric has
-  a sub-collector file in this directory.
+- **This directory holds 5 of the ~9 org-level metric domains.** `api_usage.py`,
+  `license.py`, `client_overview.py`, `firmware.py`, and `device_availability_history.py` are
+  genuine `BaseOrganizationCollector` sub-collectors. Networks-total, devices-total,
+  devices-by-model, packet captures, and application usage are still collected **directly inside
+  the parent coordinator** `../organization.py::OrganizationCollector` (its
+  `_collect_network_metrics`, `_collect_device_metrics`, `_collect_device_counts_by_model`,
+  `_collect_packet_capture_metrics`, `_collect_application_usage_metrics`) — not as modules here.
+  Note point-in-time device availability (`_collect_device_availability_metrics`, via
+  `getOrganizationDevicesAvailabilities`) stays on the coordinator; only the *change-history*
+  variant moved into this directory as `device_availability_history.py`. Don't assume every org
+  metric has a sub-collector file in this directory.
 - **Inherit from `BaseOrganizationCollector`** (`base.py`) for the shared `parent`/`api`/`settings`
   wiring, plus `self.inventory = getattr(parent, "inventory", None)`.
 - **MEDIUM update tier**: `OrganizationCollector` is `@register_collector(UpdateTier.MEDIUM)`
   (300s interval) — it is not SLOW/900s.
-- **Manual registration**: the 3 sub-collectors are instantiated in
+- **Manual registration**: the 5 sub-collectors are instantiated in
   `OrganizationCollector.__init__` (`api_usage_collector`, `license_collector`,
-  `client_overview_collector`) and each exposes `collect(org_id, org_name)`, called from the
-  coordinator's `_collect_api_metrics` / `_collect_license_metrics` / `_collect_client_overview`.
-- **None of the 3 sub-collectors here fetch networks or devices** — they only call org-scoped
+  `client_overview_collector`, `firmware_collector`, `device_availability_history_collector`) and
+  each exposes `collect(org_id, org_name)`, called from the coordinator's `_collect_api_metrics` /
+  `_collect_license_metrics` / `_collect_client_overview` / firmware+availability-history
+  equivalents.
+- **None of the 5 sub-collectors here fetch networks or devices** — they only call org-scoped
   endpoints (`getOrganizationApiRequestsOverview`, `getOrganizationClientsOverview`,
-  `getOrganizationLicensesOverview`/`getOrganizationLicenses`), so the `get_allowed_network_ids`
+  `getOrganizationLicensesOverview`/`getOrganizationLicenses`, `getOrganizationFirmwareUpgrades`,
+  `getOrganizationDevicesAvailabilitiesChangeHistory`), so the `get_allowed_network_ids`
   allow-list pattern doesn't apply to this directory's code. It's used by the coordinator/device
   collectors instead — see `../../services/CLAUDE.md` for the full inventory contract.
 - **License overview is inventory-cached too, not just networks/devices**: `LicenseCollector`
@@ -43,6 +48,13 @@ Organization-level collectors for Meraki Dashboard Exporter - Handles metrics th
   and per-device licensing models (see `api_quirks`)
 - `client_overview.py` - `ClientOverviewCollector`: org-wide client count + total/down/upstream
   usage (KB) over the last hour, via `getOrganizationClientsOverview`
+- `firmware.py` - `FirmwareCollector`: firmware upgrade event counts (incl. a pending-total gauge
+  for `scheduled`/`pending`/`started` statuses), via `getOrganizationFirmwareUpgrades`
+  (`total_pages="all"`)
+- `device_availability_history.py` - `DeviceAvailabilityHistoryCollector`: windowed device
+  availability *change* counts (not point-in-time status — that's the coordinator's
+  `_collect_device_availability_metrics`), via `getOrganizationDevicesAvailabilitiesChangeHistory`
+  with a 300s timespan matching the MEDIUM collection cadence
 </file_map>
 
 <paved_path>
@@ -90,11 +102,12 @@ instead of writing zeros. Non-zero responses update the cache. Keep this in mind
   `timespan=3600`.
 - **License pagination**: `getOrganizationLicenses` requires `total_pages="all"` to get the full
   per-device license list.
-- **404 handling is inconsistent across the 3 collectors**: `client_overview.py` and `license.py`
-  both special-case `"404" in str(e)` as "not available for this org" (`debug` log, no
-  exception raised/logged); `api_usage.py` has no such branch and always logs via
-  `logger.exception` on any failure. Match the existing per-file convention rather than
-  "fixing" this asymmetry as a drive-by change.
+- **404 handling is inconsistent across the 5 collectors**: `client_overview.py`, `license.py`,
+  `firmware.py`, and `device_availability_history.py` all special-case `"404" in str(e)` as "not
+  available for this org" (`debug` log, no exception raised/logged, re-raising only non-404
+  errors for the decorator to handle); `api_usage.py` is the outlier with no such branch — it
+  always logs via `logger.exception` on any failure. Match the existing per-file convention
+  rather than "fixing" this asymmetry as a drive-by change.
 - **Rate limiting**: organization-level calls count toward per-org rate limits like any other API
   call.
 </api_quirks>
