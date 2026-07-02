@@ -650,12 +650,129 @@ class TestOrganizationCollector(BaseCollectorTest):
         # through the inventory cache (NetworkFilter enforcement point), not
         # collector.api directly, so it must be repointed at the same mock too.
         collector.inventory.api = api
+        # The five delegating sub-collectors captured collector.api at __init__
+        # and are not repointed here; this test exercises the *direct*
+        # packet-capture 404 path, so stub them to success (True) rather than
+        # let them spuriously fail against the unconfigured original mock and
+        # muddy the 404-vs-real-failure signal (F-172).
+        for sub in (
+            collector.api_usage_collector,
+            collector.license_collector,
+            collector.client_overview_collector,
+            collector.firmware_collector,
+            collector.device_availability_history_collector,
+        ):
+            sub.collect = AsyncMock(return_value=True)  # type: ignore[method-assign]
 
         await collector._collect_org_metrics(org)
 
         health = collector.org_health_tracker.get_health(org["id"])
         assert health is None or health.consecutive_failures == 0
 
+        metrics.assert_gauge_value(
+            "meraki_exporter_org_collection_status",
+            1,
+            org_id=org["id"],
+            org_name=org["name"],
+        )
+
+    # -- F-172: isolated failure in one of the 5 delegating sub-collectors ---
+
+    def _neutralize_all_but(self, collector, keep: str) -> None:
+        """Stub every org sub-collection to success except ``keep``.
+
+        Lets a test exercise exactly one sub-collection's failure signalling
+        without spurious failures from the others (which would otherwise hit
+        the unconfigured mock).
+        """
+
+        async def _ok(*_args: object, **_kwargs: object) -> bool:
+            return True
+
+        names = [
+            "_collect_api_metrics",
+            "_collect_network_metrics",
+            "_collect_device_metrics",
+            "_collect_device_counts_by_model",
+            "_collect_device_availability_metrics",
+            "_collect_device_availability_changes_metrics",
+            "_collect_firmware_metrics",
+            "_collect_license_metrics",
+            "_collect_client_overview",
+            "_collect_packet_capture_metrics",
+            "_collect_application_usage_metrics",
+        ]
+        for name in names:
+            if name != keep:
+                setattr(collector, name, _ok)
+
+    async def test_delegating_subcollector_false_signal_records_failure(self, collector, metrics):
+        """A False signal from a delegating sub-collector must record a failure.
+
+        Previously each of the 5 sub-collectors (api_usage/firmware/
+        device_availability_history/license/client_overview) swallowed its own
+        exceptions and never surfaced an isolated failure to OrgHealthTracker,
+        so backoff/export-suppression could not engage (bug-bash F-172).
+        """
+        org = OrganizationFactory.create(org_id="781", name="ApiUsage Broken Org")
+        self._neutralize_all_but(collector, keep="_collect_api_metrics")
+        # Sub-collector reports a real (non-404) failure via its bool signal.
+        collector.api_usage_collector.collect = AsyncMock(  # type: ignore[method-assign]
+            return_value=False
+        )
+
+        await collector._collect_org_metrics(org)
+
+        health = collector.org_health_tracker.get_health(org["id"])
+        assert health is not None
+        assert health.consecutive_failures == 1
+        metrics.assert_gauge_value(
+            "meraki_exporter_org_collection_status",
+            0,
+            org_id=org["id"],
+            org_name=org["name"],
+        )
+
+    async def test_delegating_subcollector_non_404_error_records_failure(self, collector, metrics):
+        """A non-404 error inside a real sub-collector must record a failure.
+
+        End-to-end variant of F-172: the sub-collector catches the error
+        itself (resilience) but now returns a False signal the parent counts.
+        """
+        org = OrganizationFactory.create(org_id="782", name="Firmware Broken Org")
+        self._neutralize_all_but(collector, keep="_collect_firmware_metrics")
+        collector.firmware_collector._fetch_firmware_upgrades = AsyncMock(  # type: ignore[method-assign]
+            side_effect=Exception("500 Internal Server Error")
+        )
+
+        await collector._collect_org_metrics(org)
+
+        health = collector.org_health_tracker.get_health(org["id"])
+        assert health is not None
+        assert health.consecutive_failures == 1
+        metrics.assert_gauge_value(
+            "meraki_exporter_org_collection_status",
+            0,
+            org_id=org["id"],
+            org_name=org["name"],
+        )
+
+    async def test_delegating_subcollector_404_not_counted_as_failure(self, collector, metrics):
+        """A 404 inside a delegating sub-collector must NOT count as a failure.
+
+        Many orgs legitimately lack e.g. firmware upgrade history; treating a
+        404 as unhealthy would falsely trip backoff (companion to F-172).
+        """
+        org = OrganizationFactory.create(org_id="783", name="No Firmware Org")
+        self._neutralize_all_but(collector, keep="_collect_firmware_metrics")
+        collector.firmware_collector._fetch_firmware_upgrades = AsyncMock(  # type: ignore[method-assign]
+            side_effect=Exception("404 Not Found")
+        )
+
+        await collector._collect_org_metrics(org)
+
+        health = collector.org_health_tracker.get_health(org["id"])
+        assert health is None or health.consecutive_failures == 0
         metrics.assert_gauge_value(
             "meraki_exporter_org_collection_status",
             1,

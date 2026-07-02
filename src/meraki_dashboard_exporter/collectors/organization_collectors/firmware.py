@@ -76,7 +76,7 @@ class FirmwareCollector(BaseOrganizationCollector):
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def collect(self, org_id: str, org_name: str) -> None:
+    async def collect(self, org_id: str, org_name: str) -> bool:
         """Collect firmware upgrade metrics.
 
         Parameters
@@ -85,6 +85,16 @@ class FirmwareCollector(BaseOrganizationCollector):
             Organization ID.
         org_name : str
             Organization name.
+
+        Returns
+        -------
+        bool
+            ``True`` on success or when the endpoint is unavailable for this
+            org (404). On a real (non-404) failure the error is re-raised so
+            the ``with_error_handling`` decorator can retry rate limits and
+            then swallow it (returning ``None``); the parent coordinator treats
+            any non-``True`` result as a failure so it is counted by
+            ``OrgHealthTracker`` (F-172).
 
         """
         try:
@@ -102,6 +112,7 @@ class FirmwareCollector(BaseOrganizationCollector):
             # Always process (even with an empty list) so bounded label combos that
             # disappear this cycle get explicitly zeroed rather than left stale.
             self._process_firmware_upgrades(org_id, org_name, upgrades, allowed_network_ids)
+            return True
 
         except Exception as e:
             if "404" in str(e):
@@ -110,8 +121,8 @@ class FirmwareCollector(BaseOrganizationCollector):
                     org_id=org_id,
                     org_name=org_name,
                 )
-            else:
-                raise  # Let decorator handle non-404 errors
+                return True
+            raise  # Let decorator handle non-404 errors (retry + swallow)
 
     def _process_firmware_upgrades(
         self,

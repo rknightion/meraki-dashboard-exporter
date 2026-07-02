@@ -704,6 +704,102 @@ class TestAlertsCollector(BaseCollectorTest):
             severity="critical",
         )
 
+    async def test_alert_gauges_respect_network_filter(self, collector, metrics):
+        """Active/severity/network alert gauges must honor get_allowed_network_ids.
+
+        Previously only the derived network-health-alert metric filtered by the
+        allow-list; the active/severity/network gauges emitted series for every
+        network, so ``meraki_*_alert*`` series leaked for networks excluded by
+        NetworkFilter (bug-bash F-173). All per-network aggregations must now
+        skip rows whose network is outside the filter.
+        """
+        org_id, org_name = "123", "Test Org"
+        allowed = NetworkFactory.create(network_id="N_1", name="Allowed Network")
+        excluded = NetworkFactory.create(network_id="N_2", name="Excluded Network")
+
+        alerts = [
+            AlertFactory.create(
+                alert_id="a1",
+                alert_type="connectivity",
+                categoryType="connectivity",
+                severity="critical",
+                deviceType="MR",
+                network=allowed,
+                dismissedAt=None,
+                resolvedAt=None,
+            ),
+            AlertFactory.create(
+                alert_id="a2",
+                alert_type="performance",
+                categoryType="wireless",
+                severity="warning",
+                deviceType="MS",
+                network=excluded,
+                dismissedAt=None,
+                resolvedAt=None,
+            ),
+        ]
+
+        collector._process_alerts(alerts, org_id, org_name, allowed_network_ids={"N_1"})
+
+        # Allowed network emits its active + by-network series.
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_ACTIVE,
+            1,
+            org_id=org_id,
+            org_name=org_name,
+            alert_type="connectivity",
+            category_type="connectivity",
+            severity="critical",
+            device_type="MR",
+            network_id="N_1",
+            network_name="Allowed Network",
+        )
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_TOTAL_BY_NETWORK,
+            1,
+            org_id=org_id,
+            org_name=org_name,
+            network_id="N_1",
+            network_name="Allowed Network",
+        )
+
+        # Excluded network must not emit any series.
+        metrics.assert_metric_not_set(
+            AlertMetricName.ALERTS_ACTIVE,
+            org_id=org_id,
+            org_name=org_name,
+            alert_type="performance",
+            category_type="wireless",
+            severity="warning",
+            device_type="MS",
+            network_id="N_2",
+            network_name="Excluded Network",
+        )
+        metrics.assert_metric_not_set(
+            AlertMetricName.ALERTS_TOTAL_BY_NETWORK,
+            org_id=org_id,
+            org_name=org_name,
+            network_id="N_2",
+            network_name="Excluded Network",
+        )
+
+        # By-severity summary must only count the allowed network's alert.
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_TOTAL_BY_SEVERITY,
+            1,
+            org_id=org_id,
+            org_name=org_name,
+            severity="critical",
+        )
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_TOTAL_BY_SEVERITY,
+            0,
+            org_id=org_id,
+            org_name=org_name,
+            severity="warning",
+        )
+
     async def test_fetch_networks_direct_still_applies_network_filter(
         self, mock_api_builder, settings, isolated_registry
     ):

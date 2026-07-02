@@ -70,7 +70,7 @@ class ClientOverviewCollector(BaseOrganizationCollector):
             ),
         )
 
-    async def collect(self, org_id: str, org_name: str) -> None:
+    async def collect(self, org_id: str, org_name: str) -> bool:
         """Collect client overview metrics.
 
         Parameters
@@ -79,6 +79,14 @@ class ClientOverviewCollector(BaseOrganizationCollector):
             Organization ID.
         org_name : str
             Organization name.
+
+        Returns
+        -------
+        bool
+            ``True`` on success or when the endpoint is unavailable for this
+            org (404); ``False`` on a real (non-404) failure. The parent
+            coordinator uses this signal so an isolated failure here is counted
+            by ``OrgHealthTracker`` (F-172) instead of being silently swallowed.
 
         """
         try:
@@ -201,6 +209,11 @@ class ClientOverviewCollector(BaseOrganizationCollector):
             else:
                 logger.warning("No client overview data available", org_id=org_id)
 
+            # Reached only when no exception was raised (success or benign
+            # no-data). Signal success so the parent does not count this cycle
+            # as a failure (F-172).
+            return True
+
         except Exception as e:
             # Check if this is a 404 error (endpoint might not be available)
             if "404" in str(e):
@@ -209,9 +222,13 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                     org_id=org_id,
                     org_name=org_name,
                 )
-            else:
-                logger.exception(
-                    "Failed to collect client overview metrics",
-                    org_id=org_id,
-                    org_name=org_name,
-                )
+                # Not available for this org is expected, not a health failure.
+                return True
+            logger.exception(
+                "Failed to collect client overview metrics",
+                org_id=org_id,
+                org_name=org_name,
+            )
+            # A real (non-404) failure must be surfaced to OrgHealthTracker via
+            # the parent (F-172).
+            return False

@@ -420,10 +420,15 @@ class OrganizationCollector(MetricCollector):
         Note: `api_metrics`, `firmware_metrics`,
         `device_availability_changes_metrics`, `license_metrics`, and
         `client_overview` delegate to sub-collectors in
-        `organization_collectors/` that fully swallow their own exceptions
-        (by design, for resilience) and therefore can never appear in the
-        returned failure list -- only the six sub-collections implemented
-        directly in this module can currently be observed failing here.
+        `organization_collectors/` that swallow their own exceptions (by
+        design, for resilience) rather than raising. To keep an isolated
+        failure in one of those five observable by ``OrgHealthTracker``
+        (bug-bash F-172), each of those delegating wrappers now returns a
+        boolean success signal: ``True`` on success or an expected 404, and
+        ``False`` on a real (non-404) failure. ``_attempt`` records a wrapper
+        that returns ``False`` as a failed sub-collection, alongside the six
+        sub-collections implemented directly in this module (which instead
+        raise on failure and return ``None`` on success).
 
         Parameters
         ----------
@@ -435,15 +440,17 @@ class OrganizationCollector(MetricCollector):
         Returns
         -------
         list[str]
-            Names of sub-collections that raised a non-404 exception this
-            cycle (empty if every sub-collection succeeded or 404'd).
+            Names of sub-collections that failed with a non-404 error this
+            cycle -- either by raising (the six direct sub-collections) or by
+            returning ``False`` (the five delegating sub-collectors) -- empty
+            if every sub-collection succeeded or 404'd.
 
         """
         failed: list[str] = []
 
-        async def _attempt(name: str, coro: Coroutine[Any, Any, None]) -> None:
+        async def _attempt(name: str, coro: Coroutine[Any, Any, bool | None]) -> None:
             try:
-                await coro
+                result = await coro
             except CollectorError as exc:
                 if exc.category == ErrorCategory.API_NOT_AVAILABLE:
                     return
@@ -456,6 +463,12 @@ class OrganizationCollector(MetricCollector):
                     sub_collection=name,
                 )
                 failed.append(name)
+            else:
+                # Delegating sub-collectors signal a real (non-404) failure by
+                # returning False instead of raising (F-172). The six direct
+                # sub-collections return None on success and are unaffected.
+                if result is False:
+                    failed.append(name)
 
         await _attempt("api_metrics", self._collect_api_metrics(org_id, org_name))
         await _attempt("network_metrics", self._collect_network_metrics(org_id, org_name))
@@ -484,14 +497,15 @@ class OrganizationCollector(MetricCollector):
 
         return failed
 
-    @with_error_handling(
-        operation="Collect API usage metrics",
-        continue_on_error=True,
-        error_category=ErrorCategory.API_CLIENT_ERROR,
-    )
-    async def _collect_api_metrics(self, org_id: str, org_name: str) -> None:
+    async def _collect_api_metrics(self, org_id: str, org_name: str) -> bool:
         """Collect API usage metrics.
 
+        Returns the sub-collector's success/failure signal so an isolated
+        failure here is observable by ``OrgHealthTracker`` (F-172): ``True`` on
+        success or an expected 404, ``False`` on a real (non-404) failure. The
+        sub-collector owns its own error handling (it never raises), so no
+        ``with_error_handling`` wrapper is needed on this thin delegator.
+
         Parameters
         ----------
         org_id : str
@@ -500,16 +514,15 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        await self.api_usage_collector.collect(org_id, org_name)
+        return await self.api_usage_collector.collect(org_id, org_name) is True
 
-    @with_error_handling(
-        operation="Collect firmware upgrade metrics",
-        continue_on_error=True,
-        error_category=ErrorCategory.API_CLIENT_ERROR,
-    )
-    async def _collect_firmware_metrics(self, org_id: str, org_name: str) -> None:
+    async def _collect_firmware_metrics(self, org_id: str, org_name: str) -> bool:
         """Collect firmware upgrade status metrics.
 
+        Returns the sub-collector's success/failure signal (see
+        ``_collect_api_metrics``) so an isolated failure is counted by
+        ``OrgHealthTracker`` (F-172).
+
         Parameters
         ----------
         org_id : str
@@ -518,17 +531,16 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        await self.firmware_collector.collect(org_id, org_name)
+        return await self.firmware_collector.collect(org_id, org_name) is True
 
-    @with_error_handling(
-        operation="Collect device availability change history metrics",
-        continue_on_error=True,
-        error_category=ErrorCategory.API_CLIENT_ERROR,
-    )
     async def _collect_device_availability_changes_metrics(
         self, org_id: str, org_name: str
-    ) -> None:
+    ) -> bool:
         """Collect device availability change-history (flap) metrics.
+
+        Returns the sub-collector's success/failure signal (see
+        ``_collect_api_metrics``) so an isolated failure is counted by
+        ``OrgHealthTracker`` (F-172).
 
         Parameters
         ----------
@@ -538,7 +550,7 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        await self.device_availability_history_collector.collect(org_id, org_name)
+        return await self.device_availability_history_collector.collect(org_id, org_name) is True
 
     @with_error_handling(
         operation="Collect network metrics",
@@ -715,8 +727,12 @@ class OrganizationCollector(MetricCollector):
         else:
             logger.error("_devices_by_model_total metric not initialized")
 
-    async def _collect_license_metrics(self, org_id: str, org_name: str) -> None:
+    async def _collect_license_metrics(self, org_id: str, org_name: str) -> bool:
         """Collect license metrics.
+
+        Returns the sub-collector's success/failure signal (see
+        ``_collect_api_metrics``) so an isolated failure is counted by
+        ``OrgHealthTracker`` (F-172).
 
         Parameters
         ----------
@@ -726,7 +742,7 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        await self.license_collector.collect(org_id, org_name)
+        return await self.license_collector.collect(org_id, org_name) is True
 
     @with_error_handling(
         operation="Collect device availability metrics",
@@ -799,8 +815,12 @@ class OrganizationCollector(MetricCollector):
         else:
             logger.error("_devices_availability_total metric not initialized")
 
-    async def _collect_client_overview(self, org_id: str, org_name: str) -> None:
+    async def _collect_client_overview(self, org_id: str, org_name: str) -> bool:
         """Collect client overview metrics.
+
+        Returns the sub-collector's success/failure signal (see
+        ``_collect_api_metrics``) so an isolated failure is counted by
+        ``OrgHealthTracker`` (F-172).
 
         Parameters
         ----------
@@ -810,7 +830,7 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        await self.client_overview_collector.collect(org_id, org_name)
+        return await self.client_overview_collector.collect(org_id, org_name) is True
 
     @log_api_call("getOrganizationDevicesPacketCaptureCaptures")
     @with_error_handling(

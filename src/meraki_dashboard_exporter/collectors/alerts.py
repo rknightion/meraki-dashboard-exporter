@@ -332,10 +332,13 @@ class AlertsCollector(MetricCollector):
             Organization name
         allowed_network_ids : set[str] | None
             Network IDs that pass the configured NetworkFilter, or None when no
-            filter is active (accept every row). Used to keep the derived
-            network-health-alert metric consistent with the NetworkFilter
-            enforcement the old per-network loop got for free by only iterating
-            ``inventory.get_networks(org_id)``.
+            filter is active (accept every row). Applied to *every* per-network
+            aggregation below -- active alerts, by-severity, by-network, and the
+            derived health-alert metric -- so no ``meraki_*_alert*`` series is
+            emitted for a network excluded by the filter (F-173). Alerts with no
+            network (org-wide, ``network.id`` absent) are dropped under an active
+            filter, mirroring the row-filter pattern in devices/mx_ha.py /
+            devices/mg.py.
 
         """
         alert_counts: dict[tuple[str, str, str, str, str, str, str, str], int] = {}
@@ -357,6 +360,12 @@ class AlertsCollector(MetricCollector):
             network = alert.get("network", {})
             network_id = network.get("id", "unknown")
             network_name = network.get("name", "unknown")
+
+            # Skip alert rows whose network is outside the configured
+            # NetworkFilter so no meraki_*_alert* series is emitted for an
+            # excluded network (F-173). None => no filter active, accept all.
+            if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                continue
 
             # Create composite key for aggregation
             key = (
@@ -382,11 +391,10 @@ class AlertsCollector(MetricCollector):
             network_counts[network_key] = network_counts.get(network_key, 0) + 1
 
             # Count by network/category/severity for the derived health-alert metric.
-            # Skip rows outside the configured NetworkFilter (mirrors the allow-list
-            # pattern in devices/mx_ha.py / devices/mg.py).
-            if allowed_network_ids is None or network_id in allowed_network_ids:
-                health_key = (network_id, network_name, category_type, severity)
-                health_alert_counts[health_key] = health_alert_counts.get(health_key, 0) + 1
+            # Rows outside the configured NetworkFilter were already skipped above
+            # (F-173), so every row reaching here belongs to an allowed network.
+            health_key = (network_id, network_name, category_type, severity)
+            health_alert_counts[health_key] = health_alert_counts.get(health_key, 0) + 1
 
         # Set metrics for active alerts. Routed through self._set_metric (rather than
         # raw .labels().set()) so the metric expiration manager tracks every label

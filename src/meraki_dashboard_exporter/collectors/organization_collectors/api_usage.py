@@ -69,7 +69,7 @@ class APIUsageCollector(BaseOrganizationCollector):
             ),
         )
 
-    async def collect(self, org_id: str, org_name: str) -> None:
+    async def collect(self, org_id: str, org_name: str) -> bool:
         """Collect API usage metrics.
 
         Parameters
@@ -78,6 +78,14 @@ class APIUsageCollector(BaseOrganizationCollector):
             Organization ID.
         org_name : str
             Organization name.
+
+        Returns
+        -------
+        bool
+            ``True`` on success or when the endpoint is unavailable for this
+            org (404); ``False`` on a real (non-404) failure. The parent
+            coordinator uses this signal so an isolated failure here is counted
+            by ``OrgHealthTracker`` (F-172) instead of being silently swallowed.
 
         """
         try:
@@ -165,9 +173,25 @@ class APIUsageCollector(BaseOrganizationCollector):
                     else False,
                 )
 
-        except Exception:
+            # Reached only when no exception was raised (success or benign
+            # no-data). Signal success so the parent does not count this cycle
+            # as a failure (F-172).
+            return True
+
+        except Exception as e:
+            # A 404 means the endpoint is not available for this org -- expected,
+            # not a health failure. Any other error is a real failure that must
+            # be surfaced to OrgHealthTracker via the parent (F-172).
+            if "404" in str(e):
+                logger.debug(
+                    "API usage endpoint not available for organization",
+                    org_id=org_id,
+                    org_name=org_name,
+                )
+                return True
             logger.exception(
                 "Failed to collect API metrics",
                 org_id=org_id,
                 org_name=org_name,
             )
+            return False

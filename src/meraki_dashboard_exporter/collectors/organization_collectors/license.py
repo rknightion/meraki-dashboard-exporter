@@ -107,7 +107,7 @@ class LicenseCollector(BaseOrganizationCollector):
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def collect(self, org_id: str, org_name: str) -> None:
+    async def collect(self, org_id: str, org_name: str) -> bool:
         """Collect license metrics.
 
         Parameters
@@ -116,6 +116,17 @@ class LicenseCollector(BaseOrganizationCollector):
             Organization ID.
         org_name : str
             Organization name.
+
+        Returns
+        -------
+        bool
+            ``True`` on success, on a deliberately-skipped cycle (transient
+            inventory-cached fetch failure), or when the endpoint is
+            unavailable for this org (404). On a real (non-404) failure the
+            error is re-raised so the ``with_error_handling`` decorator can
+            retry rate limits and then swallow it (returning ``None``); the
+            parent coordinator treats any non-``True`` result as a failure so
+            it is counted by ``OrgHealthTracker`` (F-172).
 
         """
         try:
@@ -133,7 +144,7 @@ class LicenseCollector(BaseOrganizationCollector):
                     org_id=org_id,
                     org_name=org_name,
                 )
-                return
+                return True
 
             # Check if this is co-termination or per-device licensing
             if overview.get("licensedDeviceCounts"):
@@ -165,6 +176,8 @@ class LicenseCollector(BaseOrganizationCollector):
                 else:
                     logger.warning("No license data available", org_id=org_id)
 
+            return True
+
         except Exception as e:
             # Check if this is a 404 error (no licensing info)
             if "404" in str(e):
@@ -173,8 +186,8 @@ class LicenseCollector(BaseOrganizationCollector):
                     org_id=org_id,
                     org_name=org_name,
                 )
-            else:
-                raise  # Let decorator handle non-404 errors
+                return True
+            raise  # Let decorator handle non-404 errors (retry + swallow)
 
     def _process_per_device_licenses(
         self, org_id: str, org_name: str, licenses: list[dict[str, Any]]
