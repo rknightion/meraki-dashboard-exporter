@@ -113,20 +113,20 @@ class TestClientOverviewCollector:
         parent = client_overview_collector.parent
 
         # Check client count metric
-        client_key = ("_clients_total", (("org_id", org_id), ("org_name", org_name)))
+        client_key = ("_clients_total", (("org_id", org_id),))
         assert client_key in parent._metrics
         assert parent._metrics[client_key] == 150
 
         # Check usage metrics
-        total_usage_key = ("_usage_total_kb", (("org_id", org_id), ("org_name", org_name)))
+        total_usage_key = ("_usage_total_kb", (("org_id", org_id),))
         assert total_usage_key in parent._metrics
         assert parent._metrics[total_usage_key] == 1048576000
 
-        downstream_key = ("_usage_downstream_kb", (("org_id", org_id), ("org_name", org_name)))
+        downstream_key = ("_usage_downstream_kb", (("org_id", org_id),))
         assert downstream_key in parent._metrics
         assert parent._metrics[downstream_key] == 786432000
 
-        upstream_key = ("_usage_upstream_kb", (("org_id", org_id), ("org_name", org_name)))
+        upstream_key = ("_usage_upstream_kb", (("org_id", org_id),))
         assert upstream_key in parent._metrics
         assert parent._metrics[upstream_key] == 262144000
 
@@ -184,16 +184,16 @@ class TestClientOverviewCollector:
         await client_overview_collector.collect(org_id, org_name)
 
         # Verify cached values were used
-        client_key = ("_clients_total", (("org_id", org_id), ("org_name", org_name)))
+        client_key = ("_clients_total", (("org_id", org_id),))
         assert parent._metrics[client_key] == 100  # Cached value
 
-        total_usage_key = ("_usage_total_kb", (("org_id", org_id), ("org_name", org_name)))
+        total_usage_key = ("_usage_total_kb", (("org_id", org_id),))
         assert parent._metrics[total_usage_key] == 500000000  # Cached value
 
-        downstream_key = ("_usage_downstream_kb", (("org_id", org_id), ("org_name", org_name)))
+        downstream_key = ("_usage_downstream_kb", (("org_id", org_id),))
         assert parent._metrics[downstream_key] == 300000000  # Cached value
 
-        upstream_key = ("_usage_upstream_kb", (("org_id", org_id), ("org_name", org_name)))
+        upstream_key = ("_usage_upstream_kb", (("org_id", org_id),))
         assert parent._metrics[upstream_key] == 200000000  # Cached value
 
     async def test_collect_with_missing_fields(self, client_overview_collector, mock_api_builder):
@@ -218,12 +218,12 @@ class TestClientOverviewCollector:
         parent = client_overview_collector.parent
 
         # Client count should be set
-        client_key = ("_clients_total", (("org_id", org_id), ("org_name", org_name)))
+        client_key = ("_clients_total", (("org_id", org_id),))
         assert client_key in parent._metrics
         assert parent._metrics[client_key] == 50
 
         # Usage metrics should be set to 0
-        total_usage_key = ("_usage_total_kb", (("org_id", org_id), ("org_name", org_name)))
+        total_usage_key = ("_usage_total_kb", (("org_id", org_id),))
         assert total_usage_key in parent._metrics
         assert parent._metrics[total_usage_key] == 0
 
@@ -328,18 +328,18 @@ class TestClientOverviewCollector:
         parent = client_overview_collector.parent
 
         # Client count should be set
-        client_key = ("_clients_total", (("org_id", org_id), ("org_name", org_name)))
+        client_key = ("_clients_total", (("org_id", org_id),))
         assert parent._metrics[client_key] == 75
 
         # Total usage should be set
-        total_usage_key = ("_usage_total_kb", (("org_id", org_id), ("org_name", org_name)))
+        total_usage_key = ("_usage_total_kb", (("org_id", org_id),))
         assert parent._metrics[total_usage_key] == 100000000
 
         # Downstream and upstream should default to 0
-        downstream_key = ("_usage_downstream_kb", (("org_id", org_id), ("org_name", org_name)))
+        downstream_key = ("_usage_downstream_kb", (("org_id", org_id),))
         assert parent._metrics[downstream_key] == 0
 
-        upstream_key = ("_usage_upstream_kb", (("org_id", org_id), ("org_name", org_name)))
+        upstream_key = ("_usage_upstream_kb", (("org_id", org_id),))
         assert parent._metrics[upstream_key] == 0
 
     async def test_caching_across_multiple_organizations(
@@ -465,7 +465,7 @@ class TestClientOverviewCollector:
         await client_overview_collector.collect(org_id, org_name)
 
         parent = client_overview_collector.parent
-        client_key = ("_clients_total", (("org_id", org_id), ("org_name", org_name)))
+        client_key = ("_clients_total", (("org_id", org_id),))
         assert parent._metrics[client_key] == 100
 
         # Now the org genuinely goes to zero forever - simulate many consecutive cycles.
@@ -518,6 +518,6 @@ class TestClientOverviewCollector:
         await client_overview_collector.collect(org_id, org_name)
 
         parent = client_overview_collector.parent
-        client_key = ("_clients_total", (("org_id", org_id), ("org_name", org_name)))
+        client_key = ("_clients_total", (("org_id", org_id),))
         # Cache is stale by age - the real zero must be emitted, not the cached 100.
         assert parent._metrics[client_key] == 0

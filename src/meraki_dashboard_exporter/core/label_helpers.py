@@ -1,4 +1,15 @@
-"""Helper functions for consistent label creation across collectors."""
+"""Helper functions for consistent label creation across collectors.
+
+Numeric series carry **stable IDs only** (issue #534, Option B). The mutable
+display-name labels (``org_name``/``network_name``/``name``/``port_name``) are
+NOT emitted onto numeric series here; they live on id-keyed ``*_info`` join
+metrics whose emission sites build their own label dicts. Consumers re-attach a
+name via ``<numeric> * on(<id>) group_left(<name>) <..._info>``.
+
+The name-carrying parameters (``org_name``, ``network_name``) are retained on
+these signatures because callers still pass them for ``LogContext``/logging;
+they are simply no longer written into the returned label dict.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +24,12 @@ def create_device_labels(
     org_name: str | None = None,
     **extra_labels: str | None,
 ) -> dict[str, str]:
-    """Create standard device labels from device data.
+    """Create standard device labels (ID-only) from device data.
+
+    The device display ``name`` and the ``org_name``/``network_name`` labels are
+    deliberately omitted (issue #534); ``model``/``device_type`` are immutable
+    per serial and are retained. The device name joins via
+    ``meraki_device_status_info`` on ``serial``.
 
     Parameters
     ----------
@@ -22,32 +38,28 @@ def create_device_labels(
     org_id : str | None
         Organization ID.
     org_name : str | None
-        Organization name.
+        Organization name. Retained for logging compatibility; NOT emitted.
     **extra_labels : str | None
         Additional labels to include.
 
     Returns
     -------
     dict[str, str]
-        Standard device labels.
+        Standard device labels: ``org_id``, ``network_id``, ``serial``,
+        ``model``, ``device_type`` (+ any extras).
 
     """
     serial = device.get("serial", "")
-    name = device.get("name", serial)
     model = device.get("model", "")
     network_id = device.get("networkId", "")
-    network_name = device.get("networkName", network_id)
 
     # Extract device type from model (first 2 characters)
     device_type = model[:2] if len(model) >= 2 else "Unknown"
 
     return create_labels(
         org_id=org_id,
-        org_name=org_name,
         network_id=network_id,
-        network_name=network_name,
         serial=serial,
-        name=name,
         model=model,
         device_type=device_type,
         **extra_labels,
@@ -60,7 +72,10 @@ def create_network_labels(
     org_name: str | None = None,
     **extra_labels: str | None,
 ) -> dict[str, str]:
-    """Create standard network labels from network data.
+    """Create standard network labels (ID-only) from network data.
+
+    The ``network_name`` and ``org_name`` labels are deliberately omitted (issue
+    #534); ``network_name`` joins via ``meraki_network_info`` on ``network_id``.
 
     Parameters
     ----------
@@ -69,24 +84,21 @@ def create_network_labels(
     org_id : str | None
         Organization ID.
     org_name : str | None
-        Organization name.
+        Organization name. Retained for logging compatibility; NOT emitted.
     **extra_labels : str | None
         Additional labels to include.
 
     Returns
     -------
     dict[str, str]
-        Standard network labels.
+        Standard network labels: ``org_id``, ``network_id`` (+ any extras).
 
     """
     network_id = network.get("id", "")
-    network_name = network.get("name", network_id)
 
     return create_labels(
         org_id=org_id,
-        org_name=org_name,
         network_id=network_id,
-        network_name=network_name,
         **extra_labels,
     )
 
@@ -98,7 +110,10 @@ def create_port_labels(
     org_name: str | None = None,
     **extra_labels: str | None,
 ) -> dict[str, str]:
-    """Create standard port labels from device and port data.
+    """Create standard port labels (ID-only) from device and port data.
+
+    The ``port_name`` label is deliberately omitted (issue #534); for MS ports
+    it joins via ``meraki_ms_port_info`` on ``serial``+``port_id``.
 
     Parameters
     ----------
@@ -109,27 +124,25 @@ def create_port_labels(
     org_id : str | None
         Organization ID.
     org_name : str | None
-        Organization name.
+        Organization name. Retained for logging compatibility; NOT emitted.
     **extra_labels : str | None
         Additional labels to include.
 
     Returns
     -------
     dict[str, str]
-        Standard port labels.
+        Device labels + ``port_id`` (+ any extras). No ``port_name``.
 
     """
-    # Get device labels first
+    # Get device labels first (already ID-only)
     device_labels = create_device_labels(device, org_id, org_name)
 
-    # Add port-specific labels
+    # Add port-specific ID label
     port_id = str(port.get("portId", ""))
-    port_name = port.get("name", f"Port {port_id}")
 
     return create_labels(
         **device_labels,
         port_id=port_id,
-        port_name=port_name,
         **extra_labels,
     )
 
@@ -144,6 +157,11 @@ def create_client_labels(
 ) -> dict[str, str]:
     """Create standard client labels from client data.
 
+    The name-family org/network labels (``org_name``/``network_name``) are
+    dropped from client numeric series (issue #534). The ``mac``/``description``/
+    ``hostname`` labels are intentionally LEFT in place — their removal and the
+    ``meraki_client_info`` carrier are issue #533 (Phase 2), out of scope here.
+
     Parameters
     ----------
     client : dict[str, Any]
@@ -151,18 +169,19 @@ def create_client_labels(
     org_id : str | None
         Organization ID.
     org_name : str | None
-        Organization name.
+        Organization name. Retained for logging compatibility; NOT emitted.
     network_id : str | None
         Network ID (if not in client data).
     network_name : str | None
-        Network name (if not in client data).
+        Network name. Retained for logging compatibility; NOT emitted.
     **extra_labels : str | None
         Additional labels to include.
 
     Returns
     -------
     dict[str, str]
-        Standard client labels.
+        Client labels: ``org_id``, ``network_id``, ``client_id``, ``mac``,
+        ``description``, ``hostname`` (+ any extras).
 
     """
     # Client identification
@@ -171,17 +190,13 @@ def create_client_labels(
     description = client.get("description", "")
     hostname = client.get("hostname", "")
 
-    # Network info might be in client data
+    # Network id might be in client data
     if not network_id:
         network_id = client.get("networkId", "")
-    if not network_name:
-        network_name = client.get("networkName", network_id)
 
     return create_labels(
         org_id=org_id,
-        org_name=org_name,
         network_id=network_id,
-        network_name=network_name,
         client_id=client_id,
         mac=mac,
         description=description,
@@ -194,7 +209,10 @@ def create_org_labels(
     org: dict[str, Any],
     **extra_labels: str | None,
 ) -> dict[str, str]:
-    """Create standard organization labels from org data.
+    """Create standard organization labels (ID-only) from org data.
+
+    The ``org_name`` label is deliberately omitted (issue #534); it joins via
+    ``meraki_org_info`` on ``org_id``.
 
     Parameters
     ----------
@@ -206,14 +224,12 @@ def create_org_labels(
     Returns
     -------
     dict[str, str]
-        Standard organization labels.
+        Standard organization labels: ``org_id`` (+ any extras).
 
     """
     org_id = org.get("id", "")
-    org_name = org.get("name", org_id)
 
     return create_labels(
         org_id=org_id,
-        org_name=org_name,
         **extra_labels,
     )

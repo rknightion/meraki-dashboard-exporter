@@ -51,11 +51,8 @@ class MRWirelessCollector:
             "Access point radio broadcasting status (1 = broadcasting, 0 = not broadcasting)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.BAND,
@@ -68,11 +65,8 @@ class MRWirelessCollector:
             "Access point radio channel number",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.BAND,
@@ -85,11 +79,8 @@ class MRWirelessCollector:
             "Access point radio channel width in MHz",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.BAND,
@@ -102,11 +93,8 @@ class MRWirelessCollector:
             "Access point radio transmit power in dBm",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.BAND,
@@ -122,7 +110,6 @@ class MRWirelessCollector:
             "Total data usage in bytes by SSID over the last day",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.SSID,
             ],
         )
@@ -132,7 +119,6 @@ class MRWirelessCollector:
             "Downstream data usage in bytes by SSID over the last day",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.SSID,
             ],
         )
@@ -142,7 +128,6 @@ class MRWirelessCollector:
             "Upstream data usage in bytes by SSID over the last day",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.SSID,
             ],
         )
@@ -152,7 +137,6 @@ class MRWirelessCollector:
             "Percentage of total organization data usage by SSID over the last day",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.SSID,
             ],
         )
@@ -162,7 +146,6 @@ class MRWirelessCollector:
             "Number of clients connected to SSID over the last day",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.SSID,
             ],
         )
@@ -349,7 +332,6 @@ class MRWirelessCollector:
 
                 ssid_labels = {
                     "org_id": org_id,
-                    "org_name": org_name,
                     "ssid": ssid_name,
                 }
 

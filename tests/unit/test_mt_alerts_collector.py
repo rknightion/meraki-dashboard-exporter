@@ -83,9 +83,7 @@ class TestMTSensorAlertsCollector(BaseCollectorTest):
         """The gauge exists under the frozen metric name with the documented label set."""
         collector._alerting_sensors_count.labels(
             org_id="123456",
-            org_name="Test Org",
             network_id="N_1",
-            network_name="Net 1",
             metric="temperature",
         ).set(3)
 
@@ -93,9 +91,7 @@ class TestMTSensorAlertsCollector(BaseCollectorTest):
             METRIC_NAME,
             3,
             org_id="123456",
-            org_name="Test Org",
             network_id="N_1",
-            network_name="Net 1",
             metric="temperature",
         )
 
@@ -151,27 +147,21 @@ class TestMTSensorAlertsCollector(BaseCollectorTest):
             METRIC_NAME,
             2,
             org_id="123456",
-            org_name="Test Org",
             network_id="N_1",
-            network_name="Net 1",
             metric="temperature",
         )
         assertions.assert_gauge_value(
             METRIC_NAME,
             1,
             org_id="123456",
-            org_name="Test Org",
             network_id="N_1",
-            network_name="Net 1",
             metric="humidity",
         )
         assertions.assert_gauge_value(
             METRIC_NAME,
             3,
             org_id="123456",
-            org_name="Test Org",
             network_id="N_1",
-            network_name="Net 1",
             metric="noise",
         )
 
@@ -259,9 +249,7 @@ class TestMTSensorAlertsCollector(BaseCollectorTest):
             METRIC_NAME,
             4,
             org_id="123456",
-            org_name="Test Org",
             network_id="N_1",
-            network_name="Net 1",
             metric="temperature",
         )
 

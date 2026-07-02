@@ -57,9 +57,7 @@ class MXHACollector(SubCollectorMixin):
             "Whether MX warm spare high availability is enabled for a network (1 = enabled)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
         self._mx_ha_mode = self.parent._create_gauge(
@@ -67,9 +65,7 @@ class MXHACollector(SubCollectorMixin):
             "MX warm spare high availability mode info (1 = present)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.MODE,
             ],
         )
@@ -78,9 +74,7 @@ class MXHACollector(SubCollectorMixin):
             "MX warm spare designation priority for a device",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
             ],
         )
@@ -161,9 +155,7 @@ class MXHACollector(SubCollectorMixin):
             mode = row.mode
             mode_labels = create_labels(
                 org_id=org_id,
-                org_name=org_name,
                 network_id=network_id,
-                network_name=network_name,
                 mode=mode,
             )
             self.parent._set_metric(
@@ -182,9 +174,7 @@ class MXHACollector(SubCollectorMixin):
 
                 role_labels = create_labels(
                     org_id=org_id,
-                    org_name=org_name,
                     network_id=network_id,
-                    network_name=network_name,
                     serial=serial,
                 )
                 self.parent._set_metric(

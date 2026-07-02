@@ -179,14 +179,12 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
         await self.run_collector(collector)
         self.assert_collector_success(collector, metrics)
 
-        # SSID 0, auth: 3 + 2 = 5
+        # SSID 0, auth: 3 + 2 = 5 (ID-only; org_name/network_name dropped per #534)
         metrics.assert_gauge_value(
             "meraki_mr_ssid_failed_connections_count",
             5,
             org_id=org["id"],
-            org_name=org["name"],
             network_id=network["id"],
-            network_name=network["name"],
             ssid="0",
             failure_step="auth",
         )
@@ -195,9 +193,7 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
             "meraki_mr_ssid_failed_connections_count",
             5,
             org_id=org["id"],
-            org_name=org["name"],
             network_id=network["id"],
-            network_name=network["name"],
             ssid="1",
             failure_step="dhcp",
         )
@@ -206,9 +202,7 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
             "meraki_mr_ssid_failed_connections_count",
             1,
             org_id=org["id"],
-            org_name=org["name"],
             network_id=network["id"],
-            network_name=network["name"],
             ssid="0",
             failure_step="assoc",
         )
@@ -318,13 +312,12 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
         self.assert_collector_success(collector, metrics)
 
         # Should use "unknown" as fallback for missing fields; both rows aggregate to 2
+        # (ID-only; org_name/network_name dropped per #534)
         metrics.assert_gauge_value(
             "meraki_mr_ssid_failed_connections_count",
             2,
             org_id=org["id"],
-            org_name=org["name"],
             network_id=network["id"],
-            network_name=network["name"],
             ssid="unknown",
             failure_step="unknown",
         )

@@ -107,7 +107,6 @@ class TestLicenseCollector:
                 (
                     ("license_type", device_type),
                     ("org_id", org_id),
-                    ("org_name", org_name),
                     ("status", "OK"),
                 ),
             )
@@ -118,7 +117,7 @@ class TestLicenseCollector:
         for device_type, _ in expected_counts:
             key = (
                 "_licenses_expiring",
-                (("license_type", device_type), ("org_id", org_id), ("org_name", org_name)),
+                (("license_type", device_type), ("org_id", org_id)),
             )
             assert key in parent._metrics
             assert parent._metrics[key] == 0
@@ -155,7 +154,7 @@ class TestLicenseCollector:
         for device_type, count in [("MS", 30), ("MR", 60)]:
             key = (
                 "_licenses_expiring",
-                (("license_type", device_type), ("org_id", org_id), ("org_name", org_name)),
+                (("license_type", device_type), ("org_id", org_id)),
             )
             assert key in parent._metrics
             assert parent._metrics[key] == count
@@ -221,7 +220,6 @@ class TestLicenseCollector:
                 (
                     ("license_type", license_type),
                     ("org_id", org_id),
-                    ("org_name", org_name),
                     ("status", status),
                 ),
             )
@@ -237,7 +235,7 @@ class TestLicenseCollector:
         for license_type, expected_expiring in expiring_checks:
             key = (
                 "_licenses_expiring",
-                (("license_type", license_type), ("org_id", org_id), ("org_name", org_name)),
+                (("license_type", license_type), ("org_id", org_id)),
             )
             assert key in parent._metrics
             assert parent._metrics[key] == expected_expiring
@@ -282,7 +280,6 @@ class TestLicenseCollector:
             (
                 ("license_type", "ENT"),
                 ("org_id", org_id),
-                ("org_name", org_name),
                 ("status", "expiring"),
             ),
         )
@@ -293,14 +290,14 @@ class TestLicenseCollector:
         # expiring gauge, same as the ADV-SEC license in state 'active'.
         key_expiring_ent = (
             "_licenses_expiring",
-            (("license_type", "ENT"), ("org_id", org_id), ("org_name", org_name)),
+            (("license_type", "ENT"), ("org_id", org_id)),
         )
         assert key_expiring_ent in parent._metrics
         assert parent._metrics[key_expiring_ent] == 2
 
         key_expiring_adv = (
             "_licenses_expiring",
-            (("license_type", "ADV-SEC"), ("org_id", org_id), ("org_name", org_name)),
+            (("license_type", "ADV-SEC"), ("org_id", org_id)),
         )
         assert key_expiring_adv in parent._metrics
         assert parent._metrics[key_expiring_adv] == 1
@@ -480,7 +477,6 @@ class TestLicenseCollector:
             (
                 ("license_type", "Unknown"),
                 ("org_id", org_id),
-                ("org_name", org_name),
                 ("status", "active"),
             ),
         )
@@ -492,7 +488,6 @@ class TestLicenseCollector:
             (
                 ("license_type", "ENT"),
                 ("org_id", org_id),
-                ("org_name", org_name),
                 ("status", "Unknown"),
             ),
         )
@@ -502,7 +497,7 @@ class TestLicenseCollector:
         # License without expiration date should not contribute to expiring count
         key3 = (
             "_licenses_expiring",
-            (("license_type", "ADV-SEC"), ("org_id", org_id), ("org_name", org_name)),
+            (("license_type", "ADV-SEC"), ("org_id", org_id)),
         )
         assert key3 in parent._metrics
         assert parent._metrics[key3] == 0
@@ -543,7 +538,6 @@ class TestLicenseCollector:
                 (
                     ("license_type", device_type),
                     ("org_id", org_id),
-                    ("org_name", org_name),
                     ("status", "EXPIRED"),
                 ),
             )
@@ -555,7 +549,7 @@ class TestLicenseCollector:
         for device_type, count in [("MS", 20), ("MR", 40)]:
             key = (
                 "_licenses_expiring",
-                (("license_type", device_type), ("org_id", org_id), ("org_name", org_name)),
+                (("license_type", device_type), ("org_id", org_id)),
             )
             assert key in parent._metrics
             assert parent._metrics[key] == count

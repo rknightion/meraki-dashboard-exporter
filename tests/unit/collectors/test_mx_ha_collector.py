@@ -100,7 +100,8 @@ class TestMXHACollector:
         gauge_0, labels_0, value_0, name_0 = mock_parent._set_metric.call_args_list[0][0]
         assert gauge_0 is collector._mx_ha_enabled
         assert labels_0["network_id"] == "N_111"
-        assert labels_0["network_name"] == "Office Network"
+        assert "network_name" not in labels_0
+        assert "org_name" not in labels_0
         assert value_0 == 1.0
         assert name_0 == "meraki_mx_ha_enabled"
 
@@ -173,16 +174,12 @@ class TestMXHACollector:
         # Series belonging to another org (would be wiped by a global clear()).
         mode_gauge.labels(
             org_id="org2",
-            org_name="Other Org",
             network_id="N_222",
-            network_name="Other Network",
             mode="active-passive",
         ).set(1)
         role_gauge.labels(
             org_id="org2",
-            org_name="Other Org",
             network_id="N_222",
-            network_name="Other Network",
             serial="Q2ZZ-OTHER",
         ).set(1)
 

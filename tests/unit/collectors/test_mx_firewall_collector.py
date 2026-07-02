@@ -114,8 +114,8 @@ class TestMXFirewallCollector:
         # 2 user rules; default rule excluded
         assert value == 2.0
         assert labels["network_id"] == "N_1"
-        assert labels["network_name"] == "Office"
         assert labels["org_id"] == "org1"
+        assert "network_name" not in labels
 
     async def test_l3_rule_count_no_user_rules(
         self,
@@ -461,7 +461,7 @@ class TestMXFirewallCollector:
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """org_id, org_name, network_id, network_name must appear in all metric calls."""
+        """org_id and network_id (ID-only, issue #534) must appear in all metric calls."""
         mock_api.appliance.getNetworkApplianceFirewallL3FirewallRules = MagicMock(
             return_value={
                 "rules": [
@@ -480,9 +480,9 @@ class TestMXFirewallCollector:
         for call in mock_parent._set_metric.call_args_list:
             _, labels, _ = call[0]
             assert labels.get("org_id") == "org-xyz"
-            assert labels.get("org_name") == "My Organisation"
             assert labels.get("network_id") == "N_99"
-            assert labels.get("network_name") == "Branch Office"
+            assert "org_name" not in labels
+            assert "network_name" not in labels
 
     async def test_rule_type_label_l3_and_l7(
         self,
@@ -598,7 +598,7 @@ class TestMXFirewallCollector:
         """
         # Seed a series for another org — a global clear() would wipe it.
         firewall_collector._security_events_count.labels(
-            org_id="org2", org_name="Other Org", event_type="IDS Alert"
+            org_id="org2", event_type="IDS Alert"
         ).set(3)
 
         mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(return_value=[])
@@ -626,7 +626,7 @@ class TestMXFirewallCollector:
         the current cycle's event type must still be passed to _set_metric.
         """
         firewall_collector._security_events_count.labels(
-            org_id="org2", org_name="Other Org", event_type="Old Type"
+            org_id="org2", event_type="Old Type"
         ).set(5)
         assert len(firewall_collector._security_events_count._metrics) == 1
 
@@ -690,7 +690,7 @@ class TestMXFirewallCollector:
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """org_id and org_name labels must appear on every emitted series."""
+        """org_id (ID-only, issue #534) must appear on every emitted series."""
         mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
             return_value=[{"eventType": "IDS Alert", "networkId": "N_1"}]
         )
@@ -705,7 +705,7 @@ class TestMXFirewallCollector:
         assert len(calls) == 1
         _, labels, _ = calls[0][0]
         assert labels["org_id"] == "org-abc"
-        assert labels["org_name"] == "My Org"
+        assert "org_name" not in labels
         assert labels["event_type"] == "IDS Alert"
 
     async def test_security_events_uses_perpage_1000(

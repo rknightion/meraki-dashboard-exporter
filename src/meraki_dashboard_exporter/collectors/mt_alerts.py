@@ -66,9 +66,7 @@ class MTSensorAlertsCollector(MetricCollector):
             "Count of currently-alerting MT sensors per network per metric",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.METRIC,
             ],
         )
@@ -182,9 +180,7 @@ class MTSensorAlertsCollector(MetricCollector):
 
         """
         network_id = network.get("id", "")
-        network_name = network.get("name", network_id)
         org_id = network.get("orgId", "")
-        org_name = network.get("orgName", org_id)
 
         raw_overview = await self._fetch_network_alerts_overview(network_id)
         if raw_overview is None:
@@ -202,9 +198,7 @@ class MTSensorAlertsCollector(MetricCollector):
 
             labels = create_labels(
                 org_id=org_id,
-                org_name=org_name,
                 network_id=network_id,
-                network_name=network_name,
                 metric=metric_name,
             )
             self._set_metric(

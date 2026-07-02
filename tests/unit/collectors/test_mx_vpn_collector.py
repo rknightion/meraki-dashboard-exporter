@@ -439,7 +439,7 @@ class TestMXVpnCollector:
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """org_id and org_name labels must appear in every metric call."""
+        """org_id (ID-only, issue #534) must appear in every metric call."""
         mock_api.appliance.getOrganizationApplianceVpnStatuses = MagicMock(
             return_value=[
                 {
@@ -456,7 +456,8 @@ class TestMXVpnCollector:
         for call in mock_parent._set_metric.call_args_list:
             _, labels, _ = call[0]
             assert labels["org_id"] == "org-abc"
-            assert labels["org_name"] == "My Org"
+            assert "org_name" not in labels
+            assert "network_name" not in labels
 
     async def test_collect_vpn_statuses_respects_network_filter(
         self,
@@ -613,9 +614,7 @@ class TestMXVpnStatsCollector:
         assert sent_call[2] == pytest.approx(123400.0)
         assert sent_call[1] == {
             "org_id": "org1",
-            "org_name": "Test Org",
             "network_id": "N_1",
-            "network_name": "HQ",
             "peer_network_id": "N_2",
         }
 

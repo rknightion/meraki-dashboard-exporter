@@ -53,11 +53,8 @@ class MXUplinkHealthCollector(SubCollectorMixin):
         """Initialize uplink loss/latency Prometheus gauge metrics."""
         labelnames = [
             LabelName.ORG_ID,
-            LabelName.ORG_NAME,
             LabelName.NETWORK_ID,
-            LabelName.NETWORK_NAME,
             LabelName.SERIAL,
-            LabelName.NAME,
             LabelName.MODEL,
             LabelName.DEVICE_TYPE,
             LabelName.INTERFACE,

@@ -54,11 +54,8 @@ class MXUplinkUsageCollector(SubCollectorMixin):
         """Initialize uplink usage Prometheus gauge metrics."""
         labelnames = [
             LabelName.ORG_ID,
-            LabelName.ORG_NAME,
             LabelName.NETWORK_ID,
-            LabelName.NETWORK_NAME,
             LabelName.SERIAL,
-            LabelName.NAME,
             LabelName.MODEL,
             LabelName.DEVICE_TYPE,
             LabelName.INTERFACE,

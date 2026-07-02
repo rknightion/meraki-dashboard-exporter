@@ -42,11 +42,8 @@ class MXCollector(BaseDeviceCollector):
             "MX appliance uplink status info (1 = present)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.INTERFACE,
@@ -59,11 +56,8 @@ class MXCollector(BaseDeviceCollector):
             "MX appliance performance score (0-100)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],

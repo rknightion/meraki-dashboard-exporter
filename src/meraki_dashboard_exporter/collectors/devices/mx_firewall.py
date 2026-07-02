@@ -81,9 +81,7 @@ class MXFirewallCollector(SubCollectorMixin):
             "Number of user-defined firewall rules by type (excludes default rule)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.RULE_TYPE,
             ],
         )
@@ -92,9 +90,7 @@ class MXFirewallCollector(SubCollectorMixin):
             "Firewall default policy for L3 rules (1=allow, 0=deny)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
         self._security_events_count = self.parent._create_gauge(
@@ -102,7 +98,6 @@ class MXFirewallCollector(SubCollectorMixin):
             "Security events by type in the current collection window (not a monotonic total)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.EVENT_TYPE,
             ],
         )
@@ -149,9 +144,7 @@ class MXFirewallCollector(SubCollectorMixin):
 
         base_labels = {
             LabelName.ORG_ID: org_id,
-            LabelName.ORG_NAME: org_name,
             LabelName.NETWORK_ID: network_id,
-            LabelName.NETWORK_NAME: network_name,
         }
 
         # L3 rules. Wrap in validate_response_format so an SDK exhausted-retry
@@ -289,7 +282,6 @@ class MXFirewallCollector(SubCollectorMixin):
                 self._security_events_count,
                 {
                     LabelName.ORG_ID: org_id,
-                    LabelName.ORG_NAME: org_name,
                     LabelName.EVENT_TYPE: event_type,
                 },
                 float(count),

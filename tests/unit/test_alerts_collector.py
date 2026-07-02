@@ -160,13 +160,11 @@ class TestAlertsCollector(BaseCollectorTest):
             AlertMetricName.ALERTS_ACTIVE,
             1,
             org_id="123",
-            org_name="Test Org",
             alert_type="connectivity",
             category_type="network",
             severity="critical",
             device_type="MR",
             network_id="N_123",
-            network_name="Test Network",
         )
 
         # Verify summary metrics
@@ -174,14 +172,12 @@ class TestAlertsCollector(BaseCollectorTest):
             AlertMetricName.ALERTS_BY_SEVERITY,
             1,
             org_id="123",
-            org_name="Test Org",
             severity="critical",
         )
         metrics.assert_gauge_value(
             AlertMetricName.ALERTS_BY_SEVERITY,
             1,
             org_id="123",
-            org_name="Test Org",
             severity="warning",
         )
 
@@ -420,35 +416,30 @@ class TestAlertsCollector(BaseCollectorTest):
             AlertMetricName.SENSOR_ALERTS_COUNT,
             2,
             network_id="N_123",
-            network_name="Test Network 1",
             metric="co2",
         )
         metrics.assert_gauge_value(
             AlertMetricName.SENSOR_ALERTS_COUNT,
             5,
             network_id="N_123",
-            network_name="Test Network 1",
             metric="door",
         )
         metrics.assert_gauge_value(
             AlertMetricName.SENSOR_ALERTS_COUNT,
             7,
             network_id="N_123",
-            network_name="Test Network 1",
             metric="temperature",
         )
         metrics.assert_gauge_value(
             AlertMetricName.SENSOR_ALERTS_COUNT,
             1,
             network_id="N_123",
-            network_name="Test Network 1",
             metric="water",
         )
         metrics.assert_gauge_value(
             AlertMetricName.SENSOR_ALERTS_COUNT,
             3,
             network_id="N_123",
-            network_name="Test Network 1",
             metric="noise_ambient",
         )
 
@@ -457,28 +448,24 @@ class TestAlertsCollector(BaseCollectorTest):
             AlertMetricName.SENSOR_ALERTS_COUNT,
             1,
             network_id="N_456",
-            network_name="Test Network 2",
             metric="apparentPower",
         )
         metrics.assert_gauge_value(
             AlertMetricName.SENSOR_ALERTS_COUNT,
             2,
             network_id="N_456",
-            network_name="Test Network 2",
             metric="current",
         )
         metrics.assert_gauge_value(
             AlertMetricName.SENSOR_ALERTS_COUNT,
             3,
             network_id="N_456",
-            network_name="Test Network 2",
             metric="realPower",
         )
         metrics.assert_gauge_value(
             AlertMetricName.SENSOR_ALERTS_COUNT,
             1,
             network_id="N_456",
-            network_name="Test Network 2",
             metric="voltage",
         )
 
@@ -487,7 +474,6 @@ class TestAlertsCollector(BaseCollectorTest):
             AlertMetricName.SENSOR_ALERTS_COUNT,
             0,
             network_id="N_123",
-            network_name="Test Network 1",
             metric="apparentPower",
         )
 
@@ -734,9 +720,7 @@ class TestAlertsCollector(BaseCollectorTest):
             AlertMetricName.NETWORK_HEALTH_ALERTS,
             2,
             org_id="123",
-            org_name="Test Org",
             network_id="N_0",
-            network_name="Network 0",
             category="connectivity",
             severity="warning",
         )
@@ -744,9 +728,7 @@ class TestAlertsCollector(BaseCollectorTest):
             AlertMetricName.NETWORK_HEALTH_ALERTS,
             1,
             org_id="123",
-            org_name="Test Org",
             network_id="N_1",
-            network_name="Network 1",
             category="device_health",
             severity="critical",
         )
@@ -794,41 +776,33 @@ class TestAlertsCollector(BaseCollectorTest):
             AlertMetricName.ALERTS_ACTIVE,
             1,
             org_id=org_id,
-            org_name=org_name,
             alert_type="connectivity",
             category_type="connectivity",
             severity="critical",
             device_type="MR",
             network_id="N_1",
-            network_name="Allowed Network",
         )
         metrics.assert_gauge_value(
             AlertMetricName.ALERTS_BY_NETWORK,
             1,
             org_id=org_id,
-            org_name=org_name,
             network_id="N_1",
-            network_name="Allowed Network",
         )
 
         # Excluded network must not emit any series.
         metrics.assert_metric_not_set(
             AlertMetricName.ALERTS_ACTIVE,
             org_id=org_id,
-            org_name=org_name,
             alert_type="performance",
             category_type="wireless",
             severity="warning",
             device_type="MS",
             network_id="N_2",
-            network_name="Excluded Network",
         )
         metrics.assert_metric_not_set(
             AlertMetricName.ALERTS_BY_NETWORK,
             org_id=org_id,
-            org_name=org_name,
             network_id="N_2",
-            network_name="Excluded Network",
         )
 
         # By-severity summary must only count the allowed network's alert.
@@ -836,14 +810,12 @@ class TestAlertsCollector(BaseCollectorTest):
             AlertMetricName.ALERTS_BY_SEVERITY,
             1,
             org_id=org_id,
-            org_name=org_name,
             severity="critical",
         )
         metrics.assert_gauge_value(
             AlertMetricName.ALERTS_BY_SEVERITY,
             0,
             org_id=org_id,
-            org_name=org_name,
             severity="warning",
         )
 
@@ -994,9 +966,7 @@ class TestAlertsCollector(BaseCollectorTest):
             AlertMetricName.ALERTS_ACTIVE,
             1,
             org_id="123",
-            org_name="Test Org",
             network_id="N_123",
-            network_name="Test Network",
             alert_type="connectivity",
             category_type="connectivity",
             severity="critical",
@@ -1014,9 +984,7 @@ class TestAlertsCollector(BaseCollectorTest):
             AlertMetricName.ALERTS_ACTIVE,
             1,
             org_id="123",
-            org_name="Test Org",
             network_id="N_123",
-            network_name="Test Network",
             alert_type="connectivity",
             category_type="connectivity",
             severity="critical",
@@ -1036,9 +1004,7 @@ class TestAlertsCollector(BaseCollectorTest):
         metrics.assert_metric_not_set(
             AlertMetricName.ALERTS_ACTIVE,
             org_id="123",
-            org_name="Test Org",
             network_id="N_123",
-            network_name="Test Network",
             alert_type="connectivity",
             category_type="connectivity",
             severity="critical",

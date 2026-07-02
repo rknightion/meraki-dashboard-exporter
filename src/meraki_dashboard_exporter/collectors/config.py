@@ -33,86 +33,86 @@ class ConfigCollector(MetricCollector):
         self._login_security_password_expiration_enabled = self._create_gauge(
             OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_ENABLED,
             "Whether password expiration is enforced (1=enabled, 0=disabled)",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._login_security_password_expiration_days = self._create_gauge(
             OrgMetricName.ORG_LOGIN_SECURITY_PASSWORD_EXPIRATION_SECONDS,
             "Seconds before password expires (0 if not set)",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._login_security_different_passwords_enabled = self._create_gauge(
             OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_ENABLED,
             "Whether different passwords are enforced (1=enabled, 0=disabled)",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._login_security_different_passwords_count = self._create_gauge(
             OrgMetricName.ORG_LOGIN_SECURITY_DIFFERENT_PASSWORDS_COUNT,
             "Number of different passwords required (0 if not set)",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._login_security_strong_passwords_enabled = self._create_gauge(
             OrgMetricName.ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED,
             "Whether strong passwords are enforced (1=enabled, 0=disabled)",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._login_security_minimum_password_length = self._create_gauge(
             OrgMetricName.ORG_LOGIN_SECURITY_MINIMUM_PASSWORD_LENGTH,
             "Minimum password length required",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._login_security_account_lockout_enabled = self._create_gauge(
             OrgMetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ENABLED,
             "Whether account lockout is enforced (1=enabled, 0=disabled)",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._login_security_account_lockout_attempts = self._create_gauge(
             OrgMetricName.ORG_LOGIN_SECURITY_ACCOUNT_LOCKOUT_ATTEMPTS,
             "Number of failed login attempts before lockout (0 if not set)",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._login_security_idle_timeout_enabled = self._create_gauge(
             OrgMetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_ENABLED,
             "Whether idle timeout is enforced (1=enabled, 0=disabled)",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._login_security_idle_timeout_minutes = self._create_gauge(
             OrgMetricName.ORG_LOGIN_SECURITY_IDLE_TIMEOUT_SECONDS,
             "Seconds before idle timeout (0 if not set)",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._login_security_two_factor_enabled = self._create_gauge(
             OrgMetricName.ORG_LOGIN_SECURITY_TWO_FACTOR_ENABLED,
             "Whether two-factor authentication is enforced (1=enabled, 0=disabled)",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._login_security_ip_ranges_enabled = self._create_gauge(
             OrgMetricName.ORG_LOGIN_SECURITY_IP_RANGES_ENABLED,
             "Whether login IP ranges are enforced (1=enabled, 0=disabled)",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._login_security_api_ip_restrictions_enabled = self._create_gauge(
             OrgMetricName.ORG_LOGIN_SECURITY_API_IP_RESTRICTIONS_ENABLED,
             "Whether API key IP restrictions are enabled (1=enabled, 0=disabled)",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         # Configuration change metrics
         self._configuration_changes_total = self._create_gauge(
             OrgMetricName.ORG_CONFIGURATION_CHANGES_COUNT,
             "Number of configuration changes observed in the last 24 hours (fetch timespan=86400s)",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         # Admin accounts & 2FA/SSO posture (aggregated, no per-admin PII)
@@ -121,7 +121,6 @@ class ConfigCollector(MetricCollector):
             "Number of org dashboard admins by authentication method and account status",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.AUTHENTICATION_METHOD,
                 LabelName.ACCOUNT_STATUS,
             ],
@@ -130,7 +129,7 @@ class ConfigCollector(MetricCollector):
         self._org_admins_two_factor_enabled_total = self._create_gauge(
             OrgMetricName.ORG_ADMINS_TWO_FACTOR_ENABLED,
             "Number of org dashboard admins with two-factor auth enabled",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
     async def _get_organizations(self) -> list[dict[str, Any]]:
@@ -289,61 +288,61 @@ class ConfigCollector(MetricCollector):
                 )
 
             # Password expiration
-            self._login_security_password_expiration_enabled.labels(org_id, org_name).set(
+            self._login_security_password_expiration_enabled.labels(org_id).set(
                 1 if security.get("enforcePasswordExpiration", False) else 0
             )
 
             # API value is in days; convert to seconds (x86400) for the renamed
             # meraki_org_login_security_password_expiration_seconds (issue #531).
-            self._login_security_password_expiration_days.labels(org_id, org_name).set(
+            self._login_security_password_expiration_days.labels(org_id).set(
                 (security.get("passwordExpirationDays") or 0) * 86400
             )
 
             # Different passwords
-            self._login_security_different_passwords_enabled.labels(org_id, org_name).set(
+            self._login_security_different_passwords_enabled.labels(org_id).set(
                 1 if security.get("enforceDifferentPasswords", False) else 0
             )
 
-            self._login_security_different_passwords_count.labels(org_id, org_name).set(
+            self._login_security_different_passwords_count.labels(org_id).set(
                 security.get("numDifferentPasswords") or 0
             )
 
             # Strong passwords
-            self._login_security_strong_passwords_enabled.labels(org_id, org_name).set(
+            self._login_security_strong_passwords_enabled.labels(org_id).set(
                 1 if security.get("enforceStrongPasswords", False) else 0
             )
 
-            self._login_security_minimum_password_length.labels(org_id, org_name).set(
+            self._login_security_minimum_password_length.labels(org_id).set(
                 security.get("minimumPasswordLength") or 0
             )
 
             # Account lockout
-            self._login_security_account_lockout_enabled.labels(org_id, org_name).set(
+            self._login_security_account_lockout_enabled.labels(org_id).set(
                 1 if security.get("enforceAccountLockout", False) else 0
             )
 
-            self._login_security_account_lockout_attempts.labels(org_id, org_name).set(
+            self._login_security_account_lockout_attempts.labels(org_id).set(
                 security.get("accountLockoutAttempts") or 0
             )
 
             # Idle timeout
-            self._login_security_idle_timeout_enabled.labels(org_id, org_name).set(
+            self._login_security_idle_timeout_enabled.labels(org_id).set(
                 1 if security.get("enforceIdleTimeout", False) else 0
             )
 
             # API value is in minutes; convert to seconds (x60) for the renamed
             # meraki_org_login_security_idle_timeout_seconds (issue #531).
-            self._login_security_idle_timeout_minutes.labels(org_id, org_name).set(
+            self._login_security_idle_timeout_minutes.labels(org_id).set(
                 (security.get("idleTimeoutMinutes") or 0) * 60
             )
 
             # Two-factor auth
-            self._login_security_two_factor_enabled.labels(org_id, org_name).set(
+            self._login_security_two_factor_enabled.labels(org_id).set(
                 1 if security.get("enforceTwoFactorAuth", False) else 0
             )
 
             # IP ranges
-            self._login_security_ip_ranges_enabled.labels(org_id, org_name).set(
+            self._login_security_ip_ranges_enabled.labels(org_id).set(
                 1 if security.get("enforceLoginIpRanges", False) else 0
             )
 
@@ -352,7 +351,7 @@ class ConfigCollector(MetricCollector):
             ip_restrictions = api_auth.get("ipRestrictionsForKeys", {})
             api_ip_enabled = ip_restrictions.get("enabled", False)
 
-            self._login_security_api_ip_restrictions_enabled.labels(org_id, org_name).set(
+            self._login_security_api_ip_restrictions_enabled.labels(org_id).set(
                 1 if api_ip_enabled else 0
             )
 
@@ -406,7 +405,6 @@ class ConfigCollector(MetricCollector):
                         self._org_admins_total,
                         {
                             LabelName.ORG_ID: org_id,
-                            LabelName.ORG_NAME: org_name,
                             LabelName.AUTHENTICATION_METHOD: auth_method,
                             LabelName.ACCOUNT_STATUS: account_status,
                         },
@@ -430,7 +428,6 @@ class ConfigCollector(MetricCollector):
                     self._org_admins_total,
                     {
                         LabelName.ORG_ID: org_id,
-                        LabelName.ORG_NAME: org_name,
                         LabelName.AUTHENTICATION_METHOD: auth_method,
                         LabelName.ACCOUNT_STATUS: account_status,
                     },
@@ -439,7 +436,7 @@ class ConfigCollector(MetricCollector):
 
             self._set_metric(
                 self._org_admins_two_factor_enabled_total,
-                {LabelName.ORG_ID: org_id, LabelName.ORG_NAME: org_name},
+                {LabelName.ORG_ID: org_id},
                 two_factor_count,
             )
 
@@ -502,7 +499,7 @@ class ConfigCollector(MetricCollector):
 
             # Set the metric
             if self._configuration_changes_total:
-                self._configuration_changes_total.labels(org_id, org_name).set(change_count)
+                self._configuration_changes_total.labels(org_id).set(change_count)
                 logger.debug(
                     "Successfully collected configuration changes",
                     org_id=org_id,
@@ -523,7 +520,7 @@ class ConfigCollector(MetricCollector):
                 )
                 # Set metric to 0 when API is not available
                 if self._configuration_changes_total:
-                    self._configuration_changes_total.labels(org_id, org_name).set(0)
+                    self._configuration_changes_total.labels(org_id).set(0)
             else:
                 logger.exception(
                     "Failed to collect configuration changes",

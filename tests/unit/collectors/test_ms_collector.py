@@ -286,46 +286,42 @@ class TestMSCollector:
         # collector now always stamps the real serial before building labels.
         net1_labels = {
             "org_id": "org123",
-            "org_name": "Org 123",
             "network_id": "net1",
-            "network_name": "Network 1",
             "model": "MS250",
             "device_type": "MS",
         }
         assert (
             REGISTRY.get_sample_value(
                 "meraki_ms_stp_priority",
-                {**net1_labels, "name": "Switch 1", "serial": "Q2MW-42Z2-JE5T"},
+                {**net1_labels, "serial": "Q2MW-42Z2-JE5T"},
             )
             == 8192.0
         )
         assert (
             REGISTRY.get_sample_value(
                 "meraki_ms_stp_priority",
-                {**net1_labels, "name": "Switch 2", "serial": "Q2BX-Q43Y-RR5C"},
+                {**net1_labels, "serial": "Q2BX-Q43Y-RR5C"},
             )
             == 32768.0
         )
 
         net2_labels = {
             "org_id": "org123",
-            "org_name": "Org 123",
             "network_id": "net2",
-            "network_name": "Network 2",
             "model": "MS350",
             "device_type": "MS",
         }
         assert (
             REGISTRY.get_sample_value(
                 "meraki_ms_stp_priority",
-                {**net2_labels, "name": "Switch 3", "serial": "Q2HP-F6VX-M24J"},
+                {**net2_labels, "serial": "Q2HP-F6VX-M24J"},
             )
             == 32768.0
         )
         assert (
             REGISTRY.get_sample_value(
                 "meraki_ms_stp_priority",
-                {**net2_labels, "name": "Switch 4", "serial": "Q2HP-K4VW-87YT"},
+                {**net2_labels, "serial": "Q2HP-K4VW-87YT"},
             )
             == 32768.0
         )
@@ -369,10 +365,7 @@ class TestMSCollector:
 
         base = {
             "org_id": "org123",
-            "org_name": "Org 123",
             "network_id": "net1",
-            "network_name": "Network 1",
-            "name": "access-sw",
             "model": "MS120",
             "device_type": "MS",
         }
@@ -752,11 +745,8 @@ class TestMSCollector:
 
         base_labels = {
             "org_id": "org1",
-            "org_name": "Org One",
             "network_id": "net1",
-            "network_name": "Test Network",
             "serial": "Q123-456-789",
-            "name": "Test Switch",
             "model": "MS250-48",
             "device_type": "MS",
         }
@@ -764,13 +754,11 @@ class TestMSCollector:
         error_labels = {
             **base_labels,
             "port_id": "1",
-            "port_name": "Port 1",
             "error_type": "PoE overload",
         }
         warning_labels = {
             **base_labels,
             "port_id": "1",
-            "port_name": "Port 1",
             "warning_type": "Port flapping",
         }
 
@@ -781,13 +769,11 @@ class TestMSCollector:
         clean_error_labels = {
             **base_labels,
             "port_id": "2",
-            "port_name": "Port 2",
             "error_type": "PoE overload",
         }
         clean_warning_labels = {
             **base_labels,
             "port_id": "2",
-            "port_name": "Port 2",
             "warning_type": "Port flapping",
         }
         assert REGISTRY.get_sample_value("meraki_ms_port_error_active", clean_error_labels) is None
@@ -844,20 +830,16 @@ class TestMSCollector:
 
         labels = {
             "org_id": "org1",
-            "org_name": "Org One",
             "network_id": "net1",
-            "network_name": "Test Network",
             "serial": "Q2XX-XXXX-XXXX",
-            "name": "Test Switch",
             "model": "MS250-48",
             "device_type": "MS",
             "port_id": "1",
-            "port_name": "Port 1",
             "error_type": "Duplex mismatch",
         }
         assert REGISTRY.get_sample_value("meraki_ms_port_error_active", labels) == 1.0
 
-        clean_labels = {**labels, "port_id": "2", "port_name": "Port 2"}
+        clean_labels = {**labels, "port_id": "2"}
         assert REGISTRY.get_sample_value("meraki_ms_port_error_active", clean_labels) is None
 
     async def test_collect_emits_stp_and_8021x_metrics(
@@ -919,11 +901,8 @@ class TestMSCollector:
 
         base_labels = {
             "org_id": "org1",
-            "org_name": "Org One",
             "network_id": "net1",
-            "network_name": "Test Network",
             "serial": "Q123-456-789",
-            "name": "Test Switch",
             "model": "MS250-48",
             "device_type": "MS",
         }
@@ -931,47 +910,42 @@ class TestMSCollector:
         stp_labels = {
             **base_labels,
             "port_id": "1",
-            "port_name": "Port 1",
             "state": "forwarding",
         }
         assert REGISTRY.get_sample_value("meraki_ms_port_stp_state", stp_labels) == 1.0
 
-        active_labels_port1 = {**base_labels, "port_id": "1", "port_name": "Port 1"}
+        active_labels_port1 = {**base_labels, "port_id": "1"}
         assert REGISTRY.get_sample_value("meraki_ms_port_8021x_active", active_labels_port1) == 1.0
 
         status_labels = {
             **base_labels,
             "port_id": "1",
-            "port_name": "Port 1",
             "status": "Authentication successful",
         }
         assert REGISTRY.get_sample_value("meraki_ms_port_8021x_status", status_labels) == 1.0
 
         # Port 2: active=False -> 0, and no authenticationStatus -> no status series.
-        active_labels_port2 = {**base_labels, "port_id": "2", "port_name": "Port 2"}
+        active_labels_port2 = {**base_labels, "port_id": "2"}
         assert REGISTRY.get_sample_value("meraki_ms_port_8021x_active", active_labels_port2) == 0.0
         status_labels_port2 = {
             **base_labels,
             "port_id": "2",
-            "port_name": "Port 2",
             "status": "Authentication successful",
         }
         assert REGISTRY.get_sample_value("meraki_ms_port_8021x_status", status_labels_port2) is None
         stp_labels_port2 = {
             **base_labels,
             "port_id": "2",
-            "port_name": "Port 2",
             "state": "forwarding",
         }
         assert REGISTRY.get_sample_value("meraki_ms_port_stp_state", stp_labels_port2) is None
 
         # Port 3: no spanningTree/securePort at all -> nothing emitted for any of these.
-        active_labels_port3 = {**base_labels, "port_id": "3", "port_name": "Port 3"}
+        active_labels_port3 = {**base_labels, "port_id": "3"}
         assert REGISTRY.get_sample_value("meraki_ms_port_8021x_active", active_labels_port3) is None
         stp_labels_port3 = {
             **base_labels,
             "port_id": "3",
-            "port_name": "Port 3",
             "state": "forwarding",
         }
         assert REGISTRY.get_sample_value("meraki_ms_port_stp_state", stp_labels_port3) is None
@@ -1027,11 +1001,8 @@ class TestMSCollector:
 
         base_labels = {
             "org_id": "org1",
-            "org_name": "Org One",
             "network_id": "net1",
-            "network_name": "Test Network",
             "serial": "Q2XX-XXXX-XXXX",
-            "name": "Test Switch",
             "model": "MS250-48",
             "device_type": "MS",
         }
@@ -1039,24 +1010,22 @@ class TestMSCollector:
         stp_labels = {
             **base_labels,
             "port_id": "1",
-            "port_name": "Port 1",
             "state": "blocking",
         }
         assert REGISTRY.get_sample_value("meraki_ms_port_stp_state", stp_labels) == 1.0
 
-        active_labels = {**base_labels, "port_id": "1", "port_name": "Port 1"}
+        active_labels = {**base_labels, "port_id": "1"}
         assert REGISTRY.get_sample_value("meraki_ms_port_8021x_active", active_labels) == 1.0
 
         status_labels = {
             **base_labels,
             "port_id": "1",
-            "port_name": "Port 1",
             "status": "Authentication successful",
         }
         assert REGISTRY.get_sample_value("meraki_ms_port_8021x_status", status_labels) == 1.0
 
         # Port 2 had no spanningTree/securePort -> nothing emitted.
-        clean_active_labels = {**base_labels, "port_id": "2", "port_name": "Port 2"}
+        clean_active_labels = {**base_labels, "port_id": "2"}
         assert REGISTRY.get_sample_value("meraki_ms_port_8021x_active", clean_active_labels) is None
 
     async def test_collect_port_overview_error_shape_does_not_zero_counts(
@@ -1084,7 +1053,7 @@ class TestMSCollector:
         )
         await ms_collector.collect_port_overview("org1", "Org One")
 
-        org_labels = {"org_id": "org1", "org_name": "Org One"}
+        org_labels = {"org_id": "org1"}
         assert REGISTRY.get_sample_value("meraki_ms_ports_active", org_labels) == 42.0
         assert REGISTRY.get_sample_value("meraki_ms_ports_inactive", org_labels) == 7.0
 
@@ -1139,15 +1108,11 @@ class TestMSCollector:
 
         labels = {
             "org_id": "org1",
-            "org_name": "Org One",
             "network_id": "net1",
-            "network_name": "Test Network",
             "serial": "Q123-456-789",
-            "name": "Test Switch",
             "model": "MS250-48",
             "device_type": "MS",
             "port_id": "1",
-            "port_name": "Port 1",
             "link_speed": "1 Gbps",
             "duplex": "full",
         }
@@ -1198,15 +1163,11 @@ class TestMSCollector:
 
         base_labels = {
             "org_id": "org1",
-            "org_name": "Org One",
             "network_id": "net1",
-            "network_name": "Test Network",
             "serial": "Q123-456-789",
-            "name": "Test Switch",
             "model": "MS250-48",
             "device_type": "MS",
             "port_id": "1",
-            "port_name": "Port 1",
         }
         forwarding_labels = {**base_labels, "state": "forwarding"}
         assert REGISTRY.get_sample_value("meraki_ms_port_stp_state", forwarding_labels) == 1.0
@@ -1347,15 +1308,11 @@ class TestMSCollector:
 
         base = {
             "org_id": "org1",
-            "org_name": "Org One",
             "network_id": "net1",
-            "network_name": "Net One",
             "serial": "Q2XX-0001",
-            "name": "SW1",
             "model": "MS250-48",
             "device_type": "MS",
             "port_id": "1",
-            "port_name": "Port 1",
         }
 
         # Usage bytes: sum of interval decimal KB * 1000 (D5: not KiB x1024).
@@ -1396,11 +1353,8 @@ class TestMSCollector:
         # (deliberately unconverted Wh-as-watts approximation, out of scope for #531).
         device_labels = {
             "org_id": "org1",
-            "org_name": "Org One",
             "network_id": "net1",
-            "network_name": "Net One",
             "serial": "Q2XX-0001",
-            "name": "SW1",
             "model": "MS250-48",
             "device_type": "MS",
         }
@@ -1438,15 +1392,11 @@ class TestMSCollector:
 
         base = {
             "org_id": "org1",
-            "org_name": "Org One",
             "network_id": "net1",
-            "network_name": "net1",
             "serial": "Q2XX-0002",
-            "name": "SW2",
             "model": "MS120-8",
             "device_type": "MS",
             "port_id": "3",
-            "port_name": "Port 3",
         }
         assert REGISTRY.get_sample_value("meraki_ms_port_client_count", base) == 0.0
 
@@ -1463,3 +1413,152 @@ class TestMSCollector:
         devices = [{"serial": "Q2XX-0003", "networkId": "net1", "name": "SW3", "model": "MS120"}]
         result = await ms_collector.collect_port_usage_by_switch("org1", "Org One", devices)
         assert result is False
+
+    async def test_collect_emits_ms_port_info_per_device_path(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """#534: the per-device fallback emits meraki_ms_port_info (value 1).
+
+        The info series is keyed on the stable ``(serial, port_id)`` and carries
+        the mutable ``port_name`` so the numeric per-port series can stay
+        id-only. A port lacking a ``name`` defaults to ``"Port {port_id}"``.
+        Exactly one info series per port, and no name-family labels leak onto it.
+        """
+        device = {
+            "serial": "Q123-456-789",
+            "name": "Test Switch",
+            "model": "MS250-48",
+            "networkId": "net1",
+            "networkName": "Test Network",
+            "orgId": "org1",
+            "orgName": "Org One",
+        }
+
+        mock_api.switch.getDeviceSwitchPortsStatuses = MagicMock(
+            return_value=[
+                {"portId": "1", "name": "Uplink Port", "status": "Connected"},
+                {"portId": "2", "status": "Connected"},  # no name -> "Port 2"
+            ]
+        )
+
+        await ms_collector.collect(device)
+
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_port_info",
+                {
+                    "org_id": "org1",
+                    "network_id": "net1",
+                    "serial": "Q123-456-789",
+                    "port_id": "1",
+                    "port_name": "Uplink Port",
+                },
+            )
+            == 1.0
+        )
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_port_info",
+                {
+                    "org_id": "org1",
+                    "network_id": "net1",
+                    "serial": "Q123-456-789",
+                    "port_id": "2",
+                    "port_name": "Port 2",
+                },
+            )
+            == 1.0
+        )
+
+        # Exactly one info series per port (2 ports -> 2 series).
+        info_samples = [
+            s
+            for mf in REGISTRY.collect()
+            if mf.name == "meraki_ms_port_info"
+            for s in mf.samples
+            if s.name == "meraki_ms_port_info"
+        ]
+        assert len(info_samples) == 2
+
+    async def test_collect_port_statuses_by_switch_emits_ms_port_info(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """#534: the org-wide status path also emits meraki_ms_port_info."""
+        devices = [
+            {
+                "serial": "Q2XX-XXXX-XXXX",
+                "networkId": "net1",
+                "networkName": "Test Network",
+                "name": "Test Switch",
+                "model": "MS250-48",
+            }
+        ]
+
+        mock_api.switch.getOrganizationSwitchPortsStatusesBySwitch = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-XXXX-XXXX",
+                    "name": "Test Switch",
+                    "model": "MS250-48",
+                    "network": {"id": "net1", "name": "Test Network"},
+                    "ports": [
+                        {"portId": "1", "name": "Port 1", "status": "Connected"},
+                    ],
+                }
+            ]
+        )
+
+        result = await ms_collector.collect_port_statuses_by_switch("org1", "Org One", devices)
+        assert result is True
+
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_port_info",
+                {
+                    "org_id": "org1",
+                    "network_id": "net1",
+                    "serial": "Q2XX-XXXX-XXXX",
+                    "port_id": "1",
+                    "port_name": "Port 1",
+                },
+            )
+            == 1.0
+        )
+
+    async def test_ms_port_info_routes_through_set_metric_for_expiration(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """#534: meraki_ms_port_info must emit via parent._set_metric.
+
+        Routing through ``_set_metric`` (with the metric name as the 4th arg)
+        is what registers the series with the MetricExpirationManager so a
+        removed port's info series expires instead of lingering forever (same
+        class as the F-084/F-175 routing guarantees for the other MS series).
+        """
+        device = {
+            "serial": "Q123-456-789",
+            "name": "Test Switch",
+            "model": "MS250-48",
+            "networkId": "net1",
+            "networkName": "Test Network",
+            "orgId": "org1",
+            "orgName": "Org One",
+        }
+
+        mock_api.switch.getDeviceSwitchPortsStatuses = MagicMock(
+            return_value=[{"portId": "1", "name": "Port 1", "status": "Connected"}]
+        )
+
+        await ms_collector.collect(device)
+
+        tracked_metric_names = {
+            call.args[3] for call in mock_parent._set_metric.call_args_list if len(call.args) > 3
+        }
+        assert "meraki_ms_port_info" in tracked_metric_names

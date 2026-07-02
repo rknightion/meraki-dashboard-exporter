@@ -132,10 +132,12 @@ class TestMXCollector:
         # Verify the first call (wan1 active)
         _, labels_0, value_0 = mock_parent._set_metric.call_args_list[0][0]
         assert labels_0["serial"] == "Q2AB-1234-5678"
-        assert labels_0["name"] == "Office MX"
         assert labels_0["interface"] == "wan1"
         assert labels_0["status"] == "active"
-        assert labels_0["network_name"] == "Office Network"
+        assert labels_0["network_id"] == "N_111"
+        assert "name" not in labels_0
+        assert "network_name" not in labels_0
+        assert "org_name" not in labels_0
         assert value_0 == 1
 
         # Verify the second call (wan2 not connected)
@@ -181,10 +183,9 @@ class TestMXCollector:
 
         assert mock_parent._set_metric.call_count == 1
         _, labels, _ = mock_parent._set_metric.call_args_list[0][0]
-        # Falls back to serial as name when not in device_lookup
-        assert labels["name"] == "Q2XX-UNKNOWN"
         assert labels["serial"] == "Q2XX-UNKNOWN"
         assert labels["model"] == "MX100"
+        assert "name" not in labels
 
     async def test_collect_uplink_statuses_multiple_appliances(
         self,
@@ -315,11 +316,8 @@ class TestMXCollector:
         # Series belonging to another org (would be wiped by a global clear()).
         gauge.labels(
             org_id="org2",
-            org_name="Other Org",
             network_id="N_222",
-            network_name="Other Network",
             serial="Q2ZZ-OTHER",
-            name="Other MX",
             model="MX68",
             device_type="MX",
             interface="wan1",
@@ -406,8 +404,10 @@ class TestMXCollector:
         assert gauge is mx_collector._mx_performance_score
         assert labels["serial"] == "Q2AB-1234-5678"
         assert labels["org_id"] == "org1"
-        assert labels["org_name"] == "Test Org"
         assert labels["network_id"] == "N_111"
+        assert "org_name" not in labels
+        assert "network_name" not in labels
+        assert "name" not in labels
         assert value == 87.0
         assert metric_name == "meraki_mx_performance_score"
 
@@ -434,13 +434,18 @@ class TestMXCollector:
 
         mock_parent._set_metric.assert_not_called()
 
-    async def test_collect_performance_score_org_name_falls_back_to_org_id(
+    async def test_collect_performance_score_missing_org_name_still_emits(
         self,
         mx_collector: MXCollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """Test that org_name falls back to org_id when not present on the device."""
+        """Test that the metric is still emitted when orgName is absent from the device.
+
+        Numeric series are ID-only (issue #534) so a missing display name has no
+        effect on label output; this only verifies the code path that used to fall
+        back org_name to org_id does not error and the metric still emits by org_id.
+        """
         mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={"perfScore": 50})
 
         device = {
@@ -455,7 +460,8 @@ class TestMXCollector:
         await mx_collector.collect(device)
 
         _, labels, _, _ = mock_parent._set_metric.call_args_list[0][0]
-        assert labels["org_name"] == "org1"
+        assert labels["org_id"] == "org1"
+        assert "org_name" not in labels
 
     async def test_collect_skips_performance_score_for_z_series_teleworker_gateway(
         self,

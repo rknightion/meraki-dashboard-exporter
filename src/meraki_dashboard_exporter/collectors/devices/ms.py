@@ -13,7 +13,7 @@ from ...core.label_helpers import create_device_labels, create_port_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
-from ...core.metrics import LabelName
+from ...core.metrics import LabelName, create_labels
 from ...core.otel_tracing import trace_method
 from .base import BaseDeviceCollector
 
@@ -28,29 +28,21 @@ logger = get_logger(__name__)
 # (see F-070: label-valued state series must not linger past a transition).
 _STP_STATE_LABEL_ORDER = (
     LabelName.ORG_ID,
-    LabelName.ORG_NAME,
     LabelName.NETWORK_ID,
-    LabelName.NETWORK_NAME,
     LabelName.SERIAL,
-    LabelName.NAME,
     LabelName.MODEL,
     LabelName.DEVICE_TYPE,
     LabelName.PORT_ID,
-    LabelName.PORT_NAME,
     LabelName.STATE,
 )
 
 _8021X_STATUS_LABEL_ORDER = (
     LabelName.ORG_ID,
-    LabelName.ORG_NAME,
     LabelName.NETWORK_ID,
-    LabelName.NETWORK_NAME,
     LabelName.SERIAL,
-    LabelName.NAME,
     LabelName.MODEL,
     LabelName.DEVICE_TYPE,
     LabelName.PORT_ID,
-    LabelName.PORT_NAME,
     LabelName.STATUS,
 )
 
@@ -94,15 +86,11 @@ class MSCollector(BaseDeviceCollector):
             "Switch port status (1 = connected, 0 = disconnected)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.PORT_ID,
-                LabelName.PORT_NAME,
                 LabelName.LINK_SPEED,
                 LabelName.DUPLEX,
             ],
@@ -113,15 +101,11 @@ class MSCollector(BaseDeviceCollector):
             "Switch port traffic rate in bytes per second (averaged over 1 hour)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.PORT_ID,
-                LabelName.PORT_NAME,
                 LabelName.DIRECTION,
             ],
         )
@@ -131,15 +115,11 @@ class MSCollector(BaseDeviceCollector):
             "Switch port data usage in bytes (decimal KB x1000) over the last 1 hour",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.PORT_ID,
-                LabelName.PORT_NAME,
                 LabelName.DIRECTION,
             ],
         )
@@ -149,15 +129,11 @@ class MSCollector(BaseDeviceCollector):
             "Number of clients connected to switch port",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.PORT_ID,
-                LabelName.PORT_NAME,
             ],
         )
 
@@ -166,15 +142,11 @@ class MSCollector(BaseDeviceCollector):
             "Active switch port errors (1 = currently active for this error_type)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.PORT_ID,
-                LabelName.PORT_NAME,
                 LabelName.ERROR_TYPE,
             ],
         )
@@ -184,15 +156,11 @@ class MSCollector(BaseDeviceCollector):
             "Active switch port warnings (1 = currently active for this warning_type)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.PORT_ID,
-                LabelName.PORT_NAME,
                 LabelName.WARNING_TYPE,
             ],
         )
@@ -203,11 +171,8 @@ class MSCollector(BaseDeviceCollector):
             "Switch power usage in watts",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -219,15 +184,11 @@ class MSCollector(BaseDeviceCollector):
             "Per-port POE energy consumption in joules over the last 1 hour",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.PORT_ID,
-                LabelName.PORT_NAME,
             ],
         )
 
@@ -236,11 +197,8 @@ class MSCollector(BaseDeviceCollector):
             "Total POE energy consumption for switch in joules",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -251,11 +209,8 @@ class MSCollector(BaseDeviceCollector):
             "Total POE power budget for switch in watts",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -266,9 +221,7 @@ class MSCollector(BaseDeviceCollector):
             "Total POE energy consumption for all switches in network in joules",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -278,11 +231,8 @@ class MSCollector(BaseDeviceCollector):
             "Switch STP (Spanning Tree Protocol) priority",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -294,15 +244,11 @@ class MSCollector(BaseDeviceCollector):
             "Switch port STP state (1 = currently active for this state)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.PORT_ID,
-                LabelName.PORT_NAME,
                 LabelName.STATE,
             ],
         )
@@ -314,15 +260,11 @@ class MSCollector(BaseDeviceCollector):
             "Switch port 802.1X authentication status (1 = currently active for this status)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.PORT_ID,
-                LabelName.PORT_NAME,
                 LabelName.STATUS,
             ],
         )
@@ -332,13 +274,25 @@ class MSCollector(BaseDeviceCollector):
             "Switch port secure-port (802.1X) active state (1 = active, 0 = inactive)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
+                LabelName.PORT_ID,
+            ],
+        )
+
+        # Port info join metric (#534): carries the mutable ``port_name`` keyed
+        # on the stable (serial, port_id) so numeric per-port series stay id-only.
+        # Join via: <numeric> * on(serial, port_id) group_left(port_name)
+        #           meraki_ms_port_info
+        self._ms_port_info = self.parent._create_gauge(
+            MSMetricName.MS_PORT_INFO,
+            "Switch port info (value 1); join port_name via on(serial, port_id)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.SERIAL,
                 LabelName.PORT_ID,
                 LabelName.PORT_NAME,
             ],
@@ -347,15 +301,11 @@ class MSCollector(BaseDeviceCollector):
         # Packet count metrics (5-minute window)
         packet_labels = [
             LabelName.ORG_ID.value,
-            LabelName.ORG_NAME.value,
             LabelName.NETWORK_ID.value,
-            LabelName.NETWORK_NAME.value,
             LabelName.SERIAL.value,
-            LabelName.NAME.value,
             LabelName.MODEL.value,
             LabelName.DEVICE_TYPE.value,
             LabelName.PORT_ID.value,
-            LabelName.PORT_NAME.value,
             LabelName.DIRECTION.value,
         ]
 
@@ -450,7 +400,6 @@ class MSCollector(BaseDeviceCollector):
             "Number of active switch ports",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
             ],
         )
 
@@ -459,7 +408,6 @@ class MSCollector(BaseDeviceCollector):
             "Number of inactive switch ports",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
             ],
         )
 
@@ -468,7 +416,6 @@ class MSCollector(BaseDeviceCollector):
             "Number of switch ports by media type",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.MEDIA,
                 LabelName.STATUS,  # active or inactive
             ],
@@ -479,7 +426,6 @@ class MSCollector(BaseDeviceCollector):
             "Number of active switch ports by link speed",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.MEDIA,
                 LabelName.LINK_SPEED,  # speed in Mbps
             ],
@@ -527,6 +473,46 @@ class MSCollector(BaseDeviceCollector):
 
     def _mark_packet_stats_collected(self, serial: str) -> None:
         self._last_packet_stats[serial] = time.time()
+
+    def _emit_port_info(
+        self,
+        device: dict[str, Any],
+        port: dict[str, Any],
+        org_id: str,
+    ) -> None:
+        """Emit the ``meraki_ms_port_info`` join series for a port (#534).
+
+        Carries the mutable ``port_name`` keyed on the stable
+        ``(serial, port_id)`` so the numeric per-port series can stay id-only.
+        The port name is already in hand at every emission site (no extra API
+        call). Emitted via ``parent._set_metric`` so the series expires when a
+        port disappears (DeviceCollector expiration bucket).
+
+        Parameters
+        ----------
+        device : dict[str, Any]
+            Device (or device-like) data used for id label construction.
+        port : dict[str, Any]
+            Port status data from the API (source of ``portId``/``name``).
+        org_id : str
+            Organization ID.
+
+        """
+        port_id = str(port.get("portId", ""))
+        port_name = port.get("name", f"Port {port_id}")
+        info_labels = create_labels(
+            org_id=org_id,
+            network_id=device.get("networkId", ""),
+            serial=device.get("serial", ""),
+            port_id=port_id,
+            port_name=port_name,
+        )
+        self.parent._set_metric(
+            self._ms_port_info,
+            info_labels,
+            1,
+            MSMetricName.MS_PORT_INFO.value,
+        )
 
     def _emit_port_error_warning_metrics(
         self,
@@ -808,6 +794,7 @@ class MSCollector(BaseDeviceCollector):
 
                 self._emit_port_error_warning_metrics(device_data, port, org_id, org_name)
                 self._emit_port_stp_8021x_metrics(device_data, port, org_id, org_name)
+                self._emit_port_info(device_data, port, org_id)
 
         return True
 
@@ -839,7 +826,7 @@ class MSCollector(BaseDeviceCollector):
 
         try:
             # Get port statuses with 1-hour timespan
-            with LogContext(serial=device_labels["serial"], name=device_labels["name"]):
+            with LogContext(serial=device_labels["serial"], name=device.get("name", "")):
                 port_statuses = await asyncio.to_thread(
                     self.api.switch.getDeviceSwitchPortsStatuses,
                     device_labels["serial"],
@@ -871,6 +858,9 @@ class MSCollector(BaseDeviceCollector):
 
                 # STP state and 802.1X/secure-port auth status (same payload)
                 self._emit_port_stp_8021x_metrics(device, port, org_id, org_name)
+
+                # Port info join series (#534): port_name keyed on serial+port_id
+                self._emit_port_info(device, port, org_id)
 
                 # Traffic counters (rate in bytes per second)
                 if "trafficInKbps" in port:
@@ -1546,7 +1536,7 @@ class MSCollector(BaseDeviceCollector):
                         logger.debug(
                             "Set STP priority",
                             serial=switch_serial,
-                            name=labels["name"],
+                            name=device_info.get("name", ""),
                             network_id=network_id,
                             priority=priority,
                         )
@@ -1606,7 +1596,7 @@ class MSCollector(BaseDeviceCollector):
 
         try:
             # Get packet statistics with 5-minute timespan
-            with LogContext(serial=device_labels["serial"], name=device_labels["name"]):
+            with LogContext(serial=device_labels["serial"], name=device.get("name", "")):
                 packet_stats = await asyncio.to_thread(
                     self.api.switch.getDeviceSwitchPortsStatusesPackets,
                     device_labels["serial"],
@@ -1719,7 +1709,7 @@ class MSCollector(BaseDeviceCollector):
             logger.debug(
                 "Collected packet statistics",
                 serial=device_labels["serial"],
-                name=device_labels["name"],
+                name=device.get("name", ""),
                 port_count=len(packet_stats),
             )
             if serial:
@@ -1767,8 +1757,8 @@ class MSCollector(BaseDeviceCollector):
         active_count = counts.get("byStatus", {}).get("active", {}).get("total", 0)
         inactive_count = counts.get("byStatus", {}).get("inactive", {}).get("total", 0)
 
-        self._ms_ports_active_total.labels(org_id=org_id, org_name=org_name).set(active_count)
-        self._ms_ports_inactive_total.labels(org_id=org_id, org_name=org_name).set(inactive_count)
+        self._ms_ports_active_total.labels(org_id=org_id).set(active_count)
+        self._ms_ports_inactive_total.labels(org_id=org_id).set(inactive_count)
 
         logger.debug(
             "Set port overview totals",
@@ -1786,7 +1776,6 @@ class MSCollector(BaseDeviceCollector):
             media_total = media_data.get("total", 0)
             self._ms_ports_by_media_total.labels(
                 org_id=org_id,
-                org_name=org_name,
                 media=media_type,
                 status="active",
             ).set(media_total)
@@ -1796,7 +1785,6 @@ class MSCollector(BaseDeviceCollector):
                 if speed != "total" and isinstance(count, (int, float)):
                     self._ms_ports_by_link_speed_total.labels(
                         org_id=org_id,
-                        org_name=org_name,
                         media=media_type,
                         link_speed=str(speed),
                     ).set(count)
@@ -1817,7 +1805,6 @@ class MSCollector(BaseDeviceCollector):
             media_total = media_data.get("total", 0)
             self._ms_ports_by_media_total.labels(
                 org_id=org_id,
-                org_name=org_name,
                 media=media_type,
                 status="inactive",
             ).set(media_total)

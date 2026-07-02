@@ -77,8 +77,23 @@ Some metrics are counters that only increase:
 
 ### Info Metrics
 Informational metrics with labels:
-- `meraki_org_info` - Organization details
-- `meraki_device_status_info` - Device status/identity information
+- `meraki_org_info` - Organization details (carries `org_name`, keyed by `org_id`)
+- `meraki_network_info` - Network details (carries `network_name`, keyed by `network_id`)
+- `meraki_device_status_info` - Device status/identity information (carries `name`, keyed by `serial`)
+
+Mutable, human-readable **name** labels (`org_name`, `network_name`, device `name`, `port_name`,
+`zone_name`, ...) are **not** present on numeric series — they live only on these id-keyed `*_info`
+carriers. To display a name alongside a measurement, join the numeric series to its info metric on
+the stable ID and pull the name across with `group_left`:
+
+```promql
+meraki_device_up
+  * on (serial) group_left (name)
+  meraki_device_status_info
+```
+
+See [Metric Stability & Deprecation Policy](../stability.md#name-labels-are-not-part-of-numeric-series)
+for the rationale.
 
 ## Common Labels
 
@@ -87,11 +102,11 @@ All metrics include relevant labels for filtering and grouping:
 | Label | Description | Example |
 |-------|-------------|---------|
 | `org_id` | Organization ID | `123456` |
-| `org_name` | Organization name | `Acme Corp` |
+| `org_name` | Organization name — **only on `meraki_org_info`**, not on numeric series (join on `org_id`) | `Acme Corp` |
 | `network_id` | Network ID | `N_123456` |
-| `network_name` | Network name | `Main Office` |
+| `network_name` | Network name — **only on `meraki_network_info`**, not on numeric series (join on `network_id`) | `Main Office` |
 | `serial` | Device serial number | `Q2XX-XXXX-XXXX` |
-| `name` | Device name | `3rd Floor Switch` |
+| `name` | Device name — **only on `meraki_device_status_info`**, not on numeric series (join on `serial`) | `3rd Floor Switch` |
 | `model` | Device model | `MS120-8LP` |
 | `device_type` | Device type | `ms` |
 | `collector` | Collector name (infrastructure metrics) | `DeviceCollector` |
@@ -171,8 +186,12 @@ up{job="meraki"} == 0
 
 ### 2. Label Filtering
 ```promql
-# Filter by organization
-meraki_device_up{org_name="Production"}
+# Filter by organization (numeric series are keyed by org_id; the org_name
+# label lives on meraki_org_info). Filtering the right-hand side both
+# restricts to that org and attaches the org_name label.
+meraki_device_up
+  * on (org_id) group_left (org_name)
+  meraki_org_info{org_name="Production"}
 
 # Filter by device type
 meraki_device_up{model=~"MS.*"}
@@ -183,8 +202,11 @@ meraki_device_up{model=~"MS.*"}
 # Total devices by type
 sum by (model) (meraki_device_up)
 
-# Average temperature by location
-avg by (network_name) (meraki_mt_temperature_celsius)
+# Average temperature by location (group by the stable network_id, then
+# attach network_name from meraki_network_info)
+avg by (network_id) (meraki_mt_temperature_celsius)
+  * on (network_id) group_left (network_name)
+  meraki_network_info
 ```
 
 ## Grafana Integration
@@ -198,7 +220,11 @@ sum by (model) (meraki_device_up)
 
 ### Temperature Heatmap
 ```promql
-meraki_mt_temperature_celsius{network_name="$network"}
+# Drive the $network variable off network_id; join to meraki_network_info to
+# pull the display name across (or label the variable from meraki_network_info)
+meraki_mt_temperature_celsius{network_id="$network"}
+  * on (network_id) group_left (network_name)
+  meraki_network_info
 ```
 
 ### API Usage Rate

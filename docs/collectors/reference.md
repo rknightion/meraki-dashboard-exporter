@@ -18,7 +18,7 @@ Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_
 | `MTSensorAlertsCollector` | MEDIUM | Collector for network-wide currently-alerting MT sensor counts. | 1 |  |
 | `MTSensorCollector` | FAST | Collector for fast-moving sensor metrics (MT devices). | 23 |  |
 | `NetworkHealthCollector` | MEDIUM | Collector for medium-moving network health metrics. | 9 |  |
-| `OrganizationCollector` | MEDIUM | Collector for organization-level metrics. | 23 |  |
+| `OrganizationCollector` | MEDIUM | Collector for organization-level metrics. | 24 |  |
 
 ## Coordinator Relationships
 

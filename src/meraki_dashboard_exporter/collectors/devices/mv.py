@@ -16,7 +16,7 @@ from ...core.error_handling import ErrorCategory, validate_response_format, with
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
-from ...core.metrics import LabelName
+from ...core.metrics import LabelName, create_labels
 from .base import BaseDeviceCollector
 
 if TYPE_CHECKING:
@@ -48,20 +48,22 @@ class MVCollector(BaseDeviceCollector):
         # pattern in mx_firewall.py/ms.py.
         self._last_static_config_collection: dict[str, float] = {}
         # Cache of the last known zone_id -> zone_label map per camera
-        # serial, so the MEDIUM-tier live-analytics call can still resolve
-        # zone names on cycles where the SLOW-gated zones call is skipped.
+        # serial, so meraki_mv_zone_info (the id-keyed join carrier for
+        # zone_name, issue #534) can still be re-emitted on cycles where the
+        # SLOW-gated zones call is skipped - the id-only meraki_mv_people_count
+        # series would otherwise have no live zone_name join target between
+        # zones-API fetches.
         self._last_zone_maps: dict[str, dict[str, str]] = {}
 
         # Common device label set shared by every MV gauge. Kept as a local
         # variable (not a module constant) so the metrics doc generator, which
         # resolves function-local label lists, picks up the full label set.
+        # ID-only (issue #534, Option B) - the device display name joins via
+        # meraki_device_status_info on serial.
         device_labels = [
             LabelName.ORG_ID.value,
-            LabelName.ORG_NAME.value,
             LabelName.NETWORK_ID.value,
-            LabelName.NETWORK_NAME.value,
             LabelName.SERIAL.value,
-            LabelName.NAME.value,
             LabelName.MODEL.value,
             LabelName.DEVICE_TYPE.value,
         ]
@@ -71,13 +73,20 @@ class MVCollector(BaseDeviceCollector):
             "Current person count reported by MV camera analytics zone",
             labelnames=[
                 LabelName.ORG_ID.value,
-                LabelName.ORG_NAME.value,
                 LabelName.NETWORK_ID.value,
-                LabelName.NETWORK_NAME.value,
                 LabelName.SERIAL.value,
-                LabelName.NAME.value,
                 LabelName.MODEL.value,
                 LabelName.DEVICE_TYPE.value,
+                LabelName.ZONE_ID.value,
+            ],
+        )
+        self._mv_zone_info = self.parent._create_gauge(
+            MVMetricName.MV_ZONE_INFO,
+            "MV camera analytics zone ID to zone name mapping (1 = present)",
+            labelnames=[
+                LabelName.ORG_ID.value,
+                LabelName.NETWORK_ID.value,
+                LabelName.SERIAL.value,
                 LabelName.ZONE_ID.value,
                 LabelName.ZONE_NAME.value,
             ],
@@ -107,11 +116,8 @@ class MVCollector(BaseDeviceCollector):
             "MV camera quality and retention configuration info (1 = present)",
             labelnames=[
                 LabelName.ORG_ID.value,
-                LabelName.ORG_NAME.value,
                 LabelName.NETWORK_ID.value,
-                LabelName.NETWORK_NAME.value,
                 LabelName.SERIAL.value,
-                LabelName.NAME.value,
                 LabelName.MODEL.value,
                 LabelName.DEVICE_TYPE.value,
                 LabelName.QUALITY.value,
@@ -155,9 +161,11 @@ class MVCollector(BaseDeviceCollector):
         cuts steady-state per-camera API traffic from 3 calls/cycle to
         effectively 1 call/cycle plus 2 calls every third cycle. The
         zone-id -> zone-label map from the last static-config collection is
-        cached (``_last_zone_maps``) so zone-name resolution on the live call
-        keeps working on cycles where the zones call is skipped. The three
-        calls are independent so a failure in one does not block the others.
+        cached (``_last_zone_maps``) so ``meraki_mv_zone_info`` (the id-keyed
+        join carrier for zone_name, issue #534) can be re-emitted on cycles
+        where the zones call is skipped, keeping the join target live between
+        fetches. The three calls are independent so a failure in one does not
+        block the others.
 
         Parameters
         ----------
@@ -181,10 +189,60 @@ class MVCollector(BaseDeviceCollector):
                 serial=serial,
                 interval_seconds=self.settings.update_intervals.slow,
             )
+            # meraki_mv_zone_info is only (re)emitted from a fresh zones-API
+            # fetch in _collect_analytics_zones - re-emit from the cached map
+            # here so the id-keyed join carrier doesn't go stale/expire on a
+            # cycle where that fetch is skipped (mirrors how the live call
+            # used to resolve zone names from this same cache).
+            self._emit_zone_info(device, org_id, org_name, self._last_zone_maps.get(serial, {}))
 
-        await self._collect_analytics_live(
-            device, org_id, org_name, serial, self._last_zone_maps.get(serial, {})
-        )
+        await self._collect_analytics_live(device, org_id, org_name, serial)
+
+    def _emit_zone_info(
+        self,
+        device: dict[str, Any],
+        org_id: str,
+        org_name: str,
+        zone_map: dict[str, str],
+    ) -> None:
+        """Emit ``meraki_mv_zone_info`` for every zone in the given zone map.
+
+        Id-keyed join carrier (issue #534, Option B): maps
+        ``serial``+``zone_id`` -> ``zone_name`` so ``meraki_mv_people_count``
+        (id-only) can re-attach the display name via
+        ``on(serial, zone_id) group_left(zone_name)``. Built directly via
+        ``create_labels`` (not ``create_device_labels``) because this metric's
+        label set is ``{org_id, network_id, serial, zone_id, zone_name}`` only
+        - no ``model``/``device_type``.
+
+        Parameters
+        ----------
+        device : dict[str, Any]
+            Device data.
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name. Retained for call-site symmetry; not emitted.
+        zone_map : dict[str, str]
+            Mapping of zone ID to zone label.
+
+        """
+        network_id = device.get("networkId", "")
+        serial = device.get("serial", "")
+        for zone_id, zone_name in zone_map.items():
+            labels = create_labels(
+                org_id=org_id,
+                network_id=network_id,
+                serial=serial,
+                zone_id=zone_id,
+                zone_name=zone_name,
+            )
+            self.parent._set_metric(
+                self._mv_zone_info,
+                labels,
+                1,
+                MVMetricName.MV_ZONE_INFO.value,
+            )
 
     @log_api_call("getDeviceCameraAnalyticsZones")
     @with_error_handling(
@@ -232,7 +290,9 @@ class MVCollector(BaseDeviceCollector):
             MVMetricName.MV_ANALYTICS_ZONES.value,
         )
 
-        return {str(zone.id): (zone.label or "") for zone in zone_models}
+        zone_map = {str(zone.id): (zone.label or "") for zone in zone_models}
+        self._emit_zone_info(device, org_id, org_name, zone_map)
+        return zone_map
 
     @log_api_call("getDeviceCameraAnalyticsLive")
     @with_error_handling(
@@ -246,9 +306,13 @@ class MVCollector(BaseDeviceCollector):
         org_id: str,
         org_name: str,
         serial: str,
-        zone_map: dict[str, str],
     ) -> None:
         """Collect live person-count analytics per zone for a camera.
+
+        ``zone_name`` is no longer a label on ``meraki_mv_people_count`` (issue
+        #534, decision D2) - it joins via ``meraki_mv_zone_info`` on
+        ``(serial, zone_id)`` instead, so this call no longer needs the
+        zone-id -> zone-label map.
 
         Parameters
         ----------
@@ -260,8 +324,6 @@ class MVCollector(BaseDeviceCollector):
             Organization name.
         serial : str
             Camera serial number.
-        zone_map : dict[str, str]
-            Mapping of zone ID to zone label, from the zones call.
 
         """
         live = await asyncio.to_thread(
@@ -280,7 +342,6 @@ class MVCollector(BaseDeviceCollector):
                 org_id=org_id,
                 org_name=org_name,
                 zone_id=str(zone_id),
-                zone_name=zone_map.get(str(zone_id), ""),
             )
             self.parent._set_metric(
                 self._mv_people_count,

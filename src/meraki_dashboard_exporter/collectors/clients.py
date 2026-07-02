@@ -91,9 +91,7 @@ class ClientsCollector(MetricCollector):
             "Client online status (1 = online, 0 = offline)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.CLIENT_ID,
                 LabelName.MAC,
                 LabelName.DESCRIPTION,
@@ -109,9 +107,7 @@ class ClientsCollector(MetricCollector):
             "Bytes sent by client in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.CLIENT_ID,
                 LabelName.MAC,
                 LabelName.DESCRIPTION,
@@ -125,9 +121,7 @@ class ClientsCollector(MetricCollector):
             "Bytes received by client in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.CLIENT_ID,
                 LabelName.MAC,
                 LabelName.DESCRIPTION,
@@ -141,9 +135,7 @@ class ClientsCollector(MetricCollector):
             "Total bytes transferred by client in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.CLIENT_ID,
                 LabelName.MAC,
                 LabelName.DESCRIPTION,
@@ -205,9 +197,7 @@ class ClientsCollector(MetricCollector):
             "Count of wireless clients by capability, over the last hour",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.TYPE,  # For the capability type
             ],
         )
@@ -218,9 +208,7 @@ class ClientsCollector(MetricCollector):
             "Count of clients per SSID, over the last hour",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SSID,
             ],
         )
@@ -230,9 +218,7 @@ class ClientsCollector(MetricCollector):
             "Count of clients per VLAN, over the last hour",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.VLAN,
             ],
         )
@@ -243,9 +229,7 @@ class ClientsCollector(MetricCollector):
             "Bytes sent by client per application in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.CLIENT_ID,
                 LabelName.MAC,
                 LabelName.DESCRIPTION,
@@ -259,9 +243,7 @@ class ClientsCollector(MetricCollector):
             "Bytes received by client per application in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.CLIENT_ID,
                 LabelName.MAC,
                 LabelName.DESCRIPTION,
@@ -275,9 +257,7 @@ class ClientsCollector(MetricCollector):
             "Total bytes transferred by client per application in the last hour",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.CLIENT_ID,
                 LabelName.MAC,
                 LabelName.DESCRIPTION,
@@ -293,9 +273,7 @@ class ClientsCollector(MetricCollector):
             "most recent 5-min sample",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.CLIENT_ID,
                 LabelName.MAC,
                 LabelName.DESCRIPTION,
@@ -309,9 +287,7 @@ class ClientsCollector(MetricCollector):
             "Wireless client SNR (Signal-to-Noise Ratio) in dB, most recent 5-min sample",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.CLIENT_ID,
                 LabelName.MAC,
                 LabelName.DESCRIPTION,

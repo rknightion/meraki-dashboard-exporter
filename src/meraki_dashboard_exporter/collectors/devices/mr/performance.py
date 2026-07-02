@@ -54,11 +54,8 @@ class MRPerformanceCollector:
             "Access point power information",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.MODE,
@@ -70,11 +67,8 @@ class MRPerformanceCollector:
             "Access point AC power connection status (1 = connected, 0 = not connected)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -85,11 +79,8 @@ class MRPerformanceCollector:
             "Access point PoE power connection status (1 = connected, 0 = not connected)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -100,11 +91,8 @@ class MRPerformanceCollector:
             "Access point port PoE information",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.PORT_NAME,
@@ -117,11 +105,8 @@ class MRPerformanceCollector:
             "Access point port link negotiation information",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.PORT_NAME,
@@ -134,11 +119,8 @@ class MRPerformanceCollector:
             "Access point port link negotiation speed in Mbps",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.PORT_NAME,
@@ -150,11 +132,8 @@ class MRPerformanceCollector:
             "Access point port aggregation enabled status (1 = enabled, 0 = disabled)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -165,11 +144,8 @@ class MRPerformanceCollector:
             "Access point total aggregated port speed in Mbps",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -181,11 +157,8 @@ class MRPerformanceCollector:
             "Total downstream packets transmitted by access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -196,11 +169,8 @@ class MRPerformanceCollector:
             "Downstream packets lost by access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -211,11 +181,8 @@ class MRPerformanceCollector:
             "Downstream packet loss percentage for access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -226,11 +193,8 @@ class MRPerformanceCollector:
             "Total upstream packets received by access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -241,11 +205,8 @@ class MRPerformanceCollector:
             "Upstream packets lost by access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -256,11 +217,8 @@ class MRPerformanceCollector:
             "Upstream packet loss percentage for access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -272,11 +230,8 @@ class MRPerformanceCollector:
             "Total packets (upstream + downstream) for access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -287,11 +242,8 @@ class MRPerformanceCollector:
             "Total packets lost (upstream + downstream) for access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -302,11 +254,8 @@ class MRPerformanceCollector:
             "Total packet loss percentage for access point (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -318,9 +267,7 @@ class MRPerformanceCollector:
             "Total downstream packets for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -329,9 +276,7 @@ class MRPerformanceCollector:
             "Downstream packets lost for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -340,9 +285,7 @@ class MRPerformanceCollector:
             "Downstream packet loss percentage for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -351,9 +294,7 @@ class MRPerformanceCollector:
             "Total upstream packets for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -362,9 +303,7 @@ class MRPerformanceCollector:
             "Upstream packets lost for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -373,9 +312,7 @@ class MRPerformanceCollector:
             "Upstream packet loss percentage for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -384,9 +321,7 @@ class MRPerformanceCollector:
             "Total packets (upstream + downstream) for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -395,9 +330,7 @@ class MRPerformanceCollector:
             "Total packets lost (upstream + downstream) for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -406,9 +339,7 @@ class MRPerformanceCollector:
             "Total packet loss percentage for network (5-minute window)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -418,11 +349,8 @@ class MRPerformanceCollector:
             "Access point CPU load percentage (5-minute average)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],

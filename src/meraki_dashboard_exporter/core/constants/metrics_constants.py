@@ -84,6 +84,8 @@ class NetworkMetricName(StrEnum):
     """Network-level metric names."""
 
     NETWORK_WIRELESS_CONNECTION_STATS_COUNT = "meraki_network_wireless_connection_stats_count"
+    # id-keyed join carrier: maps network_id -> network_name (issue #534, Option B)
+    NETWORK_INFO = "meraki_network_info"
     # Network-filter observability (emitted by services/inventory.py)
     NETWORK_FILTER_MATCH = "meraki_network_filter_match"
     NETWORK_FILTER_RESOLVED = "meraki_network_filter_resolved"
@@ -107,6 +109,8 @@ class MSMetricName(StrEnum):
     """MS (Switch) specific metric names."""
 
     MS_PORT_STATUS = "meraki_ms_port_status"
+    # id-keyed join carrier: maps serial+port_id -> port_name (issue #534, Option B)
+    MS_PORT_INFO = "meraki_ms_port_info"
     # Rate, not a volume: API kbps converted x1000/8 to bytes/second (#531 D7)
     MS_PORT_TRAFFIC_BYTES_PER_SECOND = "meraki_ms_port_traffic_bytes_per_second"
     MS_POWER_USAGE_WATTS = "meraki_ms_power_usage_watts"
@@ -282,6 +286,8 @@ class MVMetricName(StrEnum):
 
     MV_ANALYTICS_ZONES = "meraki_mv_analytics_zones"
     MV_PEOPLE_COUNT = "meraki_mv_people_count"
+    # id-keyed join carrier: maps serial+zone_id -> zone_name (issue #534, Option B)
+    MV_ZONE_INFO = "meraki_mv_zone_info"
 
     # Quality & retention config (info + boolean gauges)
     MV_MOTION_BASED_RETENTION_ENABLED = "meraki_mv_motion_based_retention_enabled"

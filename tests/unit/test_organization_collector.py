@@ -5,7 +5,11 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 from meraki_dashboard_exporter.collectors.organization import OrganizationCollector
-from meraki_dashboard_exporter.core.constants import OrgMetricName, UpdateTier
+from meraki_dashboard_exporter.core.constants import (
+    NetworkMetricName,
+    OrgMetricName,
+    UpdateTier,
+)
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import (
     NetworkFactory,
@@ -144,14 +148,12 @@ class TestOrganizationCollector(BaseCollectorTest):
             OrgMetricName.ORG_PACKETCAPTURES,
             266,
             org_id="123",
-            org_name="Test Org",
         )
 
         metrics.assert_gauge_value(
             OrgMetricName.ORG_PACKETCAPTURES_REMAINING,
             263,
             org_id="123",
-            org_name="Test Org",
         )
 
     async def test_packet_capture_metrics_with_no_captures(
@@ -196,14 +198,12 @@ class TestOrganizationCollector(BaseCollectorTest):
             OrgMetricName.ORG_PACKETCAPTURES,
             0,
             org_id="456",
-            org_name="Empty Org",
         )
 
         metrics.assert_gauge_value(
             OrgMetricName.ORG_PACKETCAPTURES_REMAINING,
             0,
             org_id="456",
-            org_name="Empty Org",
         )
 
     async def test_packet_capture_metrics_with_api_error(
@@ -239,13 +239,11 @@ class TestOrganizationCollector(BaseCollectorTest):
         metrics.assert_metric_not_set(
             OrgMetricName.ORG_PACKETCAPTURES,
             org_id="789",
-            org_name="Error Org",
         )
 
         metrics.assert_metric_not_set(
             OrgMetricName.ORG_PACKETCAPTURES_REMAINING,
             org_id="789",
-            org_name="Error Org",
         )
 
     async def test_packet_capture_metrics_with_unexpected_response(
@@ -289,13 +287,11 @@ class TestOrganizationCollector(BaseCollectorTest):
         metrics.assert_metric_not_set(
             OrgMetricName.ORG_PACKETCAPTURES,
             org_id="999",
-            org_name="Weird Org",
         )
 
         metrics.assert_metric_not_set(
             OrgMetricName.ORG_PACKETCAPTURES_REMAINING,
             org_id="999",
-            org_name="Weird Org",
         )
 
     async def test_collect_application_usage_metrics(self, collector, mock_api_builder, metrics):
@@ -368,7 +364,6 @@ class TestOrganizationCollector(BaseCollectorTest):
             OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
             579131547202.1103,
             org_id="111",
-            org_name="App Usage Org",
             category="other",
         )
 
@@ -376,7 +371,6 @@ class TestOrganizationCollector(BaseCollectorTest):
             OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_BYTES,
             364303215503.6926,
             org_id="111",
-            org_name="App Usage Org",
             category="other",
         )
 
@@ -384,7 +378,6 @@ class TestOrganizationCollector(BaseCollectorTest):
             OrgMetricName.ORG_APPLICATION_USAGE_PERCENT,
             97.1055882261812,
             org_id="111",
-            org_name="App Usage Org",
             category="other",
         )
 
@@ -393,7 +386,6 @@ class TestOrganizationCollector(BaseCollectorTest):
             OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
             2367426.872253418,
             org_id="111",
-            org_name="App Usage Org",
             category="voip_and_video_conferencing",
         )
 
@@ -402,7 +394,6 @@ class TestOrganizationCollector(BaseCollectorTest):
             OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_BYTES,
             500000.0,
             org_id="111",
-            org_name="App Usage Org",
             category="voip_and_video_conferencing",
         )
 
@@ -411,7 +402,6 @@ class TestOrganizationCollector(BaseCollectorTest):
             OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
             33518364.906311035,
             org_id="111",
-            org_name="App Usage Org",
             category="software_and_anti_virus_updates",
         )
 
@@ -526,7 +516,6 @@ class TestOrganizationCollector(BaseCollectorTest):
         metrics.assert_metric_not_set(
             OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
             org_id="333",
-            org_name="Error App Usage Org",
             category="other",
         )
 
@@ -562,7 +551,6 @@ class TestOrganizationCollector(BaseCollectorTest):
             "meraki_exporter_org_collection_status",
             0,
             org_id=org["id"],
-            org_name=org["name"],
         )
 
     async def test_org_metrics_resilient_to_partial_subcollection_failure(self, collector, metrics):
@@ -614,7 +602,6 @@ class TestOrganizationCollector(BaseCollectorTest):
             "meraki_exporter_org_collection_status",
             0,
             org_id=org["id"],
-            org_name=org["name"],
         )
 
     async def test_org_metrics_404_not_counted_as_failure(
@@ -673,7 +660,6 @@ class TestOrganizationCollector(BaseCollectorTest):
             "meraki_exporter_org_collection_status",
             1,
             org_id=org["id"],
-            org_name=org["name"],
         )
 
     # -- F-172: isolated failure in one of the 5 delegating sub-collectors ---
@@ -730,7 +716,6 @@ class TestOrganizationCollector(BaseCollectorTest):
             "meraki_exporter_org_collection_status",
             0,
             org_id=org["id"],
-            org_name=org["name"],
         )
 
     async def test_delegating_subcollector_non_404_error_records_failure(self, collector, metrics):
@@ -754,7 +739,6 @@ class TestOrganizationCollector(BaseCollectorTest):
             "meraki_exporter_org_collection_status",
             0,
             org_id=org["id"],
-            org_name=org["name"],
         )
 
     async def test_delegating_subcollector_404_not_counted_as_failure(self, collector, metrics):
@@ -777,7 +761,6 @@ class TestOrganizationCollector(BaseCollectorTest):
             "meraki_exporter_org_collection_status",
             1,
             org_id=org["id"],
-            org_name=org["name"],
         )
 
     # -- F-041: dead {"items": ...} branch in device-counts-by-model --------
@@ -803,7 +786,6 @@ class TestOrganizationCollector(BaseCollectorTest):
             OrgMetricName.ORG_DEVICES_BY_MODEL,
             5,
             org_id=org_id,
-            org_name=org_name,
             model="MS120-8",
         )
 
@@ -890,3 +872,163 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         call = api.organizations.getOrganizationDevicesPacketCaptureCaptures.call_args
         assert call.kwargs["networkIds"] == ["N_3"]
+
+    # -- #534 NI-1: meraki_network_info id->name join backbone ---------------
+
+    @staticmethod
+    def _network_info_samples(registry) -> list[tuple[frozenset[tuple[str, str]], float]]:
+        """Collect (label-set, value) pairs for meraki_network_info from a registry."""
+        samples: list[tuple[frozenset[tuple[str, str]], float]] = []
+        for metric in registry.collect():
+            for sample in metric.samples:
+                if sample.name == NetworkMetricName.NETWORK_INFO.value:
+                    samples.append((frozenset(sample.labels.items()), sample.value))
+        return samples
+
+    async def test_network_info_emitted_one_series_per_network(
+        self, collector, metrics, isolated_registry
+    ):
+        """NI-1: meraki_network_info emits value 1, exactly one series per network.
+
+        Labels are ID-only + the name carrier: {org_id, network_id,
+        network_name}. This is the id->name join backbone every network_name
+        join across the exporter depends on.
+        """
+        org_id, org_name = "org-1", "Org One"
+        networks = [
+            {"id": "N_1", "name": "HQ"},
+            {"id": "N_2", "name": "Branch"},
+        ]
+        collector.api_helper.get_organization_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=networks
+        )
+
+        await collector._collect_network_metrics(org_id, org_name)
+
+        # networks-total gauge is ID-only (org_name dropped) and counts both.
+        metrics.assert_gauge_value(OrgMetricName.ORG_NETWORKS, 2, org_id=org_id)
+
+        # Exactly one network_info series per network, each value 1, each with
+        # the exact ID-only + name-carrier label set (no org_name leakage).
+        samples = self._network_info_samples(isolated_registry)
+        assert len(samples) == 2
+        expected = {
+            frozenset(
+                {"org_id": org_id, "network_id": "N_1", "network_name": "HQ"}.items()
+            ),
+            frozenset(
+                {"org_id": org_id, "network_id": "N_2", "network_name": "Branch"}.items()
+            ),
+        }
+        assert {labelset for labelset, _ in samples} == expected
+        assert all(value == 1 for _, value in samples)
+
+    async def test_network_info_series_retired_when_network_removed(
+        self, mock_api, settings, isolated_registry, inventory
+    ):
+        """NI-1: a deleted/filtered network's info series expires (not frozen).
+
+        Emitting via _set_metric registers the series with the expiration
+        manager; once the network stops being emitted its series is retired on
+        the next cleanup, while surviving networks are refreshed and kept.
+        """
+        from unittest.mock import patch
+
+        from meraki_dashboard_exporter.core.metric_expiration import MetricExpirationManager
+
+        manager = MetricExpirationManager(settings=settings)
+        collector = OrganizationCollector(
+            api=mock_api,
+            settings=settings,
+            registry=isolated_registry,
+            inventory=inventory,
+            expiration_manager=manager,
+        )
+
+        org_id, org_name = "org-9", "Org Nine"
+
+        # Cycle 1 at base_time: both networks present.
+        collector.api_helper.get_organization_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[{"id": "N_1", "name": "HQ"}, {"id": "N_2", "name": "Branch"}]
+        )
+        base_time = 1_000_000.0
+        with patch(
+            "meraki_dashboard_exporter.core.metric_expiration.time.time",
+            return_value=base_time,
+        ):
+            await collector._collect_network_metrics(org_id, org_name)
+
+        assert len(self._network_info_samples(isolated_registry)) == 2
+
+        # Cycle 2 much later: N_2 is gone, only N_1 refreshed to a recent time.
+        collector.api_helper.get_organization_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[{"id": "N_1", "name": "HQ"}]
+        )
+        refresh_time = base_time + 100_000
+        with patch(
+            "meraki_dashboard_exporter.core.metric_expiration.time.time",
+            return_value=refresh_time,
+        ):
+            await collector._collect_network_metrics(org_id, org_name)
+
+        # Cleanup just after the refresh: N_1 (age ~1s) is fresh and kept, while
+        # N_2 (never refreshed, age ~100k s >> MEDIUM TTL) is retired.
+        with patch(
+            "meraki_dashboard_exporter.core.metric_expiration.time.time",
+            return_value=refresh_time + 1,
+        ):
+            await manager._cleanup_expired_metrics()
+
+        samples = self._network_info_samples(isolated_registry)
+        assert samples == [
+            (frozenset({"org_id": org_id, "network_id": "N_1", "network_name": "HQ"}.items()), 1.0)
+        ]
+
+    async def test_network_info_excluded_network_has_no_series(
+        self, mock_api_builder, settings, isolated_registry, metrics
+    ):
+        """NI-1: a NetworkFilter-excluded network gets NO info series.
+
+        Exercised end-to-end through the real inventory + NetworkFilter (per
+        tests/CLAUDE.md) rather than by patching the filter out.
+        """
+        from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+        from meraki_dashboard_exporter.core.network_filter import NetworkFilter
+        from meraki_dashboard_exporter.services.inventory import OrganizationInventory
+
+        org_id, org_name = "org-f", "Filter Org"
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationNetworks",
+            [
+                {"id": "N_keep", "name": "Prod", "tags": []},
+                {"id": "N_drop", "name": "Lab", "tags": ["lab"]},
+            ],
+        ).build()
+
+        network_filter = NetworkFilter(NetworkFilterSettings(exclude_tags=["lab"]))
+        inventory = OrganizationInventory(api, settings, network_filter=network_filter)
+        collector = OrganizationCollector(
+            api=api,
+            settings=settings,
+            registry=isolated_registry,
+            inventory=inventory,
+        )
+        collector.api_helper.api = api
+
+        await collector._collect_network_metrics(org_id, org_name)
+
+        # The allowed network is the only info series; the excluded one is absent.
+        metrics.assert_gauge_value(
+            NetworkMetricName.NETWORK_INFO,
+            1,
+            org_id=org_id,
+            network_id="N_keep",
+            network_name="Prod",
+        )
+        metrics.assert_metric_not_set(NetworkMetricName.NETWORK_INFO, network_id="N_drop")
+
+        samples = self._network_info_samples(isolated_registry)
+        assert len(samples) == 1
+        assert samples[0][0] == frozenset(
+            {"org_id": org_id, "network_id": "N_keep", "network_name": "Prod"}.items()
+        )

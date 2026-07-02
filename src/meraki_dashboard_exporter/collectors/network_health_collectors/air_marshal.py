@@ -53,9 +53,7 @@ class AirMarshalCollector(BaseNetworkHealthCollector):
         """Initialize Air Marshal Prometheus gauge metrics."""
         labelnames = [
             LabelName.ORG_ID,
-            LabelName.ORG_NAME,
             LabelName.NETWORK_ID,
-            LabelName.NETWORK_NAME,
         ]
         self._air_marshal_ssids_total = self.parent._create_gauge(
             NetworkHealthMetricName.MR_AIR_MARSHAL_SSIDS_COUNT,

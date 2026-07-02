@@ -57,11 +57,8 @@ class MSPowerCollector(SubCollectorMixin):
             "MS/rackmount power-supply module status (1 = reported this cycle)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.SLOT,

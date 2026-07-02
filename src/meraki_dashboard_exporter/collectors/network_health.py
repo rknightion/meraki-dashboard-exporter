@@ -75,11 +75,8 @@ class NetworkHealthCollector(MetricCollector):
             "2.4GHz channel utilization percentage per AP, 10-min bucket",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.UTILIZATION_TYPE,
@@ -91,11 +88,8 @@ class NetworkHealthCollector(MetricCollector):
             "5GHz channel utilization percentage per AP, 10-min bucket",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.UTILIZATION_TYPE,
@@ -108,9 +102,7 @@ class NetworkHealthCollector(MetricCollector):
             "Network-wide average 2.4GHz channel utilization percentage, 10-min bucket",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.UTILIZATION_TYPE,
             ],
         )
@@ -120,9 +112,7 @@ class NetworkHealthCollector(MetricCollector):
             "Network-wide average 5GHz channel utilization percentage, 10-min bucket",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.UTILIZATION_TYPE,
             ],
         )
@@ -133,9 +123,7 @@ class NetworkHealthCollector(MetricCollector):
             "Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.STAT_TYPE,
             ],
         )
@@ -149,9 +137,7 @@ class NetworkHealthCollector(MetricCollector):
             "Network-wide wireless download bandwidth in bytes per second, 5-min bucket",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -163,9 +149,7 @@ class NetworkHealthCollector(MetricCollector):
             "Network-wide wireless upload bandwidth in bytes per second, 5-min bucket",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -175,9 +159,7 @@ class NetworkHealthCollector(MetricCollector):
             "Number of Bluetooth clients detected by MR devices in the last 5 minutes",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -187,9 +169,7 @@ class NetworkHealthCollector(MetricCollector):
             "Failed wireless connections by SSID and failure step over the last hour",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SSID,
                 LabelName.FAILURE_STEP,
             ],

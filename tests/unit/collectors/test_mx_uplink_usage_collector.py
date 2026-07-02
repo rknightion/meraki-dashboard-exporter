@@ -112,9 +112,11 @@ class TestMXUplinkUsageCollector:
         gauge_0, labels_0, value_0, name_0 = mock_parent._set_metric.call_args_list[0][0]
         assert gauge_0 is collector._mx_uplink_sent_bytes
         assert labels_0["serial"] == "Q2AB-1234-5678"
-        assert labels_0["name"] == "Office MX"
+        assert labels_0["network_id"] == "N_111"
         assert labels_0["interface"] == "wan1"
-        assert labels_0["network_name"] == "Office Network"
+        assert "name" not in labels_0
+        assert "network_name" not in labels_0
+        assert "org_name" not in labels_0
         assert value_0 == 12345.0
         assert name_0 == "meraki_mx_uplink_sent_bytes"
 
@@ -322,9 +324,10 @@ class TestMXUplinkUsageCollector:
 
         assert mock_parent._set_metric.call_count == 2
         _, labels, _, _ = mock_parent._set_metric.call_args_list[0][0]
-        assert labels["name"] == "Q2XX-UNKNOWN"
         assert labels["serial"] == "Q2XX-UNKNOWN"
-        assert labels["network_name"] == "Unknown Network"
+        assert labels["network_id"] == "N_999"
+        assert "name" not in labels
+        assert "network_name" not in labels
 
 
 def test_uplink_usage_row_validates_via_domain_model() -> None:

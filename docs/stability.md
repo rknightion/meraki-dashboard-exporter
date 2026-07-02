@@ -149,10 +149,12 @@ identity; the network-filter observability gauges in `services/inventory.py` alr
 (they deliberately omit `network_name` from their labels to avoid orphan series on rename).
 
 !!! info "Rollout"
-    This policy is stated here as settled contract. The code that strips mutable name labels
-    from numeric series and moves them onto `_info` metrics lands as part of the pre-1.0 metric
-    sweep; once complete, the [Complete Metrics Reference](metrics/metrics.md) is the source of
-    truth for exactly which labels each metric carries.
+    This policy is settled contract, and the code has landed (#534): mutable name labels are
+    stripped from numeric series and the id-keyed `*_info` carriers (`meraki_network_info`,
+    `meraki_ms_port_info`, `meraki_mv_zone_info`, alongside the existing `meraki_org_info` and
+    `meraki_device_status_info`) now hold the names. The
+    [Complete Metrics Reference](metrics/metrics.md) reflects the reduced label sets and is the
+    source of truth for exactly which labels each metric carries.
 
 ## Post-1.0 rename & deprecation process
 

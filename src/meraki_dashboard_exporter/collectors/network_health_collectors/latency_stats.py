@@ -60,9 +60,7 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
             "MR access point average wireless latency in seconds by traffic class, 1-h window",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.TRAFFIC_CLASS,
             ],
@@ -72,9 +70,7 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
             "Network-wide average wireless client latency in seconds by traffic class, 1-h window",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.TRAFFIC_CLASS,
             ],
         )

@@ -154,5 +154,4 @@ class TestConfigCollectorResponseValidation(BaseCollectorTest):
             "meraki_org_configuration_changes_count",
             0,
             org_id="123",
-            org_name="Test Org",
         )

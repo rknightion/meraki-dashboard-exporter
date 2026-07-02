@@ -144,8 +144,11 @@ class TestMGCollector:
         info_metric, info_labels, info_value, *_ = info_call[0]
         assert info_metric is mg_collector._mg_uplink_status_info
         assert info_labels["serial"] == "Q2XX-1"
-        assert info_labels["name"] == "Gateway 1"
-        assert info_labels["network_name"] == "Main Network"
+        # Name-family labels are dropped from numeric series (issue #534) - the
+        # device display name joins via meraki_device_status_info on serial.
+        assert "name" not in info_labels
+        assert "org_name" not in info_labels
+        assert "network_name" not in info_labels
         assert info_labels["interface"] == "cellular"
         assert info_labels["status"] == "active"
         assert info_labels["provider"] == "Verizon"
@@ -321,8 +324,8 @@ class TestMGCollector:
         ]
         assert len(info_calls) == 1
         _, labels, _, *_rest = info_calls[0][0]
-        # Falls back to serial as name when not in device_lookup
-        assert labels["name"] == "Q2XX-UNKNOWN"
+        # Name-family labels are dropped from numeric series (issue #534).
+        assert "name" not in labels
         assert labels["serial"] == "Q2XX-UNKNOWN"
         assert labels["model"] == "MG21"
 
@@ -422,13 +425,11 @@ class TestMGCollector:
         roaming_gauge = mg_collector._mg_uplink_roaming
 
         # Series belonging to another org (would be wiped by a global clear()).
+        # ID-only label set (issue #534) - no org_name/network_name/name.
         info_gauge.labels(
             org_id="org2",
-            org_name="Other Org",
             network_id="N_2",
-            network_name="Other Network",
             serial="Q2ZZ-OTHER",
-            name="Gateway 2",
             model="MG21",
             device_type="MG",
             interface="cellular",
@@ -442,11 +443,8 @@ class TestMGCollector:
         ).set(1)
         roaming_gauge.labels(
             org_id="org2",
-            org_name="Other Org",
             network_id="N_2",
-            network_name="Other Network",
             serial="Q2ZZ-OTHER",
-            name="Gateway 2",
             model="MG21",
             device_type="MG",
             interface="cellular",

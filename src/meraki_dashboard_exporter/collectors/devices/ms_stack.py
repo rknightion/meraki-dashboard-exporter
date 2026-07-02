@@ -53,9 +53,7 @@ class MSStackCollector(SubCollectorMixin):
             "Switch stack member status (1=present/online, 0=absent/offline)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.STACK_ID,
                 LabelName.SERIAL,
                 LabelName.ROLE,
@@ -66,9 +64,7 @@ class MSStackCollector(SubCollectorMixin):
             "Number of members in switch stack",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.STACK_ID,
             ],
         )
@@ -141,9 +137,7 @@ class MSStackCollector(SubCollectorMixin):
                 self._stack_members_total,
                 {
                     "org_id": org_id,
-                    "org_name": org_name,
                     "network_id": network_id,
-                    "network_name": network_name,
                     "stack_id": stack_id,
                 },
                 len(members) if members else len(serials),
@@ -160,9 +154,7 @@ class MSStackCollector(SubCollectorMixin):
                         self._stack_member_status,
                         {
                             "org_id": org_id,
-                            "org_name": org_name,
                             "network_id": network_id,
-                            "network_name": network_name,
                             "stack_id": stack_id,
                             "serial": serial,
                             "role": role,
@@ -180,9 +172,7 @@ class MSStackCollector(SubCollectorMixin):
                         self._stack_member_status,
                         {
                             "org_id": org_id,
-                            "org_name": org_name,
                             "network_id": network_id,
-                            "network_name": network_name,
                             "stack_id": stack_id,
                             "serial": serial,
                             "role": role,

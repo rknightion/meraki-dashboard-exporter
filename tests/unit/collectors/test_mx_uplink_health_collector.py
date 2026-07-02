@@ -111,9 +111,11 @@ class TestMXUplinkHealthCollector:
         gauge_0, labels_0, value_0, _ = mock_parent._set_metric.call_args_list[0][0]
         assert gauge_0 is collector._mx_uplink_loss_percent
         assert labels_0["serial"] == "Q2AB-1234-5678"
-        assert labels_0["name"] == "Office MX"
+        assert labels_0["network_id"] == "N_111"
         assert labels_0["interface"] == "wan1"
-        assert labels_0["network_name"] == "Office Network"
+        assert "name" not in labels_0
+        assert "network_name" not in labels_0
+        assert "org_name" not in labels_0
         assert value_0 == 0.5
 
         gauge_1, labels_1, value_1, _ = mock_parent._set_metric.call_args_list[1][0]
@@ -442,8 +444,8 @@ class TestMXUplinkHealthCollector:
 
         assert mock_parent._set_metric.call_count == 2
         _, labels, _, _ = mock_parent._set_metric.call_args_list[0][0]
-        assert labels["name"] == "Q2XX-UNKNOWN"
         assert labels["serial"] == "Q2XX-UNKNOWN"
+        assert "name" not in labels
 
     # ------------------------------------------------------------------
     # Pydantic domain-model validation (F-029)

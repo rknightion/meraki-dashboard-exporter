@@ -164,7 +164,6 @@ class TestDeviceAvailabilityHistoryCollector:
                 "_org_devices_availability_changes_total",
                 (
                     ("org_id", org_id),
-                    ("org_name", org_name),
                     ("product_type", product_type),
                     ("status", status),
                 ),
@@ -220,7 +219,6 @@ class TestDeviceAvailabilityHistoryCollector:
             "_org_devices_availability_changes_total",
             (
                 ("org_id", org_id),
-                ("org_name", org_name),
                 ("product_type", "appliance"),
                 ("status", "unknown"),
             ),
@@ -259,7 +257,6 @@ class TestDeviceAvailabilityHistoryCollector:
             "_org_devices_availability_changes_total",
             (
                 ("org_id", org_id),
-                ("org_name", org_name),
                 ("product_type", "unknown"),
                 ("status", "offline"),
             ),
@@ -402,7 +399,6 @@ class TestDeviceAvailabilityHistoryCollector:
             "_org_devices_availability_changes_total",
             (
                 ("org_id", org_id),
-                ("org_name", org_name),
                 ("product_type", "wireless"),
                 ("status", "offline"),
             ),
@@ -438,7 +434,6 @@ class TestDeviceAvailabilityHistoryCollector:
             "_org_devices_availability_changes_total",
             (
                 ("org_id", org_id),
-                ("org_name", org_name),
                 ("product_type", "wireless"),
                 ("status", "offline"),
             ),

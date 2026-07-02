@@ -54,9 +54,7 @@ class MXVpnCollector(SubCollectorMixin):
             "VPN peer reachability status (1=reachable, 0=unreachable)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.PEER_NETWORK_ID,
                 LabelName.PEER_TYPE,
             ],
@@ -66,9 +64,7 @@ class MXVpnCollector(SubCollectorMixin):
             "Number of VPN peers configured for a network",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -76,9 +72,7 @@ class MXVpnCollector(SubCollectorMixin):
         # aggregated per (network, peer network) pair to keep cardinality bounded.
         vpn_stats_labelnames = [
             LabelName.ORG_ID,
-            LabelName.ORG_NAME,
             LabelName.NETWORK_ID,
-            LabelName.NETWORK_NAME,
             LabelName.PEER_NETWORK_ID,
         ]
         self._vpn_usage_sent_bytes = self.parent._create_gauge(
@@ -140,7 +134,6 @@ class MXVpnCollector(SubCollectorMixin):
 
         for status in vpn_statuses:
             network_id = status.get("networkId", "")
-            network_name = status.get("networkName", network_id)
 
             if allowed_network_ids is not None and network_id not in allowed_network_ids:
                 skipped += 1
@@ -156,9 +149,7 @@ class MXVpnCollector(SubCollectorMixin):
                 self._vpn_peers_total,
                 {
                     LabelName.ORG_ID: org_id,
-                    LabelName.ORG_NAME: org_name,
                     LabelName.NETWORK_ID: network_id,
-                    LabelName.NETWORK_NAME: network_name,
                 },
                 float(len(all_peers)),
             )
@@ -176,9 +167,7 @@ class MXVpnCollector(SubCollectorMixin):
                 reachability = peer.get("reachability", "")
                 peer_labels = {
                     LabelName.ORG_ID: org_id,
-                    LabelName.ORG_NAME: org_name,
                     LabelName.NETWORK_ID: network_id,
-                    LabelName.NETWORK_NAME: network_name,
                     LabelName.PEER_NETWORK_ID: peer_network_id,
                     LabelName.PEER_TYPE: peer_type,
                 }
@@ -246,7 +235,6 @@ class MXVpnCollector(SubCollectorMixin):
         for raw_row in rows:
             row = ApplianceVpnStats.model_validate(raw_row)
             network_id = row.networkId
-            network_name = row.networkName if row.networkName is not None else network_id
 
             if allowed_network_ids is not None and network_id not in allowed_network_ids:
                 skipped += 1
@@ -257,9 +245,7 @@ class MXVpnCollector(SubCollectorMixin):
 
                 labels = create_labels(
                     org_id=org_id,
-                    org_name=org_name,
                     network_id=network_id,
-                    network_name=network_name,
                     peer_network_id=peer_id,
                 )
 

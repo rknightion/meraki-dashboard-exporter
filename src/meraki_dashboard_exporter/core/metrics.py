@@ -70,7 +70,6 @@ class LabelName(StrEnum):
     # Sensor specific
     METRIC = "metric"
     SENSOR_SERIAL = "sensor_serial"
-    SENSOR_NAME = "sensor_name"
     SENSOR_TYPE = "sensor_type"
 
     # Additional labels found in codebase
@@ -88,7 +87,6 @@ class LabelName(StrEnum):
     HOSTNAME = "hostname"
     MANUFACTURER = "manufacturer"
     OS = "os"
-    RECENT_DEVICE_NAME = "recent_device_name"
     IP = "ip"
     VLAN = "vlan"
     FIRST_SEEN = "first_seen"

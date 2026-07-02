@@ -305,7 +305,7 @@ class TestMRCollector:
         by_ssid = {c[0][1]["ssid"]: c[0] for c in total_calls}
         assert set(by_ssid) == {"Guest WiFi", "Corporate WiFi"}
         for _, labels, _ in by_ssid.values():
-            assert set(labels) == {"org_id", "org_name", "ssid"}
+            assert set(labels) == {"org_id", "ssid"}
         # Values are converted from MB (decimal) to bytes at the emit site
         # (×1,000,000) per issue #531 APIDEV-03.
         assert by_ssid["Guest WiFi"][2] == 1536.75 * 1_000_000

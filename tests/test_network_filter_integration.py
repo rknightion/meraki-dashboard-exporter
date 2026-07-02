@@ -109,11 +109,13 @@ async def test_mr_ssid_usage_does_not_fetch_per_network() -> None:
     assert not hasattr(collector, "_build_ssid_to_network_mapping")
     parent.inventory.get_networks.assert_not_awaited()
     collector.api.wireless.getNetworkWirelessSsids.assert_not_called()
-    # Emitted labels are org+SSID only — never a network label.
+    # Emitted labels are org+SSID only — never a network label. The mutable
+    # org_name has moved onto meraki_org_info (#534); numeric SSID-usage series
+    # carry ID-only labels plus the retained ssid key.
     assert parent._set_metric.call_count == 5
     for call in parent._set_metric.call_args_list:
         labels = call[0][1]
-        assert set(labels) == {"org_id", "org_name", "ssid"}
+        assert set(labels) == {"org_id", "ssid"}
 
 
 async def test_alerts_direct_fallback_applies_filter() -> None:

@@ -109,11 +109,8 @@ class TestMTGatewayConnections(BaseCollectorTest):
 
         expected_labels = {
             "org_id": "123456",
-            "org_name": "Test Org",
             "network_id": "N_1",
-            "network_name": "Net 1",
-            "sensor_serial": "Q2MT-1",
-            "sensor_name": "Sensor1",
+            "serial": "Q2MT-1",
             "gateway_serial": "Q2GW-1",
         }
         rssi_metric.labels.assert_called_once_with(**expected_labels)
@@ -233,11 +230,8 @@ class TestMTSensorGatewayGauges(BaseCollectorTest):
         """The rssi gauge exists under its frozen name with the full documented label set."""
         collector._sensor_gateway_rssi.labels(
             org_id="123456",
-            org_name="Test Org",
             network_id="N_1",
-            network_name="Net 1",
-            sensor_serial="Q2MT-1",
-            sensor_name="Sensor1",
+            serial="Q2MT-1",
             gateway_serial="Q2GW-1",
         ).set(-55)
 
@@ -245,11 +239,8 @@ class TestMTSensorGatewayGauges(BaseCollectorTest):
             "meraki_mt_gateway_rssi",
             -55,
             org_id="123456",
-            org_name="Test Org",
             network_id="N_1",
-            network_name="Net 1",
-            sensor_serial="Q2MT-1",
-            sensor_name="Sensor1",
+            serial="Q2MT-1",
             gateway_serial="Q2GW-1",
         )
 
@@ -259,11 +250,8 @@ class TestMTSensorGatewayGauges(BaseCollectorTest):
         """The last-connected gauge exists under its frozen name with the full label set."""
         collector._sensor_gateway_last_connected.labels(
             org_id="123456",
-            org_name="Test Org",
             network_id="N_1",
-            network_name="Net 1",
-            sensor_serial="Q2MT-1",
-            sensor_name="Sensor1",
+            serial="Q2MT-1",
             gateway_serial="Q2GW-1",
         ).set(1704067200.0)
 
@@ -271,10 +259,7 @@ class TestMTSensorGatewayGauges(BaseCollectorTest):
             "meraki_mt_gateway_last_connected_timestamp_seconds",
             1704067200.0,
             org_id="123456",
-            org_name="Test Org",
             network_id="N_1",
-            network_name="Net 1",
-            sensor_serial="Q2MT-1",
-            sensor_name="Sensor1",
+            serial="Q2MT-1",
             gateway_serial="Q2GW-1",
         )

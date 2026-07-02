@@ -136,14 +136,14 @@ class TestAPIUsageCollector:
         for status_code, count in expected_status_metrics:
             key = (
                 "_api_requests_by_status",
-                (("org_id", org_id), ("org_name", org_name), ("status_code", status_code)),
+                (("org_id", org_id), ("status_code", status_code)),
             )
             assert key in parent._metrics
             assert parent._metrics[key] == count
 
         # Check total requests metric (zero-count codes contribute nothing)
         expected_total = sum(count for _, count in expected_status_metrics)
-        total_key = ("_api_requests_total", (("org_id", org_id), ("org_name", org_name)))
+        total_key = ("_api_requests_total", (("org_id", org_id),))
         assert total_key in parent._metrics
         assert parent._metrics[total_key] == expected_total
 
@@ -181,7 +181,7 @@ class TestAPIUsageCollector:
 
         # Verify total is set to 0
         parent = api_usage_collector.parent
-        total_key = ("_api_requests_total", (("org_id", org_id), ("org_name", org_name)))
+        total_key = ("_api_requests_total", (("org_id", org_id),))
         assert total_key in parent._metrics
         assert parent._metrics[total_key] == 0
 
@@ -190,7 +190,7 @@ class TestAPIUsageCollector:
         for status_code in api_response["responseCodeCounts"]:
             key = (
                 "_api_requests_by_status",
-                (("org_id", org_id), ("org_name", org_name), ("status_code", status_code)),
+                (("org_id", org_id), ("status_code", status_code)),
             )
             assert key in parent._metrics
             assert parent._metrics[key] == 0
@@ -302,7 +302,7 @@ class TestAPIUsageCollector:
 
         # Verify total is set to 0
         parent = api_usage_collector.parent
-        total_key = ("_api_requests_total", (("org_id", org_id), ("org_name", org_name)))
+        total_key = ("_api_requests_total", (("org_id", org_id),))
         assert total_key in parent._metrics
         assert parent._metrics[total_key] == 0
 
@@ -329,7 +329,7 @@ class TestAPIUsageCollector:
         parent = api_usage_collector.parent
         status_429_key = (
             "_api_requests_by_status",
-            (("org_id", org_id), ("org_name", org_name), ("status_code", "429")),
+            (("org_id", org_id), ("status_code", "429")),
         )
         assert parent._metrics[status_429_key] == 50
 
@@ -346,7 +346,7 @@ class TestAPIUsageCollector:
         assert parent._metrics[status_429_key] == 0
         status_200_key = (
             "_api_requests_by_status",
-            (("org_id", org_id), ("org_name", org_name), ("status_code", "200")),
+            (("org_id", org_id), ("status_code", "200")),
         )
         assert parent._metrics[status_200_key] == 120
 
@@ -386,7 +386,7 @@ class TestAPIUsageCollector:
         # The valid numeric count must be set.
         status_key = (
             "_api_requests_by_status",
-            (("org_id", org_id), ("org_name", org_name), ("status_code", "400")),
+            (("org_id", org_id), ("status_code", "400")),
         )
         assert status_key in parent._metrics
         assert parent._metrics[status_key] == 100
@@ -395,13 +395,13 @@ class TestAPIUsageCollector:
         for bad_code in ("200", "201"):
             bad_key = (
                 "_api_requests_by_status",
-                (("org_id", org_id), ("org_name", org_name), ("status_code", bad_code)),
+                (("org_id", org_id), ("status_code", bad_code)),
             )
             assert bad_key not in parent._metrics
 
         # The total-requests gauge must still be written, summing only the
         # valid numeric counts (the loop must not abort mid-way).
-        total_key = ("_api_requests_total", (("org_id", org_id), ("org_name", org_name)))
+        total_key = ("_api_requests_total", (("org_id", org_id),))
         assert total_key in parent._metrics
         assert parent._metrics[total_key] == 100
 

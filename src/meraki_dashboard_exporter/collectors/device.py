@@ -213,11 +213,8 @@ class DeviceCollector(MetricCollector):
             "Device online status (1 = online, 0 = offline)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -228,9 +225,7 @@ class DeviceCollector(MetricCollector):
             "Device status information",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
                 LabelName.NAME,
                 LabelName.MODEL,
@@ -246,11 +241,8 @@ class DeviceCollector(MetricCollector):
             "5-min window",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.STAT,
@@ -263,11 +255,8 @@ class DeviceCollector(MetricCollector):
             "5-min window",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.STAT,
@@ -279,11 +268,8 @@ class DeviceCollector(MetricCollector):
             "Device memory total provisioned in bytes (derived from the API's binary KiB value x1024)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -294,11 +280,8 @@ class DeviceCollector(MetricCollector):
             "Device memory usage percentage (maximum from most recent interval)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
@@ -1025,8 +1008,13 @@ class DeviceCollector(MetricCollector):
         """
         availability_status = device.get("availability_status", DEFAULT_DEVICE_STATUS)
 
-        # Create standard device labels
+        # Create standard device labels (ID-only; see label_helpers.py, #534)
         labels = create_device_labels(device, org_id=org_id, org_name=org_name)
+
+        # meraki_device_status_info keeps `name` as its designated device-name
+        # carrier (docs/stability.md) even though create_device_labels() no
+        # longer emits it, so it's supplied here as an explicit extra label.
+        device_name = device.get("name", device.get("serial", ""))
 
         # Device up/down status
         is_online = 1 if availability_status == DeviceStatus.ONLINE else 0
@@ -1041,16 +1029,18 @@ class DeviceCollector(MetricCollector):
         for stale_status in DeviceStatus:
             if stale_status.value != availability_status:
                 stale_labels = create_device_labels(
-                    device, org_id=org_id, org_name=org_name, status=stale_status.value
+                    device,
+                    org_id=org_id,
+                    org_name=org_name,
+                    name=device_name,
+                    status=stale_status.value,
                 )
                 try:
                     self._device_status_info.remove(*[
                         stale_labels[ln.value]
                         for ln in [
                             LabelName.ORG_ID,
-                            LabelName.ORG_NAME,
                             LabelName.NETWORK_ID,
-                            LabelName.NETWORK_NAME,
                             LabelName.SERIAL,
                             LabelName.NAME,
                             LabelName.MODEL,
@@ -1063,7 +1053,7 @@ class DeviceCollector(MetricCollector):
 
         # Device status info metric
         status_labels = create_device_labels(
-            device, org_id=org_id, org_name=org_name, status=availability_status
+            device, org_id=org_id, org_name=org_name, name=device_name, status=availability_status
         )
         self._set_metric_value(
             "_device_status_info",
@@ -1165,15 +1155,14 @@ class DeviceCollector(MetricCollector):
                         )
                         continue
 
-                # Set network-wide POE metric
+                # Set network-wide POE metric (ID-only labels, #534: org_name/
+                # network_name dropped, join via meraki_org_info/meraki_network_info)
                 network_name = network_map.get(network_id, network_id)
                 self._set_metric(
                     self.ms_collector._switch_poe_network_total,
                     {
                         "org_id": org_id,
-                        "org_name": org_name,
                         "network_id": network_id,
-                        "network_name": network_name,
                     },
                     total_poe,
                 )

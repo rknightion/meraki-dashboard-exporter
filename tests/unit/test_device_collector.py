@@ -301,7 +301,6 @@ class TestDeviceCollector(BaseCollectorTest):
             "meraki_mr_ssid_usage_total_bytes",
             54878.025390625 * 1_000_000,
             org_id="123456",
-            org_name="Test Organization",
             ssid="The Cubhouse",
         )
 
@@ -309,7 +308,6 @@ class TestDeviceCollector(BaseCollectorTest):
             "meraki_mr_ssid_usage_downstream_bytes",
             10818.2802734375 * 1_000_000,
             org_id="123456",
-            org_name="Test Organization",
             ssid="The Cubhouse",
         )
 
@@ -317,7 +315,6 @@ class TestDeviceCollector(BaseCollectorTest):
             "meraki_mr_ssid_usage_upstream_bytes",
             44059.7451171875 * 1_000_000,
             org_id="123456",
-            org_name="Test Organization",
             ssid="The Cubhouse",
         )
 
@@ -325,7 +322,6 @@ class TestDeviceCollector(BaseCollectorTest):
             "meraki_mr_ssid_usage_percent",
             56.01148842015454,
             org_id="123456",
-            org_name="Test Organization",
             ssid="The Cubhouse",
         )
 
@@ -333,7 +329,6 @@ class TestDeviceCollector(BaseCollectorTest):
             "meraki_mr_ssid_client_count",
             16,
             org_id="123456",
-            org_name="Test Organization",
             ssid="The Cubhouse",
         )
 
@@ -342,7 +337,6 @@ class TestDeviceCollector(BaseCollectorTest):
             "meraki_mr_ssid_usage_total_bytes",
             42764.8857421875 * 1_000_000,
             org_id="123456",
-            org_name="Test Organization",
             ssid="Cubhouse Video",
         )
 
@@ -350,7 +344,6 @@ class TestDeviceCollector(BaseCollectorTest):
             "meraki_mr_ssid_client_count",
             2,
             org_id="123456",
-            org_name="Test Organization",
             ssid="Cubhouse Video",
         )
 
@@ -359,7 +352,6 @@ class TestDeviceCollector(BaseCollectorTest):
             "meraki_mr_ssid_usage_total_bytes",
             333.462890625 * 1_000_000,
             org_id="123456",
-            org_name="Test Organization",
             ssid="Cubhouse IOT",
         )
 
@@ -367,7 +359,6 @@ class TestDeviceCollector(BaseCollectorTest):
             "meraki_mr_ssid_usage_percent",
             0.3403503078662927,
             org_id="123456",
-            org_name="Test Organization",
             ssid="Cubhouse IOT",
         )
 
@@ -375,7 +366,6 @@ class TestDeviceCollector(BaseCollectorTest):
             "meraki_mr_ssid_client_count",
             21,
             org_id="123456",
-            org_name="Test Organization",
             ssid="Cubhouse IOT",
         )
 
@@ -595,6 +585,70 @@ class TestDeviceCollector(BaseCollectorTest):
         label_tuple = list(gauge._metrics.keys())[0]
         # Status is the last label in the labelnames list
         assert label_tuple[-1] == "offline"
+
+    def test_device_up_labels_are_id_only(self, collector):
+        """#534: meraki_device_up carries stable IDs only, no mutable names.
+
+        org_name/network_name/name join via meraki_org_info/meraki_network_info/
+        meraki_device_status_info respectively - they must not be re-added here.
+        """
+        assert set(collector._device_up._labelnames) == {
+            "org_id",
+            "network_id",
+            "serial",
+            "model",
+            "device_type",
+        }
+
+    def test_device_status_info_keeps_name_drops_org_network_names(self, collector):
+        """#534: meraki_device_status_info is the designated device-name carrier.
+
+        It keeps `name` (per docs/stability.md) but drops org_name/network_name -
+        those join via meraki_org_info/meraki_network_info on org_id/network_id.
+        """
+        assert set(collector._device_status_info._labelnames) == {
+            "org_id",
+            "network_id",
+            "serial",
+            "name",
+            "model",
+            "device_type",
+            "status",
+        }
+
+    def test_device_memory_metrics_labels_are_id_only(self, collector):
+        """#534: memory metrics carry stable IDs only, no mutable names."""
+        base_labels = {"org_id", "network_id", "serial", "model", "device_type"}
+        assert set(collector._device_memory_used_bytes._labelnames) == base_labels | {"stat"}
+        assert set(collector._device_memory_free_bytes._labelnames) == base_labels | {"stat"}
+        assert set(collector._device_memory_total_bytes._labelnames) == base_labels
+        assert set(collector._device_memory_usage_percent._labelnames) == base_labels
+
+    def test_device_status_info_status_labels_include_name(self, collector):
+        """The status_labels dict built at emission time must include `name`.
+
+        Regression guard: create_device_labels() no longer emits `name` (#534),
+        so _collect_common_metrics must pass it explicitly as an extra label or
+        the KEEP name carrier would silently lose its device-name value.
+        """
+        device = {
+            "serial": "Q2AB-5678",
+            "name": "Named Device",
+            "model": "MS120-8",
+            "networkId": "N_222",
+            "networkName": "Test Network 2",
+            "availability_status": "online",
+        }
+        collector._collect_common_metrics(device, org_id="org2", org_name="Test Org 2")
+
+        gauge = collector._device_status_info
+        label_tuple = next(iter(gauge._metrics.keys()))
+        labelnames = gauge._labelnames
+        labels = dict(zip(labelnames, label_tuple, strict=True))
+        assert labels["name"] == "Named Device"
+        assert labels["serial"] == "Q2AB-5678"
+        assert "org_name" not in labels
+        assert "network_name" not in labels
 
     async def test_device_collection_basic(self, collector, mock_api_builder, metrics):
         """Test basic device collection functionality."""

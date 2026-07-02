@@ -393,11 +393,8 @@ class MTCollector(BaseDeviceCollector):
 
                 labels = create_labels(
                     org_id=org_id,
-                    org_name=org_name or org_id,
                     network_id=network_id,
-                    network_name=item.network.name or "",
-                    sensor_serial=item.sensor.serial,
-                    sensor_name=item.sensor.name or "",
+                    serial=item.sensor.serial,
                     gateway_serial=item.gateway.serial,
                 )
 

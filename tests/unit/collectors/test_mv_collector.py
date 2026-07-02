@@ -87,6 +87,7 @@ class TestMVCollector:
         """Test that all MV gauges are created on init."""
         mock_parent._create_gauge.assert_called()
         assert mv_collector._mv_people_count is not None
+        assert mv_collector._mv_zone_info is not None
         assert mv_collector._mv_analytics_zones is not None
         assert mv_collector._mv_motion_based_retention_enabled is not None
         assert mv_collector._mv_audio_recording_enabled is not None
@@ -135,15 +136,23 @@ class TestMVCollector:
         _, labels, value = zones_calls[0][0][:3]
         assert value == 2
         assert labels["serial"] == "Q2CC-1234-5678"
+        # Name-family labels are dropped from numeric series (issue #534).
+        assert "name" not in labels
+        assert "org_name" not in labels
+        assert "network_name" not in labels
 
-    async def test_collect_people_count_with_zone_name_resolution(
+    async def test_collect_people_count_labels_are_id_only(
         self,
         mv_collector: MVCollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
         device: dict,
     ) -> None:
-        """Test per-zone people counts are emitted with resolved zone names."""
+        """meraki_mv_people_count carries zone_id only - no zone_name (issue #534, D2).
+
+        The display name joins via meraki_mv_zone_info on (serial, zone_id)
+        instead of being a direct label on the numeric series.
+        """
         mock_api.camera.getDeviceCameraAnalyticsZones = MagicMock(
             return_value=[
                 # Real API field is `id`, not `zoneId` - see F-024.
@@ -180,11 +189,79 @@ class TestMVCollector:
         by_zone = {call[0][1]["zone_id"]: call for call in people_calls}
         _, labels_0, value_0 = by_zone["0"][0][:3]
         assert value_0 == 3
-        assert labels_0["zone_name"] == "Entrance"
+        assert "zone_name" not in labels_0
+        assert labels_0 == {
+            "org_id": "org1",
+            "network_id": "N_111",
+            "serial": "Q2CC-1234-5678",
+            "model": "MV12",
+            "device_type": "MV",
+            "zone_id": "0",
+        }
 
         _, labels_1, value_1 = by_zone["1"][0][:3]
         assert value_1 == 0
-        assert labels_1["zone_name"] == "Lobby"
+        assert "zone_name" not in labels_1
+
+    async def test_collect_zone_info_emitted_per_zone(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """meraki_mv_zone_info (NI-3, issue #534) emits one series per zone.
+
+        Value 1, exact id-keyed label set {org_id, network_id, serial,
+        zone_id, zone_name} - the join carrier meraki_mv_people_count re-attaches
+        zone_name through.
+        """
+        mock_api.camera.getDeviceCameraAnalyticsZones = MagicMock(
+            return_value=[
+                {"id": "0", "label": "Entrance", "type": ["person"]},
+                {"id": "1", "label": "Lobby", "type": ["person"]},
+            ]
+        )
+        mock_api.camera.getDeviceCameraAnalyticsLive = MagicMock(
+            return_value={"ts": "2026-07-01T00:00:00Z", "zones": {}}
+        )
+        mock_api.camera.getDeviceCameraQualityAndRetention = MagicMock(
+            return_value={
+                "motionBasedRetentionEnabled": True,
+                "audioRecordingEnabled": False,
+                "restrictedBandwidthModeEnabled": False,
+                "quality": "Standard",
+                "resolution": "1280x720",
+                "profileId": "123",
+            }
+        )
+
+        await mv_collector.collect(device)
+
+        zone_info_calls = [
+            call
+            for call in mock_parent._set_metric.call_args_list
+            if call[0][0] is mv_collector._mv_zone_info
+        ]
+        assert len(zone_info_calls) == 2
+        for call in zone_info_calls:
+            assert call[0][2] == 1
+
+        by_zone = {call[0][1]["zone_id"]: call[0][1] for call in zone_info_calls}
+        assert by_zone["0"] == {
+            "org_id": "org1",
+            "network_id": "N_111",
+            "serial": "Q2CC-1234-5678",
+            "zone_id": "0",
+            "zone_name": "Entrance",
+        }
+        assert by_zone["1"] == {
+            "org_id": "org1",
+            "network_id": "N_111",
+            "serial": "Q2CC-1234-5678",
+            "zone_id": "1",
+            "zone_name": "Lobby",
+        }
 
     async def test_collect_quality_booleans(
         self,
@@ -288,6 +365,9 @@ class TestMVCollector:
 
         gauges_set = {call[0][0] for call in mock_parent._set_metric.call_args_list}
         assert mv_collector._mv_analytics_zones in gauges_set
+        # zone_info comes from the (successful) zones fetch, independent of
+        # the live-analytics failure.
+        assert mv_collector._mv_zone_info in gauges_set
         assert mv_collector._mv_motion_based_retention_enabled in gauges_set
         assert mv_collector._mv_audio_recording_enabled in gauges_set
         assert mv_collector._mv_restricted_bandwidth_mode_enabled in gauges_set
@@ -331,6 +411,9 @@ class TestMVCollector:
 
         gauges_set = {call[0][0] for call in mock_parent._set_metric.call_args_list}
         assert mv_collector._mv_analytics_zones not in gauges_set
+        # zone_info is only emitted from within a successful zones fetch (or
+        # the SLOW-gated skip-cycle re-emit) - neither applies here.
+        assert mv_collector._mv_zone_info not in gauges_set
         # The live-analytics call also has no zone map, but must still be
         # unaffected by the zones failure.
         assert mv_collector._mv_quality_retention_info in gauges_set
@@ -371,6 +454,7 @@ class TestMVCollector:
 
         gauges_set = {call[0][0] for call in mock_parent._set_metric.call_args_list}
         assert mv_collector._mv_analytics_zones in gauges_set
+        assert mv_collector._mv_zone_info in gauges_set
         assert mv_collector._mv_quality_retention_info in gauges_set
         assert mv_collector._mv_people_count not in gauges_set
 
@@ -403,6 +487,7 @@ class TestMVCollector:
 
         gauges_set = {call[0][0] for call in mock_parent._set_metric.call_args_list}
         assert mv_collector._mv_analytics_zones in gauges_set
+        assert mv_collector._mv_zone_info in gauges_set
         assert mv_collector._mv_people_count in gauges_set
         assert mv_collector._mv_motion_based_retention_enabled not in gauges_set
         assert mv_collector._mv_audio_recording_enabled not in gauges_set
@@ -537,14 +622,19 @@ class TestMVCollector:
         # ...but the volatile live-analytics call must run every cycle.
         assert mock_api.camera.getDeviceCameraAnalyticsLive.call_count == 2
 
-    async def test_zone_name_resolution_uses_cached_map_when_static_config_skipped(
+    async def test_zone_info_reemitted_from_cache_when_static_config_skipped(
         self,
         mv_collector: MVCollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
         device: dict,
     ) -> None:
-        """zone_name must still resolve on a cycle where the zones call is gated out."""
+        """meraki_mv_zone_info must still be (re)emitted on a cycle where the zones call is gated out.
+
+        Otherwise the id-keyed join carrier would go stale/expire between the
+        infrequent SLOW-tier zones fetches even though the volatile
+        people-count series keeps emitting every MEDIUM cycle.
+        """
         self._set_all_responses(mock_api)
 
         await mv_collector.collect(device)
@@ -552,14 +642,111 @@ class TestMVCollector:
 
         await mv_collector.collect(device)
 
+        # The zones API call itself is gated out this cycle...
+        assert mock_api.camera.getDeviceCameraAnalyticsZones.call_count == 1
+        # ...but zone_info must still be re-emitted from the cached zone map.
+        zone_info_calls = [
+            call
+            for call in mock_parent._set_metric.call_args_list
+            if call[0][0] is mv_collector._mv_zone_info
+        ]
+        assert len(zone_info_calls) == 1
+        _, labels, value = zone_info_calls[0][0][:3]
+        assert value == 1
+        assert labels["zone_id"] == "0"
+        assert labels["zone_name"] == "Entrance"
+
+        # meraki_mv_people_count itself no longer carries zone_name at all.
         people_calls = [
             call
             for call in mock_parent._set_metric.call_args_list
             if call[0][0] is mv_collector._mv_people_count
         ]
         assert len(people_calls) == 1
-        _, labels, _value = people_calls[0][0][:3]
-        assert labels["zone_name"] == "Entrance"
+        assert "zone_name" not in people_calls[0][0][1]
+
+    async def test_zone_info_stale_zone_not_reemitted_after_removal(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """A zone removed from the camera's config must stop being (re)emitted.
+
+        meraki_mv_zone_info is routed through parent._set_metric (expiration
+        tracking, generic TTL sweep tested in
+        tests/integration/test_metric_expiration.py) rather than any
+        collector-local positional-removal logic - so the collector-side
+        contract to verify is simply that a vanished zone is never emitted
+        again, on either a fresh zones fetch or a cached-map re-emit.
+        """
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mv.time.time",
+            return_value=1_000.0,
+        ):
+            mock_api.camera.getDeviceCameraAnalyticsZones = MagicMock(
+                return_value=[
+                    {"id": "0", "label": "Entrance", "type": ["person"]},
+                    {"id": "1", "label": "Lobby", "type": ["person"]},
+                ]
+            )
+            mock_api.camera.getDeviceCameraAnalyticsLive = MagicMock(
+                return_value={"ts": "2026-07-01T00:00:00Z", "zones": {}}
+            )
+            mock_api.camera.getDeviceCameraQualityAndRetention = MagicMock(
+                return_value={
+                    "motionBasedRetentionEnabled": True,
+                    "audioRecordingEnabled": False,
+                    "restrictedBandwidthModeEnabled": False,
+                    "quality": "Standard",
+                    "resolution": "1280x720",
+                    "profileId": "123",
+                }
+            )
+            await mv_collector.collect(device)
+
+        zone_ids = {
+            call[0][1]["zone_id"]
+            for call in mock_parent._set_metric.call_args_list
+            if call[0][0] is mv_collector._mv_zone_info
+        }
+        assert zone_ids == {"0", "1"}
+        mock_parent._set_metric.reset_mock()
+
+        # Zone "1" (Lobby) is removed from the camera config; the SLOW
+        # interval has elapsed so a fresh zones fetch happens this cycle.
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mv.time.time",
+            return_value=1_000.0 + 901,
+        ):
+            mock_api.camera.getDeviceCameraAnalyticsZones = MagicMock(
+                return_value=[{"id": "0", "label": "Entrance", "type": ["person"]}]
+            )
+            await mv_collector.collect(device)
+
+        zone_ids = {
+            call[0][1]["zone_id"]
+            for call in mock_parent._set_metric.call_args_list
+            if call[0][0] is mv_collector._mv_zone_info
+        }
+        assert zone_ids == {"0"}
+        mock_parent._set_metric.reset_mock()
+
+        # The cache itself no longer holds the removed zone either, so a
+        # subsequent SLOW-gated skip cycle won't resurrect it.
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mv.time.time",
+            return_value=1_000.0 + 901 + 10,
+        ):
+            await mv_collector.collect(device)
+
+        zone_ids = {
+            call[0][1]["zone_id"]
+            for call in mock_parent._set_metric.call_args_list
+            if call[0][0] is mv_collector._mv_zone_info
+        }
+        assert zone_ids == {"0"}
 
     async def test_static_config_collected_again_after_slow_interval_elapses(
         self,
@@ -768,7 +955,17 @@ class TestMVCollector:
         assert len(people_calls) == 1
         _, labels, value = people_calls[0][0][:3]
         assert value == 2
-        assert labels["zone_name"] == ""  # noqa: PLC1901  (must be "", not merely falsey/None)
+        # zone_name is no longer a label on meraki_mv_people_count (issue #534, D2).
+        assert "zone_name" not in labels
+
+        zone_info_calls = [
+            call
+            for call in mock_parent._set_metric.call_args_list
+            if call[0][0] is mv_collector._mv_zone_info
+        ]
+        assert len(zone_info_calls) == 1
+        # Missing "label" on the zone row must still emit "" (not "None"), see F-004.
+        assert zone_info_calls[0][0][1]["zone_name"] == ""  # noqa: PLC1901
 
         def value_for(gauge):
             for call in mock_parent._set_metric.call_args_list:

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 from ..core.api_helpers import create_api_helper
 from ..core.async_utils import ManagedTaskGroup
 from ..core.collector import MetricCollector
-from ..core.constants import OrgMetricName, UpdateTier
+from ..core.constants import NetworkMetricName, OrgMetricName, UpdateTier
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.error_handling import (
     CollectorError,
@@ -22,7 +22,7 @@ from ..core.label_helpers import create_org_labels
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call, log_batch_operation
 from ..core.logging_helpers import LogContext, log_metric_collection_summary
-from ..core.metrics import LabelName
+from ..core.metrics import LabelName, create_labels
 from ..core.org_health import OrgHealthTracker
 from ..core.otel_tracing import trace_method
 from ..core.registry import register_collector
@@ -85,14 +85,24 @@ class OrganizationCollector(MetricCollector):
         self._org_collection_status = self._create_gauge(
             CollectorMetricName.EXPORTER_ORG_COLLECTION_STATUS,
             "Organization collection status (1=success, 0=failed or in backoff)",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
-        # Organization info
+        # Organization info -- canonical org-name carrier; keeps org_name (#534
+        # KEEP). Numeric series join back via meraki_org_info on org_id.
         self._org_info = self._create_info(
             OrgMetricName.ORG_INFO,
             "Organization information",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+        )
+
+        # Network info -- the id->name join backbone (#534 NI-1). Constant value
+        # 1, one series per NetworkFilter-allowed network. network_name joins via
+        # `<numeric> * on(network_id) group_left(network_name) meraki_network_info`.
+        self._network_info = self._create_gauge(
+            NetworkMetricName.NETWORK_INFO,
+            "Network information (join metric: network_id -> network_name)",
+            labelnames=[LabelName.ORG_ID, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
         )
 
         # API metrics
@@ -101,33 +111,33 @@ class OrganizationCollector(MetricCollector):
             "Meraki-reported total API requests made by ALL clients of this organization's "
             "Dashboard API (any app/integration, not just this exporter) in the trailing 1-hour "
             "window; a snapshot count, not a monotonic counter",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._api_requests_by_status = self._create_gauge(
             OrgMetricName.ORG_API_REQUESTS_BY_STATUS,
             "API requests by HTTP status code in the last hour",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.STATUS_CODE],
+            labelnames=[LabelName.ORG_ID, LabelName.STATUS_CODE],
         )
 
         # Network metrics
         self._networks_total = self._create_gauge(
             OrgMetricName.ORG_NETWORKS,
             "Number of networks in the organization",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         # Device metrics
         self._devices_total = self._create_gauge(
             OrgMetricName.ORG_DEVICES,
             "Number of devices in the organization",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.DEVICE_TYPE],
+            labelnames=[LabelName.ORG_ID, LabelName.DEVICE_TYPE],
         )
 
         self._devices_by_model_total = self._create_gauge(
             OrgMetricName.ORG_DEVICES_BY_MODEL,
             "Number of devices by specific model",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.MODEL],
+            labelnames=[LabelName.ORG_ID, LabelName.MODEL],
         )
 
         # Device availability metrics (from new API)
@@ -136,7 +146,6 @@ class OrganizationCollector(MetricCollector):
             "Number of devices by availability status and product type",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.STATUS,
                 LabelName.PRODUCT_TYPE,
             ],
@@ -150,7 +159,6 @@ class OrganizationCollector(MetricCollector):
             "and new status",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.PRODUCT_TYPE,
                 LabelName.STATUS,
             ],
@@ -162,7 +170,6 @@ class OrganizationCollector(MetricCollector):
             "Number of firmware upgrade events by product type and status",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.PRODUCT_TYPE,
                 LabelName.STATUS,
             ],
@@ -172,7 +179,6 @@ class OrganizationCollector(MetricCollector):
             "Number of pending/in-flight firmware upgrade events by product type",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.PRODUCT_TYPE,
             ],
         )
@@ -183,7 +189,6 @@ class OrganizationCollector(MetricCollector):
             "Number of licenses",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.LICENSE_TYPE,
                 LabelName.STATUS,
             ],
@@ -192,71 +197,71 @@ class OrganizationCollector(MetricCollector):
         self._licenses_expiring = self._create_gauge(
             OrgMetricName.ORG_LICENSES_EXPIRING,
             "Number of licenses expiring within 30 days",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.LICENSE_TYPE],
+            labelnames=[LabelName.ORG_ID, LabelName.LICENSE_TYPE],
         )
 
         # Client metrics
         self._clients_total = self._create_gauge(
             OrgMetricName.ORG_CLIENTS_COUNT,
             "Number of active clients in the organization in the last hour",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         # Usage metrics (in bytes for the 1-hour window)
         self._usage_total_kb = self._create_gauge(
             OrgMetricName.ORG_USAGE_TOTAL_BYTES,
             "Total data usage in bytes for the 1-hour window",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._usage_downstream_kb = self._create_gauge(
             OrgMetricName.ORG_USAGE_DOWNSTREAM_BYTES,
             "Downstream data usage in bytes for the 1-hour window",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._usage_upstream_kb = self._create_gauge(
             OrgMetricName.ORG_USAGE_UPSTREAM_BYTES,
             "Upstream data usage in bytes for the 1-hour window",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         # Packet capture metrics
         self._packetcaptures_total = self._create_gauge(
             OrgMetricName.ORG_PACKETCAPTURES,
             "Number of packet captures in the organization",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         self._packetcaptures_remaining = self._create_gauge(
             OrgMetricName.ORG_PACKETCAPTURES_REMAINING,
             "Number of remaining packet captures to process",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
+            labelnames=[LabelName.ORG_ID],
         )
 
         # Application usage metrics (API default rolling window is 1 day)
         self._application_usage_total_mb = self._create_gauge(
             OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
             "Total application usage in bytes by category over the trailing 1-day window",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
+            labelnames=[LabelName.ORG_ID, LabelName.CATEGORY],
         )
 
         self._application_usage_downstream_mb = self._create_gauge(
             OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_BYTES,
             "Downstream application usage in bytes by category over the trailing 1-day window",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
+            labelnames=[LabelName.ORG_ID, LabelName.CATEGORY],
         )
 
         self._application_usage_upstream_mb = self._create_gauge(
             OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_BYTES,
             "Upstream application usage in bytes by category over the trailing 1-day window",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
+            labelnames=[LabelName.ORG_ID, LabelName.CATEGORY],
         )
 
         self._application_usage_percentage = self._create_gauge(
             OrgMetricName.ORG_APPLICATION_USAGE_PERCENT,
             "Application usage percent by category over the trailing 1-day window",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
+            labelnames=[LabelName.ORG_ID, LabelName.CATEGORY],
         )
 
     async def _collect_impl(self) -> None:
@@ -368,9 +373,12 @@ class OrganizationCollector(MetricCollector):
 
         try:
             with LogContext(org_id=org_id, org_name=org_name):
-                # Set organization info
+                # Set organization info. This is the canonical org-name carrier
+                # (#534 KEEP), so its label dict is built explicitly WITH
+                # org_name rather than via the ID-only create_org_labels helper.
                 if self._org_info:
-                    self._org_info.labels(**org_labels).info({
+                    info_labels = create_labels(org_id=org_id, org_name=org_name)
+                    self._org_info.labels(**info_labels).info({
                         "url": org.get("url", ""),
                         "api_enabled": str(org.get("api", {}).get("enabled", False)),
                     })
@@ -586,6 +594,31 @@ class OrganizationCollector(MetricCollector):
             self._networks_total.labels(**org_labels).set(total_networks)
         else:
             logger.error("_networks_total metric not initialized")
+
+        # Emit the network_id -> network_name join backbone (#534 NI-1). One
+        # series (value 1) per NetworkFilter-allowed network, straight from the
+        # already-fetched filtered list (zero extra API calls). Routed through
+        # _set_metric so a deleted/filtered network's series expires instead of
+        # freezing forever. This is the id->name carrier every network_name
+        # join across the exporter depends on.
+        if self._network_info:
+            for network in networks:
+                network_id = network.get("id", "")
+                if not network_id:
+                    continue
+                info_labels = create_labels(
+                    org_id=org_id,
+                    network_id=network_id,
+                    network_name=network.get("name", ""),
+                )
+                self._set_metric(
+                    self._network_info,
+                    info_labels,
+                    1,
+                    NetworkMetricName.NETWORK_INFO.value,
+                )
+        else:
+            logger.error("_network_info metric not initialized")
 
     @with_error_handling(
         operation="Collect device metrics",

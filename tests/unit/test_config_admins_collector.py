@@ -69,7 +69,6 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
             "meraki_org_admins",
             2,
             org_id="123",
-            org_name="Test Org",
             authentication_method="Email",
             account_status="ok",
         )
@@ -77,7 +76,6 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
             "meraki_org_admins",
             1,
             org_id="123",
-            org_name="Test Org",
             authentication_method="Cisco SecureX Sign-On",
             account_status="locked",
         )
@@ -106,7 +104,6 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
             "meraki_org_admins_two_factor_enabled",
             2,
             org_id="123",
-            org_name="Test Org",
         )
 
     async def test_known_combo_prezeroed_when_absent(self, collector, mock_api_builder, metrics):
@@ -132,7 +129,6 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
             "meraki_org_admins",
             0,
             org_id="123",
-            org_name="Test Org",
             authentication_method="Cisco SecureX Sign-On",
             account_status="locked",
         )
@@ -140,7 +136,6 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
             "meraki_org_admins",
             0,
             org_id="123",
-            org_name="Test Org",
             authentication_method="Email",
             account_status="pending",
         )
@@ -163,7 +158,6 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
             "meraki_org_admins",
             0,
             org_id="123",
-            org_name="Test Org",
             authentication_method="Email",
             account_status="ok",
         )
@@ -171,7 +165,6 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
             "meraki_org_admins_two_factor_enabled",
             0,
             org_id="123",
-            org_name="Test Org",
         )
 
     async def test_admin_metrics_routed_through_set_metric(
@@ -201,7 +194,6 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
             "meraki_org_admins_two_factor_enabled",
             1,
             org_id="123",
-            org_name="Test Org",
         )
 
     async def test_admin_pii_fields_not_used_as_labels(self, collector, mock_api_builder, metrics):
@@ -237,7 +229,6 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
             # Only the expected bounded label set is present.
             assert set(sample.labels.keys()) == {
                 "org_id",
-                "org_name",
                 "authentication_method",
                 "account_status",
             }

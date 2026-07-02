@@ -111,7 +111,11 @@ class TestMSPowerCollector:
         assert labels["slot"] == "1"
         assert labels["status"] == "powering"
         assert labels["network_id"] == "N_111"
-        assert labels["network_name"] == "Office Network"
+        # network_name/name/org_name dropped from numeric series (#534) — the
+        # PSU status series is id-only now (join names via *_info metrics).
+        assert "network_name" not in labels
+        assert "name" not in labels
+        assert "org_name" not in labels
         assert labels["model"] == "MS250-48"
         assert labels["psu_model"] == "PWR-350WAC"
         assert labels["psu_model"] != labels["model"]
@@ -307,11 +311,8 @@ class TestMSPowerCollector:
         # Series belonging to another org (would be wiped by a global clear()).
         gauge.labels(
             org_id="org2",
-            org_name="Other Org",
             network_id="N_222",
-            network_name="Other Network",
             serial="Q2SW-OTHER",
-            name="Switch 9",
             model="MS250-48",
             device_type="MS",
             slot="1",
@@ -419,6 +420,7 @@ class TestMSPowerCollector:
         assert mock_parent._set_metric.call_count == 1
         _, labels, value, *_ = mock_parent._set_metric.call_args_list[0][0]
         assert value == 1
-        assert labels["name"] == "Switch From Lookup"
+        # name dropped from the numeric series (#534); model still comes from lookup.
+        assert "name" not in labels
         assert labels["model"] == "MS250-48-FROM-LOOKUP"
         assert labels["psu_serial"] == "PSU-SERIAL-1"

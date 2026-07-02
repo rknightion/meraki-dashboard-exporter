@@ -4,6 +4,13 @@ from __future__ import annotations
 
 import pytest
 
+from meraki_dashboard_exporter.core.label_helpers import (
+    create_client_labels,
+    create_device_labels,
+    create_network_labels,
+    create_org_labels,
+    create_port_labels,
+)
 from meraki_dashboard_exporter.core.metrics import (
     LabelName,
     create_labels,
@@ -51,7 +58,6 @@ class TestLabelNameEnum:
         """Test sensor specific labels."""
         assert LabelName.METRIC == "metric"
         assert LabelName.SENSOR_SERIAL == "sensor_serial"
-        assert LabelName.SENSOR_NAME == "sensor_name"
         assert LabelName.SENSOR_TYPE == "sensor_type"
 
     def test_client_labels(self) -> None:
@@ -103,3 +109,85 @@ class TestCreateLabels:
         """Unknown label keys still raise ValueError."""
         with pytest.raises(ValueError, match="Invalid label key"):
             create_labels(not_a_real_label="x")
+
+
+class TestLabelHelpersIdOnly:
+    """Lock the ID-only label-helper seam (issue #534, Option B).
+
+    Numeric series carry stable IDs only; the mutable display-name labels
+    (``org_name``/``network_name``/``name``/``port_name``) are NOT emitted onto
+    numeric series and must be absent from these helpers' output. ``mac``/
+    ``description``/``hostname`` on client series remain (issue #533 scope).
+    """
+
+    def test_create_org_labels_id_only(self) -> None:
+        """create_org_labels emits org_id only (no org_name)."""
+        labels = create_org_labels({"id": "111", "name": "Acme Org"})
+        assert labels == {"org_id": "111"}
+
+    def test_create_network_labels_id_only(self) -> None:
+        """create_network_labels emits org_id + network_id (no names)."""
+        labels = create_network_labels(
+            {"id": "N_1", "name": "HQ"}, org_id="111", org_name="Acme Org"
+        )
+        assert labels == {"org_id": "111", "network_id": "N_1"}
+
+    def test_create_device_labels_id_only_keeps_model_and_type(self) -> None:
+        """create_device_labels drops name/org_name/network_name; keeps model + device_type."""
+        labels = create_device_labels(
+            {
+                "serial": "Q2XX-1111-2222",
+                "name": "AP-1",
+                "model": "MR46",
+                "networkId": "N_1",
+                "networkName": "HQ",
+            },
+            org_id="111",
+            org_name="Acme Org",
+        )
+        assert labels == {
+            "org_id": "111",
+            "network_id": "N_1",
+            "serial": "Q2XX-1111-2222",
+            "model": "MR46",
+            "device_type": "MR",
+        }
+
+    def test_create_port_labels_id_only(self) -> None:
+        """create_port_labels adds port_id and drops port_name."""
+        labels = create_port_labels(
+            {"serial": "Q2XX-1111-2222", "name": "SW-1", "model": "MS220", "networkId": "N_1"},
+            {"portId": "5", "name": "Uplink"},
+            org_id="111",
+        )
+        assert labels == {
+            "org_id": "111",
+            "network_id": "N_1",
+            "serial": "Q2XX-1111-2222",
+            "model": "MS220",
+            "device_type": "MS",
+            "port_id": "5",
+        }
+
+    def test_create_client_labels_drops_org_and_network_name(self) -> None:
+        """create_client_labels drops org_name/network_name; keeps mac/description/hostname (#533)."""
+        labels = create_client_labels(
+            {
+                "id": "k1",
+                "mac": "aa:bb:cc:dd:ee:ff",
+                "description": "Laptop",
+                "hostname": "laptop-1",
+                "networkId": "N_1",
+            },
+            org_id="111",
+            org_name="Acme Org",
+            network_name="HQ",
+        )
+        assert labels == {
+            "org_id": "111",
+            "network_id": "N_1",
+            "client_id": "k1",
+            "mac": "aa:bb:cc:dd:ee:ff",
+            "description": "Laptop",
+            "hostname": "laptop-1",
+        }

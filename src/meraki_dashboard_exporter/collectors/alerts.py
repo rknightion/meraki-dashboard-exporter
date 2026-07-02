@@ -59,9 +59,7 @@ class AlertsCollector(MetricCollector):
             "Number of active Meraki assurance alerts",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.ALERT_TYPE,
                 LabelName.CATEGORY_TYPE,
                 LabelName.SEVERITY,
@@ -73,7 +71,7 @@ class AlertsCollector(MetricCollector):
         self._alerts_by_severity = self._create_gauge(
             AlertMetricName.ALERTS_BY_SEVERITY,
             "Number of active alerts by severity",
-            labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.SEVERITY],
+            labelnames=[LabelName.ORG_ID, LabelName.SEVERITY],
         )
 
         # Alerts by network (for network-level overview)
@@ -82,9 +80,7 @@ class AlertsCollector(MetricCollector):
             "Number of active alerts per network",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
             ],
         )
 
@@ -94,9 +90,7 @@ class AlertsCollector(MetricCollector):
             "Number of sensor alerts in the last hour by metric type",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.METRIC,
             ],
         )
@@ -107,9 +101,7 @@ class AlertsCollector(MetricCollector):
             "Number of active network health alerts by category and severity",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.CATEGORY,
                 LabelName.SEVERITY,
             ],
@@ -398,10 +390,15 @@ class AlertsCollector(MetricCollector):
             devices/mg.py.
 
         """
-        alert_counts: dict[tuple[str, str, str, str, str, str, str, str], int] = {}
+        # Composite keys are ID-only (issue #534, Option B): org_name/network_name
+        # are no longer part of any emitted label set, so they are dropped from
+        # these aggregation keys too -- they'd otherwise be dead weight. The
+        # network_name/org_name join happens downstream via meraki_org_info /
+        # meraki_network_info (NI-1, lane A).
+        alert_counts: dict[tuple[str, str, str, str, str], int] = {}
         severity_counts = {"critical": 0, "warning": 0, "informational": 0}
-        network_counts: dict[tuple[str, str], int] = {}
-        health_alert_counts: dict[tuple[str, str, str, str], int] = {}
+        network_counts: dict[str, int] = {}
+        health_alert_counts: dict[tuple[str, str, str], int] = {}
 
         for alert in alerts:
             # Skip dismissed or resolved alerts
@@ -416,7 +413,6 @@ class AlertsCollector(MetricCollector):
 
             network = alert.get("network", {})
             network_id = network.get("id", "unknown")
-            network_name = network.get("name", "unknown")
 
             # Skip alert rows whose network is outside the configured
             # NetworkFilter so no meraki_*_alert* series is emitted for an
@@ -426,10 +422,7 @@ class AlertsCollector(MetricCollector):
 
             # Create composite key for aggregation
             key = (
-                org_id,
-                org_name,
                 network_id,
-                network_name,
                 alert_type,
                 category_type,
                 severity,
@@ -444,13 +437,12 @@ class AlertsCollector(MetricCollector):
                 severity_counts[severity] += 1
 
             # Count by network
-            network_key = (network_id, network_name)
-            network_counts[network_key] = network_counts.get(network_key, 0) + 1
+            network_counts[network_id] = network_counts.get(network_id, 0) + 1
 
             # Count by network/category/severity for the derived health-alert metric.
             # Rows outside the configured NetworkFilter were already skipped above
             # (F-173), so every row reaching here belongs to an allowed network.
-            health_key = (network_id, network_name, category_type, severity)
+            health_key = (network_id, category_type, severity)
             health_alert_counts[health_key] = health_alert_counts.get(health_key, 0) + 1
 
         # Set metrics for active alerts. Routed through self._set_metric (rather than
@@ -458,10 +450,7 @@ class AlertsCollector(MetricCollector):
         # combination and reaps series for alerts that have since resolved (F-059).
         for key, count in alert_counts.items():
             (
-                org_id,
-                org_name,
                 network_id,
-                network_name,
                 alert_type,
                 category_type,
                 severity,
@@ -472,9 +461,7 @@ class AlertsCollector(MetricCollector):
                 self._alerts_active,
                 {
                     "org_id": org_id,
-                    "org_name": org_name,
                     "network_id": network_id,
-                    "network_name": network_name,
                     "alert_type": alert_type,
                     "category_type": category_type,
                     "severity": severity,
@@ -490,7 +477,6 @@ class AlertsCollector(MetricCollector):
                 self._alerts_by_severity,
                 {
                     "org_id": org_id,
-                    "org_name": org_name,
                     "severity": severity,
                 },
                 count,
@@ -498,14 +484,12 @@ class AlertsCollector(MetricCollector):
             )
 
         # Set network summary metrics
-        for (network_id, network_name), count in network_counts.items():
+        for network_id, count in network_counts.items():
             self._set_metric(
                 self._alerts_by_network,
                 {
                     "org_id": org_id,
-                    "org_name": org_name,
                     "network_id": network_id,
-                    "network_name": network_name,
                 },
                 count,
                 AlertMetricName.ALERTS_BY_NETWORK.value,
@@ -513,14 +497,12 @@ class AlertsCollector(MetricCollector):
 
         # Set derived network health alert metrics (replaces the deprecated
         # per-network getNetworkHealthAlerts loop, see F-064 / issue #273).
-        for (network_id, network_name, category, severity), count in health_alert_counts.items():
+        for (network_id, category, severity), count in health_alert_counts.items():
             self._set_metric(
                 self._network_health_alerts_total,
                 {
                     "org_id": org_id,
-                    "org_name": org_name,
                     "network_id": network_id,
-                    "network_name": network_name,
                     "category": category,
                     "severity": severity,
                 },

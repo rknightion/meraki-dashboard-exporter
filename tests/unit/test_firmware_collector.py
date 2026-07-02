@@ -144,7 +144,6 @@ class TestFirmwareCollector:
                 "_org_firmware_upgrades_total",
                 (
                     ("org_id", org_id),
-                    ("org_name", org_name),
                     ("product_type", product_type),
                     ("status", status),
                 ),
@@ -155,7 +154,7 @@ class TestFirmwareCollector:
         # Pending subset: only "scheduled" (wireless) counts as pending here.
         pending_key = (
             "_org_firmware_upgrades_pending_total",
-            (("org_id", org_id), ("org_name", org_name), ("product_type", "wireless")),
+            (("org_id", org_id), ("product_type", "wireless")),
         )
         assert pending_key in parent._metrics
         assert parent._metrics[pending_key] == 1
@@ -164,7 +163,7 @@ class TestFirmwareCollector:
         for product_type in ("switch", "appliance"):
             key = (
                 "_org_firmware_upgrades_pending_total",
-                (("org_id", org_id), ("org_name", org_name), ("product_type", product_type)),
+                (("org_id", org_id), ("product_type", product_type)),
             )
             assert key not in parent._metrics
 
@@ -204,7 +203,7 @@ class TestFirmwareCollector:
         parent = firmware_collector.parent
         pending_key = (
             "_org_firmware_upgrades_pending_total",
-            (("org_id", org_id), ("org_name", org_name), ("product_type", "switch")),
+            (("org_id", org_id), ("product_type", "switch")),
         )
         assert pending_key in parent._metrics
         assert parent._metrics[pending_key] == 3
@@ -245,7 +244,6 @@ class TestFirmwareCollector:
             "_org_firmware_upgrades_total",
             (
                 ("org_id", org_id),
-                ("org_name", org_name),
                 ("product_type", "unknown"),
                 ("status", "unknown"),
             ),
@@ -335,7 +333,6 @@ class TestFirmwareCollector:
             "_org_firmware_upgrades_total",
             (
                 ("org_id", org_id),
-                ("org_name", org_name),
                 ("product_type", "switch"),
                 ("status", "Completed"),
             ),
@@ -382,7 +379,7 @@ class TestFirmwareCollector:
         parent = firmware_collector.parent
         pending_key = (
             "_org_firmware_upgrades_pending_total",
-            (("org_id", org_id), ("org_name", org_name), ("product_type", "wireless")),
+            (("org_id", org_id), ("product_type", "wireless")),
         )
         assert pending_key in parent._metrics
         assert parent._metrics[pending_key] == 2
@@ -414,14 +411,13 @@ class TestFirmwareCollector:
             "_org_firmware_upgrades_total",
             (
                 ("org_id", org_id),
-                ("org_name", org_name),
                 ("product_type", "switch"),
                 ("status", "Started"),
             ),
         )
         pending_key = (
             "_org_firmware_upgrades_pending_total",
-            (("org_id", org_id), ("org_name", org_name), ("product_type", "switch")),
+            (("org_id", org_id), ("product_type", "switch")),
         )
         assert parent._metrics[total_key] == 1
         assert parent._metrics[pending_key] == 1
@@ -451,7 +447,6 @@ class TestFirmwareCollector:
             "_org_firmware_upgrades_total",
             (
                 ("org_id", org_id),
-                ("org_name", org_name),
                 ("product_type", "switch"),
                 ("status", "Completed"),
             ),
@@ -485,7 +480,6 @@ class TestFirmwareCollector:
             "_org_firmware_upgrades_total",
             (
                 ("org_id", org_id),
-                ("org_name", org_name),
                 ("product_type", "appliance"),
                 ("status", "Completed"),
             ),

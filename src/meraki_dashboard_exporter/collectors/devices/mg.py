@@ -38,7 +38,7 @@ def _parse_float(value: Any) -> float | None:
         return None
     try:
         return float(value)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return None
 
 
@@ -61,11 +61,8 @@ class MGCollector(BaseDeviceCollector):
             "MG cellular gateway uplink status info (1 = present)",
             labelnames=[
                 LabelName.ORG_ID,
-                LabelName.ORG_NAME,
                 LabelName.NETWORK_ID,
-                LabelName.NETWORK_NAME,
                 LabelName.SERIAL,
-                LabelName.NAME,
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
                 LabelName.INTERFACE,
@@ -81,11 +78,8 @@ class MGCollector(BaseDeviceCollector):
 
         signal_labelnames = [
             LabelName.ORG_ID,
-            LabelName.ORG_NAME,
             LabelName.NETWORK_ID,
-            LabelName.NETWORK_NAME,
             LabelName.SERIAL,
-            LabelName.NAME,
             LabelName.MODEL,
             LabelName.DEVICE_TYPE,
             LabelName.INTERFACE,

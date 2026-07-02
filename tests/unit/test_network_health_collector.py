@@ -189,18 +189,17 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             collector, metrics, "getNetworkNetworkHealthChannelUtilization"
         )
 
-        # Verify metrics were set (includes org labels and device_type)
+        # Verify metrics were set (ID-only labels; name/org_name/network_name
+        # dropped per #534 - name joins via meraki_device_status_info,
+        # network_name via meraki_network_info).
         metrics.assert_gauge_value(
             "meraki_ap_channel_utilization_2_4ghz_percent",
             45,
             org_id=org["id"],
-            org_name=org["name"],
             serial="Q2KD-XXXX",
-            name="AP1",
             model="MR36",
             device_type="MR",
             network_id=network["id"],
-            network_name=network["name"],
             utilization_type="total",  # Changed from 'type' to 'utilization_type'
         )
 
@@ -213,7 +212,10 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         so an explicit ``name: None`` produced a None name label; create_labels
         then dropped it, Gauge.labels() raised ValueError for the missing
         labelname, and a bare except silently lost the whole per-AP series. The
-        name must now coalesce to the serial.
+        `name` coalescing still happens internally in rf_health.py (used for the
+        RFHealthData domain-model validation) but `name` is no longer a metric
+        label (#534) - this test now guards that the explicit-None device record
+        still doesn't crash the collector / drop the series.
         """
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         network = NetworkFactory.create(
@@ -252,18 +254,15 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         await self.run_collector(collector)
 
         self.assert_collector_success(collector, metrics)
-        # name label coalesced to the serial (not None / not dropped).
+        # Series still emitted (not dropped) despite the explicit None name.
         metrics.assert_gauge_value(
             "meraki_ap_channel_utilization_2_4ghz_percent",
             42,
             org_id=org["id"],
-            org_name=org["name"],
             serial="Q2KD-ZZZZ",
-            name="Q2KD-ZZZZ",
             model="MR36",
             device_type="MR",
             network_id=network["id"],
-            network_name=network["name"],
             utilization_type="total",
         )
 
@@ -307,13 +306,12 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         self.assert_collector_success(collector, metrics)
         self.assert_api_call_tracked(collector, metrics, "getNetworkWirelessConnectionStats")
 
-        # Verify metrics were set
+        # Verify metrics were set (ID-only; network_name dropped per #534)
         metrics.assert_gauge_value(
             "meraki_network_wireless_connection_stats_count",
             95,
             stat_type="assoc",
             network_id=network["id"],
-            network_name=network["name"],
         )
 
     async def test_collect_data_rates(self, collector, mock_api_builder, metrics):
@@ -364,11 +362,11 @@ class TestNetworkHealthCollector(BaseCollectorTest):
 
         # Verify metrics were set (should use most recent data point).
         # API value is kilobytes/second; converted x1000 to bytes/second (#531 F-065).
+        # ID-only; network_name dropped per #534.
         metrics.assert_gauge_value(
             "meraki_network_wireless_download_bytes_per_second",
             25000 * 1000,
             network_id=network["id"],
-            network_name=network["name"],
         )
 
     async def test_collect_handles_empty_channel_util_data(
@@ -518,12 +516,11 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         self.assert_collector_success(collector, metrics)
 
         # The gauge must NOT have been set to a confident 0 for this cycle.
+        # ID-only; org_name/network_name dropped per #534.
         metrics.assert_metric_not_set(
             "meraki_network_bluetooth_clients_count",
             org_id=org["id"],
-            org_name=org["name"],
             network_id=network["id"],
-            network_name=network["name"],
         )
 
     async def test_channel_utilization_wifi1_only_does_not_crash(
@@ -571,17 +568,15 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         self.assert_collector_success(collector, metrics)
 
         # 5GHz metric emitted even though wifi0 is absent.
+        # ID-only; org_name/name/network_name dropped per #534.
         metrics.assert_gauge_value(
             "meraki_ap_channel_utilization_5ghz_percent",
             30,
             org_id=org["id"],
-            org_name=org["name"],
             serial="Q2KD-AAAA",
-            name="AP1",
             model="MR36",
             device_type="MR",
             network_id=network["id"],
-            network_name=network["name"],
             utilization_type="total",
         )
 
@@ -676,17 +671,15 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         await self.run_collector(collector)
         self.assert_collector_success(collector, metrics)
 
+        # ID-only; org_name/name/network_name dropped per #534.
         metrics.assert_gauge_value(
             "meraki_ap_channel_utilization_2_4ghz_percent",
             80,
             org_id=org["id"],
-            org_name=org["name"],
             serial="Q2KD-AAAA",
-            name="AP1",
             model="MR36",
             device_type="MR",
             network_id=network["id"],
-            network_name=network["name"],
             utilization_type="total",
         )
 
@@ -720,11 +713,11 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         self.assert_collector_success(collector, metrics)
 
         # API value is kilobytes/second; converted x1000 to bytes/second (NOT bits, F-065).
+        # ID-only; network_name dropped per #534.
         metrics.assert_gauge_value(
             "meraki_network_wireless_download_bytes_per_second",
             25000 * 1000,
             network_id=network["id"],
-            network_name=network["name"],
         )
         # Help text must state the real unit and the conversion basis.
         download = metrics.get_metric("meraki_network_wireless_download_bytes_per_second")

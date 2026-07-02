@@ -60,12 +60,9 @@ class TestMTCollector(BaseCollectorTest):
         # Verify temperature was set with new labels including org/network
         expected_labels = {
             "serial": test_device["serial"],
-            "name": test_device["name"],
             "model": test_device["model"],
             "org_id": test_device["orgId"],
-            "org_name": test_device["orgName"],
             "network_id": test_device["networkId"],
-            "network_name": test_device["networkName"],
             "device_type": "MT",
         }
         mock_metric.labels.assert_called_once_with(**expected_labels)
@@ -103,12 +100,9 @@ class TestMTCollector(BaseCollectorTest):
         # Verify humidity was set with new labels including org/network
         expected_labels = {
             "serial": test_device["serial"],
-            "name": test_device["name"],
             "model": test_device["model"],
             "org_id": test_device["orgId"],
-            "org_name": test_device["orgName"],
             "network_id": test_device["networkId"],
-            "network_name": test_device["networkName"],
             "device_type": "MT",
         }
         mock_metric.labels.assert_called_once_with(**expected_labels)
@@ -135,12 +129,9 @@ class TestMTCollector(BaseCollectorTest):
         # Verify door status was set (1 for open) with new labels
         expected_labels = {
             "serial": test_device["serial"],
-            "name": test_device["name"],
             "model": test_device["model"],
             "org_id": test_device["orgId"],
-            "org_name": test_device["orgName"],
             "network_id": test_device["networkId"],
-            "network_name": test_device["networkName"],
             "device_type": "MT",
         }
         mock_metric.labels.assert_called_once_with(**expected_labels)
@@ -167,12 +158,9 @@ class TestMTCollector(BaseCollectorTest):
         # Verify door status was set (0 for closed) with new labels
         expected_labels = {
             "serial": test_device["serial"],
-            "name": test_device["name"],
             "model": test_device["model"],
             "org_id": test_device["orgId"],
-            "org_name": test_device["orgName"],
             "network_id": test_device["networkId"],
-            "network_name": test_device["networkName"],
             "device_type": "MT",
         }
         mock_metric.labels.assert_called_once_with(**expected_labels)
@@ -198,12 +186,9 @@ class TestMTCollector(BaseCollectorTest):
         # Verify water detection was set (1 for present) with new labels
         expected_labels = {
             "serial": test_device["serial"],
-            "name": test_device["name"],
             "model": test_device["model"],
             "org_id": test_device["orgId"],
-            "org_name": test_device["orgName"],
             "network_id": test_device["networkId"],
-            "network_name": test_device["networkName"],
             "device_type": "MT",
         }
         mock_metric.labels.assert_called_once_with(**expected_labels)
@@ -229,12 +214,9 @@ class TestMTCollector(BaseCollectorTest):
         # Verify water detection was set (0 for not present) with new labels
         expected_labels = {
             "serial": test_device["serial"],
-            "name": test_device["name"],
             "model": test_device["model"],
             "org_id": test_device["orgId"],
-            "org_name": test_device["orgName"],
             "network_id": test_device["networkId"],
-            "network_name": test_device["networkName"],
             "device_type": "MT",
         }
         mock_metric.labels.assert_called_once_with(**expected_labels)
@@ -345,12 +327,9 @@ class TestMTCollector(BaseCollectorTest):
 
         expected_labels = {
             "serial": test_device["serial"],
-            "name": test_device["name"],
             "model": test_device["model"],
             "org_id": test_device["orgId"],
-            "org_name": test_device["orgName"],
             "network_id": test_device["networkId"],
-            "network_name": test_device["networkName"],
             "device_type": "MT",
         }
         mock_metric.labels.assert_called_once_with(**expected_labels)
@@ -369,12 +348,9 @@ class TestMTCollector(BaseCollectorTest):
 
         expected_labels = {
             "serial": test_device["serial"],
-            "name": test_device["name"],
             "model": test_device["model"],
             "org_id": test_device["orgId"],
-            "org_name": test_device["orgName"],
             "network_id": test_device["networkId"],
-            "network_name": test_device["networkName"],
             "device_type": "MT",
         }
         mock_metric.labels.assert_called_once_with(**expected_labels)
@@ -393,12 +369,9 @@ class TestMTCollector(BaseCollectorTest):
 
         expected_labels = {
             "serial": test_device["serial"],
-            "name": test_device["name"],
             "model": test_device["model"],
             "org_id": test_device["orgId"],
-            "org_name": test_device["orgName"],
             "network_id": test_device["networkId"],
-            "network_name": test_device["networkName"],
             "device_type": "MT",
         }
         mock_metric.labels.assert_called_once_with(**expected_labels)
