@@ -239,6 +239,47 @@ class TestLatencyStatsCollector:
         assert labels["traffic_class"] == "background"
         assert value == 0.02
 
+    async def test_fetchers_request_avg_field_only(
+        self,
+        collector: LatencyStatsCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        network: dict,
+    ) -> None:
+        """Test that both fetchers pass fields='avg' to skip the unused rawDistribution payload."""
+        mock_api.wireless.getNetworkWirelessDevicesLatencyStats = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2AB-0001",
+                    "latencyStats": {"backgroundTraffic": {"avg": 10.0}},
+                }
+            ]
+        )
+        mock_api.wireless.getNetworkWirelessClientsLatencyStats = MagicMock(
+            return_value=[
+                {
+                    "mac": "aa:bb:cc:dd:ee:01",
+                    "latencyStats": {"backgroundTraffic": {"avg": 20.0}},
+                }
+            ]
+        )
+
+        await collector.collect(network)
+
+        device_call = mock_api.wireless.getNetworkWirelessDevicesLatencyStats.call_args
+        assert device_call.kwargs["fields"] == "avg"
+        assert device_call.kwargs["timespan"] == 3600
+
+        client_call = mock_api.wireless.getNetworkWirelessClientsLatencyStats.call_args
+        assert client_call.kwargs["fields"] == "avg"
+        assert client_call.kwargs["timespan"] == 3600
+
+        # avg is still parsed correctly even with fields="avg" requested.
+        assert mock_parent._set_metric.call_count == 2
+        emitted_values = {call[0][0]: call[0][2] for call in mock_parent._set_metric.call_args_list}
+        assert emitted_values[collector._mr_device_latency_ms] == 0.01
+        assert emitted_values[collector._mr_network_client_latency_ms] == 0.02
+
     async def test_no_client_rows_skips_aggregate(
         self,
         collector: LatencyStatsCollector,

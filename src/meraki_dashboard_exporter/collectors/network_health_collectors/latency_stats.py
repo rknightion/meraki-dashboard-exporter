@@ -100,6 +100,7 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
             self.api.wireless.getNetworkWirelessDevicesLatencyStats,
             network_id,
             timespan=3600,
+            fields="avg",
         )
         result: list[dict[str, Any]] = validate_response_format(
             response,
@@ -133,6 +134,7 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
             self.api.wireless.getNetworkWirelessClientsLatencyStats,
             network_id,
             timespan=3600,
+            fields="avg",
         )
         result: list[dict[str, Any]] = validate_response_format(
             response,
