@@ -13,10 +13,19 @@ Releases are automated with **release-please** and GitHub Actions.
    - `.release-please-manifest.json` (current released version)
 3. **Merging the release PR** creates a Git tag (format `vX.Y.Z`) and GitHub
    Release.
-4. **Docker images are built, signed, and published** when `release_created` is
-   true: `release-please.yml` calls `docker-build.yml` via `workflow_call`,
-   which also fires independently on pushes to `main` and on `v*` tag pushes.
-   Images go to `ghcr.io/<owner>/<repo>` with semver, branch, and PR tags.
+4. **Docker images and the Helm chart are built, signed, and published** by
+   `.github/workflows/publish.yml`, a reusable workflow that wraps the shared
+   `rknightion/.github` `container-publish.yml` workflow. `release-please.yml`
+   calls it two ways, gated by `release_created` so only one runs per push:
+   - `release_created == true`: the `docker-release` job calls `publish.yml`
+     with the new release tag, publishing the versioned image and Helm chart.
+   - `release_created != true` (an ordinary push to `main`): the `edge` job
+     calls `publish.yml` with no tag, publishing a `:main` edge image and a
+     `0.0.0-main.*` snapshot Helm chart.
+
+   Images go to `ghcr.io/<owner>/<repo>` with semver, branch, and PR tags; the
+   chart is published to `ghcr.io/<owner>/charts/<chart-name>`. See
+   [Security](../security.md) for how to verify image signatures.
 
 ## Manual Trigger
 

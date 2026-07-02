@@ -13,7 +13,8 @@ nav = [
   { "Deployment & Operations" = [
       "deployment-operations.md",
       { Security = "security.md" },
-      { "HTTP Endpoints" = "reference/endpoints.md" }
+      { "HTTP Endpoints" = "reference/endpoints.md" },
+      { "Scaling Guide" = "scaling-guide.md" }
     ] },
   { Observability = [
       { OpenTelemetry = "observability/otel.md" },
@@ -32,7 +33,8 @@ nav = [
   { Changelog = "changelog.md" },
   { Development = [
       { "Extending Collectors" = "extending-collectors.md" },
-      { "Release Process" = "development/release-process.md" }
+      { "Release Process" = "development/release-process.md" },
+      { "API Call Audit" = "api-call-audit.md" }
     ] }
 ]
 extra_css = ["stylesheets/extra.css"]
@@ -76,7 +78,6 @@ features = [
   "content.action.edit",
   "content.action.view"
 ]
-favicon = "assets/favicon.png"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme)"

@@ -69,6 +69,25 @@ docker run -d \
   meraki-dashboard-exporter
 ```
 
+### Using Helm (Kubernetes)
+
+A Helm chart is published to the GHCR OCI registry alongside every release, from
+[`charts/meraki-dashboard-exporter`](charts/meraki-dashboard-exporter):
+
+```bash
+helm install meraki-dashboard-exporter \
+  oci://ghcr.io/rknightion/charts/meraki-dashboard-exporter \
+  --version <exporter-version> \
+  --set meraki.apiKey=your_api_key_here
+```
+
+Replace `<exporter-version>` with a [released version](https://github.com/rknightion/meraki-dashboard-exporter/releases)
+(chart versions track exporter releases, e.g. `0.31.0`), or use an `existingSecret` instead of
+`meraki.apiKey` for production. See
+[`values.yaml`](charts/meraki-dashboard-exporter/values.yaml) for all configurable settings and
+[the chart's `CLAUDE.md`](charts/meraki-dashboard-exporter/CLAUDE.md) for implementation notes. An
+edge chart tracking `main` is also published on every push, versioned `0.0.0-main.*`.
+
 ## OpenTelemetry Tracing
 
 The exporter provides OpenTelemetry tracing when enabled:

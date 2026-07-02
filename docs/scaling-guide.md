@@ -107,7 +107,10 @@ Live filter state is observable via `meraki_network_filter_match`,
 - **Fix:** Reduce `MERAKI_EXPORTER_API__RATE_LIMIT_REQUESTS_PER_SECOND`, increase intervals, or disable non-critical collectors
 
 ### Collector Timeouts
-- **Symptom:** `meraki_exporter_collector_errors_total{error_type="timeout"}` increasing
+- **Symptom:** `meraki_exporter_collection_errors_total{error_type="TimeoutError"}` increasing — this
+  is the run-level collector budget expiring (distinct from the similarly-named
+  `meraki_exporter_collector_errors_total{error_type="timeout"}`, which fires for individual
+  API-call timeouts, not the overall collector run)
 - **Fix:** Increase `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT`, reduce batch sizes, increase concurrency
 
 ### Cardinality Spikes

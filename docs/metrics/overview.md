@@ -78,7 +78,7 @@ Some metrics are counters that only increase:
 ### Info Metrics
 Informational metrics with labels:
 - `meraki_org_info` - Organization details
-- `meraki_device_info` - Device information
+- `meraki_device_status_info` - Device status/identity information
 
 ## Common Labels
 
@@ -146,16 +146,16 @@ The exporter tracks its own performance:
 
 ```prometheus
 # Collection duration
-meraki_collector_duration_seconds{collector="organization"} 2.5
+meraki_exporter_collector_duration_seconds{collector="OrganizationCollector"} 2.5
 
 # API calls made
-meraki_collector_api_calls_total{collector="device"} 145
+meraki_exporter_collector_api_calls_total{collector="DeviceCollector"} 145
 
 # Collection errors
-meraki_collector_errors_total{collector="sensor"} 0
+meraki_exporter_collector_errors_total{collector="SensorCollector"} 0
 
-# Last successful collection
-meraki_collector_last_success_timestamp_seconds{collector="alerts"} 1705320000
+# Timestamp of last successful collection
+meraki_exporter_collector_success_timestamp_seconds{collector="AlertsCollector"} 1705320000
 ```
 
 ## Best Practices

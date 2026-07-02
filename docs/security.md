@@ -35,12 +35,16 @@ Our Docker images include the following security features:
 
 ### Verification
 
-You can verify the authenticity of our container images:
+You can verify the authenticity of our container images. Images are built and signed by the
+shared `rknightion/.github` [`container-publish.yml`](https://github.com/rknightion/.github/blob/main/.github/workflows/container-publish.yml)
+reusable workflow (invoked from this repo's [`publish.yml`](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/.github/workflows/publish.yml)),
+so the keyless Fulcio certificate identity reflects *that* reusable workflow's path, not a
+workflow file in this repository:
 
 ```bash
 # Verify container signature
 cosign verify ghcr.io/rknightion/meraki-dashboard-exporter:latest \
-  --certificate-identity-regexp "https://github.com/rknightion/meraki-dashboard-exporter/.github/workflows/docker-build.yml@refs/heads/main" \
+  --certificate-identity-regexp "^https://github\.com/rknightion/\.github/\.github/workflows/container-publish\.yml@.+$" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
 # Download and inspect SBOM
@@ -49,7 +53,7 @@ cosign download sbom ghcr.io/rknightion/meraki-dashboard-exporter:latest
 # Verify attestations
 cosign verify-attestation ghcr.io/rknightion/meraki-dashboard-exporter:latest \
   --type slsaprovenance \
-  --certificate-identity-regexp "https://github.com/rknightion/meraki-dashboard-exporter/.github/workflows/docker-build.yml@refs/heads/main" \
+  --certificate-identity-regexp "^https://github\.com/rknightion/\.github/\.github/workflows/container-publish\.yml@.+$" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 ```
 

@@ -5,7 +5,26 @@ description: Running the exporter in production
 
 # Deployment & Operations
 
-This exporter is distributed as a container image. Use the [Getting Started](getting-started.md) guide for initial setup and the provided [docker-compose.yml](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/docker-compose.yml) as a baseline for production deployments.
+This exporter is distributed as a container image, plus an official Helm chart for Kubernetes. Use the [Getting Started](getting-started.md) guide for initial setup and the provided [docker-compose.yml](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/docker-compose.yml) as a baseline for production deployments.
+
+## Kubernetes (Helm)
+
+A Helm chart ([`charts/meraki-dashboard-exporter`](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/charts/meraki-dashboard-exporter))
+is published to the GHCR OCI registry on every release, alongside the container image:
+
+```bash
+helm install meraki-dashboard-exporter \
+  oci://ghcr.io/rknightion/charts/meraki-dashboard-exporter \
+  --version <exporter-version> \
+  --set meraki.apiKey=your_api_key_here
+```
+
+Chart versions track exporter release versions (e.g. `0.31.0`); an edge chart tracking `main` is
+also published on every push, versioned `0.0.0-main.*`. The chart defaults to a hardened
+`securityContext` (non-root, read-only root filesystem) and fails render-time validation unless
+exactly one of `meraki.apiKey` / `meraki.existingSecret` is set — prefer `existingSecret` in
+production. See [`values.yaml`](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/charts/meraki-dashboard-exporter/values.yaml)
+for the full set of configurable settings.
 
 ## Endpoints
 The exporter exposes endpoints for metrics (`/metrics`), liveness (`/health`),
@@ -28,8 +47,11 @@ docker compose up -d
 - Check container logs with `docker compose logs meraki_dashboard_exporter`.
 - Verify the API key and network connectivity.
 - Metrics `meraki_exporter_collector_errors_total` help identify failing collectors.
-- Open `/status` for an at-a-glance view of tier health, last collection
-  durations, and network filter resolution.
+- Open `/status` for an at-a-glance view of tier health and last collection
+  durations. Network filter resolution is not shown on `/status` yet (tracked in
+  [#311](https://github.com/rknightion/meraki-dashboard-exporter/issues/311)) —
+  check the `meraki_network_filter_*` metrics instead (see
+  [Network Filter](#network-filter) below).
 
 ## Network Filter
 For large organisations, restrict scraping to a subset of networks via the
@@ -41,11 +63,9 @@ exits with an error so typos fail loudly. See `.env.example` and the
 
 ## Log Aggregation
 
-The exporter outputs structured logs in `logfmt` format by default, which is ideal for Loki ingestion. You can switch to JSON format by setting:
-
-```bash
-MERAKI_EXPORTER_LOGGING__FORMAT=json
-```
+The exporter outputs structured logs in `logfmt` format only, which is ideal for Loki ingestion.
+There is currently no setting to switch to JSON output — adding a `log_format` setting is tracked in
+[#310](https://github.com/rknightion/meraki-dashboard-exporter/issues/310).
 
 ### Grafana Alloy Configuration
 
@@ -95,12 +115,12 @@ loki.source.docker "meraki" {
 
 **Rate limit events:**
 ```logql
-{container="meraki-dashboard-exporter"} |= "rate limit" or |= "429" | logfmt
+{container="meraki-dashboard-exporter"} |~ "rate limit|429" | logfmt
 ```
 
-**Slow collections (>60s):**
+**Slow collections (utilization warnings, logged when a collector uses >80% of its tier interval):**
 ```logql
-{container="meraki-dashboard-exporter"} |= "collection_duration" | logfmt | duration > 60
+{container="meraki-dashboard-exporter"} |= "Collector utilization high" | logfmt | duration > 60
 ```
 
 **Error summary by collector:**
