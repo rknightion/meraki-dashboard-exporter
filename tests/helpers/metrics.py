@@ -29,10 +29,14 @@ class MetricAssertions:
 
         """
         self.registry = registry
-        self._metrics_cache: dict[str, Any] = {}
 
     def get_metric(self, metric_name: str) -> Any:
         """Get a metric by name from the registry.
+
+        Always re-collects from the registry (`collector.collect()` returns
+        a point-in-time snapshot), so this reflects whatever the most recent
+        collection cycle set - callers doing assert -> mutate -> assert
+        again see the new values, not a stale first-read snapshot.
 
         Parameters
         ----------
@@ -50,15 +54,11 @@ class MetricAssertions:
             If metric not found
 
         """
-        if metric_name in self._metrics_cache:
-            return self._metrics_cache[metric_name]
-
         # Search through all collectors in registry
         for collector in self.registry._collector_to_names:
             metrics = collector.collect()
             for metric in metrics:
                 if metric.name == metric_name:
-                    self._metrics_cache[metric_name] = metric
                     return metric
 
         raise AssertionError(f"Metric '{metric_name}' not found in registry")

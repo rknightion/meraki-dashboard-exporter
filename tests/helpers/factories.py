@@ -288,7 +288,7 @@ class DeviceStatusFactory:
         status_data = {
             "serial": serial or DataFactory.generate_serial(),
             "status": status or DeviceStatus.ONLINE,
-            "lastReportedAt": datetime.now(UTC).isoformat() + "Z",
+            "lastReportedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "publicIp": DataFactory.generate_ip(),
             "gateway": DataFactory.generate_ip(),
             "ipType": "dhcp",
@@ -310,7 +310,7 @@ class DeviceStatusFactory:
             "serial": serial or DataFactory.generate_serial(),
             "status": status or DeviceStatus.ONLINE,
             "productType": product_type or ProductType.WIRELESS,
-            "lastReportedAt": datetime.now(UTC).isoformat() + "Z",
+            "lastReportedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         }
         avail_data.update(kwargs)
         return avail_data
@@ -543,7 +543,7 @@ class TimeSeriesFactory:
         for i in range(count):
             value = base_value + (trend * i) + random.uniform(-variance, variance)
             points.append({
-                "timestamp": current_time.isoformat() + "Z",
+                "timestamp": current_time.isoformat().replace("+00:00", "Z"),
                 "value": round(max(0, value), 2),
             })
             current_time += timedelta(seconds=interval)
@@ -562,7 +562,7 @@ class TimeSeriesFactory:
             timestamp = base_time + timedelta(minutes=i * 5)
             usage_data.append({
                 "serial": serial or DataFactory.generate_serial(),
-                "ts": timestamp.isoformat() + "Z",
+                "ts": timestamp.isoformat().replace("+00:00", "Z"),
                 "usage": {
                     "percentage": round(random.uniform(40, 80), 2),
                 },
