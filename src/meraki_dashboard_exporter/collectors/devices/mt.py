@@ -19,7 +19,7 @@ from ...core.constants import (
     SensorMetricType,
     UpdateTier,
 )
-from ...core.domain_models import SensorMeasurement
+from ...core.domain_models import SensorGatewayConnection, SensorMeasurement
 from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
@@ -384,11 +384,9 @@ class MTCollector(BaseDeviceCollector):
                 else None
             )
 
-            for item in connections:
-                sensor = item.get("sensor", {})
-                gateway = item.get("gateway", {})
-                network = item.get("network", {})
-                network_id = network.get("id", "")
+            for raw_item in connections:
+                item = SensorGatewayConnection.model_validate(raw_item)
+                network_id = item.network.id
 
                 if allowed_network_ids is not None and network_id not in allowed_network_ids:
                     continue
@@ -397,15 +395,15 @@ class MTCollector(BaseDeviceCollector):
                     org_id=org_id,
                     org_name=org_name or org_id,
                     network_id=network_id,
-                    network_name=network.get("name", ""),
-                    sensor_serial=sensor.get("serial", ""),
-                    sensor_name=sensor.get("name", ""),
-                    gateway_serial=gateway.get("serial", ""),
+                    network_name=item.network.name or "",
+                    sensor_serial=item.sensor.serial,
+                    sensor_name=item.sensor.name or "",
+                    gateway_serial=item.gateway.serial,
                 )
 
-                self._set_metric_value("_sensor_gateway_rssi", labels, item.get("rssi"))
+                self._set_metric_value("_sensor_gateway_rssi", labels, item.rssi)
 
-                epoch = self._parse_iso_timestamp(item.get("lastConnectedAt"))
+                epoch = self._parse_iso_timestamp(item.lastConnectedAt)
                 self._set_metric_value("_sensor_gateway_last_connected", labels, epoch)
 
         except Exception:

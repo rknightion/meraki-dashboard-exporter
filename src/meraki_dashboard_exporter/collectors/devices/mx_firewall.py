@@ -7,7 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants.metrics_constants import MXMetricName
-from ...core.domain_models import ApplianceSecurityEvent
+from ...core.domain_models import ApplianceFirewallRules, ApplianceSecurityEvent
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -154,15 +154,22 @@ class MXFirewallCollector(SubCollectorMixin):
             LabelName.NETWORK_NAME: network_name,
         }
 
-        # L3 rules
+        # L3 rules. Wrap in validate_response_format so an SDK exhausted-retry
+        # error shape (a dict with an "errors" key) raises instead of silently
+        # yielding empty rules and emitting a false-zero rule count (F-034).
         l3_response = await asyncio.to_thread(
             self.api.appliance.getNetworkApplianceFirewallL3FirewallRules,
             network_id,
         )
-        l3_rules: list[dict[str, Any]] = l3_response.get("rules", []) if l3_response else []
+        l3_data = validate_response_format(
+            l3_response,
+            expected_type=dict,
+            operation="getNetworkApplianceFirewallL3FirewallRules",
+        )
+        l3_rules = ApplianceFirewallRules.model_validate(l3_data).rules
 
         # The last rule is always the built-in default rule; exclude it from the count
-        user_l3_rules = [r for r in l3_rules if r.get("comment", "") != "Default rule"]
+        user_l3_rules = [r for r in l3_rules if (r.comment or "") != "Default rule"]
 
         self.parent._set_metric(
             self._firewall_rules_total,
@@ -173,20 +180,25 @@ class MXFirewallCollector(SubCollectorMixin):
         # Default policy: determined from the last rule's policy field
         if l3_rules:
             default_rule = l3_rules[-1]
-            default_policy = default_rule.get("policy", "deny")
+            default_policy = default_rule.policy or "deny"
             self.parent._set_metric(
                 self._firewall_default_policy,
                 base_labels,
                 1.0 if default_policy == "allow" else 0.0,
             )
 
-        # L7 rules
+        # L7 rules (same error-shape normalization as L3)
         self._track_api_call("getNetworkApplianceFirewallL7FirewallRules")
         l7_response = await asyncio.to_thread(
             self.api.appliance.getNetworkApplianceFirewallL7FirewallRules,
             network_id,
         )
-        l7_rules: list[dict[str, Any]] = l7_response.get("rules", []) if l7_response else []
+        l7_data = validate_response_format(
+            l7_response,
+            expected_type=dict,
+            operation="getNetworkApplianceFirewallL7FirewallRules",
+        )
+        l7_rules = ApplianceFirewallRules.model_validate(l7_data).rules
 
         self.parent._set_metric(
             self._firewall_rules_total,

@@ -804,3 +804,26 @@ class TestMXVpnStatsCollector:
             call[0][1].get("network_id") == "N_INCLUDED"
             for call in mock_parent._set_metric.call_args_list
         )
+
+
+def test_vpn_stats_row_validates_via_domain_model() -> None:
+    """F-023: the VPN stats peer row is parsed via a typed Pydantic domain model."""
+    from meraki_dashboard_exporter.core.domain_models import ApplianceVpnStats
+
+    row = ApplianceVpnStats.model_validate({
+        "networkId": "N_1",
+        "networkName": "HQ",
+        "merakiVpnPeers": [
+            {
+                "networkId": "N_2",
+                "usageSummary": {"sentInKilobytes": 123.4, "receivedInKilobytes": 567.8},
+                "latencySummaries": [{"avgLatencyMs": 10.0}, {"avgLatencyMs": None}],
+            }
+        ],
+    })
+
+    peer = row.merakiVpnPeers[0]
+    assert peer.networkId == "N_2"
+    assert peer.usageSummary is not None
+    assert peer.usageSummary.sentInKilobytes == 123.4
+    assert [s.avgLatencyMs for s in peer.latencySummaries] == [10.0, None]

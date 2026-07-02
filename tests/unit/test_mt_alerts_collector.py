@@ -224,3 +224,16 @@ class TestMTSensorAlertsCollector(BaseCollectorTest):
         """No organizations -> returns cleanly without error."""
         collector.inventory.get_organizations = AsyncMock(return_value=[])
         await collector._collect_impl()
+
+
+def test_sensor_alerts_overview_validates_via_domain_model() -> None:
+    """F-023: the sensor alerts overview is parsed via a typed Pydantic domain model."""
+    from meraki_dashboard_exporter.core.domain_models import SensorAlertsOverviewByMetric
+
+    overview = SensorAlertsOverviewByMetric.model_validate({
+        "supportedMetrics": ["temperature", "humidity", "noise"],
+        "counts": {"temperature": 2, "humidity": 1, "noise": {"ambient": 3}},
+    })
+
+    assert overview.supportedMetrics == ["temperature", "humidity", "noise"]
+    assert overview.counts == {"temperature": 2, "humidity": 1, "noise": {"ambient": 3}}

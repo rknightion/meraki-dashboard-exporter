@@ -335,30 +335,84 @@ class TestMXFirewallCollector:
             _, _, value = call[0]
             assert value == 0.0
 
-    async def test_none_response_handled_gracefully(
+    async def test_none_response_skips_without_false_zeros(
         self,
         firewall_collector: MXFirewallCollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """None API responses must not cause an exception."""
+        """A None (invalid, non-dict) L3 response must be skipped, not emit a false-zero.
+
+        After F-034 the L3/L7 fetch is wrapped in ``validate_response_format`` so a
+        non-dict response (None, or the SDK exhausted-retry ``{"errors": [...]}``
+        shape) raises internally and is absorbed by ``@with_error_handling`` — the
+        cycle emits nothing rather than recording a misleading rule count of 0.
+        """
         mock_api.appliance.getNetworkApplianceFirewallL3FirewallRules = MagicMock(return_value=None)
         mock_api.appliance.getNetworkApplianceFirewallL7FirewallRules = MagicMock(return_value=None)
 
-        # Should not raise
+        # Should not raise – the exception is absorbed by the decorator.
         await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
 
-        # Rule counts of 0 should still be recorded
-        rule_count_calls = [
-            c
-            for c in mock_parent._set_metric.call_args_list
-            if c[0][0] is firewall_collector._firewall_rules_total
-        ]
-        assert len(rule_count_calls) == 2
+        # No rule-count series should be emitted for an invalid response shape.
+        mock_parent._set_metric.assert_not_called()
 
     # ------------------------------------------------------------------
     # Error handling
     # ------------------------------------------------------------------
+
+    async def test_l3_error_shape_response_raises_and_emits_nothing(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The SDK exhausted-retry error shape on L3 must raise (F-034), not emit false zeros.
+
+        ``getNetworkApplianceFirewallL3FirewallRules`` returning a dict with an
+        ``errors`` key (the retries-exhausted body) must be normalized by
+        ``validate_response_format`` into a raised error that ``@with_error_handling``
+        absorbs — so the L3/L7 rule counts and default policy are NOT set to a
+        misleading 0 for that cycle.
+        """
+        mock_api.appliance.getNetworkApplianceFirewallL3FirewallRules = MagicMock(
+            return_value={"errors": ["server error, retries exhausted"]}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallL7FirewallRules = MagicMock(
+            return_value={"rules": []}
+        )
+
+        # Should not raise – validate_response_format raises internally, and
+        # @with_error_handling absorbs it.
+        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+
+        # L3 raised before any emission, so nothing (incl. L7) is recorded.
+        mock_parent._set_metric.assert_not_called()
+
+    async def test_l7_error_shape_response_raises_and_emits_nothing(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The SDK exhausted-retry error shape on L7 must raise (F-034), not emit a false zero."""
+        mock_api.appliance.getNetworkApplianceFirewallL3FirewallRules = MagicMock(
+            return_value={"rules": [{"comment": "Default rule", "policy": "deny"}]}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallL7FirewallRules = MagicMock(
+            return_value={"errors": ["server error, retries exhausted"]}
+        )
+
+        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+
+        # L7 raised, so no L7 rule-count series is emitted for this cycle.
+        l7_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is firewall_collector._firewall_rules_total
+            and c[0][1].get("rule_type") == "L7"
+        ]
+        assert l7_calls == []
 
     async def test_l3_api_error_handled_gracefully(
         self,
@@ -810,3 +864,25 @@ class TestMXFirewallCollector:
         await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
 
         assert mock_api.appliance.getNetworkApplianceFirewallL3FirewallRules.call_count == 2
+
+    def test_firewall_rules_validate_via_domain_model(self) -> None:
+        """F-023: L3/L7 rule responses are parsed via a typed Pydantic domain model."""
+        from meraki_dashboard_exporter.core.domain_models import ApplianceFirewallRules
+
+        parsed = ApplianceFirewallRules.model_validate({
+            "rules": [
+                {"comment": "Allow internal", "policy": "allow", "protocol": "any"},
+                {"comment": "Default rule", "policy": "deny", "protocol": "any"},
+            ]
+        })
+
+        assert parsed.rules[0].comment == "Allow internal"
+        assert parsed.rules[0].policy == "allow"
+        assert parsed.rules[-1].comment == "Default rule"
+
+        # L7 rules carry different fields; extras are permitted and count still works.
+        l7 = ApplianceFirewallRules.model_validate({
+            "rules": [{"type": "host", "value": "bad.example.com"}]
+        })
+        assert len(l7.rules) == 1
+        assert l7.rules[0].comment is None

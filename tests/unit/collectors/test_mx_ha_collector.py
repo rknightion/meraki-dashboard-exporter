@@ -295,3 +295,24 @@ class TestMXHACollector:
         await collector.collect_redundancy("org1", "Test Org", {})
 
         mock_parent._set_metric.assert_not_called()
+
+    def test_redundancy_row_validates_via_domain_model(self) -> None:
+        """F-023: the redundancy row is parsed via a typed Pydantic domain model."""
+        from meraki_dashboard_exporter.core.domain_models import ApplianceDeviceRedundancy
+
+        row = ApplianceDeviceRedundancy.model_validate({
+            "networkId": "N_111",
+            "name": "Office Network",
+            "enabled": True,
+            "mode": "active-active",
+            "designations": [
+                {"serial": "Q2AB-0001", "priority": 1},
+                {"serial": "Q2AB-0002", "priority": 2},
+            ],
+        })
+
+        assert row.networkId == "N_111"
+        assert row.enabled is True
+        assert row.mode == "active-active"
+        assert [d.serial for d in row.designations] == ["Q2AB-0001", "Q2AB-0002"]
+        assert isinstance(row.designations[0].priority, int)

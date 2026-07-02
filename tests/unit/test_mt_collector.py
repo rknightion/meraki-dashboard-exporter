@@ -631,3 +631,22 @@ class TestMTExpirationTracking(BaseCollectorTest):
             for c in collector.expiration_manager.track_metric_update.call_args_list
         }
         assert "meraki_mt_gateway_rssi" in names
+
+
+def test_sensor_gateway_connection_validates_via_domain_model() -> None:
+    """F-023: the sensor-gateway connection item is parsed via a typed domain model."""
+    from meraki_dashboard_exporter.core.domain_models import SensorGatewayConnection
+
+    item = SensorGatewayConnection.model_validate({
+        "rssi": -55,
+        "lastConnectedAt": "2024-01-01T00:00:00Z",
+        "network": {"id": "N_1", "name": "Net 1"},
+        "sensor": {"serial": "Q2MT-1", "name": "Sensor1"},
+        "gateway": {"serial": "Q2GW-1"},
+    })
+
+    assert item.rssi == -55
+    assert isinstance(item.rssi, int)
+    assert item.network.id == "N_1"
+    assert item.sensor.serial == "Q2MT-1"
+    assert item.gateway.name is None

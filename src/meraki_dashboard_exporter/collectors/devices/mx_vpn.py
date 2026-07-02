@@ -6,6 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants.metrics_constants import MXMetricName
+from ...core.domain_models import ApplianceVpnStats
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -242,18 +243,17 @@ class MXVpnCollector(SubCollectorMixin):
         skipped = 0
         emitted = 0
 
-        for row in rows:
-            network_id = row.get("networkId", "")
-            network_name = row.get("networkName", network_id)
+        for raw_row in rows:
+            row = ApplianceVpnStats.model_validate(raw_row)
+            network_id = row.networkId
+            network_name = row.networkName if row.networkName is not None else network_id
 
             if allowed_network_ids is not None and network_id not in allowed_network_ids:
                 skipped += 1
                 continue
 
-            peers: list[dict[str, Any]] = row.get("merakiVpnPeers", [])
-
-            for peer in peers:
-                peer_id = peer.get("networkId", "")
+            for peer in row.merakiVpnPeers:
+                peer_id = peer.networkId
 
                 labels = create_labels(
                     org_id=org_id,
@@ -263,9 +263,9 @@ class MXVpnCollector(SubCollectorMixin):
                     peer_network_id=peer_id,
                 )
 
-                usage: dict[str, Any] = peer.get("usageSummary") or {}
+                usage = peer.usageSummary
 
-                sent = usage.get("sentInKilobytes")
+                sent = usage.sentInKilobytes if usage is not None else None
                 if sent is not None:
                     self.parent._set_metric(
                         self._vpn_usage_sent_kb,
@@ -275,7 +275,7 @@ class MXVpnCollector(SubCollectorMixin):
                     )
                     emitted += 1
 
-                received = usage.get("receivedInKilobytes")
+                received = usage.receivedInKilobytes if usage is not None else None
                 if received is not None:
                     self.parent._set_metric(
                         self._vpn_usage_recv_kb,
@@ -285,11 +285,10 @@ class MXVpnCollector(SubCollectorMixin):
                     )
                     emitted += 1
 
-                latency_summaries: list[dict[str, Any]] = peer.get("latencySummaries") or []
                 latency_values = [
-                    float(summary["avgLatencyMs"])
-                    for summary in latency_summaries
-                    if summary.get("avgLatencyMs") is not None
+                    float(summary.avgLatencyMs)
+                    for summary in peer.latencySummaries
+                    if summary.avgLatencyMs is not None
                 ]
                 if latency_values:
                     self.parent._set_metric(

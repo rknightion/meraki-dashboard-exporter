@@ -6,6 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants.metrics_constants import MXMetricName
+from ...core.domain_models import ApplianceUplinkUsage
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
@@ -118,18 +119,21 @@ class MXUplinkUsageCollector(SubCollectorMixin):
         skipped = 0
         emitted = 0
 
-        for row in rows:
-            network_id = row.get("networkId", "")
+        for raw_row in rows:
+            row = ApplianceUplinkUsage.model_validate(raw_row)
+            network_id = row.networkId
 
             if allowed_network_ids is not None and network_id not in allowed_network_ids:
                 skipped += 1
                 continue
 
-            for uplink in row.get("byUplink", []):
-                serial = uplink.get("serial", "")
-                interface = uplink.get("interface", "")
-                sent = uplink.get("sent")
-                received = uplink.get("received")
+            row_network_name = row.name if row.name is not None else network_id
+
+            for uplink in row.byUplink:
+                serial = uplink.serial
+                interface = uplink.interface
+                sent = uplink.sent
+                received = uplink.received
 
                 if sent is None and received is None:
                     continue
@@ -140,7 +144,7 @@ class MXUplinkUsageCollector(SubCollectorMixin):
                     "name": device_info.get("name", serial),
                     "model": device_info.get("model", ""),
                     "networkId": network_id,
-                    "networkName": device_info.get("network_name", row.get("name", network_id)),
+                    "networkName": device_info.get("network_name", row_network_name),
                 }
 
                 labels = create_device_labels(

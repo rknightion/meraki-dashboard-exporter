@@ -376,6 +376,188 @@ class ApplianceSecurityEvent(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+# Appliance HA / Uplink / VPN / Firewall Models (M3 new-signal fetchers, F-023)
+
+
+class ApplianceRedundancyDesignation(BaseModel):
+    """A single warm-spare designation (device + priority) within a network."""
+
+    serial: str = ""
+    priority: int | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceDeviceRedundancy(BaseModel):
+    """Per-network MX warm-spare (HA) redundancy row.
+
+    Source: ``getOrganizationApplianceDevicesRedundancyByNetwork``.
+    """
+
+    __meraki_op__ = "getOrganizationApplianceDevicesRedundancyByNetwork"
+
+    networkId: str = ""
+    name: str | None = None
+    enabled: bool | None = None
+    mode: str = ""
+    designations: list[ApplianceRedundancyDesignation] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceUplinkUsageEntry(BaseModel):
+    """A single (device, uplink) usage entry within an uplink-usage row."""
+
+    serial: str = ""
+    interface: str = ""
+    sent: float | None = None
+    received: float | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceUplinkUsage(BaseModel):
+    """Per-network MX uplink usage row.
+
+    Source: ``getOrganizationApplianceUplinksUsageByNetwork``.
+    """
+
+    __meraki_op__ = "getOrganizationApplianceUplinksUsageByNetwork"
+
+    networkId: str = ""
+    name: str | None = None
+    byUplink: list[ApplianceUplinkUsageEntry] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceVpnUsageSummary(BaseModel):
+    """VPN usage volume summary for a peer network."""
+
+    sentInKilobytes: float | None = None
+    receivedInKilobytes: float | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceVpnLatencySummary(BaseModel):
+    """VPN latency summary for one sender/receiver uplink combination."""
+
+    avgLatencyMs: float | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceVpnStatsPeer(BaseModel):
+    """A single peer-network entry within a VPN stats row."""
+
+    networkId: str = ""
+    usageSummary: ApplianceVpnUsageSummary | None = None
+    latencySummaries: list[ApplianceVpnLatencySummary] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceVpnStats(BaseModel):
+    """Per-network historical VPN usage/latency stats row.
+
+    Source: ``getOrganizationApplianceVpnStats``.
+    """
+
+    __meraki_op__ = "getOrganizationApplianceVpnStats"
+
+    networkId: str = ""
+    networkName: str | None = None
+    merakiVpnPeers: list[ApplianceVpnStatsPeer] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceFirewallRule(BaseModel):
+    """A single L3 or L7 firewall rule.
+
+    Only ``comment``/``policy`` (used for default-rule exclusion and default
+    policy detection) are pinned; the differing L7 rule fields are permitted
+    via extras.
+    """
+
+    comment: str | None = None
+    policy: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceFirewallRules(BaseModel):
+    """A firewall rules response (L3 or L7).
+
+    Source: ``getNetworkApplianceFirewallL3FirewallRules`` /
+    ``getNetworkApplianceFirewallL7FirewallRules``.
+    """
+
+    __meraki_op__ = [
+        "getNetworkApplianceFirewallL3FirewallRules",
+        "getNetworkApplianceFirewallL7FirewallRules",
+    ]
+
+    rules: list[ApplianceFirewallRule] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+# Sensor overview / gateway-connection Models (M3 new-signal fetchers, F-023)
+
+
+class SensorAlertsOverviewByMetric(BaseModel):
+    """Currently-alerting sensor overview for a network, keyed by metric.
+
+    Source: ``getNetworkSensorAlertsCurrentOverviewByMetric``. ``counts`` values
+    may be ints or nested dicts (e.g. ``noise: {ambient: N}``), so the mapping is
+    kept loosely typed and normalized by the collector.
+    """
+
+    __meraki_op__ = "getNetworkSensorAlertsCurrentOverviewByMetric"
+
+    supportedMetrics: list[str] = Field(default_factory=list)
+    counts: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class SensorGatewayNodeRef(BaseModel):
+    """A sensor or gateway reference (serial + optional name)."""
+
+    serial: str = ""
+    name: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class SensorGatewayNetworkRef(BaseModel):
+    """A network reference within a sensor-gateway connection item."""
+
+    id: str = ""
+    name: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class SensorGatewayConnection(BaseModel):
+    """Latest sensor-to-gateway connectivity item.
+
+    Source: ``getOrganizationSensorGatewaysConnectionsLatest``.
+    """
+
+    __meraki_op__ = "getOrganizationSensorGatewaysConnectionsLatest"
+
+    sensor: SensorGatewayNodeRef = Field(default_factory=SensorGatewayNodeRef)
+    gateway: SensorGatewayNodeRef = Field(default_factory=SensorGatewayNodeRef)
+    network: SensorGatewayNetworkRef = Field(default_factory=SensorGatewayNetworkRef)
+    rssi: int | None = None
+    lastConnectedAt: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
 # Organization Models
 
 

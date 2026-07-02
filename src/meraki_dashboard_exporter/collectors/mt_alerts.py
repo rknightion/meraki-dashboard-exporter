@@ -17,6 +17,7 @@ from ..core.async_utils import ManagedTaskGroup
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import MTMetricName, ProductType, UpdateTier
+from ..core.domain_models import SensorAlertsOverviewByMetric
 from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call
@@ -166,11 +167,12 @@ class MTSensorAlertsCollector(MetricCollector):
         org_id = network.get("orgId", "")
         org_name = network.get("orgName", org_id)
 
-        overview = await self._fetch_network_alerts_overview(network_id)
-        if overview is None:
+        raw_overview = await self._fetch_network_alerts_overview(network_id)
+        if raw_overview is None:
             return
 
-        counts = overview.get("counts", {})
+        overview = SensorAlertsOverviewByMetric.model_validate(raw_overview)
+        counts = overview.counts
         if not isinstance(counts, dict):
             return
 

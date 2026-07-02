@@ -325,3 +325,23 @@ class TestMXUplinkUsageCollector:
         assert labels["name"] == "Q2XX-UNKNOWN"
         assert labels["serial"] == "Q2XX-UNKNOWN"
         assert labels["network_name"] == "Unknown Network"
+
+
+def test_uplink_usage_row_validates_via_domain_model() -> None:
+    """F-023: the uplink-usage row is parsed via a typed Pydantic domain model."""
+    from meraki_dashboard_exporter.core.domain_models import ApplianceUplinkUsage
+
+    row = ApplianceUplinkUsage.model_validate({
+        "networkId": "N_1",
+        "name": "Office",
+        "byUplink": [
+            {"serial": "Q2AB-1234", "interface": "wan1", "sent": 12345, "received": None},
+        ],
+    })
+
+    assert row.networkId == "N_1"
+    entry = row.byUplink[0]
+    assert entry.serial == "Q2AB-1234"
+    assert entry.interface == "wan1"
+    assert entry.sent == 12345.0
+    assert entry.received is None

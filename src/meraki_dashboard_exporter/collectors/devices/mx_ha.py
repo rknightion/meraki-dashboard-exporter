@@ -6,6 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants.metrics_constants import MXMetricName
+from ...core.domain_models import ApplianceDeviceRedundancy
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
@@ -134,14 +135,15 @@ class MXHACollector(SubCollectorMixin):
         skipped = 0
         emitted = 0
 
-        for row in rows:
-            network_id = row.get("networkId", "")
+        for raw_row in rows:
+            row = ApplianceDeviceRedundancy.model_validate(raw_row)
+            network_id = row.networkId
 
             if allowed_network_ids is not None and network_id not in allowed_network_ids:
                 skipped += 1
                 continue
 
-            network_name = row.get("name", network_id)
+            network_name = row.name if row.name is not None else network_id
             network_labels = create_network_labels(
                 {"id": network_id, "name": network_name},
                 org_id=org_id,
@@ -151,12 +153,12 @@ class MXHACollector(SubCollectorMixin):
             self.parent._set_metric(
                 self._mx_ha_enabled,
                 network_labels,
-                1.0 if row.get("enabled") else 0.0,
+                1.0 if row.enabled else 0.0,
                 MXMetricName.MX_HA_ENABLED.value,
             )
             emitted += 1
 
-            mode = row.get("mode", "")
+            mode = row.mode
             mode_labels = create_labels(
                 org_id=org_id,
                 org_name=org_name,
@@ -172,9 +174,9 @@ class MXHACollector(SubCollectorMixin):
             )
             emitted += 1
 
-            for designation in row.get("designations", []):
-                serial = designation.get("serial", "")
-                priority = designation.get("priority")
+            for designation in row.designations:
+                serial = designation.serial
+                priority = designation.priority
                 if priority is None:
                     continue
 
