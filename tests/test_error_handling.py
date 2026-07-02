@@ -14,11 +14,20 @@ from meraki_dashboard_exporter.core.error_handling import (
     DataValidationError,
     ErrorCategory,
     RetryableAPIError,
+    _categorize_error,  # noqa: PLC2701  (intentionally testing the private categorizer)
     batch_with_concurrency_limit,
     validate_response_format,
     with_error_handling,
     with_semaphore_limit,
 )
+
+
+class _StatusError(Exception):
+    """Exception carrying an HTTP ``.status`` like ``meraki.exceptions.APIError``."""
+
+    def __init__(self, status: int, message: str) -> None:
+        self.status = status
+        super().__init__(message)
 
 
 class TestErrorCategories:
@@ -154,6 +163,38 @@ class TestWithErrorHandlingDecorator:
 
         result = await not_found_operation()
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_500_status_with_404_in_message_not_downgraded(self) -> None:
+        """A 500 whose message contains '404' is NOT downgraded (F-052).
+
+        ``str(APIError)`` concatenates server-controlled body text, so a genuine
+        500 whose message happens to contain '404' (a serial/ID fragment) must
+        be categorized by its ``.status`` (500), not silently downgraded to a
+        debug-level API_NOT_AVAILABLE.
+        """
+
+        @with_error_handling(operation="Fetch resource", continue_on_error=False)
+        async def server_error() -> str:
+            raise _StatusError(500, "Server error, device 404XYZ failed")
+
+        with pytest.raises(CollectorError) as exc_info:
+            await server_error()
+
+        assert exc_info.value.category == ErrorCategory.API_SERVER_ERROR
+
+    def test_categorize_500_status_with_404_in_message(self) -> None:
+        """_categorize_error uses .status over substring for a 500 (F-052)."""
+        error = _StatusError(500, "weird 404 fragment in body")
+        assert _categorize_error(error) == ErrorCategory.API_SERVER_ERROR
+
+    def test_categorize_404_status(self) -> None:
+        """A genuine 404 status still maps to API_NOT_AVAILABLE (F-052)."""
+        assert _categorize_error(_StatusError(404, "not here")) == (ErrorCategory.API_NOT_AVAILABLE)
+
+    def test_categorize_404_message_fallback_without_status(self) -> None:
+        """Non-APIError exceptions (no .status) still fall back to substrings."""
+        assert _categorize_error(Exception("404 Not Found")) == (ErrorCategory.API_NOT_AVAILABLE)
 
     @pytest.mark.asyncio
     async def test_collector_context_extraction(self) -> None:

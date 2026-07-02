@@ -219,6 +219,47 @@ class TestManagedTaskGroupErrorHandling:
         # Task should have been cancelled
         assert task_cancelled
 
+    async def test_early_finisher_exception_captured(self) -> None:
+        """A task that fails before group exit surfaces its exception (F-002).
+
+        The failing task completes (and is discarded from ``group.tasks`` by its
+        done-callback) while the caller is still enqueuing more tasks. Its
+        exception must still be captured by the group's machinery rather than
+        being silently lost to a bare "Task exception was never retrieved" GC
+        warning.
+        """
+
+        async def failing_task() -> None:
+            raise ValueError("early failure")
+
+        async def slow_task() -> None:
+            await asyncio.sleep(0.05)
+
+        async with ManagedTaskGroup("test") as group:
+            await group.create_task(failing_task())
+            # Let the failing task run to completion so its done-callback
+            # discards it from group.tasks BEFORE __aexit__ gathers survivors.
+            await asyncio.sleep(0.01)
+            assert len(group.tasks) == 0
+            await group.create_task(slow_task())
+
+        # The early finisher's exception is recorded by the group machinery.
+        assert any(
+            isinstance(e, ValueError) and str(e) == "early failure" for e in group._task_exceptions
+        )
+
+    async def test_surviving_task_exception_captured(self) -> None:
+        """A task still running at group exit also has its exception captured."""
+
+        async def failing_task() -> None:
+            await asyncio.sleep(0.01)
+            raise RuntimeError("late failure")
+
+        async with ManagedTaskGroup("test") as group:
+            await group.create_task(failing_task())
+
+        assert any(isinstance(e, RuntimeError) for e in group._task_exceptions)
+
     async def test_gather_returns_exceptions(self) -> None:
         """Test that gather returns exceptions."""
 

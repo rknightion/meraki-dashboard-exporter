@@ -11,7 +11,7 @@ from collections.abc import Callable, Coroutine
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from .batch_processing import extract_successful_results, process_in_batches_with_errors
-from .error_handling import ErrorCategory, with_error_handling
+from .error_handling import ErrorCategory, validate_response_format, with_error_handling
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -89,6 +89,8 @@ class APIHelper:
                 self.api.organizations.getOrganization,
                 self.collector.settings.meraki.org_id,
             )
+            # Normalize the SDK exhausted-retry error shape ({"errors": [...]}).
+            org = validate_response_format(org, expected_type=dict, operation="getOrganization")
             return [org]
         else:
             # Fetch all organizations
@@ -96,6 +98,8 @@ class APIHelper:
             self.collector._track_api_call("getOrganizations")
             await self._acquire_rate_limit(None, "getOrganizations")
             orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
+            # Normalize the SDK exhausted-retry error shape ({"errors": [...]}).
+            orgs = validate_response_format(orgs, expected_type=list, operation="getOrganizations")
             logger.debug("Successfully fetched organizations", count=len(orgs))
             return cast(list[dict[str, Any]], orgs)
 
@@ -174,6 +178,11 @@ class APIHelper:
             self.api.organizations.getOrganizationNetworks,
             org_id,
             total_pages="all",
+        )
+        # Normalize the SDK exhausted-retry error shape ({"errors": [...]})
+        # before casting straight to a list and feeding NetworkFilter.
+        networks = validate_response_format(
+            networks, expected_type=list, operation="getOrganizationNetworks"
         )
         networks_list = cast(list[dict[str, Any]], networks)
 
@@ -278,10 +287,14 @@ class APIHelper:
         if product_types:
             params["productTypes"] = product_types
 
-        devices: list[dict[str, Any]] = await asyncio.to_thread(
+        raw_devices = await asyncio.to_thread(
             self.api.organizations.getOrganizationDevices,
             org_id,
             **params,
+        )
+        # Normalize the SDK exhausted-retry error shape ({"errors": [...]}).
+        devices: list[dict[str, Any]] = validate_response_format(
+            raw_devices, expected_type=list, operation="getOrganizationDevices"
         )
         logger.debug("Successfully fetched devices", org_id=org_id, count=len(devices))
         return devices

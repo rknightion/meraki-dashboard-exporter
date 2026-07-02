@@ -395,6 +395,45 @@ class TestAPIHelper:
         assert results[1] == [{"id": "N_123"}]
         assert results[2] == [{"serial": "Q2XX"}]
 
+    async def test_fetch_organizations_direct_normalizes_error_shape(
+        self, api_helper, mock_collector
+    ):
+        """getOrganizations error-shaped dict is normalized (F-000/F-053).
+
+        The SDK exhausted-retry error shape ``{"errors": [...]}`` must be run
+        through ``validate_response_format`` so the fetcher does not leak an
+        error dict as if it were the organization list.
+        """
+        mock_collector.api.organizations.getOrganizations.return_value = {
+            "errors": ["Internal server error while fetching organizations"]
+        }
+
+        result = await api_helper.get_organizations()
+
+        # DataValidationError is raised inside the decorated fetcher and
+        # swallowed (continue_on_error) -> empty list, NOT the raw error dict.
+        assert result == []
+
+    async def test_fetch_networks_direct_normalizes_error_shape(self, api_helper, mock_collector):
+        """getOrganizationNetworks error-shaped dict is normalized (F-000/F-053)."""
+        mock_collector.api.organizations.getOrganizationNetworks.return_value = {
+            "errors": ["Server error while fetching networks"]
+        }
+
+        result = await api_helper.get_organization_networks("123")
+
+        assert result == []
+
+    async def test_fetch_devices_direct_normalizes_error_shape(self, api_helper, mock_collector):
+        """getOrganizationDevices error-shaped dict is normalized (F-000/F-053)."""
+        mock_collector.api.organizations.getOrganizationDevices.return_value = {
+            "errors": ["Server error while fetching devices"]
+        }
+
+        result = await api_helper.get_organization_devices("123")
+
+        assert result == []
+
     async def test_process_in_batches_respects_order(self, api_helper):
         """Test that batch processing maintains order of results."""
         items = list(range(20))

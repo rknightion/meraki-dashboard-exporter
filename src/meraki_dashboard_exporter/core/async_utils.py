@@ -119,6 +119,10 @@ class ManagedTaskGroup:
         self._active_count = 0
         self._total_created = 0
         self._total_completed = 0
+        # Exceptions from tasks are recorded here as they complete (including
+        # early finishers that are discarded from ``self.tasks`` before
+        # ``__aexit__`` gathers the survivors), so no task's failure is lost.
+        self._task_exceptions: list[BaseException] = []
 
         # Tracing support for distributed tracing context propagation
         self._span: trace.Span | None = None
@@ -158,23 +162,28 @@ class ManagedTaskGroup:
                     if not task.done():
                         task.cancel()
 
-            # Wait for all tasks to complete
+            # Wait for all surviving tasks to complete. Exceptions are recorded
+            # in ``self._task_exceptions`` by each task's done-callback rather
+            # than read from the gather results, so early finishers (already
+            # discarded from ``self.tasks``) are captured too.
             try:
-                results = await asyncio.gather(*self.tasks, return_exceptions=True)
-
-                # Log any exceptions from tasks
-                for i, result in enumerate(results):
-                    if isinstance(result, Exception) and not isinstance(
-                        result, asyncio.CancelledError
-                    ):
-                        logger.error(
-                            f"Task failed in group {self.name}",
-                            task_index=i,
-                            error=str(result),
-                            error_type=type(result).__name__,
-                        )
+                await asyncio.gather(*self.tasks, return_exceptions=True)
             except Exception:
                 logger.exception(f"Error cleaning up task group: {self.name}")
+
+        # Yield once so any pending done-callbacks (which record task
+        # exceptions) run before we inspect the accumulated exceptions.
+        await asyncio.sleep(0)
+
+        # Log any exceptions raised by tasks in this group (surviving or
+        # early-finishing) so a fail-fast task's error is never silently lost.
+        for i, task_exc in enumerate(self._task_exceptions):
+            logger.error(
+                f"Task failed in group {self.name}",
+                task_index=i,
+                error=str(task_exc),
+                error_type=type(task_exc).__name__,
+            )
 
         # End the tracing span with proper status
         if self._span is not None:
@@ -254,6 +263,16 @@ class ManagedTaskGroup:
         def _on_complete(t: Task[T]) -> None:
             self.tasks.discard(t)
             self._total_completed += 1
+            # Retrieve and record any exception immediately. Calling
+            # ``t.exception()`` here also marks it retrieved (suppressing the
+            # "Task exception was never retrieved" warning), and stashing it
+            # ensures a fail-fast task surfaces through the group's machinery
+            # even though it is discarded from ``self.tasks`` right now — before
+            # ``__aexit__`` inspects the survivors.
+            if not t.cancelled():
+                exc = t.exception()
+                if exc is not None and not isinstance(exc, asyncio.CancelledError):
+                    self._task_exceptions.append(exc)
 
         task.add_done_callback(_on_complete)
 

@@ -334,8 +334,17 @@ def with_error_handling(
                         "error": error_msg,
                     })
 
-                    # Special handling for 404 errors
-                    if "404" in error_msg:
+                    # Special handling for 404 errors. Prefer the structured
+                    # HTTP status code (e.g. meraki.APIError.status) over a bare
+                    # substring check: str(APIError) concatenates server-controlled
+                    # body text, so a genuine 500 whose message merely contains
+                    # "404" must not be silently downgraded. Only fall back to the
+                    # substring heuristic for non-APIError exceptions with no status.
+                    status_code = getattr(e, "status", None)
+                    is_not_available = (
+                        status_code == 404 if status_code is not None else "404" in error_msg
+                    )
+                    if is_not_available:
                         logger.debug(
                             f"{operation} - API endpoint not available",
                             **exc_context,
@@ -382,8 +391,24 @@ def _categorize_error(error: Exception) -> ErrorCategory:
     """
     error_str = str(error).lower()
     error_type = type(error).__name__
+    status = getattr(error, "status", None)
 
-    # Check for specific error patterns
+    # Prefer the structured HTTP status code (e.g. meraki.APIError.status) over
+    # brittle substring matching. str(APIError) concatenates server-controlled
+    # body text, so a status-code-like fragment (a serial, an ID, etc.) in the
+    # message must not miscategorize a genuine 500 as a 404.
+    if status is not None:
+        if status == 429:
+            return ErrorCategory.API_RATE_LIMIT
+        if status == 404:
+            return ErrorCategory.API_NOT_AVAILABLE
+        if status in {400, 401, 403, 405, 406}:
+            return ErrorCategory.API_CLIENT_ERROR
+        if status in {500, 502, 503, 504}:
+            return ErrorCategory.API_SERVER_ERROR
+        # Unknown/other status: fall through to the heuristics below.
+
+    # Fallback string heuristics for non-APIError exceptions (no .status).
     if "429" in error_str or "rate limit" in error_str:
         return ErrorCategory.API_RATE_LIMIT
     elif "404" in error_str or "not found" in error_str:
