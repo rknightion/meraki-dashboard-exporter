@@ -39,12 +39,16 @@ class MyNetworkHealthCollector(BaseNetworkHealthCollector):
         response = await asyncio.to_thread(
             self.api.wireless.getNetworkSomeEndpoint, network_id, timespan=3600
         )
-        return validate_response_format(response, expected_type=list, operation="getNetworkSomeEndpoint")
+        return validate_response_format(
+            response, expected_type=list, operation="getNetworkSomeEndpoint"
+        )
 
     async def collect(self, network: dict[str, Any]) -> None:
         network_id = network["id"]
         data = await self._fetch_something(network_id)
-        labels = create_network_labels(network, org_id=network.get("orgId", ""), org_name=network.get("orgName", ""))
+        labels = create_network_labels(
+            network, org_id=network.get("orgId", ""), org_name=network.get("orgName", "")
+        )
         self._set_metric_value("_my_gauge_attr", labels, value)  # gauge lives on the parent
 ```
 The gauge (`self._my_gauge_attr` in this example) is defined once in

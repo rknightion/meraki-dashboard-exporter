@@ -41,6 +41,7 @@ Meraki Dashboard Exporter Test Suite - Comprehensive testing infrastructure with
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import DeviceFactory, OrganizationFactory
 
+
 class TestMyCollector(BaseCollectorTest):
     collector_class = MyCollector
     update_tier = UpdateTier.MEDIUM

@@ -73,8 +73,12 @@ class MyOrgCollector(BaseOrganizationCollector):
     @log_api_call("getOrganizationSomeEndpoint")
     async def _fetch_something(self, org_id: str) -> dict[str, Any]:
         self._track_api_call("getOrganizationSomeEndpoint")
-        response = await asyncio.to_thread(self.api.organizations.getOrganizationSomeEndpoint, org_id)
-        return validate_response_format(response, expected_type=dict, operation="getOrganizationSomeEndpoint")
+        response = await asyncio.to_thread(
+            self.api.organizations.getOrganizationSomeEndpoint, org_id
+        )
+        return validate_response_format(
+            response, expected_type=dict, operation="getOrganizationSomeEndpoint"
+        )
 
     async def collect(self, org_id: str, org_name: str) -> None:
         data = await self._fetch_something(org_id)
