@@ -18,7 +18,13 @@ from ..core.metrics import LabelName
 from ..core.registry import register_collector
 
 if TYPE_CHECKING:
-    pass
+    from meraki import DashboardAPI
+    from prometheus_client import CollectorRegistry
+
+    from ..core.config import Settings
+    from ..core.metric_expiration import MetricExpirationManager
+    from ..core.org_health import OrgHealthTracker
+    from ..services.inventory import OrganizationInventory
 
 logger = get_logger(__name__)
 
@@ -26,6 +32,24 @@ logger = get_logger(__name__)
 @register_collector(UpdateTier.MEDIUM)
 class AlertsCollector(MetricCollector):
     """Collector for Meraki assurance alerts."""
+
+    def __init__(
+        self,
+        api: DashboardAPI,
+        settings: Settings,
+        registry: CollectorRegistry | None = None,
+        inventory: OrganizationInventory | None = None,
+        expiration_manager: MetricExpirationManager | None = None,
+        rate_limiter: Any | None = None,
+        org_health_tracker: OrgHealthTracker | None = None,
+    ) -> None:
+        """Initialize alerts collector."""
+        super().__init__(api, settings, registry, inventory, expiration_manager, rate_limiter)
+
+        # Shared per-org health tracker (F-169): when present, per-org collection is
+        # skipped for organizations currently in backoff. Gating consumer only -- the
+        # tracker is owned/updated by OrganizationCollector.
+        self.org_health_tracker = org_health_tracker
 
     def _initialize_metrics(self) -> None:
         """Initialize alert metrics."""
@@ -128,6 +152,27 @@ class AlertsCollector(MetricCollector):
             return await self._fetch_networks_direct(org_id) or []
         return await self.inventory.get_networks(org_id)
 
+    def _org_in_backoff(self, org_id: str) -> bool:
+        """Return True if the org is currently backed off and should be skipped.
+
+        Backward compatible: when no tracker is wired in (``None``) collection
+        always proceeds (F-169).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        bool
+            True when the shared tracker says this org should NOT be collected.
+
+        """
+        return self.org_health_tracker is not None and not self.org_health_tracker.should_collect(
+            org_id
+        )
+
     async def _collect_impl(self) -> None:
         """Collect alert metrics."""
         start_time = time.time()
@@ -180,6 +225,9 @@ class AlertsCollector(MetricCollector):
             # also drops the getNetworkHealthAlerts fan-out this loop used to build.
             sensor_networks = []
             for org_id in org_ids:
+                # Skip sensor-alert fan-out for orgs in backoff too (F-169).
+                if self._org_in_backoff(org_id):
+                    continue
                 if self.inventory:
                     # Use filtered network list (only networks with sensors)
                     org_sensor_networks = await self.inventory.get_networks_with_device_types(
@@ -277,6 +325,15 @@ class AlertsCollector(MetricCollector):
             Organization name.
 
         """
+        # Skip organizations currently in backoff so a persistently-failing org
+        # does not receive full-rate alert collection every cycle (F-169).
+        if self._org_in_backoff(org_id):
+            logger.debug(
+                "Skipping alert collection for organization in backoff",
+                org_id=org_id,
+                org_name=org_name,
+            )
+            return
         with LogContext(org_id=org_id, org_name=org_name):
             # Get all active alerts
             alerts = await asyncio.to_thread(

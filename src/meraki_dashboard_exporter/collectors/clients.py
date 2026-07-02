@@ -45,9 +45,16 @@ class ClientsCollector(MetricCollector):
         *args : Any
             Positional arguments passed to parent.
         **kwargs : Any
-            Keyword arguments passed to parent.
+            Keyword arguments passed to parent. ``org_health_tracker`` (F-169), if
+            present, is consumed here rather than forwarded to the base collector.
 
         """
+        # Shared per-org health tracker (F-169): consumed before the base __init__
+        # (which does not accept it). When present, per-org collection is skipped
+        # for organizations currently in backoff. Gating consumer only -- the
+        # tracker is owned/updated by OrganizationCollector.
+        self.org_health_tracker = kwargs.pop("org_health_tracker", None)
+
         super().__init__(*args, **kwargs)
 
         # Check if client collection is enabled
@@ -330,6 +337,18 @@ class ClientsCollector(MetricCollector):
         for org in organizations:
             org_id = org["id"]
             org_name = org["name"]
+
+            # Skip organizations currently in backoff so a persistently-failing org
+            # does not receive full-rate client collection every cycle (F-169).
+            if self.org_health_tracker is not None and not self.org_health_tracker.should_collect(
+                org_id
+            ):
+                logger.debug(
+                    "Skipping client collection for organization in backoff",
+                    org_id=org_id,
+                    org_name=org_name,
+                )
+                continue
 
             # Get all networks for the organization
             networks = await self.api_helper.get_organization_networks(org_id)

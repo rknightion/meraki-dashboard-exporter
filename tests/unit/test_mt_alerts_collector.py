@@ -6,10 +6,67 @@ from unittest.mock import AsyncMock, MagicMock
 
 from meraki_dashboard_exporter.collectors.mt_alerts import MTSensorAlertsCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
+from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import NetworkFactory, OrganizationFactory
 
 METRIC_NAME = "meraki_mt_alerting_sensors_count"
+
+
+def _backed_off_tracker(org_id: str) -> OrgHealthTracker:
+    """Build a tracker with ``org_id`` driven into backoff (should_collect False)."""
+    tracker = OrgHealthTracker()
+    for _ in range(tracker.max_consecutive_failures):
+        tracker.record_failure(org_id, "Backed Org")
+    assert tracker.should_collect(org_id) is False
+    return tracker
+
+
+class TestMTSensorAlertsCollectorOrgHealthGating(BaseCollectorTest):
+    """F-169: MTSensorAlertsCollector honours the shared OrgHealthTracker per-org gate."""
+
+    collector_class = MTSensorAlertsCollector
+    update_tier = UpdateTier.MEDIUM
+
+    async def test_backed_off_org_is_skipped(
+        self, mock_api, settings, isolated_registry, inventory
+    ):
+        """A backed-off org is skipped before fetching networks; a healthy org is not."""
+        tracker = _backed_off_tracker("BACKED")
+        collector = MTSensorAlertsCollector(
+            api=mock_api,
+            settings=settings,
+            registry=isolated_registry,
+            inventory=inventory,
+            org_health_tracker=tracker,
+        )
+        seen: list[str] = []
+
+        async def _spy(org_id: str) -> list:
+            seen.append(org_id)
+            return []
+
+        collector.inventory.get_networks = _spy  # type: ignore[method-assign]
+
+        await collector._collect_org_sensor_alerts("BACKED", "Backed Org")
+        assert seen == []  # gate short-circuited before fetching networks
+
+        await collector._collect_org_sensor_alerts("HEALTHY", "Healthy Org")
+        assert seen == ["HEALTHY"]
+
+    async def test_none_tracker_collects_all(self, collector):
+        """With no tracker wired in, every org is collected (backward compatible)."""
+        assert collector.org_health_tracker is None
+        seen: list[str] = []
+
+        async def _spy(org_id: str) -> list:
+            seen.append(org_id)
+            return []
+
+        collector.inventory.get_networks = _spy  # type: ignore[method-assign]
+
+        await collector._collect_org_sensor_alerts("ANY", "Any Org")
+        assert seen == ["ANY"]
 
 
 class TestMTSensorAlertsCollector(BaseCollectorTest):

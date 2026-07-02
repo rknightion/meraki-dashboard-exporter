@@ -9,9 +9,56 @@ from meraki_dashboard_exporter.collectors import alerts as alerts_module
 from meraki_dashboard_exporter.collectors.alerts import AlertsCollector
 from meraki_dashboard_exporter.core.batch_processing import process_in_batches_with_errors
 from meraki_dashboard_exporter.core.constants import AlertMetricName, UpdateTier
+from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import AlertFactory, DeviceFactory, NetworkFactory, OrganizationFactory
 from tests.helpers.metrics import MetricAssertions
+
+
+def _backed_off_tracker(org_id: str) -> OrgHealthTracker:
+    """Build a tracker with ``org_id`` driven into backoff (should_collect False)."""
+    tracker = OrgHealthTracker()
+    for _ in range(tracker.max_consecutive_failures):
+        tracker.record_failure(org_id, "Backed Org")
+    assert tracker.should_collect(org_id) is False
+    return tracker
+
+
+class TestAlertsCollectorOrgHealthGating(BaseCollectorTest):
+    """F-169: AlertsCollector honours the shared OrgHealthTracker per-org gate."""
+
+    collector_class = AlertsCollector
+    update_tier = UpdateTier.MEDIUM
+
+    async def test_backed_off_org_is_skipped(
+        self, mock_api, settings, isolated_registry, inventory
+    ):
+        """A backed-off org is skipped before the alerts API call; a healthy org is not."""
+        tracker = _backed_off_tracker("BACKED")
+        collector = AlertsCollector(
+            api=mock_api,
+            settings=settings,
+            registry=isolated_registry,
+            inventory=inventory,
+            org_health_tracker=tracker,
+        )
+        api_call = MagicMock(return_value=[])
+        collector.api.organizations.getOrganizationAssuranceAlerts = api_call
+
+        await collector._collect_org_alerts("BACKED", "Backed Org")
+        assert api_call.call_count == 0  # gate short-circuited before the API call
+
+        await collector._collect_org_alerts("HEALTHY", "Healthy Org")
+        assert api_call.call_count == 1
+
+    async def test_none_tracker_collects_all(self, collector):
+        """With no tracker wired in, every org is collected (backward compatible)."""
+        assert collector.org_health_tracker is None
+        api_call = MagicMock(return_value=[])
+        collector.api.organizations.getOrganizationAssuranceAlerts = api_call
+
+        await collector._collect_org_alerts("ANY", "Any Org")
+        assert api_call.call_count == 1
 
 
 class TestAlertsCollector(BaseCollectorTest):

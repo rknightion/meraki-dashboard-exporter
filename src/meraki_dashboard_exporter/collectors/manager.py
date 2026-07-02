@@ -37,6 +37,19 @@ logger = get_logger(__name__)
 # is a utilization problem surfaced separately by the utilization metric.
 _SMOOTHING_MAX_INTERVAL_FRACTION = 0.5
 
+# Collectors that consult the shared OrgHealthTracker to skip per-org collection
+# for organizations currently in exponential backoff (F-169). OrganizationCollector
+# additionally *records* success/failure into the tracker; the others are gating
+# consumers only (they read should_collect but never mutate the tracker).
+_ORG_HEALTH_TRACKER_COLLECTORS = frozenset({
+    "OrganizationCollector",
+    "DeviceCollector",
+    "NetworkHealthCollector",
+    "ClientsCollector",
+    "AlertsCollector",
+    "MTSensorAlertsCollector",
+})
+
 
 class CollectorManager:
     """Manages and coordinates metric collectors with tiered update intervals.
@@ -255,9 +268,10 @@ class CollectorManager:
 
                 try:
                     # Create instance of the collector with inventory service and expiration manager
-                    # Pass org_health_tracker to OrganizationCollector for per-org graceful degradation
+                    # Pass the shared org_health_tracker to every collector that gates
+                    # per-org collection on it for graceful degradation (F-169).
                     extra_kwargs: dict[str, Any] = {}
-                    if collector_name == "OrganizationCollector":
+                    if collector_name in _ORG_HEALTH_TRACKER_COLLECTORS:
                         extra_kwargs["org_health_tracker"] = self.org_health_tracker
                     collector_instance = collector_class(
                         api=self.client.api,

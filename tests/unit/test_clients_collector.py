@@ -9,8 +9,74 @@ from structlog.testing import capture_logs
 
 from meraki_dashboard_exporter.collectors.clients import ClientsCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
+from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
+from meraki_dashboard_exporter.services.inventory import OrganizationInventory
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import ClientFactory, NetworkFactory, OrganizationFactory
+
+
+class TestClientsCollectorOrgHealthGating(BaseCollectorTest):
+    """F-169: ClientsCollector honours the shared OrgHealthTracker per-org gate."""
+
+    collector_class = ClientsCollector
+    update_tier = UpdateTier.MEDIUM
+
+    def _build_collector(self, mock_api_builder, settings, isolated_registry, tracker):
+        """Build a clients-enabled collector over a two-org mock API."""
+        settings.clients.enabled = True
+        org_backed = OrganizationFactory.create(org_id="BACKED", name="Backed Org")
+        org_healthy = OrganizationFactory.create(org_id="HEALTHY", name="Healthy Org")
+        net_b = NetworkFactory.create(org_id="BACKED")
+        net_h = NetworkFactory.create(org_id="HEALTHY")
+        api = (
+            mock_api_builder
+            .with_organizations([org_backed, org_healthy])
+            .with_networks([net_b], org_id="BACKED")
+            .with_networks([net_h], org_id="HEALTHY")
+            .build()
+        )
+        inventory = OrganizationInventory(api, settings)
+        collector = ClientsCollector(
+            api=api,
+            settings=settings,
+            registry=isolated_registry,
+            inventory=inventory,
+            org_health_tracker=tracker,
+        )
+        collector.api_helper.api = api
+        return collector
+
+    async def test_backed_off_org_is_skipped(self, mock_api_builder, settings, isolated_registry):
+        """A backed-off org is skipped in the per-org loop; a healthy org is processed."""
+        tracker = OrgHealthTracker()
+        for _ in range(tracker.max_consecutive_failures):
+            tracker.record_failure("BACKED", "Backed Org")
+        assert tracker.should_collect("BACKED") is False
+
+        collector = self._build_collector(mock_api_builder, settings, isolated_registry, tracker)
+        processed: list[str] = []
+
+        async def _spy(org_id: str, org_name: str, networks: list) -> None:
+            processed.append(org_id)
+
+        collector._process_network_batch = _spy  # type: ignore[method-assign]
+
+        await collector._collect_impl()
+        assert processed == ["HEALTHY"]
+
+    async def test_none_tracker_collects_all(self, mock_api_builder, settings, isolated_registry):
+        """With no tracker wired in, every org is processed (backward compatible)."""
+        collector = self._build_collector(mock_api_builder, settings, isolated_registry, None)
+        assert collector.org_health_tracker is None
+        processed: list[str] = []
+
+        async def _spy(org_id: str, org_name: str, networks: list) -> None:
+            processed.append(org_id)
+
+        collector._process_network_batch = _spy  # type: ignore[method-assign]
+
+        await collector._collect_impl()
+        assert sorted(processed) == ["BACKED", "HEALTHY"]
 
 
 class TestClientsCollector(BaseCollectorTest):

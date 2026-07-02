@@ -6,8 +6,65 @@ from unittest.mock import AsyncMock, MagicMock
 
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
+from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import DeviceFactory, NetworkFactory, OrganizationFactory
+
+
+def _backed_off_tracker(org_id: str) -> OrgHealthTracker:
+    """Build a tracker with ``org_id`` driven into backoff (should_collect False)."""
+    tracker = OrgHealthTracker()
+    for _ in range(tracker.max_consecutive_failures):
+        tracker.record_failure(org_id, "Backed Org")
+    assert tracker.should_collect(org_id) is False
+    return tracker
+
+
+class TestDeviceCollectorOrgHealthGating(BaseCollectorTest):
+    """F-169: DeviceCollector honours the shared OrgHealthTracker per-org gate."""
+
+    collector_class = DeviceCollector
+    update_tier = UpdateTier.MEDIUM
+
+    async def test_backed_off_org_is_skipped(
+        self, mock_api, settings, isolated_registry, inventory
+    ):
+        """A backed-off org is skipped before any device fetch; a healthy org is not."""
+        tracker = _backed_off_tracker("BACKED")
+        collector = DeviceCollector(
+            api=mock_api,
+            settings=settings,
+            registry=isolated_registry,
+            inventory=inventory,
+            org_health_tracker=tracker,
+        )
+        fetched: list[str] = []
+
+        async def _spy(org_id: str) -> list:
+            fetched.append(org_id)
+            return []
+
+        collector._fetch_devices = _spy  # type: ignore[method-assign]
+
+        await collector._collect_org_devices("BACKED", "Backed Org")
+        assert fetched == []  # gate short-circuited before the fetch
+
+        await collector._collect_org_devices("HEALTHY", "Healthy Org")
+        assert fetched == ["HEALTHY"]
+
+    async def test_none_tracker_collects_all(self, collector):
+        """With no tracker wired in, every org is collected (backward compatible)."""
+        assert collector.org_health_tracker is None
+        fetched: list[str] = []
+
+        async def _spy(org_id: str) -> list:
+            fetched.append(org_id)
+            return []
+
+        collector._fetch_devices = _spy  # type: ignore[method-assign]
+
+        await collector._collect_org_devices("ANY", "Any Org")
+        assert fetched == ["ANY"]
 
 
 class TestDeviceCollector(BaseCollectorTest):

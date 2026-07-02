@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 
     from ..core.config import Settings
     from ..core.metric_expiration import MetricExpirationManager
+    from ..core.org_health import OrgHealthTracker
     from ..services.inventory import OrganizationInventory
 
 logger = get_logger(__name__)
@@ -150,10 +151,16 @@ class DeviceCollector(MetricCollector):
         inventory: OrganizationInventory | None = None,
         expiration_manager: MetricExpirationManager | None = None,
         rate_limiter: Any | None = None,
+        org_health_tracker: OrgHealthTracker | None = None,
     ) -> None:
         """Initialize device collector with sub-collectors."""
         self._subcollectors_ready = False
         super().__init__(api, settings, registry, inventory, expiration_manager, rate_limiter)
+
+        # Shared per-org health tracker (F-169): when present, per-org collection is
+        # skipped for organizations currently in backoff. Gating consumer only -- the
+        # tracker is owned/updated by OrganizationCollector.
+        self.org_health_tracker = org_health_tracker
 
         # Initialize device-specific collectors
         self.mg_collector = MGCollector(self)
@@ -401,6 +408,17 @@ class DeviceCollector(MetricCollector):
             Organization name.
 
         """
+        # Skip organizations currently in backoff so a persistently-failing org
+        # does not receive full-rate device collection every cycle (F-169).
+        if self.org_health_tracker is not None and not self.org_health_tracker.should_collect(
+            org_id
+        ):
+            logger.debug(
+                "Skipping device collection for organization in backoff",
+                org_id=org_id,
+                org_name=org_name,
+            )
+            return
         try:
             with LogContext(org_id=org_id):
                 # Local device lookup map - must not be an instance attribute
