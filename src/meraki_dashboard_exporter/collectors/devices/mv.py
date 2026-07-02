@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants import MVMetricName
@@ -32,6 +33,19 @@ class MVCollector(BaseDeviceCollector):
 
         """
         super().__init__(parent)
+
+        # Tracks the last time near-static per-camera config (analytics zones,
+        # quality/retention) was collected, keyed by serial, so the SLOW
+        # cadence can be self-enforced even though collect() is dispatched
+        # every MEDIUM-tier (300s) cycle by DeviceCollector's per-device
+        # fan-out (see F-027). Mirrors the
+        # _should_collect_firewall_rules/_should_collect_port_usage throttle
+        # pattern in mx_firewall.py/ms.py.
+        self._last_static_config_collection: dict[str, float] = {}
+        # Cache of the last known zone_id -> zone_label map per camera
+        # serial, so the MEDIUM-tier live-analytics call can still resolve
+        # zone names on cycles where the SLOW-gated zones call is skipped.
+        self._last_zone_maps: dict[str, dict[str, str]] = {}
 
         # Common device label set shared by every MV gauge. Kept as a local
         # variable (not a module constant) so the metrics doc generator, which
@@ -101,18 +115,44 @@ class MVCollector(BaseDeviceCollector):
             ],
         )
 
+    def _should_collect_static_config(self, serial: str) -> bool:
+        """Return whether enough time has elapsed to (re)collect near-static camera config.
+
+        Mirrors the ``_should_collect_firewall_rules``/``_should_collect_port_usage``
+        throttle pattern in ``mx_firewall.py``/``ms.py``, keyed on
+        ``settings.update_intervals.slow`` instead of a dedicated interval
+        setting: analytics-zone layout and quality/retention config change
+        infrequently, but ``collect()`` is invoked every MEDIUM-tier (300s)
+        cycle by ``DeviceCollector``'s per-device fan-out (see F-027).
+        """
+        interval = self.settings.update_intervals.slow
+        if interval <= 0:
+            return True
+        last = self._last_static_config_collection.get(serial, 0.0)
+        return (time.time() - last) >= interval
+
+    def _mark_static_config_collected(self, serial: str) -> None:
+        """Record that near-static config was just collected for this camera."""
+        self._last_static_config_collection[serial] = time.time()
+
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect MV-specific metrics.
 
         Common device metrics (device_up, status_info, uptime) are handled
         by DeviceCollector._collect_common_metrics() before this is called.
 
-        Runs at the parent DeviceCollector's MEDIUM (300s) per-device cadence:
-        camera analytics/config data tolerates 5-minute freshness. Each camera
-        makes one zones call, one live-analytics call, and one quality/retention
-        call per cycle, bounded by the coordinator's existing per-device
-        ManagedTaskGroup fan-out. The three calls are independent so a failure
-        in one does not block the others.
+        Runs at the parent DeviceCollector's MEDIUM (300s) per-device cadence,
+        but only the live-analytics (person-count) call is genuinely volatile
+        enough to warrant that cadence. The analytics-zones and
+        quality/retention calls are near-static camera configuration, so they
+        are self-gated to the SLOW cadence (``settings.update_intervals.slow``,
+        900s default) via ``_should_collect_static_config`` (see F-027) - this
+        cuts steady-state per-camera API traffic from 3 calls/cycle to
+        effectively 1 call/cycle plus 2 calls every third cycle. The
+        zone-id -> zone-label map from the last static-config collection is
+        cached (``_last_zone_maps``) so zone-name resolution on the live call
+        keeps working on cycles where the zones call is skipped. The three
+        calls are independent so a failure in one does not block the others.
 
         Parameters
         ----------
@@ -124,9 +164,22 @@ class MVCollector(BaseDeviceCollector):
         org_name = device.get("orgName", org_id)
         serial = device.get("serial", "")
 
-        zone_map = await self._collect_analytics_zones(device, org_id, org_name, serial)
-        await self._collect_analytics_live(device, org_id, org_name, serial, zone_map or {})
-        await self._collect_quality_and_retention(device, org_id, org_name, serial)
+        if self._should_collect_static_config(serial):
+            zone_map = await self._collect_analytics_zones(device, org_id, org_name, serial)
+            if zone_map is not None:
+                self._last_zone_maps[serial] = zone_map
+            await self._collect_quality_and_retention(device, org_id, org_name, serial)
+            self._mark_static_config_collected(serial)
+        else:
+            logger.debug(
+                "Skipping MV static config collection (SLOW-tier cadence not yet elapsed)",
+                serial=serial,
+                interval_seconds=self.settings.update_intervals.slow,
+            )
+
+        await self._collect_analytics_live(
+            device, org_id, org_name, serial, self._last_zone_maps.get(serial, {})
+        )
 
     @log_api_call("getDeviceCameraAnalyticsZones")
     @with_error_handling(
@@ -173,7 +226,7 @@ class MVCollector(BaseDeviceCollector):
             MVMetricName.MV_ANALYTICS_ZONES.value,
         )
 
-        return {str(zone.get("zoneId")): zone.get("label", "") for zone in zones}
+        return {str(zone.get("id")): zone.get("label", "") for zone in zones}
 
     @log_api_call("getDeviceCameraAnalyticsLive")
     @with_error_handling(
@@ -283,13 +336,17 @@ class MVCollector(BaseDeviceCollector):
             MVMetricName.MV_RESTRICTED_BANDWIDTH_MODE_ENABLED.value,
         )
 
+        # quality/resolution/profileId are all documented as nullable in the
+        # OpenAPI spec (e.g. profileId is null when the camera isn't assigned
+        # to a profile) - `or ""` avoids emitting the literal string "None"
+        # for a null value (see F-004).
         quality_labels = create_device_labels(
             device,
             org_id=org_id,
             org_name=org_name,
-            quality=str(quality_retention.get("quality", "")),
-            resolution=str(quality_retention.get("resolution", "")),
-            profile_id=str(quality_retention.get("profileId", "")),
+            quality=str(quality_retention.get("quality") or ""),
+            resolution=str(quality_retention.get("resolution") or ""),
+            profile_id=str(quality_retention.get("profileId") or ""),
         )
         self.parent._set_metric(
             self._mv_quality_retention_info,
