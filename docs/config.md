@@ -104,8 +104,6 @@ HTTP server configuration for the metrics endpoint
 | `MERAKI_EXPORTER_SERVER__PORT` | `int` | `9099` | Port to bind the exporter to (min: 1, max: 65535) |
 | `MERAKI_EXPORTER_SERVER__API_TOKEN` | `SecretStr | None` | `_(none)_` | Optional bearer token required for state-changing POST control endpoints (/api/collectors/trigger, /api/clients/clear-dns-cache). When unset (default) these endpoints are unauthenticated - bind the exporter to a trusted interface. When set, requests must present 'Authorization: Bearer <token>'. |
 
-`PATH_PREFIX` and `ENABLE_HEALTH_CHECK` are currently defined for compatibility, but the application still exposes `/`, `/health`, `/metrics`, and `/cardinality` unconditionally.
-
 ## Webhook Settings
 
 Webhook receiver configuration
@@ -183,12 +181,4 @@ Restrict which networks are scraped by name glob, ID, or tag
 | `MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_TAGS` | `list[str]` | `[]` | Network tags to exclude. |
 
 All fields default to empty, which leaves the filter inactive (every network in every configured org is scraped). If any `INCLUDE_*` field is set, a network must match at least one include rule (by name, ID, or tag) to be considered; exclude rules are applied afterward and always win. Name fields (`INCLUDE_NAMES`/`EXCLUDE_NAMES`) are case-sensitive glob patterns (`*`/`?`). Values are comma-separated lists (or a JSON array string).
-
-## Additional Runtime Options
-
-Some runtime knobs are read directly from environment variables and are not part of the Pydantic settings model:
-
-| Environment Variable | Type | Default | Description |
-|---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_OTEL__SAMPLING_RATE` | `float` | `0.1` | Trace sampling rate between 0 and 1 |
 

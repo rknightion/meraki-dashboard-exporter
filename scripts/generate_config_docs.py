@@ -288,11 +288,6 @@ def generate_configuration_docs() -> str:
             "`MEDIUM` must be greater than or equal to `FAST`, `SLOW` must be greater than or equal "
             "to `MEDIUM`, and `MEDIUM` must be a multiple of `FAST`."
         ),
-        "Server Settings": (
-            "`PATH_PREFIX` and `ENABLE_HEALTH_CHECK` are currently defined for compatibility, "
-            "but the application still exposes `/`, `/health`, `/metrics`, and `/cardinality` "
-            "unconditionally."
-        ),
         "Webhook Settings": ("Webhooks are received on `POST /api/webhooks/meraki` when enabled."),
         "Network Filter Settings": (
             "All fields default to empty, which leaves the filter inactive (every network in every "
@@ -352,20 +347,6 @@ def generate_configuration_docs() -> str:
         if title in section_notes:
             sections.append(section_notes[title])
             sections.append("")
-
-    sections.append("## Additional Runtime Options")
-    sections.append("")
-    sections.append(
-        "Some runtime knobs are read directly from environment variables and are not part of the"
-        " Pydantic settings model:"
-    )
-    sections.append("")
-    sections.append("| Environment Variable | Type | Default | Description |")
-    sections.append("|---------------------|------|---------|-------------|")
-    sections.append(
-        "| `MERAKI_EXPORTER_OTEL__SAMPLING_RATE` | `float` | `0.1` | Trace sampling rate between 0 and 1 |"
-    )
-    sections.append("")
 
     return "\n".join(sections)
 
