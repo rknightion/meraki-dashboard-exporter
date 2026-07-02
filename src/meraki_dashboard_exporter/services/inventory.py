@@ -625,7 +625,13 @@ class OrganizationInventory:
             allowed_ids = self._network_filter.resolved_ids(networks)
             devices = [d for d in devices if d.get("networkId") in allowed_ids]
 
-        return devices
+        # Return defensive shallow copies so consumers (e.g. collectors/device.py
+        # enrichment adding availability_status/networkName/orgId/orgName) can
+        # mutate the returned dicts in place without polluting the shared cache
+        # for the rest of its TTL (F-078). Enrichment only sets top-level scalar
+        # keys, so a shallow copy per device is sufficient and far cheaper than
+        # a deep copy.
+        return [dict(d) for d in devices]
 
     async def get_device_availabilities(
         self,

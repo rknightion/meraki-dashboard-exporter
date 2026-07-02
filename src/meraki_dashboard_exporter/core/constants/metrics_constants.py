@@ -438,6 +438,14 @@ class CollectorMetricName(StrEnum):
     # Collection utilization metrics
     EXPORTER_COLLECTION_UTILIZATION_RATIO = "meraki_exporter_collection_utilization_ratio"
 
+    # Per-collector performance metrics (owned by core/collector.py's
+    # MetricCollector._initialize_performance_metrics and collectors/manager.py).
+    COLLECTOR_DURATION_SECONDS = "meraki_exporter_collector_duration_seconds"
+    COLLECTOR_ERRORS_TOTAL = "meraki_exporter_collector_errors_total"
+    COLLECTOR_SUCCESS_TIMESTAMP_SECONDS = "meraki_exporter_collector_success_timestamp_seconds"
+    COLLECTOR_API_CALLS_TOTAL = "meraki_exporter_collector_api_calls_total"
+    COLLECTOR_FAILURE_STREAK = "meraki_exporter_collector_failure_streak"
+
 
 class WebhookMetricName(StrEnum):
     """Webhook receiver metric names for monitoring webhook events (Phase 4.2)."""

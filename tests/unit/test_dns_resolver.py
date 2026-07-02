@@ -101,6 +101,39 @@ async def test_perform_lookup_applies_timeout(monkeypatch, resolver):
 
 
 @pytest.mark.asyncio
+async def test_system_dns_lookup_uses_dedicated_executor(monkeypatch, resolver):
+    """Blocking reverse-DNS runs on the resolver's own pool, not the loop default (F-075).
+
+    Routing gethostbyaddr through the default executor (run_in_executor(None, ...))
+    would share the pool with asyncio.to_thread() Meraki API calls; a hung,
+    un-cancellable lookup could then starve API collection. The resolver owns a
+    dedicated bounded ThreadPoolExecutor instead.
+    """
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    import meraki_dashboard_exporter.services.dns_resolver as dns_mod
+
+    # A dedicated, bounded executor exists.
+    assert isinstance(resolver._executor, ThreadPoolExecutor)
+
+    thread_names: list[str] = []
+
+    def fake_gethostbyaddr(ip: str):
+        thread_names.append(threading.current_thread().name)
+        return ("host.example.com", [], [ip])
+
+    monkeypatch.setattr(dns_mod.socket, "gethostbyaddr", fake_gethostbyaddr)
+
+    result = await resolver._system_dns_lookup("1.1.1.1")
+
+    assert result == "host.example.com"
+    # Ran on a thread from the dedicated pool, not a default-executor thread.
+    assert thread_names
+    assert thread_names[0].startswith("dns-resolver")
+
+
+@pytest.mark.asyncio
 async def test_clear_cache(monkeypatch, resolver):
     """Cache can be cleared manually."""
 

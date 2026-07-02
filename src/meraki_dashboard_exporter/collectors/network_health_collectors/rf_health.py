@@ -160,8 +160,11 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                 else:
                     all_devices = await self._fetch_organization_devices(org_id, network_id)
                     # Filter for MR devices in this network
+                    # Coalesce an explicit ``name: None`` (not just a missing
+                    # key) to the serial so the AP name label is never None
+                    # (F-019).
                     device_names = {
-                        d["serial"]: d.get("name", d["serial"])
+                        d["serial"]: d.get("name") or d["serial"]
                         for d in all_devices
                         if d.get("model", "").startswith(DeviceType.MR)
                         and d.get("networkId") == network_id

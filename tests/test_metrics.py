@@ -12,6 +12,7 @@ from meraki_dashboard_exporter.core.metrics import (
     MetricFactory,
     MetricType,
     create_info_labels,
+    create_labels,
     validate_metric_name,
 )
 
@@ -490,6 +491,37 @@ class TestCreateInfoLabels:
         """Test creating info labels with empty data."""
         labels = create_info_labels({})
         assert labels == {}
+
+
+class TestCreateLabels:
+    """Test create_labels validation and None handling (F-019)."""
+
+    def test_none_value_coalesced_to_empty_string_not_dropped(self) -> None:
+        """A None-valued label must be kept as "" so the labelname is never missing.
+
+        Regression for F-019: dropping the key produced an incomplete label set,
+        which later made Gauge.labels() raise ValueError (missing labelname) and a
+        bare except silently lost the metric series.
+        """
+        labels = create_labels(
+            org_id="123",
+            org_name="Test Org",
+            network_id=None,
+        )
+        # Key present (not dropped) and stringified to empty.
+        assert "network_id" in labels
+        assert labels["network_id"] == ""  # noqa: PLC1901  (must be "", not merely falsey/None)
+        assert labels == {"org_id": "123", "org_name": "Test Org", "network_id": ""}
+
+    def test_non_none_values_stringified(self) -> None:
+        """Non-None values are stringified as before."""
+        labels = create_labels(org_id="123", org_name="Org")
+        assert labels == {"org_id": "123", "org_name": "Org"}
+
+    def test_invalid_key_raises(self) -> None:
+        """Unknown label keys still raise ValueError."""
+        with pytest.raises(ValueError, match="Invalid label key"):
+            create_labels(not_a_real_label="x")
 
 
 class TestMetricTypeAnnotations:

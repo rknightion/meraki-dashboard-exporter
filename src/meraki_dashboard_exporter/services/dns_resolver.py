@@ -6,6 +6,7 @@ import asyncio
 import ipaddress
 import socket
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 import structlog
@@ -44,6 +45,16 @@ class DNSResolver:
         self._cache: dict[str, CacheEntry] = {}
         self._client_tracking: dict[str, dict[str, str]] = {}  # client_id -> {ip, description}
         self._retry = AsyncRetry(max_attempts=3, base_delay=1.0, max_delay=5.0)
+
+        # Dedicated, bounded thread pool for blocking reverse-DNS lookups (F-075).
+        # `socket.gethostbyaddr` cannot be interrupted, so when `with_timeout`
+        # abandons the await the underlying thread keeps running until the OS
+        # resolver returns. Routing these lookups through the loop's DEFAULT
+        # executor (`run_in_executor(None, ...)`) would let hung DNS threads
+        # accumulate in the SAME pool `asyncio.to_thread()` uses for every Meraki
+        # API call, starving it. A private pool caps the blast radius to DNS.
+        # max_workers matches the resolve_multiple concurrency cap (Semaphore(5)).
+        self._executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="dns-resolver")
 
         # Statistics tracking
         self._stats = {
@@ -218,9 +229,11 @@ class DNSResolver:
 
         """
         try:
-            # Run in executor to avoid blocking
+            # Run in the dedicated DNS executor (NOT the loop default pool) so a
+            # hung, un-cancellable gethostbyaddr thread can't starve the shared
+            # asyncio.to_thread pool used for Meraki API calls (F-075).
             loop = asyncio.get_event_loop()
-            hostname, _, _ = await loop.run_in_executor(None, socket.gethostbyaddr, ip)
+            hostname, _, _ = await loop.run_in_executor(self._executor, socket.gethostbyaddr, ip)
             logger.debug("Resolved hostname", ip=ip, hostname=hostname)
             return hostname
         except (socket.herror, socket.gaierror, OSError) as e:

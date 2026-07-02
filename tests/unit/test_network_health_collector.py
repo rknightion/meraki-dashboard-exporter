@@ -126,6 +126,69 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             utilization_type="total",  # Changed from 'type' to 'utilization_type'
         )
 
+    async def test_channel_utilization_none_ap_name_falls_back_to_serial(
+        self, collector, mock_api_builder, metrics
+    ):
+        """An AP whose device record has name=None must still emit its metric (F-019).
+
+        Previously ``d.get("name", d["serial"])`` only fell back on a MISSING key,
+        so an explicit ``name: None`` produced a None name label; create_labels
+        then dropped it, Gauge.labels() raised ValueError for the missing
+        labelname, and a bare except silently lost the whole per-AP series. The
+        name must now coalesce to the serial.
+        """
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(
+            network_id="N_123",
+            name="Test Network",
+            product_types=["wireless"],
+            org_id=org["id"],
+        )
+        device = DeviceFactory.create_mr(
+            serial="Q2KD-ZZZZ",
+            model="MR36",
+            network_id=network["id"],
+        )
+        device["name"] = None  # explicit None value, not a missing key
+        channel_util_data = [
+            {
+                "serial": "Q2KD-ZZZZ",
+                "model": "MR36",
+                "wifi0": [{"utilization": 42, "wifi": 30, "nonWifi": 12}],
+                "wifi1": [{"utilization": 22, "wifi": 18, "nonWifi": 4}],
+            }
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_devices([device], org_id=org["id"])
+            .with_custom_response("getNetworkNetworkHealthChannelUtilization", channel_util_data)
+            .build()
+        )
+        api.organizations.getOrganizationDevices = MagicMock(return_value=[device])
+        collector.api = api
+        collector.rf_health_collector.api = api
+
+        await self.run_collector(collector)
+
+        self.assert_collector_success(collector, metrics)
+        # name label coalesced to the serial (not None / not dropped).
+        metrics.assert_gauge_value(
+            "meraki_ap_channel_utilization_2_4ghz_percent",
+            42,
+            org_id=org["id"],
+            org_name=org["name"],
+            serial="Q2KD-ZZZZ",
+            name="Q2KD-ZZZZ",
+            model="MR36",
+            device_type="MR",
+            network_id=network["id"],
+            network_name=network["name"],
+            utilization_type="total",
+        )
+
     async def test_collect_connection_stats(self, collector, mock_api_builder, metrics):
         """Test collection of wireless connection statistics."""
         # Set up test data

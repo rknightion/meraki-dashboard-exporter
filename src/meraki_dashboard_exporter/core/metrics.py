@@ -371,8 +371,11 @@ def create_info_labels(data: dict[str, str | int | float | bool]) -> dict[str, s
 def create_labels(**kwargs: str | None) -> dict[str, str]:
     """Create a label dictionary with validation.
 
-    This function ensures that all label keys are valid LabelName enum values
-    and filters out None values.
+    This function ensures that all label keys are valid LabelName enum values.
+    A ``None`` value is coalesced to an empty string (``""``) rather than
+    dropped, so the label is always present in the returned set — dropping a
+    key would later make ``Gauge.labels()`` raise ``ValueError`` for a missing
+    labelname and silently lose the metric series (F-019).
 
     Parameters
     ----------
@@ -382,7 +385,7 @@ def create_labels(**kwargs: str | None) -> dict[str, str]:
     Returns
     -------
     dict[str, str]
-        Validated label dictionary with None values filtered out.
+        Validated label dictionary; ``None`` values become ``""``.
 
     Raises
     ------
@@ -392,7 +395,7 @@ def create_labels(**kwargs: str | None) -> dict[str, str]:
     Examples
     --------
     >>> create_labels(org_id="123", org_name="Test Org", network_id=None)
-    {"org_id": "123", "org_name": "Test Org"}
+    {"org_id": "123", "org_name": "Test Org", "network_id": ""}
 
     """
     valid_keys = {label.value for label in LabelName}
@@ -403,8 +406,11 @@ def create_labels(**kwargs: str | None) -> dict[str, str]:
             raise ValueError(
                 f"Invalid label key: '{key}'. Must be one of: {', '.join(sorted(valid_keys))}"
             )
-        if value is not None:
-            result[key] = str(value)
+        # Coalesce None to an empty string rather than dropping the key (F-019).
+        # Dropping a None-valued label leaves a hole in the labelname set, which
+        # later makes Gauge.labels() raise ValueError (missing labelname) — a
+        # bare except then swallows it, silently losing the whole metric series.
+        result[key] = "" if value is None else str(value)
 
     return result
 

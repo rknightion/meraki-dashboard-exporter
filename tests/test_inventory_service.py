@@ -163,6 +163,36 @@ class TestOrganizationInventoryBasics:
         # API should not be called again
         assert mock_api.organizations.getOrganizationDevices.call_count == 1
 
+    async def test_get_devices_returns_defensive_copies(self, mock_api, inventory_service):
+        """Mutating the returned dicts must not pollute the shared cache (F-078).
+
+        collectors/device.py enriches each device in place
+        (availability_status/networkName/orgId/orgName). Before the fix those
+        mutations hit the cached dict objects by reference and persisted for the
+        rest of the cache TTL, corrupting every later consumer of the inventory.
+        """
+        org_id = "org_123"
+        devices = DeviceFactory.create_many(3)
+        mock_api.organizations.getOrganizationDevices.return_value = devices
+
+        first = await inventory_service.get_devices(org_id)
+        # Simulate collector enrichment mutating the returned dicts in place.
+        for dev in first:
+            dev["availability_status"] = "online"
+            dev["orgId"] = org_id
+            dev["networkName"] = "polluted"
+
+        # A subsequent (cache-hit) read must be pristine.
+        second = await inventory_service.get_devices(org_id)
+        assert mock_api.organizations.getOrganizationDevices.call_count == 1  # cache hit
+        for dev in second:
+            assert "availability_status" not in dev
+            assert "orgId" not in dev
+            assert "networkName" not in dev
+
+        # Returned lists must not alias each other's dict objects either.
+        assert first[0] is not second[0]
+
 
 class TestOrganizationInventoryCacheInvalidation:
     """Test cache invalidation functionality."""

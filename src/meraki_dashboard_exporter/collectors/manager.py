@@ -137,7 +137,7 @@ class CollectorManager:
 
         # Gauge for collector failure streak
         self._collector_failure_streak = Gauge(
-            "meraki_exporter_collector_failure_streak",
+            CollectorMetricName.COLLECTOR_FAILURE_STREAK.value,
             "Consecutive failures for each collector since last success",
             labelnames=[
                 LabelName.COLLECTOR.value,
