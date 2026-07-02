@@ -88,13 +88,13 @@ class MetricExpirationManager:
 
         # Metrics for monitoring expiration
         self._expired_metrics_total = Counter(
-            CollectorMetricName.COLLECTION_ERRORS_TOTAL.value + "_expired",
+            CollectorMetricName.EXPIRED_METRICS_TOTAL.value,
             "Total number of metrics expired due to TTL",
             labelnames=[LabelName.COLLECTOR.value, LabelName.TIER.value],
         )
 
         self._tracked_metrics = Gauge(
-            CollectorMetricName.INVENTORY_CACHE_SIZE.value + "_tracked_metrics",
+            CollectorMetricName.EXPIRATION_TRACKED_METRICS.value,
             "Number of metrics currently tracked for expiration",
             labelnames=[LabelName.COLLECTOR.value],
         )

@@ -665,3 +665,64 @@ class TestV1MetricRenames:
             if m.value.endswith(_FORBIDDEN_SUFFIXES)
         ]
         assert not offenders, f"metrics with forbidden unit suffixes: {offenders}"
+
+
+class TestMet06ExporterSelfMetricRenames:
+    """Issue #532 (MET-06): fix three exporter self-metric type/name mismatches.
+
+    Pre-1.0 rename, no dual-emit — the old wire names must be gone entirely from
+    source (not just superseded by a new enum member).
+
+    1. `meraki_exporter_cardinality_analyzed_total` (core/cardinality.py) was a
+       Gauge (per-cycle snapshot) wrongly suffixed `_total`.
+    2. `meraki_exporter_collection_errors_total_expired` (core/metric_expiration.py)
+       was a Counter with `_total` stuck mid-name instead of at the end.
+    3. `meraki_exporter_cache_size_tracked_metrics` (core/metric_expiration.py) was
+       named after the unrelated `INVENTORY_CACHE_SIZE` enum member it was
+       string-concatenated from, and does not measure cache size at all — it
+       measures the count of metric series tracked for expiration.
+    """
+
+    def test_cardinality_analyzed_metrics_is_enum_backed_gauge_without_total(self) -> None:
+        """Gauge value must be enum-backed and must not carry a `_total` suffix."""
+        assert (
+            CollectorMetricName.CARDINALITY_ANALYZED_METRICS.value
+            == "meraki_exporter_cardinality_analyzed_metrics"
+        )
+        assert not CollectorMetricName.CARDINALITY_ANALYZED_METRICS.value.endswith("_total")
+
+    def test_expired_metrics_counter_ends_in_total(self) -> None:
+        """Counter value must be enum-backed and must end (not have mid-name) `_total`."""
+        assert (
+            CollectorMetricName.EXPIRED_METRICS_TOTAL.value
+            == "meraki_exporter_collection_errors_expired_total"
+        )
+        assert CollectorMetricName.EXPIRED_METRICS_TOTAL.value.endswith("_total")
+
+    def test_expiration_tracked_metrics_name_describes_what_it_measures(self) -> None:
+        """Gauge value must describe tracked-metric count, not the unrelated cache size."""
+        assert (
+            CollectorMetricName.EXPIRATION_TRACKED_METRICS.value
+            == "meraki_exporter_expiration_tracked_metrics"
+        )
+
+    def test_old_names_gone_from_source(self) -> None:
+        """The old, mismatched wire names must not survive anywhere in `src/`."""
+        from pathlib import Path
+
+        import meraki_dashboard_exporter as pkg
+
+        root = Path(pkg.__file__).parent
+        cardinality_src = (root / "core" / "cardinality.py").read_text()
+        expiration_src = (root / "core" / "metric_expiration.py").read_text()
+
+        assert "meraki_exporter_cardinality_analyzed_total" not in cardinality_src
+        assert "meraki_exporter_collection_errors_total_expired" not in expiration_src
+        assert "meraki_exporter_cache_size_tracked_metrics" not in expiration_src
+        # No more deriving these names by string-concatenating unrelated enum members.
+        assert 'CollectorMetricName.COLLECTION_ERRORS_TOTAL.value + "_expired"' not in (
+            expiration_src
+        )
+        assert 'CollectorMetricName.INVENTORY_CACHE_SIZE.value + "_tracked_metrics"' not in (
+            expiration_src
+        )

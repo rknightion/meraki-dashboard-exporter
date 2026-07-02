@@ -427,11 +427,14 @@ class CollectorMetricName(StrEnum):
     COLLECTION_ERRORS_TOTAL = "meraki_exporter_collection_errors_total"
 
     # Inventory cache metrics
-    # NB: INVENTORY_CACHE_SIZE is consumed by core/metric_expiration.py to build the
-    # separate "meraki_exporter_cache_size_tracked_metrics" gauge — it does NOT name the
-    # inventory cache-size gauge. The actual inventory cache-size gauge uses
-    # INVENTORY_CACHE_ENTRIES below (F-080). The former hit/miss counter enums were
-    # declared but never registered as Counters and have been removed.
+    # NB: INVENTORY_CACHE_SIZE is not consumed by anything (F-080 dead literal
+    # follow-up, #532/MET-06) — the actual inventory cache-size gauge uses
+    # INVENTORY_CACHE_ENTRIES below. It previously doubled as the base string that
+    # core/metric_expiration.py string-concatenated to derive an unrelated
+    # "meraki_exporter_cache_size_tracked_metrics" gauge name; that gauge now has
+    # its own dedicated EXPIRATION_TRACKED_METRICS entry below. The former hit/miss
+    # counter enums were declared but never registered as Counters and have been
+    # removed.
     INVENTORY_CACHE_SIZE = "meraki_exporter_cache_size"
     INVENTORY_CACHE_ENTRIES = "meraki_exporter_inventory_cache_size"
 
@@ -449,9 +452,15 @@ class CollectorMetricName(StrEnum):
 
     # Cardinality control metrics
     EXPORTER_CARDINALITY_LIMIT_REACHED = "meraki_exporter_cardinality_limit_reached"
+    # Gauge (per-cycle snapshot, not a monotonic counter) — must not end in `_total`.
+    CARDINALITY_ANALYZED_METRICS = "meraki_exporter_cardinality_analyzed_metrics"
 
     # Collection utilization metrics
     EXPORTER_COLLECTION_UTILIZATION_RATIO = "meraki_exporter_collection_utilization_ratio"
+
+    # Metric expiration metrics (core/metric_expiration.py) — #532/MET-06
+    EXPIRED_METRICS_TOTAL = "meraki_exporter_collection_errors_expired_total"
+    EXPIRATION_TRACKED_METRICS = "meraki_exporter_expiration_tracked_metrics"
 
     # Per-collector performance metrics (owned by core/collector.py's
     # MetricCollector._initialize_performance_metrics and collectors/manager.py).

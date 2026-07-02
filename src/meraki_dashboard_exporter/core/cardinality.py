@@ -12,6 +12,7 @@ from prometheus_client import CollectorRegistry, Counter, Gauge
 from prometheus_client.core import REGISTRY, Metric
 from starlette.requests import Request
 
+from .constants.metrics_constants import CollectorMetricName
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -115,8 +116,8 @@ class CardinalityMonitor:
         )
 
         self.analyzed_metrics_count = Gauge(
-            "meraki_exporter_cardinality_analyzed_total",
-            "Total number of metrics analyzed in last run",
+            CollectorMetricName.CARDINALITY_ANALYZED_METRICS.value,
+            "Number of metrics analyzed in last run",
             registry=self.registry,
         )
 

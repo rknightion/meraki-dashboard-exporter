@@ -365,7 +365,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_exporter_cardinality_analyzed_total` | gauge | — | Total number of metrics analyzed in last run |  |
+| `meraki_exporter_cardinality_analyzed_metrics` | gauge | — | Number of metrics analyzed in last run |  |
 | `meraki_exporter_cardinality_duration_seconds` | gauge | — | Time taken to complete cardinality analysis |  |
 | `meraki_exporter_cardinality_warnings_total` | counter | `metric_name`, `severity` | Number of cardinality warnings triggered |  |
 | `meraki_exporter_total_series` | gauge | — | Total number of time series across all metrics |  |
@@ -394,9 +394,9 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_exporter_cache_size_tracked_metrics` | gauge | `collector` | Number of metrics currently tracked for expiration |  |
 | `meraki_exporter_cardinality_limit_reached` | gauge | `collector` | 1 if cardinality shedding is active for this collector, 0 otherwise |  |
-| `meraki_exporter_collection_errors_total_expired` | counter | `collector`, `tier` | Total number of metrics expired due to TTL |  |
+| `meraki_exporter_collection_errors_expired_total` | counter | `collector`, `tier` | Total number of metrics expired due to TTL |  |
+| `meraki_exporter_expiration_tracked_metrics` | gauge | `collector` | Number of metrics currently tracked for expiration |  |
 
 ### OrgRateLimiter
 
