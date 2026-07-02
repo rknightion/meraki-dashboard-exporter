@@ -154,6 +154,10 @@ class LabelName(StrEnum):
     # Sensor-gateway connectivity labels
     GATEWAY_SERIAL = "gateway_serial"  # MT sensor's paired gateway serial
 
+    # Exporter build-info labels
+    VERSION = "version"  # Exporter build version (get_version())
+    COMMIT = "commit"  # Git commit SHA the build was produced from (get_commit())
+
 
 def create_labels(**kwargs: str | None) -> dict[str, str]:
     """Create a label dictionary with validation.

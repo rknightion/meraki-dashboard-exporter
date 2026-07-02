@@ -94,12 +94,18 @@ COPY --link --chown=1000:1000 docker-entrypoint.py ./
 # `--build-arg APP_VERSION=<version>` (see CI wiring); defaults to the dev sentinel.
 ARG APP_VERSION=0.0.0+dev
 
+# Bake the build-time git commit SHA into the image for meraki_exporter_build_info
+# (MET-10). Passed via `--build-arg GIT_COMMIT=<sha>` (CI passes `github.sha`);
+# defaults to `unknown` for local builds without the build-arg (DEP-06).
+ARG GIT_COMMIT=unknown
+
 # Environment setup - use the venv Python
 # Note: PYTHONDONTWRITEBYTECODE removed since we pre-compile bytecode
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONFAULTHANDLER=1 \
-    MERAKI_EXPORTER_VERSION=${APP_VERSION}
+    MERAKI_EXPORTER_VERSION=${APP_VERSION} \
+    MERAKI_EXPORTER_COMMIT=${GIT_COMMIT}
 
 # Switch to non-root user
 USER exporter

@@ -23,6 +23,7 @@ from starlette.requests import Request
 from .__version__ import __version__
 from .api.client import AsyncMerakiClient
 from .collectors.manager import CollectorManager
+from .core.build_info import register_build_info
 from .core.cardinality import CardinalityMonitor, setup_cardinality_endpoint
 from .core.config import Settings
 from .core.config_logger import log_startup_summary
@@ -72,6 +73,10 @@ class ExporterApp:
             self.otel_logging.setup_otel_logging()
 
         self.client = AsyncMerakiClient(self.settings)
+
+        # Register the static build-info gauge (MET-10): constant value 1 with
+        # version/commit labels identifying the running build.
+        register_build_info()
 
         # Initialize metric expiration manager (Phase 3.2)
         self.expiration_manager = MetricExpirationManager(settings=self.settings)

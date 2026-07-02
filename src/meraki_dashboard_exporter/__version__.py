@@ -52,4 +52,23 @@ def get_version() -> str:
     return "0.0.0+dev"
 
 
+def get_commit() -> str:
+    """Get the git commit SHA the running build was produced from.
+
+    Resolution order:
+    1. The ``MERAKI_EXPORTER_COMMIT`` env var baked into the runtime container
+       image at build time from the ``GIT_COMMIT`` build-arg (CI passes
+       ``github.sha`` in both ``ci.yml`` and ``publish.yml``).
+    2. The ``"unknown"`` sentinel for local/dev builds that were not built with
+       that build-arg (DEP-06) — mirrors ``get_version()``'s ``0.0.0+dev``.
+
+    Returns
+    -------
+    str
+        The commit SHA, or ``"unknown"`` for un-stamped dev builds.
+
+    """
+    return os.environ.get("MERAKI_EXPORTER_COMMIT") or "unknown"
+
+
 __version__ = get_version()

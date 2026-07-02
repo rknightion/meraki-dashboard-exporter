@@ -43,6 +43,7 @@ jobs:
       build-args: |
         PY_VERSION=3.14
         APP_VERSION=${{ inputs.release_tag || github.sha }}
+        GIT_COMMIT=${{ github.sha }}
       dockerhub-login: true
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}

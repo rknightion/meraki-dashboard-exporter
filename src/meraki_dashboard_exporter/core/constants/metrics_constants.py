@@ -415,6 +415,9 @@ class CollectorMetricName(StrEnum):
     from Meraki network data metrics (which use 'meraki_' prefix).
     """
 
+    # Build information (constant info-gauge, value 1; version/commit labels)
+    BUILD_INFO = "meraki_exporter_build_info"
+
     # Parallel collection metrics
     PARALLEL_COLLECTIONS_ACTIVE = "meraki_exporter_collections_active"
     COLLECTION_ERRORS_TOTAL = "meraki_exporter_collection_errors_total"

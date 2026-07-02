@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 245
-- **Gauges:** 223
+- **Total metrics:** 246
+- **Gauges:** 224
 - **Counters:** 18
 - **Histograms:** 3
 - **Info metrics:** 1
@@ -424,6 +424,12 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_webhook_events_received_total` | counter | — | Total webhook events received by the active WebhookHandler request pipeline (POST /api/webhooks/meraki), labeled by org_id and alert_type | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_processing_duration_seconds` | histogram | — | Time spent processing webhook events | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_validation_failures_total` | counter | — | Total webhook validation failures | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+
+### build_info
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_exporter_build_info` | gauge | `version`, `commit` | Exporter build information as a constant gauge (value always 1); the version and commit labels identify the running build. Local/dev builds without the APP_VERSION and GIT_COMMIT build-args report version='0.0.0+dev' and commit='unknown'. |  |
 
 ## Metric Types
 
