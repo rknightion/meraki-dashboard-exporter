@@ -537,6 +537,19 @@ class TestMXVpnStatsCollector:
 
         mock_parent._set_metric.assert_not_called()
 
+    def test_vpn_usage_help_states_window(self, vpn_collector: MXVpnCollector) -> None:
+        """MET-09: VPN usage HELP must state the 5-minute data window.
+
+        collect_vpn_stats pins timespan=300 on getOrganizationApplianceVpnStats,
+        so the sent/recv usage HELP text (previously just "over the collection
+        window") must say 5 minutes explicitly. mx_vpn_stats_avg_latency_seconds
+        already states "(5-min avg)" and is intentionally left unchanged.
+        """
+        sent_doc = vpn_collector._vpn_usage_sent_bytes._documentation.lower()
+        recv_doc = vpn_collector._vpn_usage_recv_bytes._documentation.lower()
+        assert "5-min" in sent_doc or "5 min" in sent_doc
+        assert "5-min" in recv_doc or "5 min" in recv_doc
+
     async def test_invalid_response_type(
         self,
         vpn_collector: MXVpnCollector,

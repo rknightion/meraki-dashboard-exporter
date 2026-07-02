@@ -72,7 +72,7 @@ class NetworkHealthCollector(MetricCollector):
         # RF channel utilization metrics per AP
         self._ap_utilization_2_4ghz = self._create_gauge(
             NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_2_4GHZ_PERCENT,
-            "2.4GHz channel utilization percentage per AP",
+            "2.4GHz channel utilization percentage per AP, 10-min bucket",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -88,7 +88,7 @@ class NetworkHealthCollector(MetricCollector):
 
         self._ap_utilization_5ghz = self._create_gauge(
             NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_5GHZ_PERCENT,
-            "5GHz channel utilization percentage per AP",
+            "5GHz channel utilization percentage per AP, 10-min bucket",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -105,7 +105,7 @@ class NetworkHealthCollector(MetricCollector):
         # Network-wide average utilization
         self._network_utilization_2_4ghz = self._create_gauge(
             NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_2_4GHZ_PERCENT,
-            "Network-wide average 2.4GHz channel utilization percentage",
+            "Network-wide average 2.4GHz channel utilization percentage, 10-min bucket",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -117,7 +117,7 @@ class NetworkHealthCollector(MetricCollector):
 
         self._network_utilization_5ghz = self._create_gauge(
             NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_5GHZ_PERCENT,
-            "Network-wide average 5GHz channel utilization percentage",
+            "Network-wide average 5GHz channel utilization percentage, 10-min bucket",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,

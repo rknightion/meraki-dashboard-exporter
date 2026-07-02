@@ -83,12 +83,12 @@ class MXVpnCollector(SubCollectorMixin):
         ]
         self._vpn_usage_sent_bytes = self.parent._create_gauge(
             MXMetricName.MX_VPN_USAGE_SENT_BYTES,
-            "VPN usage sent in bytes over the collection window, per peer network",
+            "VPN usage sent in bytes over the last 5 minutes, per peer network",
             labelnames=vpn_stats_labelnames,
         )
         self._vpn_usage_recv_bytes = self.parent._create_gauge(
             MXMetricName.MX_VPN_USAGE_RECV_BYTES,
-            "VPN usage received in bytes over the collection window, per peer network",
+            "VPN usage received in bytes over the last 5 minutes, per peer network",
             labelnames=vpn_stats_labelnames,
         )
         self._vpn_stats_avg_latency_seconds = self.parent._create_gauge(

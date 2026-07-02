@@ -43,8 +43,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_client_usage_recv_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `client_id`, `mac`, `description`, `hostname`, `ssid` | Bytes received by client in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_client_usage_sent_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `client_id`, `mac`, `description`, `hostname`, `ssid` | Bytes sent by client in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_client_usage_total_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `client_id`, `mac`, `description`, `hostname`, `ssid` | Total bytes transferred by client in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `meraki_clients_per_ssid_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `ssid` | Count of clients per SSID | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `meraki_clients_per_vlan_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `vlan` | Count of clients per VLAN | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_clients_per_ssid_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `ssid` | Count of clients per SSID, over the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_clients_per_vlan_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `vlan` | Count of clients per VLAN, over the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_cache_expired` | gauge | — | Number of expired entries in DNS cache | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_cache_total` | gauge | — | Total number of entries in DNS cache | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_cache_valid` | gauge | — | Number of valid entries in DNS cache | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
@@ -54,9 +54,9 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_exporter_client_dns_lookups_total` | counter | — | Total number of DNS lookups performed | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_store_networks` | gauge | — | Total number of networks with clients | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_store_total` | gauge | — | Total number of clients in the store | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `meraki_wireless_client_capabilities_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `type` | Count of wireless clients by capability | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `meraki_wireless_client_rssi` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `client_id`, `mac`, `description`, `hostname`, `ssid` | Wireless client RSSI (Received Signal Strength Indicator) in dBm | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `meraki_wireless_client_snr` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `client_id`, `mac`, `description`, `hostname`, `ssid` | Wireless client SNR (Signal-to-Noise Ratio) in dB | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_wireless_client_capabilities_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `type` | Count of wireless clients by capability, over the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_wireless_client_rssi` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `client_id`, `mac`, `description`, `hostname`, `ssid` | Wireless client RSSI (Received Signal Strength Indicator) in dBm, most recent 5-min sample | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_wireless_client_snr` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `client_id`, `mac`, `description`, `hostname`, `ssid` | Wireless client SNR (Signal-to-Noise Ratio) in dB, most recent 5-min sample | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 
 ### ConfigCollector
 
@@ -83,10 +83,10 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_device_memory_free_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `stat` | Device memory free in bytes (derived from the API's binary KiB value x1024) |  |
+| `meraki_device_memory_free_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `stat` | Device memory free in bytes (derived from the API's binary KiB value x1024), 5-min window |  |
 | `meraki_device_memory_total_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Device memory total provisioned in bytes (derived from the API's binary KiB value x1024) |  |
 | `meraki_device_memory_usage_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Device memory usage percentage (maximum from most recent interval) |  |
-| `meraki_device_memory_used_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `stat` | Device memory used in bytes (derived from the API's binary KiB value x1024) |  |
+| `meraki_device_memory_used_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `stat` | Device memory used in bytes (derived from the API's binary KiB value x1024), 5-min window |  |
 | `meraki_device_status_info` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `status` | Device status information |  |
 | `meraki_device_up` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type` | Device online status (1 = online, 0 = offline) |  |
 
@@ -299,19 +299,19 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mx_vpn_peer_status` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id`, `peer_type` | VPN peer reachability status (1=reachable, 0=unreachable) |  |
 | `meraki_mx_vpn_peers` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Number of VPN peers configured for a network |  |
 | `meraki_mx_vpn_stats_avg_latency_seconds` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id` | Average VPN latency in seconds to a peer network (5-min avg), averaged across all sender/receiver uplink combinations |  |
-| `meraki_mx_vpn_usage_recv_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id` | VPN usage received in bytes over the collection window, per peer network |  |
-| `meraki_mx_vpn_usage_sent_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id` | VPN usage sent in bytes over the collection window, per peer network |  |
+| `meraki_mx_vpn_usage_recv_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id` | VPN usage received in bytes over the last 5 minutes, per peer network |  |
+| `meraki_mx_vpn_usage_sent_bytes` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `peer_network_id` | VPN usage sent in bytes over the last 5 minutes, per peer network |  |
 
 ### NetworkHealthCollector
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_ap_channel_utilization_2_4ghz_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `utilization_type` | 2.4GHz channel utilization percentage per AP |  |
-| `meraki_ap_channel_utilization_5ghz_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `utilization_type` | 5GHz channel utilization percentage per AP |  |
+| `meraki_ap_channel_utilization_2_4ghz_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `utilization_type` | 2.4GHz channel utilization percentage per AP, 10-min bucket |  |
+| `meraki_ap_channel_utilization_5ghz_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `serial`, `name`, `model`, `device_type`, `utilization_type` | 5GHz channel utilization percentage per AP, 10-min bucket |  |
 | `meraki_mr_ssid_failed_connections_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `ssid`, `failure_step` | Failed wireless connections by SSID and failure step over the last hour |  |
 | `meraki_network_bluetooth_clients_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Number of Bluetooth clients detected by MR devices in the last 5 minutes |  |
-| `meraki_network_channel_utilization_2_4ghz_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `utilization_type` | Network-wide average 2.4GHz channel utilization percentage |  |
-| `meraki_network_channel_utilization_5ghz_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `utilization_type` | Network-wide average 5GHz channel utilization percentage |  |
+| `meraki_network_channel_utilization_2_4ghz_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `utilization_type` | Network-wide average 2.4GHz channel utilization percentage, 10-min bucket |  |
+| `meraki_network_channel_utilization_5ghz_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `utilization_type` | Network-wide average 5GHz channel utilization percentage, 10-min bucket |  |
 | `meraki_network_wireless_connection_stats_count` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `stat_type` | Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success) |  |
 | `meraki_network_wireless_download_bytes_per_second` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Network-wide wireless download bandwidth in bytes per second, 5-min bucket |  |
 | `meraki_network_wireless_upload_bytes_per_second` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Network-wide wireless upload bandwidth in bytes per second, 5-min bucket |  |

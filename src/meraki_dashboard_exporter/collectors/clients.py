@@ -202,7 +202,7 @@ class ClientsCollector(MetricCollector):
         # Client capability metrics
         self.client_capabilities_count = self._create_gauge(
             ClientMetricName.WIRELESS_CLIENT_CAPABILITIES_COUNT,
-            "Count of wireless clients by capability",
+            "Count of wireless clients by capability, over the last hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -215,7 +215,7 @@ class ClientsCollector(MetricCollector):
         # Client distribution metrics
         self.clients_per_ssid = self._create_gauge(
             ClientMetricName.CLIENTS_PER_SSID_COUNT,
-            "Count of clients per SSID",
+            "Count of clients per SSID, over the last hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -227,7 +227,7 @@ class ClientsCollector(MetricCollector):
 
         self.clients_per_vlan = self._create_gauge(
             ClientMetricName.CLIENTS_PER_VLAN_COUNT,
-            "Count of clients per VLAN",
+            "Count of clients per VLAN, over the last hour",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -289,7 +289,8 @@ class ClientsCollector(MetricCollector):
         # Wireless client signal quality metrics
         self.wireless_client_rssi = self._create_gauge(
             ClientMetricName.WIRELESS_CLIENT_RSSI,
-            "Wireless client RSSI (Received Signal Strength Indicator) in dBm",
+            "Wireless client RSSI (Received Signal Strength Indicator) in dBm, "
+            "most recent 5-min sample",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -305,7 +306,7 @@ class ClientsCollector(MetricCollector):
 
         self.wireless_client_snr = self._create_gauge(
             ClientMetricName.WIRELESS_CLIENT_SNR,
-            "Wireless client SNR (Signal-to-Noise Ratio) in dB",
+            "Wireless client SNR (Signal-to-Noise Ratio) in dB, most recent 5-min sample",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,

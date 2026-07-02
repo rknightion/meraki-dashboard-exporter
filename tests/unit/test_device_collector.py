@@ -73,6 +73,19 @@ class TestDeviceCollector(BaseCollectorTest):
     collector_class = DeviceCollector
     update_tier = UpdateTier.MEDIUM
 
+    def test_memory_metric_help_states_window(self, collector, metrics):
+        """MET-09: device memory used/free HELP must state the 5-min data window.
+
+        collect_memory_metrics (devices/base.py) pins timespan=300, interval=300
+        on getOrganizationDevicesSystemMemoryUsageHistoryByInterval and emits the
+        single most-recent interval's max/min stat, so the HELP text must say so
+        (this is a windowed sample, not an instantaneous reading).
+        """
+        used = metrics.get_metric("meraki_device_memory_used_bytes")
+        free = metrics.get_metric("meraki_device_memory_free_bytes")
+        for doc in (used.documentation.lower(), free.documentation.lower()):
+            assert "5-min" in doc or "5 min" in doc
+
     def test_packet_metric_value_retention(self, collector):
         """Test that packet metrics retain last known values."""
         labels = {

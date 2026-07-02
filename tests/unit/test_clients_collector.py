@@ -115,6 +115,31 @@ class TestClientsCollector(BaseCollectorTest):
         # Should not make any API calls when disabled
         mock_api.organizations.getOrganizations.assert_not_called()
 
+    def test_windowed_metric_help_states_window(self, collector, metrics):
+        """MET-09: HELP text for windowed client metrics must state the data window.
+
+        wireless_client_rssi/_snr are the latest sample from a 5-minute
+        (timespan=300, resolution=300) getNetworkWirelessSignalQualityHistory
+        query (see _collect_wireless_signal_quality); capabilities/per-ssid/
+        per-vlan counts are aggregated from a 1-hour (timespan=3600)
+        getNetworkClients query (see _collect_network_clients). These are
+        gauges, not instantaneous readings, so the HELP text must say so.
+        """
+        rssi = metrics.get_metric("meraki_wireless_client_rssi")
+        snr = metrics.get_metric("meraki_wireless_client_snr")
+        assert "5-min" in rssi.documentation.lower() or "5 min" in rssi.documentation.lower()
+        assert "5-min" in snr.documentation.lower() or "5 min" in snr.documentation.lower()
+
+        capabilities = metrics.get_metric("meraki_wireless_client_capabilities_count")
+        per_ssid = metrics.get_metric("meraki_clients_per_ssid_count")
+        per_vlan = metrics.get_metric("meraki_clients_per_vlan_count")
+        for doc in (
+            capabilities.documentation.lower(),
+            per_ssid.documentation.lower(),
+            per_vlan.documentation.lower(),
+        ):
+            assert "last hour" in doc or "1-hour" in doc or "1 hour" in doc
+
     async def test_collect_with_no_clients(self, collector, mock_api_builder, metrics):
         """Test collection when no clients exist."""
         # Set up test data

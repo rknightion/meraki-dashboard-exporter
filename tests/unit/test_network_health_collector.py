@@ -73,6 +73,27 @@ class TestNetworkHealthCollector(BaseCollectorTest):
     collector_class = NetworkHealthCollector
     update_tier = UpdateTier.MEDIUM
 
+    def test_channel_utilization_help_states_window(self, collector, metrics):
+        """MET-09: AP/network channel-utilization HELP must state the 10-min bucket.
+
+        rf_health.py::_fetch_channel_utilization pins
+        timespan=600, resolution=600 on
+        getNetworkNetworkHealthChannelUtilization (600s is the endpoint's only
+        valid resolution) and only the most-recent bucket is read, so the HELP
+        text must say so.
+        """
+        ap_24 = metrics.get_metric("meraki_ap_channel_utilization_2_4ghz_percent")
+        ap_5 = metrics.get_metric("meraki_ap_channel_utilization_5ghz_percent")
+        net_24 = metrics.get_metric("meraki_network_channel_utilization_2_4ghz_percent")
+        net_5 = metrics.get_metric("meraki_network_channel_utilization_5ghz_percent")
+        for doc in (
+            ap_24.documentation.lower(),
+            ap_5.documentation.lower(),
+            net_24.documentation.lower(),
+            net_5.documentation.lower(),
+        ):
+            assert "10-min" in doc or "10 min" in doc
+
     async def test_collect_with_no_networks(self, collector, mock_api_builder, metrics):
         """Test collection when no networks exist."""
         # Set up test data
