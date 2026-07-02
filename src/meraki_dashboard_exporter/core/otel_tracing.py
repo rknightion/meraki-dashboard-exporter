@@ -165,7 +165,7 @@ class TracingConfig:
         # Instrument requests (used by Meraki SDK)
         RequestsInstrumentor().instrument(
             tracer_provider=self._tracer_provider,
-            span_callback=self._requests_span_callback,
+            response_hook=self._requests_response_hook,
         )
         logger.debug("Instrumented requests library")
 
@@ -188,13 +188,20 @@ class TracingConfig:
         )
         logger.debug("Instrumented logging")
 
-    def _requests_span_callback(self, span: Any, response: Any) -> None:
-        """Callback to enrich requests spans with additional attributes.
+    def _requests_response_hook(self, span: Any, request: Any, response: Any) -> None:
+        """Response hook to enrich requests spans with additional attributes.
+
+        The opentelemetry-instrumentation-requests API exposes ``response_hook``
+        with the signature ``(span, request, response)``; the previously-used
+        ``span_callback`` kwarg is not supported by the instrumentor and was
+        silently dropped, so this enrichment never ran (F-022).
 
         Parameters
         ----------
         span : Any
             The span being recorded.
+        request : Any
+            The outgoing request object (unused, present for the hook signature).
         response : Any
             The HTTP response object.
 
