@@ -1011,8 +1011,10 @@ class ClientsCollector(MetricCollector):
             client_count=len(client_ids),
         )
 
-        # Batch client IDs for API calls (using 1000 per batch as per API limit)
-        batch_size = 1000
+        # Batch client IDs for API calls. The API's documented per-request limit is
+        # 1000 client IDs, but passing that many as a comma-separated query param risks
+        # an HTTP 414 (URI Too Long) at scale -- cap well below that (#525).
+        batch_size = 100
         for i in range(0, len(client_ids), batch_size):
             batch_ids = client_ids[i : i + batch_size]
 

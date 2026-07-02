@@ -790,7 +790,8 @@ class TestClientsCollector(BaseCollectorTest):
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
 
-        # Create 2500 clients to test batching (batch size is 1000)
+        # Create 2500 clients to test batching (batch size is 100, per #525 -- capped
+        # to avoid HTTP 414 URL-too-long risk from a 1000-client-ID query string)
         clients = [ClientFactory.create(client_id=f"c{i}") for i in range(2500)]
 
         # Create application usage data for all clients
@@ -830,8 +831,8 @@ class TestClientsCollector(BaseCollectorTest):
             # Run collection
             await self.run_collector(collector)
 
-        # Verify batching worked correctly (should be 3 calls: 1000, 1000, 500)
-        assert call_count == 3
+        # Verify batching worked correctly (2500 clients / 100 per batch = 25 calls)
+        assert call_count == 25
 
         # Verify some metrics were set
         metrics.assert_gauge_value(
@@ -842,6 +843,66 @@ class TestClientsCollector(BaseCollectorTest):
             200000,
             client_id="c2499",
             type="test_app",
+        )
+
+    async def test_application_usage_batches_over_100_clients(
+        self, collector, mock_api_builder, metrics
+    ):
+        """#525: client-ID batches must be capped well below 1000 (414 risk).
+
+        150 clients must be split into multiple `getNetworkClientsApplicationUsage`
+        calls, each carrying no more than 100 client IDs.
+        """
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+
+        clients = [ClientFactory.create(client_id=f"c{i}") for i in range(150)]
+
+        app_usage_data = [
+            {
+                "clientId": f"c{i}",
+                "applicationUsage": [{"application": "Test App", "received": 10, "sent": 20}],
+            }
+            for i in range(150)
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_custom_response("getNetworkClients", clients)
+            .build()
+        )
+
+        call_batches: list[list[str]] = []
+
+        def app_usage_handler(network_id, clients=None, **kwargs):
+            batch_ids = clients.split(",") if clients else []
+            call_batches.append(batch_ids)
+            return [d for d in app_usage_data if d["clientId"] in batch_ids]
+
+        api.networks.getNetworkClientsApplicationUsage = MagicMock(side_effect=app_usage_handler)
+        self._update_collector_api(collector, api)
+
+        with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
+            mock_resolve.return_value = {}
+            await self.run_collector(collector)
+
+        # 150 clients must be split into more than one request.
+        assert len(call_batches) > 1
+        # Each individual batch must stay well below the old 1000-ID limit.
+        for batch in call_batches:
+            assert len(batch) <= 100
+        # All client IDs must be covered exactly once across the batches.
+        assert sorted(cid for batch in call_batches for cid in batch) == sorted(
+            f"c{i}" for i in range(150)
+        )
+
+        metrics.assert_gauge_value(
+            "meraki_client_application_usage_sent_bytes", 20000, client_id="c0", type="test_app"
+        )
+        metrics.assert_gauge_value(
+            "meraki_client_application_usage_sent_bytes", 20000, client_id="c149", type="test_app"
         )
 
     async def test_numeric_client_series_are_id_only(self, collector, mock_api_builder, metrics):
