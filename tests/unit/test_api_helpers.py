@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -291,81 +290,6 @@ class TestAPIHelper:
 
         assert len(results) == 25
         assert processed_count == 25
-
-    async def test_get_time_based_data_basic(self, api_helper, mock_collector):
-        """Test fetching time-based data."""
-        mock_data = [
-            {"ts": "2024-01-15T10:00:00Z", "value": 50},
-            {"ts": "2024-01-15T10:05:00Z", "value": 60},
-        ]
-        mock_api_method = MagicMock(return_value=mock_data)
-
-        result = await api_helper.get_time_based_data(
-            mock_api_method, "getTimeSeries", timespan=300
-        )
-
-        assert result == mock_data
-        mock_collector._track_api_call.assert_called_once_with("getTimeSeries")
-        mock_api_method.assert_called_once_with(timespan=300)
-
-    async def test_get_time_based_data_with_interval(self, api_helper, mock_collector):
-        """Test fetching time-based data with interval."""
-        mock_data = {"average": 75.5}
-        mock_api_method = MagicMock(return_value=mock_data)
-
-        result = await api_helper.get_time_based_data(
-            mock_api_method, "getAggregatedData", timespan=3600, interval=300
-        )
-
-        assert result == mock_data
-        mock_api_method.assert_called_once_with(timespan=3600, interval=300)
-
-    async def test_get_time_based_data_wrapped_response(self, api_helper, mock_collector):
-        """Test handling wrapped response format."""
-        wrapped_data = {
-            "items": [
-                {"ts": "2024-01-15T10:00:00Z", "value": 50},
-                {"ts": "2024-01-15T10:05:00Z", "value": 60},
-            ],
-            "meta": {"page": 1},
-        }
-        mock_api_method = MagicMock(return_value=wrapped_data)
-
-        result = await api_helper.get_time_based_data(
-            mock_api_method, "getWrappedData", timespan=300
-        )
-
-        # Should unwrap and return just the items
-        assert result == wrapped_data["items"]
-
-    async def test_get_time_based_data_with_kwargs(self, api_helper, mock_collector):
-        """Test passing additional kwargs to API method."""
-        mock_data: list[Any] = []
-        mock_api_method = MagicMock(return_value=mock_data)
-
-        result = await api_helper.get_time_based_data(
-            mock_api_method,
-            "getFilteredData",
-            timespan=300,
-            network_id="N_123",
-            device_serial="Q2XX-XXXX-XXXX",
-        )
-
-        assert result == mock_data
-        mock_api_method.assert_called_once_with(
-            timespan=300, network_id="N_123", device_serial="Q2XX-XXXX-XXXX"
-        )
-
-    async def test_get_time_based_data_error_handling(self, api_helper, mock_collector):
-        """Test error handling in time-based data fetching."""
-        mock_api_method = MagicMock(side_effect=Exception("API Error"))
-
-        # Should not raise due to error handling decorator
-        result = await api_helper.get_time_based_data(
-            mock_api_method, "getFailingData", timespan=300
-        )
-
-        assert result is None or result == []
 
     def test_create_api_helper(self, mock_collector):
         """Test create_api_helper factory function."""

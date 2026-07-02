@@ -24,7 +24,7 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 - `logging_decorators.py` - `@log_api_call()`, `@log_collection_progress()`, `@log_batch_operation()`
 
 ### Metrics & Labels
-- `metrics.py` - `LabelName` enum, `MetricFactory`, `LabelSet`, `MetricDefinition`
+- `metrics.py` - `LabelName` enum and `create_labels()` label-dict builder (validates keys, coalesces `None`→`""`, F-019)
 - `label_helpers.py` - Label construction helpers
 - `metric_expiration.py` - Metric TTL and automatic stale metric cleanup
 - `exemplars.py` - OpenTelemetry exemplar support
