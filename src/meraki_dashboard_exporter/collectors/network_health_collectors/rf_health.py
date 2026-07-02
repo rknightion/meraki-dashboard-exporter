@@ -6,7 +6,6 @@ import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
 from ...core.constants import DeviceType, ProductType
-from ...core.domain_models import RFHealthData
 from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_device_labels, create_network_labels
 from ...core.logging import get_logger
@@ -28,10 +27,12 @@ class RFHealthCollector(BaseNetworkHealthCollector):
         """Return the most-recent utilization bucket for a radio.
 
         The API does not guarantee bucket ordering, so sort by end timestamp
-        (``endTime`` per the OpenAPI spec, falling back to ``endTs``) descending
-        before picking the newest (F-017). Buckets with no timestamp sort last
-        but preserve their original relative order, so a single-bucket response
-        is unaffected.
+        descending before picking the newest (F-017). The live legacy endpoint
+        emits snake_case ``end_ts`` (evidence/live-api-verification.md Sample 1);
+        the OpenAPI spec's ``endTime`` does NOT exist on the wire (#512). We read
+        ``end_ts`` first and keep the ``endTime``/``endTs`` fallbacks defensively.
+        Buckets with no timestamp sort last but preserve their original relative
+        order, so a single-bucket response is unaffected.
 
         Parameters
         ----------
@@ -46,7 +47,7 @@ class RFHealthCollector(BaseNetworkHealthCollector):
         """
         return sorted(
             buckets,
-            key=lambda b: b.get("endTime") or b.get("endTs") or "",
+            key=lambda b: b.get("end_ts") or b.get("endTime") or b.get("endTs") or "",
             reverse=True,
         )[0]
 
@@ -182,22 +183,6 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                     model = ap_data.get("model", "")
                     name = device_names.get(serial, serial)
 
-                    # Try to parse to domain model for validation
-                    try:
-                        RFHealthData(
-                            serial=serial,
-                            apName=name,
-                            model=model,
-                            band2_4GhzUtilization=ap_data.get("wifi0", [{}])[0].get("utilization")
-                            if "wifi0" in ap_data and ap_data["wifi0"]
-                            else None,
-                            band5GhzUtilization=ap_data.get("wifi1", [{}])[0].get("utilization")
-                            if "wifi1" in ap_data and ap_data["wifi1"]
-                            else None,
-                        )
-                    except Exception:
-                        logger.debug("Failed to parse RF data to domain model", serial=serial)
-
                     # Create device labels once per AP, before either radio block, so
                     # an AP that reports only wifi1 (5GHz) can't hit an UnboundLocalError
                     # on base_labels (F-017).
@@ -219,7 +204,7 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                         latest_2_4 = self._latest_bucket(ap_data["wifi0"])
                         total_util = latest_2_4.get("utilization", 0)
                         wifi_util = latest_2_4.get("wifi", 0)
-                        non_wifi_util = latest_2_4.get("nonWifi", 0)
+                        non_wifi_util = latest_2_4.get("non_wifi", 0)
 
                         # Set per-AP metrics for total utilization
                         labels = {**base_labels, "utilization_type": "total"}
@@ -256,7 +241,7 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                         latest_5 = self._latest_bucket(ap_data["wifi1"])
                         total_util = latest_5.get("utilization", 0)
                         wifi_util = latest_5.get("wifi", 0)
-                        non_wifi_util = latest_5.get("nonWifi", 0)
+                        non_wifi_util = latest_5.get("non_wifi", 0)
 
                         # Use same base labels as 2.4GHz
                         # Set per-AP metrics for total utilization

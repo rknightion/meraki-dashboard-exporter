@@ -146,22 +146,54 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             ),
         ]
 
+        # Live field names (evidence/live-api-verification.md Sample 1): the legacy
+        # endpoint returns snake_case utilization/wifi/non_wifi + start_ts/end_ts.
+        # The OpenAPI spec's utilizationTotal/utilization80211/utilizationNon80211/
+        # startTime/endTime do NOT exist on the wire (#512).
         channel_util_data = [
             {
                 "serial": "Q2KD-XXXX",
                 "model": "MR36",
                 "wifi0": [  # 2.4GHz
-                    {"utilization": 45, "wifi": 30, "nonWifi": 15}
+                    {
+                        "utilization": 45,
+                        "wifi": 30,
+                        "non_wifi": 15,
+                        "start_ts": "2026-07-02T17:20:00Z",
+                        "end_ts": "2026-07-02T17:30:00Z",
+                    }
                 ],
                 "wifi1": [  # 5GHz
-                    {"utilization": 25, "wifi": 20, "nonWifi": 5}
+                    {
+                        "utilization": 25,
+                        "wifi": 20,
+                        "non_wifi": 5,
+                        "start_ts": "2026-07-02T17:20:00Z",
+                        "end_ts": "2026-07-02T17:30:00Z",
+                    }
                 ],
             },
             {
                 "serial": "Q2KD-YYYY",
                 "model": "MR46",
-                "wifi0": [{"utilization": 55, "wifi": 40, "nonWifi": 15}],
-                "wifi1": [{"utilization": 35, "wifi": 30, "nonWifi": 5}],
+                "wifi0": [
+                    {
+                        "utilization": 55,
+                        "wifi": 40,
+                        "non_wifi": 15,
+                        "start_ts": "2026-07-02T17:20:00Z",
+                        "end_ts": "2026-07-02T17:30:00Z",
+                    }
+                ],
+                "wifi1": [
+                    {
+                        "utilization": 35,
+                        "wifi": 30,
+                        "non_wifi": 5,
+                        "start_ts": "2026-07-02T17:20:00Z",
+                        "end_ts": "2026-07-02T17:30:00Z",
+                    }
+                ],
             },
         ]
 
@@ -213,6 +245,29 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             utilization_type="total",  # Changed from 'type' to 'utilization_type'
         )
 
+        # #512: the non_wifi series was silently 0 because the code read the
+        # non-existent camelCase "nonWifi" key instead of the live "non_wifi".
+        metrics.assert_gauge_value(
+            "meraki_ap_channel_utilization_2_4ghz_percent",
+            15,
+            org_id=org["id"],
+            serial="Q2KD-XXXX",
+            model="MR36",
+            device_type="MR",
+            network_id=network["id"],
+            utilization_type="non_wifi",
+        )
+        metrics.assert_gauge_value(
+            "meraki_ap_channel_utilization_5ghz_percent",
+            5,
+            org_id=org["id"],
+            serial="Q2KD-XXXX",
+            model="MR36",
+            device_type="MR",
+            network_id=network["id"],
+            utilization_type="non_wifi",
+        )
+
     async def test_channel_utilization_none_ap_name_falls_back_to_serial(
         self, collector, mock_api_builder, metrics
     ):
@@ -244,8 +299,24 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             {
                 "serial": "Q2KD-ZZZZ",
                 "model": "MR36",
-                "wifi0": [{"utilization": 42, "wifi": 30, "nonWifi": 12}],
-                "wifi1": [{"utilization": 22, "wifi": 18, "nonWifi": 4}],
+                "wifi0": [
+                    {
+                        "utilization": 42,
+                        "wifi": 30,
+                        "non_wifi": 12,
+                        "start_ts": "2026-07-02T17:20:00Z",
+                        "end_ts": "2026-07-02T17:30:00Z",
+                    }
+                ],
+                "wifi1": [
+                    {
+                        "utilization": 22,
+                        "wifi": 18,
+                        "non_wifi": 4,
+                        "start_ts": "2026-07-02T17:20:00Z",
+                        "end_ts": "2026-07-02T17:30:00Z",
+                    }
+                ],
             }
         ]
 
@@ -644,23 +715,27 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             ),
         ]
 
-        # Oldest bucket listed first; the collector must still pick the newest (endTime).
+        # Oldest bucket listed first; the collector must still pick the newest.
+        # Live buckets sort by "end_ts" (evidence Sample 1) — NOT the spec's
+        # non-existent "endTime" (#512), so this fixture uses the live key.
         channel_util_data = [
             {
                 "serial": "Q2KD-AAAA",
                 "model": "MR36",
                 "wifi0": [
                     {
-                        "endTime": "2024-01-01T11:50:00Z",
+                        "start_ts": "2024-01-01T11:40:00Z",
+                        "end_ts": "2024-01-01T11:50:00Z",
                         "utilization": 10,
                         "wifi": 5,
-                        "nonWifi": 5,
+                        "non_wifi": 5,
                     },
                     {
-                        "endTime": "2024-01-01T12:00:00Z",
+                        "start_ts": "2024-01-01T11:50:00Z",
+                        "end_ts": "2024-01-01T12:00:00Z",
                         "utilization": 80,
                         "wifi": 60,
-                        "nonWifi": 20,
+                        "non_wifi": 20,
                     },
                 ],
             }
