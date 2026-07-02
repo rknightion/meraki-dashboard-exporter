@@ -11,6 +11,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+from prometheus_client import Gauge
 
 from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.metric_expiration import MetricExpirationManager
@@ -329,6 +330,144 @@ class TestExpirationManagerLifecycle:
 # ---------------------------------------------------------------------------
 # Tests: tier-aware expiration
 # ---------------------------------------------------------------------------
+
+
+class TestRealSeriesRemoval:
+    """Expiration must remove the actual Prometheus series, not just tracking."""
+
+    async def test_expired_series_removed_from_registry(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """When a tracked metric expires, its Gauge child series must be removed."""
+        gauge = Gauge(
+            "meraki_test_expiry_removal",
+            "test gauge for expiry removal",
+            labelnames=["org_id", "serial"],
+        )
+        base_time = 20_000_000.0
+        medium_ttl = 600.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            gauge.labels(org_id="o1", serial="s1").set(5)
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name="meraki_test_expiry_removal",
+                label_values={"org_id": "o1", "serial": "s1"},
+                metric=gauge,
+            )
+
+        # Series exists before expiry.
+        assert ("o1", "s1") in gauge._metrics
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + medium_ttl + 1.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        # Series is actually gone from the Gauge — not just untracked.
+        assert ("o1", "s1") not in gauge._metrics
+        assert len(expiration_manager._metric_timestamps) == 0
+
+    async def test_fresh_series_survives_removal(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """Only the stale series is removed; a fresh series stays in the registry."""
+        gauge = Gauge(
+            "meraki_test_expiry_partial",
+            "test gauge",
+            labelnames=["org_id", "serial"],
+        )
+        base_time = 21_000_000.0
+        medium_ttl = 600.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            gauge.labels(org_id="o1", serial="stale").set(1)
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name="meraki_test_expiry_partial",
+                label_values={"org_id": "o1", "serial": "stale"},
+                metric=gauge,
+            )
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + medium_ttl - 10.0
+            gauge.labels(org_id="o1", serial="fresh").set(1)
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name="meraki_test_expiry_partial",
+                label_values={"org_id": "o1", "serial": "fresh"},
+                metric=gauge,
+            )
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + medium_ttl + 1.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        assert ("o1", "stale") not in gauge._metrics
+        assert ("o1", "fresh") in gauge._metrics
+
+    async def test_cardinality_shed_removes_series(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """Cardinality shedding must also remove the underlying series."""
+        gauge = Gauge(
+            "meraki_test_cardinality_shed",
+            "test gauge",
+            labelnames=["org_id", "serial"],
+        )
+        base_time = 22_000_000.0
+
+        for i in range(5):
+            with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+                mock_time.return_value = base_time + i  # distinct timestamps
+                gauge.labels(org_id="o1", serial=f"s{i}").set(1)
+                expiration_manager.track_metric_update(
+                    collector_name=_COLLECTOR,
+                    metric_name="meraki_test_cardinality_shed",
+                    label_values={"org_id": "o1", "serial": f"s{i}"},
+                    metric=gauge,
+                )
+
+        # Shed down to 2 — the 3 oldest series should be removed from the Gauge.
+        shed = expiration_manager.check_cardinality(_COLLECTOR, max_cardinality=2)
+        assert shed == 3
+        assert ("o1", "s0") not in gauge._metrics
+        assert ("o1", "s1") not in gauge._metrics
+        assert ("o1", "s2") not in gauge._metrics
+        assert ("o1", "s3") in gauge._metrics
+        assert ("o1", "s4") in gauge._metrics
+
+    async def test_removal_survives_already_removed_series(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """Removing a series that was already removed elsewhere must not raise."""
+        gauge = Gauge(
+            "meraki_test_double_removal",
+            "test gauge",
+            labelnames=["org_id", "serial"],
+        )
+        base_time = 23_000_000.0
+        medium_ttl = 600.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            gauge.labels(org_id="o1", serial="s1").set(1)
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name="meraki_test_double_removal",
+                label_values={"org_id": "o1", "serial": "s1"},
+                metric=gauge,
+            )
+
+        # Externally remove the series before cleanup runs.
+        gauge.remove("o1", "s1")
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + medium_ttl + 1.0
+            await expiration_manager._cleanup_expired_metrics()  # must not raise
+
+        assert len(expiration_manager._metric_timestamps) == 0
 
 
 class TestTierAwareExpiration:

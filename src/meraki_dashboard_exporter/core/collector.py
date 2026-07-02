@@ -640,12 +640,13 @@ class MetricCollector(ABC):
                 if metric_name is None:
                     metric_name = getattr(metric, "_name", "unknown")
 
-                # Track the update
+                # Track the update (pass the Gauge so the series can be removed on expiry)
                 self.expiration_manager.track_metric_update(
                     collector_name=self.__class__.__name__,
                     metric_name=metric_name,
                     label_values=labels,
                     tier=self.update_tier,
+                    metric=metric,
                 )
 
         except Exception:

@@ -72,6 +72,13 @@ class MetricExpirationManager:
         # Value: (timestamp of last update, tier or None)
         self._metric_timestamps: dict[tuple[str, str, str], tuple[float, UpdateTier | None]] = {}
 
+        # Track the actual Gauge object and its label values per metric series so
+        # expired/shed entries can be removed from the Prometheus registry (not just
+        # from tracking bookkeeping).
+        # Key: (collector_name, metric_name, frozen_labels)
+        # Value: (Gauge object, ordered label values dict)
+        self._metric_series: dict[tuple[str, str, str], tuple[Gauge, dict[str, str]]] = {}
+
         # Track metric count per collector
         self._metric_counts: defaultdict[str, int] = defaultdict(int)
 
@@ -109,6 +116,7 @@ class MetricExpirationManager:
         metric_name: str,
         label_values: dict[str, str],
         tier: UpdateTier | None = None,
+        metric: Gauge | None = None,
     ) -> None:
         """Track that a metric was updated.
 
@@ -123,6 +131,11 @@ class MetricExpirationManager:
         tier : UpdateTier | None
             The update tier for this metric, used to calculate the TTL.
             If None, the default TTL (MEDIUM) is used.
+        metric : Gauge | None
+            The Gauge object owning this series. When provided, the actual
+            Prometheus series is removed (via ``Gauge.remove``) once the entry
+            expires or is shed for cardinality. When ``None``, only tracking
+            bookkeeping is kept (backward compatible).
 
         """
         # Create a frozen representation of labels for dict key
@@ -135,6 +148,37 @@ class MetricExpirationManager:
             self._metric_counts[collector_name] += 1
 
         self._metric_timestamps[key] = (current_time, tier)
+
+        # Remember the actual series so it can be removed from the registry on expiry.
+        if metric is not None:
+            self._metric_series[key] = (metric, dict(label_values))
+
+    def _remove_series(self, key: tuple[str, str, str]) -> None:
+        """Remove the actual Prometheus series for an expired/shed tracking key.
+
+        Looks up the Gauge object recorded via ``track_metric_update`` and calls
+        ``Gauge.remove`` with the label values in the gauge's declared order. Safe
+        to call for keys with no recorded series (no-op) or series already removed
+        elsewhere (swallows ``KeyError``/``ValueError``).
+
+        Parameters
+        ----------
+        key : tuple[str, str, str]
+            The (collector_name, metric_name, frozen_labels) tracking key.
+
+        """
+        series = self._metric_series.pop(key, None)
+        if series is None:
+            return
+
+        metric, label_values = series
+        try:
+            labelnames = list(getattr(metric, "_labelnames", ()) or ())
+            ordered = [label_values[name] for name in labelnames]
+            metric.remove(*ordered)
+        except KeyError, ValueError:
+            # Series already removed, or labels no longer match the gauge — nothing to do.
+            pass
 
     def _freeze_labels(self, labels: dict[str, str]) -> str:
         """Convert label dict to frozen string representation.
@@ -217,9 +261,10 @@ class MetricExpirationManager:
     async def _cleanup_expired_metrics(self) -> None:
         """Clean up metrics that haven't been updated within their TTL.
 
-        This is a placeholder for actual cleanup. In practice, Prometheus
-        doesn't provide an easy way to delete individual metric series.
-        Instead, this tracks and logs stale metrics for monitoring.
+        For every tracked series past its TTL this removes the actual Prometheus
+        series (via ``Gauge.remove``) when the owning Gauge object was recorded at
+        ``track_metric_update`` time, then drops the tracking bookkeeping. Series
+        tracked without a Gauge reference are only untracked (bookkeeping only).
         """
         current_time = time.time()
         expired_count = 0
@@ -243,9 +288,10 @@ class MetricExpirationManager:
                 tier_label = tier.value if tier is not None else "unknown"
                 expired_by_collector_tier[(collector_name, tier_label)] += 1
 
-        # Remove expired metrics from tracking
+        # Remove expired metrics from the registry and from tracking
         for key in expired_keys:
             collector_name = key[0]
+            self._remove_series(key)
             del self._metric_timestamps[key]
             self._metric_counts[collector_name] -= 1
 
@@ -307,6 +353,7 @@ class MetricExpirationManager:
         to_shed = len(collector_metrics) - max_cardinality
 
         for key, _ts in collector_metrics[:to_shed]:
+            self._remove_series(key)
             del self._metric_timestamps[key]
             self._metric_counts[collector_name] -= 1
 
