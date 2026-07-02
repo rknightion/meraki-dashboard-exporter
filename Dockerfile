@@ -4,7 +4,13 @@ ARG PY_VERSION=3.14
 # --------------------------------------------------------------------------- #
 # Builder stage - uses official slim image to compile wheels with uv
 # --------------------------------------------------------------------------- #
-FROM python:${PY_VERSION}-slim-bookworm AS builder
+# Digest-pinned for supply-chain immutability (#562). Renovate's built-in `dockerfile`
+# manager natively tracks `FROM image:${ARG}@sha256:digest` (expands the ARG default to
+# resolve the tag, then keeps the digest in sync with that tag) — no custom regex manager
+# needed, unlike the UV_VERSION ARG below which lives outside a FROM line.
+# Pinned digest resolves to python:3.14-slim-bookworm (3.14.6-slim-bookworm, multi-arch
+# index incl. linux/amd64 + linux/arm64) as of 2026-07-02.
+FROM python:${PY_VERSION}-slim-bookworm@sha256:4ff4b92a68355dbdb52584ab3391dff8d371a61d4e063468bfd0130e3189c6d9 AS builder
 
 # Install system deps with cache mounts for faster rebuilds
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -27,22 +33,34 @@ ENV UV_COMPILE_BYTECODE=1 \
 # Install uv for the target architecture
 # renovate: datasource=github-releases depName=astral-sh/uv
 ARG UV_VERSION=0.11.26
+# Expected sha256 checksums for the uv release tarballs fetched below, one per supported
+# TARGETARCH, pinned from https://github.com/astral-sh/uv/releases/download/<UV_VERSION>/sha256.sum
+# (verified against that release's per-asset *.sha256 files too). This is a real pin — the
+# values are committed here, not fetched at build time alongside the tarball they'd be
+# checking, so a compromised/corrupted release download still fails the build (#562).
+# Renovate's github-releases datasource only tracks UV_VERSION (comment above); it cannot
+# compute these hashes, so whenever UV_VERSION bumps (via Renovate or by hand) these two
+# ARGs must be refreshed in the same change — `make docker-uv-checksums` prints the current
+# values for the pinned UV_VERSION to copy in. A stale checksum here fails the build loudly
+# rather than silently installing an unverified uv, so this cannot go unnoticed.
+ARG UV_CHECKSUM_AMD64=6426a73c3837e6e2483ee344cbc00f36394d179afcba6183cb77437e67db4af0
+ARG UV_CHECKSUM_ARM64=befa1a59c91e96eb601b0fd9a97c03dd666f17baba644b2b4db9c59a767e387e
 ARG TARGETARCH
-ARG TARGETVARIANT
 RUN set -eux \
-    && case "${TARGETARCH}${TARGETVARIANT:-}" in \
-         amd64) uv_arch="x86_64-unknown-linux-gnu" ;; \
-         arm64) uv_arch="aarch64-unknown-linux-gnu" ;; \
-         armv7) uv_arch="armv7-unknown-linux-gnueabihf" ;; \
-         *) echo "Unsupported TARGETARCH=${TARGETARCH}${TARGETVARIANT:-}" >&2; exit 1 ;; \
+    && case "${TARGETARCH}" in \
+         amd64) uv_arch="x86_64-unknown-linux-gnu"; uv_sha256="${UV_CHECKSUM_AMD64}" ;; \
+         arm64) uv_arch="aarch64-unknown-linux-gnu"; uv_sha256="${UV_CHECKSUM_ARM64}" ;; \
+         *) echo "Unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
        esac \
     && if [ "${UV_VERSION}" = "latest" ]; then \
-         uv_url="https://github.com/astral-sh/uv/releases/latest/download/uv-${uv_arch}.tar.gz"; \
-       else \
-         uv_url="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${uv_arch}.tar.gz"; \
+         echo "UV_VERSION=latest is a manual dev override only; it has no pinned checksum" >&2; \
+         echo "and is intentionally not supported with checksum verification." >&2; \
+         exit 1; \
        fi \
+    && uv_url="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${uv_arch}.tar.gz" \
     && mkdir -p /tmp/uv \
     && curl -sSfL "${uv_url}" -o /tmp/uv.tar.gz \
+    && echo "${uv_sha256}  /tmp/uv.tar.gz" | sha256sum -c - \
     && tar -xzf /tmp/uv.tar.gz -C /tmp/uv --strip-components=1 \
     && install -m 0755 /tmp/uv/uv /usr/local/bin/uv \
     && rm -rf /tmp/uv /tmp/uv.tar.gz \
@@ -61,7 +79,9 @@ COPY src/meraki_dashboard_exporter ./meraki_dashboard_exporter
 # --------------------------------------------------------------------------- #
 # Runtime stage - minimal Debian-based Python image
 # --------------------------------------------------------------------------- #
-FROM python:${PY_VERSION}-slim-bookworm AS runtime
+# Same digest pin as the builder stage above (#562) — both stages must resolve to the
+# identical base image.
+FROM python:${PY_VERSION}-slim-bookworm@sha256:4ff4b92a68355dbdb52584ab3391dff8d371a61d4e063468bfd0130e3189c6d9 AS runtime
 
 # Install runtime dependencies and create non-root user
 RUN apt-get update -qq \

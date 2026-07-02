@@ -149,7 +149,7 @@ docker-build-all: ## Build Docker image for all supported architectures
 	@echo "$(BLUE)Building Docker image for all architectures...$(NC)"
 	@echo "$(YELLOW)Note: This builds but doesn't load (can't load multi-arch locally)$(NC)"
 	docker buildx build \
-		--platform linux/amd64,linux/arm64,linux/arm/v7 \
+		--platform linux/amd64,linux/arm64 \
 		--tag $(DOCKER_IMAGE_NAME):latest \
 		--tag $(DOCKER_IMAGE_NAME):$(VERSION) \
 		--build-arg PY_VERSION=$(PYTHON_VERSION) \
@@ -161,7 +161,7 @@ docker-build-all: ## Build Docker image for all supported architectures
 docker-build-push: ## Build and push multi-arch image to registry (requires login)
 	@echo "$(BLUE)Building and pushing multi-arch image...$(NC)"
 	docker buildx build \
-		--platform linux/amd64,linux/arm64,linux/arm/v7 \
+		--platform linux/amd64,linux/arm64 \
 		--push \
 		--tag $(DOCKER_REGISTRY)/$(DOCKER_IMAGE_NAME):latest \
 		--tag $(DOCKER_REGISTRY)/$(DOCKER_IMAGE_NAME):$(VERSION) \
@@ -196,6 +196,19 @@ docker-test: docker-build ## Test Docker image build
 docker-inspect: ## Inspect Docker image manifest
 	@echo "$(BLUE)Inspecting Docker image...$(NC)"
 	docker buildx imagetools inspect $(DOCKER_IMAGE_NAME):latest || echo "$(YELLOW)Image not found. Build it first with 'make docker-build'$(NC)"
+
+.PHONY: docker-base-digest
+docker-base-digest: ## Print the current multi-arch index digest for the Dockerfile's PY_VERSION base image (#562)
+	@echo "$(BLUE)Resolving digest for python:$(PYTHON_VERSION)-slim-bookworm...$(NC)"
+	docker buildx imagetools inspect python:$(PYTHON_VERSION)-slim-bookworm --format '{{println .Manifest.Digest}}'
+	@echo "$(YELLOW)Paste this as the @sha256:<digest> pin on BOTH FROM lines in the Dockerfile.$(NC)"
+
+.PHONY: docker-uv-checksums
+docker-uv-checksums: ## Print current amd64/arm64 sha256 checksums for the Dockerfile's pinned UV_VERSION (#562)
+	@uv_version=$$(sed -n 's/^ARG UV_VERSION=\(.*\)/\1/p' Dockerfile); \
+	echo "$(BLUE)uv $$uv_version checksums (paste into Dockerfile UV_CHECKSUM_AMD64 / UV_CHECKSUM_ARM64):$(NC)"; \
+	curl -fsSL "https://github.com/astral-sh/uv/releases/download/$$uv_version/sha256.sum" \
+		| grep -E 'uv-(x86_64|aarch64)-unknown-linux-gnu\.tar\.gz$$'
 
 .PHONY: docker-compose-up
 docker-compose-up: ## Start services with docker compose
