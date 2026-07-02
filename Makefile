@@ -149,7 +149,7 @@ docker-build-all: ## Build Docker image for all supported architectures
 	@echo "$(BLUE)Building Docker image for all architectures...$(NC)"
 	@echo "$(YELLOW)Note: This builds but doesn't load (can't load multi-arch locally)$(NC)"
 	docker buildx build \
-		--platform linux/386,linux/amd64,linux/arm/v5,linux/arm/v7,linux/arm64/v8,linux/ppc64le,linux/s390x \
+		--platform linux/amd64,linux/arm64,linux/arm/v7 \
 		--tag $(DOCKER_IMAGE_NAME):latest \
 		--tag $(DOCKER_IMAGE_NAME):$(VERSION) \
 		--build-arg PY_VERSION=$(PYTHON_VERSION) \
@@ -161,7 +161,7 @@ docker-build-all: ## Build Docker image for all supported architectures
 docker-build-push: ## Build and push multi-arch image to registry (requires login)
 	@echo "$(BLUE)Building and pushing multi-arch image...$(NC)"
 	docker buildx build \
-		--platform linux/386,linux/amd64,linux/arm/v5,linux/arm/v7,linux/arm64/v8,linux/ppc64le,linux/s390x \
+		--platform linux/amd64,linux/arm64,linux/arm/v7 \
 		--push \
 		--tag $(DOCKER_REGISTRY)/$(DOCKER_IMAGE_NAME):latest \
 		--tag $(DOCKER_REGISTRY)/$(DOCKER_IMAGE_NAME):$(VERSION) \
@@ -175,8 +175,8 @@ docker-run: docker-build ## Run Docker container locally
 	@echo "$(BLUE)Running Docker container...$(NC)"
 	docker run --rm -it \
 		-p 9099:9099 \
-		-e MERAKI_API_KEY=$${MERAKI_API_KEY} \
-		-e MERAKI_EXPORTER_LOG_LEVEL=DEBUG \
+		-e MERAKI_EXPORTER_MERAKI__API_KEY=$${MERAKI_EXPORTER_MERAKI__API_KEY} \
+		-e MERAKI_EXPORTER_LOGGING__LEVEL=DEBUG \
 		$(DOCKER_IMAGE_NAME):latest
 
 .PHONY: docker-shell
@@ -198,14 +198,14 @@ docker-inspect: ## Inspect Docker image manifest
 	docker buildx imagetools inspect $(DOCKER_IMAGE_NAME):latest || echo "$(YELLOW)Image not found. Build it first with 'make docker-build'$(NC)"
 
 .PHONY: docker-compose-up
-docker-compose-up: ## Start services with docker-compose
-	@echo "$(BLUE)Starting services with docker-compose...$(NC)"
-	docker-compose -f docker-compose.dev.yml up --build
+docker-compose-up: ## Start services with docker compose
+	@echo "$(BLUE)Starting services with docker compose...$(NC)"
+	docker compose -f docker-compose.yml up --build
 
 .PHONY: docker-compose-down
 docker-compose-down: ## Stop services
 	@echo "$(BLUE)Stopping services...$(NC)"
-	docker-compose -f docker-compose.dev.yml down
+	docker compose -f docker-compose.yml down
 
 # BuildKit Setup
 .PHONY: buildkit-setup
@@ -291,11 +291,10 @@ pre-commit: format lint typecheck ## Run pre-commit checks
 	@echo "$(GREEN)Pre-commit checks passed!$(NC)"
 
 .PHONY: install-hooks
-install-hooks: ## Install git pre-commit hook
-	@echo "$(BLUE)Installing git hooks...$(NC)"
-	@echo '#!/bin/sh\nmake pre-commit' > .git/hooks/pre-commit
-	@chmod +x .git/hooks/pre-commit
-	@echo "$(GREEN)Git hooks installed!$(NC)"
+install-hooks: ## Install the pre-commit framework hooks (see .pre-commit-config.yaml)
+	@echo "$(BLUE)Installing git hooks via the pre-commit framework...$(NC)"
+	uvx pre-commit install
+	@echo "$(GREEN)Git hooks installed! (managed by .pre-commit-config.yaml)$(NC)"
 
 # Utilities
 .PHONY: tree
