@@ -5,10 +5,10 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 253
-- **Gauges:** 229
+- **Total metrics:** 251
+- **Gauges:** 228
 - **Counters:** 18
-- **Histograms:** 5
+- **Histograms:** 4
 - **Info metrics:** 1
 
 ## Collector Metrics
@@ -382,10 +382,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_exporter_collection_errors_total` | counter | `collector`, `tier`, `error_type` | Total number of collection errors by collector and phase |  |
 | `meraki_exporter_collection_utilization_ratio` | gauge | `collector`, `tier` | Fraction of the tier interval consumed by actual collection (0=instant, 1=full interval) |  |
-| `meraki_exporter_collection_wait_seconds` | histogram | `collector`, `org_id` | Time an organization spends waiting for semaphore slot before collection starts |  |
 | `meraki_exporter_collections_active` | gauge | `collector`, `tier` | Number of parallel organization collections currently active |  |
 | `meraki_exporter_collector_failure_streak` | gauge | `collector`, `tier` | Consecutive failures for each collector since last success |  |
-| `meraki_exporter_collector_success_age_seconds` | gauge | `collector`, `tier` | Seconds since the last successful collection for each collector |  |
 
 ### MetricCollector
 
@@ -439,4 +437,3 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 - **Counter**: Cumulative value that only increases
 - **Histogram**: Distribution of observations across buckets
 - **Info**: Metadata metric with labels and value 1
-

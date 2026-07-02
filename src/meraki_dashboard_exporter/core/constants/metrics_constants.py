@@ -402,7 +402,6 @@ class CollectorMetricName(StrEnum):
 
     # Parallel collection metrics
     PARALLEL_COLLECTIONS_ACTIVE = "meraki_exporter_collections_active"
-    ORG_COLLECTION_WAIT_TIME_SECONDS = "meraki_exporter_collection_wait_seconds"
     COLLECTION_ERRORS_TOTAL = "meraki_exporter_collection_errors_total"
 
     # Inventory cache metrics

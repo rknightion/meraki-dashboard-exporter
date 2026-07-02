@@ -7,7 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from opentelemetry import trace
-from prometheus_client import Counter, Gauge, Histogram
+from prometheus_client import Counter, Gauge
 
 from ..core.async_utils import ManagedTaskGroup
 from ..core.constants import UpdateTier
@@ -109,17 +109,6 @@ class CollectorManager:
             ],
         )
 
-        # Histogram for organization collection wait time
-        self._org_collection_wait_time = Histogram(
-            CollectorMetricName.ORG_COLLECTION_WAIT_TIME_SECONDS.value,
-            "Time an organization spends waiting for semaphore slot before collection starts",
-            labelnames=[
-                LabelName.COLLECTOR.value,
-                LabelName.ORG_ID.value,
-            ],
-            buckets=[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0],
-        )
-
         # Counter for collection errors by collector and phase
         self._collection_errors = Counter(
             CollectorMetricName.COLLECTION_ERRORS_TOTAL.value,
@@ -131,15 +120,11 @@ class CollectorManager:
             ],
         )
 
-        # Gauge for collector health - last successful collection age in seconds
-        self._collector_last_success_age = Gauge(
-            "meraki_exporter_collector_success_age_seconds",
-            "Seconds since the last successful collection for each collector",
-            labelnames=[
-                LabelName.COLLECTOR.value,
-                LabelName.TIER.value,
-            ],
-        )
+        # NB: no "collector_success_age_seconds" gauge here (F-039). It was set only
+        # in post-run bookkeeping, so it froze at its last value when a collector
+        # stopped running — defeating staleness detection. Use the query-time
+        # expression `time() - meraki_exporter_collector_success_timestamp_seconds`
+        # (owned by MetricCollector) for a freeze-proof staleness signal instead.
 
         # Gauge for collector failure streak
         self._collector_failure_streak = Gauge(
@@ -691,15 +676,8 @@ class CollectorManager:
                         self.collector_health[collector_name]["failure_streak"] += 1
                         self.collector_health[collector_name]["total_failures"] += 1
 
-                    # Update health metrics
-                    last_success = self.collector_health[collector_name]["last_success_time"]
-                    if last_success is not None:
-                        age = time.time() - last_success
-                        self._collector_last_success_age.labels(
-                            collector=collector_name,
-                            tier=tier.value,
-                        ).set(age)
-
+                    # No success-age gauge emission (F-039): staleness is derived at
+                    # query time from meraki_exporter_collector_success_timestamp_seconds.
                     self._collector_failure_streak.labels(
                         collector=collector_name,
                         tier=tier.value,

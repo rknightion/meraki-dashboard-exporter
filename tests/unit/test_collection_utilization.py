@@ -40,8 +40,6 @@ def manager(test_settings: Settings) -> CollectorManager:
     mgr._parallel_collections_active.labels.return_value = MagicMock()
     mgr._collection_errors = MagicMock()
     mgr._collection_errors.labels.return_value = MagicMock()
-    mgr._collector_last_success_age = MagicMock()
-    mgr._collector_last_success_age.labels.return_value = MagicMock()
     mgr._collector_failure_streak = MagicMock()
     mgr._collector_failure_streak.labels.return_value = MagicMock()
     mgr._collection_utilization = MagicMock()
