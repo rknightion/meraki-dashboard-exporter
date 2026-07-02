@@ -111,6 +111,7 @@ jobs:
           cache-from: type=gha
           build-args: |
             PY_VERSION=3.14
+            APP_VERSION=${{ github.sha }}
 
       - name: Test Docker image startup
         env:
