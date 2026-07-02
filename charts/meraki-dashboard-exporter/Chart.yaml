@@ -2,7 +2,12 @@ apiVersion: v2
 name: meraki-dashboard-exporter
 description: Prometheus exporter for Cisco Meraki Dashboard API metrics
 type: application
+# version is intentionally static: the chart is versioned independently of the app and this
+# value is overridden at publish time via `helm package --version ${TAG#v}` (see
+# .github/workflows/publish.yml). release-please does not manage this field.
 version: 0.1.0
+# appVersion tracks the exporter release via release-please's extra-files mechanism
+# (release-please-config.json), matched by the x-release-please-version marker below.
 appVersion: "0.31.0" # x-release-please-version
 home: https://github.com/rknightion/meraki-dashboard-exporter
 sources:
