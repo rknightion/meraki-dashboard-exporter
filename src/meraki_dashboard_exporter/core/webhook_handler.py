@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -49,10 +50,14 @@ class WebhookHandler:
             [LabelName.ORG_ID.value, LabelName.ALERT_TYPE.value],
         )
 
+        # SECURITY (F-051): the failure path is reachable before the shared secret is
+        # verified, and org_id/alert_type on a malformed payload are attacker-controlled,
+        # unbounded strings. Label the failure counter ONLY by the bounded error_type to
+        # prevent unauthenticated cardinality injection.
         self.events_failed = Counter(
             WebhookMetricName.WEBHOOK_EVENTS_FAILED_TOTAL.value,
             "Total webhook events that failed processing",
-            [LabelName.ORG_ID.value, LabelName.ALERT_TYPE.value, LabelName.ERROR_TYPE.value],
+            [LabelName.ERROR_TYPE.value],
         )
 
         # Processing latency
@@ -95,9 +100,13 @@ class WebhookHandler:
             self.validation_failures.labels(validation_error="secret_not_configured").inc()
             return False
 
-        # Validate the secret
+        # Validate the secret using a constant-time comparison (F-109 / CWE-208).
+        # A plain `!=` compare leaks the length of the matching prefix via timing,
+        # letting an attacker recover the secret byte-by-byte.
         expected_secret = self.settings.webhooks.shared_secret.get_secret_value()
-        if payload_secret != expected_secret:
+        if payload_secret is None or not hmac.compare_digest(
+            payload_secret.encode("utf-8"), expected_secret.encode("utf-8")
+        ):
             logger.warning("Invalid shared secret in webhook payload")
             self.validation_failures.labels(validation_error="secret_mismatch").inc()
             return False
@@ -162,34 +171,34 @@ class WebhookHandler:
             return payload
 
         except ValidationError as e:
+            # SECURITY (F-166): never log raw error input. Pydantic embeds the ENTIRE
+            # raw payload (including sharedSecret) in errors()[i]["input"] on
+            # missing-field errors, and str(e) does the same. Log only the field
+            # locations and error types - never the values.
+            sanitized_errors = [
+                {
+                    "loc": ".".join(str(part) for part in err.get("loc", ())),
+                    "type": err.get("type", ""),
+                }
+                for err in e.errors()
+            ]
             logger.error(
                 "Webhook payload validation failed",
-                error=str(e),
-                errors=e.errors(),
+                error_count=len(sanitized_errors),
+                errors=sanitized_errors,
             )
             self.validation_failures.labels(validation_error="invalid_payload").inc()
 
-            # Try to extract org_id and alert_type for failed event tracking
-            org_id = payload_data.get("organizationId", "unknown")
-            alert_type = payload_data.get("alertType", "unknown")
-            self.events_failed.labels(
-                org_id=org_id,
-                alert_type=alert_type,
-                error_type="validation_error",
-            ).inc()
+            # SECURITY (F-051): label only by the bounded error_type - payload_data
+            # values are attacker-controlled and unbounded on the failure path.
+            self.events_failed.labels(error_type="validation_error").inc()
 
             return None
 
         except Exception as e:
             logger.exception("Unexpected error processing webhook")
 
-            # Try to extract org_id and alert_type for failed event tracking
-            org_id = payload_data.get("organizationId", "unknown")
-            alert_type = payload_data.get("alertType", "unknown")
-            self.events_failed.labels(
-                org_id=org_id,
-                alert_type=alert_type,
-                error_type=type(e).__name__,
-            ).inc()
+            # SECURITY (F-051): bounded error_type label only.
+            self.events_failed.labels(error_type=type(e).__name__).inc()
 
             return None

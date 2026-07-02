@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 import pytest
 from prometheus_client import REGISTRY
 from pydantic import SecretStr
 
+import meraki_dashboard_exporter.core.webhook_handler as webhook_handler_module
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings, WebhookSettings
 from meraki_dashboard_exporter.core.webhook_handler import WebhookHandler
@@ -194,14 +196,11 @@ class TestWebhookHandlerProcessing:
         assert validation_metric is not None
         assert validation_metric > 0
 
-        # Check that failed event was tracked
+        # Check that failed event was tracked (bounded error_type label only;
+        # no attacker-controlled org_id/alert_type labels - see F-051)
         failed_metric = REGISTRY.get_sample_value(
             "meraki_webhook_events_failed_total",
-            {
-                "org_id": "unknown",
-                "alert_type": "unknown",
-                "error_type": "validation_error",
-            },
+            {"error_type": "validation_error"},
         )
         assert failed_metric is not None
         assert failed_metric > 0
@@ -263,14 +262,10 @@ class TestWebhookHandlerProcessing:
         result = webhook_handler.process_webhook(invalid_payload)
         assert result is None
 
-        # Check that failed event was tracked
+        # Check that failed event was tracked (bounded error_type label only)
         failed_metric = REGISTRY.get_sample_value(
             "meraki_webhook_events_failed_total",
-            {
-                "org_id": "org_123",
-                "alert_type": "unknown",
-                "error_type": "validation_error",
-            },
+            {"error_type": "validation_error"},
         )
         assert failed_metric is not None
         assert failed_metric > 0
@@ -407,3 +402,89 @@ class TestWebhookHandlerEdgeCases:
         result = webhook_handler.process_webhook(valid_payload)
         assert result is not None
         assert result.alert_type == "test/alert-type_with.special:chars"
+
+
+class TestWebhookHandlerSecurity:
+    """Security regression tests (F-109 timing, F-051 cardinality, F-166 secret leak)."""
+
+    def test_validate_secret_uses_constant_time_compare(
+        self, webhook_handler: WebhookHandler, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """F-109: secret comparison must use hmac.compare_digest (constant-time)."""
+        real_compare = webhook_handler_module.hmac.compare_digest
+        calls: list[tuple] = []
+
+        def spy(a: object, b: object) -> bool:
+            calls.append((a, b))
+            return real_compare(a, b)
+
+        monkeypatch.setattr(webhook_handler_module.hmac, "compare_digest", spy)
+
+        assert webhook_handler.validate_secret("test_secret_123") is True
+        assert calls, "hmac.compare_digest was not used for secret validation"
+
+    def test_validate_secret_constant_time_rejects_wrong_secret(
+        self, webhook_handler: WebhookHandler, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """F-109: constant-time compare still rejects an incorrect secret."""
+        real_compare = webhook_handler_module.hmac.compare_digest
+        calls: list[tuple] = []
+
+        def spy(a: object, b: object) -> bool:
+            calls.append((a, b))
+            return real_compare(a, b)
+
+        monkeypatch.setattr(webhook_handler_module.hmac, "compare_digest", spy)
+
+        assert webhook_handler.validate_secret("wrong_secret") is False
+        assert calls, "hmac.compare_digest was not used for secret validation"
+
+    def test_failure_path_no_unbounded_label_series(self, webhook_handler: WebhookHandler) -> None:
+        """F-051: many distinct malformed payloads must not create unbounded label series."""
+        for i in range(50):
+            webhook_handler.process_webhook({
+                "version": "1.0",
+                "organizationId": f"attacker_org_{i}",
+                "alertType": f"attacker_alert_{i}",
+                # Missing required fields -> ValidationError on the failure path.
+            })
+
+        series: set[tuple] = set()
+        leaked: set[str] = set()
+        for metric_family in REGISTRY.collect():
+            for sample in metric_family.samples:
+                if sample.name == "meraki_webhook_events_failed_total":
+                    series.add(tuple(sorted(sample.labels.items())))
+                    for value in sample.labels.values():
+                        if "attacker" in value:
+                            leaked.add(value)
+
+        assert not leaked, f"attacker-controlled values leaked into label series: {leaked}"
+        # A single bounded series (error_type=validation_error) regardless of 50 payloads.
+        assert len(series) == 1, f"unbounded cardinality on failure path: {series}"
+
+    def test_validation_failure_does_not_log_secret(
+        self, webhook_handler: WebhookHandler, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """F-166: a validation failure must not emit the sharedSecret value in logs."""
+        fake_logger = MagicMock()
+        monkeypatch.setattr(webhook_handler_module, "logger", fake_logger)
+
+        secret = "SUPER_SECRET_SENTINEL_VALUE_9f3a"  # pragma: allowlist secret
+        webhook_handler.process_webhook({
+            "version": "1.0",
+            "sharedSecret": secret,
+            # Missing required fields -> ValidationError; pydantic embeds the raw
+            # input (including sharedSecret) in errors()[i]["input"].
+        })
+
+        logged = " ".join(
+            repr(call)
+            for call in (
+                *fake_logger.error.call_args_list,
+                *fake_logger.exception.call_args_list,
+                *fake_logger.warning.call_args_list,
+                *fake_logger.info.call_args_list,
+            )
+        )
+        assert secret not in logged, "sharedSecret value leaked into logs on validation failure"
