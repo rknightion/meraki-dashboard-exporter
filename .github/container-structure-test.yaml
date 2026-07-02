@@ -1,0 +1,47 @@
+schemaVersion: "2.0.0"
+
+# Validates the built Meraki Dashboard Exporter image (#605): entrypoint, exposed metrics
+# port, non-root runtime user, and the presence of the files the runtime image is expected
+# to ship. Run standalone with:
+#   container-structure-test test --image meraki-dashboard-exporter:test \
+#     --config .github/container-structure-test.yaml
+# Wired into ci.yml's docker-build-test job, after the image is built with `load: true`.
+#
+# Note: commandTests always override the image ENTRYPOINT (container-structure-test runs
+# each command directly), so metadataTest.entrypoint below is the only place the real
+# `python docker-entrypoint.py` entrypoint is asserted.
+
+metadataTest:
+  entrypoint: ["python", "docker-entrypoint.py"]
+  exposedPorts: ["9099"]
+  user: "exporter"
+  workdir: "/app"
+
+fileExistenceTests:
+  - name: "entrypoint script present"
+    # Invoked as `python docker-entrypoint.py` (see metadataTest.entrypoint above), not
+    # executed directly, so it need not carry its own executable bit.
+    path: "/app/docker-entrypoint.py"
+    shouldExist: true
+  - name: "application package present"
+    path: "/app/meraki_dashboard_exporter"
+    shouldExist: true
+  - name: "baked-in virtualenv present"
+    path: "/app/.venv"
+    shouldExist: true
+  - name: "venv python interpreter present"
+    path: "/app/.venv/bin/python"
+    shouldExist: true
+    isExecutableBy: "any"
+
+commandTests:
+  - name: "container runs as non-root exporter user"
+    # No `^...$` anchors: the CST regex match is against raw stdout, which includes a
+    # trailing newline that a `$` anchor (end-of-text, not end-of-line, under Go's RE2
+    # engine) fails to match past — confirmed by running this locally before landing it.
+    command: "whoami"
+    expectedOutput: ["^exporter"]
+  - name: "python resolves from the baked-in venv (PATH wiring)"
+    command: "which"
+    args: ["python"]
+    expectedOutput: ["^/app/\\.venv/bin/python"]

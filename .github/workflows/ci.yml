@@ -145,6 +145,105 @@ jobs:
             exit 1
           fi
 
+      - name: Install container-structure-test
+        run: |
+          # renovate: datasource=github-releases depName=GoogleContainerTools/container-structure-test
+          CST_VERSION=1.22.1
+          mkdir -p "${RUNNER_TEMP}/bin"
+          curl -sSfL "https://github.com/GoogleContainerTools/container-structure-test/releases/download/v${CST_VERSION}/container-structure-test-linux-amd64" \
+            -o "${RUNNER_TEMP}/bin/container-structure-test"
+          chmod +x "${RUNNER_TEMP}/bin/container-structure-test"
+          echo "${RUNNER_TEMP}/bin" >> "${GITHUB_PATH}"
+
+      - name: Container structure test (entrypoint, port, non-root user, required files)
+        run: |
+          container-structure-test test \
+            --image meraki-dashboard-exporter:test \
+            --config .github/container-structure-test.yaml
+
+      - name: Serve smoke test (container up, GET /health + /metrics respond)
+        env:
+          MERAKI_EXPORTER_MERAKI__API_KEY: "00000000000000000000000000000000deadbeef"
+        run: |
+          container_id="$(docker run -d --rm -p 9099:9099 -e MERAKI_EXPORTER_MERAKI__API_KEY meraki-dashboard-exporter:test)"
+          echo "Started container ${container_id}"
+
+          cleanup() {
+            echo "::group::container logs"
+            docker logs "${container_id}" || true
+            echo "::endgroup::"
+            docker stop "${container_id}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          check_endpoint() {
+            path="$1"
+            status=000
+            for attempt in $(seq 1 30); do
+              status="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:9099${path}" || echo 000)"
+              if [ "${status}" = "200" ]; then
+                echo "${path} responded 200 on attempt ${attempt}"
+                return 0
+              fi
+              sleep 2
+            done
+            echo "::error::${path} did not return 200 after retries (last status: ${status})"
+            return 1
+          }
+
+          check_endpoint "/health"
+          check_endpoint "/metrics"
+
+  helm-lint-kubeconform:
+    name: helm-lint-kubeconform
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install Helm
+        run: |
+          # renovate: datasource=github-releases depName=helm/helm
+          HELM_VERSION=4.2.2
+          mkdir -p "${RUNNER_TEMP}/bin"
+          curl -sSfL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz
+          tar -xzf /tmp/helm.tar.gz -C /tmp
+          install -m 0755 /tmp/linux-amd64/helm "${RUNNER_TEMP}/bin/helm"
+          echo "${RUNNER_TEMP}/bin" >> "${GITHUB_PATH}"
+
+      - name: Install kubeconform
+        run: |
+          # renovate: datasource=github-releases depName=yannh/kubeconform
+          KUBECONFORM_VERSION=0.8.0
+          mkdir -p "${RUNNER_TEMP}/bin" /tmp/kubeconform
+          curl -sSfL "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            -o /tmp/kubeconform.tar.gz
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp/kubeconform
+          install -m 0755 /tmp/kubeconform/kubeconform "${RUNNER_TEMP}/bin/kubeconform"
+          echo "${RUNNER_TEMP}/bin" >> "${GITHUB_PATH}"
+
+      - name: Helm lint
+        run: helm lint charts/meraki-dashboard-exporter --set meraki.apiKey=dummy
+
+      - name: Render chart templates
+        # serviceMonitor.enabled defaults to false, so the rendered set is core-API-only
+        # (Deployment/Service/ConfigMap/Secret/ServiceAccount) — no Prometheus Operator CRD
+        # schema is needed for kubeconform below.
+        run: |
+          helm template test-release charts/meraki-dashboard-exporter \
+            --set meraki.apiKey=dummy \
+            > "${RUNNER_TEMP}/rendered-manifests.yaml"
+
+      - name: kubeconform validate rendered manifests
+        run: |
+          kubeconform -summary -strict -ignore-missing-schemas "${RUNNER_TEMP}/rendered-manifests.yaml"
+
   slow-tests:
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
@@ -162,7 +261,20 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --locked
       - name: Run slow tests
-        run: uv run pytest -m slow -v --timeout=300
+        # No test is currently marked `slow` (the marker is registered in pyproject.toml for
+        # future use), so pytest exits 5 ("no tests collected") every week and this job has been
+        # perpetually red (#595). Exit 5 is not a test failure — treat it the same as success;
+        # any other non-zero exit (an actual failure/error) still fails the job.
+        run: |
+          set +e
+          uv run pytest -m slow -v --timeout=300
+          status=$?
+          set -e
+          if [ "${status}" -eq 5 ]; then
+            echo "No tests marked 'slow' were collected — treating as success, not a failure."
+            exit 0
+          fi
+          exit "${status}"
 
   # Single required status check (the branch ruleset requires only this). if: always() + an explicit
   # failure check so a failed/cancelled leg fails the gate; the schedule-only slow-tests job isn't
@@ -171,7 +283,7 @@ jobs:
     name: ci-success
     runs-on: ubuntu-latest
     if: always()
-    needs: [test, docker-build-test]
+    needs: [test, docker-build-test, helm-lint-kubeconform]
     steps:
       - name: Fail if any required job did not pass
         if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
