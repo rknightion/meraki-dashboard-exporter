@@ -453,6 +453,72 @@ class TestFirmwareCollector:
         )
         assert parent._metrics[completed_key] == 1
 
+    async def test_collect_cancelled_spellings_not_pending(
+        self, firmware_collector, mock_api_builder
+    ):
+        """#526: verify both cancel spellings are counted and never treated as pending.
+
+        Both 'Canceled' (single-L, observed live) and 'Cancelled' (spec spelling) must be
+        counted in the total gauge under their own raw status label, and neither spelling
+        should ever be treated as pending.
+        """
+        org_id = "526"
+        org_name = "Cancel Spelling Org"
+
+        upgrades_response = [
+            {
+                "upgradeId": "1",
+                "network": {"id": "n1", "name": "Network 1"},
+                "status": "Canceled",
+                "productTypes": "switch",
+            },
+            {
+                "upgradeId": "2",
+                "network": {"id": "n2", "name": "Network 2"},
+                "status": "Cancelled",
+                "productTypes": "switch",
+            },
+            {
+                "upgradeId": "3",
+                "network": {"id": "n3", "name": "Network 3"},
+                "status": "CANCELED",
+                "productTypes": "wireless",
+            },
+        ]
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationFirmwareUpgrades", upgrades_response
+        ).build()
+        firmware_collector.api = api
+
+        await firmware_collector.collect(org_id, org_name)
+
+        parent = firmware_collector.parent
+
+        for product_type, status in (
+            ("switch", "Canceled"),
+            ("switch", "Cancelled"),
+            ("wireless", "CANCELED"),
+        ):
+            key = (
+                "_org_firmware_upgrades_total",
+                (
+                    ("org_id", org_id),
+                    ("product_type", product_type),
+                    ("status", status),
+                ),
+            )
+            assert key in parent._metrics
+            assert parent._metrics[key] == 1
+
+        # Neither cancel spelling (in any case) should ever register as pending.
+        for product_type in ("switch", "wireless"):
+            pending_key = (
+                "_org_firmware_upgrades_pending_total",
+                (("org_id", org_id), ("product_type", product_type)),
+            )
+            assert pending_key not in parent._metrics
+
     async def test_collect_zeroes_stale_combos_on_quiet_window(
         self, firmware_collector, mock_api_builder
     ):
