@@ -597,9 +597,9 @@ class TestMXFirewallCollector:
         expiration manager instead.
         """
         # Seed a series for another org — a global clear() would wipe it.
-        firewall_collector._security_events_count.labels(
-            org_id="org2", event_type="IDS Alert"
-        ).set(3)
+        firewall_collector._security_events_count.labels(org_id="org2", event_type="IDS Alert").set(
+            3
+        )
 
         mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(return_value=[])
 
@@ -625,9 +625,9 @@ class TestMXFirewallCollector:
         pre-seeded for a *different* org must survive org1's collection cycle, and
         the current cycle's event type must still be passed to _set_metric.
         """
-        firewall_collector._security_events_count.labels(
-            org_id="org2", event_type="Old Type"
-        ).set(5)
+        firewall_collector._security_events_count.labels(org_id="org2", event_type="Old Type").set(
+            5
+        )
         assert len(firewall_collector._security_events_count._metrics) == 1
 
         mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(

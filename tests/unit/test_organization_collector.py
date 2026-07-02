@@ -913,12 +913,8 @@ class TestOrganizationCollector(BaseCollectorTest):
         samples = self._network_info_samples(isolated_registry)
         assert len(samples) == 2
         expected = {
-            frozenset(
-                {"org_id": org_id, "network_id": "N_1", "network_name": "HQ"}.items()
-            ),
-            frozenset(
-                {"org_id": org_id, "network_id": "N_2", "network_name": "Branch"}.items()
-            ),
+            frozenset({"org_id": org_id, "network_id": "N_1", "network_name": "HQ"}.items()),
+            frozenset({"org_id": org_id, "network_id": "N_2", "network_name": "Branch"}.items()),
         }
         assert {labelset for labelset, _ in samples} == expected
         assert all(value == 1 for _, value in samples)
