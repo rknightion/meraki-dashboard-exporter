@@ -22,6 +22,8 @@ import typing
 from dataclasses import dataclass
 from typing import Any
 
+from pydantic import BaseModel
+
 from apidrift.reducer import index_operations
 
 _UNION_ORIGINS = frozenset({typing.Union, types.UnionType})
@@ -187,6 +189,24 @@ def check_models(models: list[type], spec: dict[str, Any]) -> list[Finding]:
                 issubclass(c, _TYPE_MAP[t]) for t in spec_types if t in _TYPE_MAP for c in concrete
             )
             if not ok:
+                # Strictly-narrower typing: the spec declares the field a bare
+                # ``object`` (an untyped dict) but the model gives it a structured
+                # Pydantic submodel. That is a legitimate, correct narrowing — the
+                # exporter parses a known nested shape the spec left unstructured —
+                # not upstream drift, so report INFO (does not gate the build).
+                # Genuine mismatches (e.g. spec integer vs model str) stay WARNING.
+                if spec_types == {"object"} and all(
+                    isinstance(c, type) and issubclass(c, BaseModel) for c in concrete
+                ):
+                    findings.append(
+                        Finding(
+                            "INFO",
+                            "model-narrower",
+                            label,
+                            f"{name}.{fname}: model {concrete} narrows spec 'object'",
+                        )
+                    )
+                    continue
                 findings.append(
                     Finding(
                         "WARNING",

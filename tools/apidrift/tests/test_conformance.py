@@ -32,8 +32,27 @@ SPEC: dict[str, Any] = {
     "paths": {
         **_op("getDevice", {"serial": {"type": "string"}, "count": {"type": "integer"}}),
         **_op("getOther", {"extraField": {"type": "string"}}),
+        **_op("getNested", {"network": {"type": "object"}}),
+        **_op("getTyped", {"count": {"type": "integer"}}),
     },
 }
+
+
+class _NetworkRef(BaseModel):
+    id: str | None = None
+
+
+class NarrowerSubmodel(BaseModel):
+    # Spec says bare `object`; model narrows it to a structured submodel.
+    # Strictly-narrower typing must be INFO, not a gating WARNING.
+    __meraki_op__ = "getNested"
+    network: _NetworkRef | None = None
+
+
+class RealMismatch(BaseModel):
+    # Spec says integer; model says str -> genuine drift, must stay WARNING.
+    __meraki_op__ = "getTyped"
+    count: str
 
 
 class GoodModel(BaseModel):
@@ -125,3 +144,17 @@ def test_child_does_not_inherit_meraki_op() -> None:
 def test_unmapped_model_reported_info() -> None:
     findings = check_models([Unmapped], SPEC)
     assert any(f.kind == "unmapped" and f.severity == "INFO" for f in findings)
+
+
+def test_structured_submodel_vs_bare_object_is_info_not_gating() -> None:
+    # Model narrows a spec `object` field to a Pydantic submodel: strictly narrower,
+    # reported INFO (model-narrower), never a gating WARNING.
+    findings = check_models([NarrowerSubmodel], SPEC)
+    assert not [f for f in findings if f.severity == "WARNING"]
+    narrower = [f for f in findings if f.kind == "model-narrower"]
+    assert narrower and all(f.severity == "INFO" for f in narrower)
+
+
+def test_real_type_mismatch_still_warns() -> None:
+    findings = check_models([RealMismatch], SPEC)
+    assert [f for f in findings if f.kind == "type-mismatch" and f.severity == "WARNING"]
