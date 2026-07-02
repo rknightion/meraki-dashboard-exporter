@@ -97,3 +97,6 @@ release-please-config.json
 .release-please-manifest.json
 renovate.json
 .pre-commit-config.yaml
+
+# Assessment evidence pack (dev-only, not needed in image)
+evidence/

@@ -33,6 +33,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - `charts/meraki-dashboard-exporter/` - Helm chart - See `charts/meraki-dashboard-exporter/CLAUDE.md`
 - `tools/apidrift/` - Standalone Meraki API drift-detection CLI - See `tools/apidrift/CLAUDE.md`
 - `.github/` - CI workflows and composite actions - See `.github/CLAUDE.md`
+- `evidence/` - v1-readiness assessment evidence pack (verified research backing issues #508–#617; treat as solved data — see `evidence/README.md`)
 </file_map>
 
 <paved_path>
@@ -122,6 +123,11 @@ is a self-contained spec. Point an agent at one issue and follow this exact work
 - Confirm the SDK method exists in the installed `meraki` version: introspect `self.api.<controller>`.
 - Confirm the endpoint/response shape against the OpenAPI spec if unsure — the spec may have moved on
   since the issue was written. If the issue is stale, fix the approach and note it in the issue.
+- For `v1-readiness`-labelled issues (#508–#617), consult `evidence/` first — it holds the verified
+  research (capacity math, per-fetcher conformance tables, live-API samples) backing those issues;
+  treat its facts as solved data rather than re-deriving them. Beware: the OpenAPI spec is WRONG for
+  some endpoints (see `evidence/live-api-verification.md`) — when an issue flags live verification,
+  do it before coding (a working homelab key lives in the gitignored `.env`).
 - Check whether the metric/enum already exists (several issues wire up *already-declared* enums).
 
 ### 3. Implement (strict TDD)
