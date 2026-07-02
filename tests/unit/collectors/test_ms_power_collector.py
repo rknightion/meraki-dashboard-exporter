@@ -264,6 +264,29 @@ class TestMSPowerCollector:
 
         mock_parent._set_metric.assert_not_called()
 
+    async def test_collect_power_modules_exhausted_retry_error_shape_handled_gracefully(
+        self,
+        ms_power_collector: MSPowerCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The SDK exhausted-retry error shape (dict with 'errors') must be handled, not raised.
+
+        getOrganizationDevicesPowerModulesStatusesByDevice is validated via
+        validate_response_format (expected_type=list); a {"errors": [...]}
+        response must raise internally and be absorbed by @with_error_handling,
+        not propagate or emit a metric.
+        """
+        mock_api.organizations.getOrganizationDevicesPowerModulesStatusesByDevice = MagicMock(
+            return_value={"errors": ["internal server error"]}
+        )
+
+        # Should not raise - validate_response_format raises internally, and
+        # @with_error_handling absorbs it.
+        await ms_power_collector.collect_power_modules("org1", "Test Org", {})
+
+        mock_parent._set_metric.assert_not_called()
+
     async def test_collect_power_modules_does_not_wipe_other_orgs(
         self,
         ms_power_collector: MSPowerCollector,

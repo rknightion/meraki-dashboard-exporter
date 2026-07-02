@@ -395,6 +395,29 @@ class TestMXUplinkHealthCollector:
 
         mock_parent._set_metric.assert_not_called()
 
+    async def test_exhausted_retry_error_shape_handled_gracefully(
+        self,
+        collector: MXUplinkHealthCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The SDK exhausted-retry error shape (dict with 'errors') must be handled, not raised.
+
+        getOrganizationDevicesUplinksLossAndLatency is validated via
+        validate_response_format (expected_type=list); a {"errors": [...]}
+        response must raise internally and be absorbed by @with_error_handling,
+        not propagate or emit a metric.
+        """
+        mock_api.organizations.getOrganizationDevicesUplinksLossAndLatency = MagicMock(
+            return_value={"errors": ["internal server error"]}
+        )
+
+        # Should not raise - validate_response_format raises internally, and
+        # @with_error_handling absorbs it.
+        await collector.collect_uplink_loss_latency("org1", "Test Org", {})
+
+        mock_parent._set_metric.assert_not_called()
+
     async def test_unknown_serial_falls_back_to_serial_as_name(
         self,
         collector: MXUplinkHealthCollector,

@@ -380,6 +380,29 @@ class TestMGCollector:
 
         mock_parent._set_metric.assert_not_called()
 
+    async def test_collect_uplink_statuses_exhausted_retry_error_shape_handled_gracefully(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The SDK exhausted-retry error shape (dict with 'errors') must be handled, not raised.
+
+        getOrganizationCellularGatewayUplinkStatuses is validated via
+        validate_response_format (expected_type=list); a {"errors": [...]}
+        response must raise internally and be absorbed by @with_error_handling,
+        not propagate or emit a metric.
+        """
+        mock_api.cellularGateway.getOrganizationCellularGatewayUplinkStatuses = MagicMock(
+            return_value={"errors": ["internal server error"]}
+        )
+
+        # Should not raise - validate_response_format raises internally, and
+        # @with_error_handling absorbs it.
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        mock_parent._set_metric.assert_not_called()
+
     async def test_collect_uplink_statuses_does_not_wipe_other_orgs(
         self,
         mg_collector: MGCollector,

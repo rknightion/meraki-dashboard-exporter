@@ -290,6 +290,120 @@ class TestMVCollector:
         # The live call failed, so no people-count metrics should exist.
         assert mv_collector._mv_people_count not in gauges_set
 
+    async def test_collect_zones_exhausted_retry_error_shape_handled_gracefully(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """The SDK exhausted-retry error shape (dict with 'errors') must be handled, not raised.
+
+        getDeviceCameraAnalyticsZones is validated via validate_response_format
+        (expected_type=list); a {"errors": [...]} response must raise internally
+        and be absorbed by @with_error_handling, not propagate or emit a metric.
+        """
+        mock_api.camera.getDeviceCameraAnalyticsZones = MagicMock(
+            return_value={"errors": ["internal server error"]}
+        )
+        mock_api.camera.getDeviceCameraAnalyticsLive = MagicMock(
+            return_value={"ts": "2026-07-01T00:00:00Z", "zones": {}}
+        )
+        mock_api.camera.getDeviceCameraQualityAndRetention = MagicMock(
+            return_value={
+                "motionBasedRetentionEnabled": True,
+                "audioRecordingEnabled": False,
+                "restrictedBandwidthModeEnabled": False,
+                "quality": "Standard",
+                "resolution": "1280x720",
+                "profileId": "123",
+            }
+        )
+
+        # Should not raise - validate_response_format raises internally, and
+        # @with_error_handling absorbs it.
+        await mv_collector.collect(device)
+
+        gauges_set = {call[0][0] for call in mock_parent._set_metric.call_args_list}
+        assert mv_collector._mv_analytics_zones not in gauges_set
+        # The live-analytics call also has no zone map, but must still be
+        # unaffected by the zones failure.
+        assert mv_collector._mv_quality_retention_info in gauges_set
+
+    async def test_collect_live_exhausted_retry_error_shape_handled_gracefully(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """The SDK exhausted-retry error shape (dict with 'errors') must be handled, not raised.
+
+        getDeviceCameraAnalyticsLive is validated via validate_response_format
+        (expected_type=dict); a {"errors": [...]} response must raise internally
+        and be absorbed by @with_error_handling, not propagate or emit a metric.
+        """
+        mock_api.camera.getDeviceCameraAnalyticsZones = MagicMock(
+            return_value=[{"id": "0", "label": "Entrance", "type": ["person"]}]
+        )
+        mock_api.camera.getDeviceCameraAnalyticsLive = MagicMock(
+            return_value={"errors": ["internal server error"]}
+        )
+        mock_api.camera.getDeviceCameraQualityAndRetention = MagicMock(
+            return_value={
+                "motionBasedRetentionEnabled": True,
+                "audioRecordingEnabled": False,
+                "restrictedBandwidthModeEnabled": False,
+                "quality": "Standard",
+                "resolution": "1280x720",
+                "profileId": "123",
+            }
+        )
+
+        # Should not raise - validate_response_format raises internally, and
+        # @with_error_handling absorbs it.
+        await mv_collector.collect(device)
+
+        gauges_set = {call[0][0] for call in mock_parent._set_metric.call_args_list}
+        assert mv_collector._mv_analytics_zones in gauges_set
+        assert mv_collector._mv_quality_retention_info in gauges_set
+        assert mv_collector._mv_people_count not in gauges_set
+
+    async def test_collect_quality_retention_exhausted_retry_error_shape_handled_gracefully(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """The SDK exhausted-retry error shape (dict with 'errors') must be handled, not raised.
+
+        getDeviceCameraQualityAndRetention is validated via validate_response_format
+        (expected_type=dict); a {"errors": [...]} response must raise internally
+        and be absorbed by @with_error_handling, not propagate or emit a metric.
+        """
+        mock_api.camera.getDeviceCameraAnalyticsZones = MagicMock(
+            return_value=[{"id": "0", "label": "Entrance", "type": ["person"]}]
+        )
+        mock_api.camera.getDeviceCameraAnalyticsLive = MagicMock(
+            return_value={"ts": "2026-07-01T00:00:00Z", "zones": {"0": {"person": 1}}}
+        )
+        mock_api.camera.getDeviceCameraQualityAndRetention = MagicMock(
+            return_value={"errors": ["internal server error"]}
+        )
+
+        # Should not raise - validate_response_format raises internally, and
+        # @with_error_handling absorbs it.
+        await mv_collector.collect(device)
+
+        gauges_set = {call[0][0] for call in mock_parent._set_metric.call_args_list}
+        assert mv_collector._mv_analytics_zones in gauges_set
+        assert mv_collector._mv_people_count in gauges_set
+        assert mv_collector._mv_motion_based_retention_enabled not in gauges_set
+        assert mv_collector._mv_audio_recording_enabled not in gauges_set
+        assert mv_collector._mv_restricted_bandwidth_mode_enabled not in gauges_set
+        assert mv_collector._mv_quality_retention_info not in gauges_set
+
     async def test_collect_empty_zones(
         self,
         mv_collector: MVCollector,

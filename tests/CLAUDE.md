@@ -58,7 +58,7 @@ class TestMyCollector(BaseCollectorTest):
     async def test_api_error_handling(self, collector, mock_api_builder, metrics):
         org = OrganizationFactory.create()
         mock_api_builder.with_organizations([org]).with_error(
-            "getOrganizationDevices", Exception("Rate limit exceeded")
+            "getOrganizationDevices", Exception("Connection error")
         )
         await self.run_collector(collector)
         metrics.assert_metric_not_set("meraki_device_up")
@@ -67,6 +67,17 @@ Note: `collector`/`mock_api`/`metrics` come from `BaseCollectorTest` fixtures; `
 2nd arg is an `Exception` instance or an `int` HTTP status code (404/429 get specific canned
 bodies, any other code gets a generic `HTTPError`) - there is no `exception_type=`/`message=`
 kwarg form.
+
+**Caution - don't inject a "rate limit" message:** `with_error_handling`'s retry logic
+(`core/error_handling.py`) matches error messages against `RATE_LIMIT_PATTERNS` (substrings like
+"rate limit exceeded", "too many requests") independently of any test settings, and the retry
+knobs (`max_retries=3`, `base_delay=10.0`) are decorator parameters, not settings-driven -
+`fast_test_settings` does NOT disable them. An error whose message matches triggers real
+`asyncio.sleep` retries (~10s/20s/40s = ~70s total), which blows past pytest-timeout's 30s
+(`pyproject.toml`) and kills the test with an opaque timeout instead of a useful assertion
+failure. Use a non-rate-limit message (e.g. `"Connection error"`) for generic error-path tests,
+or an `int` HTTP status code via `with_error(method, 429)` if you specifically need to exercise
+the rate-limit/retry path (and patch `asyncio.sleep` in that case).
 
 ## FACTORY USAGE
 ```python

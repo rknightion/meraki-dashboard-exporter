@@ -15,6 +15,15 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Fork PRs don't receive repo secrets, so CODECOV_TOKEN/CODACY_PROJECT_TOKEN are empty on
+    # them. codecov-action soft-fails on a missing token, but codacy-coverage-reporter-action
+    # hard-errors (its uploader script requires a non-empty token), which would otherwise fail
+    # this required job for every external contributor. The `secrets` context isn't available in
+    # step-level `if:` conditions, so resolve availability into job-level env vars here (env IS
+    # available at step-level `if:`) and gate the upload steps below on those.
+    env:
+      HAS_CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN != '' }}
+      HAS_CODACY_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN != '' }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -39,6 +48,11 @@ jobs:
         # forgot to re-lock). release-please-lock.yml keeps the release PR's lock in sync.
         run: uv sync --locked
 
+      - name: Lint (ruff)
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
       - name: Type-check (mypy)
         run: uv run mypy .
 
@@ -57,7 +71,7 @@ jobs:
         run: uv run pytest --cov=meraki_dashboard_exporter --cov-report=xml --cov-fail-under=80
 
       - name: Upload coverage
-        if: success()
+        if: success() && env.HAS_CODECOV_TOKEN == 'true'
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -65,7 +79,7 @@ jobs:
           files: coverage.xml
 
       - name: Upload coverage to Codacy
-        if: success()
+        if: success() && env.HAS_CODACY_TOKEN == 'true'
         uses: codacy/codacy-coverage-reporter-action@89d6c85cfafaec52c72b6c5e8b2878d33104c699 # v1.3.0
         with:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
