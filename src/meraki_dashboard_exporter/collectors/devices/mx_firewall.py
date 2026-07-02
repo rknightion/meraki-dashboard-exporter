@@ -116,7 +116,6 @@ class MXFirewallCollector(SubCollectorMixin):
         }
 
         # L3 rules
-        self._track_api_call("getNetworkApplianceFirewallL3FirewallRules")
         l3_response = await asyncio.to_thread(
             self.api.appliance.getNetworkApplianceFirewallL3FirewallRules,
             network_id,
@@ -193,7 +192,6 @@ class MXFirewallCollector(SubCollectorMixin):
         """
         timespan = self.settings.update_intervals.medium
 
-        self._track_api_call("getOrganizationApplianceSecurityEvents")
         events_response = await asyncio.to_thread(
             self.api.appliance.getOrganizationApplianceSecurityEvents,
             org_id,

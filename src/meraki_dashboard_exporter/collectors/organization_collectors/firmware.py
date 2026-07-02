@@ -39,7 +39,6 @@ class FirmwareCollector(BaseOrganizationCollector):
             List of firmware upgrade events.
 
         """
-        self._track_api_call("getOrganizationFirmwareUpgrades")
         response = await asyncio.to_thread(
             self.api.organizations.getOrganizationFirmwareUpgrades,
             org_id,

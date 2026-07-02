@@ -36,7 +36,6 @@ class APIUsageCollector(BaseOrganizationCollector):
             API request overview data with response code counts.
 
         """
-        self._track_api_call("getOrganizationApiRequestsOverview")
         response = await asyncio.to_thread(
             self.api.organizations.getOrganizationApiRequestsOverview,
             org_id,

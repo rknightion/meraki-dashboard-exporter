@@ -100,7 +100,6 @@ class MSStackCollector(SubCollectorMixin):
             Network name.
 
         """
-        self._track_api_call("getNetworkSwitchStacks")
 
         with LogContext(org_id=org_id, network_id=network_id):
             stacks = await asyncio.to_thread(

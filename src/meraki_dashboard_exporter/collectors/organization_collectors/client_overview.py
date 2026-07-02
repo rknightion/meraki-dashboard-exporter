@@ -41,7 +41,6 @@ class ClientOverviewCollector(BaseOrganizationCollector):
             Client overview data.
 
         """
-        self._track_api_call("getOrganizationClientsOverview")
         return await asyncio.to_thread(
             self.api.organizations.getOrganizationClientsOverview,
             org_id,

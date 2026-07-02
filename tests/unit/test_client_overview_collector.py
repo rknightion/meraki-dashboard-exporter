@@ -129,8 +129,9 @@ class TestClientOverviewCollector:
         assert upstream_key in parent._metrics
         assert parent._metrics[upstream_key] == 262144
 
-        # Verify API call was tracked
-        assert parent._api_calls.get("getOrganizationClientsOverview") == 2
+        # Verify API call was tracked exactly once (by the @log_api_call decorator);
+        # the redundant manual _track_api_call was removed (F-014, no double count).
+        assert parent._api_calls.get("getOrganizationClientsOverview") == 1
 
     async def test_collect_with_zero_values_and_caching(
         self, client_overview_collector, mock_api_builder

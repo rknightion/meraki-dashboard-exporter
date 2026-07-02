@@ -150,7 +150,6 @@ class MXVpnCollector(SubCollectorMixin):
             Organization name.
 
         """
-        self._track_api_call("getOrganizationApplianceVpnStatuses")
         vpn_statuses = await asyncio.to_thread(
             self.api.appliance.getOrganizationApplianceVpnStatuses,
             org_id,
@@ -283,7 +282,6 @@ class MXVpnCollector(SubCollectorMixin):
             Organization name.
 
         """
-        self._track_api_call("getOrganizationApplianceVpnStats")
         resp = await asyncio.to_thread(
             self.api.appliance.getOrganizationApplianceVpnStats,
             org_id,

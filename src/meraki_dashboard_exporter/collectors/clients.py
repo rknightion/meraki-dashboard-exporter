@@ -422,7 +422,6 @@ class ClientsCollector(MetricCollector):
 
         # Always fetch fresh data from API to get current status and usage
         # The cache is only used for hostname lookups, not for skipping API calls
-        self._track_api_call("getNetworkClients")
         try:
             clients_data = await asyncio.to_thread(
                 self.api.networks.getNetworkClients,
@@ -1037,10 +1036,13 @@ class ClientsCollector(MetricCollector):
             wireless_client_count=len(wireless_clients),
         )
 
-        # Process each wireless client individually
-        for client in wireless_clients:
+        # Process each wireless client individually. One API call per client; the
+        # @log_api_call decorator already counts the first, so only track the rest
+        # to avoid an off-by-one overcount (mirrors the batched pattern elsewhere).
+        for idx, client in enumerate(wireless_clients):
             try:
-                self._track_api_call("getNetworkWirelessSignalQualityHistory")
+                if idx > 0:
+                    self._track_api_call("getNetworkWirelessSignalQualityHistory")
                 signal_response = await asyncio.to_thread(
                     self.api.wireless.getNetworkWirelessSignalQualityHistory,
                     network_id,

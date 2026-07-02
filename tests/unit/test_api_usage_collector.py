@@ -151,8 +151,9 @@ class TestAPIUsageCollector:
         assert total_key in parent._metrics
         assert parent._metrics[total_key] == expected_total
 
-        # Verify API call was tracked (called twice: once by decorator, once manually)
-        assert parent._api_calls.get("getOrganizationApiRequestsOverview") == 2
+        # Verify API call was tracked exactly once (by the @log_api_call decorator);
+        # the redundant manual _track_api_call was removed (F-014, no double count).
+        assert parent._api_calls.get("getOrganizationApiRequestsOverview") == 1
 
     async def test_collect_api_usage_with_all_zeros(self, api_usage_collector, mock_api_builder):
         """Test API usage metrics when all status codes have zero count."""

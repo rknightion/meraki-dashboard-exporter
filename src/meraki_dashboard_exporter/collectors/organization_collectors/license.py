@@ -45,7 +45,6 @@ class LicenseCollector(BaseOrganizationCollector):
             return await self.inventory.get_licenses_overview(org_id)
 
         # Fallback to direct API call
-        self._track_api_call("getOrganizationLicensesOverview")
         response = await asyncio.to_thread(
             self.api.organizations.getOrganizationLicensesOverview,
             org_id,
@@ -74,7 +73,6 @@ class LicenseCollector(BaseOrganizationCollector):
             List of licenses.
 
         """
-        self._track_api_call("getOrganizationLicenses")
         response = await asyncio.to_thread(
             self.api.organizations.getOrganizationLicenses,
             org_id,

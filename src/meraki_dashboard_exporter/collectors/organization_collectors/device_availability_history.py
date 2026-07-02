@@ -40,7 +40,6 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
             List of device availability change events.
 
         """
-        self._track_api_call("getOrganizationDevicesAvailabilitiesChangeHistory")
         response = await asyncio.to_thread(
             self.api.organizations.getOrganizationDevicesAvailabilitiesChangeHistory,
             org_id,
