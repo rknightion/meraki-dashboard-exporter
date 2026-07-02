@@ -34,7 +34,7 @@ Meraki Dashboard Exporter Collectors - All metric collection logic organized by 
 - `clients.py` - `ClientsCollector` (MEDIUM tier) - client device tracking
 - `mt_sensor.py` - `MTSensorCollector` (FAST tier) - standalone sensor data collection
 - `mt_alerts.py` - `MTSensorAlertsCollector` (MEDIUM tier) - MT sensor alert collection
-- `webhook_metrics.py` - `WebhookMetricsCollector` - event-driven webhook metric sink; a plain class (does NOT inherit `MetricCollector`, NOT `@register_collector`-decorated, NOT tier-registered); updated via inbound HTTP pushes from `core/webhook_handler.py`
+- `webhook_metrics.py` - **removed (issue #530)**: `WebhookMetricsCollector` was dead code (never instantiated/wired anywhere; its `network_id`-labeled counter was also a cardinality risk). The live webhook receiver's metrics (`meraki_webhook_events_received_total`, `_processed_total`, `_failed_total`, `_processing_duration_seconds`, `_validation_failures_total`) are owned entirely by `core/webhook_handler.py::WebhookHandler` and are unaffected — those remain Stable per `docs/stability.md`.
 </file_map>
 
 <paved_path>

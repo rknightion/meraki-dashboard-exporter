@@ -4,7 +4,7 @@ This page summarizes the collectors that ship with the exporter.
 
 Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_INTERVALS__*`. See the Metrics Overview for tier definitions.
 
-**Total collector classes:** 40
+**Total collector classes:** 39
 **Auto-registered collectors:** 8
 
 ## Main Collectors (auto-registered)
@@ -69,10 +69,6 @@ Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_
 - `DeviceAvailabilityHistoryCollector` — Collector for organization device availability change history metrics.
 - `FirmwareCollector` — Collector for organization firmware upgrade metrics.
 - `LicenseCollector` — Collector for organization license metrics.
-
-### Other Sub-collectors
-
-- `WebhookMetricsCollector` — Converts webhook events into Prometheus metrics.
 
 ## Notes
 

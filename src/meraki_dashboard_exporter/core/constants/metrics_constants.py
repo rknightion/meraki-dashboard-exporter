@@ -487,8 +487,3 @@ class WebhookMetricName(StrEnum):
 
     # Validation metrics
     WEBHOOK_VALIDATION_FAILURES_TOTAL = "meraki_webhook_validation_failures_total"
-
-    # Metric sink metrics (Phase 4.5) - event-driven, not polled
-    WEBHOOK_EVENTS_TOTAL = "meraki_webhook_events_total"
-    WEBHOOK_LAST_EVENT_TIMESTAMP = "meraki_webhook_last_event_timestamp"
-    WEBHOOK_PROCESSING_ERRORS_TOTAL = "meraki_webhook_processing_errors_total"
