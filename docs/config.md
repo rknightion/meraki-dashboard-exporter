@@ -19,10 +19,10 @@ Configuration follows a hierarchical structure using environment variables:
     # Meraki API configuration
     export MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here
     export MERAKI_EXPORTER_MERAKI__ORG_ID=123456
-    
+
     # Logging configuration
     export MERAKI_EXPORTER_LOGGING__LEVEL=INFO
-    
+
     # API settings
     export MERAKI_EXPORTER_API__TIMEOUT=30
     export MERAKI_EXPORTER_API__CONCURRENCY_LIMIT=5
@@ -162,6 +162,21 @@ Client data collection and DNS resolution settings
 | `MERAKI_EXPORTER_CLIENTS__CACHE_TTL` | `int` | `3600` | Client cache TTL in seconds (for ID/hostname mappings, not metrics) (min: 300, max: 86400) |
 | `MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_PER_NETWORK` | `int` | `10000` | Maximum clients to track per network (min: 100, max: 50000) |
 
+## Network Filter Settings
+
+Restrict which networks are scraped by name glob, ID, or tag
+
+| Environment Variable | Type | Default | Description |
+|---------------------|------|---------|-------------|
+| `MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_NAMES` | `list[str]` | `[]` | Network name globs to include. Supports * and ? wildcards. |
+| `MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_IDS` | `list[str]` | `[]` | Exact network IDs (e.g. L_xxx) to include. |
+| `MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_TAGS` | `list[str]` | `[]` | Network tags to include. A network matches if it carries any of these tags. |
+| `MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_NAMES` | `list[str]` | `[]` | Network name globs to exclude. Applied AFTER includes. |
+| `MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_IDS` | `list[str]` | `[]` | Exact network IDs to exclude. |
+| `MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_TAGS` | `list[str]` | `[]` | Network tags to exclude. |
+
+All fields default to empty, which leaves the filter inactive (every network in every configured org is scraped). If any `INCLUDE_*` field is set, a network must match at least one include rule (by name, ID, or tag) to be considered; exclude rules are applied afterward and always win. Name fields (`INCLUDE_NAMES`/`EXCLUDE_NAMES`) are case-sensitive glob patterns (`*`/`?`). Values are comma-separated lists (or a JSON array string).
+
 ## Additional Runtime Options
 
 Some runtime knobs are read directly from environment variables and are not part of the Pydantic settings model:
@@ -169,4 +184,3 @@ Some runtime knobs are read directly from environment variables and are not part
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_OTEL__SAMPLING_RATE` | `float` | `0.1` | Trace sampling rate between 0 and 1 |
-

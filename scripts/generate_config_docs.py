@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from typing import Any, get_args, get_origin
 
@@ -41,6 +42,15 @@ def load_config_models(repo_root: Path) -> Any:
         raise ImportError("Unable to load config_models module spec")
 
     module = importlib.util.module_from_spec(spec)
+    # Register in sys.modules *before* exec_module: pydantic resolves each
+    # field's `from __future__ import annotations` string annotation lazily
+    # (e.g. when it needs typing constructs like `Annotated`) by looking the
+    # defining module up in sys.modules via cls.__module__. Without this the
+    # lookup fails, forward-ref resolution silently falls back to an empty
+    # namespace, and any annotation referencing an imported name (Annotated,
+    # NoDecode, ...) is left as an unresolved ForwardRef whose raw source text
+    # then leaks into the generated docs' Type column.
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -265,6 +275,12 @@ def generate_configuration_docs() -> str:
             "MERAKI_EXPORTER_CLIENTS",
             "Client data collection and DNS resolution settings",
         ),
+        (
+            "Network Filter Settings",
+            config_models.NetworkFilterSettings,
+            "MERAKI_EXPORTER_NETWORK_FILTER",
+            "Restrict which networks are scraped by name glob, ID, or tag",
+        ),
     ]
 
     section_notes = {
@@ -278,6 +294,13 @@ def generate_configuration_docs() -> str:
             "unconditionally."
         ),
         "Webhook Settings": ("Webhooks are received on `POST /api/webhooks/meraki` when enabled."),
+        "Network Filter Settings": (
+            "All fields default to empty, which leaves the filter inactive (every network in every "
+            "configured org is scraped). If any `INCLUDE_*` field is set, a network must match at "
+            "least one include rule (by name, ID, or tag) to be considered; exclude rules are applied "
+            "afterward and always win. Name fields (`INCLUDE_NAMES`/`EXCLUDE_NAMES`) are case-sensitive "
+            "glob patterns (`*`/`?`). Values are comma-separated lists (or a JSON array string)."
+        ),
     }
 
     for title, model, prefix, description in nested_models:
