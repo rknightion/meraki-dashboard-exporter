@@ -136,7 +136,9 @@ class NetworkHealthCollector(MetricCollector):
         # Network-wide wireless data rate metrics
         self._network_wireless_download_kbps = self._create_gauge(
             NetworkHealthMetricName.NETWORK_WIRELESS_DOWNLOAD_KBPS,
-            "Network-wide wireless download bandwidth in kilobits per second",
+            # The Meraki API reports this field (downloadKbps) in kilobytes-per-second,
+            # not kilobits, per the OpenAPI spec (F-065). Value is emitted unchanged.
+            "Network-wide wireless download bandwidth in kilobytes per second",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,
@@ -147,7 +149,9 @@ class NetworkHealthCollector(MetricCollector):
 
         self._network_wireless_upload_kbps = self._create_gauge(
             NetworkHealthMetricName.NETWORK_WIRELESS_UPLOAD_KBPS,
-            "Network-wide wireless upload bandwidth in kilobits per second",
+            # The Meraki API reports this field (uploadKbps) in kilobytes-per-second,
+            # not kilobits, per the OpenAPI spec (F-065). Value is emitted unchanged.
+            "Network-wide wireless upload bandwidth in kilobytes per second",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.ORG_NAME,

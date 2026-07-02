@@ -338,6 +338,260 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             # Expected - the API call wasn't tracked
             pass
 
+    async def test_bluetooth_error_does_not_zero_metric(self, collector, mock_api_builder, metrics):
+        """F-015: a rate-limit/transient error must NOT manufacture a 0 client count."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(
+            network_id="N_123",
+            name="Test Network",
+            product_types=["wireless"],
+            org_id=org["id"],
+        )
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_devices([], org_id=org["id"])
+            .with_custom_response("getNetworkNetworkHealthChannelUtilization", [])
+            .with_custom_response("getNetworkWirelessConnectionStats", {})
+            .with_custom_response("getNetworkWirelessDataRateHistory", [])
+            .with_custom_response("getNetworkWirelessFailedConnections", [])
+            .build()
+        )
+        # Simulate the SDK exhausting retries on a rate limit.
+        api.networks.getNetworkBluetoothClients = MagicMock(
+            side_effect=Exception("rate limit exceeded")
+        )
+        collector.api = api
+        collector.rf_health_collector.api = api
+        collector.connection_stats_collector.api = api
+        collector.data_rates_collector.api = api
+        collector.bluetooth_collector.api = api
+        collector.ssid_performance_collector.api = api
+        collector.latency_stats_collector.api = api
+        collector.air_marshal_collector.api = api
+
+        await self.run_collector(collector)
+        self.assert_collector_success(collector, metrics)
+
+        # The gauge must NOT have been set to a confident 0 for this cycle.
+        metrics.assert_metric_not_set(
+            "meraki_network_bluetooth_clients_total",
+            org_id=org["id"],
+            org_name=org["name"],
+            network_id=network["id"],
+            network_name=network["name"],
+        )
+
+    async def test_channel_utilization_wifi1_only_does_not_crash(
+        self, collector, mock_api_builder, metrics
+    ):
+        """F-017: an AP reporting only wifi1 (5GHz) must not raise UnboundLocalError."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(
+            network_id="N_123",
+            name="Test Network",
+            product_types=["wireless"],
+            org_id=org["id"],
+        )
+        devices = [
+            DeviceFactory.create_mr(
+                serial="Q2KD-AAAA",
+                name="AP1",
+                model="MR36",
+                network_id=network["id"],
+            ),
+        ]
+
+        # Only wifi1 present, no wifi0 — pre-fix this used base_labels before assignment.
+        channel_util_data = [
+            {
+                "serial": "Q2KD-AAAA",
+                "model": "MR36",
+                "wifi1": [{"utilization": 30, "wifi": 25, "nonWifi": 5}],
+            }
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_devices(devices, org_id=org["id"])
+            .with_custom_response("getNetworkNetworkHealthChannelUtilization", channel_util_data)
+            .build()
+        )
+        api.organizations.getOrganizationDevices = MagicMock(return_value=devices)
+        collector.api = api
+        collector.rf_health_collector.api = api
+
+        await self.run_collector(collector)
+        self.assert_collector_success(collector, metrics)
+
+        # 5GHz metric emitted even though wifi0 is absent.
+        metrics.assert_gauge_value(
+            "meraki_ap_channel_utilization_5ghz_percent",
+            30,
+            org_id=org["id"],
+            org_name=org["name"],
+            serial="Q2KD-AAAA",
+            name="AP1",
+            model="MR36",
+            device_type="MR",
+            network_id=network["id"],
+            network_name=network["name"],
+            utilization_type="total",
+        )
+
+    async def test_channel_utilization_fetch_pins_query_params(
+        self, collector, mock_api_builder, metrics
+    ):
+        """F-017: the fetch must pin timespan/resolution/perPage, not just total_pages."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(
+            network_id="N_123",
+            name="Test Network",
+            product_types=["wireless"],
+            org_id=org["id"],
+        )
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_devices([], org_id=org["id"])
+            .build()
+        )
+        channel_mock = MagicMock(return_value=[])
+        api.networks.getNetworkNetworkHealthChannelUtilization = channel_mock
+        collector.api = api
+        collector.rf_health_collector.api = api
+
+        await self.run_collector(collector)
+        self.assert_collector_success(collector, metrics)
+
+        channel_mock.assert_called_once()
+        _, kwargs = channel_mock.call_args
+        assert kwargs.get("timespan") == 600
+        assert kwargs.get("resolution") == 600
+        assert kwargs.get("perPage") == 100
+        assert kwargs.get("total_pages") == "all"
+
+    async def test_channel_utilization_picks_latest_bucket(
+        self, collector, mock_api_builder, metrics
+    ):
+        """F-017: buckets must be sorted by end time; the newest reading wins."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(
+            network_id="N_123",
+            name="Test Network",
+            product_types=["wireless"],
+            org_id=org["id"],
+        )
+        devices = [
+            DeviceFactory.create_mr(
+                serial="Q2KD-AAAA",
+                name="AP1",
+                model="MR36",
+                network_id=network["id"],
+            ),
+        ]
+
+        # Oldest bucket listed first; the collector must still pick the newest (endTime).
+        channel_util_data = [
+            {
+                "serial": "Q2KD-AAAA",
+                "model": "MR36",
+                "wifi0": [
+                    {
+                        "endTime": "2024-01-01T11:50:00Z",
+                        "utilization": 10,
+                        "wifi": 5,
+                        "nonWifi": 5,
+                    },
+                    {
+                        "endTime": "2024-01-01T12:00:00Z",
+                        "utilization": 80,
+                        "wifi": 60,
+                        "nonWifi": 20,
+                    },
+                ],
+            }
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_devices(devices, org_id=org["id"])
+            .with_custom_response("getNetworkNetworkHealthChannelUtilization", channel_util_data)
+            .build()
+        )
+        api.organizations.getOrganizationDevices = MagicMock(return_value=devices)
+        collector.api = api
+        collector.rf_health_collector.api = api
+
+        await self.run_collector(collector)
+        self.assert_collector_success(collector, metrics)
+
+        metrics.assert_gauge_value(
+            "meraki_ap_channel_utilization_2_4ghz_percent",
+            80,
+            org_id=org["id"],
+            org_name=org["name"],
+            serial="Q2KD-AAAA",
+            name="AP1",
+            model="MR36",
+            device_type="MR",
+            network_id=network["id"],
+            network_name=network["name"],
+            utilization_type="total",
+        )
+
+    async def test_data_rate_help_text_states_kilobytes(self, collector, mock_api_builder, metrics):
+        """F-065: help text must match the OpenAPI spec unit (kilobytes-per-second)."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(
+            network_id="N_123",
+            name="Test Network",
+            product_types=["wireless"],
+            org_id=org["id"],
+        )
+        data_rate_history = [
+            {"endTs": "2024-01-01T12:00:00Z", "downloadKbps": 25000, "uploadKbps": 10000},
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_devices([], org_id=org["id"])
+            .with_custom_response("getNetworkNetworkHealthChannelUtilization", [])
+            .with_custom_response("getNetworkWirelessConnectionStats", {})
+            .with_custom_response("getNetworkWirelessDataRateHistory", data_rate_history)
+            .build()
+        )
+        collector.api = api
+        collector.data_rates_collector.api = api
+
+        await self.run_collector(collector)
+        self.assert_collector_success(collector, metrics)
+
+        # Value is reported as-is from the API (no conversion).
+        metrics.assert_gauge_value(
+            "meraki_network_wireless_download_kbps",
+            25000,
+            network_id=network["id"],
+            network_name=network["name"],
+        )
+        # Help text must state the real unit.
+        download = metrics.get_metric("meraki_network_wireless_download_kbps")
+        upload = metrics.get_metric("meraki_network_wireless_upload_kbps")
+        assert "kilobytes per second" in download.documentation.lower()
+        assert "kilobit" not in download.documentation.lower()
+        assert "kilobytes per second" in upload.documentation.lower()
+        assert "kilobit" not in upload.documentation.lower()
+
     def test_set_metric_value_handles_none(self, collector):
         """Test that None values are handled properly."""
         # This tests the _set_metric_value method directly

@@ -77,16 +77,18 @@ class SSIDPerformanceCollector(BaseNetworkHealthCollector):
             if not failed_connections:
                 return
 
-            # Aggregate failed connections by SSID number and failure step
-            # The API returns one entry per client connection failure; we sum counts
+            # Aggregate failed connections by SSID number and failure step.
+            # getNetworkWirelessFailedConnections returns one row per failure EVENT
+            # (fields: ssidNumber, vlan, clientMac, serial, radio, failureStep, type,
+            # ts) — there is no pre-aggregated `failures` count field in the response
+            # (F-159), so each row counts as exactly one failure.
             failure_counts: dict[tuple[str, str], int] = {}
             for entry in failed_connections:
                 ssid_raw = entry.get("ssidNumber")
                 ssid = str(ssid_raw) if ssid_raw is not None else "unknown"
                 failure_step = entry.get("failureStep") or "unknown"
-                count = int(entry.get("failures", 1))
                 key = (ssid, failure_step)
-                failure_counts[key] = failure_counts.get(key, 0) + count
+                failure_counts[key] = failure_counts.get(key, 0) + 1
 
             # Set metrics per SSID / failure step combination
             base_labels = create_network_labels(

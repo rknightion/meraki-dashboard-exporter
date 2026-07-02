@@ -313,8 +313,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_network_channel_utilization_2_4ghz_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `utilization_type` | Network-wide average 2.4GHz channel utilization percentage |  |
 | `meraki_network_channel_utilization_5ghz_percent` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `utilization_type` | Network-wide average 5GHz channel utilization percentage |  |
 | `meraki_network_wireless_connection_stats_total` | gauge | `org_id`, `org_name`, `network_id`, `network_name`, `stat_type` | Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success) |  |
-| `meraki_network_wireless_download_kbps` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Network-wide wireless download bandwidth in kilobits per second |  |
-| `meraki_network_wireless_upload_kbps` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Network-wide wireless upload bandwidth in kilobits per second |  |
+| `meraki_network_wireless_download_kbps` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Network-wide wireless download bandwidth in kilobytes per second |  |
+| `meraki_network_wireless_upload_kbps` | gauge | `org_id`, `org_name`, `network_id`, `network_name` | Network-wide wireless upload bandwidth in kilobytes per second |  |
 
 ### OrganizationCollector
 

@@ -23,6 +23,33 @@ logger = get_logger(__name__)
 class RFHealthCollector(BaseNetworkHealthCollector):
     """Collector for wireless RF health metrics including channel utilization."""
 
+    @staticmethod
+    def _latest_bucket(buckets: list[dict[str, Any]]) -> dict[str, Any]:
+        """Return the most-recent utilization bucket for a radio.
+
+        The API does not guarantee bucket ordering, so sort by end timestamp
+        (``endTime`` per the OpenAPI spec, falling back to ``endTs``) descending
+        before picking the newest (F-017). Buckets with no timestamp sort last
+        but preserve their original relative order, so a single-bucket response
+        is unaffected.
+
+        Parameters
+        ----------
+        buckets : list[dict[str, Any]]
+            Non-empty list of per-interval utilization buckets for one radio.
+
+        Returns
+        -------
+        dict[str, Any]
+            The bucket with the latest end timestamp.
+
+        """
+        return sorted(
+            buckets,
+            key=lambda b: b.get("endTime") or b.get("endTs") or "",
+            reverse=True,
+        )[0]
+
     async def _fetch_organization_devices(
         self, org_id: str, network_id: str
     ) -> list[dict[str, Any]]:
@@ -88,9 +115,17 @@ class RFHealthCollector(BaseNetworkHealthCollector):
             Channel utilization data.
 
         """
+        # Pin explicit query params (F-017). SDK 3.3.0 defaults for this endpoint are
+        # timespan=1 day, resolution=600 (the only valid value), perPage=10 (range
+        # 3-100). We only ever use the single most-recent bucket, so request the
+        # shortest useful window (timespan=600 == one resolution=600 bucket) and the
+        # largest page size to minimise pagination fan-out across a network's APs.
         response = await asyncio.to_thread(
             self.api.networks.getNetworkNetworkHealthChannelUtilization,
             network_id,
+            timespan=600,
+            resolution=600,
+            perPage=100,
             total_pages="all",
         )
         return cast(
@@ -160,28 +195,28 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                     except Exception:
                         logger.debug("Failed to parse RF data to domain model", serial=serial)
 
+                    # Create device labels once per AP, before either radio block, so
+                    # an AP that reports only wifi1 (5GHz) can't hit an UnboundLocalError
+                    # on base_labels (F-017).
+                    device_data = {
+                        "serial": serial,
+                        "name": name,
+                        "model": model,
+                        "networkId": network_id,
+                        "networkName": network_name,
+                    }
+                    base_labels = create_device_labels(
+                        device_data,
+                        org_id=org_id,
+                        org_name=org_name,
+                    )
+
                     # Process 2.4GHz (wifi0)
                     if "wifi0" in ap_data and ap_data["wifi0"]:
-                        latest_2_4 = ap_data["wifi0"][0]  # Get most recent data
+                        latest_2_4 = self._latest_bucket(ap_data["wifi0"])
                         total_util = latest_2_4.get("utilization", 0)
                         wifi_util = latest_2_4.get("wifi", 0)
                         non_wifi_util = latest_2_4.get("nonWifi", 0)
-
-                        # Create device labels using helper
-                        device_data = {
-                            "serial": serial,
-                            "name": name,
-                            "model": model,
-                            "networkId": network_id,
-                            "networkName": network_name,
-                        }
-
-                        # Create base labels including device_type
-                        base_labels = create_device_labels(
-                            device_data,
-                            org_id=org_id,
-                            org_name=org_name,
-                        )
 
                         # Set per-AP metrics for total utilization
                         labels = {**base_labels, "utilization_type": "total"}
@@ -215,7 +250,7 @@ class RFHealthCollector(BaseNetworkHealthCollector):
 
                     # Process 5GHz (wifi1)
                     if "wifi1" in ap_data and ap_data["wifi1"]:
-                        latest_5 = ap_data["wifi1"][0]  # Get most recent data
+                        latest_5 = self._latest_bucket(ap_data["wifi1"])
                         total_util = latest_5.get("utilization", 0)
                         wifi_util = latest_5.get("wifi", 0)
                         non_wifi_util = latest_5.get("nonWifi", 0)

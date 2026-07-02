@@ -91,6 +91,13 @@ class BluetoothCollector(BaseNetworkHealthCollector):
         except Exception as e:
             # Log at debug level if it's just not available (400/404 errors)
             # or if the API exhausted retries on a rate limit.
+            #
+            # Deliberately do NOT emit a value here (F-015): a transient 429 or a
+            # temporarily-unavailable endpoint must not manufacture a confident
+            # "0 clients" reading that a presence/asset-tracking alert would see as
+            # a real drop to zero. Skipping emission lets the series keep its prior
+            # value and expire naturally, matching the other network-health
+            # sub-collectors (see network_health_collectors/CLAUDE.md).
             error_str = str(e)
             if (
                 "400" in error_str
@@ -103,19 +110,6 @@ class BluetoothCollector(BaseNetworkHealthCollector):
                     network_id=network_id,
                     network_name=network_name,
                     error=error_str,
-                )
-                # Create network labels using helper
-                labels = create_network_labels(
-                    network,
-                    org_id=org_id,
-                    org_name=org_name,
-                )
-
-                # Set metric to 0 when API is not available
-                self._set_metric_value(
-                    "_network_bluetooth_clients_total",
-                    labels,
-                    0,
                 )
             else:
                 logger.exception(

@@ -42,12 +42,121 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
             org_id=org["id"],
         )
 
-        # API returns one entry per failed client connection
+        # The API returns one row per failure EVENT (spec shape: ssidNumber, vlan,
+        # clientMac, serial, radio, failureStep, type, ts) — there is no `failures`
+        # count field. Aggregation is by counting rows: SSID0/auth=5, SSID1/dhcp=5,
+        # SSID0/assoc=1.
         failed_connections_data = [
-            {"ssidNumber": 0, "failureStep": "auth", "failures": 3},
-            {"ssidNumber": 0, "failureStep": "auth", "failures": 2},
-            {"ssidNumber": 1, "failureStep": "dhcp", "failures": 5},
-            {"ssidNumber": 0, "failureStep": "assoc", "failures": 1},
+            {
+                "ssidNumber": 0,
+                "vlan": 100,
+                "clientMac": "aa:bb:cc:00:00:01",
+                "serial": "Q2XX-0001",
+                "radio": 0,
+                "failureStep": "auth",
+                "type": "802.1X auth fail",
+                "ts": "2024-01-01T12:00:00Z",
+            },
+            {
+                "ssidNumber": 0,
+                "vlan": 100,
+                "clientMac": "aa:bb:cc:00:00:02",
+                "serial": "Q2XX-0001",
+                "radio": 1,
+                "failureStep": "auth",
+                "type": "802.1X auth fail",
+                "ts": "2024-01-01T12:00:05Z",
+            },
+            {
+                "ssidNumber": 0,
+                "vlan": 100,
+                "clientMac": "aa:bb:cc:00:00:03",
+                "serial": "Q2XX-0002",
+                "radio": 0,
+                "failureStep": "auth",
+                "type": "802.1X auth fail",
+                "ts": "2024-01-01T12:00:10Z",
+            },
+            {
+                "ssidNumber": 0,
+                "vlan": 100,
+                "clientMac": "aa:bb:cc:00:00:04",
+                "serial": "Q2XX-0002",
+                "radio": 1,
+                "failureStep": "auth",
+                "type": "802.1X auth fail",
+                "ts": "2024-01-01T12:00:15Z",
+            },
+            {
+                "ssidNumber": 0,
+                "vlan": 100,
+                "clientMac": "aa:bb:cc:00:00:05",
+                "serial": "Q2XX-0002",
+                "radio": 0,
+                "failureStep": "auth",
+                "type": "802.1X auth fail",
+                "ts": "2024-01-01T12:00:20Z",
+            },
+            {
+                "ssidNumber": 1,
+                "vlan": 200,
+                "clientMac": "aa:bb:cc:00:00:06",
+                "serial": "Q2XX-0001",
+                "radio": 0,
+                "failureStep": "dhcp",
+                "type": "dhcp timeout",
+                "ts": "2024-01-01T12:01:00Z",
+            },
+            {
+                "ssidNumber": 1,
+                "vlan": 200,
+                "clientMac": "aa:bb:cc:00:00:07",
+                "serial": "Q2XX-0001",
+                "radio": 1,
+                "failureStep": "dhcp",
+                "type": "dhcp timeout",
+                "ts": "2024-01-01T12:01:05Z",
+            },
+            {
+                "ssidNumber": 1,
+                "vlan": 200,
+                "clientMac": "aa:bb:cc:00:00:08",
+                "serial": "Q2XX-0002",
+                "radio": 0,
+                "failureStep": "dhcp",
+                "type": "dhcp timeout",
+                "ts": "2024-01-01T12:01:10Z",
+            },
+            {
+                "ssidNumber": 1,
+                "vlan": 200,
+                "clientMac": "aa:bb:cc:00:00:09",
+                "serial": "Q2XX-0002",
+                "radio": 1,
+                "failureStep": "dhcp",
+                "type": "dhcp timeout",
+                "ts": "2024-01-01T12:01:15Z",
+            },
+            {
+                "ssidNumber": 1,
+                "vlan": 200,
+                "clientMac": "aa:bb:cc:00:00:10",
+                "serial": "Q2XX-0002",
+                "radio": 0,
+                "failureStep": "dhcp",
+                "type": "dhcp timeout",
+                "ts": "2024-01-01T12:01:20Z",
+            },
+            {
+                "ssidNumber": 0,
+                "vlan": 100,
+                "clientMac": "aa:bb:cc:00:00:11",
+                "serial": "Q2XX-0001",
+                "radio": 0,
+                "failureStep": "assoc",
+                "type": "assoc timeout",
+                "ts": "2024-01-01T12:02:00Z",
+            },
         ]
 
         api = (
@@ -182,10 +291,10 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
             org_id=org["id"],
         )
 
-        # Entries with None/missing values
+        # Entries with None/missing values (one row per failure event, no `failures` field)
         failed_connections_data = [
-            {"ssidNumber": None, "failureStep": None, "failures": 2},
-            {"failures": 1},  # Missing ssidNumber and failureStep entirely
+            {"ssidNumber": None, "failureStep": None, "ts": "2024-01-01T12:00:00Z"},
+            {"ts": "2024-01-01T12:00:05Z"},  # Missing ssidNumber and failureStep entirely
         ]
 
         api = (
@@ -208,10 +317,10 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
         await self.run_collector(collector)
         self.assert_collector_success(collector, metrics)
 
-        # Should use "unknown" as fallback for missing fields; count aggregated: 2 + 1 = 3
+        # Should use "unknown" as fallback for missing fields; both rows aggregate to 2
         metrics.assert_gauge_value(
             "meraki_mr_ssid_failed_connections_total",
-            3,
+            2,
             org_id=org["id"],
             org_name=org["name"],
             network_id=network["id"],
