@@ -493,7 +493,7 @@ class CollectorManager:
             concurrency_limit=tier_concurrency,
         )
 
-        # Use collector_timeout from settings (default: 120s)
+        # Use collector_timeout from settings (default: 240s)
         timeout = self.settings.collectors.collector_timeout
 
         smoothing_window = self._get_smoothing_window(tier)
