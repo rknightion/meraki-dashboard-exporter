@@ -10,6 +10,7 @@ nav = [
   { Home = ["index.md"] },
   { "Getting Started" = "getting-started.md" },
   { Configuration = "config.md" },
+  { Upgrading = "upgrading.md" },
   { "Deployment & Operations" = [
       "deployment-operations.md",
       { Security = "security.md" },
@@ -21,6 +22,7 @@ nav = [
       { Tracing = "observability/tracing.md" }
     ] },
   { "Integration & Dashboards" = "integration-dashboards.md" },
+  { FAQ = "faq.md" },
   { "Metrics Reference" = [
       "metrics/index.md",
       { Overview = "metrics/overview.md" },
@@ -34,8 +36,7 @@ nav = [
   { Changelog = "changelog.md" },
   { Development = [
       { "Extending Collectors" = "extending-collectors.md" },
-      { "Release Process" = "development/release-process.md" },
-      { "API Call Audit" = "api-call-audit.md" }
+      { "Release Process" = "development/release-process.md" }
     ] }
 ]
 extra_css = ["stylesheets/extra.css"]

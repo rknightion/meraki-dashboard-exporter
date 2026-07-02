@@ -1,5 +1,13 @@
 # API Call Audit
 
+!!! warning "Internal snapshot - not a supported reference"
+    This is a **dated, point-in-time internal snapshot** (last refreshed 2026-05-08) captured
+    during an API-call-reduction effort. It is **not** a supported reference and is not kept in
+    sync with the code - endpoint lists, line numbers, and counts here drift as collectors change.
+    For authoritative, generated data use the [HTTP Endpoints](reference/endpoints.md) reference
+    and the [Collectors Reference](collectors/reference.md). It is intentionally excluded from the
+    site navigation.
+
 **Date:** 2026-04-08 (initial); 2026-05-08 (refresh after inventory routing refactor)
 **Purpose:** Map all Meraki API calls to identify reduction opportunities
 
