@@ -1,0 +1,42 @@
+# golden metrics exposition contract: family=clients
+# fields: NAME / TYPE / HELP / LABELS (label KEY sets, values normalized out)
+
+meraki_client_application_usage_recv_bytes gauge
+  help: Bytes received by client per application in the last hour
+  labels: client_id,network_id,org_id,type
+meraki_client_application_usage_sent_bytes gauge
+  help: Bytes sent by client per application in the last hour
+  labels: client_id,network_id,org_id,type
+meraki_client_application_usage_total_bytes gauge
+  help: Total bytes transferred by client per application in the last hour
+  labels: client_id,network_id,org_id,type
+meraki_client_info gauge
+  help: Client information join metric (client_id -> mac/description/hostname/ssid); value is always 1. Labels churn (old series expire) when a client's hostname/description/SSID changes.
+  labels: client_id,description,hostname,mac,network_id,org_id,ssid
+meraki_client_status gauge
+  help: Client online status (1 = online, 0 = offline)
+  labels: client_id,network_id,org_id
+meraki_client_usage_recv_bytes gauge
+  help: Bytes received by client in the last hour
+  labels: client_id,network_id,org_id
+meraki_client_usage_sent_bytes gauge
+  help: Bytes sent by client in the last hour
+  labels: client_id,network_id,org_id
+meraki_client_usage_total_bytes gauge
+  help: Total bytes transferred by client in the last hour
+  labels: client_id,network_id,org_id
+meraki_clients_per_ssid_count gauge
+  help: Count of clients per SSID, over the last hour
+  labels: network_id,org_id,ssid
+meraki_clients_per_vlan_count gauge
+  help: Count of clients per VLAN, over the last hour
+  labels: network_id,org_id,vlan
+meraki_wireless_client_capabilities_count gauge
+  help: Count of wireless clients by capability, over the last hour
+  labels: network_id,org_id,type
+meraki_wireless_client_rssi gauge
+  help: Wireless client RSSI (Received Signal Strength Indicator) in dBm, most recent 5-min sample; collected only when MERAKI_EXPORTER_CLIENTS__SIGNAL_QUALITY_ENABLED=true
+  labels: client_id,network_id,org_id
+meraki_wireless_client_snr gauge
+  help: Wireless client SNR (Signal-to-Noise Ratio) in dB, most recent 5-min sample; collected only when MERAKI_EXPORTER_CLIENTS__SIGNAL_QUALITY_ENABLED=true
+  labels: client_id,network_id,org_id

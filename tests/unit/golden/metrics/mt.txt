@@ -1,0 +1,72 @@
+# golden metrics exposition contract: family=mt
+# fields: NAME / TYPE / HELP / LABELS (label KEY sets, values normalized out)
+
+meraki_mt_apparent_power_va gauge
+  help: Apparent power in volt-amperes
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_battery_percent gauge
+  help: Battery level percentage
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_co2_ppm gauge
+  help: CO2 level in parts per million
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_current_amps gauge
+  help: Current in amperes
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_door_status gauge
+  help: Door sensor status (1 = open, 0 = closed)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_downstream_power_enabled gauge
+  help: Downstream power status (1 = enabled, 0 = disabled)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_frequency_hz gauge
+  help: Frequency in hertz
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_gateway_last_connected_timestamp_seconds gauge
+  help: MT sensor-to-gateway last-connected Unix timestamp (seconds)
+  labels: gateway_serial,network_id,org_id,serial
+meraki_mt_gateway_rssi gauge
+  help: MT sensor-to-gateway RSSI (dBm)
+  labels: gateway_serial,network_id,org_id,serial
+meraki_mt_humidity_percent gauge
+  help: Humidity percentage
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_indoor_air_quality_score gauge
+  help: Indoor air quality score (0-100)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_no2_ppb gauge
+  help: NO2 (nitrogen dioxide) concentration in parts per billion
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_noise_db gauge
+  help: Noise level in decibels
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_o3_ppb gauge
+  help: O3 (ozone) concentration in parts per billion
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_pm10_ug_m3 gauge
+  help: PM10 particulate matter in micrograms per cubic meter
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_pm25_ug_m3 gauge
+  help: PM2.5 particulate matter in micrograms per cubic meter
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_power_factor_percent gauge
+  help: Power factor percentage
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_real_power_watts gauge
+  help: Real power in watts
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_remote_lockout_status gauge
+  help: Remote lockout switch status (1 = locked, 0 = unlocked)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_temperature_celsius gauge
+  help: Temperature reading in Celsius
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_tvoc_ppb gauge
+  help: Total volatile organic compounds in parts per billion
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_voltage_volts gauge
+  help: Voltage in volts
+  labels: device_type,model,network_id,org_id,serial
+meraki_mt_water_detected gauge
+  help: Water detection status (1 = detected, 0 = not detected)
+  labels: device_type,model,network_id,org_id,serial

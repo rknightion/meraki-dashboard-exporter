@@ -1,0 +1,21 @@
+# golden metrics exposition contract: family=device_common
+# fields: NAME / TYPE / HELP / LABELS (label KEY sets, values normalized out)
+
+meraki_device_memory_free_bytes gauge
+  help: Device memory free in bytes (derived from the API's binary KiB value x1024), 5-min window
+  labels: device_type,model,network_id,org_id,serial,stat
+meraki_device_memory_total_bytes gauge
+  help: Device memory total provisioned in bytes (derived from the API's binary KiB value x1024)
+  labels: device_type,model,network_id,org_id,serial
+meraki_device_memory_usage_percent gauge
+  help: Device memory usage percentage (maximum from most recent interval)
+  labels: device_type,model,network_id,org_id,serial
+meraki_device_memory_used_bytes gauge
+  help: Device memory used in bytes (derived from the API's binary KiB value x1024), 5-min window
+  labels: device_type,model,network_id,org_id,serial,stat
+meraki_device_status_info gauge
+  help: Device status information
+  labels: device_type,model,name,network_id,org_id,serial,status
+meraki_device_up gauge
+  help: Device online status (1 = online, 0 = offline)
+  labels: device_type,model,network_id,org_id,serial

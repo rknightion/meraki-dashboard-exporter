@@ -1,0 +1,117 @@
+# golden metrics exposition contract: family=mr
+# fields: NAME / TYPE / HELP / LABELS (label KEY sets, values normalized out)
+
+meraki_mr_aggregation_enabled gauge
+  help: Access point port aggregation enabled status (1 = enabled, 0 = disabled)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_aggregation_speed_mbps gauge
+  help: Access point total aggregated port speed in Mbps
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_clients_connected gauge
+  help: Number of clients connected to access point
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_connection_stats_count gauge
+  help: Wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)
+  labels: device_type,model,network_id,org_id,serial,stat_type
+meraki_mr_cpu_load_5min gauge
+  help: Access point CPU load percentage (5-minute average)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_network_packet_loss_downstream_percent gauge
+  help: Downstream packet loss percentage for network (5-minute window)
+  labels: network_id,org_id
+meraki_mr_network_packet_loss_total_percent gauge
+  help: Total packet loss percentage for network (5-minute window)
+  labels: network_id,org_id
+meraki_mr_network_packet_loss_upstream_percent gauge
+  help: Upstream packet loss percentage for network (5-minute window)
+  labels: network_id,org_id
+meraki_mr_network_packets_count gauge
+  help: Total packets (upstream + downstream) for network (5-minute window)
+  labels: network_id,org_id
+meraki_mr_network_packets_downstream_count gauge
+  help: Total downstream packets for network (5-minute window)
+  labels: network_id,org_id
+meraki_mr_network_packets_downstream_lost_count gauge
+  help: Downstream packets lost for network (5-minute window)
+  labels: network_id,org_id
+meraki_mr_network_packets_lost_count gauge
+  help: Total packets lost (upstream + downstream) for network (5-minute window)
+  labels: network_id,org_id
+meraki_mr_network_packets_upstream_count gauge
+  help: Total upstream packets for network (5-minute window)
+  labels: network_id,org_id
+meraki_mr_network_packets_upstream_lost_count gauge
+  help: Upstream packets lost for network (5-minute window)
+  labels: network_id,org_id
+meraki_mr_packet_loss_downstream_percent gauge
+  help: Downstream packet loss percentage for access point (5-minute window)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_packet_loss_total_percent gauge
+  help: Total packet loss percentage for access point (5-minute window)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_packet_loss_upstream_percent gauge
+  help: Upstream packet loss percentage for access point (5-minute window)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_packets_count gauge
+  help: Total packets (upstream + downstream) for access point (5-minute window)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_packets_downstream_count gauge
+  help: Total downstream packets transmitted by access point (5-minute window)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_packets_downstream_lost_count gauge
+  help: Downstream packets lost by access point (5-minute window)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_packets_lost_count gauge
+  help: Total packets lost (upstream + downstream) for access point (5-minute window)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_packets_upstream_count gauge
+  help: Total upstream packets received by access point (5-minute window)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_packets_upstream_lost_count gauge
+  help: Upstream packets lost by access point (5-minute window)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_port_link_negotiation_info gauge
+  help: Access point port link negotiation information
+  labels: device_type,duplex,model,network_id,org_id,port_name,serial
+meraki_mr_port_link_negotiation_speed_mbps gauge
+  help: Access point port link negotiation speed in Mbps
+  labels: device_type,model,network_id,org_id,port_name,serial
+meraki_mr_port_poe_info gauge
+  help: Access point port PoE information
+  labels: device_type,model,network_id,org_id,port_name,serial,standard
+meraki_mr_power_ac_connected gauge
+  help: Access point AC power connection status (1 = connected, 0 = not connected)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_power_info gauge
+  help: Access point power information
+  labels: device_type,mode,model,network_id,org_id,serial
+meraki_mr_power_poe_connected gauge
+  help: Access point PoE power connection status (1 = connected, 0 = not connected)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_radio_broadcasting gauge
+  help: Access point radio broadcasting status (1 = broadcasting, 0 = not broadcasting)
+  labels: band,device_type,model,network_id,org_id,radio_index,serial
+meraki_mr_radio_channel gauge
+  help: Access point radio channel number
+  labels: band,device_type,model,network_id,org_id,radio_index,serial
+meraki_mr_radio_channel_width_mhz gauge
+  help: Access point radio channel width in MHz
+  labels: band,device_type,model,network_id,org_id,radio_index,serial
+meraki_mr_radio_power_dbm gauge
+  help: Access point radio transmit power in dBm
+  labels: band,device_type,model,network_id,org_id,radio_index,serial
+meraki_mr_ssid_client_count gauge
+  help: Number of clients connected to SSID over the last day
+  labels: org_id,ssid
+meraki_mr_ssid_usage_downstream_bytes gauge
+  help: Downstream data usage in bytes by SSID over the last day
+  labels: org_id,ssid
+meraki_mr_ssid_usage_percent gauge
+  help: Percentage of total organization data usage by SSID over the last day
+  labels: org_id,ssid
+meraki_mr_ssid_usage_total_bytes gauge
+  help: Total data usage in bytes by SSID over the last day
+  labels: org_id,ssid
+meraki_mr_ssid_usage_upstream_bytes gauge
+  help: Upstream data usage in bytes by SSID over the last day
+  labels: org_id,ssid

@@ -1,0 +1,73 @@
+# golden metrics exposition contract: family=org
+# fields: NAME / TYPE / HELP / LABELS (label KEY sets, values normalized out)
+
+meraki_network_info gauge
+  help: Network information (join metric: network_id -> network_name)
+  labels: network_id,network_name,org_id
+meraki_org info
+  help: Organization information
+  labels: api_enabled,org_id,org_name,url
+  labels: org_id,org_name
+meraki_org_api_requests_by_status gauge
+  help: API requests by HTTP status code in the last hour
+  labels: org_id,status_code
+meraki_org_api_requests_count gauge
+  help: Meraki-reported total API requests made by ALL clients of this organization's Dashboard API (any app/integration, not just this exporter) in the trailing 1-hour window; a snapshot count, not a monotonic counter
+  labels: org_id
+meraki_org_application_usage_downstream_bytes gauge
+  help: Downstream application usage in bytes by category over the trailing 1-day window
+  labels: category,org_id
+meraki_org_application_usage_percent gauge
+  help: Application usage percent by category over the trailing 1-day window
+  labels: category,org_id
+meraki_org_application_usage_total_bytes gauge
+  help: Total application usage in bytes by category over the trailing 1-day window
+  labels: category,org_id
+meraki_org_application_usage_upstream_bytes gauge
+  help: Upstream application usage in bytes by category over the trailing 1-day window
+  labels: category,org_id
+meraki_org_clients_count gauge
+  help: Number of active clients in the organization in the last hour
+  labels: org_id
+meraki_org_devices gauge
+  help: Number of devices in the organization
+  labels: device_type,org_id
+meraki_org_devices_availability gauge
+  help: Number of devices by availability status and product type
+  labels: org_id,product_type,status
+meraki_org_devices_availability_changes_count gauge
+  help: Number of device availability transitions observed in the collection window (tied to the configured MEDIUM update interval, default 300s) by product type and new status
+  labels: org_id,product_type,status
+meraki_org_devices_by_model gauge
+  help: Number of devices by specific model
+  labels: model,org_id
+meraki_org_firmware_upgrades gauge
+  help: Number of firmware upgrade events by product type and status
+  labels: org_id,product_type,status
+meraki_org_firmware_upgrades_pending gauge
+  help: Number of pending/in-flight firmware upgrade events by product type
+  labels: org_id,product_type
+meraki_org_licenses gauge
+  help: Number of licenses
+  labels: license_type,org_id,status
+meraki_org_licenses_expiring gauge
+  help: Number of licenses expiring within 30 days
+  labels: license_type,org_id
+meraki_org_networks gauge
+  help: Number of networks in the organization
+  labels: org_id
+meraki_org_packetcaptures gauge
+  help: Number of packet captures in the organization
+  labels: org_id
+meraki_org_packetcaptures_remaining gauge
+  help: Number of remaining packet captures to process
+  labels: org_id
+meraki_org_usage_downstream_bytes gauge
+  help: Downstream data usage in bytes for the 1-hour window
+  labels: org_id
+meraki_org_usage_total_bytes gauge
+  help: Total data usage in bytes for the 1-hour window
+  labels: org_id
+meraki_org_usage_upstream_bytes gauge
+  help: Upstream data usage in bytes for the 1-hour window
+  labels: org_id

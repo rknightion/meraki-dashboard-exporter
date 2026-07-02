@@ -1,0 +1,54 @@
+# golden metrics exposition contract: family=mx
+# fields: NAME / TYPE / HELP / LABELS (label KEY sets, values normalized out)
+
+meraki_mx_firewall_default_policy gauge
+  help: Firewall default policy for L3 rules (1=allow, 0=deny)
+  labels: network_id,org_id
+meraki_mx_firewall_rules gauge
+  help: Number of user-defined firewall rules by type (excludes default rule)
+  labels: network_id,org_id,rule_type
+meraki_mx_ha_enabled gauge
+  help: Whether MX warm spare high availability is enabled for a network (1 = enabled)
+  labels: network_id,org_id
+meraki_mx_ha_mode gauge
+  help: MX warm spare high availability mode info (1 = present)
+  labels: mode,network_id,org_id
+meraki_mx_ha_role gauge
+  help: MX warm spare designation priority for a device
+  labels: network_id,org_id,serial
+meraki_mx_performance_score gauge
+  help: MX appliance performance score (0-100)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mx_security_events_count gauge
+  help: Security events by type in the current collection window (not a monotonic total)
+  labels: event_type,org_id
+meraki_mx_uplink_info gauge
+  help: MX appliance uplink status info (1 = present)
+  labels: device_type,interface,model,network_id,org_id,serial,status
+meraki_mx_uplink_latency_seconds gauge
+  help: MX per-uplink WAN latency in seconds (worst-case across monitored destinations, latest sample)
+  labels: device_type,interface,model,network_id,org_id,serial
+meraki_mx_uplink_loss_percent gauge
+  help: MX per-uplink WAN loss percent (worst-case across monitored destinations, latest sample)
+  labels: device_type,interface,model,network_id,org_id,serial
+meraki_mx_uplink_recv_bytes gauge
+  help: MX per-uplink WAN bytes received (last 5 minutes)
+  labels: device_type,interface,model,network_id,org_id,serial
+meraki_mx_uplink_sent_bytes gauge
+  help: MX per-uplink WAN bytes sent (last 5 minutes)
+  labels: device_type,interface,model,network_id,org_id,serial
+meraki_mx_vpn_peer_status gauge
+  help: VPN peer reachability status (1=reachable, 0=unreachable)
+  labels: network_id,org_id,peer_network_id,peer_type
+meraki_mx_vpn_peers gauge
+  help: Number of VPN peers configured for a network
+  labels: network_id,org_id
+meraki_mx_vpn_stats_avg_latency_seconds gauge
+  help: Average VPN latency in seconds to a peer network (15-min avg), averaged across all sender/receiver uplink combinations
+  labels: network_id,org_id,peer_network_id
+meraki_mx_vpn_usage_recv_bytes gauge
+  help: VPN usage received in bytes over the last 15 minutes, per peer network
+  labels: network_id,org_id,peer_network_id
+meraki_mx_vpn_usage_sent_bytes gauge
+  help: VPN usage sent in bytes over the last 15 minutes, per peer network
+  labels: network_id,org_id,peer_network_id

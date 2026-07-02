@@ -1,0 +1,114 @@
+# golden metrics exposition contract: family=ms
+# fields: NAME / TYPE / HELP / LABELS (label KEY sets, values normalized out)
+
+meraki_ms_poe_budget_watts gauge
+  help: Total POE power budget for switch in watts
+  labels: device_type,model,network_id,org_id,serial
+meraki_ms_poe_network_total_energy_joules gauge
+  help: Total POE energy consumption for all switches in network in joules
+  labels: network_id,org_id
+meraki_ms_poe_port_energy_joules gauge
+  help: Per-port POE energy consumption in joules over the last 1 hour
+  labels: device_type,model,network_id,org_id,port_id,serial
+meraki_ms_poe_total_energy_joules gauge
+  help: Total POE energy consumption for switch in joules
+  labels: device_type,model,network_id,org_id,serial
+meraki_ms_port_8021x_active gauge
+  help: Switch port secure-port (802.1X) active state (1 = active, 0 = inactive)
+  labels: device_type,model,network_id,org_id,port_id,serial
+meraki_ms_port_8021x_status gauge
+  help: Switch port 802.1X authentication status (1 = currently active for this status)
+  labels: device_type,model,network_id,org_id,port_id,serial,status
+meraki_ms_port_client_count gauge
+  help: Number of clients connected to switch port
+  labels: device_type,model,network_id,org_id,port_id,serial
+meraki_ms_port_error_active gauge
+  help: Active switch port errors (1 = currently active for this error_type)
+  labels: device_type,error_type,model,network_id,org_id,port_id,serial
+meraki_ms_port_info gauge
+  help: Switch port info (value 1); join port_name via on(serial, port_id)
+  labels: network_id,org_id,port_id,port_name,serial
+meraki_ms_port_packets_broadcast_count gauge
+  help: Broadcast packets on switch port (5-minute window)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_packets_collisions_count gauge
+  help: Collision packets on switch port (5-minute window)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_packets_count gauge
+  help: Total packets on switch port (5-minute window)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_packets_crcerrors_count gauge
+  help: CRC align error packets on switch port (5-minute window)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_packets_fragments_count gauge
+  help: Fragment packets on switch port (5-minute window)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_packets_multicast_count gauge
+  help: Multicast packets on switch port (5-minute window)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_packets_rate gauge
+  help: Total packet rate on switch port (packets per second, 5-minute average)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_packets_rate_broadcast gauge
+  help: Broadcast packet rate on switch port (packets per second, 5-minute average)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_packets_rate_collisions gauge
+  help: Collision packet rate on switch port (packets per second, 5-minute average)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_packets_rate_crcerrors gauge
+  help: CRC align error packet rate on switch port (packets per second, 5-minute average)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_packets_rate_fragments gauge
+  help: Fragment packet rate on switch port (packets per second, 5-minute average)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_packets_rate_multicast gauge
+  help: Multicast packet rate on switch port (packets per second, 5-minute average)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_packets_rate_topologychanges gauge
+  help: Topology change packet rate on switch port (packets per second, 5-minute average)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_packets_topologychanges_count gauge
+  help: Topology change packets on switch port (5-minute window)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_status gauge
+  help: Switch port status (1 = connected, 0 = disconnected)
+  labels: device_type,duplex,link_speed,model,network_id,org_id,port_id,serial
+meraki_ms_port_stp_state gauge
+  help: Switch port STP state (1 = currently active for this state)
+  labels: device_type,model,network_id,org_id,port_id,serial,state
+meraki_ms_port_traffic_bytes_per_second gauge
+  help: Switch port traffic rate in bytes per second (averaged over 1 hour)
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_usage_bytes gauge
+  help: Switch port data usage in bytes (decimal KB x1000) over the last 1 hour
+  labels: device_type,direction,model,network_id,org_id,port_id,serial
+meraki_ms_port_warning_active gauge
+  help: Active switch port warnings (1 = currently active for this warning_type)
+  labels: device_type,model,network_id,org_id,port_id,serial,warning_type
+meraki_ms_ports_active gauge
+  help: Number of active switch ports
+  labels: org_id
+meraki_ms_ports_by_link_speed gauge
+  help: Number of active switch ports by link speed
+  labels: link_speed,media,org_id
+meraki_ms_ports_by_media gauge
+  help: Number of switch ports by media type
+  labels: media,org_id,status
+meraki_ms_ports_inactive gauge
+  help: Number of inactive switch ports
+  labels: org_id
+meraki_ms_power_supply_status gauge
+  help: MS/rackmount power-supply module status (1 = reported this cycle)
+  labels: device_type,model,network_id,org_id,psu_model,psu_serial,serial,slot,status
+meraki_ms_power_usage_watts gauge
+  help: Switch power usage in watts
+  labels: device_type,model,network_id,org_id,serial
+meraki_ms_stack_member_status gauge
+  help: Switch stack member status (1=present/online, 0=absent/offline)
+  labels: network_id,org_id,role,serial,stack_id
+meraki_ms_stack_members gauge
+  help: Number of members in switch stack
+  labels: network_id,org_id,stack_id
+meraki_ms_stp_priority gauge
+  help: Switch STP (Spanning Tree Protocol) priority
+  labels: device_type,model,network_id,org_id,serial

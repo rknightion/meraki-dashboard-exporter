@@ -1,0 +1,15 @@
+# golden metrics exposition contract: family=mg
+# fields: NAME / TYPE / HELP / LABELS (label KEY sets, values normalized out)
+
+meraki_mg_uplink_roaming gauge
+  help: MG cellular gateway uplink roaming status (1 = roaming, 0 = home)
+  labels: device_type,interface,model,network_id,org_id,serial
+meraki_mg_uplink_signal_rsrp_dbm gauge
+  help: MG cellular gateway uplink RSRP signal strength in dBm
+  labels: device_type,interface,model,network_id,org_id,serial
+meraki_mg_uplink_signal_rsrq_db gauge
+  help: MG cellular gateway uplink RSRQ signal quality in dB
+  labels: device_type,interface,model,network_id,org_id,serial
+meraki_mg_uplink_status_info gauge
+  help: MG cellular gateway uplink status info (1 = present)
+  labels: apn,connection_type,device_type,interface,ip,model,network_id,org_id,provider,roaming_status,serial,signal_type,status
