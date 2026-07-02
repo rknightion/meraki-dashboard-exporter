@@ -108,7 +108,9 @@ class MetricCollector(ABC):
 
         # Initialize performance metrics only once
         if not MetricCollector._metrics_initialized:
-            MetricCollector._initialize_performance_metrics()
+            MetricCollector._initialize_performance_metrics(
+                buckets=self.settings.monitoring.histogram_buckets
+            )
             MetricCollector._metrics_initialized = True
 
         self._initialize_metrics()
@@ -657,9 +659,33 @@ class MetricCollector(ABC):
                 value=value,
             )
 
+    # Fallback buckets if no configured buckets are supplied (mirrors the
+    # MonitoringSettings.histogram_buckets default).
+    _DEFAULT_DURATION_BUCKETS: tuple[float, ...] = (
+        0.1,
+        0.5,
+        1.0,
+        2.5,
+        5.0,
+        10.0,
+        30.0,
+        60.0,
+        120.0,
+        300.0,
+    )
+
     @classmethod
-    def _initialize_performance_metrics(cls) -> None:
-        """Initialize collector performance metrics."""
+    def _initialize_performance_metrics(cls, buckets: list[float] | None = None) -> None:
+        """Initialize collector performance metrics.
+
+        Parameters
+        ----------
+        buckets : list[float] | None
+            Histogram bucket boundaries for the collector duration metric,
+            sourced from ``MonitoringSettings.histogram_buckets`` (F-008). Falls
+            back to ``_DEFAULT_DURATION_BUCKETS`` when not provided.
+
+        """
         if cls._metrics_initialized:
             logger.debug("Performance metrics already initialized")
             return
@@ -670,7 +696,7 @@ class MetricCollector(ABC):
                 "meraki_exporter_collector_duration_seconds",
                 "Time spent collecting metrics",
                 labelnames=["collector", "tier"],
-                buckets=(0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0),
+                buckets=tuple(buckets) if buckets else cls._DEFAULT_DURATION_BUCKETS,
                 registry=REGISTRY,
             )
             cls._collector_duration = duration_metric

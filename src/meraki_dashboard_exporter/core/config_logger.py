@@ -341,22 +341,36 @@ def log_startup_summary(
         logger.info("  Organization Filter: None (all organizations)")
 
     # Collector Status
-    all_collectors = ["organization", "device", "network_health", "alerts", "mt_sensor", "config"]
-    enabled = settings.collectors.enabled_collectors
+    # Use the registered collector short-names (no underscores) so this matches
+    # what CollectorManager actually filters on, and report from
+    # active_collectors so disable overrides are reflected (F-005).
+    all_collectors = [
+        "organization",
+        "device",
+        "networkhealth",
+        "alerts",
+        "clients",
+        "config",
+        "mtsensor",
+        "mtsensoralerts",
+    ]
+    enabled = settings.collectors.active_collectors
     disabled = [c for c in all_collectors if c not in enabled]
 
     # Format collector names for display
     display_names = {
         "organization": "Organization",
         "device": "Device",
-        "network_health": "Network Health",
+        "networkhealth": "Network Health",
         "alerts": "Alerts",
-        "mt_sensor": "MT Sensors",
+        "clients": "Clients",
         "config": "Config Changes",
+        "mtsensor": "MT Sensors",
+        "mtsensoralerts": "MT Sensor Alerts",
     }
 
-    enabled_display = [display_names.get(c, c) for c in enabled]
-    disabled_display = [display_names.get(c, c) for c in disabled]
+    enabled_display = [display_names.get(c, c) for c in all_collectors if c in enabled]
+    disabled_display = [display_names[c] for c in disabled]
 
     logger.info(
         f"  Enabled Collectors: {', '.join(enabled_display) if enabled_display else 'None'}"

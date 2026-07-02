@@ -39,14 +39,11 @@ class DNSResolver:
 
         """
         self.settings = settings
-        self.dns_server = settings.clients.dns_server
         self.timeout = settings.clients.dns_timeout
         self.cache_ttl = settings.clients.dns_cache_ttl
         self._cache: dict[str, CacheEntry] = {}
         self._client_tracking: dict[str, dict[str, str]] = {}  # client_id -> {ip, description}
-        self._resolver_configured = False
         self._retry = AsyncRetry(max_attempts=3, base_delay=1.0, max_delay=5.0)
-        self._configure_resolver()
 
         # Statistics tracking
         self._stats = {
@@ -55,21 +52,6 @@ class DNSResolver:
             "failed_lookups": 0,
             "cache_hits": 0,
         }
-
-    def _configure_resolver(self) -> None:
-        """Configure DNS resolver with custom server if provided."""
-        if self.dns_server:
-            try:
-                # Validate DNS server IP
-                ipaddress.ip_address(self.dns_server)
-                self._resolver_configured = True
-                logger.info("Using custom DNS server", dns_server=self.dns_server)
-            except ValueError:
-                logger.error(
-                    "Invalid DNS server address, using system default",
-                    dns_server=self.dns_server,
-                )
-                self.dns_server = None
 
     def track_client(self, client_id: str, ip: str | None, description: str | None) -> bool:
         """Track client information to detect changes.
@@ -209,17 +191,14 @@ class DNSResolver:
 
         """
         try:
-            # Use custom DNS server if configured
-            if self.dns_server:
-                return await self._custom_dns_lookup(ip)
-            else:
-                # Use system default resolver
-                return await with_timeout(
-                    self._system_dns_lookup(ip),
-                    timeout=self.timeout,
-                    operation=f"DNS lookup for {ip}",
-                    default=None,
-                )
+            # Reverse DNS via the system resolver, always bounded by the
+            # configured dns_timeout (F-076).
+            return await with_timeout(
+                self._system_dns_lookup(ip),
+                timeout=self.timeout,
+                operation=f"DNS lookup for {ip}",
+                default=None,
+            )
         except Exception as e:
             logger.debug("DNS lookup failed", ip=ip, error=str(e))
             return None
@@ -247,34 +226,6 @@ class DNSResolver:
         except (socket.herror, socket.gaierror, OSError) as e:
             logger.debug("System DNS lookup failed", ip=ip, error=str(e))
             return None
-
-    async def _custom_dns_lookup(self, ip: str) -> str | None:
-        """Perform DNS lookup using custom DNS server.
-
-        Parameters
-        ----------
-        ip : str
-            IP address to resolve.
-
-        Returns
-        -------
-        str | None
-            Hostname or None if resolution fails.
-
-        Note
-        ----
-        This implementation still uses the system resolver but could be
-        extended to use a specific DNS library like dnspython if needed.
-
-        """
-        # For now, fall back to system resolver
-        # Future: Could use dnspython to query specific DNS server
-        logger.debug(
-            "Custom DNS lookup not fully implemented, using system resolver",
-            ip=ip,
-            dns_server=self.dns_server,
-        )
-        return await self._system_dns_lookup(ip)
 
     async def resolve_multiple(
         self,

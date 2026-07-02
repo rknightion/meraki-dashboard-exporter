@@ -267,6 +267,15 @@ class OTelSettings(BaseModel):
         "meraki-dashboard-exporter",
         description="Service name for OpenTelemetry tracing",
     )
+    sampling_rate: float = Field(
+        0.1,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Trace sampling rate (0.0-1.0). 0 disables sampling, 1 samples every "
+            "trace, values in between use ratio-based parent sampling."
+        ),
+    )
     resource_attributes: dict[str, str] = Field(
         default_factory=dict,
         description="Additional resource attributes for OpenTelemetry",
@@ -357,10 +366,6 @@ class ClientSettings(BaseModel):
     enabled: bool = Field(
         False,
         description="Enable client data collection",
-    )
-    dns_server: str | None = Field(
-        None,
-        description="DNS server for reverse lookups (uses system default if not set)",
     )
     dns_timeout: float = Field(
         5.0,

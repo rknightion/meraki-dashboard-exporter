@@ -186,3 +186,36 @@ class TestLogStartupSummary:
         test_settings.otel.endpoint = "http://localhost:4317"
         test_settings.otel.service_name = "meraki-exporter"
         log_startup_summary(test_settings)
+
+    def _collector_status_lines(self, test_settings: Settings) -> tuple[str, str]:
+        """Capture the Enabled/Disabled Collectors feature-status lines (F-005)."""
+        with patch.object(config_logger_mod.logger, "info") as mock_info:
+            log_startup_summary(test_settings)
+        lines = [call.args[0] for call in mock_info.call_args_list if call.args]
+        enabled_line = next(line for line in lines if str(line).startswith("  Enabled Collectors:"))
+        disabled_line = next(
+            (line for line in lines if str(line).startswith("  Disabled Collectors:")),
+            "",
+        )
+        return enabled_line, disabled_line
+
+    def test_networkhealth_and_mtsensor_reported_enabled_by_default(
+        self, test_settings: Settings
+    ) -> None:
+        """Network Health and MT Sensors must show as enabled by default (F-005)."""
+        enabled_line, disabled_line = self._collector_status_lines(test_settings)
+
+        assert "Network Health" in enabled_line
+        assert "MT Sensors" in enabled_line
+        # And must NOT be wrongly reported as disabled.
+        assert "Network Health" not in disabled_line
+        assert "MT Sensors" not in disabled_line
+
+    def test_disabled_collector_is_reflected(self, test_settings: Settings) -> None:
+        """Disabling a collector via disable_collectors is reflected in the summary (F-005)."""
+        test_settings.collectors.disable_collectors = {"networkhealth"}
+
+        enabled_line, disabled_line = self._collector_status_lines(test_settings)
+
+        assert "Network Health" in disabled_line
+        assert "Network Health" not in enabled_line

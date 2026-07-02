@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from meraki_dashboard_exporter.collectors.config import ConfigCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
 from tests.helpers.base import BaseCollectorTest
@@ -168,6 +170,36 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
         metrics.assert_gauge_value(
             "meraki_org_admins_two_factor_enabled_total",
             0,
+            org_id="123",
+            org_name="Test Org",
+        )
+
+    async def test_admin_metrics_routed_through_set_metric(
+        self, collector, mock_api_builder, metrics
+    ):
+        """Admin metrics must emit via _set_metric for expiration tracking (F-011)."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        admins = [_admin(authentication_method="Email", account_status="ok", two_factor=True)]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_custom_response("getOrganizationAdmins", admins)
+            .build()
+        )
+        collector.api = api
+
+        with patch.object(collector, "_set_metric", wraps=collector._set_metric) as spy:
+            await self.run_collector(collector)
+
+        routed_metrics = {call.args[0] for call in spy.call_args_list}
+        assert collector._org_admins_total in routed_metrics
+        assert collector._org_admins_two_factor_enabled_total in routed_metrics
+
+        # Values are still set correctly through the expiration-aware path.
+        metrics.assert_gauge_value(
+            "meraki_org_admins_two_factor_enabled_total",
+            1,
             org_id="123",
             org_name="Test Org",
         )

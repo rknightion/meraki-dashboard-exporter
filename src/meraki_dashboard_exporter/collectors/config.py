@@ -6,6 +6,7 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any, cast
 
+from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import OrgMetricName, UpdateTier
 from ..core.domain_models import ConfigurationChange
@@ -164,12 +165,23 @@ class ConfigCollector(MetricCollector):
             if not self.inventory:
                 api_calls_made += 1
 
-            # Collect metrics for each organization
-            tasks = [self._collect_org_config(org) for org in organizations]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Collect metrics for each organization with bounded concurrency
+            # (never raw asyncio.gather) so we respect the API concurrency budget
+            # while still collecting per-org errors (F-016).
+            results = await process_in_batches_with_errors(
+                organizations,
+                self._collect_org_config,
+                batch_size=self.settings.api.concurrency_limit,
+                delay_between_batches=0.0,
+                item_description="organization",
+                error_context_func=lambda org: {
+                    "org_id": org.get("id"),
+                    "org_name": org.get("name"),
+                },
+            )
 
             # Count successful collections
-            for result in results:
+            for _org, result in results:
                 if not isinstance(result, Exception):
                     # Each org makes 3 API calls (login security + admins + config changes)
                     api_calls_made += 3
@@ -267,6 +279,13 @@ class ConfigCollector(MetricCollector):
                 security = await asyncio.to_thread(
                     self.api.organizations.getOrganizationLoginSecurity,
                     org_id,
+                )
+                # Normalize the SDK exhausted-retry error shape so an error-shaped
+                # dict raises instead of silently emitting false zeros (F-034).
+                security = validate_response_format(
+                    security,
+                    expected_type=dict,
+                    operation="getOrganizationLoginSecurity",
                 )
 
             # Password expiration
@@ -379,9 +398,16 @@ class ConfigCollector(MetricCollector):
             # this cycle is reported as 0 rather than left stale or missing.
             for auth_method in self._KNOWN_AUTHENTICATION_METHODS:
                 for account_status in self._KNOWN_ACCOUNT_STATUSES:
-                    self._org_admins_total.labels(
-                        org_id, org_name, auth_method, account_status
-                    ).set(0)
+                    self._set_metric(
+                        self._org_admins_total,
+                        {
+                            LabelName.ORG_ID: org_id,
+                            LabelName.ORG_NAME: org_name,
+                            LabelName.AUTHENTICATION_METHOD: auth_method,
+                            LabelName.ACCOUNT_STATUS: account_status,
+                        },
+                        0,
+                    )
 
             counts: dict[tuple[str, str], int] = {}
             two_factor_count = 0
@@ -396,11 +422,22 @@ class ConfigCollector(MetricCollector):
                     two_factor_count += 1
 
             for (auth_method, account_status), count in counts.items():
-                self._org_admins_total.labels(org_id, org_name, auth_method, account_status).set(
-                    count
+                self._set_metric(
+                    self._org_admins_total,
+                    {
+                        LabelName.ORG_ID: org_id,
+                        LabelName.ORG_NAME: org_name,
+                        LabelName.AUTHENTICATION_METHOD: auth_method,
+                        LabelName.ACCOUNT_STATUS: account_status,
+                    },
+                    count,
                 )
 
-            self._org_admins_two_factor_enabled_total.labels(org_id, org_name).set(two_factor_count)
+            self._set_metric(
+                self._org_admins_two_factor_enabled_total,
+                {LabelName.ORG_ID: org_id, LabelName.ORG_NAME: org_name},
+                two_factor_count,
+            )
 
             logger.debug(
                 "Successfully collected admin account metrics",
@@ -436,6 +473,13 @@ class ConfigCollector(MetricCollector):
                     org_id,
                     timespan=86400,  # 24 hours in seconds
                     total_pages="all",
+                )
+                # Normalize the SDK exhausted-retry error shape so an error-shaped
+                # dict raises instead of being counted as zero changes (F-034).
+                config_changes = validate_response_format(
+                    config_changes,
+                    expected_type=list,
+                    operation="getOrganizationConfigurationChanges",
                 )
 
             # Parse changes using domain model for validation

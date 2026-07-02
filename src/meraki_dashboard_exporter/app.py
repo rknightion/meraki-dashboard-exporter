@@ -653,7 +653,6 @@ class ExporterApp:
                 "offline_clients": stats["offline_clients"],
                 "network_count": stats["total_networks"],
                 "cache_ttl": exporter.settings.clients.cache_ttl,
-                "dns_server": exporter.settings.clients.dns_server or "System Default",
                 "dns_cache_stats": dns_cache_stats,
             }
 

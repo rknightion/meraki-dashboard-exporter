@@ -139,6 +139,61 @@ class TestTracingConfigSettings:
 
         assert settings.otel.enabled is True
 
+    def test_sampling_rate_honored_from_env(self, monkeypatch) -> None:
+        """A sampling rate set via env/.env is read from settings (F-106)."""
+        from opentelemetry.sdk.trace.sampling import ALWAYS_ON
+
+        monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+        monkeypatch.setenv("MERAKI_EXPORTER_OTEL__SAMPLING_RATE", "1.0")
+        settings = Settings()
+
+        assert settings.otel.sampling_rate == 1.0
+
+        config = TracingConfig(settings)
+        assert config._get_sampling_rate() == 1.0
+        assert config._create_sampler() is ALWAYS_ON
+
+
+class TestTracingConfigSampling:
+    """F-106: sampling rate sourced from settings, with a guarded parse."""
+
+    def _settings(self, sampling_rate) -> MagicMock:
+        settings = MagicMock(spec=Settings)
+        settings.otel = MagicMock()
+        settings.otel.sampling_rate = sampling_rate
+        return settings
+
+    def test_zero_rate_disables_sampling(self) -> None:
+        """A 0.0 sampling rate maps to ALWAYS_OFF."""
+        from opentelemetry.sdk.trace.sampling import ALWAYS_OFF
+
+        config = TracingConfig(self._settings(0.0))
+        assert config._create_sampler() is ALWAYS_OFF
+
+    def test_full_rate_samples_all(self) -> None:
+        """A 1.0 sampling rate maps to ALWAYS_ON."""
+        from opentelemetry.sdk.trace.sampling import ALWAYS_ON
+
+        config = TracingConfig(self._settings(1.0))
+        assert config._create_sampler() is ALWAYS_ON
+
+    def test_partial_rate_uses_ratio_sampler(self) -> None:
+        """A fractional sampling rate maps to a ParentBased ratio sampler."""
+        from opentelemetry.sdk.trace.sampling import ParentBased
+
+        config = TracingConfig(self._settings(0.5))
+        assert isinstance(config._create_sampler(), ParentBased)
+
+    def test_malformed_rate_does_not_abort(self) -> None:
+        """A non-numeric sampling rate falls back to the default without raising (F-106)."""
+        from opentelemetry.sdk.trace.sampling import ParentBased
+
+        config = TracingConfig(self._settings("not-a-float"))
+
+        # Guarded: does not raise, falls back to the 0.1 default.
+        assert config._get_sampling_rate() == config._DEFAULT_SAMPLING_RATE
+        assert isinstance(config._create_sampler(), ParentBased)
+
 
 class TestTracingConfigReinitialization:
     """Test TracingConfig handles reinitialization correctly."""

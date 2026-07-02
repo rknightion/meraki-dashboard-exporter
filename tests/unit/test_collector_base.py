@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 from prometheus_client import Counter, Gauge, Histogram
 
@@ -59,6 +61,22 @@ class TestMetricCollector(BaseCollectorTest):
 
     collector_class = DummyCollectorImpl
     update_tier = UpdateTier.MEDIUM
+
+    def test_duration_histogram_uses_configured_buckets(self, isolated_registry, settings):
+        """MonitoringSettings.histogram_buckets is wired to the duration histogram (F-008)."""
+        custom_buckets = [0.25, 2.0, 8.0, 42.0]
+        settings.monitoring.histogram_buckets = custom_buckets
+
+        DummyCollectorImpl(
+            api=MagicMock(),
+            settings=settings,
+            registry=isolated_registry,
+        )
+
+        duration = MetricCollector._collector_duration
+        assert duration is not None
+        # prometheus_client appends +Inf to the upper bounds.
+        assert list(duration._upper_bounds) == [*custom_buckets, float("inf")]
 
     def test_collector_initialization(self, collector):
         """Test that collector initializes properly."""

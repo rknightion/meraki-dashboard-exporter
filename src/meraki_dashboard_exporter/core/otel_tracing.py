@@ -132,8 +132,8 @@ class TracingConfig:
             OpenTelemetry sampler instance.
 
         """
-        # Get sampling rate from environment or default
-        sampling_rate = float(os.getenv("MERAKI_EXPORTER_OTEL__SAMPLING_RATE", "0.1"))
+        # Get sampling rate from settings (guarded so a bad value can't abort setup)
+        sampling_rate = self._get_sampling_rate()
 
         if sampling_rate <= 0:
             return ALWAYS_OFF
@@ -149,8 +149,17 @@ class TracingConfig:
                 local_parent_not_sampled=ALWAYS_OFF,
             )
 
+    # Fallback when the configured sampling rate is unusable.
+    _DEFAULT_SAMPLING_RATE = 0.1
+
     def _get_sampling_rate(self) -> float:
-        """Get the configured sampling rate.
+        """Get the configured sampling rate from settings.
+
+        Reads ``settings.otel.sampling_rate`` (validated to 0.0-1.0 by
+        pydantic, so a value set in ``.env`` is honoured). The parse is guarded
+        so a malformed/out-of-range value logs a warning and falls back to the
+        default instead of raising inside ``setup_tracing`` and aborting all
+        tracing (F-106).
 
         Returns
         -------
@@ -158,7 +167,25 @@ class TracingConfig:
             Sampling rate between 0 and 1.
 
         """
-        return float(os.getenv("MERAKI_EXPORTER_OTEL__SAMPLING_RATE", "0.1"))
+        try:
+            rate = float(self.settings.otel.sampling_rate)
+        except TypeError, ValueError:
+            logger.warning(
+                "Invalid OTEL sampling rate, falling back to default",
+                default=self._DEFAULT_SAMPLING_RATE,
+            )
+            return self._DEFAULT_SAMPLING_RATE
+
+        if not 0.0 <= rate <= 1.0:
+            clamped = min(1.0, max(0.0, rate))
+            logger.warning(
+                "OTEL sampling rate out of range, clamping",
+                rate=rate,
+                clamped=clamped,
+            )
+            return clamped
+
+        return rate
 
     def _instrument_libraries(self) -> None:
         """Instrument all relevant libraries for tracing."""

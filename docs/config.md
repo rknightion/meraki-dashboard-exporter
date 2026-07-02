@@ -125,6 +125,7 @@ OpenTelemetry observability configuration
 | `MERAKI_EXPORTER_OTEL__ENABLED` | `bool` | `False` | Enable OpenTelemetry tracing |
 | `MERAKI_EXPORTER_OTEL__ENDPOINT` | `str | None` | `_(none)_` | OpenTelemetry collector endpoint (OTLP gRPC) |
 | `MERAKI_EXPORTER_OTEL__SERVICE_NAME` | `str` | `meraki-dashboard-exporter` | Service name for OpenTelemetry tracing |
+| `MERAKI_EXPORTER_OTEL__SAMPLING_RATE` | `float` | `0.1` | Trace sampling rate (0.0-1.0). 0 disables sampling, 1 samples every trace, values in between use ratio-based parent sampling. (min: 0.0, max: 1.0) |
 | `MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES` | `dict[str, str]` | `{}` | Additional resource attributes for OpenTelemetry |
 
 ## Monitoring Settings
@@ -156,7 +157,6 @@ Client data collection and DNS resolution settings
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_CLIENTS__ENABLED` | `bool` | `False` | Enable client data collection |
-| `MERAKI_EXPORTER_CLIENTS__DNS_SERVER` | `str | None` | `_(none)_` | DNS server for reverse lookups (uses system default if not set) |
 | `MERAKI_EXPORTER_CLIENTS__DNS_TIMEOUT` | `float` | `5.0` | DNS lookup timeout in seconds (min: 0.5, max: 10.0) |
 | `MERAKI_EXPORTER_CLIENTS__DNS_CACHE_TTL` | `int` | `21600` | DNS cache TTL in seconds (default: 6 hours) (min: 300, max: 86400) |
 | `MERAKI_EXPORTER_CLIENTS__CACHE_TTL` | `int` | `3600` | Client cache TTL in seconds (for ID/hostname mappings, not metrics) (min: 300, max: 86400) |

@@ -81,6 +81,26 @@ async def test_resolve_multiple_uses_resolver(monkeypatch, resolver):
 
 
 @pytest.mark.asyncio
+async def test_perform_lookup_applies_timeout(monkeypatch, resolver):
+    """Reverse lookups are always bounded by the configured dns_timeout (F-076)."""
+    import meraki_dashboard_exporter.services.dns_resolver as dns_mod
+
+    captured: dict[str, float] = {}
+
+    async def fake_with_timeout(coro, timeout, operation="operation", default=None):
+        captured["timeout"] = timeout
+        coro.close()  # avoid un-awaited coroutine warning
+        return "host.example.com"
+
+    monkeypatch.setattr(dns_mod, "with_timeout", fake_with_timeout)
+
+    result = await resolver._perform_lookup("1.1.1.1")
+
+    assert result == "host.example.com"
+    assert captured["timeout"] == resolver.timeout
+
+
+@pytest.mark.asyncio
 async def test_clear_cache(monkeypatch, resolver):
     """Cache can be cleared manually."""
 
