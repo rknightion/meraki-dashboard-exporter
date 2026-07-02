@@ -1,0 +1,65 @@
+name: Release Please Lock
+
+# release-please bumps the version in pyproject.toml but has no uv.lock updater, so the
+# release PR ships a uv.lock whose own-package version is one release behind. That fails
+# CI's `uv sync --locked`. This workflow reacts to the release PR, regenerates uv.lock, and
+# pushes the result back under the PAT (so CI re-runs), leaving the lock consistent for merge.
+# It is idempotent: once locked, `uv lock` produces no diff, so it self-terminates.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+# Workflow-level lockdown; the single job grants only what it needs. The push authenticates
+# as the PAT (RELEASE_PLEASE_TOKEN), not GITHUB_TOKEN, so no contents:write is needed here.
+permissions: {}
+
+concurrency:
+  group: release-please-lock-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  relock:
+    name: Regenerate uv.lock
+    # Only the release-please branch — never a contributor/fork PR (which lacks the secret anyway).
+    if: startsWith(github.head_ref, 'release-please--')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read  # checkout only; the push uses the PAT below
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.head_ref }}
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Regenerate lockfile
+        run: uv lock
+
+      - name: Commit and push if uv.lock changed
+        env:
+          # PAT so the push re-triggers CI (a GITHUB_TOKEN push would not); masked in logs.
+          PUSH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- uv.lock; then
+            echo "uv.lock already in sync — nothing to do"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock
+          git commit -m "chore: sync uv.lock with release version"
+          git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${HEAD_REF}"
