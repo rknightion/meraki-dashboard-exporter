@@ -30,7 +30,6 @@ class OrgMetricName(StrEnum):
 
     # Configuration and security metrics
     ORG_CONFIGURATION_CHANGES_COUNT = "meraki_org_configuration_changes_count"
-    ORG_LOGIN_SECURITY_ENABLED = "meraki_org_login_security_enabled"
 
     # Packet capture metrics
     ORG_PACKETCAPTURES = "meraki_org_packetcaptures"
@@ -45,7 +44,6 @@ class OrgMetricName(StrEnum):
         "meraki_org_login_security_strong_passwords_enabled"
     )
     ORG_LOGIN_SECURITY_TWO_FACTOR_ENABLED = "meraki_org_login_security_two_factor_enabled"
-    ORG_LOGIN_SECURITY_IP_RESTRICTIONS_ENABLED = "meraki_org_login_security_ip_restrictions_enabled"
     ORG_LOGIN_SECURITY_IP_RANGES_ENABLED = "meraki_org_login_security_ip_ranges_enabled"
     ORG_LOGIN_SECURITY_IDLE_TIMEOUT_ENABLED = "meraki_org_login_security_idle_timeout_enabled"
     ORG_LOGIN_SECURITY_IDLE_TIMEOUT_SECONDS = "meraki_org_login_security_idle_timeout_seconds"
@@ -85,9 +83,6 @@ class OrgMetricName(StrEnum):
 class NetworkMetricName(StrEnum):
     """Network-level metric names."""
 
-    NETWORK_CLIENTS_TOTAL = "meraki_network_clients_total"
-    NETWORK_TRAFFIC_BYTES = "meraki_network_traffic_bytes"
-    NETWORK_DEVICE_STATUS = "meraki_network_device_status"
     NETWORK_WIRELESS_CONNECTION_STATS_COUNT = "meraki_network_wireless_connection_stats_count"
     # Network-filter observability (emitted by services/inventory.py)
     NETWORK_FILTER_MATCH = "meraki_network_filter_match"
@@ -342,9 +337,7 @@ class AlertMetricName(StrEnum):
     SENSOR_ALERTS_COUNT = "meraki_sensor_alerts_count"
 
     # Health alert metrics (Phase 4.1)
-    ORGANIZATION_HEALTH_ALERTS_TOTAL = "meraki_organization_health_alerts_total"
     NETWORK_HEALTH_ALERTS = "meraki_network_health_alerts"
-    HEALTH_ALERT_INFO = "meraki_health_alert_info"
 
 
 class ConfigMetricName(StrEnum):
@@ -427,15 +420,6 @@ class CollectorMetricName(StrEnum):
     COLLECTION_ERRORS_TOTAL = "meraki_exporter_collection_errors_total"
 
     # Inventory cache metrics
-    # NB: INVENTORY_CACHE_SIZE is not consumed by anything (F-080 dead literal
-    # follow-up, #532/MET-06) — the actual inventory cache-size gauge uses
-    # INVENTORY_CACHE_ENTRIES below. It previously doubled as the base string that
-    # core/metric_expiration.py string-concatenated to derive an unrelated
-    # "meraki_exporter_cache_size_tracked_metrics" gauge name; that gauge now has
-    # its own dedicated EXPIRATION_TRACKED_METRICS entry below. The former hit/miss
-    # counter enums were declared but never registered as Counters and have been
-    # removed.
-    INVENTORY_CACHE_SIZE = "meraki_exporter_cache_size"
     INVENTORY_CACHE_ENTRIES = "meraki_exporter_inventory_cache_size"
 
     # API client metrics

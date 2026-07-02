@@ -541,25 +541,6 @@ V1_RENAME_TABLE: list[tuple[type[StrEnum], str, str, str]] = [
     (MTMetricName, "MT_BATTERY_PERCENTAGE", "MT_BATTERY_PERCENT", "meraki_mt_battery_percent"),
 ]
 
-# Dead enums owned by #538 — #531 must NOT touch them (spec §3).
-DEAD_ENUMS_UNTOUCHED: list[tuple[type[StrEnum], str, str]] = [
-    (OrgMetricName, "ORG_LOGIN_SECURITY_ENABLED", "meraki_org_login_security_enabled"),
-    (
-        OrgMetricName,
-        "ORG_LOGIN_SECURITY_IP_RESTRICTIONS_ENABLED",
-        "meraki_org_login_security_ip_restrictions_enabled",
-    ),
-    (NetworkMetricName, "NETWORK_CLIENTS_TOTAL", "meraki_network_clients_total"),
-    (NetworkMetricName, "NETWORK_TRAFFIC_BYTES", "meraki_network_traffic_bytes"),
-    (NetworkMetricName, "NETWORK_DEVICE_STATUS", "meraki_network_device_status"),
-    (
-        AlertMetricName,
-        "ORGANIZATION_HEALTH_ALERTS_TOTAL",
-        "meraki_organization_health_alerts_total",
-    ),
-    (AlertMetricName, "HEALTH_ALERT_INFO", "meraki_health_alert_info"),
-]
-
 # All Meraki-network-data domain enums (excludes the exporter self-metric and
 # webhook enums, whose true Counters legitimately carry `_total`).
 DOMAIN_ENUMS: list[type[StrEnum]] = [
@@ -577,11 +558,7 @@ DOMAIN_ENUMS: list[type[StrEnum]] = [
     ClientMetricName,
 ]
 
-# Dead enums (deleted by #538) that still legitimately end in `_total` until then.
-_TOTAL_SUFFIX_ALLOWLIST = {
-    "meraki_network_clients_total",
-    "meraki_organization_health_alerts_total",
-}
+_TOTAL_SUFFIX_ALLOWLIST: set[str] = set()
 
 # Suffixes banned by the v1 naming convention: non-base units, `_percentage`,
 # and rate suffixes that misstate the value's unit (spec §1 D1-D5, D7).
@@ -634,17 +611,6 @@ class TestV1MetricRenames:
         assert old_member not in enum_cls.__members__, (
             f"{enum_cls.__name__}.{old_member} still exists; it must be renamed to {new_member}"
         )
-
-    @pytest.mark.parametrize(
-        "enum_cls,member,value",
-        DEAD_ENUMS_UNTOUCHED,
-        ids=[f"{cls.__name__}.{member}" for cls, member, _ in DEAD_ENUMS_UNTOUCHED],
-    )
-    def test_dead_enums_left_for_538(
-        self, enum_cls: type[StrEnum], member: str, value: str
-    ) -> None:
-        """Dead enums belong to #538 — #531 must leave them byte-identical."""
-        assert enum_cls[member].value == value
 
     def test_no_domain_gauge_ends_in_total(self) -> None:
         """`_total` is reserved for monotonic Counters (D1/D2); domain gauges must not use it."""
