@@ -379,6 +379,64 @@ class TestOrganizationInventoryEdgeCases:
         assert len(result) == 0
 
 
+def _make_api_error(status_code: int):
+    """Build a real ``meraki.exceptions.APIError`` with the given HTTP status."""
+    from meraki.exceptions import APIError
+
+    metadata = {"tags": ["organizations"], "operation": "test"}
+    response = MagicMock()
+    response.status_code = status_code
+    response.reason = "Error"
+    response.json.return_value = {"errors": [f"HTTP {status_code}"]}
+    return APIError(metadata, response)
+
+
+class TestMakeApiCallAuthLatch:
+    """`_make_api_call` records the auth-outcome latch on AsyncMerakiClient (#509)."""
+
+    async def test_success_records_auth_true(self, inventory_service) -> None:
+        """A successful fetch records the latch as authenticated (True)."""
+        from meraki_dashboard_exporter.api.client import AsyncMerakiClient
+
+        def fetcher(*args, **kwargs):
+            return {"ok": True}
+
+        result = await inventory_service._make_api_call("testEndpoint", fetcher)
+
+        assert result == {"ok": True}
+        assert AsyncMerakiClient.get_auth_ok() is True
+
+    async def test_401_raises_and_records_auth_false(self, inventory_service) -> None:
+        """A 401 APIError propagates AND records the latch as unauthenticated (False)."""
+        from meraki.exceptions import APIError
+
+        from meraki_dashboard_exporter.api.client import AsyncMerakiClient
+
+        def fetcher(*args, **kwargs):
+            raise _make_api_error(401)
+
+        with pytest.raises(APIError):
+            await inventory_service._make_api_call("testEndpoint", fetcher)
+
+        assert AsyncMerakiClient.get_auth_ok() is False
+
+    async def test_500_leaves_latch_unchanged(self, inventory_service) -> None:
+        """A non-401 APIError (e.g. 500) does not alter the auth latch."""
+        from meraki.exceptions import APIError
+
+        from meraki_dashboard_exporter.api.client import AsyncMerakiClient
+
+        AsyncMerakiClient.record_auth_outcome(True)
+
+        def fetcher(*args, **kwargs):
+            raise _make_api_error(500)
+
+        with pytest.raises(APIError):
+            await inventory_service._make_api_call("testEndpoint", fetcher)
+
+        assert AsyncMerakiClient.get_auth_ok() is True
+
+
 class TestOrganizationInventoryMetrics:
     """Test metrics tracking in inventory service."""
 

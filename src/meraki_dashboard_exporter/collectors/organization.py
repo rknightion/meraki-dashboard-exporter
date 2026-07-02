@@ -15,6 +15,7 @@ from ..core.error_handling import (
     CollectorError,
     DataValidationError,
     ErrorCategory,
+    NothingCollectedError,
     validate_response_format,
     with_error_handling,
 )
@@ -275,46 +276,75 @@ class OrganizationCollector(MetricCollector):
         organizations_processed = 0
         api_calls_made = 0
 
-        try:
-            # Get organizations
-            organizations = await self._fetch_organizations()
-            if not organizations:
-                logger.warning("No organizations found to collect metrics from")
-                return
-            api_calls_made += 1
+        # Get organizations. No blanket try/except here (#509): a failure to
+        # fetch organizations is a genuine collection failure and must raise
+        # out of _collect_impl so the manager records the cycle as a failure
+        # instead of a spurious success.
+        organizations = await self._fetch_organizations()
+        if not organizations:
+            logger.warning("No organizations found to collect metrics from")
+            return
+        api_calls_made += 1
 
-            logger.info(
-                "Starting parallel organization processing",
-                org_count=len(organizations),
-                concurrency_limit=self.settings.api.concurrency_limit,
-            )
+        logger.info(
+            "Starting parallel organization processing",
+            org_count=len(organizations),
+            concurrency_limit=self.settings.api.concurrency_limit,
+        )
 
-            # Process organizations in parallel with bounded concurrency
-            async with ManagedTaskGroup(
-                name="org_collector_orgs",
-                max_concurrency=self.settings.api.concurrency_limit,
-            ) as group:
-                for org in organizations:
-                    await group.create_task(
-                        self._collect_org_metrics(org),
-                        name=f"org_{org['id']}",
+        # Process organizations in parallel with bounded concurrency. Orgs
+        # currently in OrgHealthTracker backoff are skipped HERE, before the
+        # worker coroutine is even constructed (not inside the worker), so an
+        # all-orgs-in-backoff cycle can be distinguished from a genuine
+        # success by the frozen coordinator failure rule below (#509).
+        skipped_backoff = 0
+        async with ManagedTaskGroup(
+            name="org_collector_orgs",
+            max_concurrency=self.settings.api.concurrency_limit,
+        ) as group:
+            for org in organizations:
+                org_id = org["id"]
+                if not self.org_health_tracker.should_collect(org_id):
+                    health = self.org_health_tracker.get_health(org_id)
+                    logger.info(
+                        "Skipping organization collection due to backoff",
+                        org_id=org_id,
+                        org_name=org.get("name"),
+                        consecutive_failures=health.consecutive_failures if health else 0,
                     )
-                    organizations_processed += 1
+                    self._org_collection_status.labels(**create_org_labels(org)).set(0)
+                    skipped_backoff += 1
+                    continue
+                await group.create_task(
+                    self._collect_org_metrics(org),
+                    name=f"org_{org_id}",
+                )
+                organizations_processed += 1
 
-            # Approximate API calls (actual count may vary)
-            api_calls_made += organizations_processed * 7
-
-            # Log collection summary
-            log_metric_collection_summary(
-                "OrganizationCollector",
-                metrics_collected=metrics_collected,
-                duration_seconds=asyncio.get_event_loop().time() - start_time,
-                organizations_processed=organizations_processed,
-                api_calls_made=api_calls_made,
+        attempted = len(organizations) - skipped_backoff
+        if (
+            organizations
+            and group.succeeded_count == 0
+            and (group.failed_count > 0 or attempted == 0)
+        ):
+            raise NothingCollectedError(
+                self.__class__.__name__,
+                attempted=attempted,
+                failed=group.failed_count,
+                skipped_backoff=skipped_backoff,
             )
 
-        except Exception:
-            logger.exception("Failed to collect organization metrics")
+        # Approximate API calls (actual count may vary)
+        api_calls_made += organizations_processed * 7
+
+        # Log collection summary
+        log_metric_collection_summary(
+            "OrganizationCollector",
+            metrics_collected=metrics_collected,
+            duration_seconds=asyncio.get_event_loop().time() - start_time,
+            organizations_processed=organizations_processed,
+            api_calls_made=api_calls_made,
+        )
 
     async def _fetch_organizations(self) -> list[dict[str, Any]] | None:
         """Fetch organizations using inventory cache.
@@ -342,10 +372,15 @@ class OrganizationCollector(MetricCollector):
     @log_batch_operation("collect org metrics", batch_size=1)
     @with_error_handling(
         operation="Collect organization metrics",
-        continue_on_error=True,
+        continue_on_error=False,
     )
     async def _collect_org_metrics(self, org: dict[str, Any]) -> None:
         """Collect metrics for a specific organization.
+
+        Note: the OrgHealthTracker backoff check has moved to the coordinator
+        (`_collect_impl`), which now skips backed-off orgs before this worker
+        is even scheduled (#509) -- so this method no longer needs to check
+        `should_collect` itself.
 
         Parameters
         ----------
@@ -355,19 +390,6 @@ class OrganizationCollector(MetricCollector):
         """
         org_id = org["id"]
         org_name = org["name"]
-
-        # Check if this org is in backoff - if so, skip collection
-        if not self.org_health_tracker.should_collect(org_id):
-            health = self.org_health_tracker.get_health(org_id)
-            logger.info(
-                "Skipping organization collection due to backoff",
-                org_id=org_id,
-                org_name=org_name,
-                consecutive_failures=health.consecutive_failures if health else 0,
-            )
-            org_labels = create_org_labels(org)
-            self._org_collection_status.labels(**org_labels).set(0)
-            return
 
         org_labels = create_org_labels(org)
 
@@ -388,7 +410,10 @@ class OrganizationCollector(MetricCollector):
                 # Collect every sub-collection, tracking (not raising) failures so
                 # one broken endpoint never prevents the rest of this org's metrics
                 # from being collected.
-                failed_sub_collections = await self._run_org_sub_collections(org_id, org_name)
+                (
+                    failed_sub_collections,
+                    succeeded_sub_collections,
+                ) = await self._run_org_sub_collections(org_id, org_name)
 
             if failed_sub_collections:
                 # At least one sub-collection failed with a real (non-404) error
@@ -418,8 +443,24 @@ class OrganizationCollector(MetricCollector):
             )
             self.org_health_tracker.record_failure(org_id, org_name)
             self._org_collection_status.labels(**org_labels).set(0)
+            raise
 
-    async def _run_org_sub_collections(self, org_id: str, org_name: str) -> list[str]:
+        if failed_sub_collections and succeeded_sub_collections == 0:
+            # Every sub-collection failed with a real (non-404) error this
+            # cycle -- this org contributed nothing this cycle, so this
+            # worker must raise to be counted as failed by the coordinator's
+            # ManagedTaskGroup (#509). Raised OUTSIDE the try/except above (a
+            # deliberate deviation from the spec's literal placement) so
+            # OrgHealthTracker.record_failure -- already called once in the
+            # F-040 branch above -- is not invoked a second time by the
+            # except block re-catching this raise.
+            raise CollectorError(
+                f"All organization sub-collections failed for org {org_id}",
+                ErrorCategory.API_CLIENT_ERROR,
+                {"org_id": org_id},
+            )
+
+    async def _run_org_sub_collections(self, org_id: str, org_name: str) -> tuple[list[str], int]:
         """Run every per-organization sub-collection, tracking which ones fail.
 
         Every sub-collection is attempted even if an earlier one failed, so a
@@ -450,16 +491,25 @@ class OrganizationCollector(MetricCollector):
 
         Returns
         -------
-        list[str]
-            Names of sub-collections that failed with a non-404 error this
-            cycle -- either by raising (the six direct sub-collections) or by
-            returning ``False`` (the five delegating sub-collectors) -- empty
-            if every sub-collection succeeded or 404'd.
+        tuple[list[str], int]
+            ``(failed, succeeded)`` -- ``failed`` is the names of
+            sub-collections that failed with a non-404 error this cycle
+            (either by raising, the six direct sub-collections, or by
+            returning ``False``, the five delegating sub-collectors); empty
+            if every sub-collection succeeded or 404'd. ``succeeded`` is the
+            count of sub-collections whose result was not ``False`` (i.e. a
+            direct sub-collection returning ``None``, or a delegating
+            sub-collector returning ``True``) -- used by the caller (#509) to
+            detect an org where every attempted sub-collection failed. A 404
+            (``API_NOT_AVAILABLE``) early-return counts as neither failed nor
+            succeeded.
 
         """
         failed: list[str] = []
+        succeeded = 0
 
         async def _attempt(name: str, coro: Coroutine[Any, Any, bool | None]) -> None:
+            nonlocal succeeded
             try:
                 result = await coro
             except CollectorError as exc:
@@ -480,6 +530,8 @@ class OrganizationCollector(MetricCollector):
                 # sub-collections return None on success and are unaffected.
                 if result is False:
                     failed.append(name)
+                else:
+                    succeeded += 1
 
         await _attempt("api_metrics", self._collect_api_metrics(org_id, org_name))
         await _attempt("network_metrics", self._collect_network_metrics(org_id, org_name))
@@ -506,7 +558,7 @@ class OrganizationCollector(MetricCollector):
             self._collect_application_usage_metrics(org_id, org_name),
         )
 
-        return failed
+        return failed, succeeded
 
     async def _collect_api_metrics(self, org_id: str, org_name: str) -> bool:
         """Collect API usage metrics.

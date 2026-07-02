@@ -117,6 +117,7 @@ class ManagedTaskGroup:
         self._active_count = 0
         self._total_created = 0
         self._total_completed = 0
+        self._cancelled_count = 0
         # Exceptions from tasks are recorded here as they complete (including
         # early finishers that are discarded from ``self.tasks`` before
         # ``__aexit__`` gathers the survivors), so no task's failure is lost.
@@ -267,14 +268,26 @@ class ManagedTaskGroup:
             # ensures a fail-fast task surfaces through the group's machinery
             # even though it is discarded from ``self.tasks`` right now — before
             # ``__aexit__`` inspects the survivors.
-            if not t.cancelled():
-                exc = t.exception()
-                if exc is not None and not isinstance(exc, asyncio.CancelledError):
-                    self._task_exceptions.append(exc)
+            if t.cancelled():
+                self._cancelled_count += 1
+                return
+            exc = t.exception()
+            if exc is not None and not isinstance(exc, asyncio.CancelledError):
+                self._task_exceptions.append(exc)
 
         task.add_done_callback(_on_complete)
 
         return task
+
+    @property
+    def failed_count(self) -> int:
+        """Number of tasks that completed with an exception (cancellations excluded)."""
+        return len(self._task_exceptions)
+
+    @property
+    def succeeded_count(self) -> int:
+        """Number of tasks that completed without raising (cancellations excluded)."""
+        return self._total_completed - self._cancelled_count - len(self._task_exceptions)
 
     async def _run_with_semaphore(
         self,

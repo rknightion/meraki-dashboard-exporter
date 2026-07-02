@@ -4,11 +4,19 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
+from meraki_dashboard_exporter.core.error_handling import CollectorError, NothingCollectedError
 from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
 from tests.helpers.base import BaseCollectorTest
-from tests.helpers.factories import DeviceFactory, NetworkFactory, OrganizationFactory
+from tests.helpers.factories import (
+    DeviceFactory,
+    DeviceStatusFactory,
+    NetworkFactory,
+    OrganizationFactory,
+)
 
 
 def _backed_off_tracker(org_id: str) -> OrgHealthTracker:
@@ -21,49 +29,85 @@ def _backed_off_tracker(org_id: str) -> OrgHealthTracker:
 
 
 class TestDeviceCollectorOrgHealthGating(BaseCollectorTest):
-    """F-169: DeviceCollector honours the shared OrgHealthTracker per-org gate."""
+    """F-169: DeviceCollector honours the shared OrgHealthTracker per-org gate.
+
+    #509: the backoff check moved from the per-org worker (`_collect_org_devices`)
+    into the coordinator's task-creation loop (`_collect_impl`), so gating is now
+    exercised through a full `collect()` cycle rather than by calling the worker
+    directly.
+    """
 
     collector_class = DeviceCollector
     update_tier = UpdateTier.MEDIUM
 
     async def test_backed_off_org_is_skipped(
-        self, mock_api, settings, isolated_registry, inventory
+        self, mock_api_builder, settings, isolated_registry, inventory
     ):
-        """A backed-off org is skipped before any device fetch; a healthy org is not."""
+        """A backed-off org's devices are never fetched; a healthy org's are."""
+        healthy = OrganizationFactory.create(org_id="HEALTHY")
+        backed = OrganizationFactory.create(org_id="BACKED")
         tracker = _backed_off_tracker("BACKED")
+
+        api = (
+            mock_api_builder
+            .with_organizations([healthy, backed])
+            .with_devices([], org_id="HEALTHY")
+            .with_devices([], org_id="BACKED")
+            .with_device_statuses([], org_id="HEALTHY")
+            .with_device_statuses([], org_id="BACKED")
+            .build()
+        )
+        inventory.api = api
+
         collector = DeviceCollector(
-            api=mock_api,
+            api=api,
             settings=settings,
             registry=isolated_registry,
             inventory=inventory,
             org_health_tracker=tracker,
         )
+
         fetched: list[str] = []
+        real_fetch_devices = collector._fetch_devices
 
         async def _spy(org_id: str) -> list:
             fetched.append(org_id)
-            return []
+            return await real_fetch_devices(org_id)
 
         collector._fetch_devices = _spy  # type: ignore[method-assign]
 
-        await collector._collect_org_devices("BACKED", "Backed Org")
-        assert fetched == []  # gate short-circuited before the fetch
+        await collector.collect()
 
-        await collector._collect_org_devices("HEALTHY", "Healthy Org")
-        assert fetched == ["HEALTHY"]
+        assert fetched == ["HEALTHY"]  # BACKED never reached the fetch
 
-    async def test_none_tracker_collects_all(self, collector):
+    async def test_none_tracker_collects_all(
+        self, collector, mock_api_builder, settings, inventory
+    ):
         """With no tracker wired in, every org is collected (backward compatible)."""
         assert collector.org_health_tracker is None
+
+        org = OrganizationFactory.create(org_id="ANY")
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_devices([], org_id="ANY")
+            .with_device_statuses([], org_id="ANY")
+            .build()
+        )
+        collector.api = api
+        collector.inventory.api = api
+
         fetched: list[str] = []
+        real_fetch_devices = collector._fetch_devices
 
         async def _spy(org_id: str) -> list:
             fetched.append(org_id)
-            return []
+            return await real_fetch_devices(org_id)
 
         collector._fetch_devices = _spy  # type: ignore[method-assign]
 
-        await collector._collect_org_devices("ANY", "Any Org")
+        await collector.collect()
+
         assert fetched == ["ANY"]
 
 
@@ -438,6 +482,7 @@ class TestDeviceCollector(BaseCollectorTest):
         api = (
             mock_api_builder
             .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
             .with_devices(devices, org_id=org["id"])
             .with_device_statuses([], org_id=org["id"])
             .with_custom_response(
@@ -446,6 +491,7 @@ class TestDeviceCollector(BaseCollectorTest):
             .build()
         )
         collector.api = api
+        collector.inventory.api = api
         # Update MR collector's API reference
         collector.mr_collector.api = api
 
@@ -653,7 +699,13 @@ class TestDeviceCollector(BaseCollectorTest):
     async def test_device_collection_basic(self, collector, mock_api_builder, metrics):
         """Test basic device collection functionality."""
         # Set up standard test data
-        self.setup_standard_test_data(mock_api_builder)
+        test_data = self.setup_standard_test_data(mock_api_builder)
+        # Availabilities must be explicitly configured or the mock returns an
+        # unconfigured MagicMock, which now raises DataValidationError (#509
+        # exposed this pre-existing test-fixture gap once org failures stopped
+        # being silently swallowed).
+        for org in test_data["organizations"]:
+            mock_api_builder.with_device_statuses([], org_id=org["id"])
         collector.api = mock_api_builder.build()
 
         # Run collection
@@ -710,3 +762,93 @@ class TestDeviceCollector(BaseCollectorTest):
         await collector._collect_org_devices(org["id"], org.get("name", "Test Org"))
 
         collector._collect_ms_specific_metrics.assert_called_once()
+
+
+class TestDeviceCollectorNothingCollected(BaseCollectorTest):
+    """#509: total collection failure must raise instead of being swallowed.
+
+    Base settings are multi-org (no ``settings.meraki.org_id`` configured), so
+    ``getOrganizations`` errors raise straight through
+    ``OrganizationInventory.get_organizations`` rather than being replaced with
+    a single-org placeholder.
+    """
+
+    collector_class = DeviceCollector
+    update_tier = UpdateTier.MEDIUM
+
+    async def test_org_fetch_failure_raises(self, collector, mock_api_builder):
+        """A hard failure fetching organizations must raise, not swallow."""
+        api = mock_api_builder.with_error("getOrganizations", Exception("Connection error")).build()
+        collector.api = api
+        collector.inventory.api = api
+
+        with pytest.raises(CollectorError):
+            await collector.collect()
+
+    async def test_all_orgs_failed_raises_nothing_collected(self, collector, mock_api_builder):
+        """Every org's primary fetch failing must raise NothingCollectedError."""
+        org = OrganizationFactory.create(org_id="123456")
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_error("getOrganizationDevices", Exception("Connection error"))
+            .build()
+        )
+        collector.api = api
+        collector.inventory.api = api
+
+        with pytest.raises(NothingCollectedError):
+            await collector.collect()
+
+    async def test_partial_org_failure_does_not_raise(self, collector, mock_api_builder, metrics):
+        """One org failing while another succeeds must NOT raise (partial success)."""
+        healthy_org = OrganizationFactory.create(org_id="HEALTHY")
+        broken_org = OrganizationFactory.create(org_id="BROKEN")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network")
+        device = DeviceFactory.create_mr(
+            serial="Q2KD-XXXX",
+            name="Healthy AP",
+            network_id=network["id"],
+        )
+
+        api = (
+            mock_api_builder
+            .with_organizations([healthy_org, broken_org])
+            .with_networks([network], org_id="HEALTHY")
+            .with_devices([device], org_id="HEALTHY")
+            .with_device_statuses(
+                [DeviceStatusFactory.create(serial="Q2KD-XXXX", status="online")], org_id="HEALTHY"
+            )
+            .with_error("getOrganizationDevices", Exception("Connection error"), org_id="BROKEN")
+            .build()
+        )
+        collector.api = api
+        collector.inventory.api = api
+
+        await collector.collect()
+
+        metrics.assert_gauge_value("meraki_device_up", 1, serial="Q2KD-XXXX")
+
+    async def test_all_orgs_in_backoff_raises(self, collector, mock_api_builder):
+        """Every org skipped for backoff must raise NothingCollectedError (not a spurious success)."""
+        org = OrganizationFactory.create(org_id="BACKED")
+        api = mock_api_builder.with_organizations([org]).build()
+        collector.api = api
+        collector.inventory.api = api
+        collector.org_health_tracker = _backed_off_tracker("BACKED")
+
+        with pytest.raises(NothingCollectedError) as exc_info:
+            await collector.collect()
+
+        assert exc_info.value.skipped_backoff == 1
+        assert exc_info.value.failed == 0
+
+    async def test_empty_org_list_is_success(self, collector, mock_api_builder, metrics):
+        """An empty (but successfully fetched) org list is a legitimate no-op success."""
+        api = mock_api_builder.with_organizations([]).build()
+        collector.api = api
+        collector.inventory.api = api
+
+        await collector.collect()
+
+        self.assert_collector_success(collector, metrics)

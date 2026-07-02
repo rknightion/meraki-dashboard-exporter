@@ -15,7 +15,13 @@ from ..core.constants import (
     DeviceType,
     UpdateTier,
 )
-from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ..core.error_handling import (
+    CollectorError,
+    ErrorCategory,
+    NothingCollectedError,
+    validate_response_format,
+    with_error_handling,
+)
 from ..core.label_helpers import create_device_labels
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call, log_batch_operation
@@ -301,66 +307,91 @@ class DeviceCollector(MetricCollector):
         # Reset active-key tracker for this collection cycle
         self._active_cache_keys = set()
 
-        try:
-            # Get organizations with error handling
-            organizations = await self._fetch_organizations()
-            if not organizations:
-                logger.warning("No organizations found for device collection")
-                return
-            api_calls_made += 1
+        # Get organizations with error handling
+        organizations = await self._fetch_organizations()
+        if not organizations:
+            logger.warning("No organizations found for device collection")
+            return
+        api_calls_made += 1
 
-            logger.info(
-                "Starting parallel organization processing",
-                org_count=len(organizations),
-                concurrency_limit=self.settings.api.concurrency_limit,
-            )
+        logger.info(
+            "Starting parallel organization processing",
+            org_count=len(organizations),
+            concurrency_limit=self.settings.api.concurrency_limit,
+        )
 
-            # Process organizations in parallel with bounded concurrency
-            async with ManagedTaskGroup(
-                name="device_collector_orgs",
-                max_concurrency=self.settings.api.concurrency_limit,
-            ) as group:
-                for org in organizations:
-                    await group.create_task(
-                        self._collect_org_devices(org["id"], org.get("name", org["id"])),
-                        name=f"org_{org['id']}",
+        # Process organizations in parallel with bounded concurrency. Backoff
+        # gating happens here (before task creation) rather than inside the
+        # worker so an all-in-backoff cycle can be distinguished from a
+        # genuine success (#509 frozen coordinator rule).
+        skipped_backoff = 0
+        async with ManagedTaskGroup(
+            name="device_collector_orgs",
+            max_concurrency=self.settings.api.concurrency_limit,
+        ) as group:
+            for org in organizations:
+                org_id = org["id"]
+                if (
+                    self.org_health_tracker is not None
+                    and not self.org_health_tracker.should_collect(org_id)
+                ):
+                    skipped_backoff += 1
+                    logger.debug(
+                        "Skipping device collection for organization in backoff",
+                        org_id=org_id,
+                        org_name=org.get("name", org_id),
                     )
-                    organizations_processed += 1
+                    continue
+                await group.create_task(
+                    self._collect_org_devices(org_id, org.get("name", org_id)),
+                    name=f"org_{org_id}",
+                )
+                organizations_processed += 1
 
-            # Approximate API calls (actual count may vary)
-            api_calls_made += organizations_processed * 10
-
-            # Evict packet metric cache entries for devices no longer seen this cycle
-            self._evict_stale_cache_entries(self._active_cache_keys)
-            # Evict MS collector timestamp caches for serials no longer seen this cycle
-            self.ms_collector._evict_stale_serials(self.ms_collector._active_serials)
-            # Reset MS active serials for next cycle
-            self.ms_collector._active_serials = set()
-
-            # Log collection summary
-            log_metric_collection_summary(
-                "DeviceCollector",
-                metrics_collected=metrics_collected,
-                duration_seconds=asyncio.get_event_loop().time() - start_time,
-                organizations_processed=organizations_processed,
-                api_calls_made=api_calls_made,
+        attempted = len(organizations) - skipped_backoff
+        if (
+            organizations
+            and group.succeeded_count == 0
+            and (group.failed_count > 0 or attempted == 0)
+        ):
+            raise NothingCollectedError(
+                self.__class__.__name__,
+                attempted=attempted,
+                failed=group.failed_count,
+                skipped_backoff=skipped_backoff,
             )
 
-        except Exception:
-            logger.exception("Failed to collect device metrics")
+        # Approximate API calls (actual count may vary)
+        api_calls_made += organizations_processed * 10
+
+        # Evict packet metric cache entries for devices no longer seen this cycle
+        self._evict_stale_cache_entries(self._active_cache_keys)
+        # Evict MS collector timestamp caches for serials no longer seen this cycle
+        self.ms_collector._evict_stale_serials(self.ms_collector._active_serials)
+        # Reset MS active serials for next cycle
+        self.ms_collector._active_serials = set()
+
+        # Log collection summary
+        log_metric_collection_summary(
+            "DeviceCollector",
+            metrics_collected=metrics_collected,
+            duration_seconds=asyncio.get_event_loop().time() - start_time,
+            organizations_processed=organizations_processed,
+            api_calls_made=api_calls_made,
+        )
 
     @with_error_handling(
         operation="Fetch organizations",
-        continue_on_error=True,
+        continue_on_error=False,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def _fetch_organizations(self) -> list[dict[str, Any]] | None:
+    async def _fetch_organizations(self) -> list[dict[str, Any]]:
         """Fetch organizations for device collection using inventory cache.
 
         Returns
         -------
-        list[dict[str, Any]] | None
-            List of organizations or None on error.
+        list[dict[str, Any]]
+            List of organizations.
 
         Raises
         ------
@@ -380,7 +411,7 @@ class DeviceCollector(MetricCollector):
     @log_batch_operation("collect devices", batch_size=None)
     @with_error_handling(
         operation="Collect organization devices",
-        continue_on_error=True,
+        continue_on_error=False,
     )
     async def _collect_org_devices(self, org_id: str, org_name: str) -> None:
         """Collect device metrics for an organization.
@@ -393,17 +424,6 @@ class DeviceCollector(MetricCollector):
             Organization name.
 
         """
-        # Skip organizations currently in backoff so a persistently-failing org
-        # does not receive full-rate device collection every cycle (F-169).
-        if self.org_health_tracker is not None and not self.org_health_tracker.should_collect(
-            org_id
-        ):
-            logger.debug(
-                "Skipping device collection for organization in backoff",
-                org_id=org_id,
-                org_name=org_name,
-            )
-            return
         try:
             with LogContext(org_id=org_id):
                 # Local device lookup map - must not be an instance attribute
@@ -412,8 +432,14 @@ class DeviceCollector(MetricCollector):
 
                 # Fetch devices with error handling
                 devices = await self._fetch_devices(org_id)
+                if devices is None:
+                    raise CollectorError(
+                        "Device fetch failed for organization",
+                        ErrorCategory.API_CLIENT_ERROR,
+                        {"org_id": org_id},
+                    )
                 if not devices:
-                    logger.warning("No devices found", org_id=org_id)
+                    logger.info("No devices found", org_id=org_id)
                     return
 
                 # Fetch availabilities with error handling
@@ -661,6 +687,8 @@ class DeviceCollector(MetricCollector):
             if any(d for d in devices if d.get("model", "").startswith(DeviceType.MG)):
                 await self._collect_mg_specific_metrics(org_id, org_name, device_lookup)
 
+        except CollectorError:
+            raise
         except Exception as e:
             logger.exception(
                 "Failed to collect devices for organization",

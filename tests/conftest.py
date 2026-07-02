@@ -45,6 +45,16 @@ def isolated_registry():
     # Registry will be garbage collected after test
 
 
+@pytest.fixture(autouse=True)
+def reset_client_auth_state():
+    """Reset the AsyncMerakiClient auth-outcome latch around every test (#509)."""
+    from meraki_dashboard_exporter.api.client import AsyncMerakiClient
+
+    AsyncMerakiClient.reset_auth_state()
+    yield
+    AsyncMerakiClient.reset_auth_state()
+
+
 @pytest.fixture
 def force_debug_log_capture():
     """Force structlog to emit DEBUG events so ``capture_logs()`` can record them.

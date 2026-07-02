@@ -13,6 +13,7 @@ from meraki_dashboard_exporter.core.error_handling import (
     CollectorError,
     DataValidationError,
     ErrorCategory,
+    NothingCollectedError,
     RetryableAPIError,
     _categorize_error,  # noqa: PLC2701  (intentionally testing the private categorizer)
     batch_with_concurrency_limit,
@@ -84,6 +85,16 @@ class TestCollectorErrors:
         assert str(error) == "Expected list, got dict"
         assert error.category == ErrorCategory.VALIDATION
         assert error.context == {"response_type": "dict", "endpoint": "/devices"}
+
+    def test_nothing_collected_error(self) -> None:
+        """Test NothingCollectedError (#509 seam)."""
+        error = NothingCollectedError("X", attempted=3, failed=3, skipped_backoff=1)
+        assert isinstance(error, CollectorError)
+        assert error.category == ErrorCategory.API_CLIENT_ERROR
+        assert error.attempted == 3
+        assert error.failed == 3
+        assert error.skipped_backoff == 1
+        assert "attempted=3" in str(error)
 
 
 class TestWithErrorHandlingDecorator:

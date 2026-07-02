@@ -191,6 +191,7 @@ class TestCollectorManagerReadiness:
 
         mock_client = MagicMock()
         mock_client.api = MagicMock()
+        mock_client.get_successful_api_requests.return_value = 0
 
         # Patch out all the metric registrations to avoid Prometheus duplicate errors
         with patch.object(CollectorManager, "_initialize_metrics"):
@@ -213,6 +214,7 @@ class TestCollectorManagerReadiness:
 
         mock_client = MagicMock()
         mock_client.api = MagicMock()
+        mock_client.get_successful_api_requests.return_value = 0
 
         with patch.object(CollectorManager, "_initialize_metrics"):
             with patch.object(CollectorManager, "_initialize_collectors"):
@@ -222,6 +224,7 @@ class TestCollectorManagerReadiness:
         status = manager.get_readiness_status()
         assert status == {
             "ready": False,
+            "api_success": False,
             "collectors": {"fast": False, "medium": False, "slow": False},
         }
 
@@ -233,6 +236,7 @@ class TestCollectorManagerReadiness:
 
         mock_client = MagicMock()
         mock_client.api = MagicMock()
+        mock_client.get_successful_api_requests.return_value = 5
 
         with patch.object(CollectorManager, "_initialize_metrics"):
             with patch.object(CollectorManager, "_initialize_collectors"):
@@ -255,6 +259,7 @@ class TestCollectorManagerReadiness:
 
         mock_client = MagicMock()
         mock_client.api = MagicMock()
+        mock_client.get_successful_api_requests.return_value = 5
 
         with patch.object(CollectorManager, "_initialize_metrics"):
             with patch.object(CollectorManager, "_initialize_collectors"):
@@ -267,8 +272,8 @@ class TestCollectorManagerReadiness:
 
         assert manager.is_ready is True
 
-    def test_get_readiness_status_when_ready(self, test_settings: Settings) -> None:
-        """Test get_readiness_status when both required tiers are complete."""
+    def test_is_ready_requires_api_success(self, test_settings: Settings) -> None:
+        """Test that is_ready is gated on >=1 HTTP-200 API request (#509)."""
         from unittest.mock import patch
 
         from meraki_dashboard_exporter.collectors.manager import CollectorManager
@@ -284,8 +289,33 @@ class TestCollectorManagerReadiness:
         manager._tier_initial_complete["fast"] = True
         manager._tier_initial_complete["medium"] = True
 
+        mock_client.get_successful_api_requests.return_value = 0
+        assert manager.is_ready is False
+
+        mock_client.get_successful_api_requests.return_value = 5
+        assert manager.is_ready is True
+
+    def test_get_readiness_status_when_ready(self, test_settings: Settings) -> None:
+        """Test get_readiness_status when both required tiers are complete."""
+        from unittest.mock import patch
+
+        from meraki_dashboard_exporter.collectors.manager import CollectorManager
+
+        mock_client = MagicMock()
+        mock_client.api = MagicMock()
+        mock_client.get_successful_api_requests.return_value = 5
+
+        with patch.object(CollectorManager, "_initialize_metrics"):
+            with patch.object(CollectorManager, "_initialize_collectors"):
+                with patch.object(CollectorManager, "_validate_collector_configuration"):
+                    manager = CollectorManager(client=mock_client, settings=test_settings)
+
+        manager._tier_initial_complete["fast"] = True
+        manager._tier_initial_complete["medium"] = True
+
         status = manager.get_readiness_status()
         assert status == {
             "ready": True,
+            "api_success": True,
             "collectors": {"fast": True, "medium": True, "slow": False},
         }

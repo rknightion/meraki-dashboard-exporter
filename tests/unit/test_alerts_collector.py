@@ -9,6 +9,7 @@ from meraki_dashboard_exporter.collectors import alerts as alerts_module
 from meraki_dashboard_exporter.collectors.alerts import AlertsCollector
 from meraki_dashboard_exporter.core.batch_processing import process_in_batches_with_errors
 from meraki_dashboard_exporter.core.constants import AlertMetricName, UpdateTier
+from meraki_dashboard_exporter.core.error_handling import NothingCollectedError
 from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import AlertFactory, DeviceFactory, NetworkFactory, OrganizationFactory
@@ -25,31 +26,50 @@ def _backed_off_tracker(org_id: str) -> OrgHealthTracker:
 
 
 class TestAlertsCollectorOrgHealthGating(BaseCollectorTest):
-    """F-169: AlertsCollector honours the shared OrgHealthTracker per-org gate."""
+    """F-169: AlertsCollector honours the shared OrgHealthTracker per-org gate.
+
+    #509: the backoff pre-filter moved from ``_collect_org_alerts`` into
+    ``_collect_impl`` (so an all-orgs-in-backoff cycle is visible to the
+    coordinator's failure accounting). ``_collect_org_alerts`` itself no
+    longer re-checks the tracker, so gating is now exercised end-to-end via
+    ``_collect_impl``/``collect()``.
+    """
 
     collector_class = AlertsCollector
     update_tier = UpdateTier.MEDIUM
 
     async def test_backed_off_org_is_skipped(
-        self, mock_api, settings, isolated_registry, inventory
+        self, mock_api_builder, settings, isolated_registry, inventory
     ):
         """A backed-off org is skipped before the alerts API call; a healthy org is not."""
+        org_backed = OrganizationFactory.create(org_id="BACKED", name="Backed Org")
+        org_healthy = OrganizationFactory.create(org_id="HEALTHY", name="Healthy Org")
+
         tracker = _backed_off_tracker("BACKED")
+        api = (
+            mock_api_builder
+            .with_organizations([org_backed, org_healthy])
+            .with_devices([], org_id="BACKED")
+            .with_devices([], org_id="HEALTHY")
+            .with_custom_response("getOrganizationAssuranceAlerts", [])
+            .build()
+        )
         collector = AlertsCollector(
-            api=mock_api,
+            api=api,
             settings=settings,
             registry=isolated_registry,
             inventory=inventory,
             org_health_tracker=tracker,
         )
-        api_call = MagicMock(return_value=[])
-        collector.api.organizations.getOrganizationAssuranceAlerts = api_call
+        collector.inventory.api = api
 
-        await collector._collect_org_alerts("BACKED", "Backed Org")
-        assert api_call.call_count == 0  # gate short-circuited before the API call
+        await self.run_collector(collector)
 
-        await collector._collect_org_alerts("HEALTHY", "Healthy Org")
-        assert api_call.call_count == 1
+        calls = [
+            call.args[0] for call in api.organizations.getOrganizationAssuranceAlerts.call_args_list
+        ]
+        assert "BACKED" not in calls
+        assert "HEALTHY" in calls
 
     async def test_none_tracker_collects_all(self, collector):
         """With no tracker wired in, every org is collected (backward compatible)."""
@@ -76,6 +96,7 @@ class TestAlertsCollector(BaseCollectorTest):
         api = (
             mock_api_builder
             .with_organizations([org])
+            .with_devices([], org_id="123")
             .with_custom_response("getOrganizationAssuranceAlerts", [])
             .build()
         )
@@ -139,6 +160,7 @@ class TestAlertsCollector(BaseCollectorTest):
         api = (
             mock_api_builder
             .with_organizations([org])
+            .with_devices([], org_id="123")
             .with_custom_response("getOrganizationAssuranceAlerts", alerts)
             .build()
         )
@@ -206,6 +228,7 @@ class TestAlertsCollector(BaseCollectorTest):
         api = (
             mock_api_builder
             .with_organizations([org])
+            .with_devices([], org_id="123")
             .with_custom_response("getOrganizationAssuranceAlerts", alerts)
             .build()
         )
@@ -222,7 +245,12 @@ class TestAlertsCollector(BaseCollectorTest):
         metrics.assert_metric_not_set(AlertMetricName.ALERTS_ACTIVE)
 
     async def test_collect_handles_api_404_error(self, collector, mock_api_builder, metrics):
-        """Test handling of 404 errors (alerts API not available)."""
+        """A 404 on the only org's alerts endpoint is now a total failure (#509).
+
+        Previously this was swallowed as a "gracefully handled" success; since
+        every org-scope unit of work failed, the coordinator must now raise
+        ``NothingCollectedError`` instead of recording a spurious success.
+        """
         # Set up test data
         org = OrganizationFactory.create(org_id="123", name="Test Org")
 
@@ -235,12 +263,9 @@ class TestAlertsCollector(BaseCollectorTest):
         )
         collector.api = api
 
-        # Run collection - should handle error gracefully
-        await self.run_collector(collector)
-
-        # Verify collector still succeeded (404 is handled gracefully)
-        self.assert_collector_success(collector, metrics)
-        self.assert_api_call_tracked(collector, metrics, "getOrganizationAssuranceAlerts")
+        # Run collection - all orgs failed -> raises
+        exc = await self.run_collector(collector, expect_success=False)
+        assert isinstance(exc, NothingCollectedError)
 
     async def test_collect_with_specific_org_id(
         self, mock_api_builder, settings, isolated_registry
@@ -287,6 +312,7 @@ class TestAlertsCollector(BaseCollectorTest):
         api = (
             mock_api_builder
             .with_organizations([org])
+            .with_devices([], org_id="123")
             .with_custom_response("getOrganizationAssuranceAlerts", alerts)
             .build()
         )
@@ -299,15 +325,19 @@ class TestAlertsCollector(BaseCollectorTest):
         self.assert_collector_success(collector, metrics)
 
     async def test_collect_handles_general_exception(self, collector, mock_api_builder, metrics):
-        """Test handling of general exceptions during collection."""
+        """An org-fetch failure now propagates out of ``collect()`` (#509).
+
+        Previously the outer blanket ``try/except`` in ``_collect_impl`` swallowed
+        this and the cycle was recorded as a success; it must now raise so the
+        manager records the cycle as a failure.
+        """
         # Configure mock API to raise exception
         api = mock_api_builder.with_error("getOrganizations", Exception("Network error")).build()
         collector.api = api
 
-        # Run collection - should handle error gracefully (AlertsCollector has error handling decorators)
-        await self.run_collector(collector, expect_success=True)
-
-        # The collector should complete successfully but log the error
+        # Run collection - the org-fetch failure must propagate.
+        exc = await self.run_collector(collector, expect_success=False)
+        assert isinstance(exc, Exception)
 
     def test_update_tier(self, collector):
         """Test that alerts collector has correct update tier."""
@@ -487,6 +517,7 @@ class TestAlertsCollector(BaseCollectorTest):
         api = (
             mock_api_builder
             .with_organizations([org])
+            .with_devices([], org_id="123")
             .with_custom_response("getOrganizationAssuranceAlerts", [])
             .with_custom_response("getOrganizationNetworks", [network])
             .with_custom_response("getNetworkSensorAlertsOverviewByMetric", [])
@@ -510,6 +541,7 @@ class TestAlertsCollector(BaseCollectorTest):
         api = (
             mock_api_builder
             .with_organizations([org])
+            .with_devices([], org_id="123")
             .with_custom_response("getOrganizationAssuranceAlerts", [])
             .with_custom_response("getOrganizationNetworks", [network])
             .with_error("getNetworkSensorAlertsOverviewByMetric", Exception("API Error"))
@@ -532,6 +564,7 @@ class TestAlertsCollector(BaseCollectorTest):
         api = (
             mock_api_builder
             .with_organizations([org])
+            .with_devices([], org_id="123")
             .with_custom_response("getOrganizationAssuranceAlerts", [])
             .with_custom_response("getOrganizationNetworks", [])
             .build()
@@ -563,6 +596,7 @@ class TestAlertsCollector(BaseCollectorTest):
         api = (
             mock_api_builder
             .with_organizations([org])
+            .with_devices([], org_id="123")
             .with_custom_response("getOrganizationAssuranceAlerts", [])
             .with_custom_response("getOrganizationNetworks", [network])
             .with_custom_response("getNetworkSensorAlertsOverviewByMetric", sensor_alert_response)
@@ -1010,3 +1044,92 @@ class TestAlertsCollector(BaseCollectorTest):
             severity="critical",
             device_type="MR",
         )
+
+
+class TestAlertsCollectorNothingCollected(BaseCollectorTest):
+    """#509: total-failure and all-in-backoff cycles must raise, not swallow.
+
+    ``AlertsCollector`` was a validated scope addition to #509 (its blanket
+    ``try/except`` in ``_collect_impl`` would otherwise keep the MEDIUM tier
+    marked complete -- and ``last_success_time`` advancing -- under a revoked
+    API key, permanently defeating the ``/health`` dead-man).
+    """
+
+    collector_class = AlertsCollector
+    update_tier = UpdateTier.MEDIUM
+
+    async def test_org_fetch_failure_raises(self, collector, mock_api_builder):
+        """A failure fetching the org list itself must propagate."""
+        api = mock_api_builder.with_error("getOrganizations", Exception("Connection error")).build()
+        collector.api = api
+
+        exc = await self.run_collector(collector, expect_success=False)
+        assert isinstance(exc, Exception)
+
+    async def test_all_orgs_failed_raises_nothing_collected(self, collector, mock_api_builder):
+        """A single org whose primary endpoint errors -> NothingCollectedError."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_error("getOrganizationAssuranceAlerts", Exception("Connection error"))
+            .build()
+        )
+        collector.api = api
+
+        exc = await self.run_collector(collector, expect_success=False)
+        assert isinstance(exc, NothingCollectedError)
+        assert exc.failed == 1
+        assert exc.skipped_backoff == 0
+
+    async def test_partial_org_failure_does_not_raise(self, collector, mock_api_builder, metrics):
+        """One of two orgs failing must not raise -- the healthy org still succeeds."""
+        org_bad = OrganizationFactory.create(org_id="BAD", name="Bad Org")
+        org_good = OrganizationFactory.create(org_id="GOOD", name="Good Org")
+
+        def get_assurance_alerts(org_id, **kwargs):
+            if org_id == "BAD":
+                raise Exception("Connection error")
+            return []
+
+        api = (
+            mock_api_builder
+            .with_organizations([org_bad, org_good])
+            .with_devices([], org_id="BAD")
+            .with_devices([], org_id="GOOD")
+            .build()
+        )
+        api.organizations.getOrganizationAssuranceAlerts = MagicMock(
+            side_effect=get_assurance_alerts
+        )
+        collector.api = api
+
+        await self.run_collector(collector)
+
+        self.assert_collector_success(collector, metrics)
+
+    async def test_all_orgs_in_backoff_raises(self, collector, mock_api_builder):
+        """Every org in backoff must raise NothingCollectedError with skipped_backoff set."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_custom_response("getOrganizationAssuranceAlerts", [])
+            .build()
+        )
+        collector.api = api
+        collector.org_health_tracker = _backed_off_tracker("123")
+
+        exc = await self.run_collector(collector, expect_success=False)
+        assert isinstance(exc, NothingCollectedError)
+        assert exc.failed == 0
+        assert exc.skipped_backoff == 1
+
+    async def test_empty_org_list_is_success(self, collector, mock_api_builder, metrics):
+        """An empty org list is a legitimate no-op, not a failure."""
+        api = mock_api_builder.with_organizations([]).build()
+        collector.api = api
+
+        await self.run_collector(collector)
+
+        self.assert_collector_success(collector, metrics)

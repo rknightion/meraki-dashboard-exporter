@@ -13,6 +13,7 @@ import pytest
 
 from meraki_dashboard_exporter.collectors.config import ConfigCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
+from meraki_dashboard_exporter.core.error_handling import NothingCollectedError
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import OrganizationFactory
 
@@ -89,6 +90,10 @@ class TestConfigCollectorResponseValidation(BaseCollectorTest):
                 "getOrganizationLoginSecurity",
                 {"errors": ["Something went wrong after retries"]},
             )
+            # Keep the other two sub-collections healthy so this is a partial
+            # (1-of-3) sub-collection failure, not a total org failure (#509).
+            .with_custom_response("getOrganizationAdmins", [])
+            .with_custom_response("getOrganizationConfigurationChanges", [])
             .build()
         )
         collector.api = api
@@ -127,6 +132,10 @@ class TestConfigCollectorResponseValidation(BaseCollectorTest):
                 "getOrganizationConfigurationChanges",
                 {"errors": ["retries exhausted"]},
             )
+            # Keep the other two sub-collections healthy so this is a partial
+            # (1-of-3) sub-collection failure, not a total org failure (#509).
+            .with_custom_response("getOrganizationLoginSecurity", {})
+            .with_custom_response("getOrganizationAdmins", [])
             .build()
         )
         collector.api = api
@@ -144,6 +153,8 @@ class TestConfigCollectorResponseValidation(BaseCollectorTest):
             mock_api_builder
             .with_organizations([org])
             .with_custom_response("getOrganizationConfigurationChanges", [])
+            .with_custom_response("getOrganizationLoginSecurity", {})
+            .with_custom_response("getOrganizationAdmins", [])
             .build()
         )
         collector.api = api
@@ -155,3 +166,74 @@ class TestConfigCollectorResponseValidation(BaseCollectorTest):
             0,
             org_id="123",
         )
+
+
+class TestConfigCollectorNothingCollected(BaseCollectorTest):
+    """#509: total collection failure must raise instead of being swallowed."""
+
+    collector_class = ConfigCollector
+    update_tier = UpdateTier.SLOW
+
+    async def test_org_fetch_failure_raises(self, collector, mock_api_builder, metrics):
+        """Org fetch itself failing must propagate out of _collect_impl (#509)."""
+        api = mock_api_builder.with_error("getOrganizations", Exception("Connection error")).build()
+        collector.api = api
+        collector.inventory.api = api
+
+        with pytest.raises(Exception, match="Connection error"):  # noqa: B017,PT011
+            await collector.collect()
+
+    async def test_all_orgs_failed_raises_nothing_collected(
+        self, collector, mock_api_builder, metrics
+    ):
+        """All 3 config sub-collections erroring for the only org raises NothingCollectedError."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_error("getOrganizationLoginSecurity", Exception("Connection error"))
+            .with_error("getOrganizationAdmins", Exception("Connection error"))
+            .with_error("getOrganizationConfigurationChanges", Exception("Connection error"))
+            .build()
+        )
+        collector.api = api
+        collector.inventory.api = api
+
+        with pytest.raises(NothingCollectedError):
+            await collector.collect()
+
+    async def test_partial_org_failure_does_not_raise(self, collector, mock_api_builder, metrics):
+        """One org's total failure among several must not fail the whole cycle (#509)."""
+        healthy_org = OrganizationFactory.create(org_id="0", name="Healthy Org")
+        broken_org = OrganizationFactory.create(org_id="1", name="Broken Org")
+        api = (
+            mock_api_builder
+            .with_organizations([healthy_org, broken_org])
+            .with_custom_response("getOrganizationLoginSecurity", {}, org_id="0")
+            .with_custom_response("getOrganizationAdmins", [], org_id="0")
+            .with_custom_response("getOrganizationConfigurationChanges", [], org_id="0")
+            .with_error("getOrganizationLoginSecurity", Exception("Connection error"), org_id="1")
+            .with_error("getOrganizationAdmins", Exception("Connection error"), org_id="1")
+            .with_error(
+                "getOrganizationConfigurationChanges", Exception("Connection error"), org_id="1"
+            )
+            .build()
+        )
+        collector.api = api
+        collector.inventory.api = api
+
+        await collector.collect()
+
+        metrics.assert_gauge_value(
+            "meraki_org_configuration_changes_count",
+            0,
+            org_id="0",
+        )
+
+    async def test_empty_org_list_is_success(self, collector, mock_api_builder, metrics):
+        """An empty org list is a legitimate no-op, not a failure (#509)."""
+        api = mock_api_builder.with_organizations([]).build()
+        collector.api = api
+        collector.inventory.api = api
+
+        await collector.collect()

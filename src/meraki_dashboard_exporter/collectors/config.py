@@ -10,7 +10,13 @@ from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import OrgMetricName, UpdateTier
 from ..core.domain_models import ConfigurationChange
-from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ..core.error_handling import (
+    CollectorError,
+    ErrorCategory,
+    NothingCollectedError,
+    validate_response_format,
+    with_error_handling,
+)
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call
 from ..core.logging_helpers import LogContext, log_metric_collection_summary
@@ -154,49 +160,59 @@ class ConfigCollector(MetricCollector):
         metrics_collected = 0
         api_calls_made = 0
 
-        try:
-            # Get organizations from cache or API
-            organizations = await self._get_organizations()
-            if not organizations:
-                logger.warning("No organizations found for config collection")
-                return
-            # Only count as API call if we didn't use cache
-            if not self.inventory:
-                api_calls_made += 1
+        # Get organizations from cache or API. Org-fetch failure propagates
+        # out of _collect_impl (no blanket except) so the manager records a
+        # real cycle failure instead of a swallowed one (#509).
+        organizations = await self._get_organizations()
+        if not organizations:
+            logger.warning("No organizations found for config collection")
+            return
+        # Only count as API call if we didn't use cache
+        if not self.inventory:
+            api_calls_made += 1
 
-            # Collect metrics for each organization with bounded concurrency
-            # (never raw asyncio.gather) so we respect the API concurrency budget
-            # while still collecting per-org errors (F-016).
-            results = await process_in_batches_with_errors(
-                organizations,
-                self._collect_org_config,
-                batch_size=self.settings.api.concurrency_limit,
-                delay_between_batches=0.0,
-                item_description="organization",
-                error_context_func=lambda org: {
-                    "org_id": org.get("id"),
-                    "org_name": org.get("name"),
-                },
+        # Collect metrics for each organization with bounded concurrency
+        # (never raw asyncio.gather) so we respect the API concurrency budget
+        # while still collecting per-org errors (F-016).
+        results = await process_in_batches_with_errors(
+            organizations,
+            self._collect_org_config,
+            batch_size=self.settings.api.concurrency_limit,
+            delay_between_batches=0.0,
+            item_description="organization",
+            error_context_func=lambda org: {
+                "org_id": org.get("id"),
+                "org_name": org.get("name"),
+            },
+        )
+
+        # Count successful collections
+        failures = sum(1 for _, result in results if isinstance(result, Exception))
+        successes = len(results) - failures
+        for _org, result in results:
+            if not isinstance(result, Exception):
+                # Each org makes 3 API calls (login security + admins + config changes)
+                api_calls_made += 3
+
+        # Log collection summary
+        duration = time.time() - start_time
+        log_metric_collection_summary(
+            "ConfigCollector",
+            metrics_collected=metrics_collected,
+            duration_seconds=duration,
+            organizations_processed=len(organizations),
+            api_calls_made=api_calls_made,
+        )
+
+        # All orgs present but zero org-scope collections succeeded = total
+        # cycle failure (#509 / RES-01) so the manager stops recording a
+        # spurious success and /ready trips correctly.
+        if organizations and successes == 0 and failures > 0:
+            raise NothingCollectedError(
+                self.__class__.__name__,
+                attempted=len(organizations),
+                failed=failures,
             )
-
-            # Count successful collections
-            for _org, result in results:
-                if not isinstance(result, Exception):
-                    # Each org makes 3 API calls (login security + admins + config changes)
-                    api_calls_made += 3
-
-            # Log collection summary
-            duration = time.time() - start_time
-            log_metric_collection_summary(
-                "ConfigCollector",
-                metrics_collected=metrics_collected,
-                duration_seconds=duration,
-                organizations_processed=len(organizations),
-                api_calls_made=api_calls_made,
-            )
-
-        except Exception:
-            logger.exception("Failed to collect configuration metrics")
 
     @log_api_call("getOrganization")
     @with_error_handling(
@@ -228,12 +244,13 @@ class ConfigCollector(MetricCollector):
             )
             return cast(list[dict[str, Any]], organizations)
 
-    @with_error_handling(
-        operation="Collect organization config",
-        continue_on_error=True,
-    )
     async def _collect_org_config(self, org: dict[str, Any]) -> None:
         """Collect configuration for a specific organization.
+
+        Each of the three sub-collections is isolated: one broken endpoint
+        never blocks the other two (partial failure = org success). Only
+        when ALL THREE sub-collections fail does this org count as failed
+        for the coordinator's #509 all-orgs-failed accounting.
 
         Parameters
         ----------
@@ -244,21 +261,28 @@ class ConfigCollector(MetricCollector):
         org_id = org["id"]
         org_name = org["name"]
 
-        try:
-            logger.debug("Collecting login security configuration", org_id=org_id)
-            await self._collect_login_security(org_id, org_name)
+        failed: list[str] = []
+        for name, fn in (
+            ("login_security", self._collect_login_security),
+            ("admins", self._collect_admins),
+            ("configuration_changes", self._collect_configuration_changes),
+        ):
+            try:
+                await fn(org_id, org_name)
+            except Exception:
+                logger.exception(
+                    "Failed to collect config sub-collection",
+                    sub_collection=name,
+                    org_id=org_id,
+                    org_name=org_name,
+                )
+                failed.append(name)
 
-            logger.debug("Collecting admin accounts", org_id=org_id)
-            await self._collect_admins(org_id, org_name)
-
-            logger.debug("Collecting configuration changes", org_id=org_id)
-            await self._collect_configuration_changes(org_id, org_name)
-
-        except Exception:
-            logger.exception(
-                "Failed to collect configuration for organization",
-                org_id=org_id,
-                org_name=org_name,
+        if len(failed) == 3:
+            raise CollectorError(
+                f"All config sub-collections failed for org {org_id}",
+                ErrorCategory.API_CLIENT_ERROR,
+                {"org_id": org_id},
             )
 
     @log_api_call("getOrganizationLoginSecurity")
@@ -369,6 +393,7 @@ class ConfigCollector(MetricCollector):
                 org_id=org_id,
                 org_name=org_name,
             )
+            raise
 
     # Known values as of the M3 roadmap spec; any unrecognized value observed on an
     # admin record is still counted (the pre-zero pass just won't have covered it).
@@ -453,6 +478,7 @@ class ConfigCollector(MetricCollector):
                 org_id=org_id,
                 org_name=org_name,
             )
+            raise
 
     @log_api_call("getOrganizationConfigurationChanges")
     async def _collect_configuration_changes(self, org_id: str, org_name: str) -> None:
@@ -527,3 +553,4 @@ class ConfigCollector(MetricCollector):
                     org_id=org_id,
                     org_name=org_name,
                 )
+                raise

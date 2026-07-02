@@ -555,6 +555,65 @@ class TestManagedTaskGroupEdgeCases:
             await group.create_task(dummy())
 
 
+class TestFailureAccounting:
+    """Test failed_count/succeeded_count properties (#509/#510 seam)."""
+
+    async def test_failed_and_succeeded_counts(self) -> None:
+        """2 succeeding + 1 raising -> failed_count==1, succeeded_count==2."""
+
+        async def success_task() -> None:
+            await asyncio.sleep(0.01)
+
+        async def failing_task() -> None:
+            await asyncio.sleep(0.01)
+            raise ValueError("boom")
+
+        async with ManagedTaskGroup("test") as group:
+            await group.create_task(success_task())
+            await group.create_task(success_task())
+            await group.create_task(failing_task())
+
+        assert group.failed_count == 1
+        assert group.succeeded_count == 2
+
+    async def test_all_failed(self) -> None:
+        """3 tasks all raising -> failed_count==3, succeeded_count==0."""
+
+        async def failing_task() -> None:
+            raise ValueError("boom")
+
+        async with ManagedTaskGroup("test") as group:
+            await group.create_task(failing_task())
+            await group.create_task(failing_task())
+            await group.create_task(failing_task())
+
+        assert group.failed_count == 3
+        assert group.succeeded_count == 0
+
+    async def test_cancelled_excluded(self) -> None:
+        """A task cancelled mid-group is counted in neither failed nor succeeded."""
+
+        async def long_task() -> None:
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                raise
+
+        async def success_task() -> None:
+            await asyncio.sleep(0.01)
+
+        group = ManagedTaskGroup("test")
+        async with group:
+            task = await group.create_task(long_task())
+            await group.create_task(success_task())
+            await asyncio.sleep(0.02)
+            task.cancel()
+
+        assert group.failed_count == 0
+        assert group.succeeded_count == 1
+        assert group._cancelled_count == 1
+
+
 class TestManagedTaskGroupRealWorldScenarios:
     """Test real-world usage scenarios."""
 

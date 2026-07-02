@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 
 from ..core.collector import MetricCollector
 from ..core.constants import MTMetricName, UpdateTier
-from ..core.error_handling import with_error_handling
 from ..core.logging import get_logger
 from ..core.logging_helpers import log_metric_collection_summary
 from ..core.metrics import LabelName
@@ -327,12 +326,13 @@ class MTSensorCollector(MetricCollector):
             ],
         )
 
-    @with_error_handling(
-        operation="Collect MT sensor metrics",
-        continue_on_error=True,
-    )
     async def _collect_impl(self) -> None:
-        """Collect sensor metrics by delegating to MT collector."""
+        """Collect sensor metrics by delegating to MT collector.
+
+        No blanket error handling here (#509) — exceptions from
+        ``collect_sensor_metrics`` (including ``NothingCollectedError``) must
+        propagate so the manager records the cycle as a failure.
+        """
         start_time = asyncio.get_event_loop().time()
 
         # Delegate to MT collector to collect sensor metrics

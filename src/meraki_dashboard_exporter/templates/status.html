@@ -179,6 +179,10 @@
                     <div class="stat-value">{{ api_health.throttle_events }}</div>
                     <div class="stat-label">Throttle Events</div>
                 </div>
+                <div class="stat-item">
+                    <div class="stat-value"{% if api_health.authenticated is sameas false %} style="color: #c0392b;"{% endif %}>{{ "Yes" if api_health.authenticated else ("No" if api_health.authenticated is sameas false else "Unknown") }}</div>
+                    <div class="stat-label">Authenticated</div>
+                </div>
             </div>
             {% if api_health.per_org_rate_limits %}
             <table style="margin-top: 12px;">

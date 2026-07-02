@@ -20,7 +20,7 @@ from ...core.constants import (
     UpdateTier,
 )
 from ...core.domain_models import SensorGatewayConnection, SensorMeasurement
-from ...core.error_handling import validate_response_format
+from ...core.error_handling import NothingCollectedError, validate_response_format
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -126,48 +126,62 @@ class MTCollector(BaseDeviceCollector):
         org_name : str | None
             Organization name. If None, will be determined based on org_id.
 
+        Raises
+        ------
+        NothingCollectedError
+            If organizations were present but every org's sensor collection
+            failed (#509) — a total-failure cycle must surface as a failure,
+            not a silently-swallowed success.
+
         """
-        try:
-            # Prefer the shared inventory cache (injected on the parent) over
-            # per-cycle API calls on the FAST 60s tier.
-            inventory = self.parent.inventory if self.parent is not None else None
+        # Prefer the shared inventory cache (injected on the parent) over
+        # per-cycle API calls on the FAST 60s tier.
+        inventory = self.parent.inventory if self.parent is not None else None
 
-            # Get organizations
-            if org_id:
-                org_ids = [org_id]
-            elif self.settings and self.settings.meraki.org_id:
-                org_ids = [self.settings.meraki.org_id]
-            elif inventory is not None:
-                orgs = await inventory.get_organizations()
-                org_ids = [org["id"] for org in orgs]
-            else:
-                if not self.api:
-                    logger.error("API client not initialized")
-                    return
-                orgs = await self._fetch_organizations()
-                org_ids = [org["id"] for org in orgs]
+        # Get organizations
+        if org_id:
+            org_ids = [org_id]
+        elif self.settings and self.settings.meraki.org_id:
+            org_ids = [self.settings.meraki.org_id]
+        elif inventory is not None:
+            orgs = await inventory.get_organizations()
+            org_ids = [org["id"] for org in orgs]
+        else:
+            if not self.api:
+                logger.error("API client not initialized")
+                return
+            orgs = await self._fetch_organizations()
+            org_ids = [org["id"] for org in orgs]
 
-            # Collect sensors for each organization
-            for organization_id in org_ids:
-                try:
-                    # Reuse a caller-provided org_name for the requested org;
-                    # otherwise resolve it (from the inventory cache when available).
-                    if org_name is not None and organization_id == org_id:
-                        current_org_name = org_name
-                    else:
-                        current_org_name = await self._get_org_name(organization_id)
+        # Collect sensors for each organization
+        succeeded = 0
+        failed = 0
+        for organization_id in org_ids:
+            try:
+                # Reuse a caller-provided org_name for the requested org;
+                # otherwise resolve it (from the inventory cache when available).
+                if org_name is not None and organization_id == org_id:
+                    current_org_name = org_name
+                else:
+                    current_org_name = await self._get_org_name(organization_id)
 
-                    await self._collect_org_sensors(organization_id, current_org_name)
-                    await self._collect_org_gateway_connections(organization_id, current_org_name)
-                except Exception:
-                    logger.exception(
-                        "Failed to collect sensors for organization",
-                        org_id=organization_id,
-                    )
-                    # Continue with next organization
+                await self._collect_org_sensors(organization_id, current_org_name)
+                succeeded += 1
+                await self._collect_org_gateway_connections(organization_id, current_org_name)
+            except Exception:
+                logger.exception(
+                    "Failed to collect sensors for organization",
+                    org_id=organization_id,
+                )
+                failed += 1
+                # Continue with next organization
 
-        except Exception:
-            logger.exception("Failed to collect sensor metrics")
+        if org_ids and succeeded == 0 and failed > 0:
+            raise NothingCollectedError(
+                self.__class__.__name__,
+                attempted=len(org_ids),
+                failed=failed,
+            )
 
     @log_api_call("getOrganizations")
     async def _fetch_organizations(self) -> list[dict[str, Any]]:
@@ -320,6 +334,7 @@ class MTCollector(BaseDeviceCollector):
                 "Failed to collect sensors for organization",
                 org_id=org_id,
             )
+            raise
 
     @log_api_call("getOrganizationSensorGatewaysConnectionsLatest")
     async def _fetch_gateway_connections(self, org_id: str) -> list[dict[str, Any]]:

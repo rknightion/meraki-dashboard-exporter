@@ -44,6 +44,9 @@ class AsyncMerakiClient:
     # _api_retry_attempts by core/collector.py::_track_retry on rate-limit retries.
     _api_requests_total: Counter | None = None
     _api_retry_attempts: Counter | None = None
+    # Last observed authentication outcome: None = unknown (no auth-signalling
+    # response yet), True after any HTTP 200, False after any HTTP 401 (#509).
+    _auth_ok: bool | None = None
 
     def __init__(self, settings: Settings) -> None:
         """Initialize the async Meraki client with settings."""
@@ -206,6 +209,35 @@ class AsyncMerakiClient:
                 if sample.name.endswith("_created"):
                     continue
                 total += sample.value
+        return int(total)
+
+    @classmethod
+    def record_auth_outcome(cls, ok: bool) -> None:
+        """Record the auth outcome of an API response (200 → True, 401 → False)."""
+        cls._auth_ok = ok
+
+    @classmethod
+    def get_auth_ok(cls) -> bool | None:
+        """Last observed authentication state (None until a 200 or 401 is seen)."""
+        return cls._auth_ok
+
+    @classmethod
+    def reset_auth_state(cls) -> None:
+        """Reset recorded auth state (test isolation helper)."""
+        cls._auth_ok = None
+
+    def get_successful_api_requests(self) -> int:
+        """Total Meraki API requests that returned HTTP 200 (readiness gate, #509)."""
+        counter = type(self)._api_requests_total
+        if counter is None:
+            return 0
+        total = 0.0
+        for metric in counter.collect():
+            for sample in metric.samples:
+                if sample.name.endswith("_created"):
+                    continue
+                if sample.labels.get(LabelName.STATUS_CODE.value) == "200":
+                    total += sample.value
         return int(total)
 
     async def close(self) -> None:

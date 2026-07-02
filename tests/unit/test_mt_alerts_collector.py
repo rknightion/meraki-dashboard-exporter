@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from meraki_dashboard_exporter.collectors.mt_alerts import MTSensorAlertsCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
+from meraki_dashboard_exporter.core.error_handling import NothingCollectedError
 from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import NetworkFactory, OrganizationFactory
@@ -23,7 +26,14 @@ def _backed_off_tracker(org_id: str) -> OrgHealthTracker:
 
 
 class TestMTSensorAlertsCollectorOrgHealthGating(BaseCollectorTest):
-    """F-169: MTSensorAlertsCollector honours the shared OrgHealthTracker per-org gate."""
+    """F-169: MTSensorAlertsCollector honours the shared OrgHealthTracker per-org gate.
+
+    #509: the backoff pre-filter moved from ``_collect_org_sensor_alerts`` into
+    ``_collect_impl`` (so an all-orgs-in-backoff cycle is visible to the
+    coordinator's failure accounting). ``_collect_org_sensor_alerts`` itself no
+    longer re-checks the tracker, so gating is now exercised end-to-end via
+    ``_collect_impl``.
+    """
 
     collector_class = MTSensorAlertsCollector
     update_tier = UpdateTier.MEDIUM
@@ -40,6 +50,12 @@ class TestMTSensorAlertsCollectorOrgHealthGating(BaseCollectorTest):
             inventory=inventory,
             org_health_tracker=tracker,
         )
+        collector.inventory.get_organizations = AsyncMock(
+            return_value=[
+                {"id": "BACKED", "name": "Backed Org"},
+                {"id": "HEALTHY", "name": "Healthy Org"},
+            ]
+        )
         seen: list[str] = []
 
         async def _spy(org_id: str) -> list:
@@ -48,11 +64,8 @@ class TestMTSensorAlertsCollectorOrgHealthGating(BaseCollectorTest):
 
         collector.inventory.get_networks = _spy  # type: ignore[method-assign]
 
-        await collector._collect_org_sensor_alerts("BACKED", "Backed Org")
-        assert seen == []  # gate short-circuited before fetching networks
-
-        await collector._collect_org_sensor_alerts("HEALTHY", "Healthy Org")
-        assert seen == ["HEALTHY"]
+        await collector._collect_impl()
+        assert seen == ["HEALTHY"]  # backed-off org never reaches the network fetch
 
     async def test_none_tracker_collects_all(self, collector):
         """With no tracker wired in, every org is collected (backward compatible)."""
@@ -254,7 +267,7 @@ class TestMTSensorAlertsCollector(BaseCollectorTest):
         )
 
     async def test_collect_impl_requires_inventory(self, settings, isolated_registry, mock_api):
-        """Without inventory configured, _collect_impl logs and does not raise."""
+        """Without inventory configured, _collect_impl raises (#509: no swallow)."""
         collector = MTSensorAlertsCollector(
             api=mock_api,
             settings=settings,
@@ -262,11 +275,104 @@ class TestMTSensorAlertsCollector(BaseCollectorTest):
             inventory=None,
         )
 
-        # Should be swallowed by @with_error_handling(continue_on_error=True), not raised.
-        await collector._collect_impl()
+        # The @with_error_handling(continue_on_error=True) decorator was removed
+        # from _collect_impl (#509), so this programming-error RuntimeError now
+        # propagates instead of being swallowed.
+        with pytest.raises(RuntimeError):
+            await collector._collect_impl()
 
     async def test_collect_impl_no_organizations(self, collector) -> None:
         """No organizations -> returns cleanly without error."""
+        collector.inventory.get_organizations = AsyncMock(return_value=[])
+        await collector._collect_impl()
+
+
+class TestMTSensorAlertsCollectorNothingCollected(BaseCollectorTest):
+    """#509: total-failure and all-in-backoff cycles must raise, not swallow.
+
+    ``MTSensorAlertsCollector`` was a validated scope addition to #509: its
+    ``_collect_impl`` decorated ``@with_error_handling(continue_on_error=True)``
+    would otherwise keep the MEDIUM tier marked complete under a revoked API key.
+    """
+
+    collector_class = MTSensorAlertsCollector
+    update_tier = UpdateTier.MEDIUM
+
+    async def test_org_fetch_failure_raises(self, collector) -> None:
+        """A failure fetching networks for the only org must propagate.
+
+        The coordinator uses ``ManagedTaskGroup``, so the worker's underlying
+        exception is swallowed by the group and the coordinator raises its own
+        ``NothingCollectedError`` once it observes zero successes -- either way,
+        the collection must not return cleanly.
+        """
+        collector.inventory.get_organizations = AsyncMock(
+            return_value=[{"id": "123456", "name": "Test Org"}]
+        )
+        collector.inventory.get_networks = AsyncMock(side_effect=Exception("Connection error"))
+
+        with pytest.raises(NothingCollectedError):
+            await collector._collect_impl()
+
+    async def test_all_orgs_failed_raises_nothing_collected(self, collector) -> None:
+        """A single org whose network fetch errors -> NothingCollectedError."""
+        collector.inventory.get_organizations = AsyncMock(
+            return_value=[{"id": "123456", "name": "Test Org"}]
+        )
+        collector.inventory.get_networks = AsyncMock(side_effect=Exception("Connection error"))
+
+        with pytest.raises(NothingCollectedError) as exc_info:
+            await collector._collect_impl()
+        assert exc_info.value.failed == 1
+        assert exc_info.value.skipped_backoff == 0
+
+    async def test_partial_org_failure_does_not_raise(self, collector, metrics) -> None:
+        """One of two orgs failing must not raise -- the healthy org still succeeds."""
+        collector.inventory.get_organizations = AsyncMock(
+            return_value=[
+                {"id": "BAD", "name": "Bad Org"},
+                {"id": "GOOD", "name": "Good Org"},
+            ]
+        )
+
+        good_network = NetworkFactory.create(
+            network_id="N_good", org_id="GOOD", product_types=["sensor"]
+        )
+
+        async def _get_networks(org_id: str) -> list:
+            if org_id == "BAD":
+                raise Exception("Connection error")
+            return [good_network]
+
+        collector.inventory.get_networks = _get_networks  # type: ignore[method-assign]
+        collector.api.sensor.getNetworkSensorAlertsCurrentOverviewByMetric = MagicMock(
+            return_value={"supportedMetrics": ["temperature"], "counts": {"temperature": 1}}
+        )
+
+        await collector._collect_impl()
+
+        metrics.assert_gauge_value(
+            METRIC_NAME,
+            1,
+            org_id="GOOD",
+            network_id="N_good",
+            metric="temperature",
+        )
+
+    async def test_all_orgs_in_backoff_raises(self, collector) -> None:
+        """Every org in backoff must raise NothingCollectedError with skipped_backoff set."""
+        collector.inventory.get_organizations = AsyncMock(
+            return_value=[{"id": "123456", "name": "Test Org"}]
+        )
+        collector.org_health_tracker = _backed_off_tracker("123456")
+
+        with pytest.raises(NothingCollectedError) as exc_info:
+            await collector._collect_impl()
+        assert exc_info.value.failed == 0
+        assert exc_info.value.skipped_backoff == 1
+
+    async def test_empty_org_list_is_success(self, collector) -> None:
+        """An empty org list is a legitimate no-op, not a failure."""
         collector.inventory.get_organizations = AsyncMock(return_value=[])
         await collector._collect_impl()
 

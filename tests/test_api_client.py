@@ -173,3 +173,37 @@ class TestApiRequestTotalAccessor:
         ).inc(2)
 
         assert client.get_total_api_requests() == before + 3
+
+
+class TestAuthOutcomeLatch:
+    """#509: auth-outcome latch used for /status `authenticated` and readiness."""
+
+    def test_auth_outcome_latch(self) -> None:
+        """get_auth_ok() tracks record_auth_outcome()/reset_auth_state()."""
+        AsyncMerakiClient.reset_auth_state()
+        assert AsyncMerakiClient.get_auth_ok() is None
+
+        AsyncMerakiClient.record_auth_outcome(False)
+        assert AsyncMerakiClient.get_auth_ok() is False
+
+        AsyncMerakiClient.record_auth_outcome(True)
+        assert AsyncMerakiClient.get_auth_ok() is True
+
+        AsyncMerakiClient.reset_auth_state()
+        assert AsyncMerakiClient.get_auth_ok() is None
+
+    def test_get_successful_api_requests_counts_only_200(self, mock_settings: Settings) -> None:
+        """get_successful_api_requests sums only status_code=200 samples."""
+        client = AsyncMerakiClient(mock_settings)
+
+        before = client.get_successful_api_requests()
+
+        assert AsyncMerakiClient._api_requests_total is not None
+        AsyncMerakiClient._api_requests_total.labels(
+            endpoint="getOrganizations", method="GET", status_code="200"
+        ).inc(2)
+        AsyncMerakiClient._api_requests_total.labels(
+            endpoint="getOrganizations", method="GET", status_code="401"
+        ).inc(5)
+
+        assert client.get_successful_api_requests() == before + 2

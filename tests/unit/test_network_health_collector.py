@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from meraki_dashboard_exporter.collectors.network_health import NetworkHealthCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
+from meraki_dashboard_exporter.core.error_handling import NothingCollectedError
 from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import DeviceFactory, NetworkFactory, OrganizationFactory
@@ -27,12 +30,22 @@ class TestNetworkHealthCollectorOrgHealthGating(BaseCollectorTest):
     update_tier = UpdateTier.MEDIUM
 
     async def test_backed_off_org_is_skipped(
-        self, mock_api, settings, isolated_registry, inventory
+        self, mock_api_builder, settings, isolated_registry, inventory
     ):
-        """A backed-off org is skipped before fetching networks; a healthy org is not."""
+        """A backed-off org is skipped before fetching networks; a healthy org is not.
+
+        The backoff gate moved from the per-org worker into the coordinator's
+        task-creation loop (#509 frozen rule 2c), so this is now exercised via
+        a full ``_collect_impl()`` cycle rather than a direct call to
+        ``_collect_org_network_health``.
+        """
         tracker = _backed_off_tracker("BACKED")
+        org_backed = OrganizationFactory.create(org_id="BACKED", name="Backed Org")
+        org_healthy = OrganizationFactory.create(org_id="HEALTHY", name="Healthy Org")
+        api = mock_api_builder.with_organizations([org_backed, org_healthy]).build()
+        inventory.api = api
         collector = NetworkHealthCollector(
-            api=mock_api,
+            api=api,
             settings=settings,
             registry=isolated_registry,
             inventory=inventory,
@@ -46,11 +59,8 @@ class TestNetworkHealthCollectorOrgHealthGating(BaseCollectorTest):
 
         collector._fetch_networks_for_health = _spy  # type: ignore[method-assign]
 
-        await collector._collect_org_network_health("BACKED", "Backed Org")
-        assert fetched == []  # gate short-circuited before the fetch
-
-        await collector._collect_org_network_health("HEALTHY", "Healthy Org")
-        assert fetched == ["HEALTHY"]
+        await collector.collect()
+        assert fetched == ["HEALTHY"]  # BACKED skipped by the coordinator's backoff gate
 
     async def test_none_tracker_collects_all(self, collector):
         """With no tracker wired in, every org is collected (backward compatible)."""
@@ -739,6 +749,94 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         """Test that network health collector has correct update tier."""
         assert collector.update_tier == UpdateTier.MEDIUM
         assert self.update_tier == UpdateTier.MEDIUM
+
+
+class TestNetworkHealthCollectorFailureAccounting(BaseCollectorTest):
+    """#509: total collection failure must raise instead of being swallowed."""
+
+    collector_class = NetworkHealthCollector
+    update_tier = UpdateTier.MEDIUM
+
+    async def test_org_fetch_failure_raises(self, collector, mock_api_builder):
+        """A total org-fetch failure must propagate out of collect()."""
+        api = mock_api_builder.with_error("getOrganizations", Exception("Connection error")).build()
+        collector.api = api
+        collector.inventory.api = api
+
+        with pytest.raises(Exception):  # noqa: B017 - either CollectorError or the raw error
+            await collector.collect()
+
+    async def test_all_orgs_failed_raises_nothing_collected(self, collector, mock_api_builder):
+        """If the only org's network fetch fails, the cycle must raise NothingCollectedError."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_error("getOrganizationNetworks", Exception("Connection error"))
+            .build()
+        )
+        collector.api = api
+        collector.inventory.api = api
+
+        with pytest.raises(NothingCollectedError):
+            await collector.collect()
+
+    async def test_partial_org_failure_does_not_raise(self, collector, mock_api_builder, metrics):
+        """One org failing while another succeeds must not raise; healthy org's data survives."""
+        org_bad = OrganizationFactory.create(org_id="BAD", name="Bad Org")
+        org_good = OrganizationFactory.create(org_id="GOOD", name="Good Org")
+        network = NetworkFactory.create(
+            network_id="N_GOOD",
+            name="Good Network",
+            product_types=["wireless"],
+            org_id=org_good["id"],
+        )
+
+        api = (
+            mock_api_builder
+            .with_organizations([org_bad, org_good])
+            .with_error("getOrganizationNetworks", Exception("Connection error"), org_id="BAD")
+            .with_networks([network], org_id=org_good["id"])
+            .with_devices([], org_id=org_good["id"])
+            .with_custom_response("getNetworkNetworkHealthChannelUtilization", [])
+            .with_custom_response("getNetworkWirelessConnectionStats", {})
+            .with_custom_response("getNetworkWirelessDataRateHistory", [])
+            .build()
+        )
+        collector.api = api
+
+        await self.run_collector(collector)
+
+        self.assert_collector_success(collector, metrics)
+        self.assert_api_call_tracked(collector, metrics, "getNetworkWirelessConnectionStats")
+
+    async def test_all_orgs_in_backoff_raises(self, collector, mock_api_builder):
+        """Every org skipped for backoff must raise NothingCollectedError (attempted == 0)."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        api = mock_api_builder.with_organizations([org]).build()
+        collector.api = api
+        collector.inventory.api = api
+        collector.org_health_tracker = _backed_off_tracker("123")
+
+        with pytest.raises(NothingCollectedError) as excinfo:
+            await collector.collect()
+        assert excinfo.value.skipped_backoff == 1
+        assert excinfo.value.failed == 0
+
+    async def test_empty_org_list_is_success(self, collector, mock_api_builder, metrics):
+        """No organizations found is a legitimate no-op, not a failure."""
+        api = mock_api_builder.with_organizations([]).build()
+        collector.api = api
+
+        await self.run_collector(collector)
+        self.assert_collector_success(collector, metrics)
+
+
+class TestNetworkHealthCollectorBluetooth(BaseCollectorTest):
+    """Test NetworkHealthCollector functionality (continued)."""
+
+    collector_class = NetworkHealthCollector
+    update_tier = UpdateTier.MEDIUM
 
     async def test_collect_bluetooth_clients(self, collector, mock_api_builder, metrics):
         """Test collection of Bluetooth client metrics."""

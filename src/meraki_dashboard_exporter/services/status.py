@@ -107,6 +107,7 @@ class ApiHealthStatus:
     total_calls: int
     throttle_events: int
     per_org_rate_limits: list[dict[str, Any]]
+    authenticated: bool | None = None
 
 
 @dataclass
@@ -257,6 +258,7 @@ class StatusService:
             total_calls=self._client.get_total_api_requests(),
             throttle_events=rate_limiter.get_total_throttled(),
             per_org_rate_limits=per_org,
+            authenticated=self._client.get_auth_ok(),
         )
 
         # Build data freshness

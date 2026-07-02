@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from meraki_dashboard_exporter.api.client import AsyncMerakiClient
 from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.org_health import OrgHealth
 from meraki_dashboard_exporter.services.status import (
@@ -53,6 +54,7 @@ class TestStatusSnapshot:
                 total_calls=100,
                 throttle_events=2,
                 per_org_rate_limits=[{"org_id": "123", "tokens_remaining": 5.0}],
+                authenticated=True,
             ),
             data_freshness=DataFreshnessStatus(
                 total_tracked_metrics=500,
@@ -293,3 +295,74 @@ class TestStatusService:
         assert org.org_name == "Acme Corp"
         assert org.in_backoff is True
         assert org.backoff_remaining_seconds == 60.0
+
+
+class TestApiHealthAuthenticated:
+    """Tests for ApiHealthStatus.authenticated wiring to the auth-outcome latch (#509)."""
+
+    def _make_service(self) -> tuple[StatusService, MagicMock, MagicMock, MagicMock]:
+        mock_manager = MagicMock()
+        mock_expiration = MagicMock()
+        mock_client = MagicMock()
+        mock_settings = MagicMock()
+
+        mock_settings.update_intervals.fast = 60
+        mock_settings.update_intervals.medium = 300
+        mock_settings.update_intervals.slow = 900
+
+        mock_manager.collectors = {UpdateTier.FAST: [], UpdateTier.MEDIUM: [], UpdateTier.SLOW: []}
+        mock_manager.collector_health = {}
+        mock_manager.get_readiness_status.return_value = {
+            "ready": False,
+            "api_success": False,
+            "collectors": {"fast": False, "medium": False, "slow": False},
+        }
+        mock_manager.org_health_tracker._orgs = {}
+        mock_manager.rate_limiter._tokens = {}
+        mock_manager.rate_limiter.enabled = True
+        mock_manager.rate_limiter.get_total_throttled.return_value = 0
+        mock_client.get_total_api_requests.return_value = 0
+        mock_expiration.get_stats.return_value = {
+            "total_tracked": 0,
+            "by_collector": {},
+            "ttl_multiplier": 2.0,
+        }
+
+        service = StatusService(
+            collector_manager=mock_manager,
+            expiration_manager=mock_expiration,
+            client=mock_client,
+            settings=mock_settings,
+            start_time=0.0,
+        )
+        return service, mock_manager, mock_expiration, mock_client
+
+    def test_authenticated_unknown_default(self) -> None:
+        """Before any 200/401 is observed, authenticated is None (unknown)."""
+        assert AsyncMerakiClient.get_auth_ok() is None
+        service, _, _, mock_client = self._make_service()
+        mock_client.get_auth_ok.return_value = AsyncMerakiClient.get_auth_ok()
+
+        snapshot = service.get_snapshot()
+
+        assert snapshot.api_health.authenticated is None
+
+    def test_authenticated_false_after_401(self) -> None:
+        """After a recorded 401, authenticated reports False."""
+        AsyncMerakiClient.record_auth_outcome(False)
+        service, _, _, mock_client = self._make_service()
+        mock_client.get_auth_ok.return_value = AsyncMerakiClient.get_auth_ok()
+
+        snapshot = service.get_snapshot()
+
+        assert snapshot.api_health.authenticated is False
+
+    def test_authenticated_true_after_200(self) -> None:
+        """After a recorded 200, authenticated reports True."""
+        AsyncMerakiClient.record_auth_outcome(True)
+        service, _, _, mock_client = self._make_service()
+        mock_client.get_auth_ok.return_value = AsyncMerakiClient.get_auth_ok()
+
+        snapshot = service.get_snapshot()
+
+        assert snapshot.api_health.authenticated is True

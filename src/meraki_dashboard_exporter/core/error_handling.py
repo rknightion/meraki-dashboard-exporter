@@ -117,6 +117,39 @@ class RetryableAPIError(CollectorError):
         self.retry_after = retry_after
 
 
+class NothingCollectedError(CollectorError):
+    """A collection cycle produced zero successful organization-scope updates.
+
+    Raised by coordinator collectors when organizations were present but every
+    attempted unit of work failed (or every org was skipped for backoff), so the
+    manager records the cycle as a FAILURE instead of a spurious success
+    (#509 / RES-01). The failure seam contract: a collector signals failure by
+    raising out of ``_collect_impl()``; success/failure accounting lives ONLY in
+    ``collectors/manager.py`` (collector_health) and ``core/collector.py``
+    (success timestamp / error counter).
+    """
+
+    def __init__(
+        self,
+        collector: str,
+        *,
+        attempted: int,
+        failed: int,
+        skipped_backoff: int = 0,
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        """Initialize NothingCollectedError."""
+        super().__init__(
+            f"{collector} collected nothing this cycle: "
+            f"attempted={attempted} failed={failed} skipped_backoff={skipped_backoff}",
+            ErrorCategory.API_CLIENT_ERROR,
+            context,
+        )
+        self.attempted = attempted
+        self.failed = failed
+        self.skipped_backoff = skipped_backoff
+
+
 def with_error_handling(
     *,
     operation: str,

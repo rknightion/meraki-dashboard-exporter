@@ -295,9 +295,12 @@ class OrganizationInventory:
         try:
             result = await asyncio.to_thread(api_func, *args, **kwargs)
             counter.labels(endpoint=endpoint, method="GET", status_code="200").inc()
+            AsyncMerakiClient.record_auth_outcome(True)
             return result
         except APIError as e:
             counter.labels(endpoint=endpoint, method="GET", status_code=str(e.status)).inc()
+            if e.status == 401:
+                AsyncMerakiClient.record_auth_outcome(False)
             raise
         except Exception:
             counter.labels(endpoint=endpoint, method="GET", status_code="error").inc()

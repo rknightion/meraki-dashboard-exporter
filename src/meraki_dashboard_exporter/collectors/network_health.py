@@ -9,7 +9,7 @@ from ..core.async_utils import ManagedTaskGroup
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import NetworkHealthMetricName, NetworkMetricName, ProductType, UpdateTier
-from ..core.error_handling import ErrorCategory, with_error_handling
+from ..core.error_handling import ErrorCategory, NothingCollectedError, with_error_handling
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_batch_operation
 from ..core.logging_helpers import log_metric_collection_summary
@@ -180,61 +180,92 @@ class NetworkHealthCollector(MetricCollector):
 
         Organizations are processed in parallel with bounded concurrency
         to significantly improve performance for multi-org deployments.
+
+        Raises
+        ------
+        NothingCollectedError
+            If organizations were present but every org-scope worker failed
+            or was skipped for backoff (#509 / RES-01) — a failure signal for
+            the manager instead of a spurious success.
+
         """
         start_time = asyncio.get_event_loop().time()
         metrics_collected = 0
         organizations_processed = 0
         api_calls_made = 0
 
-        try:
-            # Get organizations with error handling
-            organizations = await self._fetch_organizations()
-            if not organizations:
-                logger.warning("No organizations found for network health collection")
-                return
-            api_calls_made += 1
+        # Get organizations (raises on total failure; no blanket swallow).
+        organizations = await self._fetch_organizations()
+        if not organizations:
+            logger.warning("No organizations found for network health collection")
+            return
+        api_calls_made += 1
 
-            logger.info(
-                "Starting parallel organization processing",
-                org_count=len(organizations),
-                concurrency_limit=self.settings.api.concurrency_limit,
-            )
+        logger.info(
+            "Starting parallel organization processing",
+            org_count=len(organizations),
+            concurrency_limit=self.settings.api.concurrency_limit,
+        )
 
-            # Process organizations in parallel with bounded concurrency
-            async with ManagedTaskGroup(
-                name="network_health_collector_orgs",
-                max_concurrency=self.settings.api.concurrency_limit,
-            ) as group:
-                for org in organizations:
-                    org_id = org["id"]
-                    org_name = org.get("name", org_id)
-                    await group.create_task(
-                        self._collect_org_network_health(org_id, org_name),
-                        name=f"org_{org_id}",
+        # Process organizations in parallel with bounded concurrency. Backoff
+        # checks happen here (before task creation) rather than inside the
+        # worker so an all-in-backoff cycle can't masquerade as success (#509).
+        skipped_backoff = 0
+        async with ManagedTaskGroup(
+            name="network_health_collector_orgs",
+            max_concurrency=self.settings.api.concurrency_limit,
+        ) as group:
+            for org in organizations:
+                org_id = org["id"]
+                org_name = org.get("name", org_id)
+                if (
+                    self.org_health_tracker is not None
+                    and not self.org_health_tracker.should_collect(org_id)
+                ):
+                    skipped_backoff += 1
+                    logger.debug(
+                        "Skipping network health collection for organization in backoff",
+                        org_id=org_id,
+                        org_name=org_name,
                     )
-                    organizations_processed += 1
+                    continue
+                await group.create_task(
+                    self._collect_org_network_health(org_id, org_name),
+                    name=f"org_{org_id}",
+                )
+                organizations_processed += 1
 
-            # Approximate API calls (actual count may vary)
-            api_calls_made += organizations_processed * 5
-
-            # Log collection summary
-            log_metric_collection_summary(
-                "NetworkHealthCollector",
-                metrics_collected=metrics_collected,
-                duration_seconds=asyncio.get_event_loop().time() - start_time,
-                organizations_processed=organizations_processed,
-                api_calls_made=api_calls_made,
+        attempted = len(organizations) - skipped_backoff
+        if (
+            organizations
+            and group.succeeded_count == 0
+            and (group.failed_count > 0 or attempted == 0)
+        ):
+            raise NothingCollectedError(
+                self.__class__.__name__,
+                attempted=attempted,
+                failed=group.failed_count,
+                skipped_backoff=skipped_backoff,
             )
 
-        except Exception:
-            logger.exception("Failed to collect network health metrics")
+        # Approximate API calls (actual count may vary)
+        api_calls_made += organizations_processed * 5
+
+        # Log collection summary
+        log_metric_collection_summary(
+            "NetworkHealthCollector",
+            metrics_collected=metrics_collected,
+            duration_seconds=asyncio.get_event_loop().time() - start_time,
+            organizations_processed=organizations_processed,
+            api_calls_made=api_calls_made,
+        )
 
     @with_error_handling(
         operation="Fetch organizations",
-        continue_on_error=True,
+        continue_on_error=False,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def _fetch_organizations(self) -> list[dict[str, Any]] | None:
+    async def _fetch_organizations(self) -> list[dict[str, Any]]:
         """Fetch organizations for network health collection using inventory cache.
 
         Returns
@@ -263,7 +294,7 @@ class NetworkHealthCollector(MetricCollector):
     @log_batch_operation("collect network health", batch_size=None)
     @with_error_handling(
         operation="Collect organization network health",
-        continue_on_error=True,
+        continue_on_error=False,
     )
     async def _collect_org_network_health(self, org_id: str, org_name: str | None = None) -> None:
         """Collect network health metrics for an organization.
@@ -275,58 +306,49 @@ class NetworkHealthCollector(MetricCollector):
         org_name : str | None
             Organization name.
 
+        Raises
+        ------
+        Exception
+            If ``_fetch_networks_for_health`` fails (org failed this cycle).
+            Per-network bundle failures are isolated by
+            ``process_in_batches_with_errors`` and do NOT raise here (org
+            still counts as succeeded) — #509 frozen semantics.
+
         """
-        # Skip organizations currently in backoff so a persistently-failing org
-        # does not receive full-rate network-health collection every cycle (F-169).
-        if self.org_health_tracker is not None and not self.org_health_tracker.should_collect(
-            org_id
-        ):
-            logger.debug(
-                "Skipping network health collection for organization in backoff",
-                org_id=org_id,
-                org_name=org_name or org_id,
-            )
+        # Get all networks. A failure here (raised through inventory) means
+        # this org's worker fails; no blanket swallow.
+        networks = await self._fetch_networks_for_health(org_id)
+
+        # Add org info to each network
+        for network in networks:
+            network["orgId"] = org_id
+            network["orgName"] = org_name or org_id
+
+        wireless_networks = [
+            network
+            for network in networks
+            if ProductType.WIRELESS in network.get("productTypes", [])
+        ]
+        if not wireless_networks:
             return
-        try:
-            # Get all networks
-            networks = await self._fetch_networks_for_health(org_id)
 
-            # Add org info to each network
-            for network in networks:
-                network["orgId"] = org_id
-                network["orgName"] = org_name or org_id
-
-            wireless_networks = [
-                network
-                for network in networks
-                if ProductType.WIRELESS in network.get("productTypes", [])
-            ]
-            if not wireless_networks:
-                return
-
-            await process_in_batches_with_errors(
-                wireless_networks,
-                self._collect_network_health_bundle,
-                batch_size=self.settings.api.network_batch_size,
-                delay_between_batches=self.settings.api.batch_delay,
-                spread_over_seconds=self._get_smoothing_window(),
-                initial_delay=self._get_smoothing_offset(f"{org_id}:network_health"),
-                min_batch_delay=self.settings.api.smoothing_min_batch_delay,
-                max_batch_delay=self.settings.api.smoothing_max_batch_delay,
-                item_description="network health",
-                error_context_func=lambda network: {
-                    "org_id": org_id,
-                    "org_name": org_name or org_id,
-                    "network_id": network.get("id"),
-                    "network_name": network.get("name"),
-                },
-            )
-
-        except Exception:
-            logger.exception(
-                "Failed to collect network health for organization",
-                org_id=org_id,
-            )
+        await process_in_batches_with_errors(
+            wireless_networks,
+            self._collect_network_health_bundle,
+            batch_size=self.settings.api.network_batch_size,
+            delay_between_batches=self.settings.api.batch_delay,
+            spread_over_seconds=self._get_smoothing_window(),
+            initial_delay=self._get_smoothing_offset(f"{org_id}:network_health"),
+            min_batch_delay=self.settings.api.smoothing_min_batch_delay,
+            max_batch_delay=self.settings.api.smoothing_max_batch_delay,
+            item_description="network health",
+            error_context_func=lambda network: {
+                "org_id": org_id,
+                "org_name": org_name or org_id,
+                "network_id": network.get("id"),
+                "network_name": network.get("name"),
+            },
+        )
 
     async def _collect_network_health_bundle(self, network: dict[str, Any]) -> None:
         """Collect all network health sub-metrics for a single network."""

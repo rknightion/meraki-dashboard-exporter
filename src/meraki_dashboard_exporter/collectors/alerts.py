@@ -9,7 +9,12 @@ from typing import TYPE_CHECKING, Any, cast
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import AlertMetricName, UpdateTier
-from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ..core.error_handling import (
+    ErrorCategory,
+    NothingCollectedError,
+    validate_response_format,
+    with_error_handling,
+)
 from ..core.label_helpers import create_network_labels
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call, log_batch_operation
@@ -171,108 +176,127 @@ class AlertsCollector(MetricCollector):
         metrics_collected = 0
         api_calls_made = 0
 
-        try:
-            # Get organizations from cache or API
-            orgs_data = await self._get_organizations()
-            if not orgs_data:
-                logger.warning("No organizations found for alerts collection")
-                return
-            # Only count as API call if we didn't use cache
-            if not self.inventory:
+        # Get organizations from cache or API
+        orgs_data = await self._get_organizations()
+        if not orgs_data:
+            logger.warning("No organizations found for alerts collection")
+            return
+        # Only count as API call if we didn't use cache
+        if not self.inventory:
+            api_calls_made += 1
+
+        # Build org mapping
+        if self.settings.meraki.org_id:
+            org_ids = [self.settings.meraki.org_id]
+            org_names = {self.settings.meraki.org_id: orgs_data[0].get("name", "configured_org")}
+        else:
+            org_ids = [org["id"] for org in orgs_data]
+            org_names = {org["id"]: org.get("name", "unknown") for org in orgs_data}
+
+        # Pre-filter orgs currently in backoff so an all-in-backoff cycle can't
+        # masquerade as success (#509 / F-169).
+        skipped_backoff = 0
+        attempted_org_ids: list[str] = []
+        for org_id in org_ids:
+            if self._org_in_backoff(org_id):
+                logger.debug(
+                    "Skipping alert collection for organization in backoff",
+                    org_id=org_id,
+                    org_name=org_names.get(org_id, "unknown"),
+                )
+                skipped_backoff += 1
+                continue
+            attempted_org_ids.append(org_id)
+
+        # Collect alerts for each organization (bounded concurrency)
+        org_results = await process_in_batches_with_errors(
+            attempted_org_ids,
+            lambda org_id: self._collect_org_alerts(org_id, org_names.get(org_id, "unknown")),
+            batch_size=self.settings.api.network_batch_size,
+            delay_between_batches=self.settings.api.batch_delay,
+            item_description="organization alerts",
+            error_context_func=lambda org_id: {
+                "org_id": org_id,
+                "org_name": org_names.get(org_id, "unknown"),
+            },
+        )
+
+        # Count successful collections
+        for _, result in org_results:
+            if not isinstance(result, Exception):
                 api_calls_made += 1
 
-            # Build org mapping
-            if self.settings.meraki.org_id:
-                org_ids = [self.settings.meraki.org_id]
-                org_names = {
-                    self.settings.meraki.org_id: orgs_data[0].get("name", "configured_org")
-                }
-            else:
-                org_ids = [org["id"] for org in orgs_data]
-                org_names = {org["id"]: org.get("name", "unknown") for org in orgs_data}
+        org_failures = sum(1 for _, r in org_results if isinstance(r, Exception))
+        org_successes = len(org_results) - org_failures
+        if org_ids and org_successes == 0 and (org_failures > 0 or not attempted_org_ids):
+            raise NothingCollectedError(
+                self.__class__.__name__,
+                attempted=len(attempted_org_ids),
+                failed=org_failures,
+                skipped_backoff=skipped_backoff,
+            )
 
-            # Collect alerts for each organization (bounded concurrency)
-            org_results = await process_in_batches_with_errors(
-                org_ids,
-                lambda org_id: self._collect_org_alerts(org_id, org_names.get(org_id, "unknown")),
+        # Collect sensor alerts for networks with MT sensors
+        # Only query networks that actually have sensor devices (reduces API calls).
+        # Network health alerts no longer need a separate network list here: they
+        # are derived from the org-wide getOrganizationAssuranceAlerts response
+        # already fetched above in _collect_org_alerts (F-064 / issue #273), which
+        # also drops the getNetworkHealthAlerts fan-out this loop used to build.
+        sensor_networks = []
+        for org_id in org_ids:
+            # Skip sensor-alert fan-out for orgs in backoff too (F-169).
+            if self._org_in_backoff(org_id):
+                continue
+            if self.inventory:
+                # Use filtered network list (only networks with sensors)
+                org_sensor_networks = await self.inventory.get_networks_with_device_types(
+                    org_id, ["sensor"]
+                )
+            else:
+                # Fallback: get all networks (can't filter without inventory)
+                org_sensor_networks = await self._get_networks(org_id) or []
+                if org_sensor_networks:
+                    api_calls_made += 1
+
+            # Add org info to networks
+            for network in org_sensor_networks:
+                network["orgId"] = org_id
+                network["orgName"] = org_names.get(org_id, org_id)
+            sensor_networks.extend(org_sensor_networks)
+
+        # Collect sensor alerts only for networks with sensors
+        if sensor_networks:
+            logger.debug(
+                "Collecting sensor alerts for filtered networks",
+                networks_with_sensors=len(sensor_networks),
+            )
+            sensor_results = await process_in_batches_with_errors(
+                sensor_networks,
+                self._collect_network_sensor_alerts,
                 batch_size=self.settings.api.network_batch_size,
                 delay_between_batches=self.settings.api.batch_delay,
-                item_description="organization alerts",
-                error_context_func=lambda org_id: {
-                    "org_id": org_id,
-                    "org_name": org_names.get(org_id, "unknown"),
+                item_description="sensor alert network",
+                error_context_func=lambda network: {
+                    "org_id": network.get("orgId"),
+                    "network_id": network.get("id"),
+                    "network_name": network.get("name"),
                 },
             )
 
-            # Count successful collections
-            for _, result in org_results:
+            # Count successful sensor alert collections
+            for _, result in sensor_results:
                 if not isinstance(result, Exception):
                     api_calls_made += 1
 
-            # Collect sensor alerts for networks with MT sensors
-            # Only query networks that actually have sensor devices (reduces API calls).
-            # Network health alerts no longer need a separate network list here: they
-            # are derived from the org-wide getOrganizationAssuranceAlerts response
-            # already fetched above in _collect_org_alerts (F-064 / issue #273), which
-            # also drops the getNetworkHealthAlerts fan-out this loop used to build.
-            sensor_networks = []
-            for org_id in org_ids:
-                # Skip sensor-alert fan-out for orgs in backoff too (F-169).
-                if self._org_in_backoff(org_id):
-                    continue
-                if self.inventory:
-                    # Use filtered network list (only networks with sensors)
-                    org_sensor_networks = await self.inventory.get_networks_with_device_types(
-                        org_id, ["sensor"]
-                    )
-                else:
-                    # Fallback: get all networks (can't filter without inventory)
-                    org_sensor_networks = await self._get_networks(org_id) or []
-                    if org_sensor_networks:
-                        api_calls_made += 1
-
-                # Add org info to networks
-                for network in org_sensor_networks:
-                    network["orgId"] = org_id
-                    network["orgName"] = org_names.get(org_id, org_id)
-                sensor_networks.extend(org_sensor_networks)
-
-            # Collect sensor alerts only for networks with sensors
-            if sensor_networks:
-                logger.debug(
-                    "Collecting sensor alerts for filtered networks",
-                    networks_with_sensors=len(sensor_networks),
-                )
-                sensor_results = await process_in_batches_with_errors(
-                    sensor_networks,
-                    self._collect_network_sensor_alerts,
-                    batch_size=self.settings.api.network_batch_size,
-                    delay_between_batches=self.settings.api.batch_delay,
-                    item_description="sensor alert network",
-                    error_context_func=lambda network: {
-                        "org_id": network.get("orgId"),
-                        "network_id": network.get("id"),
-                        "network_name": network.get("name"),
-                    },
-                )
-
-                # Count successful sensor alert collections
-                for _, result in sensor_results:
-                    if not isinstance(result, Exception):
-                        api_calls_made += 1
-
-            # Log collection summary
-            duration = time.time() - start_time
-            log_metric_collection_summary(
-                "AlertsCollector",
-                metrics_collected=metrics_collected,  # This would need to be tracked
-                duration_seconds=duration,
-                organizations_processed=len(org_ids),
-                api_calls_made=api_calls_made,
-            )
-
-        except Exception:
-            logger.exception("Failed to collect alert metrics")
+        # Log collection summary
+        duration = time.time() - start_time
+        log_metric_collection_summary(
+            "AlertsCollector",
+            metrics_collected=metrics_collected,  # This would need to be tracked
+            duration_seconds=duration,
+            organizations_processed=len(org_ids),
+            api_calls_made=api_calls_made,
+        )
 
     @log_api_call("getOrganization")
     @with_error_handling(
@@ -303,11 +327,15 @@ class AlertsCollector(MetricCollector):
     @log_api_call("getOrganizationAssuranceAlerts")
     @with_error_handling(
         operation="Collect organization alerts",
-        continue_on_error=True,
+        continue_on_error=False,
         error_category=ErrorCategory.API_NOT_AVAILABLE,
     )
     async def _collect_org_alerts(self, org_id: str, org_name: str) -> None:
         """Collect alerts for a specific organization.
+
+        Note: the org-health-backoff gate has moved to ``_collect_impl`` (#509)
+        so an all-orgs-in-backoff cycle is visible to the coordinator's failure
+        accounting; this method no longer re-checks it.
 
         Parameters
         ----------
@@ -317,15 +345,6 @@ class AlertsCollector(MetricCollector):
             Organization name.
 
         """
-        # Skip organizations currently in backoff so a persistently-failing org
-        # does not receive full-rate alert collection every cycle (F-169).
-        if self._org_in_backoff(org_id):
-            logger.debug(
-                "Skipping alert collection for organization in backoff",
-                org_id=org_id,
-                org_name=org_name,
-            )
-            return
         with LogContext(org_id=org_id, org_name=org_name):
             # Get all active alerts
             alerts = await asyncio.to_thread(

@@ -11,8 +11,9 @@ from meraki_dashboard_exporter.collectors.devices.mt import MTCollector
 from meraki_dashboard_exporter.collectors.mt_sensor import MTSensorCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.domain_models import SensorMeasurement
-from meraki_dashboard_exporter.core.error_handling import RetryableAPIError
+from meraki_dashboard_exporter.core.error_handling import NothingCollectedError, RetryableAPIError
 from tests.helpers.base import BaseCollectorTest
+from tests.helpers.factories import OrganizationFactory
 
 
 class TestMTCollector(BaseCollectorTest):
@@ -544,6 +545,84 @@ class TestMTCollector(BaseCollectorTest):
 
         assert name == "Cached Org A"
         mt_collector.api.organizations.getOrganization.assert_not_called()
+
+
+class TestMTSensorFailureAccounting(BaseCollectorTest):
+    """#509: MTSensorCollector must raise when a cycle collects nothing."""
+
+    collector_class = MTSensorCollector
+    update_tier = UpdateTier.FAST
+
+    async def test_all_orgs_failed_raises_nothing_collected(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ):
+        """All orgs' primary device fetch fails -> NothingCollectedError propagates."""
+        org = OrganizationFactory.create(org_id="123456")
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_error("getOrganizationDevices", Exception("Connection error"))
+            .build()
+        )
+        inventory.api = api
+        collector = MTSensorCollector(
+            api=api, settings=settings, registry=isolated_registry, inventory=inventory
+        )
+
+        with pytest.raises(NothingCollectedError):
+            await collector.collect()
+
+    async def test_partial_org_failure_does_not_raise(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ):
+        """One org fails, the other succeeds -> the cycle completes without raising."""
+        org_ok = OrganizationFactory.create(org_id="orgOK", name="OK Org")
+        org_bad = OrganizationFactory.create(org_id="orgBAD", name="Bad Org")
+
+        device = {
+            "serial": "Q2MT-OK",
+            "name": "Sensor1",
+            "model": "MT10",
+            "networkId": "N_OK",
+            "networkName": "Net OK",
+        }
+
+        api = (
+            mock_api_builder
+            .with_organizations([org_ok, org_bad])
+            .with_devices([device], org_id="orgOK")
+            .with_error("getOrganizationDevices", Exception("Connection error"), org_id="orgBAD")
+            .with_custom_response(
+                "getOrganizationSensorReadingsLatest",
+                [
+                    {
+                        "serial": device["serial"],
+                        "network": {"id": device["networkId"], "name": device["networkName"]},
+                        "readings": [{"metric": "temperature", "celsius": 21.0}],
+                    }
+                ],
+            )
+            .build()
+        )
+        inventory.api = api
+        collector = MTSensorCollector(
+            api=api, settings=settings, registry=isolated_registry, inventory=inventory
+        )
+
+        # Should not raise even though one org failed.
+        await collector.collect()
+
+    async def test_empty_org_list_is_success(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ):
+        """No organizations at all -> a legitimate no-op, not a failure."""
+        api = mock_api_builder.with_organizations([]).build()
+        inventory.api = api
+        collector = MTSensorCollector(
+            api=api, settings=settings, registry=isolated_registry, inventory=inventory
+        )
+
+        await collector.collect()
 
 
 class TestMTExpirationTracking(BaseCollectorTest):

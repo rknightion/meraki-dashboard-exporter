@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
+import pytest
+
 from meraki_dashboard_exporter.collectors.organization import OrganizationCollector
 from meraki_dashboard_exporter.core.constants import (
     NetworkMetricName,
     OrgMetricName,
     UpdateTier,
 )
+from meraki_dashboard_exporter.core.error_handling import NothingCollectedError
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import (
     NetworkFactory,
@@ -1028,3 +1031,182 @@ class TestOrganizationCollector(BaseCollectorTest):
         assert samples[0][0] == frozenset(
             {"org_id": org_id, "network_id": "N_keep", "network_name": "Prod"}.items()
         )
+
+    # -- #509: "collected nothing" must be treated as a collection failure --
+
+    def _make_all_subcollections_fail(self, collector) -> None:
+        """Stub every one of the 11 org sub-collections to signal failure.
+
+        The six direct sub-collections (network/device/device-counts-by-model/
+        device-availability/packet-capture/application-usage) signal failure
+        by raising; the five delegating sub-collectors (api_usage/firmware/
+        device-availability-history/license/client-overview) signal failure by
+        their wrapped ``.collect()`` returning ``False`` (F-172 contract).
+        """
+
+        async def _boom(*_args: object, **_kwargs: object) -> None:
+            raise Exception("Connection error")
+
+        collector._collect_network_metrics = _boom  # type: ignore[method-assign]
+        collector._collect_device_metrics = _boom  # type: ignore[method-assign]
+        collector._collect_device_counts_by_model = _boom  # type: ignore[method-assign]
+        collector._collect_device_availability_metrics = _boom  # type: ignore[method-assign]
+        collector._collect_packet_capture_metrics = _boom  # type: ignore[method-assign]
+        collector._collect_application_usage_metrics = _boom  # type: ignore[method-assign]
+
+        for sub in (
+            collector.api_usage_collector,
+            collector.license_collector,
+            collector.client_overview_collector,
+            collector.firmware_collector,
+            collector.device_availability_history_collector,
+        ):
+            sub.collect = AsyncMock(return_value=False)  # type: ignore[method-assign]
+
+    async def test_org_fetch_failure_raises(self, collector, mock_api_builder):
+        """A total failure to fetch organizations must raise out of collect().
+
+        Multi-org mode's getOrganizations has no swallow in inventory.py, so
+        the exception propagates all the way out with no coordinator
+        try/except left to catch it (#509).
+        """
+        api = mock_api_builder.with_error("getOrganizations", Exception("Connection error")).build()
+        collector.api = api
+        collector.inventory.api = api
+
+        with pytest.raises(Exception, match="Connection error"):
+            await collector.collect()
+
+    async def test_all_orgs_failed_raises_nothing_collected(
+        self, collector, mock_api_builder, metrics
+    ):
+        """Every org sub-collection failing must raise NothingCollectedError.
+
+        Previously the coordinator's blanket try/except swallowed this
+        entirely, so the manager recorded a spurious success even though zero
+        org-scope metrics were actually collected this cycle (#509 / RES-01).
+        """
+        org = OrganizationFactory.create(org_id="900", name="Totally Broken Org")
+        api = mock_api_builder.with_organizations([org]).build()
+        collector.api = api
+        collector.inventory.api = api
+        self._make_all_subcollections_fail(collector)
+
+        with pytest.raises(NothingCollectedError) as exc_info:
+            await collector.collect()
+
+        assert exc_info.value.attempted == 1
+        assert exc_info.value.failed == 1
+        assert exc_info.value.skipped_backoff == 0
+
+        metrics.assert_gauge_value(
+            "meraki_exporter_org_collection_status",
+            0,
+            org_id="900",
+        )
+
+    async def test_partial_org_failure_does_not_raise(self, collector, mock_api_builder, metrics):
+        """One totally-broken org among several healthy ones must not raise.
+
+        Partial org success stays a SUCCESS at the coordinator level (#509);
+        only an all-orgs-failed (or all-in-backoff) cycle raises.
+        """
+        broken_org = OrganizationFactory.create(org_id="901", name="Broken Org")
+        healthy_org = OrganizationFactory.create(org_id="902", name="Healthy Org")
+        api = (
+            mock_api_builder
+            .with_organizations([broken_org, healthy_org])
+            .with_networks([], org_id=healthy_org["id"])
+            .with_devices([], org_id=healthy_org["id"])
+            .with_custom_response("getOrganizationDevicesOverviewByModel", {"counts": []})
+            .with_custom_response("getOrganizationDevicesAvailabilities", [])
+            .with_custom_response(
+                "getOrganizationLicensesOverview",
+                {"expirationDate": "2026-01-01", "licenseTypes": []},
+            )
+            .with_custom_response("getOrganizationClientsOverview", [])
+            .with_custom_response(
+                "getOrganizationDevicesPacketCaptureCaptures",
+                {"items": [], "meta": {"counts": {"items": {"total": 0, "remaining": 0}}}},
+            )
+            .with_custom_response("getOrganizationSummaryTopApplicationsCategoriesByUsage", [])
+            .build()
+        )
+        collector.api = api
+        collector.inventory.api = api
+        collector.api_helper.api = api
+        for sub in (
+            collector.api_usage_collector,
+            collector.license_collector,
+            collector.client_overview_collector,
+            collector.firmware_collector,
+            collector.device_availability_history_collector,
+        ):
+            sub.collect = AsyncMock(return_value=True)  # type: ignore[method-assign]
+
+        async def _boom(*_args: object, **_kwargs: object) -> None:
+            raise Exception("Connection error")
+
+        # Only the broken org's network fetch fails; everything else is
+        # keyed by org_id in the mock so the healthy org sails through.
+        original_get_networks = collector.inventory.get_networks
+
+        async def _get_networks(org_id: str, *args: object, **kwargs: object):
+            if org_id == broken_org["id"]:
+                raise Exception("Connection error")
+            return await original_get_networks(org_id, *args, **kwargs)
+
+        collector.inventory.get_networks = _get_networks  # type: ignore[method-assign]
+
+        # collect() must not raise even though one org is totally broken.
+        await collector.collect()
+
+        metrics.assert_gauge_value(
+            "meraki_exporter_org_collection_status",
+            0,
+            org_id="901",
+        )
+        metrics.assert_gauge_value(
+            "meraki_exporter_org_collection_status",
+            1,
+            org_id="902",
+        )
+
+    async def test_all_orgs_in_backoff_raises(self, collector, mock_api_builder, metrics):
+        """Every org being in OrgHealthTracker backoff must raise NothingCollectedError.
+
+        Without this, once every org has backed off (~5 consecutive failed
+        MEDIUM cycles), skip-cycles would masquerade as a spurious success and
+        re-poison failure_streak/last_success_time (#509).
+        """
+        org = OrganizationFactory.create(org_id="903", name="Backed Off Org")
+        api = mock_api_builder.with_organizations([org]).build()
+        collector.api = api
+        collector.inventory.api = api
+
+        for _ in range(collector.org_health_tracker.max_consecutive_failures):
+            collector.org_health_tracker.record_failure(org["id"], org["name"])
+        assert collector.org_health_tracker.should_collect(org["id"]) is False
+
+        with pytest.raises(NothingCollectedError) as exc_info:
+            await collector.collect()
+
+        assert exc_info.value.attempted == 0
+        assert exc_info.value.failed == 0
+        assert exc_info.value.skipped_backoff == 1
+
+        metrics.assert_gauge_value(
+            "meraki_exporter_org_collection_status",
+            0,
+            org_id="903",
+        )
+
+    async def test_empty_org_list_is_success(self, collector, mock_api_builder, metrics):
+        """An empty org list is a legitimate no-op, not a failure (#509)."""
+        api = mock_api_builder.with_organizations([]).build()
+        collector.api = api
+        collector.inventory.api = api
+
+        await collector.collect()
+
+        self.assert_collector_success(collector, metrics)

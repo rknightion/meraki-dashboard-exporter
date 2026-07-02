@@ -395,12 +395,22 @@ class CollectorManager:
 
     @property
     def is_ready(self) -> bool:
-        """Whether the FAST and MEDIUM tiers have completed their first collection.
+        """Whether FAST+MEDIUM tiers completed their first collection.
 
-        SLOW tier is excluded since it may take up to 900s and Kubernetes readiness
-        probes should not block that long.
+        AND at least one Meraki API request has returned HTTP 200 (#509
+        hardening). SLOW tier is excluded (readiness probes must not block
+        up to 900s).
         """
-        return self._tier_initial_complete["fast"] and self._tier_initial_complete["medium"]
+        return (
+            self._tier_initial_complete["fast"]
+            and self._tier_initial_complete["medium"]
+            and self._has_api_success()
+        )
+
+    def _has_api_success(self) -> bool:
+        """Whether at least one Meraki API request returned HTTP 200 (#509)."""
+        count = self.client.get_successful_api_requests()
+        return isinstance(count, int) and count > 0
 
     def get_readiness_status(self) -> dict[str, Any]:
         """Return readiness status for each tier and overall readiness.
@@ -408,11 +418,13 @@ class CollectorManager:
         Returns
         -------
         dict[str, Any]
-            Dictionary with "ready" bool and "collectors" dict per tier.
+            Dictionary with "ready" bool, "api_success" bool, and "collectors"
+            dict per tier.
 
         """
         return {
             "ready": self.is_ready,
+            "api_success": self._has_api_success(),
             "collectors": {
                 "fast": self._tier_initial_complete["fast"],
                 "medium": self._tier_initial_complete["medium"],

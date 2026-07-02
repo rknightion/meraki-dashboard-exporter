@@ -18,7 +18,12 @@ from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import MTMetricName, ProductType, UpdateTier
 from ..core.domain_models import SensorAlertsOverviewByMetric
-from ..core.error_handling import ErrorCategory, validate_response_format, with_error_handling
+from ..core.error_handling import (
+    ErrorCategory,
+    NothingCollectedError,
+    validate_response_format,
+    with_error_handling,
+)
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call
 from ..core.logging_helpers import LogContext, log_metric_collection_summary
@@ -71,10 +76,6 @@ class MTSensorAlertsCollector(MetricCollector):
             ],
         )
 
-    @with_error_handling(
-        operation="Collect MT sensor alerting metrics",
-        continue_on_error=True,
-    )
     async def _collect_impl(self) -> None:
         """Collect network-wide sensor alerting counts across all organizations."""
         start_time = asyncio.get_event_loop().time()
@@ -92,6 +93,11 @@ class MTSensorAlertsCollector(MetricCollector):
             logger.warning("No organizations found for MT sensor alerts collection")
             return
 
+        # Backoff check moved into the coordinator's task-creation loop (#509 /
+        # frozen rule 2c) so an all-orgs-in-backoff cycle can't masquerade as
+        # success -- checked before constructing the worker coroutine to avoid
+        # never-awaited-coroutine warnings.
+        skipped_backoff = 0
         async with ManagedTaskGroup(
             name="mt_sensor_alerts_collector_orgs",
             max_concurrency=self.settings.api.concurrency_limit,
@@ -99,11 +105,35 @@ class MTSensorAlertsCollector(MetricCollector):
             for org in organizations:
                 org_id = org["id"]
                 org_name = org.get("name", org_id)
+                if (
+                    self.org_health_tracker is not None
+                    and not self.org_health_tracker.should_collect(org_id)
+                ):
+                    skipped_backoff += 1
+                    logger.debug(
+                        "Skipping MT sensor alert collection for organization in backoff",
+                        org_id=org_id,
+                        org_name=org_name,
+                    )
+                    continue
                 await group.create_task(
                     self._collect_org_sensor_alerts(org_id, org_name),
                     name=f"org_{org_id}",
                 )
                 organizations_processed += 1
+
+        attempted = len(organizations) - skipped_backoff
+        if (
+            organizations
+            and group.succeeded_count == 0
+            and (group.failed_count > 0 or attempted == 0)
+        ):
+            raise NothingCollectedError(
+                self.__class__.__name__,
+                attempted=attempted,
+                failed=group.failed_count,
+                skipped_backoff=skipped_backoff,
+            )
 
         log_metric_collection_summary(
             "MTSensorAlertsCollector",
@@ -115,10 +145,14 @@ class MTSensorAlertsCollector(MetricCollector):
 
     @with_error_handling(
         operation="Collect organization MT sensor alerts",
-        continue_on_error=True,
+        continue_on_error=False,
     )
     async def _collect_org_sensor_alerts(self, org_id: str, org_name: str | None = None) -> None:
         """Collect sensor alerting counts for all sensor-capable networks in an organization.
+
+        Note: the org-health-backoff gate has moved to ``_collect_impl`` (#509)
+        so an all-orgs-in-backoff cycle is visible to the coordinator's failure
+        accounting; this method no longer re-checks it.
 
         Parameters
         ----------
@@ -129,18 +163,6 @@ class MTSensorAlertsCollector(MetricCollector):
 
         """
         if self.inventory is None:
-            return
-
-        # Skip organizations currently in backoff so a persistently-failing org
-        # does not receive full-rate sensor-alert collection every cycle (F-169).
-        if self.org_health_tracker is not None and not self.org_health_tracker.should_collect(
-            org_id
-        ):
-            logger.debug(
-                "Skipping MT sensor alert collection for organization in backoff",
-                org_id=org_id,
-                org_name=org_name or org_id,
-            )
             return
 
         with LogContext(org_id=org_id):
