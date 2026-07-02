@@ -323,7 +323,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_exporter_org_collection_status` | gauge | `org_id`, `org_name` | Organization collection status (1=success, 0=failed or in backoff) |  |
 | `meraki_org` | info | `org_id`, `org_name` | Organization information |  |
 | `meraki_org_api_requests_by_status` | gauge | `org_id`, `org_name`, `status_code` | API requests by HTTP status code in the last hour |  |
-| `meraki_org_api_requests_count` | gauge | `org_id`, `org_name` | API requests made by the organization in the last hour |  |
+| `meraki_org_api_requests_count` | gauge | `org_id`, `org_name` | Meraki-reported total API requests made by ALL clients of this organization's Dashboard API (any app/integration, not just this exporter) in the trailing 1-hour window; a snapshot count, not a monotonic counter |  |
 | `meraki_org_application_usage_downstream_bytes` | gauge | `org_id`, `org_name`, `category` | Downstream application usage in bytes by category over the trailing 1-day window |  |
 | `meraki_org_application_usage_percent` | gauge | `org_id`, `org_name`, `category` | Application usage percent by category over the trailing 1-day window |  |
 | `meraki_org_application_usage_total_bytes` | gauge | `org_id`, `org_name`, `category` | Total application usage in bytes by category over the trailing 1-day window |  |
@@ -348,7 +348,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_webhook_events_total` | counter | — | Total webhook events received |  |
+| `meraki_webhook_events_total` | counter | — | Total webhook events recorded by the standalone WebhookMetricsCollector sink (event-driven, not wired into the active webhook request pipeline as of this writing), labeled by event_type/network_id/alert_type |  |
 | `meraki_webhook_last_event_timestamp` | gauge | — | Unix timestamp of last webhook event |  |
 | `meraki_webhook_processing_errors_total` | counter | — | Total webhook processing errors |  |
 
@@ -358,7 +358,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_exporter_api_requests_total` | counter | `endpoint`, `method`, `status_code` | Total number of Meraki API requests |  |
+| `meraki_exporter_api_requests_total` | counter | `endpoint`, `method`, `status_code` | Total number of outbound Meraki API requests made by THIS exporter process (monotonic counter), labeled by endpoint/method/status_code |  |
 | `meraki_exporter_api_retry_total` | counter | `endpoint`, `retry_reason` | Total number of API retry attempts |  |
 
 ### CardinalityMonitor
@@ -421,7 +421,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_webhook_events_failed_total` | counter | — | Total webhook events that failed processing | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_events_processed_total` | counter | — | Total webhook events successfully processed | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
-| `meraki_webhook_events_received_total` | counter | — | Total webhook events received | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_events_received_total` | counter | — | Total webhook events received by the active WebhookHandler request pipeline (POST /api/webhooks/meraki), labeled by org_id and alert_type | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_processing_duration_seconds` | histogram | — | Time spent processing webhook events | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_validation_failures_total` | counter | — | Total webhook validation failures | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 

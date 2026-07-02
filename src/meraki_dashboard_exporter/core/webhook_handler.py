@@ -40,7 +40,8 @@ class WebhookHandler:
         # Event counters
         self.events_received = Counter(
             WebhookMetricName.WEBHOOK_EVENTS_RECEIVED_TOTAL.value,
-            "Total webhook events received",
+            "Total webhook events received by the active WebhookHandler request pipeline "
+            "(POST /api/webhooks/meraki), labeled by org_id and alert_type",
             [LabelName.ORG_ID.value, LabelName.ALERT_TYPE.value],
         )
 

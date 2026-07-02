@@ -98,7 +98,9 @@ class OrganizationCollector(MetricCollector):
         # API metrics
         self._api_requests_total = self._create_gauge(
             OrgMetricName.ORG_API_REQUESTS_COUNT,
-            "API requests made by the organization in the last hour",
+            "Meraki-reported total API requests made by ALL clients of this organization's "
+            "Dashboard API (any app/integration, not just this exporter) in the trailing 1-hour "
+            "window; a snapshot count, not a monotonic counter",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 

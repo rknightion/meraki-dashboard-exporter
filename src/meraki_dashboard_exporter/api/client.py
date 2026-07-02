@@ -85,7 +85,8 @@ class AsyncMerakiClient:
             # Request counter
             cls._api_requests_total = Counter(
                 CollectorMetricName.API_REQUESTS_TOTAL.value,
-                "Total number of Meraki API requests",
+                "Total number of outbound Meraki API requests made by THIS exporter process "
+                "(monotonic counter), labeled by endpoint/method/status_code",
                 labelnames=[
                     LabelName.ENDPOINT.value,
                     LabelName.METHOD.value,

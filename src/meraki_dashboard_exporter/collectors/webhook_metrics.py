@@ -48,7 +48,9 @@ class WebhookMetricsCollector:
         """Initialise Prometheus metrics for the webhook event sink."""
         self._events_total = Counter(
             WebhookMetricName.WEBHOOK_EVENTS_TOTAL.value,
-            "Total webhook events received",
+            "Total webhook events recorded by the standalone WebhookMetricsCollector sink "
+            "(event-driven, not wired into the active webhook request pipeline as of this "
+            "writing), labeled by event_type/network_id/alert_type",
             [
                 LabelName.EVENT_TYPE.value,
                 LabelName.NETWORK_ID.value,
