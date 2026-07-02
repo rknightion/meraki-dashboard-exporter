@@ -25,6 +25,7 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_PROJECT_ENVIRONMENT=/app/.venv
 
 # Install uv for the target architecture
+# renovate: datasource=github-releases depName=astral-sh/uv
 ARG UV_VERSION=0.11.26
 ARG TARGETARCH
 ARG TARGETVARIANT

@@ -68,7 +68,7 @@ jobs:
             echo '## oasdiff breaking changes (consumed surface)'
             echo '```'
           } >> /tmp/drift.md
-          docker run --rm -v /tmp/reduced:/specs -v "$PWD/spec:/cfg" tufin/oasdiff breaking \
+          docker run --rm -v /tmp/reduced:/specs -v "$PWD/spec:/cfg" tufin/oasdiff@sha256:864f72b686c06c6b086b35ac7f01b4316f0c647d133604168005bdcb7dde80b2 breaking \
             /specs/baseline.json /specs/live.json \
             --fail-on WARN \
             --err-ignore /cfg/oasdiff-ignore.txt \
@@ -77,17 +77,22 @@ jobs:
           echo '```' >> /tmp/drift.md
           echo "code=$code" >> "$GITHUB_OUTPUT"
 
+      # oasdiff exit codes: 0 = no breaking changes, 1 = breaking changes found (real drift),
+      # anything else (100/102 usage/load error, 125 docker failure) = tool error, not drift.
+      - name: Fail on oasdiff tool error (exit not 0/1)
+        if: steps.oasdiff.outputs.code != '0' && steps.oasdiff.outputs.code != '1'
+        run: |
+          echo "oasdiff errored (exit ${CODE}) — treating as tool failure, not API drift"; cat /tmp/drift.md || true; exit 1
+        env:
+          CODE: ${{ steps.oasdiff.outputs.code }}
+
       - name: Report + fail on drift
-        if: steps.drift.outputs.code == '3' || steps.oasdiff.outputs.code != '0'
+        if: steps.drift.outputs.code == '3' || steps.oasdiff.outputs.code == '1'
         uses: ./.github/actions/report-drift
         with:
           lane-label: api-drift
           title: "Meraki OpenAPI drift on consumed operations"
           report-path: /tmp/drift.md
-          # Provide EITHER: ANTHROPIC_API_KEY (pay-per-use) or CLAUDE_CODE_OAUTH_TOKEN
-          # (Claude Pro/Max subscription, via `claude setup-token`). Both empty => skip.
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
       - name: Resolve tracking issue on clean run
         if: steps.drift.outputs.code == '0' && steps.oasdiff.outputs.code == '0'

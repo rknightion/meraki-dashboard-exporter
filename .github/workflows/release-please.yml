@@ -72,9 +72,13 @@ jobs:
   # Edge build on every non-release push to main: publishes :main multi-arch image
   # + a main-snapshot Helm chart (replaces the removed docker-build.yml push:main path).
   # release_created gates this vs docker-release, so they never both run on one push.
+  # !cancelled() (not the implicit success()) so a release-please failure — e.g. an expired
+  # RELEASE_PLEASE_TOKEN making the release job 401 — no longer silently freezes edge :main
+  # publishing on ordinary pushes; a failed release job yields an empty release_created output,
+  # which is != 'true', so edge still runs.
   edge:
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created != 'true' }}
+    if: ${{ !cancelled() && needs.release-please.outputs.release_created != 'true' }}
     permissions:
       contents: write
       packages: write
