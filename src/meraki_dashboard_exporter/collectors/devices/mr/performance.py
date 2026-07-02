@@ -619,7 +619,7 @@ class MRPerformanceCollector:
                 org_id=org_id,
             )
 
-    @log_api_call("getOrganizationWirelessDevicesPacketLossByClient")
+    @log_api_call("getOrganizationWirelessDevicesPacketLossByNetwork")
     @with_error_handling(
         operation="Collect MR packet loss",
         continue_on_error=True,
