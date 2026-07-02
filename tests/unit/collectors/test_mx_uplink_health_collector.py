@@ -170,16 +170,18 @@ class TestMXUplinkHealthCollector:
         interfaces = {call[0][1]["interface"] for call in mock_parent._set_metric.call_args_list}
         assert interfaces == {"wan1", "wan2"}
 
-    async def test_multiple_ip_rows_same_uplink_last_write_wins(
+    async def test_multiple_ip_rows_same_uplink_aggregates_to_max(
         self,
         collector: MXUplinkHealthCollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """Test that multiple destination-ip rows for the same uplink don't explode cardinality.
+        """Multiple destination-ip rows for one uplink aggregate to the worst case.
 
-        The endpoint returns one row per (device, uplink, destination-ip); we
-        label only by interface, so the last row processed wins.
+        The endpoint returns one row per (device, uplink, destination-ip). We
+        label only by interface, so the rows must be aggregated to a single
+        series per uplink taking the MAX loss and MAX latency across
+        destinations (worst-case), not last-write-wins.
         """
         mock_api.organizations.getOrganizationDevicesUplinksLossAndLatency = MagicMock(
             return_value=[
@@ -216,13 +218,110 @@ class TestMXUplinkHealthCollector:
 
         await collector.collect_uplink_loss_latency("org1", "Test Org", device_lookup)
 
-        # Both rows emit (2 rows * 2 metrics), but only "interface" is labeled,
-        # so the second (last) row's values are what a real Gauge would retain.
-        assert mock_parent._set_metric.call_count == 4
-        last_loss_call = mock_parent._set_metric.call_args_list[2][0]
-        last_latency_call = mock_parent._set_metric.call_args_list[3][0]
-        assert last_loss_call[2] == 3.0
-        assert last_latency_call[2] == pytest.approx(0.030)
+        # Two destination rows collapse to ONE uplink series -> 1 loss + 1 latency.
+        assert mock_parent._set_metric.call_count == 2
+        loss_call = mock_parent._set_metric.call_args_list[0][0]
+        latency_call = mock_parent._set_metric.call_args_list[1][0]
+        assert loss_call[0] is collector._mx_uplink_loss_percent
+        assert loss_call[1]["interface"] == "wan1"
+        assert loss_call[2] == 3.0  # max(1.0, 3.0)
+        assert latency_call[0] is collector._mx_uplink_latency_seconds
+        assert latency_call[2] == pytest.approx(0.030)  # max(10ms, 30ms)
+
+    async def test_max_is_not_last_write_wins(
+        self,
+        collector: MXUplinkHealthCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The worst (max) destination must win even when it is NOT the last row.
+
+        Guards against a regression to last-write-wins: here the first row is
+        the worst; a last-write-wins implementation would emit the second
+        (better) row's values.
+        """
+        mock_api.organizations.getOrganizationDevicesUplinksLossAndLatency = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "serial": "Q2AB-0001",
+                    "uplink": "wan1",
+                    "ip": "8.8.8.8",
+                    "timeSeries": [
+                        {"ts": "t1", "lossPercent": 5.0, "latencyMs": 50.0},
+                    ],
+                },
+                {
+                    "networkId": "N_1",
+                    "serial": "Q2AB-0001",
+                    "uplink": "wan1",
+                    "ip": "1.1.1.1",
+                    "timeSeries": [
+                        {"ts": "t1", "lossPercent": 1.0, "latencyMs": 10.0},
+                    ],
+                },
+            ]
+        )
+
+        device_lookup = {
+            "Q2AB-0001": {
+                "name": "Branch MX",
+                "model": "MX68",
+                "network_id": "N_1",
+                "network_name": "Branch",
+                "device_type": "MX",
+            },
+        }
+
+        await collector.collect_uplink_loss_latency("org1", "Test Org", device_lookup)
+
+        assert mock_parent._set_metric.call_count == 2
+        loss_call = mock_parent._set_metric.call_args_list[0][0]
+        latency_call = mock_parent._set_metric.call_args_list[1][0]
+        assert loss_call[2] == 5.0  # max, from the FIRST row (not last-write-wins 1.0)
+        assert latency_call[2] == pytest.approx(0.050)
+
+    async def test_max_loss_and_latency_independent_across_rows(
+        self,
+        collector: MXUplinkHealthCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Max loss and max latency are taken independently across destination rows.
+
+        The worst loss and worst latency can come from different destination
+        rows; each metric must take its own max.
+        """
+        mock_api.organizations.getOrganizationDevicesUplinksLossAndLatency = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "serial": "Q2AB-0001",
+                    "uplink": "wan1",
+                    "ip": "8.8.8.8",
+                    "timeSeries": [
+                        {"ts": "t1", "lossPercent": 4.0, "latencyMs": 10.0},
+                    ],
+                },
+                {
+                    "networkId": "N_1",
+                    "serial": "Q2AB-0001",
+                    "uplink": "wan1",
+                    "ip": "1.1.1.1",
+                    "timeSeries": [
+                        {"ts": "t1", "lossPercent": 1.0, "latencyMs": 40.0},
+                    ],
+                },
+            ]
+        )
+
+        await collector.collect_uplink_loss_latency("org1", "Test Org", {})
+
+        assert mock_parent._set_metric.call_count == 2
+        loss_call = mock_parent._set_metric.call_args_list[0][0]
+        latency_call = mock_parent._set_metric.call_args_list[1][0]
+        assert loss_call[2] == 4.0  # worst loss, from row 1
+        assert latency_call[2] == pytest.approx(0.040)  # worst latency, from row 2
 
     async def test_null_trailing_timeseries_picks_last_non_null(
         self,

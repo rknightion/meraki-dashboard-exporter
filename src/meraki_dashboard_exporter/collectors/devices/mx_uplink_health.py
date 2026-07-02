@@ -27,7 +27,10 @@ class MXUplinkHealthCollector(SubCollectorMixin):
 
     Collects the latest loss/latency sample per (device, uplink) at the
     organization level using the getOrganizationDevicesUplinksLossAndLatency
-    endpoint.
+    endpoint. The endpoint returns one row per monitored destination IP; rows
+    for the same uplink are aggregated to the worst case (max loss, max
+    latency, taken independently) so the emitted series reflects the
+    worst-performing destination rather than an arbitrary one.
 
     Update tier: MEDIUM (300s). This is an org-wide single call, and the
     underlying WAN-quality data is sampled roughly every minute server-side,
@@ -61,12 +64,12 @@ class MXUplinkHealthCollector(SubCollectorMixin):
         ]
         self._mx_uplink_loss_percent = self.parent._create_gauge(
             MXMetricName.MX_UPLINK_LOSS_PERCENT,
-            "MX per-uplink WAN loss percent (latest sample)",
+            "MX per-uplink WAN loss percent (worst-case across monitored destinations, latest sample)",
             labelnames=labelnames,
         )
         self._mx_uplink_latency_seconds = self.parent._create_gauge(
             MXMetricName.MX_UPLINK_LATENCY_SECONDS,
-            "MX per-uplink WAN latency in seconds (latest sample)",
+            "MX per-uplink WAN latency in seconds (worst-case across monitored destinations, latest sample)",
             labelnames=labelnames,
         )
 
@@ -116,9 +119,14 @@ class MXUplinkHealthCollector(SubCollectorMixin):
         emitted = 0
 
         # NOTE: This endpoint returns one row per (device, uplink, destination-ip);
-        # multiple destination IPs can produce multiple rows for the same uplink.
-        # We label only by interface (not destination ip, which is unbounded), so
-        # if multiple IP rows share an uplink, last-write-wins is acceptable here.
+        # multiple destination IPs produce multiple rows for the same uplink. We
+        # label only by interface (not destination ip, which is unbounded), so we
+        # aggregate across destinations to the worst case (MAX loss, MAX latency)
+        # per (serial, uplink) — reporting the worst-performing destination rather
+        # than an arbitrary last-written one. Loss and latency maxima are taken
+        # independently, since the worst destination may differ per metric.
+        aggregates: dict[tuple[str, str], dict[str, Any]] = {}
+
         for row in rows:
             entry = DeviceUplinkLossLatency.model_validate(row)
             network_id = entry.networkId or ""
@@ -128,47 +136,61 @@ class MXUplinkHealthCollector(SubCollectorMixin):
                 continue
 
             serial = entry.serial or ""
-            device_info = device_lookup.get(serial, {})
-            network_id = network_id or device_info.get("network_id", "")
-
-            device_data = {
-                "serial": serial,
-                "name": device_info.get("name", serial),
-                "model": device_info.get("model", ""),
-                "networkId": network_id,
-                "networkName": device_info.get("network_name", network_id),
-            }
-
             interface = entry.uplink or ""
-            time_series = entry.timeSeries
 
-            loss_value = self._latest_non_null(time_series, "lossPercent")
-            latency_value = self._latest_non_null(time_series, "latencyMs")
+            loss_value = self._latest_non_null(entry.timeSeries, "lossPercent")
+            latency_value = self._latest_non_null(entry.timeSeries, "latencyMs")
 
             if loss_value is None and latency_value is None:
                 continue
 
-            labels = create_device_labels(
-                device_data,
-                org_id=org_id,
-                org_name=org_name,
-                interface=interface,
-            )
+            key = (serial, interface)
+            agg = aggregates.get(key)
+            if agg is None:
+                device_info = device_lookup.get(serial, {})
+                resolved_network_id = network_id or device_info.get("network_id", "")
+                device_data = {
+                    "serial": serial,
+                    "name": device_info.get("name", serial),
+                    "model": device_info.get("model", ""),
+                    "networkId": resolved_network_id,
+                    "networkName": device_info.get("network_name", resolved_network_id),
+                }
+                agg = {
+                    "labels": create_device_labels(
+                        device_data,
+                        org_id=org_id,
+                        org_name=org_name,
+                        interface=interface,
+                    ),
+                    "loss": None,
+                    "latency": None,
+                }
+                aggregates[key] = agg
 
             if loss_value is not None:
+                agg["loss"] = loss_value if agg["loss"] is None else max(agg["loss"], loss_value)
+            if latency_value is not None:
+                agg["latency"] = (
+                    latency_value if agg["latency"] is None else max(agg["latency"], latency_value)
+                )
+
+        for agg in aggregates.values():
+            labels = agg["labels"]
+            if agg["loss"] is not None:
                 self.parent._set_metric(
                     self._mx_uplink_loss_percent,
                     labels,
-                    float(loss_value),
+                    float(agg["loss"]),
                     MXMetricName.MX_UPLINK_LOSS_PERCENT.value,
                 )
                 emitted += 1
 
-            if latency_value is not None:
+            if agg["latency"] is not None:
                 self.parent._set_metric(
                     self._mx_uplink_latency_seconds,
                     labels,
-                    float(latency_value) / 1000,
+                    float(agg["latency"]) / 1000,
                     MXMetricName.MX_UPLINK_LATENCY_SECONDS.value,
                 )
                 emitted += 1
