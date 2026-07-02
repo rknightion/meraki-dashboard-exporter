@@ -100,6 +100,7 @@ HTTP server configuration for the metrics endpoint
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_SERVER__HOST` | `str` | `0.0.0.0` | Host to bind the exporter to |
 | `MERAKI_EXPORTER_SERVER__PORT` | `int` | `9099` | Port to bind the exporter to (min: 1, max: 65535) |
+| `MERAKI_EXPORTER_SERVER__API_TOKEN` | `SecretStr | None` | `_(none)_` | Optional bearer token required for state-changing POST control endpoints (/api/collectors/trigger, /api/clients/clear-dns-cache). When unset (default) these endpoints are unauthenticated - bind the exporter to a trusted interface. When set, requests must present 'Authorization: Bearer <token>'. |
 
 `PATH_PREFIX` and `ENABLE_HEALTH_CHECK` are currently defined for compatibility, but the application still exposes `/`, `/health`, `/metrics`, and `/cardinality` unconditionally.
 
@@ -139,6 +140,7 @@ Internal monitoring and alerting configuration
 | `MERAKI_EXPORTER_MONITORING__LICENSE_EXPIRATION_WARNING_DAYS` | `int` | `30` | Days before license expiration to start warning (min: 7, max: 90) |
 | `MERAKI_EXPORTER_MONITORING__METRIC_TTL_MULTIPLIER` | `float` | `2.0` | Multiplier for metric TTL (collection_interval * multiplier) (min: 1.0, max: 10.0) |
 | `MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR` | `int` | `10000` | Maximum number of tracked label sets per collector before shedding oldest (min: 100, max: 1000000) |
+| `MERAKI_EXPORTER_MONITORING__LIVENESS_MAX_STALE_SECONDS` | `int` | `0` | Dead-man switch threshold. /health returns 503 once no collector has completed a successful run within this many seconds, so Kubernetes/Docker restart a wedged exporter instead of leaving it serving stale metrics. 0 (default) auto-derives the threshold from the SLOW tier interval (3 x slow interval). Set a large value to effectively disable. (min: 0, max: 86400) |
 
 ## Collector Settings
 

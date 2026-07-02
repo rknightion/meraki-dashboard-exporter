@@ -28,6 +28,15 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# Upper bound on a collector's smoothing start-offset as a fraction of its tier
+# interval (F-018). The tier's effective cadence is ~max(offset_i + duration_i),
+# so an offset approaching the full interval would stretch the whole tier's
+# period past its configured interval. Capping the max offset at half the
+# interval guarantees smoothing offsets alone can never push cadence beyond the
+# interval - only a collector that itself runs >50% of the interval can, which
+# is a utilization problem surfaced separately by the utilization metric.
+_SMOOTHING_MAX_INTERVAL_FRACTION = 0.5
+
 
 class CollectorManager:
     """Manages and coordinates metric collectors with tiered update intervals.
@@ -180,6 +189,11 @@ class CollectorManager:
             return 0.0
         interval = self._get_tier_interval(tier)
         window = max(0.0, float(interval) * self.settings.api.smoothing_window_ratio)
+        # Cap 1 (F-018): keep the max offset within a bounded fraction of the tier
+        # interval so smoothing offsets can never stretch the tier cadence past
+        # its configured interval.
+        window = min(window, float(interval) * _SMOOTHING_MAX_INTERVAL_FRACTION)
+        # Cap 2: keep the offset within the per-collector timeout budget.
         timeout_budget = float(self.settings.collectors.collector_timeout) - 10.0
         if timeout_budget > 0:
             window = min(window, timeout_budget)
@@ -392,6 +406,37 @@ class CollectorManager:
             },
         }
 
+    def get_last_success_time(self) -> float | None:
+        """Return the most recent successful-collection timestamp across all collectors.
+
+        Returns
+        -------
+        float | None
+            The newest ``last_success_time`` (unix seconds) among all tracked
+            collectors, or ``None`` if no collector has ever succeeded. Used by
+            the liveness dead-man switch (F-043).
+
+        """
+        times = [
+            health["last_success_time"]
+            for health in self.collector_health.values()
+            if health.get("last_success_time")
+        ]
+        return max(times) if times else None
+
+    def has_attempted_collection(self) -> bool:
+        """Whether any collector has attempted at least one run.
+
+        Returns
+        -------
+        bool
+            True once any collector's ``total_runs`` is greater than zero. Used
+            to keep the liveness probe green during startup/discovery before any
+            collection has been attempted (F-043).
+
+        """
+        return any(health.get("total_runs", 0) > 0 for health in self.collector_health.values())
+
     async def collect_initial(self) -> None:
         """Run initial collection from all tiers sequentially to avoid API overload."""
         # Warm the cache before the first collection cycle so collectors get cache hits
@@ -520,15 +565,30 @@ class CollectorManager:
             collector_count=len(tier_collectors),
         )
 
-        # Mark this tier's first collection as complete
+        # Mark this tier's first collection complete only once at least one
+        # collector in the tier has actually SUCCEEDED (F-105). Marking it
+        # complete after a cycle where every collector failed (e.g. a bad or
+        # revoked API key) would flip /ready to 200 while the exporter has no
+        # real data, defeating the readiness gate the Helm chart documents.
         tier_key = tier.value
         if not self._tier_initial_complete.get(tier_key, False):
-            self._tier_initial_complete[tier_key] = True
-            logger.info(
-                "Tier initial collection complete",
-                tier=tier_key,
-                is_ready=self.is_ready,
+            tier_had_success = any(
+                self.collector_health.get(c.__class__.__name__, {}).get("total_successes", 0) > 0
+                for c in tier_collectors
             )
+            if tier_had_success:
+                self._tier_initial_complete[tier_key] = True
+                logger.info(
+                    "Tier initial collection complete",
+                    tier=tier_key,
+                    is_ready=self.is_ready,
+                )
+            else:
+                logger.warning(
+                    "Tier collection cycle completed but no collector succeeded; "
+                    "readiness withheld",
+                    tier=tier_key,
+                )
 
     async def _run_collector_with_delay(
         self,

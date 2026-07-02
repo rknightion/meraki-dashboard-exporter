@@ -114,6 +114,20 @@ def client_with_mock_manager(
     return TestClient(fastapi_app, raise_server_exceptions=True)
 
 
+@pytest.fixture
+def app_and_manager_health(test_settings: Settings) -> tuple[TestClient, MagicMock]:
+    """TestClient with a mock manager for controlling liveness (F-043) state."""
+    exporter = ExporterApp(test_settings)
+    fastapi_app = exporter.create_app()
+
+    mock_manager = MagicMock()
+    mock_manager._exporter_ref = exporter
+    exporter.collector_manager = mock_manager
+
+    client = TestClient(fastapi_app, raise_server_exceptions=True)
+    return client, mock_manager
+
+
 # ---------------------------------------------------------------------------
 # Tests for GET / (root endpoint)
 # ---------------------------------------------------------------------------
@@ -305,13 +319,81 @@ class TestRootEndpoint:
 
 
 class TestHealthEndpoint:
-    """Tests for the GET /health endpoint."""
+    """Tests for the GET /health endpoint (F-043 dead-man switch)."""
 
     def test_health_returns_healthy(self, app_client: TestClient) -> None:
-        """Test that /health returns a healthy status."""
+        """Test that /health returns a healthy status during startup (no attempts)."""
         response = app_client.get("/health")
         assert response.status_code == 200
         assert response.json() == {"status": "healthy"}
+
+    def test_health_healthy_before_any_collection(
+        self, app_and_manager_health: tuple[TestClient, MagicMock]
+    ) -> None:
+        """No collection attempted yet -> liveness stays green (startup grace)."""
+        client, mock_manager = app_and_manager_health
+        mock_manager.has_attempted_collection.return_value = False
+
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json()["status"] == "healthy"
+
+    def test_health_healthy_with_recent_success(
+        self, app_and_manager_health: tuple[TestClient, MagicMock]
+    ) -> None:
+        """A recent successful collection keeps liveness green."""
+        client, mock_manager = app_and_manager_health
+        mock_manager.has_attempted_collection.return_value = True
+        mock_manager.get_last_success_time.return_value = time.time() - 5
+        mock_manager.get_tier_interval.return_value = 900
+
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json()["status"] == "healthy"
+
+    def test_health_wedged_returns_503(
+        self, app_and_manager_health: tuple[TestClient, MagicMock]
+    ) -> None:
+        """A wedged exporter (no success within threshold) flips /health to 503."""
+        client, mock_manager = app_and_manager_health
+        mock_manager.has_attempted_collection.return_value = True
+        # Last success far beyond the derived threshold (3 * 900 = 2700s).
+        mock_manager.get_last_success_time.return_value = time.time() - 100_000
+        mock_manager.get_tier_interval.return_value = 900
+
+        response = client.get("/health")
+        assert response.status_code == 503
+        body = response.json()
+        assert body["status"] == "unhealthy"
+        assert "reason" in body
+
+    def test_health_wedged_when_attempted_but_never_succeeded(
+        self, app_and_manager_health: tuple[TestClient, MagicMock]
+    ) -> None:
+        """Attempted collection but never succeeded past the grace window -> 503."""
+        client, mock_manager = app_and_manager_health
+        exporter = mock_manager._exporter_ref
+        exporter._start_time = time.time() - 100_000
+        mock_manager.has_attempted_collection.return_value = True
+        mock_manager.get_last_success_time.return_value = None
+        mock_manager.get_tier_interval.return_value = 900
+
+        response = client.get("/health")
+        assert response.status_code == 503
+        assert response.json()["status"] == "unhealthy"
+
+    def test_health_respects_explicit_threshold(
+        self, app_and_manager_health: tuple[TestClient, MagicMock]
+    ) -> None:
+        """An explicit liveness_max_stale_seconds overrides the derived threshold."""
+        client, mock_manager = app_and_manager_health
+        exporter = mock_manager._exporter_ref
+        exporter.settings.monitoring.liveness_max_stale_seconds = 60
+        mock_manager.has_attempted_collection.return_value = True
+        mock_manager.get_last_success_time.return_value = time.time() - 120
+
+        response = client.get("/health")
+        assert response.status_code == 503
 
 
 # ---------------------------------------------------------------------------
@@ -767,3 +849,165 @@ class TestUpdateIntervalValidation:
         # but 300 % 70 = 20 != 0, so the model_validator should raise
         with pytest.raises(PydanticValidationError, match="should be a multiple of fast"):
             UpdateIntervals(fast=70, medium=300, slow=900)
+
+
+# ---------------------------------------------------------------------------
+# Tests for the optional API-token guard on control endpoints (F-167)
+# ---------------------------------------------------------------------------
+
+
+class TestApiTokenGuard:
+    """State-changing POST endpoints honour the optional bearer-token guard."""
+
+    def _make_client(
+        self, settings: Settings, *, token: str | None
+    ) -> tuple[TestClient, MagicMock]:
+        from pydantic import SecretStr
+
+        exporter = ExporterApp(settings)
+        if token is not None:
+            exporter.settings.server.api_token = SecretStr(token)
+        mock_manager = MagicMock()
+        mock_manager.collectors = {
+            UpdateTier.FAST: [],
+            UpdateTier.MEDIUM: [],
+            UpdateTier.SLOW: [],
+        }
+        mock_manager.is_collector_running.return_value = False
+        exporter.collector_manager = mock_manager
+        fastapi_app = exporter.create_app()
+        client = TestClient(fastapi_app, raise_server_exceptions=False)
+        return client, mock_manager
+
+    def test_trigger_requires_token_when_configured(self, test_settings: Settings) -> None:
+        """POST /api/collectors/trigger returns 401 without the token when configured."""
+        client, _ = self._make_client(test_settings, token="s3cret-token")
+        response = client.post("/api/collectors/trigger", json={"collector": "DeviceCollector"})
+        assert response.status_code == 401
+
+    def test_trigger_accepts_valid_token(self, test_settings: Settings) -> None:
+        """A valid bearer token passes the guard (then hits normal not-found path)."""
+        client, mock_manager = self._make_client(test_settings, token="s3cret-token")
+        mock_manager.get_collector_by_name.return_value = None
+        response = client.post(
+            "/api/collectors/trigger",
+            json={"collector": "DeviceCollector"},
+            headers={"Authorization": "Bearer s3cret-token"},
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "error"  # not found, but guard passed
+
+    def test_trigger_rejects_wrong_token(self, test_settings: Settings) -> None:
+        """A wrong bearer token is rejected with 401."""
+        client, _ = self._make_client(test_settings, token="s3cret-token")
+        response = client.post(
+            "/api/collectors/trigger",
+            json={"collector": "DeviceCollector"},
+            headers={"Authorization": "Bearer wrong"},
+        )
+        assert response.status_code == 401
+
+    def test_trigger_open_when_token_unset(self, test_settings: Settings) -> None:
+        """With no token configured the endpoint stays open (backward compatible)."""
+        client, mock_manager = self._make_client(test_settings, token=None)
+        mock_manager.get_collector_by_name.return_value = None
+        response = client.post("/api/collectors/trigger", json={"collector": "DeviceCollector"})
+        assert response.status_code == 200
+
+    def test_clear_dns_cache_requires_token_when_configured(self, test_settings: Settings) -> None:
+        """POST /api/clients/clear-dns-cache returns 401 without the token when configured."""
+        client, _ = self._make_client(test_settings, token="s3cret-token")
+        response = client.post("/api/clients/clear-dns-cache")
+        assert response.status_code == 401
+
+    def test_clear_dns_cache_accepts_valid_token(self, test_settings: Settings) -> None:
+        """A valid token passes the guard on clear-dns-cache."""
+        test_settings.clients.enabled = False
+        client, _ = self._make_client(test_settings, token="s3cret-token")
+        response = client.post(
+            "/api/clients/clear-dns-cache",
+            headers={"Authorization": "Bearer s3cret-token"},
+        )
+        assert response.status_code == 200
+        # Guard passed; clients disabled -> error body
+        assert response.json()["status"] == "error"
+
+
+# ---------------------------------------------------------------------------
+# Tests for discovery running off the startup critical path (F-104)
+# ---------------------------------------------------------------------------
+
+
+class TestStartupDiscoveryOffCriticalPath:
+    """Discovery must run in the background so /health is serveable during startup."""
+
+    async def test_startup_runs_discovery_before_initial_collection(
+        self, test_settings: Settings
+    ) -> None:
+        """_startup_collections runs discovery, then the initial collection."""
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock, patch
+
+        exporter = ExporterApp(test_settings)
+
+        ran: dict[str, bool] = {}
+
+        async def fake_run_discovery() -> dict[str, int]:
+            ran["discovery"] = True
+            return {"orgs": 1}
+
+        exporter.collector_manager.collect_initial = AsyncMock()  # type: ignore[method-assign]
+        exporter.collector_manager.get_tier_interval = lambda tier: 60  # type: ignore[assignment]
+        exporter._tiered_collection_loop = AsyncMock()  # type: ignore[method-assign]
+        exporter._wait_for_first_collection = AsyncMock()  # type: ignore[method-assign]
+
+        with patch(
+            "meraki_dashboard_exporter.app.DiscoveryService",
+            lambda api, settings: SimpleNamespace(run_discovery=fake_run_discovery),
+        ):
+            await exporter._startup_collections()
+
+        assert ran.get("discovery") is True
+        assert exporter._discovery_summary == {"orgs": 1}
+        exporter.collector_manager.collect_initial.assert_awaited_once()
+
+    async def test_lifespan_does_not_block_on_slow_discovery(self, test_settings: Settings) -> None:
+        """Entering the lifespan must not wait for a slow discovery to finish."""
+        import asyncio
+        from contextlib import AsyncExitStack
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock, patch
+
+        exporter = ExporterApp(test_settings)
+
+        release = asyncio.Event()
+
+        async def gated_run_discovery() -> dict[str, int]:
+            await release.wait()
+            return {"orgs": 1}
+
+        exporter.collector_manager.collect_initial = AsyncMock()  # type: ignore[method-assign]
+        exporter._tiered_collection_loop = AsyncMock()  # type: ignore[method-assign]
+        exporter._wait_for_first_collection = AsyncMock()  # type: ignore[method-assign]
+        exporter._cardinality_monitor_loop = AsyncMock()  # type: ignore[method-assign]
+        exporter.expiration_manager.start = AsyncMock()  # type: ignore[method-assign]
+        exporter.expiration_manager.stop = AsyncMock()  # type: ignore[method-assign]
+        exporter.client.close = AsyncMock()  # type: ignore[method-assign]
+
+        fastapi_app = exporter.create_app()
+
+        with patch(
+            "meraki_dashboard_exporter.app.DiscoveryService",
+            lambda api, settings: SimpleNamespace(run_discovery=gated_run_discovery),
+        ):
+            stack = AsyncExitStack()
+            cm = exporter.lifespan(fastapi_app)
+            # Startup must complete promptly even though discovery is gated.
+            await asyncio.wait_for(stack.enter_async_context(cm), timeout=2.0)
+            try:
+                # Discovery has not completed yet; liveness is still green (startup).
+                assert exporter._discovery_summary is None
+                assert exporter._liveness_check()[0] is False
+            finally:
+                release.set()
+                await stack.aclose()

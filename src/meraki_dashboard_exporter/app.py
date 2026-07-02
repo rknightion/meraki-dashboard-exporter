@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import random
 import time
 from collections.abc import AsyncIterator
@@ -123,6 +124,75 @@ class ExporterApp:
         logger.info("Shutdown requested, stopping collection...")
         self._shutdown_event.set()
 
+    def _liveness_threshold_seconds(self) -> float:
+        """Return the dead-man staleness threshold in seconds (F-043).
+
+        Uses ``monitoring.liveness_max_stale_seconds`` when set (>0), otherwise
+        auto-derives a generous threshold of three SLOW-tier intervals so that
+        only a genuinely wedged exporter (nothing collecting for a long time)
+        trips the liveness probe.
+        """
+        configured = self.settings.monitoring.liveness_max_stale_seconds
+        if configured > 0:
+            return float(configured)
+        slow_interval = self.collector_manager.get_tier_interval(UpdateTier.SLOW)
+        return float(slow_interval) * 3.0
+
+    def _liveness_check(self) -> tuple[bool, str]:
+        """Evaluate the dead-man liveness switch (F-043).
+
+        Returns
+        -------
+        tuple[bool, str]
+            ``(is_wedged, reason)``. The exporter is considered wedged only once
+            it has attempted collection and no collector has succeeded within the
+            staleness threshold - a fully failing exporter therefore flips
+            /health to 503 so Kubernetes/Docker restart it. Stays healthy during
+            startup/discovery before any collection has been attempted.
+
+        """
+        manager = self.collector_manager
+        if not manager.has_attempted_collection():
+            return False, "starting up"
+
+        threshold = self._liveness_threshold_seconds()
+        now = time.time()
+        last_success = manager.get_last_success_time()
+
+        if last_success is None:
+            stale_for = now - self._start_time
+            if stale_for > threshold:
+                return True, (
+                    f"no collector has succeeded in {int(stale_for)}s (threshold {int(threshold)}s)"
+                )
+            return False, "no successful collection yet"
+
+        stale_for = now - last_success
+        if stale_for > threshold:
+            return True, (
+                f"last successful collection was {int(stale_for)}s ago "
+                f"(threshold {int(threshold)}s)"
+            )
+        return False, "healthy"
+
+    def _check_api_token(self, request: FastAPIRequest) -> None:
+        """Enforce the optional bearer-token guard on state-changing endpoints (F-167).
+
+        When ``server.api_token`` is unset (default) the control endpoints stay
+        open - the exporter is assumed bound to a trusted interface, and the web
+        UI trigger / DNS-clear buttons call them unauthenticated. When a token is
+        configured, requests must present ``Authorization: Bearer <token>`` or
+        this raises ``HTTPException(401)``.
+        """
+        configured = self.settings.server.api_token
+        if configured is None:
+            return
+        expected = configured.get_secret_value()
+        header = request.headers.get("authorization", "")
+        scheme, _, provided = header.partition(" ")
+        if scheme.lower() != "bearer" or not hmac.compare_digest(provided, expected):
+            raise HTTPException(status_code=401, detail="Invalid or missing API token")
+
     def _format_uptime(self) -> str:
         """Format uptime in a human-readable format."""
         uptime_seconds = int(time.time() - self._start_time)
@@ -191,13 +261,11 @@ class ExporterApp:
             org_id=self.settings.meraki.org_id,
         )
 
-        # Run discovery to log environment information once at startup
-        discovery = DiscoveryService(self.client.api, self.settings)
-        try:
-            self._discovery_summary = await discovery.run_discovery()
-        except Exception:
-            logger.exception("Discovery failed, continuing with normal operation")
-            self._discovery_summary = {"errors": ["discovery_failed"]}
+        # NB: discovery is deliberately NOT awaited here (F-104). Running its
+        # serial API calls before `yield` would keep uvicorn from binding, so a
+        # slow/rate-limited discovery could trip the liveness probe and
+        # crash-loop the pod during startup. It now runs inside the background
+        # `_startup_collections` task, which already tolerates failure.
 
         # Start metric expiration manager (Phase 3.2)
         await self.expiration_manager.start()
@@ -259,6 +327,15 @@ class ExporterApp:
     async def _startup_collections(self) -> None:
         """Start tiered collection loops immediately."""
         try:
+            # Run discovery off the lifespan critical path (F-104) so /health is
+            # serveable within seconds of process start. It tolerates failure.
+            discovery = DiscoveryService(self.client.api, self.settings)
+            try:
+                self._discovery_summary = await discovery.run_discovery()
+            except Exception:
+                logger.exception("Discovery failed, continuing with normal operation")
+                self._discovery_summary = {"errors": ["discovery_failed"]}
+
             # Run a sequential first collection to avoid startup bursts
             initial_collection_completed = False
             try:
@@ -563,9 +640,23 @@ class ExporterApp:
             return app.state.templates.TemplateResponse(request, "index.html", context=context)  # type: ignore[no-any-return]
 
         @app.get("/health")
-        async def health() -> dict[str, str]:
-            """Health check endpoint."""
-            return {"status": "healthy"}
+        async def health() -> JSONResponse:
+            """Liveness endpoint with a dead-man switch (F-043).
+
+            Returns 200 while the exporter is starting up or collecting
+            successfully, and 503 once it is wedged - no collector has succeeded
+            within the liveness staleness threshold - so Kubernetes/Docker
+            restart the pod instead of leaving it serving stale/empty metrics.
+            """
+            exporter = app.state.exporter
+            wedged, reason = exporter._liveness_check()
+            if wedged:
+                logger.error("Liveness dead-man switch tripped", reason=reason)
+                return JSONResponse(
+                    status_code=503,
+                    content={"status": "unhealthy", "reason": reason},
+                )
+            return JSONResponse(status_code=200, content={"status": "healthy"})
 
         @app.get("/ready")
         async def readiness() -> JSONResponse:
@@ -674,10 +765,13 @@ class ExporterApp:
             )
 
         @app.post("/api/clients/clear-dns-cache")
-        async def clear_dns_cache() -> dict[str, str]:
+        async def clear_dns_cache(request: FastAPIRequest) -> dict[str, str]:
             """Clear the DNS cache."""
             # Get exporter instance from app state
             exporter = app.state.exporter
+
+            # Optional bearer-token guard (F-167)
+            exporter._check_api_token(request)
 
             # Check if client collection is enabled
             if not exporter.settings.clients.enabled:
@@ -699,10 +793,15 @@ class ExporterApp:
 
         @app.post("/api/collectors/trigger")
         async def trigger_collector(
+            request: FastAPIRequest,
             payload: CollectorTriggerRequest,
         ) -> dict[str, str]:
             """Trigger a collector run on-demand."""
             exporter = app.state.exporter
+
+            # Optional bearer-token guard (F-167)
+            exporter._check_api_token(request)
+
             result = exporter.collector_manager.get_collector_by_name(payload.collector)
             if result is None:
                 return {

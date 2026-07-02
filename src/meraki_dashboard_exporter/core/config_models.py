@@ -238,6 +238,18 @@ class MonitoringSettings(BaseModel):
         le=1000000,
         description="Maximum number of tracked label sets per collector before shedding oldest",
     )
+    liveness_max_stale_seconds: int = Field(
+        0,
+        ge=0,
+        le=86400,
+        description=(
+            "Dead-man switch threshold. /health returns 503 once no collector has "
+            "completed a successful run within this many seconds, so Kubernetes/Docker "
+            "restart a wedged exporter instead of leaving it serving stale metrics. "
+            "0 (default) auto-derives the threshold from the SLOW tier interval "
+            "(3 x slow interval). Set a large value to effectively disable."
+        ),
+    )
 
     @field_validator("histogram_buckets")
     @classmethod
@@ -301,6 +313,16 @@ class ServerSettings(BaseModel):
         ge=1,
         le=65535,
         description="Port to bind the exporter to",
+    )
+    api_token: SecretStr | None = Field(
+        None,
+        description=(
+            "Optional bearer token required for state-changing POST control "
+            "endpoints (/api/collectors/trigger, /api/clients/clear-dns-cache). "
+            "When unset (default) these endpoints are unauthenticated - bind the "
+            "exporter to a trusted interface. When set, requests must present "
+            "'Authorization: Bearer <token>'."
+        ),
     )
 
 
