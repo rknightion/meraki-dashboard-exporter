@@ -1,0 +1,62 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- /*
+  Optional NetworkPolicy. Locks the pod down to only the traffic it needs:
+    ingress  - the http port (metrics scrape + webhook receiver)
+    egress   - DNS, HTTPS (Meraki API), and the OTLP collector port when tracing is on
+  Requires a NetworkPolicy-enforcing CNI (Calico, Cilium, ...).
+*/ -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "meraki-dashboard-exporter.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "meraki-dashboard-exporter.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "meraki-dashboard-exporter.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    {{- if .Values.networkPolicy.ingress.enabled }}
+    - Ingress
+    {{- end }}
+    - Egress
+  {{- if .Values.networkPolicy.ingress.enabled }}
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+      {{- with .Values.networkPolicy.ingress.from }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- end }}
+  egress:
+    {{- if .Values.networkPolicy.egress.dns }}
+    # DNS resolution
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- end }}
+    {{- if .Values.networkPolicy.egress.merakiApi }}
+    # HTTPS to the Meraki Dashboard API (no fixed CIDR -> any destination on 443)
+    - ports:
+        - protocol: TCP
+          port: 443
+    {{- end }}
+    {{- if and (eq (.Values.config.otelEnabled | toString) "true") .Values.networkPolicy.egress.otlpPort }}
+    # OTLP collector (tracing)
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.egress.otlpPort }}
+      {{- with .Values.networkPolicy.egress.otlpTo }}
+      to:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}
+    {{- with .Values.networkPolicy.egress.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

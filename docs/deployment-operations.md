@@ -33,12 +33,109 @@ exactly one of `meraki.apiKey` / `meraki.existingSecret` is set — prefer `exis
 production. See [`values.yaml`](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/charts/meraki-dashboard-exporter/values.yaml)
 for the full set of configurable settings.
 
+The exporter is a **single-writer singleton** (no leader election), so `replicaCount` must stay `1`
+— the chart hard-fails the render otherwise, and its Deployment uses the `Recreate` strategy so a
+rollout never briefly runs two pods. Optional resources, all off by default: `ingress.enabled`
+(webhook TLS termination, see below), `networkPolicy.enabled` (locks egress to DNS + Meraki API 443
++ the OTLP port), `serviceMonitor.enabled` (Prometheus Operator), and `autoscaling.enabled` (an HPA
+that manages the single pod; `maxReplicas` is capped at 1). Read the `resources:` sizing guidance in
+`values.yaml` before deploying at scale — the 512Mi default is sized for small orgs only.
+
 ## Endpoints
 The exporter exposes endpoints for metrics (`/metrics`), liveness (`/health`),
 readiness (`/ready`), an exporter self-health dashboard (`/status`), cardinality
 reports (`/cardinality`), and optional client (`/clients`) and webhook
 (`POST /api/webhooks/meraki`) features. See the [HTTP Endpoints](reference/endpoints.md)
 reference for the authoritative list and enablement notes.
+
+## Webhook receiver (HTTPS / TLS termination)
+
+The exporter can receive Meraki alert webhooks (`config.webhooksEnabled: true`, endpoint
+`POST /api/webhooks/meraki`). **Meraki only delivers webhooks over HTTPS** — it rejects plain
+`http://` receiver URLs — but the exporter itself serves plain **HTTP**. So you must terminate
+TLS in front of it and forward HTTP to the exporter. The receiver URL you configure in the Meraki
+Dashboard (Network-wide → Alerts → Webhooks) must therefore be `https://…/api/webhooks/meraki`,
+never `http://`. Always set the shared secret (`MERAKI_EXPORTER_WEBHOOKS__SECRET`) so payloads are
+validated — in the Helm chart, inject it via `extraEnv` (sourced from a Secret) rather than a plain
+value.
+
+Pick whichever terminator fits your environment; all three terminate TLS and proxy plain HTTP to
+the exporter's service port (`9099` by default).
+
+### Kubernetes Ingress (bundled in the Helm chart)
+
+The chart ships an optional Ingress (`ingress.enabled: true`) that fronts the Service. Terminate
+TLS at the ingress (e.g. via cert-manager) and it forwards HTTP to the exporter:
+
+```yaml
+# values.yaml
+config:
+  webhooksEnabled: "true"
+extraEnv:
+  - name: MERAKI_EXPORTER_WEBHOOKS__SECRET
+    valueFrom:
+      secretKeyRef:
+        name: meraki-webhook-secret
+        key: secret
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: meraki-exporter.example.com
+      paths:
+        - path: /api/webhooks/meraki
+          pathType: Prefix
+  tls:
+    - secretName: meraki-exporter-tls
+      hosts:
+        - meraki-exporter.example.com
+```
+
+Meraki receiver URL: `https://meraki-exporter.example.com/api/webhooks/meraki`.
+
+### nginx (standalone reverse proxy)
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name meraki-exporter.example.com;
+
+    ssl_certificate     /etc/nginx/tls/fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/privkey.pem;
+
+    # Only expose the webhook receiver publicly; scrape /metrics in-cluster/privately.
+    location /api/webhooks/meraki {
+        proxy_pass http://meraki-dashboard-exporter:9099;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Traefik (IngressRoute / dynamic config)
+
+```yaml
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: meraki-exporter-webhook
+spec:
+  entryPoints:
+    - websecure          # the TLS entrypoint
+  routes:
+    - match: Host(`meraki-exporter.example.com`) && PathPrefix(`/api/webhooks/meraki`)
+      kind: Rule
+      services:
+        - name: meraki-dashboard-exporter
+          port: 9099      # plain HTTP to the exporter
+  tls:
+    certResolver: letsencrypt
+```
+
+In every case Meraki talks HTTPS to the terminator, and the terminator talks HTTP to the exporter.
 
 ## Monitoring
 Prometheus and Grafana integration examples live in the [Integration & Dashboards](integration-dashboards.md) guide.

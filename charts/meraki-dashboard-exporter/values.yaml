@@ -2,8 +2,21 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-# -- Number of replicas. The exporter is stateless so 1 is sufficient.
+# -- Number of replicas. **Must stay 1.** The exporter is a singleton: it has no
+# leader election, so every running pod independently scrapes the Meraki API on the
+# same schedule. A second replica does NOT share load -- it doubles the outbound API
+# request rate against the per-org 10 req/s budget and produces a duplicate, competing
+# set of metrics. The chart hard-`fail`s the render if replicaCount > 1 (unless
+# autoscaling is enabled, which is itself discouraged -- see `autoscaling` below).
 replicaCount: 1
+
+# -- Deployment update strategy. Forced to `Recreate` so the old pod is torn down
+# before the new one starts: because the exporter is a single-writer with no leader
+# election, a `RollingUpdate` would briefly run two pods at once during a rollout,
+# doubling API load and emitting duplicate metrics. Do not change this to
+# RollingUpdate without adding leader election first.
+strategy:
+  type: Recreate
 
 image:
   # -- Container image repository
@@ -64,6 +77,33 @@ service:
   # -- Service port (must match the exporter's server port)
   port: 9099
 
+# Ingress (OPTIONAL). Primarily useful for the webhook receiver
+# (`config.webhooksEnabled: true`, POST /api/webhooks/meraki): Meraki only delivers
+# alert webhooks over HTTPS, and the exporter itself serves plain HTTP, so an ingress
+# (or an external nginx/Traefik) is the recommended TLS-termination point in front of
+# it. Terminate TLS at the ingress and forward HTTP to the Service. See
+# docs/deployment-operations.md for full nginx/Traefik/ingress TLS examples.
+# NOT recommended for exposing /metrics publicly -- scrape it in-cluster instead.
+ingress:
+  # -- Enable an Ingress resource.
+  enabled: false
+  # -- IngressClass name (e.g. "nginx", "traefik"). Leave "" to use the cluster default.
+  className: ""
+  # -- Annotations for the Ingress (put cert-manager / TLS-termination hints here).
+  annotations: {}
+  # -- Ingress host rules. Each host maps one or more paths to the Service http port.
+  hosts:
+    - host: meraki-exporter.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  # -- TLS configuration. Meraki requires HTTPS for webhook delivery, so populate this
+  # (or terminate TLS at an upstream LB) when exposing the webhook receiver.
+  tls: []
+  #  - secretName: meraki-exporter-tls
+  #    hosts:
+  #      - meraki-exporter.example.com
+
 # Meraki API credentials
 meraki:
   # -- Meraki Dashboard API key. If set, a Secret will be created automatically.
@@ -108,7 +148,25 @@ config:
   # -- OpenTelemetry service name.
   otelServiceName: "meraki-dashboard-exporter"
 
-# -- Resource requests and limits
+# -- Resource requests and limits.
+#
+# SIZING GUIDANCE (read before deploying to anything larger than a lab). Memory is
+# the binding constraint and scales with Prometheus series cardinality, which scales
+# with device/network count -- NOT with a fixed value. The defaults below (256Mi
+# request / 512Mi limit) are sized for a SMALL deployment only
+# (~1 org / ~10 networks / ~100 devices, registry ~20-50k series, RSS < 256Mi).
+# The old "512Mi is enough" advice is WRONG at scale and will OOMKill the pod.
+#
+# Rough tiers (single org; clients collector OFF; from evidence/scale-and-capacity.md):
+#   SMALL   (~100 devices,   ~10 nets):  requests 100m / 256Mi,  limits 500m / 512Mi
+#   MEDIUM  (~1,000 devices, ~50 nets):  requests 250m / 512Mi,  limits 1    / 1Gi
+#   LARGE   (~5,000 devices, ~500 nets): requests 500m / 1.5Gi,  limits 2    / 3Gi+
+# LARGE also exceeds the per-org API budget with current defaults (~178% of 10 req/s)
+# and needs NetworkFilter + interval tuning regardless of pod size -- more memory does
+# not fix rate-limit starvation. Registry can hold 0.6-1.1M series at LARGE, so set the
+# limit from observed RSS (watch `process_resident_memory_bytes` / container memory) and
+# leave generous headroom rather than trusting these estimates. Turning the clients
+# collector ON raises cardinality and memory substantially -- size up further.
 resources:
   requests:
     cpu: 100m
@@ -116,6 +174,28 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
+
+# Horizontal Pod Autoscaler (OPTIONAL, and UNUSUAL for this exporter).
+#
+# The exporter is a single-writer singleton with NO leader election, so scaling
+# *replicas* beyond 1 is unsupported: extra pods duplicate API load and metrics
+# rather than sharing work (see `replicaCount` above). This HPA is provided only for
+# operators who want Kubernetes to manage the *single* pod against a CPU/memory target
+# -- hence `maxReplicas` defaults to 1, which keeps the singleton contract intact while
+# still letting the HPA surface utilisation. Do NOT raise `maxReplicas` above 1 unless
+# you have added leader election; doing so reintroduces the double-scrape problem.
+# When `enabled: true`, the Deployment omits its static `replicas` so the HPA owns it.
+autoscaling:
+  # -- Enable a HorizontalPodAutoscaler for the (single) pod.
+  enabled: false
+  # -- Minimum replicas. Keep at 1 (singleton).
+  minReplicas: 1
+  # -- Maximum replicas. Keep at 1 unless leader election has been added -- see note above.
+  maxReplicas: 1
+  # -- Target average CPU utilisation percentage (omit by setting to null to disable).
+  targetCPUUtilizationPercentage: 80
+  # -- Target average memory utilisation percentage (null/unset to disable).
+  targetMemoryUtilizationPercentage: null
 
 # Liveness probe configuration
 livenessProbe:
@@ -198,3 +278,39 @@ serviceMonitor:
   metricRelabelings: []
   # -- Honor labels from the scrape target
   honorLabels: false
+
+# NetworkPolicy (OPTIONAL). When enabled, restricts pod traffic to only what the
+# exporter needs: inbound scrapes/webhooks on the http port, and outbound DNS + HTTPS
+# to the Meraki API (+ the OTLP collector when tracing is on). Requires a CNI that
+# enforces NetworkPolicy (Calico, Cilium, etc.).
+networkPolicy:
+  # -- Enable a NetworkPolicy for the exporter pod.
+  enabled: false
+  ingress:
+    # -- Allow inbound traffic to the http (metrics/webhook) port. Set to false to
+    # render an egress-only policy.
+    enabled: true
+    # -- Sources allowed to reach the http port (Prometheus, ingress controller, etc.).
+    # Standard NetworkPolicy `from` peers (namespaceSelector / podSelector / ipBlock).
+    # Leave empty to allow from ANY source on the http port (still port-restricted).
+    from: []
+    #  - namespaceSelector:
+    #      matchLabels:
+    #        kubernetes.io/metadata.name: monitoring
+    #    podSelector:
+    #      matchLabels:
+    #        app.kubernetes.io/name: prometheus
+  egress:
+    # -- Allow DNS resolution (UDP+TCP 53) to any destination. Required.
+    dns: true
+    # -- Allow outbound HTTPS (TCP 443) to any destination -- the Meraki Dashboard API.
+    # Meraki has no fixed egress CIDR, so this defaults to all destinations on 443.
+    merakiApi: true
+    # -- OTLP collector egress port (TCP). Opened only when config.otelEnabled is true.
+    # Default 4317 = OTLP/gRPC. Set to your collector's port if different.
+    otlpPort: 4317
+    # -- Restrict the OTLP egress to specific peers (namespaceSelector/podSelector/
+    # ipBlock). Empty = allow the OTLP port to any destination.
+    otlpTo: []
+    # -- Extra raw egress rules appended verbatim (list of NetworkPolicyEgressRule).
+    extraEgress: []

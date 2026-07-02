@@ -49,8 +49,24 @@ container image — the chart is a recent addition (started publishing per the
   ServiceAccount sets `automountServiceAccountToken: false`; a writable `/tmp` `emptyDir` (`64Mi`) is
   mounted explicitly to satisfy the read-only root FS. `ci.yml`'s `docker-build-test` job actually
   asserts the image runs as a non-root `exporter` user — keep chart and image defaults consistent.
-- **`serviceMonitor.enabled` defaults to `false`** (Prometheus Operator CRD may not be installed) —
-  it's the one optional resource; everything else always renders.
+- **Optional resources (all default `false`)**: `serviceMonitor.enabled` (Prometheus Operator CRD
+  may not be installed), `ingress.enabled`, `networkPolicy.enabled`, `autoscaling.enabled`. Each
+  follows the same `{{- if .Values.<flag>.enabled }}` guard pattern; everything else always renders.
+- **Singleton is enforced, not just documented.** The exporter has NO leader election, so
+  `deployment.yaml` hard-`fail`s the render when `replicaCount > 1` (or `autoscaling.maxReplicas > 1`)
+  — two pods double the per-org API load and duplicate metrics. `replicaCount` default stays `1`,
+  `strategy.type: Recreate` prevents two pods overlapping during a rollout, and when
+  `autoscaling.enabled` the Deployment omits its static `replicas` so the HPA owns it (with
+  `maxReplicas` capped at 1). Don't relax these guards or switch to `RollingUpdate` without adding
+  leader election first.
+- **Resource sizing is scale-dependent and heavily commented in `values.yaml`.** The 256Mi/512Mi
+  default is SMALL-scale only; memory scales with cardinality (device/network count). See the
+  `resources:` block comments and `evidence/scale-and-capacity.md` — do not restore any "512Mi is
+  enough" claim.
+- **Webhook receiver needs external TLS.** Meraki delivers webhooks (`POST /api/webhooks/meraki`)
+  HTTPS-only; the exporter serves HTTP. The optional Ingress (or an external nginx/Traefik) is the
+  TLS-termination point — see `docs/deployment-operations.md`. The webhook shared secret is NOT a
+  chart value; inject `MERAKI_EXPORTER_WEBHOOKS__SECRET` via `extraEnv` from a Secret.
 </critical_notes>
 
 <file_map>
@@ -72,6 +88,14 @@ container image — the chart is a recent addition (started publishing per the
   automount disabled.
 - `templates/servicemonitor.yaml` - optional Prometheus Operator `ServiceMonitor` (guarded by
   `serviceMonitor.enabled`).
+- `templates/ingress.yaml` - optional `Ingress` (guarded by `ingress.enabled`); TLS-termination
+  point for the HTTPS-only Meraki webhook receiver, backends the Service http port.
+- `templates/networkpolicy.yaml` - optional `NetworkPolicy` (guarded by `networkPolicy.enabled`);
+  ingress on the http port, egress DNS + 443 + (when `config.otelEnabled`) the OTLP port.
+- `templates/hpa.yaml` - optional `HorizontalPodAutoscaler` (guarded by `autoscaling.enabled`);
+  manages the single pod, `maxReplicas` capped at 1 (no leader election).
+- `README.md` - human-facing chart docs (install, singleton contract, sizing table, optional
+  resources). Not auto-generated — keep in sync with `values.yaml` by hand.
 - `templates/NOTES.txt` - post-install help text (port-forward + curl examples, warns if no API
   key is configured). Readiness hint is `/ready`, matching the chart's default
   `readinessProbe.httpGet.path` (also `/ready` as of `8639c1b` / #243 — `/health` is always `200`,

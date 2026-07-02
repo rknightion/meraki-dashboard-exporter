@@ -1,5 +1,11 @@
 {{- include "meraki-dashboard-exporter.validateApiKey" . }}
 {{- include "meraki-dashboard-exporter.validateOtel" . }}
+{{- if and (not .Values.autoscaling.enabled) (gt (int .Values.replicaCount) 1) }}
+{{- fail "replicaCount must be 1: the exporter is a single-writer singleton with no leader election, so >1 replica doubles Meraki API load and emits duplicate metrics. See values.yaml `replicaCount`." }}
+{{- end }}
+{{- if and .Values.autoscaling.enabled (gt (int .Values.autoscaling.maxReplicas) 1) }}
+{{- fail "autoscaling.maxReplicas must be 1 without leader election: >1 pod doubles Meraki API load and emits duplicate metrics. See values.yaml `autoscaling`." }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -8,7 +14,13 @@ metadata:
   labels:
     {{- include "meraki-dashboard-exporter.labels" . | nindent 4 }}
 spec:
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "meraki-dashboard-exporter.selectorLabels" . | nindent 6 }}
