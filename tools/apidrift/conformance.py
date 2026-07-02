@@ -12,6 +12,14 @@ Models declare their source via own (non-inherited) class attributes:
 UNION conformance surface for models that aggregate several endpoints) or
 ``__meraki_derived__ = True`` for computed/transformed shapes with no single
 upstream response. Unannotated models are reported INFO so the gap stays visible.
+
+A model may additionally set ``__meraki_beta__ = True`` to declare that its
+``__meraki_op__`` operation(s) live on Meraki's *beta* spec channel, which this
+tool does NOT fetch (it pulls a single fixed GA spec). A mapped op that is absent
+from the GA spec is then reported INFO ``beta-blind-spot`` — a *visible* record
+that this operation's drift is out of scope — instead of a false WARNING
+``model-op-absent`` (or a silent skip). This is the minimal, honest treatment of
+the beta blind spot until/unless full beta-channel fetching is implemented.
 """
 
 from __future__ import annotations
@@ -151,17 +159,46 @@ def check_models(models: list[type], spec: dict[str, Any]) -> list[Finding]:
             findings.append(Finding("INFO", "unmapped", name, "no __meraki_op__ annotation"))
             continue
 
+        is_beta = model.__dict__.get("__meraki_beta__") is True
         union, resolved, missing = _union_properties(spec, op_ids)
         label = "+".join(op_ids)
         if not resolved:
-            findings.append(
-                Finding("WARNING", "model-op-absent", label, f"{name}: no mapped op has a schema")
-            )
+            # Every mapped op is missing from the (GA) spec. For a beta-declared
+            # model this is expected — the op lives on the un-fetched beta channel —
+            # so surface it as a visible, non-gating blind spot rather than a false
+            # WARNING that the exporter's parsing is stale.
+            if is_beta:
+                findings.append(
+                    Finding(
+                        "INFO",
+                        "beta-blind-spot",
+                        label,
+                        f"{name}: mapped op(s) on beta channel, absent from GA spec (drift out of scope)",
+                    )
+                )
+            else:
+                findings.append(
+                    Finding(
+                        "WARNING", "model-op-absent", label, f"{name}: no mapped op has a schema"
+                    )
+                )
             continue
         for op_id in missing:
-            findings.append(
-                Finding("WARNING", "model-op-absent", op_id, f"{name}: mapped op absent from spec")
-            )
+            if is_beta:
+                findings.append(
+                    Finding(
+                        "INFO",
+                        "beta-blind-spot",
+                        op_id,
+                        f"{name}: beta-channel op not in GA spec (drift out of scope)",
+                    )
+                )
+            else:
+                findings.append(
+                    Finding(
+                        "WARNING", "model-op-absent", op_id, f"{name}: mapped op absent from spec"
+                    )
+                )
 
         fields: dict[str, Any] = getattr(model, "model_fields", {})
         for fname, info in fields.items():
@@ -216,3 +253,54 @@ def check_models(models: list[type], spec: dict[str, Any]) -> list[Finding]:
                     )
                 )
     return findings
+
+
+@dataclass(frozen=True)
+class Coverage:
+    """apidrift annotation-coverage summary over the registered models.
+
+    Every registered Pydantic model falls into exactly one bucket:
+
+    * ``mapped`` - carries ``__meraki_op__``; its fields are conformance-checked
+      against the live spec (``beta`` is the subset whose ops are declared
+      beta-channel via ``__meraki_beta__``, a known drift blind spot).
+    * ``derived`` - carries ``__meraki_derived__ = True``; a computed/transformed
+      shape or a nested sub-object with no single upstream response.
+    * ``unmapped`` - no annotation; the coverage gap that should be driven to zero
+      for top-level API-response models (each entry is a model class name).
+    """
+
+    total: int
+    mapped: list[str]
+    beta: list[str]
+    derived: list[str]
+    unmapped: list[str]
+
+
+def coverage(models: list[type]) -> Coverage:
+    """Classify each model by its apidrift annotation for a coverage report.
+
+    Uses the same own/non-inherited attribute lookup as :func:`check_models`, so
+    a subclass never inherits its parent's ``__meraki_op__``/``__meraki_derived__``.
+    """
+    mapped: list[str] = []
+    beta: list[str] = []
+    derived: list[str] = []
+    unmapped: list[str] = []
+    for model in models:
+        name = model.__name__
+        if model.__dict__.get("__meraki_derived__") is True:
+            derived.append(name)
+        elif _normalize_ops(model.__dict__.get("__meraki_op__")):
+            mapped.append(name)
+            if model.__dict__.get("__meraki_beta__") is True:
+                beta.append(name)
+        else:
+            unmapped.append(name)
+    return Coverage(
+        total=len(models),
+        mapped=sorted(mapped),
+        beta=sorted(beta),
+        derived=sorted(derived),
+        unmapped=sorted(unmapped),
+    )

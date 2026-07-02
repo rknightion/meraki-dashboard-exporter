@@ -382,6 +382,10 @@ class ApplianceSecurityEvent(BaseModel):
 class ApplianceRedundancyDesignation(BaseModel):
     """A single warm-spare designation (device + priority) within a network."""
 
+    # apidrift: nested sub-object of ApplianceDeviceRedundancy.designations; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
     serial: str = ""
     priority: int | None = None
 
@@ -407,6 +411,10 @@ class ApplianceDeviceRedundancy(BaseModel):
 
 class ApplianceUplinkUsageEntry(BaseModel):
     """A single (device, uplink) usage entry within an uplink-usage row."""
+
+    # apidrift: nested sub-object of ApplianceUplinkUsage.byUplink; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
 
     serial: str = ""
     interface: str = ""
@@ -434,6 +442,10 @@ class ApplianceUplinkUsage(BaseModel):
 class ApplianceVpnUsageSummary(BaseModel):
     """VPN usage volume summary for a peer network."""
 
+    # apidrift: nested sub-object of ApplianceVpnStatsPeer.usageSummary; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
     sentInKilobytes: float | None = None
     receivedInKilobytes: float | None = None
 
@@ -443,6 +455,10 @@ class ApplianceVpnUsageSummary(BaseModel):
 class ApplianceVpnLatencySummary(BaseModel):
     """VPN latency summary for one sender/receiver uplink combination."""
 
+    # apidrift: nested sub-object of ApplianceVpnStatsPeer.latencySummaries; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
     avgLatencyMs: float | None = None
 
     model_config = ConfigDict(extra="allow")
@@ -450,6 +466,10 @@ class ApplianceVpnLatencySummary(BaseModel):
 
 class ApplianceVpnStatsPeer(BaseModel):
     """A single peer-network entry within a VPN stats row."""
+
+    # apidrift: nested sub-object of ApplianceVpnStats.merakiVpnPeers; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
 
     networkId: str = ""
     usageSummary: ApplianceVpnUsageSummary | None = None
@@ -480,6 +500,10 @@ class ApplianceFirewallRule(BaseModel):
     policy detection) are pinned; the differing L7 rule fields are permitted
     via extras.
     """
+
+    # apidrift: nested sub-object of ApplianceFirewallRules.rules; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
 
     comment: str | None = None
     policy: str | None = None
@@ -526,6 +550,10 @@ class SensorAlertsOverviewByMetric(BaseModel):
 class SensorGatewayNodeRef(BaseModel):
     """A sensor or gateway reference (serial + optional name)."""
 
+    # apidrift: nested sub-object of SensorGatewayConnection; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
     serial: str = ""
     name: str | None = None
 
@@ -534,6 +562,10 @@ class SensorGatewayNodeRef(BaseModel):
 
 class SensorGatewayNetworkRef(BaseModel):
     """A network reference within a sensor-gateway connection item."""
+
+    # apidrift: nested sub-object of SensorGatewayConnection.network; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
 
     id: str = ""
     name: str | None = None
@@ -569,6 +601,10 @@ class CellularGatewayUplinkSignalStat(BaseModel):
     so these are kept loosely typed here.
     """
 
+    # apidrift: nested sub-object of CellularGatewayUplink.signalStat; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
     rsrp: Any = None
     rsrq: Any = None
 
@@ -578,6 +614,10 @@ class CellularGatewayUplinkSignalStat(BaseModel):
 class CellularGatewayUplinkRoaming(BaseModel):
     """Roaming status object for a single MG cellular uplink."""
 
+    # apidrift: nested sub-object of CellularGatewayUplink.roaming; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
     status: str | None = None
 
     model_config = ConfigDict(extra="allow")
@@ -585,6 +625,10 @@ class CellularGatewayUplinkRoaming(BaseModel):
 
 class CellularGatewayUplink(BaseModel):
     """A single uplink entry within a cellular gateway uplink-status row."""
+
+    # apidrift: nested sub-object of CellularGatewayUplinkStatus.uplinks; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
 
     interface: str = ""
     status: str = "not connected"
@@ -621,6 +665,10 @@ class CellularGatewayUplinkStatus(BaseModel):
 class PowerModuleNetworkRef(BaseModel):
     """A network reference nested within a power-module-status row."""
 
+    # apidrift: nested sub-object of DevicePowerModuleStatus.network; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
     id: str | None = None
 
     model_config = ConfigDict(extra="allow")
@@ -628,6 +676,10 @@ class PowerModuleNetworkRef(BaseModel):
 
 class PowerModuleSlot(BaseModel):
     """A single power-supply slot entry within a power-module-status row."""
+
+    # apidrift: nested sub-object of DevicePowerModuleStatus.slots; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
 
     number: int | str | None = None
     serial: str | None = None
@@ -659,6 +711,10 @@ class DevicePowerModuleStatus(BaseModel):
 
 class UplinkLossLatencyTimeSeriesPoint(BaseModel):
     """A single timestamped loss/latency sample within an uplink health row."""
+
+    # apidrift: nested sub-object of DeviceUplinkLossLatency.timeSeries; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
 
     ts: str | None = None
     lossPercent: float | None = None
@@ -703,6 +759,10 @@ class CameraAnalyticsZone(BaseModel):
 
 class CameraAnalyticsLiveZoneData(BaseModel):
     """Live per-zone analytics counts within a live-analytics response."""
+
+    # apidrift: nested sub-object of CameraAnalyticsLive.zones; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
 
     person: int = 0
 

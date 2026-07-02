@@ -111,3 +111,21 @@ def test_cli_emit_reduced_writes_specs(tmp_path: Path) -> None:
 def test_cli_load_error_exit_2(tmp_path: Path) -> None:
     r = _run(["--baseline", str(tmp_path / "nope.json"), "--live", str(tmp_path / "x.json")])
     assert r.returncode == 2, r.stderr
+
+
+def test_cli_coverage_runs_standalone_without_spec() -> None:
+    # --coverage needs no --baseline/--live and must import the real models, so it
+    # needs src on the path alongside tools.
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(["src", "tools"])}
+    r = subprocess.run(
+        [sys.executable, "-m", "apidrift", "--coverage", "--format", "json"],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        env=env,
+    )
+    assert r.returncode == 0, r.stderr
+    cov = json.loads(r.stdout)
+    # Every registered model is classified; the sum of buckets equals the total.
+    assert cov["total"] == len(cov["mapped"]) + len(cov["derived"]) + len(cov["unmapped"])
+    assert cov["total"] > 0

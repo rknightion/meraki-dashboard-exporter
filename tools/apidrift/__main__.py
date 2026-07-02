@@ -16,9 +16,15 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from apidrift.conformance import Finding, check_models
+from apidrift.conformance import Finding, check_models, coverage
 from apidrift.reducer import index_operations, reduce_spec
-from apidrift.report import has_actionable, render_json, render_markdown
+from apidrift.report import (
+    has_actionable,
+    render_coverage_json,
+    render_coverage_markdown,
+    render_json,
+    render_markdown,
+)
 from apidrift.scanner import consumed_operations
 from apidrift.spec import load_spec, load_spec_bytes
 
@@ -52,8 +58,11 @@ def _conformance_only(live: dict[str, Any], fmt: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     """Run the drift check and return the process exit code (0/2/3)."""
     ap = argparse.ArgumentParser(prog="apidrift")
-    ap.add_argument("--baseline", required=True, help="vendored baseline spec (.json/.json.gz)")
-    source = ap.add_mutually_exclusive_group(required=True)
+    # --baseline / --live are required for every mode EXCEPT --coverage (a pure
+    # offline model-annotation report that never touches a spec); enforced manually
+    # after parsing so --coverage can run standalone.
+    ap.add_argument("--baseline", help="vendored baseline spec (.json/.json.gz)")
+    source = ap.add_mutually_exclusive_group()
     source.add_argument("--live", help="path to a live spec file")
     source.add_argument("--live-url", help="https URL to fetch the live spec from")
     ap.add_argument("--src", default="src", help="source tree to scan for consumed ops")
@@ -70,7 +79,22 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="suggest source operations for unmapped models (review aid; always exits 0)",
     )
+    ap.add_argument(
+        "--coverage",
+        action="store_true",
+        help="print the model annotation-coverage summary and exit 0 (report aid; no spec fetch)",
+    )
     args = ap.parse_args(argv)
+
+    if args.coverage:
+        from apidrift.models import conformance_models
+
+        cov = coverage(conformance_models())
+        print(render_coverage_json(cov) if args.format == "json" else render_coverage_markdown(cov))
+        return 0
+
+    if not args.baseline or not (args.live or args.live_url):
+        ap.error("--baseline and one of --live/--live-url are required (except with --coverage)")
 
     try:
         baseline = load_spec(args.baseline)

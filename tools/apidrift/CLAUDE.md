@@ -24,6 +24,24 @@ sibling tailscale2otel repo's apidrift tool; exit-code contract is intentionally
   `__meraki_derived__ = True` off each Pydantic model. Unannotated models are reported `INFO`
   (`unmapped`), not skipped — the coverage gap must stay visible. Use `--suggest` /
   `suggest.py` to get candidate ops for an unmapped model by field-overlap scoring.
+  **Nested structural sub-objects** (a submodel that is only ever a field of a parent whose
+  response the parent model already maps — e.g. `PowerModuleSlot` inside `DevicePowerModuleStatus`)
+  carry `__meraki_derived__ = True`, NOT the parent's `__meraki_op__`: their fields are not
+  top-level fields of any op response, so mapping them to the parent op would emit false
+  `model-extra` INFO. Their drift is caught by oasdiff on the reduced parent-op schema.
+- **`--coverage` reports annotation coverage.** `apidrift --coverage` (offline, no spec fetch,
+  always exit 0) prints a mapped/derived/unmapped summary of all `conformance_models()` via
+  `conformance.coverage()` + `report.render_coverage_{markdown,json}`. Drive `unmapped` to zero for
+  real top-level API-response models. (No `make` target wired yet — invoke directly with
+  `PYTHONPATH=src:tools uv run python -m apidrift --coverage`.)
+- **Beta-spec blind spot (`__meraki_beta__`).** apidrift pulls a single fixed **GA** spec channel;
+  beta-tagged operations (`liveTools`, radio-status/overrides, AFC, `getDeviceWirelessHealthScores`,
+  …) are absent from it entirely and their drift is out of scope. A model whose `__meraki_op__` lives
+  on the beta channel must also set `__meraki_beta__ = True`: a mapped op missing from the GA spec is
+  then reported `INFO beta-blind-spot` (a *visible*, non-gating record) instead of a false
+  `WARNING model-op-absent` or a silent skip. No model uses this yet (the exporter consumes no beta
+  ops); it exists so a future beta-dependent collector surfaces the blind spot rather than a false
+  positive. Full beta-channel fetching (a second `--live-beta` source) remains unimplemented larger work.
 - **Findings severities are intentionally asymmetric**: a field on a model but absent from every
   mapped op's response is only `INFO` (`model-extra` — the exporter's models legitimately carry
   derived/enrichment fields); only a concrete `type-mismatch` or a vanished mapped op

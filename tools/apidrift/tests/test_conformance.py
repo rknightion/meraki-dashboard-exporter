@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from apidrift.conformance import check_models
+from apidrift.conformance import check_models, coverage
 
 
 def _op(op_id: str, props: dict[str, dict[str, str]]) -> dict[str, Any]:
@@ -158,3 +158,45 @@ def test_structured_submodel_vs_bare_object_is_info_not_gating() -> None:
 def test_real_type_mismatch_still_warns() -> None:
     findings = check_models([RealMismatch], SPEC)
     assert [f for f in findings if f.kind == "type-mismatch" and f.severity == "WARNING"]
+
+
+class BetaModel(BaseModel):
+    # Mapped op lives on the beta channel and is absent from the (GA) SPEC.
+    __meraki_op__ = "getDeviceWirelessHealthScores"
+    __meraki_beta__ = True
+    score: int
+
+
+class NonBetaMissingModel(BaseModel):
+    # Mapped op absent from spec, NOT beta -> must stay a gating WARNING.
+    __meraki_op__ = "getSomethingRemoved"
+    score: int
+
+
+def test_beta_op_absent_from_ga_spec_is_info_blind_spot_not_gating() -> None:
+    findings = check_models([BetaModel], SPEC)
+    assert not [f for f in findings if f.severity == "WARNING"]
+    blind = [f for f in findings if f.kind == "beta-blind-spot"]
+    assert blind and all(f.severity == "INFO" for f in blind)
+
+
+def test_non_beta_missing_op_still_warns() -> None:
+    findings = check_models([NonBetaMissingModel], SPEC)
+    assert [f for f in findings if f.kind == "model-op-absent" and f.severity == "WARNING"]
+    assert not [f for f in findings if f.kind == "beta-blind-spot"]
+
+
+def test_coverage_classifies_each_model_once() -> None:
+    cov = coverage([GoodModel, DerivedModel, Unmapped, BetaModel])
+    assert cov.total == 4
+    assert cov.mapped == ["BetaModel", "GoodModel"]
+    assert cov.beta == ["BetaModel"]
+    assert cov.derived == ["DerivedModel"]
+    assert cov.unmapped == ["Unmapped"]
+
+
+def test_coverage_child_does_not_inherit_mapping() -> None:
+    # ChildModel has no own annotation; it must count as unmapped, not mapped.
+    cov = coverage([ChildModel])
+    assert cov.unmapped == ["ChildModel"]
+    assert cov.mapped == []
