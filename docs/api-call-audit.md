@@ -31,7 +31,7 @@ These calls fetch data for an entire organization in one request, which is the o
 | Endpoint | Collector File | Notes |
 |----------|---------------|-------|
 | `getOrganizations` | `core/discovery.py`, `collectors/alerts.py`, `collectors/config.py`, `collectors/devices/mt.py`, `services/inventory.py` | Multiple collectors fetch this independently; inventory caches it |
-| `getOrganization` | `core/api_helpers.py`, `collectors/alerts.py`, `collectors/config.py`, `collectors/devices/mt.py` | Single-org mode fallback |
+| `getOrganization` | `core/api_helpers.py`, `collectors/alerts.py`, `collectors/config.py`, `collectors/devices/mt.py`, `services/inventory.py` | Single-org mode fallback (inventory resolves the real org name here) |
 | `getOrganizationNetworks` | `core/api_helpers.py`, `collectors/device.py`, `collectors/network_health.py`, `collectors/devices/ms.py`, `collectors/devices/mr/wireless.py`, `collectors/alerts.py`, `services/inventory.py` | Heavily used; some bypass inventory cache |
 | `getOrganizationDevices` | `core/api_helpers.py`, `collectors/devices/mt.py`, `collectors/network_health_collectors/rf_health.py`, `services/inventory.py` | Some bypass inventory cache |
 | `getOrganizationDevicesAvailabilities` | `collectors/device.py`, `collectors/organization.py`, `services/inventory.py` | Partially cached via inventory |

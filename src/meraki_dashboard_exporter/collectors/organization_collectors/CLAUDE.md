@@ -24,18 +24,23 @@ Organization-level collectors for Meraki Dashboard Exporter - Handles metrics th
   each exposes `collect(org_id, org_name)`, called from the coordinator's `_collect_api_metrics` /
   `_collect_license_metrics` / `_collect_client_overview` / firmware+availability-history
   equivalents.
-- **None of the 5 sub-collectors here fetch networks or devices** — they only call org-scoped
-  endpoints (`getOrganizationApiRequestsOverview`, `getOrganizationClientsOverview`,
+- **None of the 5 sub-collectors *fetch* networks/devices** — they only call org-scoped endpoints
+  (`getOrganizationApiRequestsOverview`, `getOrganizationClientsOverview`,
   `getOrganizationLicensesOverview`/`getOrganizationLicenses`, `getOrganizationFirmwareUpgrades`,
-  `getOrganizationDevicesAvailabilitiesChangeHistory`), so the `get_allowed_network_ids`
-  allow-list pattern doesn't apply to this directory's code. It's used by the coordinator/device
-  collectors instead — see `../../services/CLAUDE.md` for the full inventory contract.
+  `getOrganizationDevicesAvailabilitiesChangeHistory`). But two of them **do apply the
+  `get_allowed_network_ids` allow-list** to *filter response rows* whose `network.id` falls outside
+  the configured `NetworkFilter`: `firmware.py` and `device_availability_history.py` (both resolve
+  `self.inventory.get_allowed_network_ids(org_id)` and skip excluded networks — the same row-filter
+  rule the coordinator/device collectors use). `api_usage.py`, `client_overview.py`, and `license.py`
+  return purely org-scoped aggregates with no per-network rows, so the allow-list doesn't apply to
+  them. See `../../services/CLAUDE.md` for the full inventory contract.
 - **License overview is inventory-cached too, not just networks/devices**: `LicenseCollector`
   prefers `self.inventory.get_licenses_overview(org_id)` (30-minute TTL, since license data
   rarely changes), falling back to a direct `getOrganizationLicensesOverview` call only when
   `inventory` is unset.
 - **Wrap fetcher responses** with `validate_response_format` from `core.error_handling`
-  (`api_usage.py`, `license.py`; `client_overview.py`'s fetch does not wrap its raw dict).
+  (`api_usage.py`, `license.py`, and `client_overview.py` — the latter now wraps its raw dict so an
+  SDK exhausted-retry error shape raises instead of poisoning the stale-zero cache with zeros).
 </critical_notes>
 
 <file_map>
@@ -54,7 +59,8 @@ Organization-level collectors for Meraki Dashboard Exporter - Handles metrics th
 - `device_availability_history.py` - `DeviceAvailabilityHistoryCollector`: windowed device
   availability *change* counts (not point-in-time status — that's the coordinator's
   `_collect_device_availability_metrics`), via `getOrganizationDevicesAvailabilitiesChangeHistory`
-  with a 300s timespan matching the MEDIUM collection cadence
+  with a timespan tied to the configured MEDIUM interval (`settings.update_intervals.medium`, 300s
+  by default) rather than a hardcoded 300s
 </file_map>
 
 <paved_path>
@@ -92,8 +98,11 @@ and Meraki's `"Mar 13, 2027 UTC"` human-readable format).
 `ClientOverviewCollector` keeps a per-instance `_last_non_zero_values: dict[str, dict]` cache. If
 `getOrganizationClientsOverview` comes back with client count and all usage fields at zero
 (a known API glitch), it logs a warning and re-emits the last cached non-zero values for that org
-instead of writing zeros. Non-zero responses update the cache. Keep this in mind if metrics look
-"stuck" — that's the guard working as intended, not a stale collector.
+instead of writing zeros. Non-zero responses update the cache. **The replay is bounded** — after
+`_MAX_CONSECUTIVE_ZERO_REPLAYS` (3) consecutive zero cycles, or once the cache is older than
+`_MAX_CACHE_AGE_SECONDS` (900s), a genuinely-zero org is allowed to emit real zeros rather than
+being frozen forever. Keep this in mind if metrics look "stuck" — that's the guard working as
+intended, not a stale collector.
 </paved_path>
 
 <api_quirks>
