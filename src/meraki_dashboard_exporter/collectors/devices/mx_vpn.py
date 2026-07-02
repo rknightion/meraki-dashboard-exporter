@@ -77,17 +77,17 @@ class MXVpnCollector(SubCollectorMixin):
         ]
         self._vpn_usage_sent_bytes = self.parent._create_gauge(
             MXMetricName.MX_VPN_USAGE_SENT_BYTES,
-            "VPN usage sent in bytes over the last 5 minutes, per peer network",
+            "VPN usage sent in bytes over the last 15 minutes, per peer network",
             labelnames=vpn_stats_labelnames,
         )
         self._vpn_usage_recv_bytes = self.parent._create_gauge(
             MXMetricName.MX_VPN_USAGE_RECV_BYTES,
-            "VPN usage received in bytes over the last 5 minutes, per peer network",
+            "VPN usage received in bytes over the last 15 minutes, per peer network",
             labelnames=vpn_stats_labelnames,
         )
         self._vpn_stats_avg_latency_seconds = self.parent._create_gauge(
             MXMetricName.MX_VPN_STATS_AVG_LATENCY_SECONDS,
-            "Average VPN latency in seconds to a peer network (5-min avg), averaged across all "
+            "Average VPN latency in seconds to a peer network (15-min avg), averaged across all "
             "sender/receiver uplink combinations",
             labelnames=vpn_stats_labelnames,
         )
@@ -210,11 +210,22 @@ class MXVpnCollector(SubCollectorMixin):
             Organization name.
 
         """
+        # timespan (issue #527): the OpenAPI spec's default for this endpoint is 1 day
+        # (86400s), which is far larger than the 300s (5-min) this collector originally
+        # requested — evidence/api-conformance.md (APIDEV-06) flagged 300s as liable to
+        # return sparse/empty usageSummary/latencySummaries depending on how often Meraki
+        # actually rolls up VPN stats internally. No live capture of this endpoint's
+        # response exists in evidence/ to confirm/deny sparsity at 300s, so a live check
+        # is still recommended. Absent that, 900s (15 minutes) is chosen as the safe
+        # documented default: it comfortably covers this collector's own MEDIUM-tier
+        # (300s) scrape interval with 3x headroom, matching the widening the issue
+        # itself suggests (600 or 900), while staying far short of the spec's 1-day
+        # default so the data stays reasonably fresh.
         resp = await asyncio.to_thread(
             self.api.appliance.getOrganizationApplianceVpnStats,
             org_id,
             total_pages="all",
-            timespan=300,
+            timespan=900,
         )
 
         rows = validate_response_format(

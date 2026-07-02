@@ -539,17 +539,34 @@ class TestMXVpnStatsCollector:
         mock_parent._set_metric.assert_not_called()
 
     def test_vpn_usage_help_states_window(self, vpn_collector: MXVpnCollector) -> None:
-        """MET-09: VPN usage HELP must state the 5-minute data window.
+        """MET-09: VPN usage HELP must state the 15-minute data window.
 
-        collect_vpn_stats pins timespan=300 on getOrganizationApplianceVpnStats,
-        so the sent/recv usage HELP text (previously just "over the collection
-        window") must say 5 minutes explicitly. mx_vpn_stats_avg_latency_seconds
-        already states "(5-min avg)" and is intentionally left unchanged.
+        Issue #527: collect_vpn_stats widened timespan from 300s to 900s on
+        getOrganizationApplianceVpnStats (300s risked sparse/empty summaries per
+        evidence/api-conformance.md APIDEV-06), so the sent/recv usage HELP text
+        must say 15 minutes explicitly. mx_vpn_stats_avg_latency_seconds must
+        likewise state "(15-min avg)".
         """
         sent_doc = vpn_collector._vpn_usage_sent_bytes._documentation.lower()
         recv_doc = vpn_collector._vpn_usage_recv_bytes._documentation.lower()
-        assert "5-min" in sent_doc or "5 min" in sent_doc
-        assert "5-min" in recv_doc or "5 min" in recv_doc
+        latency_doc = vpn_collector._vpn_stats_avg_latency_seconds._documentation.lower()
+        assert "15-min" in sent_doc or "15 min" in sent_doc
+        assert "15-min" in recv_doc or "15 min" in recv_doc
+        assert "15-min" in latency_doc or "15 min" in latency_doc
+
+    async def test_vpn_stats_requests_widened_timespan(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Issue #527: timespan must be widened from 300s to 900s to avoid sparse summaries."""
+        mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(return_value=[])
+
+        await vpn_collector.collect_vpn_stats("org1", "Test Org")
+
+        _, kwargs = mock_api.appliance.getOrganizationApplianceVpnStats.call_args
+        assert kwargs["timespan"] == 900
 
     async def test_invalid_response_type(
         self,
