@@ -10,6 +10,11 @@
           "type": "generic",
           "path": "pyproject.toml",
           "glob": false
+        },
+        {
+          "type": "generic",
+          "path": "charts/meraki-dashboard-exporter/Chart.yaml",
+          "glob": false
         }
       ]
     }
