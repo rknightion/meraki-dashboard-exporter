@@ -146,18 +146,25 @@ class TestAPIHelper:
         )
 
     async def test_get_organization_devices_with_product_filter(self, api_helper, mock_collector):
-        """Test fetching devices with product type filtering."""
+        """Test fetching devices with product type filtering.
+
+        product_types is applied as a local post-filter on the fallback path
+        (APIORG-23, aligned with the cached-inventory path), so the SDK call
+        itself is unfiltered — no ``productTypes`` request parameter.
+        """
         mock_devices = [
             {"serial": "Q2XX-XXXX-XXXX", "model": "MR36", "productType": "wireless"},
             {"serial": "Q2YY-YYYY-YYYY", "model": "MS225", "productType": "switch"},
         ]
         mock_collector.api.organizations.getOrganizationDevices.return_value = mock_devices
 
-        await api_helper.get_organization_devices("123", product_types=["wireless"])
+        result = await api_helper.get_organization_devices("123", product_types=["wireless"])
 
         mock_collector.api.organizations.getOrganizationDevices.assert_called_once_with(
-            "123", total_pages="all", productTypes=["wireless"]
+            "123", total_pages="all"
         )
+        assert len(result) == 1
+        assert result[0]["productType"] == "wireless"
 
     async def test_get_organization_devices_with_model_filter(self, api_helper, mock_collector):
         """Test fetching devices with model filtering."""
@@ -180,7 +187,10 @@ class TestAPIHelper:
             {"serial": "Q2YY-YYYY-YYYY", "model": "MS225", "productType": "switch"},
             {"serial": "Q2ZZ-ZZZZ-ZZZZ", "model": "MX64", "productType": "appliance"},
         ]
-        # API returns only wireless devices due to product type filter
+        # Only the wireless device is returned; the local product_types
+        # post-filter (APIORG-23) would also drop the others even if the
+        # mock returned all three, since the SDK call is no longer given a
+        # productTypes request parameter.
         mock_collector.api.organizations.getOrganizationDevices.return_value = [mock_devices[0]]
 
         result = await api_helper.get_organization_devices(
@@ -357,6 +367,63 @@ class TestAPIHelper:
         result = await api_helper.get_organization_devices("123")
 
         assert result == []
+
+    async def test_fetch_devices_direct_reapplies_network_filter(self, api_helper, mock_collector):
+        """_fetch_devices_direct drops devices in networks excluded by NetworkFilter.
+
+        Mirrors _fetch_networks_direct's filtering (#520/APIORG-23): when
+        inventory is unavailable and a NetworkFilter is configured, devices
+        belonging to a filtered-out network must not leak through the
+        fallback path.
+        """
+        from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+
+        mock_collector.settings.network_filter = NetworkFilterSettings(exclude_tags=["lab"])
+        mock_collector.api.organizations.getOrganizationNetworks.return_value = [
+            {"id": "N_INCLUDED", "name": "prod", "tags": []},
+            {"id": "N_EXCLUDED", "name": "lab", "tags": ["lab"]},
+        ]
+        mock_devices = [
+            {
+                "serial": "Q-INCLUDED",
+                "model": "MR36",
+                "productType": "wireless",
+                "networkId": "N_INCLUDED",
+            },
+            {
+                "serial": "Q-EXCLUDED",
+                "model": "MR36",
+                "productType": "wireless",
+                "networkId": "N_EXCLUDED",
+            },
+        ]
+        mock_collector.api.organizations.getOrganizationDevices.return_value = mock_devices
+
+        result = await api_helper.get_organization_devices("123")
+
+        assert [d["serial"] for d in result] == ["Q-INCLUDED"]
+        mock_collector.api.organizations.getOrganizationNetworks.assert_called_once_with(
+            "123", total_pages="all"
+        )
+
+    async def test_fetch_devices_direct_no_filter_call_when_inactive(
+        self, api_helper, mock_collector
+    ):
+        """When NetworkFilter is inactive, no extra getOrganizationNetworks call is made."""
+        mock_devices = [
+            {
+                "serial": "Q2XX-XXXX-XXXX",
+                "model": "MR36",
+                "productType": "wireless",
+                "networkId": "N_1",
+            },
+        ]
+        mock_collector.api.organizations.getOrganizationDevices.return_value = mock_devices
+
+        result = await api_helper.get_organization_devices("123")
+
+        assert result == mock_devices
+        mock_collector.api.organizations.getOrganizationNetworks.assert_not_called()
 
     async def test_process_in_batches_respects_order(self, api_helper):
         """Test that batch processing maintains order of results."""

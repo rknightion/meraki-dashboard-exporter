@@ -160,3 +160,31 @@ async def test_api_helpers_direct_fallback_applies_filter() -> None:
 
     result = await helper._fetch_networks_direct("ORG")
     assert [n["id"] for n in result] == ["L_1"]
+
+
+async def test_api_helpers_devices_direct_fallback_applies_filter() -> None:
+    """api_helpers._fetch_devices_direct applies the filter when inventory missing (#520)."""
+    from meraki_dashboard_exporter.core.api_helpers import APIHelper
+    from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+
+    helper = APIHelper.__new__(APIHelper)
+    helper.api = MagicMock()
+    helper.api.organizations.getOrganizationNetworks = MagicMock(
+        return_value=[
+            {"id": "L_1", "name": "prod", "tags": []},
+            {"id": "L_2", "name": "lab", "tags": ["lab"]},
+        ]
+    )
+    helper.api.organizations.getOrganizationDevices = MagicMock(
+        return_value=[
+            {"serial": "Q1", "productType": "switch", "networkId": "L_1"},
+            {"serial": "Q2", "productType": "switch", "networkId": "L_2"},
+        ]
+    )
+    helper.collector = MagicMock()
+    helper.collector.settings.network_filter = NetworkFilterSettings(exclude_tags=["lab"])
+    helper.collector._track_api_call = MagicMock()
+    helper._acquire_rate_limit = AsyncMock()
+
+    result = await helper._fetch_devices_direct("ORG")
+    assert [d["serial"] for d in result] == ["Q1"]

@@ -261,6 +261,17 @@ class APIHelper:
     ) -> list[dict[str, Any]]:
         """Fetch devices directly from API (fallback when inventory unavailable).
 
+        Even on this fallback path the configured NetworkFilter is applied
+        (mirroring ``_fetch_networks_direct``) so devices belonging to
+        excluded networks do not leak into collectors that go through
+        ``get_organization_devices`` when inventory is missing.
+
+        ``product_types`` is applied as a local post-filter on the fetched
+        list, matching how ``get_organization_devices`` filters the
+        inventory-cached path (APIORG-23) rather than being passed to the
+        SDK as a ``productTypes`` request parameter, so both paths share
+        identical filtering semantics.
+
         Parameters
         ----------
         org_id : str
@@ -271,7 +282,7 @@ class APIHelper:
         Returns
         -------
         list[dict[str, Any]]
-            List of device dictionaries.
+            List of device dictionaries (filtered).
 
         """
         logger.debug(
@@ -282,20 +293,29 @@ class APIHelper:
         self.collector._track_api_call("getOrganizationDevices")
         await self._acquire_rate_limit(org_id, "getOrganizationDevices")
 
-        # Build API call parameters
-        params: dict[str, Any] = {"total_pages": "all"}
-        if product_types:
-            params["productTypes"] = product_types
-
         raw_devices = await asyncio.to_thread(
             self.api.organizations.getOrganizationDevices,
             org_id,
-            **params,
+            total_pages="all",
         )
         # Normalize the SDK exhausted-retry error shape ({"errors": [...]}).
         devices: list[dict[str, Any]] = validate_response_format(
             raw_devices, expected_type=list, operation="getOrganizationDevices"
         )
+
+        nf_settings = self.collector.settings.network_filter
+        if nf_settings.is_active:
+            # Reuse the sibling fetcher so the resolved allow-list is derived
+            # from the same filtered network fetch/logic used elsewhere on
+            # this fallback path, rather than duplicating NetworkFilter
+            # wiring here.
+            allowed_networks = await self._fetch_networks_direct(org_id)
+            allowed_ids = {n["id"] for n in (allowed_networks or []) if "id" in n}
+            devices = [d for d in devices if d.get("networkId") in allowed_ids]
+
+        if product_types:
+            devices = [d for d in devices if d.get("productType") in product_types]
+
         logger.debug("Successfully fetched devices", org_id=org_id, count=len(devices))
         return devices
 
