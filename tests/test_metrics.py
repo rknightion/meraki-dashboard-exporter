@@ -169,8 +169,12 @@ class TestLabelHelpersIdOnly:
             "port_id": "5",
         }
 
-    def test_create_client_labels_drops_org_and_network_name(self) -> None:
-        """create_client_labels drops org_name/network_name; keeps mac/description/hostname (#533)."""
+    def test_create_client_labels_is_id_only(self) -> None:
+        """create_client_labels is ID-only: org_id/network_id/client_id only (#533).
+
+        mac/description/hostname/ssid must NOT appear even when present in the
+        input client dict -- they live exclusively on meraki_client_info.
+        """
         labels = create_client_labels(
             {
                 "id": "k1",
@@ -187,7 +191,4 @@ class TestLabelHelpersIdOnly:
             "org_id": "111",
             "network_id": "N_1",
             "client_id": "k1",
-            "mac": "aa:bb:cc:dd:ee:ff",
-            "description": "Laptop",
-            "hostname": "laptop-1",
         }

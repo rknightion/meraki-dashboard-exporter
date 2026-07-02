@@ -30,6 +30,7 @@ class ClientStore:
         self.settings = settings
         self.cache_ttl = settings.clients.cache_ttl
         self.max_clients_per_network = settings.clients.max_clients_per_network
+        self.max_clients_total = settings.clients.max_clients_total
 
         # Store clients by network ID
         self._clients: dict[str, dict[str, ClientData]] = {}
@@ -79,6 +80,7 @@ class ClientStore:
         network_clients = self._clients[network_id]
         updated_count = 0
         new_count = 0
+        skipped_new_count = 0
 
         # Limit number of clients per network
         clients_to_process = clients[: self.max_clients_per_network]
@@ -90,6 +92,11 @@ class ClientStore:
                 total_clients=len(clients),
                 limit=self.max_clients_per_network,
             )
+
+        # Global cap (#533): computed once up-front so it is stable across the
+        # whole call even though new clients are added to the store as we go.
+        global_total = sum(len(clients_in_network) for clients_in_network in self._clients.values())
+        global_capacity = max(self.max_clients_total - global_total, 0)
 
         # Process each client
         for client in clients_to_process:
@@ -134,6 +141,13 @@ class ClientStore:
                 existing.wirelessCapabilities = client.wirelessCapabilities
                 updated_count += 1
             else:
+                # Global cap reached: skip creating new clients, but existing
+                # clients (handled in the branch above) always continue to be
+                # updated.
+                if new_count >= global_capacity:
+                    skipped_new_count += 1
+                    continue
+
                 # Add new client
                 network_clients[client_id] = ClientData(
                     id=client.id,
@@ -171,6 +185,14 @@ class ClientStore:
                     organizationId=org_id,
                 )
                 new_count += 1
+
+        if skipped_new_count > 0:
+            logger.warning(
+                "Global client store cap reached; not adding new clients",
+                network_id=network_id,
+                skipped=skipped_new_count,
+                global_cap=self.max_clients_total,
+            )
 
         # Update timestamp
         self._last_update[network_id] = time.time()

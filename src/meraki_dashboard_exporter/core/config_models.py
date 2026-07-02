@@ -435,6 +435,24 @@ class ClientSettings(BaseModel):
         le=50000,
         description="Maximum clients to track per network",
     )
+    max_clients_total: int = Field(
+        25000,
+        ge=100,
+        le=1_000_000,
+        description=(
+            "Global cap on clients emitted as metric series across ALL networks per "
+            "collection cycle. Clients beyond the cap are dropped from metric emission "
+            "with a warning and counted in meraki_exporter_clients_over_cap."
+        ),
+    )
+    signal_quality_enabled: bool = Field(
+        False,
+        description=(
+            "Enable per-client wireless signal quality (RSSI/SNR) collection. Costs one "
+            "API call per wireless client per cycle (interval-gated); prohibitively "
+            "expensive at scale, so disabled by default."
+        ),
+    )
 
 
 class MerakiSettings(BaseModel):

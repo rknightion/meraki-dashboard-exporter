@@ -212,9 +212,9 @@ class TestClientsCollector(BaseCollectorTest):
             # Run collection
             await self.run_collector(collector)
 
-        # Verify basic client metrics
-        metrics.assert_gauge_value("meraki_client_status", 1, client_id="c1", ssid="Corporate")
-        metrics.assert_gauge_value("meraki_client_status", 0, client_id="c2", ssid="Guest")
+        # Verify basic client metrics (numeric series are ID-only -- #533)
+        metrics.assert_gauge_value("meraki_client_status", 1, client_id="c1")
+        metrics.assert_gauge_value("meraki_client_status", 0, client_id="c2")
 
         # Verify usage metrics
         metrics.assert_gauge_value("meraki_client_usage_sent_bytes", 1000000, client_id="c1")
@@ -407,6 +407,9 @@ class TestClientsCollector(BaseCollectorTest):
 
     async def test_collect_wireless_signal_quality(self, collector, mock_api_builder, metrics):
         """Test collection of wireless signal quality metrics."""
+        # Signal quality collection is opt-in and default-off (#533).
+        collector.settings.clients.signal_quality_enabled = True
+
         # Set up test data
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
@@ -479,16 +482,12 @@ class TestClientsCollector(BaseCollectorTest):
             # Run collection
             await self.run_collector(collector)
 
-        # Verify wireless signal quality metrics
-        metrics.assert_gauge_value(
-            "meraki_wireless_client_rssi", -47, client_id="c1", ssid="Corporate"
-        )
-        metrics.assert_gauge_value(
-            "meraki_wireless_client_snr", 50, client_id="c1", ssid="Corporate"
-        )
+        # Verify wireless signal quality metrics (numeric series are ID-only -- #533)
+        metrics.assert_gauge_value("meraki_wireless_client_rssi", -47, client_id="c1")
+        metrics.assert_gauge_value("meraki_wireless_client_snr", 50, client_id="c1")
 
-        metrics.assert_gauge_value("meraki_wireless_client_rssi", -62, client_id="c2", ssid="Guest")
-        metrics.assert_gauge_value("meraki_wireless_client_snr", 35, client_id="c2", ssid="Guest")
+        metrics.assert_gauge_value("meraki_wireless_client_rssi", -62, client_id="c2")
+        metrics.assert_gauge_value("meraki_wireless_client_snr", 35, client_id="c2")
 
         # Verify API was called with correct parameters
         api.wireless.getNetworkWirelessSignalQualityHistory.assert_any_call(
@@ -575,6 +574,9 @@ class TestClientsCollector(BaseCollectorTest):
 
     async def test_error_handling_in_signal_quality(self, collector, mock_api_builder, metrics):
         """Test error handling when signal quality API fails."""
+        # Signal quality collection is opt-in and default-off (#533).
+        collector.settings.clients.signal_quality_enabled = True
+
         # Set up test data
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         network = NetworkFactory.create(network_id="N_123", name="Test Network")
@@ -647,7 +649,7 @@ class TestClientsCollector(BaseCollectorTest):
             await self.run_collector(collector)
 
         # Network was processed (not dropped by a ValidationError).
-        metrics.assert_gauge_value("meraki_client_status", 1, client_id="c1", ssid="Corporate")
+        metrics.assert_gauge_value("meraki_client_status", 1, client_id="c1")
         metrics.assert_gauge_value("meraki_client_usage_sent_bytes", 225600.0, client_id="c1")
         metrics.assert_gauge_value("meraki_client_usage_recv_bytes", 852500.0, client_id="c1")
 
@@ -655,6 +657,9 @@ class TestClientsCollector(BaseCollectorTest):
         self, collector, mock_api_builder, metrics
     ):
         """F-060: signal-quality fan-out is capped and acquires the rate limiter."""
+        # Signal quality collection is opt-in and default-off (#533).
+        collector.settings.clients.signal_quality_enabled = True
+
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
 
@@ -702,6 +707,9 @@ class TestClientsCollector(BaseCollectorTest):
         self, collector, mock_api_builder, metrics
     ):
         """F-060: a second immediate collection is skipped by the interval gate."""
+        # Signal quality collection is opt-in and default-off (#533).
+        collector.settings.clients.signal_quality_enabled = True
+
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
 
@@ -835,3 +843,267 @@ class TestClientsCollector(BaseCollectorTest):
             client_id="c2499",
             type="test_app",
         )
+
+    async def test_numeric_client_series_are_id_only(self, collector, mock_api_builder, metrics):
+        """Acceptance regression (#533): every per-client numeric series is ID-only.
+
+        Fails prior to the label-contract change because labels included
+        mac/description/hostname/ssid.
+        """
+        collector.settings.clients.signal_quality_enabled = True
+
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+
+        clients = [
+            ClientFactory.create(
+                client_id="c1",
+                mac="aa:bb:cc:dd:ee:01",
+                ip="10.0.0.1",
+                description="Client 1",
+                status="Online",
+                ssid="Corporate",
+                recentDeviceConnection="Wireless",
+                vlan=100,
+                usage={"sent": 1000, "recv": 2000, "total": 3000},
+            ),
+            ClientFactory.create(
+                client_id="c2",
+                mac="aa:bb:cc:dd:ee:02",
+                ip="10.0.0.2",
+                description="Client 2",
+                status="Offline",
+                ssid="Guest",
+                recentDeviceConnection="Wireless",
+                vlan=200,
+                usage={"sent": 500, "recv": 1500, "total": 2000},
+            ),
+        ]
+
+        app_usage_data = [
+            {
+                "clientId": "c1",
+                "applicationUsage": [{"application": "Google HTTPS", "received": 100, "sent": 200}],
+            },
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_custom_response("getNetworkClients", clients)
+            .with_custom_response("getNetworkClientsApplicationUsage", app_usage_data)
+            .build()
+        )
+        api.wireless.getNetworkWirelessSignalQualityHistory = MagicMock(
+            return_value=[{"rssi": -50, "snr": 40}]
+        )
+        self._update_collector_api(collector, api)
+
+        with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
+            mock_resolve.return_value = {
+                "10.0.0.1": "client1.example.com",
+                "10.0.0.2": "client2.example.com",
+            }
+            await self.run_collector(collector)
+
+        for metric_name in (
+            "meraki_client_status",
+            "meraki_client_usage_sent_bytes",
+            "meraki_client_usage_recv_bytes",
+            "meraki_client_usage_total_bytes",
+        ):
+            label_sets = metrics.get_all_label_sets(metric_name)
+            assert label_sets, f"expected series for {metric_name}"
+            assert all(set(ls.keys()) == {"org_id", "network_id", "client_id"} for ls in label_sets)
+
+        app_usage_label_sets = metrics.get_all_label_sets(
+            "meraki_client_application_usage_sent_bytes"
+        )
+        assert app_usage_label_sets
+        assert all(
+            set(ls.keys()) == {"org_id", "network_id", "client_id", "type"}
+            for ls in app_usage_label_sets
+        )
+
+        for metric_name in ("meraki_wireless_client_rssi", "meraki_wireless_client_snr"):
+            label_sets = metrics.get_all_label_sets(metric_name)
+            assert label_sets, f"expected series for {metric_name}"
+            assert all(set(ls.keys()) == {"org_id", "network_id", "client_id"} for ls in label_sets)
+
+        # Happy path: nothing was dropped by the emission cap.
+        metrics.assert_gauge_value("meraki_exporter_clients_over_cap", 0, network_id="N_123")
+
+    async def test_client_info_join_metric_emitted(self, collector, mock_api_builder, metrics):
+        """meraki_client_info carries mac/description/hostname/ssid, one series per client (#533)."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+
+        clients = [
+            ClientFactory.create(
+                client_id="c1",
+                mac="aa:bb:cc:dd:ee:01",
+                ip="10.0.0.1",
+                description="Client 1",
+                status="Online",
+                ssid="Corporate",
+            ),
+            ClientFactory.create(
+                client_id="c2",
+                mac="aa:bb:cc:dd:ee:02",
+                ip="10.0.0.2",
+                description="Client 2",
+                status="Offline",
+                ssid="Guest",
+            ),
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_custom_response("getNetworkClients", clients)
+            .build()
+        )
+        self._update_collector_api(collector, api)
+
+        with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
+            mock_resolve.return_value = {
+                "10.0.0.1": "client1.example.com",
+                "10.0.0.2": "client2.example.com",
+            }
+            await self.run_collector(collector)
+
+        metrics.assert_gauge_value(
+            "meraki_client_info",
+            1,
+            client_id="c1",
+            mac="aa:bb:cc:dd:ee:01",
+            network_id="N_123",
+        )
+
+        label_sets = metrics.get_all_label_sets("meraki_client_info")
+        assert len(label_sets) == 2  # one series per client
+        expected_keys = {
+            "org_id",
+            "network_id",
+            "client_id",
+            "mac",
+            "description",
+            "hostname",
+            "ssid",
+        }
+        assert all(set(ls.keys()) == expected_keys for ls in label_sets)
+
+        c1_labels = next(ls for ls in label_sets if ls["client_id"] == "c1")
+        # DNS-resolved "client1.example.com" sanitized (dots -> hyphens).
+        assert c1_labels["hostname"] == "client1-example-com"
+
+    async def test_per_network_cap_drops_and_alarms(self, collector, mock_api_builder, metrics):
+        """#533: the per-network cap truncates emitted clients and alarms via clients_over_cap."""
+        collector.settings.clients.max_clients_per_network = 2
+
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+        clients = [
+            ClientFactory.create(client_id=f"c{i}", mac=f"aa:bb:cc:dd:ee:{i:02d}") for i in range(3)
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_custom_response("getNetworkClients", clients)
+            .build()
+        )
+        self._update_collector_api(collector, api)
+
+        with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
+            mock_resolve.return_value = {}
+            with capture_logs() as caps:
+                await self.run_collector(collector)
+
+        warnings = [e for e in caps if "Client cap exceeded" in e.get("event", "")]
+        assert warnings, f"expected a 'Client cap exceeded' warning, captured: {caps}"
+
+        label_sets = metrics.get_all_label_sets("meraki_client_status")
+        client_ids = {ls["client_id"] for ls in label_sets}
+        assert len(client_ids) == 2
+
+        metrics.assert_gauge_value("meraki_exporter_clients_over_cap", 1, network_id="N_123")
+
+    async def test_signal_quality_default_off(self, collector, mock_api_builder, metrics):
+        """#533: signal quality collection is disabled by default (opt-in)."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+        clients = [
+            ClientFactory.create(
+                client_id="c1", recentDeviceConnection="Wireless", ssid="Corporate"
+            )
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_custom_response("getNetworkClients", clients)
+            .build()
+        )
+        api.wireless.getNetworkWirelessSignalQualityHistory = MagicMock(
+            return_value=[{"rssi": -50, "snr": 40}]
+        )
+        self._update_collector_api(collector, api)
+
+        with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
+            mock_resolve.return_value = {}
+            await self.run_collector(collector)
+
+        api.wireless.getNetworkWirelessSignalQualityHistory.assert_not_called()
+        metrics.assert_metric_not_set("meraki_wireless_client_rssi")
+
+    async def test_client_metrics_are_expiration_tracked(
+        self, mock_api_builder, settings, isolated_registry
+    ):
+        """Client metric families route through _set_metric for expiration tracking (#533)."""
+        settings.clients.enabled = True
+
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+        clients = [
+            ClientFactory.create(
+                client_id="c1",
+                mac="aa:bb:cc:dd:ee:01",
+                ip="10.0.0.1",
+                description="Client 1",
+                status="Online",
+                usage={"sent": 1000, "recv": 2000, "total": 3000},
+            ),
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_custom_response("getNetworkClients", clients)
+            .build()
+        )
+
+        expiration_manager = MagicMock()
+        collector = ClientsCollector(
+            api=api,
+            settings=settings,
+            registry=isolated_registry,
+            expiration_manager=expiration_manager,
+        )
+        collector.api_helper.api = api
+
+        with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
+            mock_resolve.return_value = {}
+            await self.run_collector(collector)
+
+        tracked_metric_names = {
+            call.kwargs["metric_name"]
+            for call in expiration_manager.track_metric_update.call_args_list
+        }
+        assert "meraki_client_status" in tracked_metric_names
+        assert "meraki_client_info" in tracked_metric_names

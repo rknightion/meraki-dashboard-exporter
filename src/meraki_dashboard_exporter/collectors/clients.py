@@ -13,6 +13,7 @@ from ..core.api_models import NetworkClient
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import ClientMetricName, UpdateTier
+from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.error_handling import (
     ErrorCategory,
     validate_response_format,
@@ -20,7 +21,7 @@ from ..core.error_handling import (
 )
 from ..core.label_helpers import create_client_labels, create_network_labels
 from ..core.logging_decorators import log_api_call, log_collection_progress
-from ..core.metrics import LabelName
+from ..core.metrics import LabelName, create_labels
 from ..core.registry import register_collector
 from ..services.client_store import ClientStore
 from ..services.dns_resolver import DNSResolver
@@ -93,10 +94,37 @@ class ClientsCollector(MetricCollector):
                 LabelName.ORG_ID,
                 LabelName.NETWORK_ID,
                 LabelName.CLIENT_ID,
+            ],
+        )
+
+        # Client information join metric (issue #533): the ONLY client metric
+        # allowed to carry descriptive/PII-ish labels. Numeric client series are
+        # ID-only and join via `<numeric> * on(client_id) group_left(mac,
+        # description, hostname, ssid) meraki_client_info`.
+        self.client_info = self._create_gauge(
+            ClientMetricName.CLIENT_INFO,
+            "Client information join metric (client_id -> mac/description/hostname/ssid); "
+            "value is always 1. Labels churn (old series expire) when a client's hostname/"
+            "description/SSID changes.",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.CLIENT_ID,
                 LabelName.MAC,
                 LabelName.DESCRIPTION,
                 LabelName.HOSTNAME,
                 LabelName.SSID,
+            ],
+        )
+
+        # Clients dropped from metric emission by the per-network/global cap (#533).
+        self.clients_over_cap = self._create_gauge(
+            CollectorMetricName.CLIENTS_OVER_CAP,
+            "Clients excluded from metric emission in the most recent cycle because the "
+            "per-network or global client cap was reached (0 = within caps)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
             ],
         )
 
@@ -109,10 +137,6 @@ class ClientsCollector(MetricCollector):
                 LabelName.ORG_ID,
                 LabelName.NETWORK_ID,
                 LabelName.CLIENT_ID,
-                LabelName.MAC,
-                LabelName.DESCRIPTION,
-                LabelName.HOSTNAME,
-                LabelName.SSID,
             ],
         )
 
@@ -123,10 +147,6 @@ class ClientsCollector(MetricCollector):
                 LabelName.ORG_ID,
                 LabelName.NETWORK_ID,
                 LabelName.CLIENT_ID,
-                LabelName.MAC,
-                LabelName.DESCRIPTION,
-                LabelName.HOSTNAME,
-                LabelName.SSID,
             ],
         )
 
@@ -137,10 +157,6 @@ class ClientsCollector(MetricCollector):
                 LabelName.ORG_ID,
                 LabelName.NETWORK_ID,
                 LabelName.CLIENT_ID,
-                LabelName.MAC,
-                LabelName.DESCRIPTION,
-                LabelName.HOSTNAME,
-                LabelName.SSID,
             ],
         )
 
@@ -231,9 +247,6 @@ class ClientsCollector(MetricCollector):
                 LabelName.ORG_ID,
                 LabelName.NETWORK_ID,
                 LabelName.CLIENT_ID,
-                LabelName.MAC,
-                LabelName.DESCRIPTION,
-                LabelName.HOSTNAME,
                 LabelName.TYPE,  # For the application type
             ],
         )
@@ -245,9 +258,6 @@ class ClientsCollector(MetricCollector):
                 LabelName.ORG_ID,
                 LabelName.NETWORK_ID,
                 LabelName.CLIENT_ID,
-                LabelName.MAC,
-                LabelName.DESCRIPTION,
-                LabelName.HOSTNAME,
                 LabelName.TYPE,  # For the application type
             ],
         )
@@ -259,9 +269,6 @@ class ClientsCollector(MetricCollector):
                 LabelName.ORG_ID,
                 LabelName.NETWORK_ID,
                 LabelName.CLIENT_ID,
-                LabelName.MAC,
-                LabelName.DESCRIPTION,
-                LabelName.HOSTNAME,
                 LabelName.TYPE,  # For the application type
             ],
         )
@@ -270,29 +277,23 @@ class ClientsCollector(MetricCollector):
         self.wireless_client_rssi = self._create_gauge(
             ClientMetricName.WIRELESS_CLIENT_RSSI,
             "Wireless client RSSI (Received Signal Strength Indicator) in dBm, "
-            "most recent 5-min sample",
+            "most recent 5-min sample; collected only when "
+            "MERAKI_EXPORTER_CLIENTS__SIGNAL_QUALITY_ENABLED=true",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.NETWORK_ID,
                 LabelName.CLIENT_ID,
-                LabelName.MAC,
-                LabelName.DESCRIPTION,
-                LabelName.HOSTNAME,
-                LabelName.SSID,
             ],
         )
 
         self.wireless_client_snr = self._create_gauge(
             ClientMetricName.WIRELESS_CLIENT_SNR,
-            "Wireless client SNR (Signal-to-Noise Ratio) in dB, most recent 5-min sample",
+            "Wireless client SNR (Signal-to-Noise Ratio) in dB, most recent 5-min sample; "
+            "collected only when MERAKI_EXPORTER_CLIENTS__SIGNAL_QUALITY_ENABLED=true",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.NETWORK_ID,
                 LabelName.CLIENT_ID,
-                LabelName.MAC,
-                LabelName.DESCRIPTION,
-                LabelName.HOSTNAME,
-                LabelName.SSID,
             ],
         )
 
@@ -305,6 +306,8 @@ class ClientsCollector(MetricCollector):
         # Reset per-collection aggregate counters (F-171 INFO summary).
         self._collection_networks = 0
         self._collection_clients = 0
+        # Reset the global emission-cap counter (#533) for this collection cycle.
+        self._cycle_clients_emitted = 0
 
         organizations = await self.api_helper.get_organizations()
 
@@ -475,6 +478,10 @@ class ClientsCollector(MetricCollector):
             client_count=len(clients),
         )
 
+        # Apply the per-network/global emission cap (#533) BEFORE DNS resolution
+        # so the DNS fan-out (and the store/metrics work below) is also bounded.
+        clients = self._apply_emission_cap(org_id, network_id, network_name, clients)
+
         # Prepare client data for DNS resolution
         client_data = [(c.id, c.ip, c.description) for c in clients]
 
@@ -499,14 +506,77 @@ class ClientsCollector(MetricCollector):
         await self._update_metrics(org_id, org_name, network_id, network_name, clients, hostnames)
 
         # Collect application usage data
-        await self._collect_application_usage(
-            org_id, org_name, network_id, network_name, clients, hostnames
-        )
+        await self._collect_application_usage(org_id, org_name, network_id, network_name, clients)
 
         # Collect wireless signal quality data
         await self._collect_wireless_signal_quality(
-            org_id, org_name, network_id, network_name, clients, hostnames
+            org_id, org_name, network_id, network_name, clients
         )
+
+    def _apply_emission_cap(
+        self, org_id: str, network_id: str, network_name: str, clients: list[NetworkClient]
+    ) -> list[NetworkClient]:
+        """Truncate the client list to the per-network and global emission caps (#533).
+
+        Applied before DNS resolution, the client store update, and metric
+        emission so a persistently oversized network/org does not blow the DNS
+        fan-out, the store, or per-cycle metric cardinality. Always emits the
+        ``meraki_exporter_clients_over_cap`` gauge (0 included) so the cap state
+        is observable even when nothing was dropped.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        network_id : str
+            Network ID.
+        network_name : str
+            Network name (for logging only).
+        clients : list[NetworkClient]
+            Full list of clients fetched for the network.
+
+        Returns
+        -------
+        list[NetworkClient]
+            The (possibly truncated) list of clients to emit metrics/DNS/store for.
+
+        """
+        total_clients = len(clients)
+
+        # Per-network cap first.
+        per_network_cap = self.settings.clients.max_clients_per_network
+        allowed = clients[:per_network_cap]
+
+        # Then the remaining global budget for this collection cycle.
+        global_cap = self.settings.clients.max_clients_total
+        remaining_global_capacity = max(global_cap - self._cycle_clients_emitted, 0)
+        allowed = allowed[:remaining_global_capacity]
+
+        self._cycle_clients_emitted += len(allowed)
+
+        dropped = total_clients - len(allowed)
+
+        self._set_metric(
+            self.clients_over_cap,
+            create_labels(org_id=org_id, network_id=network_id),
+            dropped,
+            CollectorMetricName.CLIENTS_OVER_CAP.value,
+        )
+
+        if dropped > 0:
+            logger.warning(
+                "Client cap exceeded; dropping clients from metric emission",
+                org_id=org_id,
+                network_id=network_id,
+                network_name=network_name,
+                total_clients=total_clients,
+                emitted=len(allowed),
+                dropped=dropped,
+                per_network_cap=per_network_cap,
+                global_cap=global_cap,
+            )
+
+        return allowed
 
     def _sanitize_label_value(self, value: str | None, max_length: int = 2048) -> str:
         """Sanitize a label value for Prometheus.
@@ -749,25 +819,22 @@ class ClientsCollector(MetricCollector):
             vlan_key = str(client.vlan) if client.vlan else "untagged"
             vlan_count[vlan_key] = vlan_count.get(vlan_key, 0) + 1
 
-            # Create client labels using helper
-            client_data = {
-                "id": client.id,
-                "mac": client.mac,
-                "description": sanitized_description,
-                "hostname": sanitized_hostname,
-            }
+            # Create client labels using helper (ID-only: org_id, network_id,
+            # client_id -- issue #533). Descriptive fields live on
+            # meraki_client_info below, not on this numeric series.
             labels = create_client_labels(
-                client_data,
+                {"id": client.id},
                 org_id=org_id,
                 org_name=org_name,
                 network_id=network_id,
                 network_name=network_name,
-                ssid=ssid or "Unknown",
             )
 
             # Set client status
             status_value = 1 if client.status == "Online" else 0
-            self.client_status.labels(**labels).set(status_value)
+            self._set_metric(
+                self.client_status, labels, status_value, ClientMetricName.CLIENT_STATUS.value
+            )
 
             # Set usage metrics (as gauges - these are point-in-time measurements)
             if client.usage:
@@ -776,9 +843,38 @@ class ClientsCollector(MetricCollector):
                 total_kb = client.usage.get("total", 0)
 
                 # Set gauge values (API returns decimal KB; convert to bytes, ×1000)
-                self.client_usage_sent.labels(**labels).set(float(sent_kb) * 1000)
-                self.client_usage_recv.labels(**labels).set(float(recv_kb) * 1000)
-                self.client_usage_total.labels(**labels).set(float(total_kb) * 1000)
+                self._set_metric(
+                    self.client_usage_sent,
+                    labels,
+                    float(sent_kb) * 1000,
+                    ClientMetricName.CLIENT_USAGE_SENT_BYTES.value,
+                )
+                self._set_metric(
+                    self.client_usage_recv,
+                    labels,
+                    float(recv_kb) * 1000,
+                    ClientMetricName.CLIENT_USAGE_RECV_BYTES.value,
+                )
+                self._set_metric(
+                    self.client_usage_total,
+                    labels,
+                    float(total_kb) * 1000,
+                    ClientMetricName.CLIENT_USAGE_TOTAL_BYTES.value,
+                )
+
+            # Emit the id-keyed join metric (issue #533): the only client metric
+            # carrying descriptive/PII-ish labels. Numeric series above join back
+            # onto this via `on(client_id) group_left(...)`.
+            info_labels = create_labels(
+                org_id=org_id,
+                network_id=network_id,
+                client_id=client.id,
+                mac=client.mac,
+                description=sanitized_description,
+                hostname=sanitized_hostname,
+                ssid=ssid or "Unknown",
+            )
+            self._set_metric(self.client_info, info_labels, 1, ClientMetricName.CLIENT_INFO.value)
 
             logger.debug(
                 "Updated client metrics",
@@ -801,7 +897,12 @@ class ClientsCollector(MetricCollector):
                 org_name=org_name,
                 type=capability,
             )
-            self.client_capabilities_count.labels(**cap_labels).set(count)
+            self._set_metric(
+                self.client_capabilities_count,
+                cap_labels,
+                count,
+                ClientMetricName.WIRELESS_CLIENT_CAPABILITIES_COUNT.value,
+            )
             logger.debug(
                 "Set wireless capability count",
                 capability=capability,
@@ -819,7 +920,12 @@ class ClientsCollector(MetricCollector):
                 org_name=org_name,
                 ssid=ssid_name,
             )
-            self.clients_per_ssid.labels(**ssid_labels).set(count)
+            self._set_metric(
+                self.clients_per_ssid,
+                ssid_labels,
+                count,
+                ClientMetricName.CLIENTS_PER_SSID_COUNT.value,
+            )
             logger.debug(
                 "Set SSID client count",
                 ssid=ssid_name,
@@ -837,7 +943,12 @@ class ClientsCollector(MetricCollector):
                 org_name=org_name,
                 vlan=vlan_id,
             )
-            self.clients_per_vlan.labels(**vlan_labels).set(count)
+            self._set_metric(
+                self.clients_per_vlan,
+                vlan_labels,
+                count,
+                ClientMetricName.CLIENTS_PER_VLAN_COUNT.value,
+            )
             logger.debug(
                 "Set VLAN client count",
                 vlan=vlan_id,
@@ -858,7 +969,6 @@ class ClientsCollector(MetricCollector):
         network_id: str,
         network_name: str,
         clients: list[NetworkClient],
-        hostnames: dict[str, str | None],
     ) -> None:
         """Collect application usage data for clients.
 
@@ -874,8 +984,6 @@ class ClientsCollector(MetricCollector):
             Network name.
         clients : list[NetworkClient]
             List of clients.
-        hostnames : dict[str, str | None]
-            Resolved hostnames by IP.
 
         """
         if not clients:
@@ -937,16 +1045,6 @@ class ClientsCollector(MetricCollector):
                     if not client_id or client_id not in client_map:
                         continue
 
-                    client = client_map[client_id]
-
-                    # Get resolved hostname
-                    resolved_hostname = hostnames.get(client.ip) if client.ip else None
-                    hostname = self._determine_hostname(client, resolved_hostname)
-
-                    # Sanitize label values
-                    sanitized_hostname = self._sanitize_label_value(hostname)
-                    sanitized_description = self._sanitize_label_value(client.description)
-
                     # Process each application's usage
                     for app_usage in client_usage.get("applicationUsage", []):
                         app_name = app_usage.get("application", "unknown")
@@ -956,15 +1054,9 @@ class ClientsCollector(MetricCollector):
                         sent_kb = app_usage.get("sent", 0)
                         total_kb = received_kb + sent_kb
 
-                        # Create client labels using helper
-                        client_data = {
-                            "id": client_id,
-                            "mac": client.mac,
-                            "description": sanitized_description,
-                            "hostname": sanitized_hostname,
-                        }
+                        # Create client labels using helper (ID-only + type -- #533)
                         labels = create_client_labels(
-                            client_data,
+                            {"id": client_id},
                             org_id=org_id,
                             org_name=org_name,
                             network_id=network_id,
@@ -973,9 +1065,24 @@ class ClientsCollector(MetricCollector):
                         )
 
                         # Set metrics (API returns decimal KB; convert to bytes, ×1000)
-                        self.client_app_usage_sent.labels(**labels).set(float(sent_kb) * 1000)
-                        self.client_app_usage_recv.labels(**labels).set(float(received_kb) * 1000)
-                        self.client_app_usage_total.labels(**labels).set(float(total_kb) * 1000)
+                        self._set_metric(
+                            self.client_app_usage_sent,
+                            labels,
+                            float(sent_kb) * 1000,
+                            ClientMetricName.CLIENT_APPLICATION_USAGE_SENT_BYTES.value,
+                        )
+                        self._set_metric(
+                            self.client_app_usage_recv,
+                            labels,
+                            float(received_kb) * 1000,
+                            ClientMetricName.CLIENT_APPLICATION_USAGE_RECV_BYTES.value,
+                        )
+                        self._set_metric(
+                            self.client_app_usage_total,
+                            labels,
+                            float(total_kb) * 1000,
+                            ClientMetricName.CLIENT_APPLICATION_USAGE_TOTAL_BYTES.value,
+                        )
 
                         logger.debug(
                             "Set application usage metrics",
@@ -1019,7 +1126,6 @@ class ClientsCollector(MetricCollector):
         network_id: str,
         network_name: str,
         clients: list[NetworkClient],
-        hostnames: dict[str, str | None],
     ) -> None:
         """Collect wireless signal quality data for clients.
 
@@ -1035,10 +1141,18 @@ class ClientsCollector(MetricCollector):
             Network name.
         clients : list[NetworkClient]
             List of clients.
-        hostnames : dict[str, str | None]
-            Resolved hostnames by IP.
 
         """
+        # Opt-in gate (issue #533): per-client wireless signal quality costs one
+        # API call per wireless client per cycle and is prohibitively expensive
+        # at scale, so it is disabled by default.
+        if not self.settings.clients.signal_quality_enabled:
+            logger.debug(
+                "Client signal quality collection is disabled",
+                network_id=network_id,
+            )
+            return
+
         # F-060: gate the whole per-client fan-out behind an interval, mirroring
         # application-usage collection, so we don't drain the shared org rate-limit
         # budget on every MEDIUM-tier cycle.
@@ -1135,36 +1249,32 @@ class ClientsCollector(MetricCollector):
                     )
                     continue
 
-                # Get resolved hostname
-                resolved_hostname = hostnames.get(client.ip) if client.ip else None
-                hostname = self._determine_hostname(client, resolved_hostname)
-
-                # Sanitize label values
-                sanitized_hostname = self._sanitize_label_value(hostname)
-                sanitized_description = self._sanitize_label_value(client.description)
-
-                # Create client labels using helper
-                client_data = {
-                    "id": client.id,
-                    "mac": client.mac,
-                    "description": sanitized_description,
-                    "hostname": sanitized_hostname,
-                }
+                # Create client labels using helper (ID-only -- #533; ssid is
+                # dropped here and carried on meraki_client_info instead)
                 labels = create_client_labels(
-                    client_data,
+                    {"id": client.id},
                     org_id=org_id,
                     org_name=org_name,
                     network_id=network_id,
                     network_name=network_name,
-                    ssid=client.ssid or "Unknown",
                 )
 
                 # Set metrics
                 if rssi is not None:
-                    self.wireless_client_rssi.labels(**labels).set(float(rssi))
+                    self._set_metric(
+                        self.wireless_client_rssi,
+                        labels,
+                        float(rssi),
+                        ClientMetricName.WIRELESS_CLIENT_RSSI.value,
+                    )
 
                 if snr is not None:
-                    self.wireless_client_snr.labels(**labels).set(float(snr))
+                    self._set_metric(
+                        self.wireless_client_snr,
+                        labels,
+                        float(snr),
+                        ClientMetricName.WIRELESS_CLIENT_SNR.value,
+                    )
 
                 logger.debug(
                     "Set wireless signal quality metrics",

@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 249
-- **Gauges:** 227
+- **Total metrics:** 251
+- **Gauges:** 229
 - **Counters:** 18
 - **Histograms:** 3
 - **Info metrics:** 1
@@ -36,13 +36,14 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_client_application_usage_recv_bytes` | gauge | `org_id`, `network_id`, `client_id`, `mac`, `description`, `hostname`, `type` | Bytes received by client per application in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `meraki_client_application_usage_sent_bytes` | gauge | `org_id`, `network_id`, `client_id`, `mac`, `description`, `hostname`, `type` | Bytes sent by client per application in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `meraki_client_application_usage_total_bytes` | gauge | `org_id`, `network_id`, `client_id`, `mac`, `description`, `hostname`, `type` | Total bytes transferred by client per application in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `meraki_client_status` | gauge | `org_id`, `network_id`, `client_id`, `mac`, `description`, `hostname`, `ssid` | Client online status (1 = online, 0 = offline) | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `meraki_client_usage_recv_bytes` | gauge | `org_id`, `network_id`, `client_id`, `mac`, `description`, `hostname`, `ssid` | Bytes received by client in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `meraki_client_usage_sent_bytes` | gauge | `org_id`, `network_id`, `client_id`, `mac`, `description`, `hostname`, `ssid` | Bytes sent by client in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `meraki_client_usage_total_bytes` | gauge | `org_id`, `network_id`, `client_id`, `mac`, `description`, `hostname`, `ssid` | Total bytes transferred by client in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_client_application_usage_recv_bytes` | gauge | `org_id`, `network_id`, `client_id`, `type` | Bytes received by client per application in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_client_application_usage_sent_bytes` | gauge | `org_id`, `network_id`, `client_id`, `type` | Bytes sent by client per application in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_client_application_usage_total_bytes` | gauge | `org_id`, `network_id`, `client_id`, `type` | Total bytes transferred by client per application in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_client_info` | gauge | `org_id`, `network_id`, `client_id`, `mac`, `description`, `hostname`, `ssid` | Client information join metric (client_id -> mac/description/hostname/ssid); value is always 1. Labels churn (old series expire) when a client's hostname/description/SSID changes. | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_client_status` | gauge | `org_id`, `network_id`, `client_id` | Client online status (1 = online, 0 = offline) | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_client_usage_recv_bytes` | gauge | `org_id`, `network_id`, `client_id` | Bytes received by client in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_client_usage_sent_bytes` | gauge | `org_id`, `network_id`, `client_id` | Bytes sent by client in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_client_usage_total_bytes` | gauge | `org_id`, `network_id`, `client_id` | Total bytes transferred by client in the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_clients_per_ssid_count` | gauge | `org_id`, `network_id`, `ssid` | Count of clients per SSID, over the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_clients_per_vlan_count` | gauge | `org_id`, `network_id`, `vlan` | Count of clients per VLAN, over the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_cache_expired` | gauge | — | Number of expired entries in DNS cache | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
@@ -54,9 +55,10 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_exporter_client_dns_lookups_total` | counter | — | Total number of DNS lookups performed | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_store_networks` | gauge | — | Total number of networks with clients | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_store_total` | gauge | — | Total number of clients in the store | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_exporter_clients_over_cap` | gauge | `org_id`, `network_id` | Clients excluded from metric emission in the most recent cycle because the per-network or global client cap was reached (0 = within caps) | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_wireless_client_capabilities_count` | gauge | `org_id`, `network_id`, `type` | Count of wireless clients by capability, over the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `meraki_wireless_client_rssi` | gauge | `org_id`, `network_id`, `client_id`, `mac`, `description`, `hostname`, `ssid` | Wireless client RSSI (Received Signal Strength Indicator) in dBm, most recent 5-min sample | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `meraki_wireless_client_snr` | gauge | `org_id`, `network_id`, `client_id`, `mac`, `description`, `hostname`, `ssid` | Wireless client SNR (Signal-to-Noise Ratio) in dB, most recent 5-min sample | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_wireless_client_rssi` | gauge | `org_id`, `network_id`, `client_id` | Wireless client RSSI (Received Signal Strength Indicator) in dBm, most recent 5-min sample; collected only when MERAKI_EXPORTER_CLIENTS__SIGNAL_QUALITY_ENABLED=true | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_wireless_client_snr` | gauge | `org_id`, `network_id`, `client_id` | Wireless client SNR (Signal-to-Noise Ratio) in dB, most recent 5-min sample; collected only when MERAKI_EXPORTER_CLIENTS__SIGNAL_QUALITY_ENABLED=true | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 
 ### ConfigCollector
 

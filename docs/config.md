@@ -166,6 +166,8 @@ Client data collection and DNS resolution settings
 | `MERAKI_EXPORTER_CLIENTS__DNS_CACHE_TTL` | `int` | `21600` | DNS cache TTL in seconds (default: 6 hours) (min: 300, max: 86400) |
 | `MERAKI_EXPORTER_CLIENTS__CACHE_TTL` | `int` | `3600` | Client cache TTL in seconds (for ID/hostname mappings, not metrics) (min: 300, max: 86400) |
 | `MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_PER_NETWORK` | `int` | `10000` | Maximum clients to track per network (min: 100, max: 50000) |
+| `MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_TOTAL` | `int` | `25000` | Global cap on clients emitted as metric series across ALL networks per collection cycle. Clients beyond the cap are dropped from metric emission with a warning and counted in meraki_exporter_clients_over_cap. (min: 100, max: 1000000) |
+| `MERAKI_EXPORTER_CLIENTS__SIGNAL_QUALITY_ENABLED` | `bool` | `False` | Enable per-client wireless signal quality (RSSI/SNR) collection. Costs one API call per wireless client per cycle (interval-gated); prohibitively expensive at scale, so disabled by default. |
 
 ## Network Filter Settings
 

@@ -155,12 +155,15 @@ def create_client_labels(
     network_name: str | None = None,
     **extra_labels: str | None,
 ) -> dict[str, str]:
-    """Create standard client labels from client data.
+    """Create standard client labels (ID-only) from client data.
 
-    The name-family org/network labels (``org_name``/``network_name``) are
-    dropped from client numeric series (issue #534). The ``mac``/``description``/
-    ``hostname`` labels are intentionally LEFT in place — their removal and the
-    ``meraki_client_info`` carrier are issue #533 (Phase 2), out of scope here.
+    Numeric client series are ID-only (issue #533): ``mac``/``description``/
+    ``hostname``/``ssid`` are deliberately omitted here, alongside the already-
+    dropped ``org_name``/``network_name`` (issue #534). Those descriptive/
+    mutable fields live exclusively on the ``meraki_client_info`` join metric
+    (``collectors/clients.py``), keyed on ``client_id``; consumers re-attach
+    them via ``<numeric> * on(client_id) group_left(mac, description, hostname,
+    ssid) meraki_client_info``.
 
     Parameters
     ----------
@@ -175,20 +178,17 @@ def create_client_labels(
     network_name : str | None
         Network name. Retained for logging compatibility; NOT emitted.
     **extra_labels : str | None
-        Additional labels to include.
+        Additional labels to include (e.g. ``type`` for application usage).
 
     Returns
     -------
     dict[str, str]
-        Client labels: ``org_id``, ``network_id``, ``client_id``, ``mac``,
-        ``description``, ``hostname`` (+ any extras).
+        Standard client labels: ``org_id``, ``network_id``, ``client_id``
+        (+ any extras). No ``mac``/``description``/``hostname``/``ssid``.
 
     """
     # Client identification
     client_id = client.get("id", "")
-    mac = client.get("mac", "")
-    description = client.get("description", "")
-    hostname = client.get("hostname", "")
 
     # Network id might be in client data
     if not network_id:
@@ -198,9 +198,6 @@ def create_client_labels(
         org_id=org_id,
         network_id=network_id,
         client_id=client_id,
-        mac=mac,
-        description=description,
-        hostname=hostname,
         **extra_labels,
     )
 

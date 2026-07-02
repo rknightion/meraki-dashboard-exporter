@@ -391,6 +391,12 @@ class ClientMetricName(StrEnum):
     # Client status metrics
     CLIENT_STATUS = "meraki_client_status"
 
+    # id-keyed join carrier (issue #533): the ONLY client metric allowed to carry
+    # descriptive/PII-ish labels (mac/description/hostname/ssid). Numeric client
+    # series are ID-only and join via
+    # `<numeric> * on(client_id) group_left(mac, hostname, ...) meraki_client_info`.
+    CLIENT_INFO = "meraki_client_info"
+
     # Client usage metrics (gauges for point-in-time hourly measurements;
     # values emitted in bytes, decimal KB x1000)
     CLIENT_USAGE_SENT_BYTES = "meraki_client_usage_sent_bytes"
@@ -447,6 +453,10 @@ class CollectorMetricName(StrEnum):
     EXPORTER_CARDINALITY_LIMIT_REACHED = "meraki_exporter_cardinality_limit_reached"
     # Gauge (per-cycle snapshot, not a monotonic counter) — must not end in `_total`.
     CARDINALITY_ANALYZED_METRICS = "meraki_exporter_cardinality_analyzed_metrics"
+
+    # Clients dropped from metric emission by the per-network/global client cap
+    # (#533). Per-cycle snapshot gauge (0 = within caps), not a Counter.
+    CLIENTS_OVER_CAP = "meraki_exporter_clients_over_cap"
 
     # Collection utilization metrics
     EXPORTER_COLLECTION_UTILIZATION_RATIO = "meraki_exporter_collection_utilization_ratio"

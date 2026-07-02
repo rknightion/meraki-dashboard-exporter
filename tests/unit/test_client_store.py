@@ -92,6 +92,43 @@ def test_update_clients_per_network_log_is_debug(store, force_debug_log_capture)
     )
 
 
+def test_global_cap_blocks_new_clients_but_updates_existing(store):
+    """#533: a global cap on stored clients blocks NEW clients once reached.
+
+    Updates to already-stored clients must still proceed even when the global
+    cap is reached, and a warning must be logged when new clients are skipped.
+    """
+
+    store.settings.clients.max_clients_total = 2
+    store.max_clients_total = 2
+
+    c1 = _make_client("c1", "10.0.0.1")
+    c2 = _make_client("c2", "10.0.0.2")
+    store.update_clients("N_A", [c1, c2], network_name="NetA", org_id="O1")
+
+    assert store.get_client("N_A", "c1") is not None
+    assert store.get_client("N_A", "c2") is not None
+    assert len(store.get_all_clients()) == 2
+
+    c3 = _make_client("c3", "10.0.1.1")
+    c4 = _make_client("c4", "10.0.1.2")
+    with capture_logs() as caps:
+        store.update_clients("N_B", [c3, c4], network_name="NetB", org_id="O1")
+
+    assert store.get_client("N_B", "c3") is None
+    assert store.get_client("N_B", "c4") is None
+    assert len(store.get_all_clients()) == 2
+
+    cap_events = [e for e in caps if "cap" in e.get("event", "").lower()]
+    assert cap_events, f"expected a global-cap warning event, got: {caps}"
+    assert any(e["log_level"] == "warning" for e in cap_events)
+
+    updated_c1 = _make_client("c1", "10.0.0.1", status="Offline")
+    store.update_clients("N_A", [updated_c1])
+    retrieved = store.get_client("N_A", "c1")
+    assert retrieved.status == "Offline"
+
+
 def test_get_statistics(store):
     """Check that statistics reporting aggregates correctly."""
 
