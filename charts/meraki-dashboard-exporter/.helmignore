@@ -21,3 +21,6 @@
 .idea/
 *.tmproj
 .vscode/
+# Internal agent/dev documentation - not part of the published chart artifact
+CLAUDE.md
+AGENTS.md

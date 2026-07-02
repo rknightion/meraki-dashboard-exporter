@@ -10,3 +10,16 @@ This template is called from each resource template to ensure validation runs.
 {{- fail "One of meraki.apiKey or meraki.existingSecret must be set." }}
 {{- end }}
 {{- end }}
+
+{{/*
+Validate that config.otelEndpoint is set whenever config.otelEnabled is truthy.
+Mirrors OTelSettings.validate_endpoint in core/config_models.py, which raises at
+application startup on the same condition -- failing here instead means a
+misconfiguration is caught at `helm install`/`helm template` time rather than
+surfacing as a CrashLoopBackOff.
+*/}}
+{{- define "meraki-dashboard-exporter.validateOtel" -}}
+{{- if and (eq (.Values.config.otelEnabled | toString) "true") (not .Values.config.otelEndpoint) }}
+{{- fail "config.otelEndpoint must be set when config.otelEnabled is true." }}
+{{- end }}
+{{- end }}

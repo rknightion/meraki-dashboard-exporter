@@ -25,7 +25,7 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_PROJECT_ENVIRONMENT=/app/.venv
 
 # Install uv for the target architecture
-ARG UV_VERSION=latest
+ARG UV_VERSION=0.11.26
 ARG TARGETARCH
 ARG TARGETVARIANT
 RUN set -eux \
@@ -97,9 +97,12 @@ USER exporter
 # Expose metrics port
 EXPOSE 9099
 
-# Health check
+# Health check. Reads the configurable server port from the same env var the
+# app itself uses (MERAKI_EXPORTER_SERVER__PORT, default 9099) so overriding
+# the port at `docker run` time doesn't leave the baked-in check probing the
+# wrong port.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD ["python", "-c", "import httpx; httpx.get('http://localhost:9099/health').raise_for_status()"]
+    CMD ["python", "-c", "import os, httpx; port = os.environ.get('MERAKI_EXPORTER_SERVER__PORT', '9099'); httpx.get(f'http://localhost:{port}/health').raise_for_status()"]
 
 # Use ENTRYPOINT for the main command
 ENTRYPOINT ["python", "docker-entrypoint.py"]

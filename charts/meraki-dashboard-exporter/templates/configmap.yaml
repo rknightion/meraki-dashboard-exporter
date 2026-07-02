@@ -29,7 +29,9 @@ data:
   MERAKI_EXPORTER_SERVER__PORT: {{ .Values.service.port | quote }}
 
   # Collectors
+  {{- if .Values.config.collectorTimeout }}
   MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT: {{ .Values.config.collectorTimeout | quote }}
+  {{- end }}
 
   # Webhooks
   MERAKI_EXPORTER_WEBHOOKS__ENABLED: {{ .Values.config.webhooksEnabled | quote }}

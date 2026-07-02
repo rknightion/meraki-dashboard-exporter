@@ -108,8 +108,26 @@ jobs:
           # Test image metadata
           docker inspect meraki-dashboard-exporter:test | jq '.[0].Config.Labels'
 
-          # Verify non-root user
-          docker run --rm -e MERAKI_EXPORTER_MERAKI__API_KEY meraki-dashboard-exporter:test whoami | grep -q exporter
+          # Verify non-root user. Overrides the image ENTRYPOINT (which is
+          # `python docker-entrypoint.py`, so a bare trailing `whoami` arg
+          # would otherwise just be ignored and never actually run) so this
+          # genuinely execs `whoami` and asserts an exact match on the
+          # expected runtime user, instead of grepping startup log output
+          # for the substring "exporter" (which passes even when running as
+          # root, since the exporter's own package/module paths contain it).
+          actual_user="$(docker run --rm --entrypoint whoami meraki-dashboard-exporter:test)"
+          if [ "${actual_user}" != "exporter" ]; then
+            echo "::error::Container runs as '${actual_user}', expected non-root user 'exporter'"
+            exit 1
+          fi
+          echo "Verified container runs as non-root user: ${actual_user}"
+
+          # Cross-check against the image's declared config user too.
+          configured_user="$(docker inspect -f '{{.Config.User}}' meraki-dashboard-exporter:test)"
+          if [ "${configured_user}" != "exporter" ]; then
+            echo "::error::Image Config.User is '${configured_user}', expected 'exporter'"
+            exit 1
+          fi
 
   slow-tests:
     runs-on: ubuntu-latest

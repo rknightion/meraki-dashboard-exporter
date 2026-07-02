@@ -42,6 +42,8 @@ podSecurityContext:
   runAsUser: 1000
   runAsGroup: 1000
   fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
 
 # -- Container-level security context
 securityContext:
@@ -50,6 +52,8 @@ securityContext:
   runAsNonRoot: true
   runAsUser: 1000
   runAsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
   capabilities:
     drop:
       - ALL
@@ -91,8 +95,10 @@ config:
   updateIntervalMedium: "300"
   # -- Slow update interval in seconds (configuration, inventory).
   updateIntervalSlow: "900"
-  # -- Timeout for individual collector runs in seconds.
-  collectorTimeout: "120"
+  # -- Timeout for individual collector runs in seconds. Leave empty ("") to
+  # inherit the application's own default (currently 240s) instead of pinning
+  # a chart-specific value that can drift from it.
+  collectorTimeout: ""
   # -- Enable webhook receiver endpoint.
   webhooksEnabled: "false"
   # -- Enable OpenTelemetry tracing.
@@ -169,7 +175,7 @@ affinity: {}
 # -- Extra Envs
 # extraEnv:
 #  - name: MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT
-#    value: 100
+#    value: "100"
 extraEnv: []
 
 # Prometheus Operator ServiceMonitor
