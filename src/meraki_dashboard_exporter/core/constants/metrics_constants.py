@@ -418,7 +418,6 @@ class CollectorMetricName(StrEnum):
     INVENTORY_CACHE_ENTRIES = "meraki_exporter_inventory_cache_size"
 
     # API client metrics
-    API_REQUEST_DURATION_SECONDS = "meraki_exporter_api_duration_seconds"
     API_REQUESTS_TOTAL = "meraki_exporter_api_requests_total"
     API_RETRY_ATTEMPTS_TOTAL = "meraki_exporter_api_retry_total"
     API_RATE_LIMITER_WAIT_SECONDS = "meraki_exporter_api_rate_limiter_wait_seconds"
