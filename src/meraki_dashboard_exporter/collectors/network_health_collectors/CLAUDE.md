@@ -71,9 +71,10 @@ pattern at all — their fetcher methods are wrapped in `@with_error_handling(co
   `total_pages="all"`); connection stats `timespan=1800` (30 min — the API's practical minimum
   for reliable data); data rate history `timespan=300` with `resolution=300` (take the
   most-recent bucket, sorted by `endTs`); SSID failed connections `timespan=3600` (1 hour).
-- **`resolution` is only used by `data_rates.py`** — channel utilization
-  (`getNetworkNetworkHealthChannelUtilization`) takes no `resolution`/`timespan` argument, just
-  `total_pages="all"`.
+- **`resolution` is used by `data_rates.py` AND `rf_health.py`** — channel utilization
+  (`getNetworkNetworkHealthChannelUtilization`, `rf_health.py`) pins explicit params per F-017:
+  `timespan=600, resolution=600, perPage=100, total_pages="all"` (600 is the endpoint's only
+  valid resolution; one bucket is all we read).
 - **Metric enum source is not uniform**: `_network_connection_stats`
   (`NETWORK_WIRELESS_CONNECTION_STATS`) is defined via `NetworkMetricName`, while every other
   gauge in this coordinator (AP/network utilization, data rates, Bluetooth, SSID failures) uses

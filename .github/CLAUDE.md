@@ -31,7 +31,7 @@ workflows") — don't recreate them from memory of an earlier version of this do
   NOT blanket-applied to every job in a workflow, only to specific jobs that run
   untrusted/third-party steps. In `ci.yml` it's on `test` and `docker-build-test` but deliberately
   absent from `slow-tests` (schedule-only, not part of the `ci-success` required-check surface); it
-  is also present in `api-drift.yml`, `stale.yml`, and `scorecard.yml`. Audit mode logs egress
+  is also present in `api-drift.yml`, `release-please-lock.yml`, and `scorecard.yml`. Audit mode logs egress
   without blocking — it is not currently a hard allowlist gate. When adding a new job that runs
   third-party actions, add `harden-runner` to that job specifically, don't assume workflow-level
   coverage.
@@ -82,7 +82,7 @@ workflows") — don't recreate them from memory of an earlier version of this do
   only the specific `permissions:` its job needs, workflow-level `permissions: {}`.
 - `scorecard.yml` - OSSF Scorecard, self-contained (not a shared reusable) — the standard
   `ossf/scorecard-action` template with `harden-runner`, uploads SARIF to code scanning.
-- `stale.yml` - standard `actions/stale`, daily cron.
+- `release-please-lock.yml` - regenerates `uv.lock` on the release-please PR (runs under the `RELEASE_PLEASE_TOKEN` PAT so `uv sync --locked` passes on the release PR); idempotent.
 - `trigger-docs-sync.yml` - cross-repo `repository_dispatch` on docs-path changes.
 
 ## Composite actions (`.github/actions/`)

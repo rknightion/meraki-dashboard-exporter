@@ -39,7 +39,7 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 ### Collector Infrastructure
 - `collector.py` - `MetricCollector` abstract base class with `_initialize_metrics()` and `_collect_impl()`
 - `registry.py` - `@register_collector(tier)` decorator for auto-registration
-- `async_utils.py` - `ManagedTaskGroup` for bounded concurrency, `batch_with_concurrency_limit()`
+- `async_utils.py` - `ManagedTaskGroup` for bounded concurrency, plus `with_timeout()`, `managed_resource()`, `AsyncRetry`, `chunked_async_iter()` (note: `batch_with_concurrency_limit()` lives in `error_handling.py`, not here)
 - `batch_processing.py` - Batch operation helpers
 
 ### API Helpers

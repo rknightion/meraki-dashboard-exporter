@@ -1,7 +1,8 @@
 <system_context>
 Helm chart for deploying the exporter to Kubernetes. `apiVersion: v2`, `type: application`,
-chart `version: 0.1.0` (bumped independently of `appVersion`, which tracks the exporter release —
-currently `0.28.0`). Published via the shared `container-publish.yml` reusable workflow
+chart `version: 0.1.0` (static in-repo; the publish workflow overrides it to the release tag at
+package time. `appVersion` tracks the exporter release via release-please — don't trust any
+pinned value written here to stay current). Published via the shared `container-publish.yml` reusable workflow
 (`.github/workflows/publish.yml`, `helm-chart-path: charts/meraki-dashboard-exporter`) alongside the
 container image — the chart is a recent addition (started publishing per the
 "start publishing Helm chart" commit).

@@ -27,7 +27,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - `src/meraki_dashboard_exporter/api/` - API client wrapper - See `src/meraki_dashboard_exporter/api/CLAUDE.md`
 - `tests/` - Test suite and patterns - See `tests/CLAUDE.md`
 - `pyproject.toml` - Project dependencies and configuration
-- `dashboards/` - Grafana dashboard JSON exports (hand-maintained, no generator)
+- `dashboards/` - Grafana dashboard JSON exports (hand-maintained, no generator; FROZEN until the dedicated rebuild task) - See `dashboards/CLAUDE.md`
 - `docs/` - Zensical documentation site (NOT MkDocs, despite Make target names) - See `docs/CLAUDE.md`
 - `scripts/` - Code generation and documentation scripts - See `scripts/CLAUDE.md`
 - `charts/meraki-dashboard-exporter/` - Helm chart - See `charts/meraki-dashboard-exporter/CLAUDE.md`
@@ -56,7 +56,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **Update tiers**: FAST (60s), MEDIUM (300s), SLOW (900s) based on volatility (default per-collector timeout: 240s)
 - **Parallel collection**: Use `ManagedTaskGroup` for bounded concurrency
 - **Inventory caching (mandatory for networks)**: All network fetches go through `OrganizationInventory.get_networks(org_id)`; this is the single enforcement point for the configured `NetworkFilter` (`core/network_filter.py`, `NetworkFilterSettings` in `core/config_models.py`).
-- **Meraki SDK 3.2.0** (`pyproject.toml`; upgraded 2.2.0 -> 3.1.0 -> 3.2.0): `validate_kwargs` setting (`core/config_models.py` `APISettings.validate_kwargs`); recommended for dev/CI, off by default in production.
+- **Meraki SDK 3.3.0** (`pyproject.toml`, exact pin — Renovate bumps it, so check `pyproject.toml` rather than trusting this number): `validate_kwargs` setting (`core/config_models.py` `APISettings.validate_kwargs`); recommended for dev/CI, off by default in production.
 - **Metric lifecycle**: Track and expire metrics for offline/removed devices
 - **Web endpoints**: `app.py` exposes `/metrics`, the web UI, and a `/status` health dashboard endpoint.
 
@@ -102,6 +102,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **NEVER bypass inventory service** - use cached data when available
 - **NEVER call `getOrganizationNetworks` directly from a collector** - go through `OrganizationInventory.get_networks(org_id)` so `NetworkFilter` is enforced. Only `core/discovery.py::DiscoveryService` (audit logging, unfiltered), `collectors/alerts.py::AlertsCollector._fetch_networks_direct`, and `core/api_helpers.py::APIHelper._fetch_networks_direct` (both inventory-unavailable fallbacks that reapply `NetworkFilter` manually) are permitted to bypass.
 - **NEVER forget metric tracking** - use `parent._set_metric()` for automatic expiration
+- **NEVER edit `dashboards/*.json` as part of a code fix**, and NEVER defer/park a code fix because it "might break a dashboard" — dashboards are frozen until their dedicated rebuild task (see `dashboards/CLAUDE.md`)
 </fatal_implications>
 
 <roadmap_workflow>
@@ -145,4 +146,33 @@ is a self-contained spec. Point an agent at one issue and follow this exact work
 Create an issue with the same body template + labels (`roadmap`, one `area:*`, one `P0`–`P3`), add it to
 Project #2, and set the Priority/Area/Effort/Type/Status fields. Priority + milestone express **ordering
 only** — there are deliberately no calendar due-dates.
+
+### Working many issues in parallel (wave method)
+Proven during the 2026-07 bug-bash burndown (issues #334–#507). Use it whenever a milestone holds
+many independent issues.
+
+- **GitHub is the permanent record.** Every piece of work gets a GitHub issue *before* it is fixed,
+  and the issue body must be **self-contained** (mechanism + file refs + acceptance criteria) — local
+  scratch files vanish; if it isn't in the issue, it doesn't exist.
+- **One issue per finding → fix on `main` → close via the commit** (`Closes #<N>`). Tightly-coupled
+  issues that are literally one change to one file may share a commit with multiple `Closes` trailers.
+- **Validate-before-implement.** Issues were written against a snapshot; re-confirm the mechanism
+  against the *current* code, and confirm SDK methods / response shapes against the installed
+  `meraki` SDK and the OpenAPI spec before writing the fix. If the issue is stale, say so on the
+  issue and close it `wontfix`/`duplicate` rather than forcing a fix.
+- **Roles:** the orchestrating main thread owns wave planning, seam/enum decisions, the `make check`
+  gate, **all commits and issue closes**. Implementer subagents each own one lane, re-confirm their
+  issues, TDD the fix, run scoped tests, and return a self-contained final-message brief.
+  **Subagents never commit and never run `gh`.**
+- **Lane = a disjoint set of files with ONE owner.** Group issues by the file(s) they touch — two
+  issues editing the same file share a lane. Never split a file across concurrent agents.
+- **Seams are funnelled, never parallelised.** Shared/high-blast-radius files — `core/metrics.py`
+  (LabelName), `core/constants/metrics_constants.py` (metric enums), `core/collector.py`,
+  `core/metric_expiration.py`, and coordinators/registries (`device.py`, `organization.py`,
+  `network_health.py`, `manager.py`, `config_models.py`) — are edited by the orchestrator or one
+  dedicated lane per wave. A lane needing a new enum gets it added to the frozen seam first.
+- **Foundational seams first (wave 0), then fan out.** Transient red mid-wave is fine; the full
+  `make check` must be green at each wave's integration checkpoint and before every commit.
+- **Scale the swarm to the risk:** docs/DX waves tolerate many cheap parallel lanes; code waves that
+  share seams run fewer, more careful lanes.
 </roadmap_workflow>
