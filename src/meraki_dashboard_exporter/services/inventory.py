@@ -108,6 +108,7 @@ class OrganizationInventory:
         self._devices: dict[str, list[dict[str, Any]]] = {}
         self._device_availabilities: dict[str, list[dict[str, Any]]] = {}
         self._licenses_overview: dict[str, dict[str, Any]] = {}
+        self._licenses: dict[str, list[dict[str, Any]]] = {}
         self._login_security: dict[str, dict[str, Any]] = {}
 
         # Cache timestamps
@@ -116,6 +117,7 @@ class OrganizationInventory:
         self._device_timestamps: dict[str, float] = {}
         self._availability_timestamps: dict[str, float] = {}
         self._license_timestamps: dict[str, float] = {}
+        self._license_list_timestamps: dict[str, float] = {}
         self._security_timestamps: dict[str, float] = {}
 
         # Lock for thread-safe cache updates
@@ -348,15 +350,34 @@ class OrganizationInventory:
 
             # Fetch from API
             if self.settings.meraki.org_id:
-                # Single org mode
+                # Single org mode - fetch the real organization name via
+                # getOrganization so org_name labels aren't just the numeric
+                # ID (F-116). Fall back to the ID as a placeholder if the
+                # lookup fails for any reason (e.g. transient API error).
                 org_id = self.settings.meraki.org_id
-                organizations = [
-                    {
-                        "id": org_id,
-                        # Use org_id as a placeholder name when only ID is configured
-                        "name": org_id,
-                    }
-                ]
+                try:
+                    await self._acquire_rate_limit(org_id, "getOrganization")
+                    org_result = await self._make_api_call(
+                        "getOrganization",
+                        self.api.organizations.getOrganization,
+                        org_id,
+                    )
+                    org_result = validate_response_format(
+                        org_result, expected_type=dict, operation="getOrganization"
+                    )
+                    organizations = [cast(dict[str, Any], org_result)]
+                except Exception:
+                    logger.debug(
+                        "Failed to fetch organization name; using org_id as placeholder",
+                        org_id=org_id,
+                    )
+                    organizations = [
+                        {
+                            "id": org_id,
+                            # Use org_id as a placeholder name when the lookup fails
+                            "name": org_id,
+                        }
+                    ]
             else:
                 # Multi-org mode
                 await self._acquire_rate_limit(None, "getOrganizations")
@@ -749,12 +770,14 @@ class OrganizationInventory:
                 self._devices.clear()
                 self._device_availabilities.clear()
                 self._licenses_overview.clear()
+                self._licenses.clear()
                 self._login_security.clear()
                 self._org_timestamp = 0.0
                 self._network_timestamps.clear()
                 self._device_timestamps.clear()
                 self._availability_timestamps.clear()
                 self._license_timestamps.clear()
+                self._license_list_timestamps.clear()
                 self._security_timestamps.clear()
                 logger.info("Invalidated all inventory cache")
             else:
@@ -767,6 +790,8 @@ class OrganizationInventory:
                     del self._device_availabilities[org_id]
                 if org_id in self._licenses_overview:
                     del self._licenses_overview[org_id]
+                if org_id in self._licenses:
+                    del self._licenses[org_id]
                 if org_id in self._login_security:
                     del self._login_security[org_id]
                 if org_id in self._network_timestamps:
@@ -777,6 +802,8 @@ class OrganizationInventory:
                     del self._availability_timestamps[org_id]
                 if org_id in self._license_timestamps:
                     del self._license_timestamps[org_id]
+                if org_id in self._license_list_timestamps:
+                    del self._license_list_timestamps[org_id]
                 if org_id in self._security_timestamps:
                     del self._security_timestamps[org_id]
                 logger.info("Invalidated inventory cache for organization", org_id=org_id)
@@ -803,6 +830,7 @@ class OrganizationInventory:
             "cached_devices": len(self._devices),
             "cached_availabilities": len(self._device_availabilities),
             "cached_licenses": len(self._licenses_overview),
+            "cached_license_lists": len(self._licenses),
             "cached_security": len(self._login_security),
         }
 
@@ -936,7 +964,7 @@ class OrganizationInventory:
         self,
         org_id: str,
         force_refresh: bool = False,
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | None:
         """Get organization license overview with caching.
 
         Uses a longer TTL (30 minutes) since license data rarely changes.
@@ -950,8 +978,12 @@ class OrganizationInventory:
 
         Returns
         -------
-        dict[str, Any]
-            License overview data for the organization.
+        dict[str, Any] | None
+            License overview data for the organization, or ``None`` if the
+            fetch failed (distinct from a legitimately empty ``{}`` response
+            — see F-100). Callers must treat ``None`` as "fetch failed, skip
+            this cycle" rather than falling through to per-device licensing
+            handling.
 
         """
         current_time = time.time()
@@ -1011,12 +1043,109 @@ class OrganizationInventory:
 
                 return overview
             except Exception:
-                # Return empty dict on error, don't cache errors
+                # Return None (not {}) on error, don't cache errors, so callers
+                # can distinguish "fetch failed" from "legitimately empty
+                # overview" (F-100) instead of misrouting to the per-device
+                # licensing branch.
                 logger.debug(
                     "Failed to fetch licenses overview (may not be supported)",
                     org_id=org_id,
                 )
-                return {}
+                return None
+
+    async def get_licenses(
+        self,
+        org_id: str,
+        force_refresh: bool = False,
+    ) -> list[dict[str, Any]] | None:
+        """Get the full per-device license list for an organization, cached.
+
+        Mirrors :meth:`get_licenses_overview`'s TTL (30 minutes) since
+        license data rarely changes (F-102) — previously this fetch ran
+        uncached on every collection cycle while the overview honored a
+        30-minute TTL.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        force_refresh : bool
+            If True, bypass cache and fetch fresh data.
+
+        Returns
+        -------
+        list[dict[str, Any]] | None
+            Per-device license list for the organization, or ``None`` if the
+            fetch failed (distinct from a legitimately empty ``[]`` list).
+
+        """
+        current_time = time.time()
+
+        # Check cache validity (using the same longer TTL as the overview)
+        cache_timestamp = self._license_list_timestamps.get(org_id, 0.0)
+        if (
+            not force_refresh
+            and org_id in self._licenses
+            and not self._is_expired(cache_timestamp, self.TTL_LICENSE)
+        ):
+            self._cache_hits += 1
+            logger.debug(
+                "Cache hit for licenses",
+                org_id=org_id,
+                cache_age_seconds=current_time - cache_timestamp,
+            )
+            return self._licenses[org_id]
+
+        # Cache miss - fetch from API
+        self._cache_misses += 1
+        logger.debug("Cache miss for licenses, fetching from API", org_id=org_id)
+
+        async with self._lock:
+            # Double-check after acquiring lock
+            cache_timestamp = self._license_list_timestamps.get(org_id, 0.0)
+            if (
+                not force_refresh
+                and org_id in self._licenses
+                and not self._is_expired(cache_timestamp, self.TTL_LICENSE)
+            ):
+                return self._licenses[org_id]
+
+            # Fetch from API
+            try:
+                await self._acquire_rate_limit(org_id, "getOrganizationLicenses")
+                licenses_result = await self._make_api_call(
+                    "getOrganizationLicenses",
+                    self.api.organizations.getOrganizationLicenses,
+                    org_id,
+                    total_pages="all",
+                )
+                licenses_result = validate_response_format(
+                    licenses_result,
+                    expected_type=list,
+                    operation="getOrganizationLicenses",
+                )
+                licenses = cast(list[dict[str, Any]], licenses_result)
+
+                # Update cache
+                self._licenses[org_id] = licenses
+                self._license_list_timestamps[org_id] = current_time
+
+                logger.info(
+                    "Updated licenses cache",
+                    org_id=org_id,
+                    license_count=len(licenses),
+                )
+
+                return licenses
+            except Exception:
+                # Return None (not []) on error, don't cache errors, so
+                # callers can distinguish "fetch failed" from "legitimately
+                # empty license list".
+                logger.debug(
+                    "Failed to fetch licenses (may not be supported)",
+                    org_id=org_id,
+                )
+                return None
 
     async def get_login_security(
         self,

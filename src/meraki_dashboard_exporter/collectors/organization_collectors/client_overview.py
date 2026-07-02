@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+import time
+from typing import TYPE_CHECKING, Any, cast
 
+from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -20,11 +22,24 @@ logger = get_logger(__name__)
 class ClientOverviewCollector(BaseOrganizationCollector):
     """Collector for organization client overview metrics."""
 
+    # F-101: bound the stale-zero replay guard below so a genuinely-zero org can't
+    # replay a stale non-zero snapshot forever. MEDIUM tier collects every 300s;
+    # allow up to 3 consecutive all-zero cycles (~15 min) to be absorbed as the known
+    # API glitch, and independently distrust any cached snapshot older than the same
+    # ~15 minute budget. Either bound tripping forces the real (truthful) zero to be
+    # emitted.
+    _MAX_CONSECUTIVE_ZERO_REPLAYS: int = 3
+    _MAX_CACHE_AGE_SECONDS: float = 900.0
+
     def __init__(self, parent: Any) -> None:
         """Initialize the collector with caching for last non-zero values."""
         super().__init__(parent)
         # Cache for last non-zero values per org
         self._last_non_zero_values: dict[str, dict[str, float]] = {}
+        # When each org's cache was last refreshed with a genuine non-zero response
+        self._last_non_zero_timestamp: dict[str, float] = {}
+        # How many consecutive all-zero responses have replayed the cache for this org
+        self._consecutive_zero_replays: dict[str, int] = {}
 
     @log_api_call("getOrganizationClientsOverview")
     async def _fetch_client_overview(self, org_id: str) -> dict[str, Any]:
@@ -41,10 +56,18 @@ class ClientOverviewCollector(BaseOrganizationCollector):
             Client overview data.
 
         """
-        return await asyncio.to_thread(
+        response = await asyncio.to_thread(
             self.api.organizations.getOrganizationClientsOverview,
             org_id,
             timespan=3600,  # 1 hour - required for reliable data
+        )
+        return cast(
+            dict[str, Any],
+            validate_response_format(
+                response,
+                expected_type=dict,
+                operation="getOrganizationClientsOverview",
+            ),
         )
 
     async def collect(self, org_id: str, org_name: str) -> None:
@@ -85,24 +108,46 @@ class ClientOverviewCollector(BaseOrganizationCollector):
 
                 # Check if all values are zero (likely an API issue)
                 if total_clients == 0 and total_kb == 0 and downstream_kb == 0 and upstream_kb == 0:
-                    logger.warning(
-                        "API returned all zero values, using cached non-zero values if available",
-                        org_id=org_id,
-                    )
+                    cached = self._last_non_zero_values.get(org_id)
+                    cached_at = self._last_non_zero_timestamp.get(org_id)
+                    replay_count = self._consecutive_zero_replays.get(org_id, 0)
 
-                    # Use cached values if available
-                    if org_id in self._last_non_zero_values:
-                        cached = self._last_non_zero_values[org_id]
+                    cache_is_fresh = cached_at is not None and (
+                        time.time() - cached_at <= self._MAX_CACHE_AGE_SECONDS
+                    )
+                    within_replay_budget = replay_count < self._MAX_CONSECUTIVE_ZERO_REPLAYS
+
+                    if cached is not None and cache_is_fresh and within_replay_budget:
+                        logger.warning(
+                            "API returned all zero values, using cached non-zero values",
+                            org_id=org_id,
+                            replay_count=replay_count + 1,
+                            max_replays=self._MAX_CONSECUTIVE_ZERO_REPLAYS,
+                        )
+
                         total_clients = cached.get("total_clients", 0)
                         total_kb = cached.get("total_kb", 0)
                         downstream_kb = cached.get("downstream_kb", 0)
                         upstream_kb = cached.get("upstream_kb", 0)
+                        self._consecutive_zero_replays[org_id] = replay_count + 1
 
                         logger.info(
                             "Using cached non-zero values",
                             org_id=org_id,
                             total_clients=total_clients,
                             total_kb=total_kb,
+                        )
+                    else:
+                        # Replay budget or cache age exceeded (or no cache at all) - trust
+                        # the API and emit the real, truthful zero instead of replaying a
+                        # stale snapshot forever (F-101).
+                        logger.warning(
+                            "API returned all zero values; stale-zero cache exhausted, "
+                            "emitting real zero values",
+                            org_id=org_id,
+                            had_cache=cached is not None,
+                            cache_fresh=cache_is_fresh,
+                            replay_count=replay_count,
                         )
                 else:
                     # Update cache with non-zero values
@@ -112,6 +157,8 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                         "downstream_kb": downstream_kb,
                         "upstream_kb": upstream_kb,
                     }
+                    self._last_non_zero_timestamp[org_id] = time.time()
+                    self._consecutive_zero_replays[org_id] = 0
 
                 logger.debug(
                     "Client overview metrics",

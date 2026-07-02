@@ -9,6 +9,7 @@ import pytest
 from meraki_dashboard_exporter.collectors.organization_collectors.client_overview import (
     ClientOverviewCollector,
 )
+from meraki_dashboard_exporter.core.error_handling import RetryableAPIError
 
 if TYPE_CHECKING:
     pass
@@ -404,3 +405,117 @@ class TestClientOverviewCollector:
         assert call_args[0][0] == org_id
         assert call_args[1]["timespan"] == 3600
         assert result == {"counts": {"total": 10}}
+
+    # --- F-095: validate_response_format wrapping ---
+
+    async def test_fetch_client_overview_validates_exhausted_retry_error_shape(
+        self, client_overview_collector, mock_api_builder
+    ):
+        """SDK exhausted-retry error dict ({"errors": [...]}) must raise, not be treated as data."""
+        org_id = "test-org-777"
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationClientsOverview", {"errors": ["rate limit exceeded"]}
+        ).build()
+        client_overview_collector.api = api
+
+        with pytest.raises(RetryableAPIError):
+            await client_overview_collector._fetch_client_overview(org_id)
+
+    async def test_collect_with_exhausted_retry_error_shape_does_not_write_zero_metrics(
+        self, client_overview_collector, mock_api_builder
+    ):
+        """collect() must not silently interpret an errors-dict as an all-zero response."""
+        org_id = "test-org-778"
+        org_name = "Exhausted Retry Org"
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationClientsOverview", {"errors": ["rate limit exceeded"]}
+        ).build()
+        client_overview_collector.api = api
+
+        # Should be handled gracefully by collect()'s error handling - no metrics written.
+        await client_overview_collector.collect(org_id, org_name)
+
+        parent = client_overview_collector.parent
+        assert len(parent._metrics) == 0
+        # And critically, the errors-dict must not have been mistaken for cached-worthy data.
+        assert org_id not in client_overview_collector._last_non_zero_values
+
+    # --- F-101: stale-zero guard must be bounded ---
+
+    async def test_stale_zero_guard_stops_replaying_after_max_consecutive_zeros(
+        self, client_overview_collector, mock_api_builder
+    ):
+        """After enough consecutive all-zero responses, the guard emits the real zero."""
+        org_id = "stale-zero-org"
+        org_name = "Stale Zero Org"
+
+        # Prime the cache with a non-zero response.
+        good_response = {
+            "counts": {"total": 100},
+            "usage": {"overall": {"total": 500000, "downstream": 300000, "upstream": 200000}},
+        }
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationClientsOverview", good_response
+        ).build()
+        client_overview_collector.api = api
+        await client_overview_collector.collect(org_id, org_name)
+
+        parent = client_overview_collector.parent
+        client_key = ("_clients_total", (("org_id", org_id), ("org_name", org_name)))
+        assert parent._metrics[client_key] == 100
+
+        # Now the org genuinely goes to zero forever - simulate many consecutive cycles.
+        zero_response = {
+            "counts": {"total": 0},
+            "usage": {"overall": {"total": 0, "downstream": 0, "upstream": 0}},
+        }
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationClientsOverview", zero_response
+        ).build()
+        client_overview_collector.api = api
+
+        max_replays = client_overview_collector._MAX_CONSECUTIVE_ZERO_REPLAYS
+        for _ in range(max_replays + 2):
+            parent._metrics.clear()
+            await client_overview_collector.collect(org_id, org_name)
+
+        # After exceeding the replay budget, the real (truthful) zero must be emitted.
+        assert parent._metrics[client_key] == 0
+
+    async def test_stale_zero_guard_expires_cache_by_age(
+        self, client_overview_collector, mock_api_builder
+    ):
+        """A cached snapshot older than the max age must not be replayed."""
+        org_id = "aged-cache-org"
+        org_name = "Aged Cache Org"
+
+        # Prime the cache directly (avoids sleeping in the test) with a snapshot that is
+        # older than the configured max age.
+        client_overview_collector._last_non_zero_values[org_id] = {
+            "total_clients": 100,
+            "total_kb": 500000,
+            "downstream_kb": 300000,
+            "upstream_kb": 200000,
+        }
+        import time
+
+        max_age = client_overview_collector._MAX_CACHE_AGE_SECONDS
+        client_overview_collector._last_non_zero_timestamp[org_id] = time.time() - (max_age + 1)
+
+        zero_response = {
+            "counts": {"total": 0},
+            "usage": {"overall": {"total": 0, "downstream": 0, "upstream": 0}},
+        }
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationClientsOverview", zero_response
+        ).build()
+        client_overview_collector.api = api
+
+        await client_overview_collector.collect(org_id, org_name)
+
+        parent = client_overview_collector.parent
+        client_key = ("_clients_total", (("org_id", org_id), ("org_name", org_name)))
+        # Cache is stale by age - the real zero must be emitted, not the cached 100.
+        assert parent._metrics[client_key] == 0

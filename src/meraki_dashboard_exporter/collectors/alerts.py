@@ -173,21 +173,21 @@ class AlertsCollector(MetricCollector):
                     api_calls_made += 1
 
             # Collect sensor alerts for networks with MT sensors
-            # Only query networks that actually have sensor devices (reduces API calls)
+            # Only query networks that actually have sensor devices (reduces API calls).
+            # Network health alerts no longer need a separate network list here: they
+            # are derived from the org-wide getOrganizationAssuranceAlerts response
+            # already fetched above in _collect_org_alerts (F-064 / issue #273), which
+            # also drops the getNetworkHealthAlerts fan-out this loop used to build.
             sensor_networks = []
-            all_networks = []
             for org_id in org_ids:
                 if self.inventory:
                     # Use filtered network list (only networks with sensors)
                     org_sensor_networks = await self.inventory.get_networks_with_device_types(
                         org_id, ["sensor"]
                     )
-                    # Also get all networks for health alerts (from cache)
-                    org_all_networks = await self.inventory.get_networks(org_id)
                 else:
                     # Fallback: get all networks (can't filter without inventory)
                     org_sensor_networks = await self._get_networks(org_id) or []
-                    org_all_networks = org_sensor_networks
                     if org_sensor_networks:
                         api_calls_made += 1
 
@@ -197,16 +197,10 @@ class AlertsCollector(MetricCollector):
                     network["orgName"] = org_names.get(org_id, org_id)
                 sensor_networks.extend(org_sensor_networks)
 
-                for network in org_all_networks:
-                    network["orgId"] = org_id
-                    network["orgName"] = org_names.get(org_id, org_id)
-                all_networks.extend(org_all_networks)
-
             # Collect sensor alerts only for networks with sensors
             if sensor_networks:
                 logger.debug(
                     "Collecting sensor alerts for filtered networks",
-                    total_networks=len(all_networks),
                     networks_with_sensors=len(sensor_networks),
                 )
                 sensor_results = await process_in_batches_with_errors(
@@ -224,26 +218,6 @@ class AlertsCollector(MetricCollector):
 
                 # Count successful sensor alert collections
                 for _, result in sensor_results:
-                    if not isinstance(result, Exception):
-                        api_calls_made += 1
-
-            # Collect network health alerts for all networks
-            if all_networks:
-                health_results = await process_in_batches_with_errors(
-                    all_networks,
-                    self._collect_network_health_alerts,
-                    batch_size=self.settings.api.network_batch_size,
-                    delay_between_batches=self.settings.api.batch_delay,
-                    item_description="health alert network",
-                    error_context_func=lambda network: {
-                        "org_id": network.get("orgId"),
-                        "network_id": network.get("id"),
-                        "network_name": network.get("name"),
-                    },
-                )
-
-                # Count successful network health alert collections
-                for _, result in health_results:
                     if not isinstance(result, Exception):
                         api_calls_made += 1
 
@@ -314,19 +288,39 @@ class AlertsCollector(MetricCollector):
                 alerts, expected_type=list, operation="getOrganizationAssuranceAlerts"
             )
 
-            # Clear previous metrics for this org to handle resolved alerts
-            self._clear_org_metrics(org_id)
+            # NB: do NOT clear the gauges here. Organizations are processed
+            # concurrently (process_in_batches_with_errors in _collect_impl), sharing
+            # one gauge instance per metric, so a blanket clear would wipe every other
+            # org's series mid-cycle (same reasoning as mx_ha.py/mg.py). Resolved
+            # alerts' stale label combinations are instead reaped by the metric
+            # expiration manager via self._set_metric tracking below (F-059).
+
+            allowed_network_ids = (
+                await self.inventory.get_allowed_network_ids(org_id)
+                if self.inventory is not None
+                else None
+            )
 
             if not alerts:
                 logger.debug("No active alerts", org_id=org_id)
                 return
 
             # Process alerts and aggregate counts
-            self._process_alerts(alerts, org_id, org_name)
+            self._process_alerts(alerts, org_id, org_name, allowed_network_ids)
 
     @log_batch_operation("process alerts")
-    def _process_alerts(self, alerts: list[dict[str, Any]], org_id: str, org_name: str) -> None:
+    def _process_alerts(
+        self,
+        alerts: list[dict[str, Any]],
+        org_id: str,
+        org_name: str,
+        allowed_network_ids: set[str] | None = None,
+    ) -> None:
         """Process alert data and update metrics.
+
+        Also derives per-network health-alert counts (category/severity) from this
+        same org-wide response instead of a separate per-network call, replacing the
+        deprecated ``getNetworkHealthAlerts`` loop (F-064 / issue #273).
 
         Parameters
         ----------
@@ -336,11 +330,18 @@ class AlertsCollector(MetricCollector):
             Organization ID
         org_name : str
             Organization name
+        allowed_network_ids : set[str] | None
+            Network IDs that pass the configured NetworkFilter, or None when no
+            filter is active (accept every row). Used to keep the derived
+            network-health-alert metric consistent with the NetworkFilter
+            enforcement the old per-network loop got for free by only iterating
+            ``inventory.get_networks(org_id)``.
 
         """
         alert_counts: dict[tuple[str, str, str, str, str, str, str, str], int] = {}
         severity_counts = {"critical": 0, "warning": 0, "informational": 0}
         network_counts: dict[tuple[str, str], int] = {}
+        health_alert_counts: dict[tuple[str, str, str, str], int] = {}
 
         for alert in alerts:
             # Skip dismissed or resolved alerts
@@ -380,7 +381,16 @@ class AlertsCollector(MetricCollector):
             network_key = (network_id, network_name)
             network_counts[network_key] = network_counts.get(network_key, 0) + 1
 
-        # Set metrics for active alerts
+            # Count by network/category/severity for the derived health-alert metric.
+            # Skip rows outside the configured NetworkFilter (mirrors the allow-list
+            # pattern in devices/mx_ha.py / devices/mg.py).
+            if allowed_network_ids is None or network_id in allowed_network_ids:
+                health_key = (network_id, network_name, category_type, severity)
+                health_alert_counts[health_key] = health_alert_counts.get(health_key, 0) + 1
+
+        # Set metrics for active alerts. Routed through self._set_metric (rather than
+        # raw .labels().set()) so the metric expiration manager tracks every label
+        # combination and reaps series for alerts that have since resolved (F-059).
         for key, count in alert_counts.items():
             (
                 org_id,
@@ -393,33 +403,65 @@ class AlertsCollector(MetricCollector):
                 device_type,
             ) = key
 
-            self._alerts_active.labels(
-                org_id=org_id,
-                org_name=org_name,
-                network_id=network_id,
-                network_name=network_name,
-                alert_type=alert_type,
-                category_type=category_type,
-                severity=severity,
-                device_type=device_type,
-            ).set(count)
+            self._set_metric(
+                self._alerts_active,
+                {
+                    "org_id": org_id,
+                    "org_name": org_name,
+                    "network_id": network_id,
+                    "network_name": network_name,
+                    "alert_type": alert_type,
+                    "category_type": category_type,
+                    "severity": severity,
+                    "device_type": device_type,
+                },
+                count,
+                AlertMetricName.ALERTS_ACTIVE.value,
+            )
 
         # Set severity summary metrics
         for severity, count in severity_counts.items():
-            self._alerts_by_severity.labels(
-                org_id=org_id,
-                org_name=org_name,
-                severity=severity,
-            ).set(count)
+            self._set_metric(
+                self._alerts_by_severity,
+                {
+                    "org_id": org_id,
+                    "org_name": org_name,
+                    "severity": severity,
+                },
+                count,
+                AlertMetricName.ALERTS_TOTAL_BY_SEVERITY.value,
+            )
 
         # Set network summary metrics
         for (network_id, network_name), count in network_counts.items():
-            self._alerts_by_network.labels(
-                org_id=org_id,
-                org_name=org_name,
-                network_id=network_id,
-                network_name=network_name,
-            ).set(count)
+            self._set_metric(
+                self._alerts_by_network,
+                {
+                    "org_id": org_id,
+                    "org_name": org_name,
+                    "network_id": network_id,
+                    "network_name": network_name,
+                },
+                count,
+                AlertMetricName.ALERTS_TOTAL_BY_NETWORK.value,
+            )
+
+        # Set derived network health alert metrics (replaces the deprecated
+        # per-network getNetworkHealthAlerts loop, see F-064 / issue #273).
+        for (network_id, network_name, category, severity), count in health_alert_counts.items():
+            self._set_metric(
+                self._network_health_alerts_total,
+                {
+                    "org_id": org_id,
+                    "org_name": org_name,
+                    "network_id": network_id,
+                    "network_name": network_name,
+                    "category": category,
+                    "severity": severity,
+                },
+                count,
+                AlertMetricName.NETWORK_HEALTH_ALERTS_TOTAL.value,
+            )
 
         logger.debug(
             "Collected alert metrics",
@@ -429,20 +471,8 @@ class AlertsCollector(MetricCollector):
             active_alerts=sum(alert_counts.values()),
             severity_breakdown=severity_counts,
             affected_networks=len(network_counts),
+            health_alert_categories=len(health_alert_counts),
         )
-
-    def _clear_org_metrics(self, org_id: str) -> None:
-        """Clear all metrics for an organization to handle resolved alerts.
-
-        Parameters
-        ----------
-        org_id : str
-            Organization ID to clear metrics for.
-
-        """
-        # This is a simplified approach - in production you might want
-        # to track and clear specific label combinations
-        logger.debug("Clearing previous alert metrics", org_id=org_id)
 
     @log_api_call("getOrganizationNetworks")
     @with_error_handling(
@@ -541,11 +571,21 @@ class AlertsCollector(MetricCollector):
                         # Process nested ambient noise
                         ambient_value = value.get("ambient", 0)
                         metric_labels = {**labels, "metric": "noise_ambient"}
-                        self._sensor_alerts_total.labels(**metric_labels).set(ambient_value)
+                        self._set_metric(
+                            self._sensor_alerts_total,
+                            metric_labels,
+                            ambient_value,
+                            AlertMetricName.SENSOR_ALERTS_TOTAL.value,
+                        )
                     elif isinstance(value, (int, float)):
                         # Process regular numeric values
                         metric_labels = {**labels, "metric": metric_type}
-                        self._sensor_alerts_total.labels(**metric_labels).set(value)
+                        self._set_metric(
+                            self._sensor_alerts_total,
+                            metric_labels,
+                            value,
+                            AlertMetricName.SENSOR_ALERTS_TOTAL.value,
+                        )
                     else:
                         logger.warning(
                             "Unexpected sensor alert count format",
@@ -561,71 +601,9 @@ class AlertsCollector(MetricCollector):
                     metric_count=len(counts),
                 )
 
-    @log_api_call("getNetworkHealthAlerts")
-    @with_error_handling(
-        operation="Collect network health alerts",
-        continue_on_error=True,
-        error_category=ErrorCategory.API_NOT_AVAILABLE,
-    )
-    async def _collect_network_health_alerts(self, network: dict[str, Any]) -> None:
-        """Collect health alerts for a specific network (Phase 4.1).
-
-        Parameters
-        ----------
-        network : dict[str, Any]
-            Network data with org info.
-
-        """
-        network_id = network["id"]
-        network_name = network.get("name", network_id)
-        org_id = network.get("orgId", "")
-        org_name = network.get("orgName", org_id)
-
-        with LogContext(network_id=network_id, network_name=network_name, org_id=org_id):
-            # Get network health alerts
-            alerts = await asyncio.to_thread(
-                self.api.networks.getNetworkHealthAlerts,
-                network_id,
-            )
-
-            alerts = validate_response_format(
-                alerts, expected_type=list, operation="getNetworkHealthAlerts"
-            )
-
-            if not alerts:
-                logger.debug("No network health alerts", network_id=network_id)
-                return
-
-            # Aggregate alerts by category and severity
-            alert_counts: dict[tuple[str, str], int] = {}
-
-            for alert in alerts:
-                category = alert.get("category", "unknown")
-                severity = alert.get("severity", "unknown")
-
-                # Skip if alert is resolved
-                if alert.get("closedAt"):
-                    continue
-
-                key = (category, severity)
-                alert_counts[key] = alert_counts.get(key, 0) + 1
-
-            # Set metrics for network health alerts
-            for (category, severity), count in alert_counts.items():
-                self._network_health_alerts_total.labels(
-                    org_id=org_id,
-                    org_name=org_name,
-                    network_id=network_id,
-                    network_name=network_name,
-                    category=category,
-                    severity=severity,
-                ).set(count)
-
-            logger.debug(
-                "Collected network health alert metrics",
-                network_id=network_id,
-                network_name=network_name,
-                total_alerts=len(alerts),
-                active_alerts=sum(alert_counts.values()),
-                categories=len(alert_counts),
-            )
+    # NOTE: there used to be a `_collect_network_health_alerts` method here that called
+    # the deprecated `getNetworkHealthAlerts` once per network. It has been removed
+    # (F-064 / issue #273): `_network_health_alerts_total` is now derived from the
+    # org-wide `getOrganizationAssuranceAlerts` response already fetched in
+    # `_collect_org_alerts` (see `_process_alerts`), which drops a per-network API
+    # call fan-out entirely and avoids the deprecated endpoint.

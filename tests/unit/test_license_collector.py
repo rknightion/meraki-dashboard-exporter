@@ -242,6 +242,69 @@ class TestLicenseCollector:
             assert key in parent._metrics
             assert parent._metrics[key] == expected_expiring
 
+    async def test_collect_per_device_licenses_expiring_state_included(
+        self, license_collector, mock_api_builder
+    ):
+        """Licenses in state 'expiring' must count toward the expiring gauge (F-097).
+
+        The Meraki API documents 'expiring' as a distinct license state from
+        'active'; previously only 'active' licenses were checked against the
+        30-day expiring window, silently dropping licenses the API itself
+        already flagged as expiring.
+        """
+        org_id = "888"
+        org_name = "Expiring State Org"
+
+        overview_response = {"status": "OK"}
+
+        soon = (datetime.now(UTC) + timedelta(days=10)).isoformat()
+        licenses_response = [
+            {"licenseType": "ENT", "state": "expiring", "expirationDate": soon},
+            {"licenseType": "ENT", "state": "expiring", "expirationDate": soon},
+            {"licenseType": "ADV-SEC", "state": "active", "expirationDate": soon},
+        ]
+
+        api = (
+            mock_api_builder
+            .with_custom_response("getOrganizationLicensesOverview", overview_response)
+            .with_custom_response("getOrganizationLicenses", licenses_response)
+            .build()
+        )
+        license_collector.api = api
+
+        await license_collector.collect(org_id, org_name)
+
+        parent = license_collector.parent
+
+        # Total counts recorded under the "expiring" status as-is
+        key_total = (
+            "_licenses_total",
+            (
+                ("license_type", "ENT"),
+                ("org_id", org_id),
+                ("org_name", org_name),
+                ("status", "expiring"),
+            ),
+        )
+        assert key_total in parent._metrics
+        assert parent._metrics[key_total] == 2
+
+        # Both ENT licenses in state 'expiring' must count toward the
+        # expiring gauge, same as the ADV-SEC license in state 'active'.
+        key_expiring_ent = (
+            "_licenses_expiring",
+            (("license_type", "ENT"), ("org_id", org_id), ("org_name", org_name)),
+        )
+        assert key_expiring_ent in parent._metrics
+        assert parent._metrics[key_expiring_ent] == 2
+
+        key_expiring_adv = (
+            "_licenses_expiring",
+            (("license_type", "ADV-SEC"), ("org_id", org_id), ("org_name", org_name)),
+        )
+        assert key_expiring_adv in parent._metrics
+        assert parent._metrics[key_expiring_adv] == 1
+
     async def test_collect_with_empty_licenses(self, license_collector, mock_api_builder):
         """Test handling of empty license list."""
         org_id = "111"
@@ -447,7 +510,12 @@ class TestLicenseCollector:
     async def test_collect_co_termination_with_invalid_status(
         self, license_collector, mock_api_builder
     ):
-        """Test co-termination model with non-OK status."""
+        """Test co-termination model with non-OK status still updates the expiring gauge.
+
+        Regression test for F-097: the expiring gauge must be evaluated
+        regardless of the overall co-term `status` - previously a status
+        other than "OK" meant the gauge was never updated for that cycle.
+        """
         org_id = "666"
         org_name = "Invalid Status Org"
 
@@ -482,13 +550,15 @@ class TestLicenseCollector:
             assert key in parent._metrics
             assert parent._metrics[key] == count
 
-        # No licenses should be marked as expiring since status is not OK
-        for device_type in ["MS", "MR"]:
+        # Licenses expire in 10 days (<=30), so the expiring gauge must be
+        # updated even though the overall status is not "OK" (F-097).
+        for device_type, count in [("MS", 20), ("MR", 40)]:
             key = (
                 "_licenses_expiring",
                 (("license_type", device_type), ("org_id", org_id), ("org_name", org_name)),
             )
-            assert key not in parent._metrics
+            assert key in parent._metrics
+            assert parent._metrics[key] == count
 
     async def test_fetch_methods_parameters(self, license_collector, mock_api_builder):
         """Test that fetch methods pass correct parameters."""
@@ -516,3 +586,102 @@ class TestLicenseCollector:
         assert call_args[0][0] == org_id
         assert call_args[1]["total_pages"] == "all"
         assert result2 == []
+
+    async def test_collect_overview_fetch_failure_skips_cycle(
+        self, license_collector, mock_api_builder
+    ):
+        """A None overview (inventory fetch failure) must skip the cycle.
+
+        It must not fall through to the per-device getOrganizationLicenses
+        call.
+
+        Regression test for F-100: previously the inventory cache returned
+        ``{}`` on any fetch failure, which is indistinguishable from a
+        legitimately empty co-term overview and misrouted the collector into
+        calling getOrganizationLicenses - an endpoint co-term orgs don't
+        support.
+        """
+        org_id = "999"
+        org_name = "Overview Fetch Failure Org"
+
+        class FailingInventory:
+            async def get_licenses_overview(self, org_id: str) -> dict | None:
+                return None
+
+        license_collector.inventory = FailingInventory()
+
+        api = mock_api_builder.build()
+        license_collector.api = api
+
+        await license_collector.collect(org_id, org_name)
+
+        # The per-device fallback must never be attempted.
+        assert not api.organizations.getOrganizationLicenses.called
+
+        # No metrics should have been set.
+        parent = license_collector.parent
+        assert len(parent._metrics) == 0
+
+    async def test_collect_per_device_fetch_failure_skips_cycle(
+        self, license_collector, mock_api_builder
+    ):
+        """A None per-device license list (inventory fetch failure) skips the cycle."""
+        org_id = "1000"
+        org_name = "License List Fetch Failure Org"
+
+        class FailingLicensesInventory:
+            async def get_licenses_overview(self, org_id: str) -> dict | None:
+                return {"status": "OK"}  # No licensedDeviceCounts -> per-device model
+
+            async def get_licenses(self, org_id: str) -> list | None:
+                return None
+
+        license_collector.inventory = FailingLicensesInventory()
+
+        api = mock_api_builder.build()
+        license_collector.api = api
+
+        await license_collector.collect(org_id, org_name)
+
+        parent = license_collector.parent
+        assert len(parent._metrics) == 0
+
+    async def test_fetch_licenses_overview_uses_inventory_when_present(self, license_collector):
+        """_fetch_licenses_overview must prefer the inventory cache over a direct API call."""
+        org_id = "1100"
+
+        class StubInventory:
+            def __init__(self) -> None:
+                self.calls: list[str] = []
+
+            async def get_licenses_overview(self, org_id: str) -> dict | None:
+                self.calls.append(org_id)
+                return {"status": "OK", "licensedDeviceCounts": {"MS": 1}}
+
+        stub = StubInventory()
+        license_collector.inventory = stub
+
+        result = await license_collector._fetch_licenses_overview(org_id)
+
+        assert result == {"status": "OK", "licensedDeviceCounts": {"MS": 1}}
+        assert stub.calls == [org_id]
+
+    async def test_fetch_licenses_uses_inventory_when_present(self, license_collector):
+        """_fetch_licenses must prefer the inventory cache over a direct API call (F-102)."""
+        org_id = "1200"
+
+        class StubInventory:
+            def __init__(self) -> None:
+                self.calls: list[str] = []
+
+            async def get_licenses(self, org_id: str) -> list | None:
+                self.calls.append(org_id)
+                return [{"licenseType": "ENT", "state": "active"}]
+
+        stub = StubInventory()
+        license_collector.inventory = stub
+
+        result = await license_collector._fetch_licenses(org_id)
+
+        assert result == [{"licenseType": "ENT", "state": "active"}]
+        assert stub.calls == [org_id]

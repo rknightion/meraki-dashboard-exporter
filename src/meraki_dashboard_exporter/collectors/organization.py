@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Any, cast
 
 from ..core.api_helpers import create_api_helper
@@ -11,6 +12,7 @@ from ..core.collector import MetricCollector
 from ..core.constants import OrgMetricName, UpdateTier
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.error_handling import (
+    CollectorError,
     DataValidationError,
     ErrorCategory,
     validate_response_format,
@@ -41,6 +43,10 @@ if TYPE_CHECKING:
     from ..services.inventory import OrganizationInventory
 
 logger = get_logger(__name__)
+
+# getOrganizationSummaryTopApplicationsCategoriesByUsage documents "Maximum is 50"
+# for `quantity` (SDK 3.2.0 docstring) -- see bug-bash finding F-042.
+_APPLICATION_USAGE_MAX_QUANTITY = 50
 
 
 @register_collector(UpdateTier.MEDIUM)
@@ -225,28 +231,28 @@ class OrganizationCollector(MetricCollector):
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME],
         )
 
-        # Application usage metrics
+        # Application usage metrics (API default rolling window is 1 day)
         self._application_usage_total_mb = self._create_gauge(
             OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_MB,
-            "Total application usage in MB by category",
+            "Total application usage in MB by category over the trailing 1-day window",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
         )
 
         self._application_usage_downstream_mb = self._create_gauge(
             OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_MB,
-            "Downstream application usage in MB by category",
+            "Downstream application usage in MB by category over the trailing 1-day window",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
         )
 
         self._application_usage_upstream_mb = self._create_gauge(
             OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_MB,
-            "Upstream application usage in MB by category",
+            "Upstream application usage in MB by category over the trailing 1-day window",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
         )
 
         self._application_usage_percentage = self._create_gauge(
             OrgMetricName.ORG_APPLICATION_USAGE_PERCENTAGE,
-            "Application usage percentage by category",
+            "Application usage percentage by category over the trailing 1-day window",
             labelnames=[LabelName.ORG_ID, LabelName.ORG_NAME, LabelName.CATEGORY],
         )
 
@@ -355,11 +361,10 @@ class OrganizationCollector(MetricCollector):
             self._org_collection_status.labels(**org_labels).set(0)
             return
 
+        org_labels = create_org_labels(org)
+
         try:
             with LogContext(org_id=org_id, org_name=org_name):
-                # Create org labels using helper
-                org_labels = create_org_labels(org)
-
                 # Set organization info
                 if self._org_info:
                     self._org_info.labels(**org_labels).info({
@@ -369,33 +374,115 @@ class OrganizationCollector(MetricCollector):
                 else:
                     logger.error("_org_info metric not initialized")
 
-                # Collect various metrics sequentially
-                await self._collect_api_metrics(org_id, org_name)
+                # Collect every sub-collection, tracking (not raising) failures so
+                # one broken endpoint never prevents the rest of this org's metrics
+                # from being collected.
+                failed_sub_collections = await self._run_org_sub_collections(org_id, org_name)
 
-                await self._collect_network_metrics(org_id, org_name)
-                await self._collect_device_metrics(org_id, org_name)
-                await self._collect_device_counts_by_model(org_id, org_name)
-                await self._collect_device_availability_metrics(org_id, org_name)
-                await self._collect_device_availability_changes_metrics(org_id, org_name)
-                await self._collect_firmware_metrics(org_id, org_name)
-                await self._collect_license_metrics(org_id, org_name)
-                await self._collect_client_overview(org_id, org_name)
-                await self._collect_packet_capture_metrics(org_id, org_name)
-                await self._collect_application_usage_metrics(org_id, org_name)
-
-            # Record success after all sub-collections complete
-            self.org_health_tracker.record_success(org_id, org_name)
-            self._org_collection_status.labels(**org_labels).set(1)
+            if failed_sub_collections:
+                # At least one sub-collection failed with a real (non-404) error
+                # this cycle. Previously every sub-collection swallowed its own
+                # exceptions, so this branch -- and OrgHealthTracker.record_failure
+                # / exporter_org_collection_status=0 -- could never trigger even
+                # when an org's API access was completely broken (bug-bash F-040).
+                logger.warning(
+                    "One or more sub-collections failed for organization",
+                    org_id=org_id,
+                    org_name=org_name,
+                    failed_sub_collections=failed_sub_collections,
+                )
+                self.org_health_tracker.record_failure(org_id, org_name)
+                self._org_collection_status.labels(**org_labels).set(0)
+            else:
+                self.org_health_tracker.record_success(org_id, org_name)
+                self._org_collection_status.labels(**org_labels).set(1)
 
         except Exception:
+            # Reached for errors outside the individually-tracked sub-collections
+            # (e.g. building org_labels or setting _org_info).
             logger.exception(
                 "Failed to collect metrics for organization",
                 org_id=org_id,
                 org_name=org_name,
             )
             self.org_health_tracker.record_failure(org_id, org_name)
-            org_labels = create_org_labels(org)
             self._org_collection_status.labels(**org_labels).set(0)
+
+    async def _run_org_sub_collections(self, org_id: str, org_name: str) -> list[str]:
+        """Run every per-organization sub-collection, tracking which ones fail.
+
+        Every sub-collection is attempted even if an earlier one failed, so a
+        single broken or unavailable endpoint never prevents metrics for the
+        rest of the organization from being collected. A 404 (endpoint not
+        available for this org -- e.g. packet captures or firmware upgrade
+        history not applicable) is treated as expected, not a failure.
+
+        Note: `api_metrics`, `firmware_metrics`,
+        `device_availability_changes_metrics`, `license_metrics`, and
+        `client_overview` delegate to sub-collectors in
+        `organization_collectors/` that fully swallow their own exceptions
+        (by design, for resilience) and therefore can never appear in the
+        returned failure list -- only the six sub-collections implemented
+        directly in this module can currently be observed failing here.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        Returns
+        -------
+        list[str]
+            Names of sub-collections that raised a non-404 exception this
+            cycle (empty if every sub-collection succeeded or 404'd).
+
+        """
+        failed: list[str] = []
+
+        async def _attempt(name: str, coro: Coroutine[Any, Any, None]) -> None:
+            try:
+                await coro
+            except CollectorError as exc:
+                if exc.category == ErrorCategory.API_NOT_AVAILABLE:
+                    return
+                failed.append(name)
+            except Exception:
+                logger.exception(
+                    "Sub-collection failed for organization",
+                    org_id=org_id,
+                    org_name=org_name,
+                    sub_collection=name,
+                )
+                failed.append(name)
+
+        await _attempt("api_metrics", self._collect_api_metrics(org_id, org_name))
+        await _attempt("network_metrics", self._collect_network_metrics(org_id, org_name))
+        await _attempt("device_metrics", self._collect_device_metrics(org_id, org_name))
+        await _attempt(
+            "device_counts_by_model", self._collect_device_counts_by_model(org_id, org_name)
+        )
+        await _attempt(
+            "device_availability_metrics",
+            self._collect_device_availability_metrics(org_id, org_name),
+        )
+        await _attempt(
+            "device_availability_changes_metrics",
+            self._collect_device_availability_changes_metrics(org_id, org_name),
+        )
+        await _attempt("firmware_metrics", self._collect_firmware_metrics(org_id, org_name))
+        await _attempt("license_metrics", self._collect_license_metrics(org_id, org_name))
+        await _attempt("client_overview", self._collect_client_overview(org_id, org_name))
+        await _attempt(
+            "packet_capture_metrics", self._collect_packet_capture_metrics(org_id, org_name)
+        )
+        await _attempt(
+            "application_usage_metrics",
+            self._collect_application_usage_metrics(org_id, org_name),
+        )
+
+        return failed
 
     @with_error_handling(
         operation="Collect API usage metrics",
@@ -455,7 +542,7 @@ class OrganizationCollector(MetricCollector):
 
     @with_error_handling(
         operation="Collect network metrics",
-        continue_on_error=True,
+        continue_on_error=False,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
     async def _collect_network_metrics(self, org_id: str, org_name: str) -> None:
@@ -469,33 +556,25 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        try:
-            networks = await self.api_helper.get_organization_networks(org_id)
-            if not networks:
-                logger.warning("No networks found or error fetching networks", org_id=org_id)
-                return
+        networks = await self.api_helper.get_organization_networks(org_id)
+        if not networks:
+            logger.warning("No networks found or error fetching networks", org_id=org_id)
+            return
 
-            # Count total networks
-            total_networks = len(networks)
-            # Create org labels using helper
-            org_data = {"id": org_id, "name": org_name}
-            org_labels = create_org_labels(org_data)
+        # Count total networks
+        total_networks = len(networks)
+        # Create org labels using helper
+        org_data = {"id": org_id, "name": org_name}
+        org_labels = create_org_labels(org_data)
 
-            if self._networks_total:
-                self._networks_total.labels(**org_labels).set(total_networks)
-            else:
-                logger.error("_networks_total metric not initialized")
-
-        except Exception:
-            logger.exception(
-                "Failed to collect network metrics",
-                org_id=org_id,
-                org_name=org_name,
-            )
+        if self._networks_total:
+            self._networks_total.labels(**org_labels).set(total_networks)
+        else:
+            logger.error("_networks_total metric not initialized")
 
     @with_error_handling(
         operation="Collect device metrics",
-        continue_on_error=True,
+        continue_on_error=False,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
     async def _collect_device_metrics(self, org_id: str, org_name: str) -> None:
@@ -509,55 +588,57 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        try:
-            devices = await self.api_helper.get_organization_devices(org_id)
-            if not devices:
-                return
+        devices = await self.api_helper.get_organization_devices(org_id)
+        if not devices:
+            return
 
-            # Validate response format (handles API error responses like rate limits)
-            devices = validate_response_format(
-                devices, expected_type=list, operation="getOrganizationDevices"
-            )
+        # Validate response format (handles API error responses like rate limits)
+        devices = validate_response_format(
+            devices, expected_type=list, operation="getOrganizationDevices"
+        )
 
-            # Count devices by type
-            device_counts: dict[str, int] = {}
-            for device in devices:
-                model = device.get("model", "")
-                # Extract device type from model (e.g., "MS" from "MS210-8")
-                device_type = model[:2] if len(model) >= 2 else "Unknown"
-                device_counts[device_type] = device_counts.get(device_type, 0) + 1
+        # Count devices by type
+        device_counts: dict[str, int] = {}
+        for device in devices:
+            model = device.get("model", "")
+            # Extract device type from model (e.g., "MS" from "MS210-8")
+            device_type = model[:2] if len(model) >= 2 else "Unknown"
+            device_counts[device_type] = device_counts.get(device_type, 0) + 1
 
-            # Set metrics for each device type
-            # Create org labels using helper
-            org_data = {"id": org_id, "name": org_name}
+        # Set metrics for each device type
+        # Create org labels using helper
+        org_data = {"id": org_id, "name": org_name}
 
-            if self._devices_total:
-                for device_type, count in device_counts.items():
-                    labels = create_org_labels(
-                        org_data,
-                        device_type=device_type,
-                    )
-                    # Route through _set_metric for expiration tracking so device
-                    # types that disappear are removed instead of frozen forever.
-                    self._set_metric(
-                        self._devices_total,
-                        labels,
-                        count,
-                        OrgMetricName.ORG_DEVICES_TOTAL.value,
-                    )
-            else:
-                logger.error("_devices_total metric not initialized")
-
-        except Exception:
-            logger.exception(
-                "Failed to collect device metrics",
-                org_id=org_id,
-                org_name=org_name,
-            )
+        if self._devices_total:
+            for device_type, count in device_counts.items():
+                labels = create_org_labels(
+                    org_data,
+                    device_type=device_type,
+                )
+                # Route through _set_metric for expiration tracking so device
+                # types that disappear are removed instead of frozen forever.
+                self._set_metric(
+                    self._devices_total,
+                    labels,
+                    count,
+                    OrgMetricName.ORG_DEVICES_TOTAL.value,
+                )
+        else:
+            logger.error("_devices_total metric not initialized")
 
     @log_api_call("getOrganizationDevicesOverviewByModel")
+    @with_error_handling(
+        operation="Collect device counts by model",
+        continue_on_error=False,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
     async def _collect_device_counts_by_model(self, org_id: str, org_name: str) -> None:
         """Collect device counts by specific model.
+
+        Scoped to the configured NetworkFilter (via ``networkIds``) so this
+        metric stays consistent with its inventory-filtered sibling
+        ``meraki_org_devices_total`` instead of always covering the whole org
+        (bug-bash finding F-098).
 
         Parameters
         ----------
@@ -567,68 +648,72 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        try:
-            with LogContext(org_id=org_id, org_name=org_name):
-                # This endpoint can return either the direct object or one wrapped
-                # in {"items": [...]}, so we cannot use validate_response_format
-                # (which unwraps "items"). Detect the SDK's exhausted-retry error
-                # shape inline and let the existing shape branches below handle the
-                # rest.
-                overview = await asyncio.to_thread(
-                    self.api.organizations.getOrganizationDevicesOverviewByModel,
-                    org_id,
-                )
-                if isinstance(overview, dict) and "errors" in overview:
-                    raise DataValidationError(
-                        "getOrganizationDevicesOverviewByModel: API returned errors: "
-                        f"{overview['errors']}",
-                        {"errors": overview["errors"]},
-                    )
+        network_ids: list[str] | None = None
+        if self.inventory:
+            allowed_network_ids = await self.inventory.get_allowed_network_ids(org_id)
+            if allowed_network_ids is not None:
+                network_ids = sorted(allowed_network_ids)
 
-            # Response can be either the direct object or wrapped in {"items": []}
-            if isinstance(overview, dict) and "items" in overview:
-                items = overview["items"]
-            elif isinstance(overview, dict) and "counts" in overview:
-                # Direct response format
-                counts = overview.get("counts", [])
-            else:
-                logger.warning(
-                    "Unexpected response format for device overview by model",
-                    org_id=org_id,
-                    response_type=type(overview).__name__,
-                )
-                return
+        with LogContext(org_id=org_id, org_name=org_name):
+            kwargs: dict[str, Any] = {}
+            if network_ids is not None:
+                kwargs["networkIds"] = network_ids
 
-            # Process counts
-            if "counts" in locals():
-                # Create org labels using helper
-                org_data = {"id": org_id, "name": org_name}
-
-                if self._devices_by_model_total:
-                    for model_data in counts:
-                        model = model_data.get("model", "Unknown")
-                        count = model_data.get("total", 0)
-                        labels = create_org_labels(
-                            org_data,
-                            model=model,
-                        )
-                        # Route through _set_metric so models that drop out of the
-                        # fleet expire instead of freezing at their last count.
-                        self._set_metric(
-                            self._devices_by_model_total,
-                            labels,
-                            count,
-                            OrgMetricName.ORG_DEVICES_BY_MODEL_TOTAL.value,
-                        )
-                else:
-                    logger.error("_devices_by_model_total metric not initialized")
-
-        except Exception:
-            logger.exception(
-                "Failed to collect device counts by model",
-                org_id=org_id,
-                org_name=org_name,
+            # This endpoint's documented response is a plain {"counts": [...]}
+            # object, but some org bulk endpoints wrap their payload in
+            # {"items": [...]} -- handle that shape too rather than silently
+            # dropping it (bug-bash finding F-041). Detect the SDK's
+            # exhausted-retry error shape inline.
+            overview = await asyncio.to_thread(
+                self.api.organizations.getOrganizationDevicesOverviewByModel,
+                org_id,
+                **kwargs,
             )
+            if isinstance(overview, dict) and "errors" in overview:
+                raise DataValidationError(
+                    "getOrganizationDevicesOverviewByModel: API returned errors: "
+                    f"{overview['errors']}",
+                    {"errors": overview["errors"]},
+                )
+
+        counts: list[dict[str, Any]] | None = None
+        if isinstance(overview, dict) and "counts" in overview:
+            counts = overview.get("counts", [])
+        elif isinstance(overview, dict) and "items" in overview:
+            counts = overview["items"]
+        else:
+            logger.warning(
+                "Unexpected response format for device overview by model",
+                org_id=org_id,
+                response_type=type(overview).__name__,
+            )
+            return
+
+        if not counts:
+            logger.debug("No device-by-model counts returned", org_id=org_id)
+            return
+
+        # Create org labels using helper
+        org_data = {"id": org_id, "name": org_name}
+
+        if self._devices_by_model_total:
+            for model_data in counts:
+                model = model_data.get("model", "Unknown")
+                count = model_data.get("total", 0)
+                labels = create_org_labels(
+                    org_data,
+                    model=model,
+                )
+                # Route through _set_metric so models that drop out of the
+                # fleet expire instead of freezing at their last count.
+                self._set_metric(
+                    self._devices_by_model_total,
+                    labels,
+                    count,
+                    OrgMetricName.ORG_DEVICES_BY_MODEL_TOTAL.value,
+                )
+        else:
+            logger.error("_devices_by_model_total metric not initialized")
 
     async def _collect_license_metrics(self, org_id: str, org_name: str) -> None:
         """Collect license metrics.
@@ -643,6 +728,11 @@ class OrganizationCollector(MetricCollector):
         """
         await self.license_collector.collect(org_id, org_name)
 
+    @with_error_handling(
+        operation="Collect device availability metrics",
+        continue_on_error=False,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
     async def _collect_device_availability_metrics(self, org_id: str, org_name: str) -> None:
         """Collect device availability metrics.
 
@@ -656,66 +746,58 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        try:
-            with LogContext(org_id=org_id, org_name=org_name):
-                # Use inventory cache if available
-                if self.inventory:
-                    logger.debug("Using inventory cache for device availabilities", org_id=org_id)
-                    availabilities = await self.inventory.get_device_availabilities(org_id)
-                else:
-                    logger.debug(
-                        "Inventory not available, fetching availabilities directly", org_id=org_id
-                    )
-                    availabilities_response = await asyncio.to_thread(
-                        self.api.organizations.getOrganizationDevicesAvailabilities,
-                        org_id,
-                        total_pages="all",
-                    )
-                    availabilities = cast(
-                        list[dict[str, Any]],
-                        validate_response_format(
-                            availabilities_response,
-                            expected_type=list,
-                            operation="getOrganizationDevicesAvailabilities",
-                        ),
-                    )
-
-            # Group by status and product type
-            availability_counts: dict[tuple[str, str], int] = {}
-            for device in availabilities:
-                status = device.get("status", "unknown")
-                product_type = device.get("productType", "unknown")
-                key = (status, product_type)
-                availability_counts[key] = availability_counts.get(key, 0) + 1
-
-            # Set metrics for each combination
-            # Create org labels using helper
-            org_data = {"id": org_id, "name": org_name}
-
-            if self._devices_availability_total:
-                for (status, product_type), count in availability_counts.items():
-                    labels = create_org_labels(
-                        org_data,
-                        status=status,
-                        product_type=product_type,
-                    )
-                    # Route through _set_metric so absent status/product-type combos
-                    # expire instead of holding a stale count forever.
-                    self._set_metric(
-                        self._devices_availability_total,
-                        labels,
-                        count,
-                        OrgMetricName.ORG_DEVICES_AVAILABILITY_TOTAL.value,
-                    )
+        with LogContext(org_id=org_id, org_name=org_name):
+            # Use inventory cache if available
+            if self.inventory:
+                logger.debug("Using inventory cache for device availabilities", org_id=org_id)
+                availabilities = await self.inventory.get_device_availabilities(org_id)
             else:
-                logger.error("_devices_availability_total metric not initialized")
+                logger.debug(
+                    "Inventory not available, fetching availabilities directly", org_id=org_id
+                )
+                availabilities_response = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationDevicesAvailabilities,
+                    org_id,
+                    total_pages="all",
+                )
+                availabilities = cast(
+                    list[dict[str, Any]],
+                    validate_response_format(
+                        availabilities_response,
+                        expected_type=list,
+                        operation="getOrganizationDevicesAvailabilities",
+                    ),
+                )
 
-        except Exception:
-            logger.exception(
-                "Failed to collect device availability metrics",
-                org_id=org_id,
-                org_name=org_name,
-            )
+        # Group by status and product type
+        availability_counts: dict[tuple[str, str], int] = {}
+        for device in availabilities:
+            status = device.get("status", "unknown")
+            product_type = device.get("productType", "unknown")
+            key = (status, product_type)
+            availability_counts[key] = availability_counts.get(key, 0) + 1
+
+        # Set metrics for each combination
+        # Create org labels using helper
+        org_data = {"id": org_id, "name": org_name}
+
+        if self._devices_availability_total:
+            for (status, product_type), count in availability_counts.items():
+                labels = create_org_labels(
+                    org_data,
+                    status=status,
+                    product_type=product_type,
+                )
+                # Route through _set_metric so absent status/product-type combos
+                # expire instead of holding a stale count forever.
+                self._set_metric(
+                    self._devices_availability_total,
+                    labels,
+                    count,
+                    OrgMetricName.ORG_DEVICES_AVAILABILITY_TOTAL.value,
+                )
+        else:
+            logger.error("_devices_availability_total metric not initialized")
 
     async def _collect_client_overview(self, org_id: str, org_name: str) -> None:
         """Collect client overview metrics.
@@ -733,11 +815,16 @@ class OrganizationCollector(MetricCollector):
     @log_api_call("getOrganizationDevicesPacketCaptureCaptures")
     @with_error_handling(
         operation="Collect packet capture metrics",
-        continue_on_error=True,
+        continue_on_error=False,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
     async def _collect_packet_capture_metrics(self, org_id: str, org_name: str) -> None:
         """Collect packet capture metrics.
+
+        Scoped to the configured NetworkFilter (via ``networkIds``) so packet
+        capture counts stay consistent with the exporter's other
+        inventory-filtered org metrics instead of always covering the whole
+        org (bug-bash finding F-098).
 
         Parameters
         ----------
@@ -747,63 +834,64 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        try:
-            with LogContext(org_id=org_id, org_name=org_name):
-                # Use perPage=3 to minimize data transfer while still getting the meta counts.
-                # Note: this endpoint returns {"items": [...], "meta": {...}}, so we cannot
-                # use validate_response_format (which unwraps "items"). Check for the
-                # SDK's exhausted-retry error shape inline instead.
-                response = await asyncio.to_thread(
-                    self.api.organizations.getOrganizationDevicesPacketCaptureCaptures,
-                    org_id,
-                    perPage=3,
+        network_ids: list[str] | None = None
+        if self.inventory:
+            allowed_network_ids = await self.inventory.get_allowed_network_ids(org_id)
+            if allowed_network_ids is not None:
+                network_ids = sorted(allowed_network_ids)
+
+        with LogContext(org_id=org_id, org_name=org_name):
+            # Use perPage=3 to minimize data transfer while still getting the meta counts.
+            # Note: this endpoint returns {"items": [...], "meta": {...}}, so we cannot
+            # use validate_response_format (which unwraps "items"). Check for the
+            # SDK's exhausted-retry error shape inline instead.
+            kwargs: dict[str, Any] = {"perPage": 3}
+            if network_ids is not None:
+                kwargs["networkIds"] = network_ids
+            response = await asyncio.to_thread(
+                self.api.organizations.getOrganizationDevicesPacketCaptureCaptures,
+                org_id,
+                **kwargs,
+            )
+            if isinstance(response, dict) and "errors" in response:
+                raise DataValidationError(
+                    "getOrganizationDevicesPacketCaptureCaptures: API returned errors: "
+                    f"{response['errors']}",
+                    {"errors": response["errors"]},
                 )
-                if isinstance(response, dict) and "errors" in response:
-                    raise DataValidationError(
-                        "getOrganizationDevicesPacketCaptureCaptures: API returned errors: "
-                        f"{response['errors']}",
-                        {"errors": response["errors"]},
-                    )
 
-            # Extract meta counts
-            if isinstance(response, dict) and "meta" in response and "counts" in response["meta"]:
-                counts = response["meta"]["counts"].get("items", {})
-                total = counts.get("total", 0)
-                remaining = counts.get("remaining", 0)
+        # Extract meta counts
+        if isinstance(response, dict) and "meta" in response and "counts" in response["meta"]:
+            counts = response["meta"]["counts"].get("items", {})
+            total = counts.get("total", 0)
+            remaining = counts.get("remaining", 0)
 
-                # Set metrics
-                # Create org labels using helper
-                org_data = {"id": org_id, "name": org_name}
-                org_labels = create_org_labels(org_data)
+            # Set metrics
+            # Create org labels using helper
+            org_data = {"id": org_id, "name": org_name}
+            org_labels = create_org_labels(org_data)
 
-                if self._packetcaptures_total:
-                    self._packetcaptures_total.labels(**org_labels).set(total)
-                else:
-                    logger.error("_packetcaptures_total metric not initialized")
-
-                if self._packetcaptures_remaining:
-                    self._packetcaptures_remaining.labels(**org_labels).set(remaining)
-                else:
-                    logger.error("_packetcaptures_remaining metric not initialized")
-
-                logger.debug(
-                    "Collected packet capture metrics",
-                    org_id=org_id,
-                    total=total,
-                    remaining=remaining,
-                )
+            if self._packetcaptures_total:
+                self._packetcaptures_total.labels(**org_labels).set(total)
             else:
-                logger.warning(
-                    "Unexpected response format for packet captures",
-                    org_id=org_id,
-                    response_type=type(response).__name__,
-                )
+                logger.error("_packetcaptures_total metric not initialized")
 
-        except Exception:
-            logger.exception(
-                "Failed to collect packet capture metrics",
+            if self._packetcaptures_remaining:
+                self._packetcaptures_remaining.labels(**org_labels).set(remaining)
+            else:
+                logger.error("_packetcaptures_remaining metric not initialized")
+
+            logger.debug(
+                "Collected packet capture metrics",
                 org_id=org_id,
-                org_name=org_name,
+                total=total,
+                remaining=remaining,
+            )
+        else:
+            logger.warning(
+                "Unexpected response format for packet captures",
+                org_id=org_id,
+                response_type=type(response).__name__,
             )
 
     def _sanitize_category_name(self, category: str) -> str:
@@ -859,11 +947,17 @@ class OrganizationCollector(MetricCollector):
     @log_api_call("getOrganizationSummaryTopApplicationsCategoriesByUsage")
     @with_error_handling(
         operation="Collect application usage metrics",
-        continue_on_error=True,
+        continue_on_error=False,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
     async def _collect_application_usage_metrics(self, org_id: str, org_name: str) -> None:
         """Collect application usage metrics by category.
+
+        ``quantity`` is clamped to ``_APPLICATION_USAGE_MAX_QUANTITY`` (50),
+        the documented API maximum for
+        ``getOrganizationSummaryTopApplicationsCategoriesByUsage`` (bug-bash
+        finding F-042). No ``timespan`` is passed, so values reflect the
+        API's default 1-day rolling window.
 
         Parameters
         ----------
@@ -873,63 +967,54 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        try:
-            with LogContext(org_id=org_id, org_name=org_name):
-                # Call API with quantity=1000 and no timespan
-                raw_response = await asyncio.to_thread(
-                    self.api.organizations.getOrganizationSummaryTopApplicationsCategoriesByUsage,
-                    org_id,
-                    quantity=1000,
-                )
-                response = cast(
-                    list[dict[str, Any]],
-                    validate_response_format(
-                        raw_response,
-                        expected_type=list,
-                        operation="getOrganizationSummaryTopApplicationsCategoriesByUsage",
-                    ),
-                )
-
-            # Process each category
-            for category_data in response:
-                category = category_data.get("category", "Unknown")
-                sanitized_category = self._sanitize_category_name(category)
-
-                # Convert MB to MB (values are already in MB based on the example)
-                total_mb = category_data.get("total", 0)
-                downstream_mb = category_data.get("downstream", 0)
-                upstream_mb = category_data.get("upstream", 0)
-                percentage = category_data.get("percentage", 0)
-
-                # Set metrics
-                # Create org labels using helper
-                org_data = {"id": org_id, "name": org_name}
-                labels = create_org_labels(
-                    org_data,
-                    category=sanitized_category,
-                )
-
-                if self._application_usage_total_mb:
-                    self._application_usage_total_mb.labels(**labels).set(total_mb)
-
-                if self._application_usage_downstream_mb:
-                    self._application_usage_downstream_mb.labels(**labels).set(downstream_mb)
-
-                if self._application_usage_upstream_mb:
-                    self._application_usage_upstream_mb.labels(**labels).set(upstream_mb)
-
-                if self._application_usage_percentage:
-                    self._application_usage_percentage.labels(**labels).set(percentage)
-
-            logger.debug(
-                "Collected application usage metrics",
-                org_id=org_id,
-                categories_count=len(response),
+        with LogContext(org_id=org_id, org_name=org_name):
+            raw_response = await asyncio.to_thread(
+                self.api.organizations.getOrganizationSummaryTopApplicationsCategoriesByUsage,
+                org_id,
+                quantity=_APPLICATION_USAGE_MAX_QUANTITY,
+            )
+            response = cast(
+                list[dict[str, Any]],
+                validate_response_format(
+                    raw_response,
+                    expected_type=list,
+                    operation="getOrganizationSummaryTopApplicationsCategoriesByUsage",
+                ),
             )
 
-        except Exception:
-            logger.exception(
-                "Failed to collect application usage metrics",
-                org_id=org_id,
-                org_name=org_name,
+        # Process each category
+        for category_data in response:
+            category = category_data.get("category", "Unknown")
+            sanitized_category = self._sanitize_category_name(category)
+
+            # Convert MB to MB (values are already in MB based on the example)
+            total_mb = category_data.get("total", 0)
+            downstream_mb = category_data.get("downstream", 0)
+            upstream_mb = category_data.get("upstream", 0)
+            percentage = category_data.get("percentage", 0)
+
+            # Set metrics
+            # Create org labels using helper
+            org_data = {"id": org_id, "name": org_name}
+            labels = create_org_labels(
+                org_data,
+                category=sanitized_category,
             )
+
+            if self._application_usage_total_mb:
+                self._application_usage_total_mb.labels(**labels).set(total_mb)
+
+            if self._application_usage_downstream_mb:
+                self._application_usage_downstream_mb.labels(**labels).set(downstream_mb)
+
+            if self._application_usage_upstream_mb:
+                self._application_usage_upstream_mb.labels(**labels).set(upstream_mb)
+
+            if self._application_usage_percentage:
+                self._application_usage_percentage.labels(**labels).set(percentage)
+
+        logger.debug(
+            "Collected application usage metrics",
+            org_id=org_id,
+            categories_count=len(response),
+        )

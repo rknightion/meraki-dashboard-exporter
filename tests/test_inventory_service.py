@@ -626,14 +626,28 @@ class TestOrganizationInventoryValidation:
     async def test_get_licenses_overview_swallows_validation_error(
         self, mock_api, inventory_service
     ) -> None:
-        """Best-effort endpoint catches validation errors and returns empty dict."""
+        """Best-effort endpoint catches validation errors and returns None (F-100).
+
+        None is distinct from a legitimately empty ``{}`` overview response,
+        so callers can tell "fetch failed" apart from "no license data".
+        """
         mock_api.organizations.getOrganizationLicensesOverview.return_value = {
             "errors": ["unsupported"]
         }
 
         result = await inventory_service.get_licenses_overview("ORG")
-        assert result == {}
+        assert result is None
         assert "ORG" not in inventory_service._licenses_overview
+
+    async def test_get_licenses_swallows_validation_error(
+        self, mock_api, inventory_service
+    ) -> None:
+        """Best-effort endpoint catches validation errors and returns None (F-100)."""
+        mock_api.organizations.getOrganizationLicenses.return_value = {"errors": ["unsupported"]}
+
+        result = await inventory_service.get_licenses("ORG")
+        assert result is None
+        assert "ORG" not in inventory_service._licenses
 
     async def test_get_login_security_swallows_validation_error(
         self, mock_api, inventory_service
@@ -750,3 +764,154 @@ class TestFilterMatchSeriesExpiry:
         assert (
             inventory_service._cache_size._name == CollectorMetricName.INVENTORY_CACHE_ENTRIES.value
         )
+
+
+class TestOrganizationInventoryLicenses:
+    """`get_licenses_overview` / `get_licenses` caching and failure semantics."""
+
+    async def test_get_licenses_overview_caching(self, mock_api, inventory_service) -> None:
+        """The overview is cached across calls - only one API call."""
+        org_id = "org_lic_1"
+        mock_api.organizations.getOrganizationLicensesOverview.return_value = {
+            "status": "OK",
+            "licensedDeviceCounts": {"MS": 5},
+        }
+
+        result1 = await inventory_service.get_licenses_overview(org_id)
+        result2 = await inventory_service.get_licenses_overview(org_id)
+
+        assert result1 == {"status": "OK", "licensedDeviceCounts": {"MS": 5}}
+        assert result2 == result1
+        assert mock_api.organizations.getOrganizationLicensesOverview.call_count == 1
+
+    async def test_get_licenses_overview_returns_none_on_exception(
+        self, mock_api, inventory_service
+    ) -> None:
+        """A raised exception (not just an error-shaped body) also yields None (F-100)."""
+        org_id = "org_lic_2"
+        mock_api.organizations.getOrganizationLicensesOverview.side_effect = Exception(
+            "Connection timeout"
+        )
+
+        result = await inventory_service.get_licenses_overview(org_id)
+
+        assert result is None
+        assert org_id not in inventory_service._licenses_overview
+
+    async def test_get_licenses_caching(self, mock_api, inventory_service) -> None:
+        """The per-device license list is cached across calls (F-102) - only one API call."""
+        org_id = "org_lic_3"
+        licenses = [
+            {"licenseType": "ENT", "state": "active"},
+            {"licenseType": "ENT", "state": "active"},
+        ]
+        mock_api.organizations.getOrganizationLicenses.return_value = licenses
+
+        result1 = await inventory_service.get_licenses(org_id)
+        result2 = await inventory_service.get_licenses(org_id)
+
+        assert result1 == licenses
+        assert result2 == licenses
+        assert mock_api.organizations.getOrganizationLicenses.call_count == 1
+
+    async def test_get_licenses_passes_total_pages_all(self, mock_api, inventory_service) -> None:
+        """get_licenses must paginate the full list, mirroring the collector's own fetch."""
+        org_id = "org_lic_4"
+        mock_api.organizations.getOrganizationLicenses.return_value = []
+
+        await inventory_service.get_licenses(org_id)
+
+        call_args = mock_api.organizations.getOrganizationLicenses.call_args
+        assert call_args[0][0] == org_id
+        assert call_args[1]["total_pages"] == "all"
+
+    async def test_get_licenses_returns_none_on_exception(
+        self, mock_api, inventory_service
+    ) -> None:
+        """A raised exception yields None, distinct from a legitimately empty list."""
+        org_id = "org_lic_5"
+        mock_api.organizations.getOrganizationLicenses.side_effect = Exception("Rate limited")
+
+        result = await inventory_service.get_licenses(org_id)
+
+        assert result is None
+        assert org_id not in inventory_service._licenses
+
+    async def test_get_licenses_force_refresh_bypasses_cache(
+        self, mock_api, inventory_service
+    ) -> None:
+        """force_refresh=True bypasses the cache and re-fetches."""
+        org_id = "org_lic_6"
+        mock_api.organizations.getOrganizationLicenses.return_value = []
+
+        await inventory_service.get_licenses(org_id)
+        await inventory_service.get_licenses(org_id, force_refresh=True)
+
+        assert mock_api.organizations.getOrganizationLicenses.call_count == 2
+
+    async def test_invalidate_clears_license_list_cache(self, mock_api, inventory_service) -> None:
+        """invalidate(org_id) must also clear the new per-device license cache."""
+        org_id = "org_lic_7"
+        mock_api.organizations.getOrganizationLicenses.return_value = []
+
+        await inventory_service.get_licenses(org_id)
+        assert org_id in inventory_service._licenses
+
+        await inventory_service.invalidate(org_id=org_id)
+        assert org_id not in inventory_service._licenses
+        assert org_id not in inventory_service._license_list_timestamps
+
+
+class TestOrganizationInventorySingleOrgName:
+    """Single-org mode must fetch the real organization name (F-116)."""
+
+    async def test_single_org_mode_fetches_real_name(
+        self, mock_api, mock_settings, inventory_service
+    ) -> None:
+        """getOrganization is called and its name used, not the placeholder org_id."""
+        org_id = "123456"
+        mock_settings.meraki.org_id = org_id
+        mock_api.organizations.getOrganization.return_value = {
+            "id": org_id,
+            "name": "Acme Corp HQ",
+        }
+
+        result = await inventory_service.get_organizations()
+
+        assert len(result) == 1
+        assert result[0]["id"] == org_id
+        assert result[0]["name"] == "Acme Corp HQ"
+        mock_api.organizations.getOrganization.assert_called_once_with(org_id)
+        mock_api.organizations.getOrganizations.assert_not_called()
+
+    async def test_single_org_mode_falls_back_to_org_id_on_failure(
+        self, mock_api, mock_settings, inventory_service
+    ) -> None:
+        """If getOrganization fails, fall back to the org_id placeholder name."""
+        org_id = "654321"
+        mock_settings.meraki.org_id = org_id
+        mock_api.organizations.getOrganization.side_effect = Exception("Connection error")
+
+        result = await inventory_service.get_organizations()
+
+        assert len(result) == 1
+        assert result[0]["id"] == org_id
+        assert result[0]["name"] == org_id
+
+    async def test_single_org_mode_name_is_cached(
+        self, mock_api, mock_settings, inventory_service
+    ) -> None:
+        """The fetched org name is cached like any other organizations() call."""
+        org_id = "789012"
+        mock_settings.meraki.org_id = org_id
+        mock_api.organizations.getOrganization.return_value = {
+            "id": org_id,
+            "name": "Cached Org",
+        }
+
+        result1 = await inventory_service.get_organizations()
+        result2 = await inventory_service.get_organizations()
+
+        assert result1[0]["name"] == "Cached Org"
+        assert result2[0]["name"] == "Cached Org"
+        assert mock_api.organizations.getOrganization.call_count == 1

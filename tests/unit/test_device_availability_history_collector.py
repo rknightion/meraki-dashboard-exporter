@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -315,3 +316,141 @@ class TestDeviceAvailabilityHistoryCollector:
         assert call_args[1]["timespan"] == 300
         assert call_args[1]["total_pages"] == "all"
         assert result == []
+
+    async def test_fetch_timespan_follows_configured_medium_interval(
+        self, mock_api_builder, isolated_registry
+    ):
+        """F-057: the timespan must track settings.update_intervals.medium, not a constant."""
+        from pydantic import SecretStr
+
+        from meraki_dashboard_exporter.core.config import Settings
+        from meraki_dashboard_exporter.core.config_models import MerakiSettings, UpdateIntervals
+
+        settings = Settings(
+            meraki=MerakiSettings(
+                api_key=SecretStr("6bec40cf957de430a6f1f2baa056b367d6172e1e"), org_id="test-org-id"
+            ),
+            update_intervals=UpdateIntervals(fast=60, medium=900, slow=1800),
+        )
+
+        class MockParentCollector:
+            def __init__(self) -> None:
+                self.api = mock_api_builder.build()
+                self.settings = settings
+                self._api_calls: dict[str, int] = {}
+                self._metrics: dict[tuple[str, tuple[tuple[str, str], ...]], float] = {}
+
+            def _track_api_call(self, method_name: str) -> None:
+                self._api_calls[method_name] = self._api_calls.get(method_name, 0) + 1
+
+            def _set_metric_value(
+                self, metric_name: str, labels: dict[str, str], value: float | None
+            ) -> None:
+                if value is not None:
+                    key = (metric_name, tuple(sorted(labels.items())))
+                    self._metrics[key] = value
+
+        parent = MockParentCollector()
+        collector = DeviceAvailabilityHistoryCollector(parent=parent)  # type: ignore[arg-type]
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationDevicesAvailabilitiesChangeHistory", []
+        ).build()
+        collector.api = api
+
+        await collector._fetch_availability_change_history("test-org-123")
+
+        call_args = api.organizations.getOrganizationDevicesAvailabilitiesChangeHistory.call_args
+        assert call_args[1]["timespan"] == 900
+
+    async def test_collect_applies_network_filter(
+        self, availability_history_collector, mock_api_builder
+    ):
+        """F-010: events for networks excluded by NetworkFilter must not be counted."""
+        org_id = "999"
+        org_name = "Filtered Org"
+
+        events_response = [
+            {
+                "ts": "2026-07-01T00:00:00Z",
+                "device": {"serial": "Q2XX-0001", "productType": "wireless"},
+                "details": {"new": [{"name": "status", "value": "offline"}]},
+                "network": {"id": "N_INCLUDED", "name": "Included"},
+            },
+            {
+                "ts": "2026-07-01T00:01:00Z",
+                "device": {"serial": "Q2XX-0002", "productType": "wireless"},
+                "details": {"new": [{"name": "status", "value": "offline"}]},
+                "network": {"id": "N_EXCLUDED", "name": "Excluded"},
+            },
+        ]
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationDevicesAvailabilitiesChangeHistory", events_response
+        ).build()
+        availability_history_collector.api = api
+
+        availability_history_collector.inventory = MagicMock()
+        availability_history_collector.inventory.get_allowed_network_ids = AsyncMock(
+            return_value={"N_INCLUDED"}
+        )
+
+        await availability_history_collector.collect(org_id, org_name)
+
+        parent = availability_history_collector.parent
+        key = (
+            "_org_devices_availability_changes_total",
+            (
+                ("org_id", org_id),
+                ("org_name", org_name),
+                ("product_type", "wireless"),
+                ("status", "offline"),
+            ),
+        )
+        assert key in parent._metrics
+        # Only the event for N_INCLUDED should be counted.
+        assert parent._metrics[key] == 1
+
+    async def test_collect_zeroes_stale_combos_across_cycles(
+        self, availability_history_collector, mock_api_builder
+    ):
+        """F-056: a combo present last cycle but absent this cycle must report 0."""
+        org_id = "777"
+        org_name = "Flappy Org"
+
+        first_response = [
+            {
+                "ts": "2026-07-01T00:00:00Z",
+                "device": {"serial": "Q2XX-0001", "productType": "wireless"},
+                "details": {"new": [{"name": "status", "value": "offline"}]},
+                "network": {"id": "n1", "name": "Network 1"},
+            },
+        ]
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationDevicesAvailabilitiesChangeHistory", first_response
+        ).build()
+        availability_history_collector.api = api
+
+        await availability_history_collector.collect(org_id, org_name)
+
+        parent = availability_history_collector.parent
+        key = (
+            "_org_devices_availability_changes_total",
+            (
+                ("org_id", org_id),
+                ("org_name", org_name),
+                ("product_type", "wireless"),
+                ("status", "offline"),
+            ),
+        )
+        assert parent._metrics[key] == 1
+
+        # Second cycle: no further flaps for wireless/offline.
+        api2 = mock_api_builder.with_custom_response(
+            "getOrganizationDevicesAvailabilitiesChangeHistory", []
+        ).build()
+        availability_history_collector.api = api2
+
+        await availability_history_collector.collect(org_id, org_name)
+
+        assert parent._metrics[key] == 0

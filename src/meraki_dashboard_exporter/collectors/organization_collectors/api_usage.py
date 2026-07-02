@@ -21,6 +21,25 @@ logger = get_logger(__name__)
 class APIUsageCollector(BaseOrganizationCollector):
     """Collector for organization API usage metrics."""
 
+    def __init__(self, parent: Any) -> None:
+        """Initialize the API usage collector.
+
+        Parameters
+        ----------
+        parent : OrganizationCollector
+            Parent OrganizationCollector instance that has metrics defined.
+
+        """
+        super().__init__(parent)
+        # Per-org set of status codes ever observed in a valid API response.
+        # Cardinality is bounded by actual HTTP status codes the Meraki API
+        # reports (never attacker/user controlled), so it's safe to keep
+        # zeroing these on every cycle even once they stop appearing in the
+        # response (F-096: prevents the gauge freezing at its last non-zero
+        # value once a status code's rolling count drops to 0 or the code
+        # disappears from responseCodeCounts entirely).
+        self._known_status_codes: dict[str, set[str]] = {}
+
     @log_api_call("getOrganizationApiRequestsOverview")
     async def _fetch_api_requests_overview(self, org_id: str) -> dict[str, Any]:
         """Fetch organization API requests overview.
@@ -74,34 +93,52 @@ class APIUsageCollector(BaseOrganizationCollector):
             if overview and isinstance(overview, dict) and "responseCodeCounts" in overview:
                 response_codes = overview["responseCodeCounts"]
 
-                # Calculate total requests
-                total_requests = 0
+                # Calculate total requests, defensively skipping any
+                # non-numeric entries so a single bad value can't abort the
+                # whole collection cycle (F-099).
+                total_requests: int | float = 0
+                valid_counts: dict[str, int | float] = {}
 
-                # Set metrics for each non-zero status code
                 for status_code, count in response_codes.items():
-                    if count > 0:
-                        total_requests += count
-                        # Create org labels using helper
-                        org_data = {"id": org_id, "name": org_name}
-                        labels = create_org_labels(
-                            org_data,
-                            status_code=status_code,
-                        )
-                        # Set metric for this status code
-                        self._set_metric_value(
-                            "_api_requests_by_status",
-                            labels,
-                            count,
-                        )
-                        logger.debug(
-                            "Set API request metric",
+                    if isinstance(count, bool) or not isinstance(count, int | float):
+                        logger.warning(
+                            "Skipping non-numeric API request count",
                             org_id=org_id,
                             status_code=status_code,
                             count=count,
                         )
+                        continue
+                    valid_counts[status_code] = count
+                    total_requests += count
+
+                # Track every status code ever seen for this org so it keeps
+                # being emitted (as 0) once its count drops to zero or the
+                # code disappears from the response entirely (F-096).
+                known_codes = self._known_status_codes.setdefault(org_id, set())
+                known_codes.update(valid_counts)
 
                 # Create org labels using helper
                 org_data = {"id": org_id, "name": org_name}
+
+                # Set metrics for every known status code, including zeros
+                for status_code in known_codes:
+                    count = valid_counts.get(status_code, 0)
+                    labels = create_org_labels(
+                        org_data,
+                        status_code=status_code,
+                    )
+                    self._set_metric_value(
+                        "_api_requests_by_status",
+                        labels,
+                        count,
+                    )
+                    logger.debug(
+                        "Set API request metric",
+                        org_id=org_id,
+                        status_code=status_code,
+                        count=count,
+                    )
+
                 org_labels = create_org_labels(org_data)
 
                 # Also set total requests metric
@@ -116,7 +153,7 @@ class APIUsageCollector(BaseOrganizationCollector):
                     org_id=org_id,
                     org_name=org_name,
                     total_requests=total_requests,
-                    unique_status_codes=sum(1 for c in response_codes.values() if c > 0),
+                    unique_status_codes=sum(1 for c in valid_counts.values() if c > 0),
                 )
             else:
                 logger.warning(

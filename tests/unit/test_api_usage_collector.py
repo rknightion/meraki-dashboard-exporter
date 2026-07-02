@@ -114,7 +114,9 @@ class TestAPIUsageCollector:
         # Verify metrics were set correctly
         parent = api_usage_collector.parent
 
-        # Check individual status code metrics (only non-zero values)
+        # Check individual status code metrics, including zero-count codes
+        # (F-096: zero counts must be emitted, not skipped, so the gauge
+        # doesn't freeze at the last non-zero value).
         expected_status_metrics = [
             ("200", 1500),
             ("201", 250),
@@ -127,6 +129,8 @@ class TestAPIUsageCollector:
             ("429", 10),
             ("500", 2),
             ("502", 1),
+            ("503", 0),
+            ("504", 0),
         ]
 
         for status_code, count in expected_status_metrics:
@@ -137,15 +141,7 @@ class TestAPIUsageCollector:
             assert key in parent._metrics
             assert parent._metrics[key] == count
 
-        # Check that zero-count status codes were not set
-        for status_code in ["503", "504"]:
-            key = (
-                "_api_requests_by_status",
-                (("org_id", org_id), ("org_name", org_name), ("status_code", status_code)),
-            )
-            assert key not in parent._metrics
-
-        # Check total requests metric
+        # Check total requests metric (zero-count codes contribute nothing)
         expected_total = sum(count for _, count in expected_status_metrics)
         total_key = ("_api_requests_total", (("org_id", org_id), ("org_name", org_name)))
         assert total_key in parent._metrics
@@ -189,13 +185,15 @@ class TestAPIUsageCollector:
         assert total_key in parent._metrics
         assert parent._metrics[total_key] == 0
 
-        # Verify no individual status code metrics were set
+        # F-096: zero-count status codes present in the response must still
+        # be emitted (as 0), not skipped.
         for status_code in api_response["responseCodeCounts"]:
             key = (
                 "_api_requests_by_status",
                 (("org_id", org_id), ("org_name", org_name), ("status_code", status_code)),
             )
-            assert key not in parent._metrics
+            assert key in parent._metrics
+            assert parent._metrics[key] == 0
 
     async def test_collect_api_usage_with_missing_response_codes(
         self, api_usage_collector, mock_api_builder
@@ -308,10 +306,58 @@ class TestAPIUsageCollector:
         assert total_key in parent._metrics
         assert parent._metrics[total_key] == 0
 
+    async def test_collect_api_usage_status_code_zeroed_when_no_longer_present(
+        self, api_usage_collector, mock_api_builder
+    ):
+        """F-096: a status code that drops out of the response must be zeroed.
+
+        Once a status code has been observed for an org, it must keep being
+        emitted (as 0) on subsequent cycles where it's absent or zero, so the
+        gauge doesn't freeze at its last non-zero value.
+        """
+        org_id = "555"
+        org_name = "Flapping Status Org"
+
+        first_response = {"responseCodeCounts": {"200": 100, "429": 50}}
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationApiRequestsOverview", first_response
+        ).build()
+        api_usage_collector.api = api
+
+        await api_usage_collector.collect(org_id, org_name)
+
+        parent = api_usage_collector.parent
+        status_429_key = (
+            "_api_requests_by_status",
+            (("org_id", org_id), ("org_name", org_name), ("status_code", "429")),
+        )
+        assert parent._metrics[status_429_key] == 50
+
+        # Second cycle: 429 has completely disappeared from the response.
+        second_response = {"responseCodeCounts": {"200": 120}}
+        api2 = mock_api_builder.with_custom_response(
+            "getOrganizationApiRequestsOverview", second_response
+        ).build()
+        api_usage_collector.api = api2
+
+        await api_usage_collector.collect(org_id, org_name)
+
+        # 429 must now read 0, not the stale 50 from the first cycle.
+        assert parent._metrics[status_429_key] == 0
+        status_200_key = (
+            "_api_requests_by_status",
+            (("org_id", org_id), ("org_name", org_name), ("status_code", "200")),
+        )
+        assert parent._metrics[status_200_key] == 120
+
     async def test_collect_api_usage_with_non_numeric_counts(
         self, api_usage_collector, mock_api_builder
     ):
-        """Test API usage metrics when counts are non-numeric."""
+        """F-099: a single non-numeric count must not abort collection.
+
+        The valid entries must still be processed and the total-requests
+        gauge must still be written (summing only the valid counts).
+        """
         # Set up test data
         org_id = "444"
         org_name = "Bad Count Org"
@@ -331,19 +377,33 @@ class TestAPIUsageCollector:
         ).build()
         api_usage_collector.api = api
 
-        # Run collection - should handle gracefully
+        # Run collection - should handle gracefully, not raise, and not
+        # abort before writing the total.
         await api_usage_collector.collect(org_id, org_name)
 
-        # Verify only valid numeric count was processed
         parent = api_usage_collector.parent
-        if hasattr(parent, "_metrics"):
-            # Should only have the valid count
-            status_key = (
+
+        # The valid numeric count must be set.
+        status_key = (
+            "_api_requests_by_status",
+            (("org_id", org_id), ("org_name", org_name), ("status_code", "400")),
+        )
+        assert status_key in parent._metrics
+        assert parent._metrics[status_key] == 100
+
+        # The non-numeric entries must be skipped, not emitted.
+        for bad_code in ("200", "201"):
+            bad_key = (
                 "_api_requests_by_status",
-                (("org_id", org_id), ("org_name", org_name), ("status_code", "400")),
+                (("org_id", org_id), ("org_name", org_name), ("status_code", bad_code)),
             )
-            if status_key in parent._metrics:
-                assert parent._metrics[status_key] == 100
+            assert bad_key not in parent._metrics
+
+        # The total-requests gauge must still be written, summing only the
+        # valid numeric counts (the loop must not abort mid-way).
+        total_key = ("_api_requests_total", (("org_id", org_id), ("org_name", org_name)))
+        assert total_key in parent._metrics
+        assert parent._metrics[total_key] == 100
 
     async def test_fetch_api_requests_overview_parameters(
         self, api_usage_collector, mock_api_builder

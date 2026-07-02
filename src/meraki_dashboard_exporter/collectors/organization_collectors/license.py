@@ -6,6 +6,7 @@ import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
+from ...core.constants.api_constants import LicenseState
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
@@ -23,7 +24,7 @@ class LicenseCollector(BaseOrganizationCollector):
     """Collector for organization license metrics."""
 
     @log_api_call("getOrganizationLicensesOverview")
-    async def _fetch_licenses_overview(self, org_id: str) -> dict[str, Any]:
+    async def _fetch_licenses_overview(self, org_id: str) -> dict[str, Any] | None:
         """Fetch organization licenses overview.
 
         Uses inventory cache with 30-minute TTL for efficiency since
@@ -36,8 +37,11 @@ class LicenseCollector(BaseOrganizationCollector):
 
         Returns
         -------
-        dict[str, Any]
-            Licenses overview data.
+        dict[str, Any] | None
+            Licenses overview data, or ``None`` when the fetch failed (only
+            possible via the inventory-cached path, which swallows errors so
+            a transient failure can be distinguished from a legitimately
+            empty overview - see F-100).
 
         """
         # Use inventory cache if available (30-min TTL for licenses)
@@ -59,8 +63,13 @@ class LicenseCollector(BaseOrganizationCollector):
         )
 
     @log_api_call("getOrganizationLicenses")
-    async def _fetch_licenses(self, org_id: str) -> list[dict[str, Any]]:
-        """Fetch organization licenses.
+    async def _fetch_licenses(self, org_id: str) -> list[dict[str, Any]] | None:
+        """Fetch organization licenses (per-device licensing model).
+
+        Uses inventory cache with the same 30-minute TTL as the licenses
+        overview for efficiency, since license data rarely changes (F-102) -
+        previously this full-list fetch ran uncached on every collection
+        cycle.
 
         Parameters
         ----------
@@ -69,10 +78,16 @@ class LicenseCollector(BaseOrganizationCollector):
 
         Returns
         -------
-        list[dict[str, Any]]
-            List of licenses.
+        list[dict[str, Any]] | None
+            List of licenses, or ``None`` when the fetch failed (only
+            possible via the inventory-cached path).
 
         """
+        # Use inventory cache if available (30-min TTL, mirrors the overview)
+        if self.inventory:
+            return await self.inventory.get_licenses(org_id)
+
+        # Fallback to direct API call
         response = await asyncio.to_thread(
             self.api.organizations.getOrganizationLicenses,
             org_id,
@@ -107,6 +122,19 @@ class LicenseCollector(BaseOrganizationCollector):
             with LogContext(org_id=org_id, org_name=org_name):
                 overview = await self._fetch_licenses_overview(org_id)
 
+            # A None overview means the fetch itself failed (e.g. transient
+            # 429/500) - distinct from a legitimately empty {} response.
+            # Skip this cycle rather than misrouting to the per-device
+            # getOrganizationLicenses call, which co-term orgs don't support
+            # (F-100).
+            if overview is None:
+                logger.debug(
+                    "Licenses overview fetch failed; skipping license metrics this cycle",
+                    org_id=org_id,
+                    org_name=org_name,
+                )
+                return
+
             # Check if this is co-termination or per-device licensing
             if overview.get("licensedDeviceCounts"):
                 logger.debug(
@@ -126,7 +154,13 @@ class LicenseCollector(BaseOrganizationCollector):
                 # Fetch individual licenses
                 licenses = await self._fetch_licenses(org_id)
 
-                if licenses:
+                if licenses is None:
+                    logger.debug(
+                        "Licenses fetch failed; skipping license metrics this cycle",
+                        org_id=org_id,
+                        org_name=org_name,
+                    )
+                elif licenses:
                     self._process_per_device_licenses(org_id, org_name, licenses)
                 else:
                     logger.warning("No license data available", org_id=org_id)
@@ -171,9 +205,12 @@ class LicenseCollector(BaseOrganizationCollector):
             key = (license_type, status)
             license_counts[key] = license_counts.get(key, 0) + 1
 
-            # Check if expiring within 30 days
+            # Check if expiring within 30 days. Include both 'active' and
+            # 'expiring' states - the Meraki API itself moves a license to
+            # state 'expiring' as it approaches expiration, and excluding
+            # that state undercounts the gauge (F-097).
             expiration_date = lic.get("expirationDate")
-            if expiration_date and status == "active":
+            if expiration_date and status in {LicenseState.ACTIVE, LicenseState.EXPIRING}:
                 exp_dt = self._parse_meraki_date(expiration_date)
                 if exp_dt:
                     days_until_expiry = (exp_dt - now).days
@@ -302,8 +339,11 @@ class LicenseCollector(BaseOrganizationCollector):
                 org_name=org_name,
             )
 
-        # Check if expiring soon
-        if expiration_date and status == "OK":
+        # Check if expiring soon. Evaluate regardless of overall co-term
+        # `status` - gating on status == "OK" meant an org reported in any
+        # other status (e.g. "EXPIRED") never had its expiring gauge
+        # updated, leaving it stale or absent (F-097).
+        if expiration_date:
             now = datetime.now(UTC)
             exp_dt = self._parse_meraki_date(expiration_date)
             if exp_dt:

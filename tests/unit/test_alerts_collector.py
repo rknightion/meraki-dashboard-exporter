@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import threading
-import time
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -546,10 +544,12 @@ class TestAlertsCollector(BaseCollectorTest):
         self.assert_collector_success(collector, metrics)
 
     async def test_fan_outs_use_bounded_batching(self, collector, mock_api_builder, metrics):
-        """Org alerts, sensor-alert networks, and health-alert networks must all be.
+        """Org alerts and sensor-alert networks must both be.
 
         Driven through ``process_in_batches_with_errors`` (bounded concurrency),
-        never a raw ``asyncio.gather`` fan-out, per issue #248.
+        never a raw ``asyncio.gather`` fan-out, per issue #248. There is no longer a
+        separate health-alert-network fan-out: network health alerts are derived from
+        the org-wide getOrganizationAssuranceAlerts response (F-064 / issue #273).
         """
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         networks = [
@@ -566,14 +566,13 @@ class TestAlertsCollector(BaseCollectorTest):
             .with_custom_response("getOrganizationAssuranceAlerts", [])
             .with_custom_response("getOrganizationNetworks", networks)
             .with_custom_response("getNetworkSensorAlertsOverviewByMetric", [])
-            .with_custom_response("getNetworkHealthAlerts", [])
             .build()
         )
         collector.api = api
 
         # Use a small batch size so bounding is observable, and record every call
         # made to the shared batching helper so we can assert it was actually used
-        # (and with what batch size / delay) for each of the three fan-out sites.
+        # (and with what batch size / delay) for each fan-out site.
         collector.settings.api.network_batch_size = 2
         collector.settings.api.batch_delay = 0.0
 
@@ -594,93 +593,116 @@ class TestAlertsCollector(BaseCollectorTest):
         self.assert_collector_success(collector, metrics)
         self.assert_api_call_tracked(collector, metrics, "getOrganizationAssuranceAlerts")
 
+        # Deprecated getNetworkHealthAlerts must never be called (F-064).
+        api.networks.getNetworkHealthAlerts.assert_not_called()
+
         # One call for org alerts (1 org), one for sensor-alert networks (1 network
-        # with sensors), one for health-alert networks (all 5 networks).
-        assert len(calls) == 3, f"expected 3 batched fan-outs, got {len(calls)}: {calls}"
+        # with sensors). No third fan-out for health-alert networks anymore.
+        assert len(calls) == 2, f"expected 2 batched fan-outs, got {len(calls)}: {calls}"
         for call in calls:
             assert call["batch_size"] == 2
 
         # Calls are awaited strictly sequentially in _collect_impl, in this order:
-        # org alerts, then sensor-alert networks, then health-alert networks.
-        org_call, sensor_call, health_call = calls
+        # org alerts, then sensor-alert networks.
+        org_call, sensor_call = calls
         assert org_call["items"] == ["123"]
         assert len(sensor_call["items"]) == 1
         assert sensor_call["items"][0]["id"] == "N_0"
-        assert len(health_call["items"]) == 5
 
-    async def test_health_alert_concurrency_bounded_to_batch_size(
+    async def test_network_health_alerts_derived_from_assurance_alerts(
         self, collector, mock_api_builder, metrics
     ):
-        """Verify health-alert concurrency stays within the configured batch size.
+        """Network health alerts must be derived from getOrganizationAssuranceAlerts.
 
-        With more networks than the configured batch size, no more than
-        ``network_batch_size`` health-alert calls should be in flight concurrently,
-        and every network must still get its metrics emitted.
+        F-064 / issue #273: the deprecated per-network ``getNetworkHealthAlerts`` call
+        is gone; ``meraki_network_health_alerts_total`` is now aggregated (by network,
+        categoryType, severity) from the same org-wide assurance alerts response used
+        for the other alert metrics, with no per-network API calls at all.
         """
         org = OrganizationFactory.create(org_id="123", name="Test Org")
-        network_count = 6
-        batch_size = 2
-        networks = [
-            NetworkFactory.create(network_id=f"N_{i}", name=f"Network {i}")
-            for i in range(network_count)
+        network_a = NetworkFactory.create(network_id="N_0", name="Network 0")
+        network_b = NetworkFactory.create(network_id="N_1", name="Network 1")
+
+        alerts = [
+            AlertFactory.create(
+                alert_id="alert1",
+                alert_type="connectivity",
+                categoryType="connectivity",
+                severity="warning",
+                deviceType="MR",
+                network=network_a,
+                dismissedAt=None,
+                resolvedAt=None,
+            ),
+            AlertFactory.create(
+                alert_id="alert2",
+                alert_type="connectivity",
+                categoryType="connectivity",
+                severity="warning",
+                deviceType="MS",
+                network=network_a,
+                dismissedAt=None,
+                resolvedAt=None,
+            ),
+            AlertFactory.create(
+                alert_id="alert3",
+                alert_type="crc_errors_error",
+                categoryType="device_health",
+                severity="critical",
+                deviceType="MS",
+                network=network_b,
+                dismissedAt=None,
+                resolvedAt=None,
+            ),
+            # Resolved -> must not contribute to any count, including health alerts.
+            AlertFactory.create(
+                alert_id="alert4",
+                alert_type="connectivity",
+                categoryType="connectivity",
+                severity="warning",
+                deviceType="MR",
+                network=network_b,
+                dismissedAt=None,
+                resolvedAt="2024-01-01T00:00:00Z",
+            ),
         ]
 
         api = (
             mock_api_builder
             .with_organizations([org])
             .with_devices([], org_id="123")
-            .with_custom_response("getOrganizationAssuranceAlerts", [])
-            .with_custom_response("getOrganizationNetworks", networks)
+            .with_custom_response("getOrganizationAssuranceAlerts", alerts)
             .build()
         )
-
-        lock = threading.Lock()
-        state = {"current": 0, "max_seen": 0}
-
-        def get_network_health_alerts(network_id, **kwargs):
-            with lock:
-                state["current"] += 1
-                state["max_seen"] = max(state["max_seen"], state["current"])
-            try:
-                # Hold the "connection" open briefly so overlapping calls, if any,
-                # are observed by a concurrent invocation incrementing state above.
-                time.sleep(0.05)
-            finally:
-                with lock:
-                    state["current"] -= 1
-            return [
-                {
-                    "category": "connectivity",
-                    "severity": "warning",
-                    "closedAt": None,
-                }
-            ]
-
-        api.networks.getNetworkHealthAlerts = MagicMock(side_effect=get_network_health_alerts)
         collector.api = api
-        collector.settings.api.network_batch_size = batch_size
-        collector.settings.api.batch_delay = 0.0
 
         await self.run_collector(collector)
 
         self.assert_collector_success(collector, metrics)
-        assert state["max_seen"] <= batch_size, (
-            f"observed {state['max_seen']} concurrent health-alert calls, "
-            f"expected at most batch_size={batch_size}"
-        )
 
-        # All networks must still have metrics emitted, not just the first batch.
-        for i in range(network_count):
-            metrics.assert_gauge_value(
-                AlertMetricName.NETWORK_HEALTH_ALERTS_TOTAL,
-                1,
-                org_id="123",
-                org_name="Test Org",
-                network_id=f"N_{i}",
-                network_name=f"Network {i}",
-                category="connectivity",
-                severity="warning",
-            )
+        # The deprecated endpoint must never be called.
+        api.networks.getNetworkHealthAlerts.assert_not_called()
+
+        metrics.assert_gauge_value(
+            AlertMetricName.NETWORK_HEALTH_ALERTS_TOTAL,
+            2,
+            org_id="123",
+            org_name="Test Org",
+            network_id="N_0",
+            network_name="Network 0",
+            category="connectivity",
+            severity="warning",
+        )
+        metrics.assert_gauge_value(
+            AlertMetricName.NETWORK_HEALTH_ALERTS_TOTAL,
+            1,
+            org_id="123",
+            org_name="Test Org",
+            network_id="N_1",
+            network_name="Network 1",
+            category="device_health",
+            severity="critical",
+        )
 
     async def test_fetch_networks_direct_still_applies_network_filter(
         self, mock_api_builder, settings, isolated_registry
@@ -711,3 +733,171 @@ class TestAlertsCollector(BaseCollectorTest):
         assert networks is not None
         network_ids = {n["id"] for n in networks}
         assert network_ids == {"N_allowed"}
+
+    async def test_alert_gauges_participate_in_expiration(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ):
+        """All alert gauges must route through _set_metric for expiration tracking.
+
+        F-059: resolved alerts used to stay nonzero forever because
+        ``_clear_org_metrics`` was a no-op and every gauge was set via raw
+        ``.labels(...).set(...)``, so ``MetricExpirationManager`` never tracked (and
+        therefore never reaped) a stale label combination once the underlying alert
+        resolved. Every alert gauge must now be tracked with a real ``Gauge``
+        reference so the expiration manager can actually remove stale series once
+        their TTL elapses.
+        """
+        from meraki_dashboard_exporter.core.metric_expiration import MetricExpirationManager
+
+        manager = MetricExpirationManager(settings=settings)
+        collector = AlertsCollector(
+            api=mock_api_builder.build(),
+            settings=settings,
+            registry=isolated_registry,
+            inventory=inventory,
+            expiration_manager=manager,
+        )
+
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network")
+        sensor_device = DeviceFactory.create_mt(
+            network_id="N_123", productType="sensor", serial="Q2MT-XXXX-0001"
+        )
+
+        alert = AlertFactory.create(
+            alert_id="alert1",
+            alert_type="connectivity",
+            categoryType="connectivity",
+            severity="critical",
+            deviceType="MR",
+            network=network,
+            dismissedAt=None,
+            resolvedAt=None,
+        )
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_devices([sensor_device], org_id="123")
+            .with_custom_response("getOrganizationAssuranceAlerts", [alert])
+            .with_custom_response("getOrganizationNetworks", [network])
+            .with_custom_response(
+                "getNetworkSensorAlertsOverviewByMetric",
+                [{"counts": {"door": 1}}],
+            )
+            .build()
+        )
+        collector.api = api
+
+        await self.run_collector(collector)
+
+        tracked_metric_names = {key[1] for key in manager._metric_series}
+        assert AlertMetricName.ALERTS_ACTIVE.value in tracked_metric_names
+        assert AlertMetricName.ALERTS_TOTAL_BY_SEVERITY.value in tracked_metric_names
+        assert AlertMetricName.ALERTS_TOTAL_BY_NETWORK.value in tracked_metric_names
+        assert AlertMetricName.NETWORK_HEALTH_ALERTS_TOTAL.value in tracked_metric_names
+        assert AlertMetricName.SENSOR_ALERTS_TOTAL.value in tracked_metric_names
+
+    async def test_resolved_alert_series_removed_after_ttl(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ):
+        """A resolved alert's stale series must actually disappear once expired.
+
+        End-to-end regression guard for F-059: run one cycle with an active alert
+        (series set to 1), then a second cycle where the alert has resolved (so it
+        no longer appears in the API response). Fast-forward past the metric's TTL
+        and run ``cleanup_expired_metrics`` — the stale series must be removed from
+        the registry, not left stuck at its last value forever.
+        """
+        from meraki_dashboard_exporter.core.metric_expiration import MetricExpirationManager
+
+        manager = MetricExpirationManager(settings=settings)
+        collector = AlertsCollector(
+            api=mock_api_builder.build(),
+            settings=settings,
+            registry=isolated_registry,
+            inventory=inventory,
+            expiration_manager=manager,
+        )
+
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network")
+
+        active_alert = AlertFactory.create(
+            alert_id="alert1",
+            alert_type="connectivity",
+            categoryType="connectivity",
+            severity="critical",
+            deviceType="MR",
+            network=network,
+            dismissedAt=None,
+            resolvedAt=None,
+        )
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_devices([], org_id="123")
+            .with_custom_response("getOrganizationAssuranceAlerts", [active_alert])
+            .build()
+        )
+        collector.api = api
+
+        # Cycle 1: alert is active.
+        await self.run_collector(collector)
+
+        metrics = MetricAssertions(isolated_registry)
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_ACTIVE,
+            1,
+            org_id="123",
+            org_name="Test Org",
+            network_id="N_123",
+            network_name="Test Network",
+            alert_type="connectivity",
+            category_type="connectivity",
+            severity="critical",
+            device_type="MR",
+        )
+
+        # Cycle 2: the alert has resolved and no longer appears in the response.
+        api.organizations.getOrganizationAssuranceAlerts.return_value = []
+        await self.run_collector(collector)
+
+        # The stale series is still present immediately after the resolved cycle
+        # (no per-cycle clear -- see the comment in _collect_org_alerts) but is no
+        # longer being refreshed, so it is now eligible for TTL-based expiration.
+        metrics.assert_gauge_value(
+            AlertMetricName.ALERTS_ACTIVE,
+            1,
+            org_id="123",
+            org_name="Test Org",
+            network_id="N_123",
+            network_name="Test Network",
+            alert_type="connectivity",
+            category_type="connectivity",
+            severity="critical",
+            device_type="MR",
+        )
+
+        # Fast-forward past the MEDIUM-tier TTL (2x the 300s interval) and reap.
+        import time as _time
+
+        original_time = _time.time
+        try:
+            _time.time = lambda: original_time() + 700
+            await manager._cleanup_expired_metrics()
+        finally:
+            _time.time = original_time
+
+        metrics.assert_metric_not_set(
+            AlertMetricName.ALERTS_ACTIVE,
+            org_id="123",
+            org_name="Test Org",
+            network_id="N_123",
+            network_name="Test Network",
+            alert_type="connectivity",
+            category_type="connectivity",
+            severity="critical",
+            device_type="MR",
+        )

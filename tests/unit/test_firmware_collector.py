@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -296,3 +297,204 @@ class TestFirmwareCollector:
         assert call_args[0][0] == org_id
         assert call_args[1]["total_pages"] == "all"
         assert result == []
+
+    async def test_collect_applies_network_filter(self, firmware_collector, mock_api_builder):
+        """F-010: events for networks excluded by NetworkFilter must not be counted."""
+        org_id = "999"
+        org_name = "Filtered Org"
+
+        upgrades_response = [
+            {
+                "upgradeId": "1",
+                "network": {"id": "N_INCLUDED", "name": "Included"},
+                "status": "Completed",
+                "productTypes": "switch",
+            },
+            {
+                "upgradeId": "2",
+                "network": {"id": "N_EXCLUDED", "name": "Excluded"},
+                "status": "Completed",
+                "productTypes": "switch",
+            },
+        ]
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationFirmwareUpgrades", upgrades_response
+        ).build()
+        firmware_collector.api = api
+
+        firmware_collector.inventory = MagicMock()
+        firmware_collector.inventory.get_allowed_network_ids = AsyncMock(
+            return_value={"N_INCLUDED"}
+        )
+
+        await firmware_collector.collect(org_id, org_name)
+
+        parent = firmware_collector.parent
+        key = (
+            "_org_firmware_upgrades_total",
+            (
+                ("org_id", org_id),
+                ("org_name", org_name),
+                ("product_type", "switch"),
+                ("status", "Completed"),
+            ),
+        )
+        assert key in parent._metrics
+        # Only the event for N_INCLUDED should be counted.
+        assert parent._metrics[key] == 1
+
+    async def test_collect_pending_statuses_case_insensitive(
+        self, firmware_collector, mock_api_builder
+    ):
+        """F-055: the API returns capitalized statuses; pending must still be detected."""
+        org_id = "654"
+        org_name = "Cased Org"
+
+        upgrades_response = [
+            {
+                "upgradeId": "1",
+                "network": {"id": "n1", "name": "Network 1"},
+                "status": "Scheduled",
+                "productTypes": "wireless",
+            },
+            {
+                "upgradeId": "2",
+                "network": {"id": "n2", "name": "Network 2"},
+                "status": "Started",
+                "productTypes": "wireless",
+            },
+            {
+                "upgradeId": "3",
+                "network": {"id": "n3", "name": "Network 3"},
+                "status": "Completed",
+                "productTypes": "wireless",
+            },
+        ]
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationFirmwareUpgrades", upgrades_response
+        ).build()
+        firmware_collector.api = api
+
+        await firmware_collector.collect(org_id, org_name)
+
+        parent = firmware_collector.parent
+        pending_key = (
+            "_org_firmware_upgrades_pending_total",
+            (("org_id", org_id), ("org_name", org_name), ("product_type", "wireless")),
+        )
+        assert pending_key in parent._metrics
+        assert parent._metrics[pending_key] == 2
+
+    async def test_collect_zeroes_stale_combos_across_cycles(
+        self, firmware_collector, mock_api_builder
+    ):
+        """F-056: a combo present last cycle but absent this cycle must report 0."""
+        org_id = "777"
+        org_name = "Flappy Org"
+
+        first_response = [
+            {
+                "upgradeId": "1",
+                "network": {"id": "n1", "name": "Network 1"},
+                "status": "Started",
+                "productTypes": "switch",
+            },
+        ]
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationFirmwareUpgrades", first_response
+        ).build()
+        firmware_collector.api = api
+
+        await firmware_collector.collect(org_id, org_name)
+
+        parent = firmware_collector.parent
+        total_key = (
+            "_org_firmware_upgrades_total",
+            (
+                ("org_id", org_id),
+                ("org_name", org_name),
+                ("product_type", "switch"),
+                ("status", "Started"),
+            ),
+        )
+        pending_key = (
+            "_org_firmware_upgrades_pending_total",
+            (("org_id", org_id), ("org_name", org_name), ("product_type", "switch")),
+        )
+        assert parent._metrics[total_key] == 1
+        assert parent._metrics[pending_key] == 1
+
+        # Second cycle: the upgrade has moved to Completed and no more events for the
+        # "Started" status arrive. The old "Started" combo should now report 0, and
+        # the pending gauge for switch should also drop to 0 since nothing pending
+        # remains.
+        second_response = [
+            {
+                "upgradeId": "1",
+                "network": {"id": "n1", "name": "Network 1"},
+                "status": "Completed",
+                "productTypes": "switch",
+            },
+        ]
+        api2 = mock_api_builder.with_custom_response(
+            "getOrganizationFirmwareUpgrades", second_response
+        ).build()
+        firmware_collector.api = api2
+
+        await firmware_collector.collect(org_id, org_name)
+
+        assert parent._metrics[total_key] == 0
+        assert parent._metrics[pending_key] == 0
+        completed_key = (
+            "_org_firmware_upgrades_total",
+            (
+                ("org_id", org_id),
+                ("org_name", org_name),
+                ("product_type", "switch"),
+                ("status", "Completed"),
+            ),
+        )
+        assert parent._metrics[completed_key] == 1
+
+    async def test_collect_zeroes_stale_combos_on_quiet_window(
+        self, firmware_collector, mock_api_builder
+    ):
+        """F-056: an empty response (no events this window) must still zero prior combos."""
+        org_id = "888"
+        org_name = "Quiet Org"
+
+        first_response = [
+            {
+                "upgradeId": "1",
+                "network": {"id": "n1", "name": "Network 1"},
+                "status": "Completed",
+                "productTypes": "appliance",
+            },
+        ]
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationFirmwareUpgrades", first_response
+        ).build()
+        firmware_collector.api = api
+
+        await firmware_collector.collect(org_id, org_name)
+
+        parent = firmware_collector.parent
+        total_key = (
+            "_org_firmware_upgrades_total",
+            (
+                ("org_id", org_id),
+                ("org_name", org_name),
+                ("product_type", "appliance"),
+                ("status", "Completed"),
+            ),
+        )
+        assert parent._metrics[total_key] == 1
+
+        api2 = mock_api_builder.with_custom_response("getOrganizationFirmwareUpgrades", []).build()
+        firmware_collector.api = api2
+
+        await firmware_collector.collect(org_id, org_name)
+
+        assert parent._metrics[total_key] == 0

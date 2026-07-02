@@ -13,21 +13,37 @@ from ...core.logging_helpers import LogContext
 from .base import BaseOrganizationCollector
 
 if TYPE_CHECKING:
-    pass
+    from ..organization import OrganizationCollector
 
 logger = get_logger(__name__)
-
-# timespan matches the MEDIUM (300s) collection cadence so each poll counts only
-# availability changes that occurred since the previous run (a windowed flap count).
-_TIMESPAN_SECONDS = 300
 
 
 class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
     """Collector for organization device availability change history metrics."""
 
+    def __init__(self, parent: OrganizationCollector) -> None:
+        """Initialize the device availability history collector.
+
+        Parameters
+        ----------
+        parent : OrganizationCollector
+            Parent OrganizationCollector instance that has metrics defined.
+
+        """
+        super().__init__(parent)
+        # Bounded label combos emitted on a previous cycle, per org - used to zero out
+        # combos that are absent this cycle instead of leaving a stale non-zero value.
+        self._seen_change_keys: dict[str, set[tuple[str, str]]] = {}
+
     @log_api_call("getOrganizationDevicesAvailabilitiesChangeHistory")
     async def _fetch_availability_change_history(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch organization device availability change history.
+
+        The fetch window is tied to the configured MEDIUM update interval
+        (``settings.update_intervals.medium``, operator-configurable 300-1800s)
+        rather than a hardcoded value, so it always matches the actual
+        collection cadence: each poll counts only availability changes that
+        occurred since (approximately) the previous run.
 
         Parameters
         ----------
@@ -43,7 +59,7 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
         response = await asyncio.to_thread(
             self.api.organizations.getOrganizationDevicesAvailabilitiesChangeHistory,
             org_id,
-            timespan=_TIMESPAN_SECONDS,
+            timespan=self.settings.update_intervals.medium,
             total_pages="all",
         )
         return cast(
@@ -74,12 +90,18 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
         try:
             with LogContext(org_id=org_id, org_name=org_name):
                 events = await self._fetch_availability_change_history(org_id)
+                allowed_network_ids = (
+                    await self.inventory.get_allowed_network_ids(org_id)
+                    if self.inventory is not None
+                    else None
+                )
 
             if not events:
                 logger.debug("No device availability change events available", org_id=org_id)
-                return
 
-            self._process_availability_changes(org_id, org_name, events)
+            # Always process (even with an empty list) so bounded label combos that
+            # disappear this cycle get explicitly zeroed rather than left stale.
+            self._process_availability_changes(org_id, org_name, events, allowed_network_ids)
 
         except Exception as e:
             if "404" in str(e):
@@ -92,7 +114,11 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
                 raise  # Let decorator handle non-404 errors
 
     def _process_availability_changes(
-        self, org_id: str, org_name: str, events: list[dict[str, Any]]
+        self,
+        org_id: str,
+        org_name: str,
+        events: list[dict[str, Any]],
+        allowed_network_ids: set[str] | None,
     ) -> None:
         """Process device availability change events into aggregated metrics.
 
@@ -104,12 +130,21 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
             Organization name.
         events : list[dict[str, Any]]
             List of device availability change events.
+        allowed_network_ids : set[str] | None
+            Network IDs permitted by the configured NetworkFilter, or None when
+            filtering is disabled (accept every row).
 
         """
         # Aggregate counts by (product_type, new_status) - bound cardinality, never per-device.
         change_counts: dict[tuple[str, str], int] = {}
+        skipped = 0
 
         for event in events:
+            network_id = event.get("network", {}).get("id")
+            if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                skipped += 1
+                continue
+
             product_type = event.get("device", {}).get("productType", "unknown")
             new_status = next(
                 (
@@ -125,6 +160,18 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
 
         org_data = {"id": org_id, "name": org_name}
 
+        # Zero out combos that were emitted on a previous cycle but are absent this
+        # cycle (a quiet window with no flaps), so the windowed count reports 0
+        # rather than freezing at its last non-zero value forever.
+        seen_change_keys = self._seen_change_keys.setdefault(org_id, set())
+        for stale_product_type, stale_status in seen_change_keys - change_counts.keys():
+            labels = create_org_labels(
+                org_data,
+                product_type=stale_product_type,
+                status=stale_status,
+            )
+            self._set_metric_value("_org_devices_availability_changes_total", labels, 0)
+
         for (product_type, new_status), count in change_counts.items():
             labels = create_org_labels(
                 org_data,
@@ -136,6 +183,8 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
                 labels,
                 count,
             )
+        seen_change_keys.clear()
+        seen_change_keys.update(change_counts.keys())
 
         logger.info(
             "Collected device availability change history metrics",
@@ -143,4 +192,5 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
             org_name=org_name,
             total_events=len(events),
             unique_combinations=len(change_counts),
+            skipped_filtered_network=skipped,
         )

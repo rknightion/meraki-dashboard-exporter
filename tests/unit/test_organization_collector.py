@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
 from meraki_dashboard_exporter.collectors.organization import OrganizationCollector
 from meraki_dashboard_exporter.core.constants import OrgMetricName, UpdateTier
 from tests.helpers.base import BaseCollectorTest
@@ -527,3 +529,247 @@ class TestOrganizationCollector(BaseCollectorTest):
             org_name="Error App Usage Org",
             category="other",
         )
+
+    # -- F-040: unreachable org-failure path ---------------------------------
+
+    async def test_org_metrics_records_failure_when_subcollections_fail(self, collector, metrics):
+        """A fully-broken org must record failure and set status=0.
+
+        Previously every sub-collection swallowed its own exceptions, so
+        OrgHealthTracker.record_failure and the status gauge could never
+        reflect an org whose API access is completely broken (bug-bash
+        F-040).
+        """
+        org = OrganizationFactory.create(org_id="777", name="Broken Org")
+
+        async def _boom(*_args: object, **_kwargs: object) -> None:
+            raise Exception("500 Internal Server Error")
+
+        collector._collect_network_metrics = _boom  # type: ignore[method-assign]
+        collector._collect_device_metrics = _boom  # type: ignore[method-assign]
+        collector._collect_device_counts_by_model = _boom  # type: ignore[method-assign]
+        collector._collect_device_availability_metrics = _boom  # type: ignore[method-assign]
+        collector._collect_packet_capture_metrics = _boom  # type: ignore[method-assign]
+        collector._collect_application_usage_metrics = _boom  # type: ignore[method-assign]
+
+        await collector._collect_org_metrics(org)
+
+        health = collector.org_health_tracker.get_health(org["id"])
+        assert health is not None
+        assert health.consecutive_failures == 1
+
+        metrics.assert_gauge_value(
+            "meraki_exporter_org_collection_status",
+            0,
+            org_id=org["id"],
+            org_name=org["name"],
+        )
+
+    async def test_org_metrics_resilient_to_partial_subcollection_failure(self, collector, metrics):
+        """One failing sub-collection must not prevent the others from running.
+
+        Guards the resilience property F-040's fix must preserve: a single
+        broken endpoint should not abort the rest of the org's collection.
+        """
+        org = OrganizationFactory.create(org_id="780", name="Partially Broken Org")
+
+        async def _boom(*_args: object, **_kwargs: object) -> None:
+            raise Exception("500 Internal Server Error")
+
+        network_calls: list[str] = []
+
+        async def _tracked_license(org_id: str, org_name: str) -> None:
+            network_calls.append("license_metrics")
+
+        collector._collect_network_metrics = _boom  # type: ignore[method-assign]
+        collector._collect_license_metrics = _tracked_license  # type: ignore[method-assign]
+
+        await collector._collect_org_metrics(org)
+
+        assert "license_metrics" in network_calls
+
+    async def test_org_metrics_backoff_engages_after_consecutive_failures(self, collector, metrics):
+        """Persistent per-cycle failures must eventually engage backoff.
+
+        should_collect becomes False after max_consecutive_failures cycles,
+        matching the bug-bash F-040 suggested test.
+        """
+        org = OrganizationFactory.create(org_id="778", name="Persistently Broken Org")
+
+        async def _boom(*_args: object, **_kwargs: object) -> None:
+            raise Exception("500 Internal Server Error")
+
+        collector._collect_network_metrics = _boom  # type: ignore[method-assign]
+        collector._collect_device_metrics = _boom  # type: ignore[method-assign]
+        collector._collect_device_counts_by_model = _boom  # type: ignore[method-assign]
+        collector._collect_device_availability_metrics = _boom  # type: ignore[method-assign]
+        collector._collect_packet_capture_metrics = _boom  # type: ignore[method-assign]
+        collector._collect_application_usage_metrics = _boom  # type: ignore[method-assign]
+
+        for _ in range(collector.org_health_tracker.max_consecutive_failures):
+            await collector._collect_org_metrics(org)
+
+        assert collector.org_health_tracker.should_collect(org["id"]) is False
+        metrics.assert_gauge_value(
+            "meraki_exporter_org_collection_status",
+            0,
+            org_id=org["id"],
+            org_name=org["name"],
+        )
+
+    async def test_org_metrics_404_not_counted_as_failure(
+        self, collector, mock_api_builder, metrics
+    ):
+        """A 404 (endpoint not available for this org) must not count as a failure.
+
+        Many orgs legitimately lack e.g. packet capture data, and treating
+        that as unhealthy would falsely trip OrgHealthTracker backoff for a
+        perfectly healthy org.
+        """
+        org = OrganizationFactory.create(org_id="779", name="No Packet Capture Org")
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([], org_id=org["id"])
+            .with_devices([], org_id=org["id"])
+            .with_custom_response("getOrganizationDevicesOverviewByModel", {"counts": []})
+            .with_custom_response("getOrganizationDevicesAvailabilities", [])
+            .with_custom_response(
+                "getOrganizationLicensesOverview",
+                {"expirationDate": "2026-01-01", "licenseTypes": []},
+            )
+            .with_custom_response("getOrganizationClientsOverview", {"counts": {"total": 0}})
+            .with_error("getOrganizationDevicesPacketCaptureCaptures", 404)
+            .with_custom_response("getOrganizationSummaryTopApplicationsCategoriesByUsage", [])
+            .build()
+        )
+        collector.api = api
+        collector.api_helper.api = api
+        # network_metrics/device_metrics/device_availability_metrics read
+        # through the inventory cache (NetworkFilter enforcement point), not
+        # collector.api directly, so it must be repointed at the same mock too.
+        collector.inventory.api = api
+
+        await collector._collect_org_metrics(org)
+
+        health = collector.org_health_tracker.get_health(org["id"])
+        assert health is None or health.consecutive_failures == 0
+
+        metrics.assert_gauge_value(
+            "meraki_exporter_org_collection_status",
+            1,
+            org_id=org["id"],
+            org_name=org["name"],
+        )
+
+    # -- F-041: dead {"items": ...} branch in device-counts-by-model --------
+
+    async def test_device_counts_by_model_processes_items_wrapped_response(
+        self, collector, mock_api_builder, metrics
+    ):
+        """A response wrapped in {"items": [...]} must actually be processed.
+
+        Instead of silently dropped, per bug-bash F-041.
+        """
+        org_id, org_name = "888", "Items Org"
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationDevicesOverviewByModel",
+            {"items": [{"model": "MS120-8", "total": 5}]},
+        ).build()
+        collector.api = api
+
+        await collector._collect_device_counts_by_model(org_id, org_name)
+
+        metrics.assert_gauge_value(
+            OrgMetricName.ORG_DEVICES_BY_MODEL_TOTAL,
+            5,
+            org_id=org_id,
+            org_name=org_name,
+            model="MS120-8",
+        )
+
+    # -- F-042: clamp application-usage quantity to the documented max ------
+
+    async def test_application_usage_clamps_quantity_to_documented_max(
+        self, collector, mock_api_builder
+    ):
+        """quantity must be clamped to the documented API maximum.
+
+        50, not the previous 1000 (bug-bash F-042).
+        """
+        org_id, org_name = "999", "Quantity Org"
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationSummaryTopApplicationsCategoriesByUsage", []
+        ).build()
+        collector.api = api
+
+        await collector._collect_application_usage_metrics(org_id, org_name)
+
+        call = api.organizations.getOrganizationSummaryTopApplicationsCategoriesByUsage.call_args
+        assert call.kwargs["quantity"] == 50
+
+    # -- F-098: apply NetworkFilter to device-counts-by-model + packet capture --
+
+    async def test_device_counts_by_model_applies_network_filter(self, collector, mock_api_builder):
+        """Must scope by inventory.get_allowed_network_ids when a filter is active.
+
+        Matches its inventory-filtered sibling meraki_org_devices_total
+        (bug-bash F-098).
+        """
+        org_id, org_name = "555", "Filtered Org"
+        collector.inventory.get_allowed_network_ids = AsyncMock(  # type: ignore[method-assign]
+            return_value={"N_1", "N_2"}
+        )
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationDevicesOverviewByModel", {"counts": []}
+        ).build()
+        collector.api = api
+
+        await collector._collect_device_counts_by_model(org_id, org_name)
+
+        call = api.organizations.getOrganizationDevicesOverviewByModel.call_args
+        assert sorted(call.kwargs["networkIds"]) == ["N_1", "N_2"]
+
+    async def test_device_counts_by_model_omits_network_ids_when_filter_inactive(
+        self, collector, mock_api_builder
+    ):
+        """No networkIds kwarg is sent when no NetworkFilter is configured."""
+        org_id, org_name = "556", "Unfiltered Org"
+        collector.inventory.get_allowed_network_ids = AsyncMock(  # type: ignore[method-assign]
+            return_value=None
+        )
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationDevicesOverviewByModel", {"counts": []}
+        ).build()
+        collector.api = api
+
+        await collector._collect_device_counts_by_model(org_id, org_name)
+
+        call = api.organizations.getOrganizationDevicesOverviewByModel.call_args
+        assert "networkIds" not in call.kwargs
+
+    async def test_packet_capture_metrics_applies_network_filter(self, collector, mock_api_builder):
+        """Must scope by inventory.get_allowed_network_ids when a filter is active.
+
+        Bug-bash F-098.
+        """
+        org_id, org_name = "557", "Filtered Capture Org"
+        collector.inventory.get_allowed_network_ids = AsyncMock(  # type: ignore[method-assign]
+            return_value={"N_3"}
+        )
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationDevicesPacketCaptureCaptures",
+            {"items": [], "meta": {"counts": {"items": {"total": 0, "remaining": 0}}}},
+        ).build()
+        collector.api = api
+
+        await collector._collect_packet_capture_metrics(org_id, org_name)
+
+        call = api.organizations.getOrganizationDevicesPacketCaptureCaptures.call_args
+        assert call.kwargs["networkIds"] == ["N_3"]
