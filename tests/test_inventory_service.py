@@ -710,3 +710,43 @@ class TestOrganizationInventoryAllowedIds:
         await inventory.get_allowed_network_ids("ORG")
         await inventory.get_allowed_network_ids("ORG", force_refresh=True)
         assert mock_api.organizations.getOrganizationNetworks.call_count == 2
+
+
+class TestFilterMatchSeriesExpiry:
+    """meraki_network_filter_match series must not leak for deleted networks (F-079)."""
+
+    def test_stale_filter_match_series_removed(self, inventory_service) -> None:
+        """Deleted networks must have their filter_match series removed.
+
+        A network present in one refresh but gone in the next must have its
+        filter_match series removed, not left as a stale orphan.
+        """
+        gauge = inventory_service._filter_match_gauge
+
+        nets_v1 = [
+            {"id": "N_1", "name": "one"},
+            {"id": "N_2", "name": "two"},
+        ]
+        inventory_service._emit_filter_metrics("ORG", nets_v1)
+        assert ("ORG", "N_1") in gauge._metrics
+        assert ("ORG", "N_2") in gauge._metrics
+
+        # N_2 deleted; refresh with only N_1.
+        inventory_service._emit_filter_metrics("ORG", [{"id": "N_1", "name": "one"}])
+        assert ("ORG", "N_1") in gauge._metrics
+        assert ("ORG", "N_2") not in gauge._metrics
+
+    def test_uses_metric_name_enums(self, inventory_service) -> None:
+        """The filter/cache-size gauges must use enum-derived names, not raw literals."""
+        from meraki_dashboard_exporter.core.constants.metrics_constants import (
+            CollectorMetricName,
+            NetworkMetricName,
+        )
+
+        assert (
+            inventory_service._filter_match_gauge._name
+            == NetworkMetricName.NETWORK_FILTER_MATCH.value
+        )
+        assert (
+            inventory_service._cache_size._name == CollectorMetricName.INVENTORY_CACHE_ENTRIES.value
+        )

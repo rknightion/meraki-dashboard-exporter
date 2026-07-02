@@ -19,6 +19,7 @@ from prometheus_client import Counter, Gauge
 
 from ..api.client import AsyncMerakiClient
 from ..core.constants import UpdateTier
+from ..core.constants.metrics_constants import CollectorMetricName, NetworkMetricName
 from ..core.error_handling import validate_response_format
 from ..core.network_filter import NetworkFilter
 
@@ -126,25 +127,29 @@ class OrganizationInventory:
 
         # Prometheus gauge for cache sizes
         self._cache_size = Gauge(
-            "meraki_exporter_inventory_cache_size",
+            CollectorMetricName.INVENTORY_CACHE_ENTRIES.value,
             "Number of entries in inventory cache",
             ["org_id", "cache_type"],
         )
 
+        # Per-org set of network IDs for which a filter_match series was emitted, so
+        # stale series can be removed when a network is deleted (F-079).
+        self._filter_match_emitted: dict[str, set[str]] = {}
+
         # Network-filter observability gauges. ``network_name`` is deliberately
         # omitted from labels to avoid orphan time series on rename.
         self._filter_match_gauge = Gauge(
-            "meraki_network_filter_match",
+            NetworkMetricName.NETWORK_FILTER_MATCH.value,
             "1 if the network passes the configured network filter, 0 otherwise.",
             ["org_id", "network_id"],
         )
         self._filter_resolved_gauge = Gauge(
-            "meraki_network_filter_resolved",
+            NetworkMetricName.NETWORK_FILTER_RESOLVED.value,
             "Number of networks included by the configured network filter.",
             ["org_id"],
         )
         self._filter_total_gauge = Gauge(
-            "meraki_network_filter_total",
+            NetworkMetricName.NETWORK_FILTER_TOTAL.value,
             "Total number of networks in the organization (pre-filter).",
             ["org_id"],
         )
@@ -481,12 +486,23 @@ class OrganizationInventory:
         self._filter_total_gauge.labels(org_id=org_id).set(total)
         self._filter_resolved_gauge.labels(org_id=org_id).set(len(allowed_ids))
 
+        current_ids: set[str] = set()
         for n in networks:
             nid = n.get("id", "")
             if not nid:
                 continue
+            current_ids.add(nid)
             value = 1.0 if nid in allowed_ids else 0.0
             self._filter_match_gauge.labels(org_id=org_id, network_id=nid).set(value)
+
+        # Remove filter_match series for networks that disappeared since the last
+        # refresh so deleted networks don't leak stale series indefinitely (F-079).
+        for stale_nid in self._filter_match_emitted.get(org_id, set()) - current_ids:
+            try:
+                self._filter_match_gauge.remove(org_id, stale_nid)
+            except KeyError:
+                pass
+        self._filter_match_emitted[org_id] = current_ids
 
     async def get_devices(
         self,

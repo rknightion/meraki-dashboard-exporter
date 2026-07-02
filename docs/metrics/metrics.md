@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 251
-- **Gauges:** 228
+- **Total metrics:** 249
+- **Gauges:** 226
 - **Counters:** 18
 - **Histograms:** 4
 - **Info metrics:** 1
@@ -362,8 +362,6 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
 | `meraki_exporter_api_duration_seconds` | histogram | `endpoint`, `method`, `status_code` | Duration of Meraki API requests in seconds |  |
-| `meraki_exporter_api_rate_limit_remaining` | gauge | `org_id` | Remaining rate limit for Meraki API |  |
-| `meraki_exporter_api_rate_limit_total` | gauge | `org_id` | Total rate limit for Meraki API |  |
 | `meraki_exporter_api_requests_total` | counter | `endpoint`, `method`, `status_code` | Total number of Meraki API requests |  |
 | `meraki_exporter_api_retry_total` | counter | `endpoint`, `retry_reason` | Total number of API retry attempts |  |
 

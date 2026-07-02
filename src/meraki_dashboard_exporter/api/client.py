@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 import meraki
 from meraki.exceptions import APIError
 from opentelemetry import trace
-from prometheus_client import Counter, Gauge, Histogram
+from prometheus_client import Counter, Histogram
 
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.logging import get_logger
@@ -51,8 +51,6 @@ class AsyncMerakiClient:
     # Class-level metrics (shared across all instances)
     _api_request_duration: Histogram | None = None
     _api_requests_total: Counter | None = None
-    _api_rate_limit_remaining: Gauge | None = None
-    _api_rate_limit_total: Gauge | None = None
     _api_retry_attempts: Counter | None = None
 
     def __init__(self, settings: Settings) -> None:
@@ -110,18 +108,12 @@ class AsyncMerakiClient:
                 ],
             )
 
-            # Rate limit gauges
-            cls._api_rate_limit_remaining = Gauge(
-                CollectorMetricName.API_RATE_LIMIT_REMAINING.value,
-                "Remaining rate limit for Meraki API",
-                labelnames=[LabelName.ORG_ID.value],
-            )
-
-            cls._api_rate_limit_total = Gauge(
-                CollectorMetricName.API_RATE_LIMIT_TOTAL.value,
-                "Total rate limit for Meraki API",
-                labelnames=[LabelName.ORG_ID.value],
-            )
+            # NB: no api_rate_limit_remaining/_total gauges (F-073). They were
+            # registered but never set by any code path (the only place that could
+            # populate them from response headers was the dead AsyncMerakiClient._request,
+            # see F-077), so they only ever exported zero samples. Removed rather than
+            # left as permanently-empty series. (Dashboards referencing them are left for
+            # the dedicated dashboard task.)
 
             # Retry counter
             cls._api_retry_attempts = Counter(

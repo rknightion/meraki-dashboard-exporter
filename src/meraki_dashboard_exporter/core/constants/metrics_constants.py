@@ -88,6 +88,10 @@ class NetworkMetricName(StrEnum):
     NETWORK_TRAFFIC_BYTES = "meraki_network_traffic_bytes"
     NETWORK_DEVICE_STATUS = "meraki_network_device_status"
     NETWORK_WIRELESS_CONNECTION_STATS = "meraki_network_wireless_connection_stats_total"
+    # Network-filter observability (emitted by services/inventory.py)
+    NETWORK_FILTER_MATCH = "meraki_network_filter_match"
+    NETWORK_FILTER_RESOLVED = "meraki_network_filter_resolved"
+    NETWORK_FILTER_TOTAL = "meraki_network_filter_total"
 
 
 class DeviceMetricName(StrEnum):
@@ -405,15 +409,17 @@ class CollectorMetricName(StrEnum):
     COLLECTION_ERRORS_TOTAL = "meraki_exporter_collection_errors_total"
 
     # Inventory cache metrics
-    INVENTORY_CACHE_HITS_TOTAL = "meraki_exporter_cache_hits_total"
-    INVENTORY_CACHE_MISSES_TOTAL = "meraki_exporter_cache_misses_total"
+    # NB: INVENTORY_CACHE_SIZE is consumed by core/metric_expiration.py to build the
+    # separate "meraki_exporter_cache_size_tracked_metrics" gauge — it does NOT name the
+    # inventory cache-size gauge. The actual inventory cache-size gauge uses
+    # INVENTORY_CACHE_ENTRIES below (F-080). The former hit/miss counter enums were
+    # declared but never registered as Counters and have been removed.
     INVENTORY_CACHE_SIZE = "meraki_exporter_cache_size"
+    INVENTORY_CACHE_ENTRIES = "meraki_exporter_inventory_cache_size"
 
     # API client metrics
     API_REQUEST_DURATION_SECONDS = "meraki_exporter_api_duration_seconds"
     API_REQUESTS_TOTAL = "meraki_exporter_api_requests_total"
-    API_RATE_LIMIT_REMAINING = "meraki_exporter_api_rate_limit_remaining"
-    API_RATE_LIMIT_TOTAL = "meraki_exporter_api_rate_limit_total"
     API_RETRY_ATTEMPTS_TOTAL = "meraki_exporter_api_retry_total"
     API_RATE_LIMITER_WAIT_SECONDS = "meraki_exporter_api_rate_limiter_wait_seconds"
     API_RATE_LIMITER_THROTTLED_TOTAL = "meraki_exporter_api_rate_limiter_throttled_total"
