@@ -267,6 +267,8 @@ export MERAKI_EXPORTER_MERAKI__API_BASE_URL="https://api.meraki.ca/api/v1"  # Fo
 
 See the generated [metrics reference](https://m7kni.io/meraki-dashboard-exporter/metrics/metrics/) for the authoritative metric list (kept in sync via `uv run python scripts/generate_metrics_docs.py`).
 
+Metric-name, label, and unit compatibility is governed by the [Metric Stability & Deprecation Policy](docs/stability.md), which defines the Stable vs Experimental tiers, the 1.0 promise, and the post-1.0 rename process.
+
 ## Performance
 
 - **Bounded concurrency**: ManagedTaskGroup keeps parallel collectors/orgs within `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT`

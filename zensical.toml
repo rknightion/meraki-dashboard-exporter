@@ -24,6 +24,7 @@ nav = [
   { "Metrics Reference" = [
       "metrics/index.md",
       { Overview = "metrics/overview.md" },
+      { "Stability & Deprecation Policy" = "stability.md" },
       { "Complete Reference" = "metrics/metrics.md" }
     ] },
   { Collectors = [
