@@ -715,32 +715,13 @@ class MetricCollector(ABC):
 
             logger.info("Successfully initialized collector performance metrics")
 
-            # Initialize gauge values for common collectors
-            # Note: We don't initialize counters as that creates _created timestamps
-            for collector_name in [
-                "OrganizationCollector",
-                "DeviceCollector",
-                "NetworkHealthCollector",
-                "MTSensorCollector",
-                "AlertsCollector",
-                "ConfigCollector",
-            ]:
-                for tier in ["fast", "medium", "slow"]:
-                    # Initialize gauge with 0
-                    cls._collector_last_success.labels(
-                        collector=collector_name,
-                        tier=tier,
-                    ).set(0)
-                    if cls._collector_smoothing_window is not None:
-                        cls._collector_smoothing_window.labels(
-                            collector=collector_name,
-                            tier=tier,
-                        ).set(0)
-                    if cls._collector_start_offset is not None:
-                        cls._collector_start_offset.labels(
-                            collector=collector_name,
-                            tier=tier,
-                        ).set(0)
+            # Do NOT pre-initialize per-collector/tier gauge series to 0 (F-025).
+            # Each collector runs in exactly one tier, so pre-seeding a hardcoded
+            # 6-collectors x 3-tiers grid left 12 phantom success_timestamp series
+            # stuck at 0 forever — read as perpetually stale by
+            # `time() - <timestamp>` staleness alerting. The real series are created
+            # on first collection (success path) and by _record_smoothing_metrics
+            # for the actual collector/tier that runs.
 
             cls._metrics_initialized = True
 

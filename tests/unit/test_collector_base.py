@@ -77,6 +77,19 @@ class TestMetricCollector(BaseCollectorTest):
         assert hasattr(collector, "_collector_last_success")
         assert hasattr(collector, "_collector_api_calls")
 
+    def test_no_phantom_success_timestamp_series(self, collector):
+        """No pre-initialized zero-forever success_timestamp series (F-025).
+
+        The performance-metric init used to pre-seed 6 collectors x 3 tiers = 18
+        meraki_exporter_collector_success_timestamp_seconds series at 0, but each
+        collector runs in exactly one tier, so 12 stayed 0 forever and read as
+        perpetually stale (breaking `time() - <timestamp>` staleness alerting).
+        After init (before any collection runs) there must be NO such series.
+        """
+        assert len(MetricCollector._collector_last_success._metrics) == 0
+        assert len(MetricCollector._collector_smoothing_window._metrics) == 0
+        assert len(MetricCollector._collector_start_offset._metrics) == 0
+
     def test_create_gauge(self, collector):
         """Test gauge creation."""
         gauge = collector._create_gauge(
