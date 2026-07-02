@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from prometheus_client import REGISTRY, Gauge
@@ -31,6 +31,9 @@ class TestMSCollector:
         parent.api = mock_api
         parent.settings = MagicMock()
         parent.settings.api.ms_packet_stats_interval = 0
+        parent.settings.api.ms_port_usage_interval = 0
+        parent.settings.api.concurrency_limit = 5
+        parent.settings.update_intervals.slow = 900
         parent.rate_limiter = None
 
         # Mock the _create_gauge method to return actual Gauge objects
@@ -202,9 +205,15 @@ class TestMSCollector:
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """Test STP priority collection."""
-        from unittest.mock import AsyncMock
+        """Test STP priority collection.
 
+        F-157: this now uses the 3-arg ``collect_stp_priorities(org_id,
+        org_name, device_lookup)`` signature -- the previous 2-arg form bound
+        ``device_lookup`` as ``org_name`` and never exercised real metric
+        emission. Also resets the F-037 interval gate so the call isn't
+        skipped, and asserts actual ``meraki_ms_stp_priority`` gauge samples
+        via the registry instead of only call counts.
+        """
         # The collector now fetches networks via parent.inventory.get_networks
         # rather than the SDK directly, so the network filter applies.
         mock_parent.inventory = MagicMock()
@@ -258,26 +267,94 @@ class TestMSCollector:
 
         mock_api.switch.getNetworkSwitchStp = MagicMock(side_effect=get_network_stp)
 
-        # Run collection
-        await ms_collector.collect_stp_priorities("org123", device_lookup)
+        # Reset the F-037 interval gate so this call isn't skipped.
+        ms_collector._last_stp_collection = 0.0
+
+        # Run collection (3-arg form: org_id, org_name, device_lookup)
+        await ms_collector.collect_stp_priorities("org123", "Org 123", device_lookup)
 
         # Verify network fetch went through inventory (filter applies),
         # not directly to the SDK.
         mock_parent.inventory.get_networks.assert_awaited_once_with("org123")
         assert mock_api.switch.getNetworkSwitchStp.call_count == 2  # Only for net1 and net2
 
-        # Verify metrics were set correctly
-        # Note: In real tests, you'd want to verify the actual metric values
-        # This would require accessing the Prometheus metrics registry
+        # Verify metrics were actually set on the real Gauge/registry.
+        #
+        # NOTE: production's device_info = devices.get(switch_serial, {...})
+        # (ms.py collect_stp_priorities) returns the device_lookup entry as-is
+        # when a match is found, and that entry (as built by DeviceCollector's
+        # real _device_lookup, and in this fixture) does not itself carry a
+        # "serial" key -- only "name"/"model" -- so create_device_labels()
+        # falls back to serial="" for switches resolved via the lookup. This
+        # is a pre-existing behavior (unrelated to F-157/F-037) reflected here
+        # rather than fixed, since it is out of this finding's scope; flagged
+        # separately in the bug-bash brief.
+        net1_labels = {
+            "org_id": "org123",
+            "org_name": "Org 123",
+            "network_id": "net1",
+            "network_name": "Network 1",
+            "model": "MS250",
+            "device_type": "MS",
+            "serial": "",
+        }
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_stp_priority",
+                {**net1_labels, "name": "Switch 1"},
+            )
+            == 8192.0
+        )
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_stp_priority",
+                {**net1_labels, "name": "Switch 2"},
+            )
+            == 32768.0
+        )
+
+        net2_labels = {
+            "org_id": "org123",
+            "org_name": "Org 123",
+            "network_id": "net2",
+            "network_name": "Network 2",
+            "model": "MS350",
+            "device_type": "MS",
+            "serial": "",
+        }
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_stp_priority",
+                {**net2_labels, "name": "Switch 3"},
+            )
+            == 32768.0
+        )
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_stp_priority",
+                {**net2_labels, "name": "Switch 4"},
+            )
+            == 32768.0
+        )
 
     async def test_collect_stp_handles_api_errors(
         self,
         ms_collector: MSCollector,
         mock_api: MagicMock,
+        mock_parent: MagicMock,
     ) -> None:
-        """Test STP collection handles API errors gracefully."""
-        # Mock organization networks response
-        mock_api.organizations.getOrganizationNetworks = MagicMock(
+        """Test STP collection handles API errors gracefully.
+
+        F-157: previously this mocked ``api.organizations.getOrganizationNetworks``,
+        which production no longer calls (it goes through
+        ``parent.inventory.get_networks``); ``inventory`` was a plain
+        ``MagicMock`` so the ``await`` raised ``TypeError`` before
+        ``getNetworkSwitchStp`` was ever reached, and the test asserted
+        nothing. Now ``inventory.get_networks`` is a real ``AsyncMock`` and we
+        assert the STP call was actually attempted.
+        """
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_networks = AsyncMock(
             return_value=[
                 {
                     "id": "net1",
@@ -290,8 +367,15 @@ class TestMSCollector:
         # Make STP API call fail
         mock_api.switch.getNetworkSwitchStp = MagicMock(side_effect=Exception("API Error"))
 
+        # Reset the F-037 interval gate so this call isn't skipped.
+        ms_collector._last_stp_collection = 0.0
+
         # Should not raise due to error handling
-        await ms_collector.collect_stp_priorities("org123", {})
+        await ms_collector.collect_stp_priorities("org123", "Org 123", {})
+
+        # The STP call must actually have been attempted (previously this
+        # test never reached it because inventory.get_networks was un-awaited).
+        mock_api.switch.getNetworkSwitchStp.assert_called_once_with("net1")
 
     async def test_new_metrics_collection(
         self,
@@ -919,3 +1003,195 @@ class TestMSCollector:
         # Port 2 had no spanningTree/securePort -> nothing emitted.
         clean_active_labels = {**base_labels, "port_id": "2", "port_name": "Port 2"}
         assert REGISTRY.get_sample_value("meraki_ms_port_8021x_active", clean_active_labels) is None
+
+    async def test_collect_port_overview_error_shape_does_not_zero_counts(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """Test that an error-shaped overview response does not zero counts.
+
+        F-083: collect_port_overview must wrap the response in
+        validate_response_format so the SDK exhausted-retry error dict shape
+        ({"errors": [...]}) raises (and is swallowed by with_error_handling)
+        instead of being silently interpreted as zero active/inactive counts.
+        """
+        # Establish a baseline with a normal, successful response.
+        mock_api.switch.getOrganizationSwitchPortsOverview = MagicMock(
+            return_value={
+                "counts": {
+                    "byStatus": {
+                        "active": {"total": 42, "byMediaAndLinkSpeed": {}},
+                        "inactive": {"total": 7, "byMedia": {}},
+                    }
+                }
+            }
+        )
+        await ms_collector.collect_port_overview("org1", "Org One")
+
+        org_labels = {"org_id": "org1", "org_name": "Org One"}
+        assert REGISTRY.get_sample_value("meraki_ms_ports_active_total", org_labels) == 42.0
+        assert REGISTRY.get_sample_value("meraki_ms_ports_inactive_total", org_labels) == 7.0
+
+        # Now simulate the SDK exhausted-retry error shape.
+        mock_api.switch.getOrganizationSwitchPortsOverview = MagicMock(
+            return_value={"errors": ["exhausted retries"]}
+        )
+        await ms_collector.collect_port_overview("org1", "Org One")
+
+        # Values must be untouched (NOT reset to 0): validate_response_format
+        # raises DataValidationError and with_error_handling(continue_on_error=True)
+        # swallows it before .set() is ever reached.
+        assert REGISTRY.get_sample_value("meraki_ms_ports_active_total", org_labels) == 42.0
+        assert REGISTRY.get_sample_value("meraki_ms_ports_inactive_total", org_labels) == 7.0
+
+    async def test_collect_sets_port_status_metric_via_set_metric(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Test that port_status is routed through parent._set_metric.
+
+        F-084: port_status (and the other per-port/per-device gauges) must
+        be routed through ``parent._set_metric`` -- not a bare
+        ``.labels().set()`` call -- so expiration tracking covers removed
+        switches and stale link_speed/duplex series on renegotiation.
+        """
+        device = {
+            "serial": "Q123-456-789",
+            "name": "Test Switch",
+            "model": "MS250-48",
+            "networkId": "net1",
+            "networkName": "Test Network",
+            "orgId": "org1",
+            "orgName": "Org One",
+        }
+
+        mock_api.switch.getDeviceSwitchPortsStatuses = MagicMock(
+            return_value=[
+                {
+                    "portId": "1",
+                    "name": "Port 1",
+                    "status": "Connected",
+                    "speed": "1 Gbps",
+                    "duplex": "full",
+                }
+            ]
+        )
+
+        await ms_collector.collect(device)
+
+        labels = {
+            "org_id": "org1",
+            "org_name": "Org One",
+            "network_id": "net1",
+            "network_name": "Test Network",
+            "serial": "Q123-456-789",
+            "name": "Test Switch",
+            "model": "MS250-48",
+            "device_type": "MS",
+            "port_id": "1",
+            "port_name": "Port 1",
+            "link_speed": "1 Gbps",
+            "duplex": "full",
+        }
+        assert REGISTRY.get_sample_value("meraki_ms_port_status", labels) == 1.0
+
+        # Confirm emission actually went through the expiration-tracking
+        # helper (mock_parent._set_metric), not a direct .labels().set().
+        tracked_metric_names = {
+            call.args[3] for call in mock_parent._set_metric.call_args_list if len(call.args) > 3
+        }
+        assert "meraki_ms_port_status" in tracked_metric_names
+
+    async def test_stp_state_transition_removes_stale_series(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+    ) -> None:
+        """Test that an STP state transition clears the stale series.
+
+        F-070: a port transitioning STP state must not leave the old
+        state's series lingering at 1 alongside the new one for the TTL
+        expiration window.
+        """
+        device = {
+            "serial": "Q123-456-789",
+            "name": "Test Switch",
+            "model": "MS250-48",
+            "networkId": "net1",
+            "networkName": "Test Network",
+            "orgId": "org1",
+            "orgName": "Org One",
+        }
+
+        def ports_with_state(state: str) -> list[dict]:
+            return [
+                {
+                    "portId": "1",
+                    "name": "Port 1",
+                    "status": "Connected",
+                    "spanningTree": {"statuses": [state]},
+                }
+            ]
+
+        mock_api.switch.getDeviceSwitchPortsStatuses = MagicMock(
+            return_value=ports_with_state("forwarding")
+        )
+        await ms_collector.collect(device)
+
+        base_labels = {
+            "org_id": "org1",
+            "org_name": "Org One",
+            "network_id": "net1",
+            "network_name": "Test Network",
+            "serial": "Q123-456-789",
+            "name": "Test Switch",
+            "model": "MS250-48",
+            "device_type": "MS",
+            "port_id": "1",
+            "port_name": "Port 1",
+        }
+        forwarding_labels = {**base_labels, "state": "forwarding"}
+        assert REGISTRY.get_sample_value("meraki_ms_port_stp_state", forwarding_labels) == 1.0
+
+        # Transition to blocking on the same port.
+        mock_api.switch.getDeviceSwitchPortsStatuses = MagicMock(
+            return_value=ports_with_state("blocking")
+        )
+        await ms_collector.collect(device)
+
+        blocking_labels = {**base_labels, "state": "blocking"}
+        assert REGISTRY.get_sample_value("meraki_ms_port_stp_state", blocking_labels) == 1.0
+        # The stale forwarding series must be gone, not merely left at 1.
+        assert REGISTRY.get_sample_value("meraki_ms_port_stp_state", forwarding_labels) is None
+
+    async def test_collect_stp_priorities_interval_gated(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Test that STP priority collection is interval-gated.
+
+        F-037: a second immediate call within the SLOW interval must be
+        skipped entirely (no additional getNetworkSwitchStp calls), since STP
+        bridge priority is near-static configuration collected at the SLOW
+        cadence even though DeviceCollector dispatches this at MEDIUM tier.
+        """
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_networks = AsyncMock(
+            return_value=[{"id": "net1", "name": "Network 1", "productTypes": ["switch"]}]
+        )
+        mock_api.switch.getNetworkSwitchStp = MagicMock(
+            return_value={"rstpEnabled": True, "stpBridgePriority": []}
+        )
+
+        ms_collector._last_stp_collection = 0.0
+        await ms_collector.collect_stp_priorities("org123", "Org One", {})
+        assert mock_api.switch.getNetworkSwitchStp.call_count == 1
+
+        # Immediately call again: the SLOW-interval gate should skip it.
+        await ms_collector.collect_stp_priorities("org123", "Org One", {})
+        assert mock_api.switch.getNetworkSwitchStp.call_count == 1

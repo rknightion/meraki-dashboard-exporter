@@ -6,6 +6,7 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
+from ...core.async_utils import ManagedTaskGroup
 from ...core.constants import MSMetricName
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels, create_port_labels
@@ -20,6 +21,38 @@ if TYPE_CHECKING:
     pass
 
 logger = get_logger(__name__)
+
+# Label ordering for the STP-state and 802.1X-status gauges, matching the
+# ``labelnames=[...]`` order declared in ``_initialize_metrics``. Used to build
+# positional ``.remove()`` calls when clearing stale label-transition series
+# (see F-070: label-valued state series must not linger past a transition).
+_STP_STATE_LABEL_ORDER = (
+    LabelName.ORG_ID,
+    LabelName.ORG_NAME,
+    LabelName.NETWORK_ID,
+    LabelName.NETWORK_NAME,
+    LabelName.SERIAL,
+    LabelName.NAME,
+    LabelName.MODEL,
+    LabelName.DEVICE_TYPE,
+    LabelName.PORT_ID,
+    LabelName.PORT_NAME,
+    LabelName.STATE,
+)
+
+_8021X_STATUS_LABEL_ORDER = (
+    LabelName.ORG_ID,
+    LabelName.ORG_NAME,
+    LabelName.NETWORK_ID,
+    LabelName.NETWORK_NAME,
+    LabelName.SERIAL,
+    LabelName.NAME,
+    LabelName.MODEL,
+    LabelName.DEVICE_TYPE,
+    LabelName.PORT_ID,
+    LabelName.PORT_NAME,
+    LabelName.STATUS,
+)
 
 
 class MSCollector(BaseDeviceCollector):
@@ -40,6 +73,15 @@ class MSCollector(BaseDeviceCollector):
         self._org_port_status_supported: bool | None = None
         # Tracks which device serials were seen during the current collection cycle
         self._active_serials: set[str] = set()
+        # Tracks the last emitted STP state(s) / 802.1X status(es) per
+        # (serial, port_id) so a transition can remove the now-stale label
+        # series instead of relying on TTL expiration (see F-070).
+        self._emitted_stp_states: dict[tuple[str, str], set[str]] = {}
+        self._emitted_8021x_statuses: dict[tuple[str, str], set[str]] = {}
+        # Timestamp of the last successful STP priority collection, used to
+        # gate collect_stp_priorities to the SLOW cadence even though it is
+        # invoked from the MEDIUM-tier DeviceCollector cycle (see F-037).
+        self._last_stp_collection: float = 0.0
         self._initialize_metrics()
 
     def _initialize_metrics(self) -> None:
@@ -535,6 +577,31 @@ class MSCollector(BaseDeviceCollector):
                 MSMetricName.MS_PORT_WARNINGS_TOTAL.value,
             )
 
+    def _remove_stale_label_series(
+        self,
+        gauge: Any,
+        labels: dict[str, str],
+        label_order: tuple[LabelName, ...],
+    ) -> None:
+        """Remove a single stale label-valued series, tolerating absence.
+
+        Parameters
+        ----------
+        gauge : Any
+            The Gauge metric to remove a child series from.
+        labels : dict[str, str]
+            Full label dict (as returned by ``create_port_labels``) for the
+            stale series to remove.
+        label_order : tuple[LabelName, ...]
+            The exact order the gauge's ``labelnames`` were declared in -
+            ``Gauge.remove`` takes positional values in that order.
+
+        """
+        try:
+            gauge.remove(*[labels[name.value] for name in label_order])
+        except KeyError:
+            pass  # Series doesn't exist (already removed or never emitted)
+
     def _emit_port_stp_8021x_metrics(
         self,
         device: dict[str, Any],
@@ -547,8 +614,14 @@ class MSCollector(BaseDeviceCollector):
         Extracted from the same port-status payload already processed by
         ``_emit_port_error_warning_metrics`` - no additional API call. Emission
         goes through ``parent._set_metric`` so that a state/status which stops
-        appearing in the API response expires automatically. Ports with no
-        ``spanningTree``/``securePort`` data emit nothing.
+        appearing in the API response also expires eventually via TTL as a
+        backstop. In addition, any state/status previously emitted for this
+        exact port that is NOT part of the current cycle's set is explicitly
+        removed here so a transition (e.g. Forwarding -> Blocking) doesn't
+        leave two mutually-exclusive series both reporting 1 for the 600-900s
+        TTL window (see F-070). Ports with no ``spanningTree``/``securePort``
+        data emit nothing (and any previously-emitted series for that port
+        are cleared).
 
         Parameters
         ----------
@@ -563,8 +636,13 @@ class MSCollector(BaseDeviceCollector):
             Organization name.
 
         """
+        serial = device.get("serial", "")
+        port_id = str(port.get("portId", ""))
+        port_key = (serial, port_id)
+
         spanning = port.get("spanningTree") or {}
         statuses = spanning.get("statuses") or []
+        current_states: set[str] = set(statuses)
         for state in statuses:
             stp_labels = create_port_labels(
                 device, port, org_id=org_id, org_name=org_name, state=state
@@ -576,8 +654,32 @@ class MSCollector(BaseDeviceCollector):
                 MSMetricName.MS_PORT_STP_STATE.value,
             )
 
+        previous_states = self._emitted_stp_states.get(port_key, set())
+        for stale_state in previous_states - current_states:
+            stale_labels = create_port_labels(
+                device, port, org_id=org_id, org_name=org_name, state=stale_state
+            )
+            self._remove_stale_label_series(
+                self._switch_port_stp_state, stale_labels, _STP_STATE_LABEL_ORDER
+            )
+
+        if current_states:
+            self._emitted_stp_states[port_key] = current_states
+        else:
+            self._emitted_stp_states.pop(port_key, None)
+
         secure = port.get("securePort") or {}
         if not secure:
+            # No secure-port data this cycle: clear any previously-emitted
+            # 802.1X status series for this port too.
+            previous_statuses = self._emitted_8021x_statuses.pop(port_key, set())
+            for stale_status in previous_statuses:
+                stale_labels = create_port_labels(
+                    device, port, org_id=org_id, org_name=org_name, status=stale_status
+                )
+                self._remove_stale_label_series(
+                    self._switch_port_8021x_status, stale_labels, _8021X_STATUS_LABEL_ORDER
+                )
             return
 
         active = secure.get("active", False)
@@ -590,6 +692,7 @@ class MSCollector(BaseDeviceCollector):
         )
 
         auth = secure.get("authenticationStatus")
+        current_statuses: set[str] = {auth} if auth else set()
         if auth:
             status_labels = create_port_labels(
                 device, port, org_id=org_id, org_name=org_name, status=auth
@@ -600,6 +703,20 @@ class MSCollector(BaseDeviceCollector):
                 1,
                 MSMetricName.MS_PORT_8021X_STATUS.value,
             )
+
+        previous_statuses = self._emitted_8021x_statuses.get(port_key, set())
+        for stale_status in previous_statuses - current_statuses:
+            stale_labels = create_port_labels(
+                device, port, org_id=org_id, org_name=org_name, status=stale_status
+            )
+            self._remove_stale_label_series(
+                self._switch_port_8021x_status, stale_labels, _8021X_STATUS_LABEL_ORDER
+            )
+
+        if current_statuses:
+            self._emitted_8021x_statuses[port_key] = current_statuses
+        else:
+            self._emitted_8021x_statuses.pop(port_key, None)
 
     @log_api_call("getOrganizationSwitchPortsStatusesBySwitch")
     @with_error_handling(
@@ -680,7 +797,12 @@ class MSCollector(BaseDeviceCollector):
                 )
 
                 is_connected = 1 if port.get("status") == "Connected" else 0
-                self._switch_port_status.labels(**port_labels).set(is_connected)
+                self.parent._set_metric(
+                    self._switch_port_status,
+                    port_labels,
+                    is_connected,
+                    MSMetricName.MS_PORT_STATUS.value,
+                )
 
                 self._emit_port_error_warning_metrics(device_data, port, org_id, org_name)
                 self._emit_port_stp_8021x_metrics(device_data, port, org_id, org_name)
@@ -735,7 +857,12 @@ class MSCollector(BaseDeviceCollector):
 
                 # Port status with speed and duplex
                 is_connected = 1 if port.get("status") == "Connected" else 0
-                self._switch_port_status.labels(**port_labels).set(is_connected)
+                self.parent._set_metric(
+                    self._switch_port_status,
+                    port_labels,
+                    is_connected,
+                    MSMetricName.MS_PORT_STATUS.value,
+                )
 
                 # Active port errors/warnings (expire automatically once cleared)
                 self._emit_port_error_warning_metrics(device, port, org_id, org_name)
@@ -751,16 +878,22 @@ class MSCollector(BaseDeviceCollector):
                         rx_labels = create_port_labels(
                             device, port, org_id=org_id, org_name=org_name, direction="rx"
                         )
-                        self._switch_port_traffic.labels(**rx_labels).set(
-                            traffic_counters["recv"] * 1000 / 8  # Convert kbps to bytes/sec
+                        self.parent._set_metric(
+                            self._switch_port_traffic,
+                            rx_labels,
+                            traffic_counters["recv"] * 1000 / 8,  # Convert kbps to bytes/sec
+                            MSMetricName.MS_PORT_TRAFFIC_BYTES.value,
                         )
 
                     if "sent" in traffic_counters:
                         tx_labels = create_port_labels(
                             device, port, org_id=org_id, org_name=org_name, direction="tx"
                         )
-                        self._switch_port_traffic.labels(**tx_labels).set(
-                            traffic_counters["sent"] * 1000 / 8  # Convert kbps to bytes/sec
+                        self.parent._set_metric(
+                            self._switch_port_traffic,
+                            tx_labels,
+                            traffic_counters["sent"] * 1000 / 8,  # Convert kbps to bytes/sec
+                            MSMetricName.MS_PORT_TRAFFIC_BYTES.value,
                         )
 
                 # Usage counters (total bytes over timespan)
@@ -771,24 +904,33 @@ class MSCollector(BaseDeviceCollector):
                         rx_labels = create_port_labels(
                             device, port, org_id=org_id, org_name=org_name, direction="rx"
                         )
-                        self._switch_port_usage.labels(**rx_labels).set(
-                            usage_counters["recv"] * 1024  # Convert KB to bytes
+                        self.parent._set_metric(
+                            self._switch_port_usage,
+                            rx_labels,
+                            usage_counters["recv"] * 1024,  # Convert KB to bytes
+                            MSMetricName.MS_PORT_USAGE_BYTES.value,
                         )
 
                     if "sent" in usage_counters:
                         tx_labels = create_port_labels(
                             device, port, org_id=org_id, org_name=org_name, direction="tx"
                         )
-                        self._switch_port_usage.labels(**tx_labels).set(
-                            usage_counters["sent"] * 1024  # Convert KB to bytes
+                        self.parent._set_metric(
+                            self._switch_port_usage,
+                            tx_labels,
+                            usage_counters["sent"] * 1024,  # Convert KB to bytes
+                            MSMetricName.MS_PORT_USAGE_BYTES.value,
                         )
 
                     if "total" in usage_counters:
                         total_labels = create_port_labels(
                             device, port, org_id=org_id, org_name=org_name, direction="total"
                         )
-                        self._switch_port_usage.labels(**total_labels).set(
-                            usage_counters["total"] * 1024  # Convert KB to bytes
+                        self.parent._set_metric(
+                            self._switch_port_usage,
+                            total_labels,
+                            usage_counters["total"] * 1024,  # Convert KB to bytes
+                            MSMetricName.MS_PORT_USAGE_BYTES.value,
                         )
 
                 # Client count
@@ -797,7 +939,12 @@ class MSCollector(BaseDeviceCollector):
                 port_labels_no_extra = create_port_labels(
                     device, port, org_id=org_id, org_name=org_name
                 )
-                self._switch_port_client_count.labels(**port_labels_no_extra).set(client_count)
+                self.parent._set_metric(
+                    self._switch_port_client_count,
+                    port_labels_no_extra,
+                    client_count,
+                    MSMetricName.MS_PORT_CLIENT_COUNT.value,
+                )
 
             # Extract POE data from port statuses (POE data is included in port status)
             total_poe_consumption = 0
@@ -811,18 +958,38 @@ class MSCollector(BaseDeviceCollector):
                 if poe_info.get("isAllocated", False):
                     # Port is drawing POE power
                     power_used = port.get("powerUsageInWh", 0)
-                    self._switch_poe_port_power.labels(**port_labels).set(power_used)
+                    self.parent._set_metric(
+                        self._switch_poe_port_power,
+                        port_labels,
+                        power_used,
+                        MSMetricName.MS_POE_PORT_POWER_WATTHOURS.value,
+                    )
                     total_poe_consumption += power_used
                 else:
                     # Port is not drawing POE power
-                    self._switch_poe_port_power.labels(**port_labels).set(0)
+                    self.parent._set_metric(
+                        self._switch_poe_port_power,
+                        port_labels,
+                        0,
+                        MSMetricName.MS_POE_PORT_POWER_WATTHOURS.value,
+                    )
 
             # Set switch-level POE total
-            self._switch_poe_total_power.labels(**device_labels).set(total_poe_consumption)
+            self.parent._set_metric(
+                self._switch_poe_total_power,
+                device_labels,
+                total_poe_consumption,
+                MSMetricName.MS_POE_TOTAL_POWER_WATTHOURS.value,
+            )
 
             # Set total switch power usage (POE consumption is the main power draw)
             # This is an approximation - actual switch base power consumption varies by model
-            self._switch_power.labels(**device_labels).set(total_poe_consumption)
+            self.parent._set_metric(
+                self._switch_power,
+                device_labels,
+                total_poe_consumption,
+                MSMetricName.MS_POWER_USAGE_WATTS.value,
+            )
 
             # Note: POE budget is not available via API, would need a lookup table by model
 
@@ -878,16 +1045,22 @@ class MSCollector(BaseDeviceCollector):
                     rx_labels = create_port_labels(
                         device, port, org_id=org_id, org_name=org_name, direction="rx"
                     )
-                    self._switch_port_traffic.labels(**rx_labels).set(
-                        traffic_counters["recv"] * 1000 / 8
+                    self.parent._set_metric(
+                        self._switch_port_traffic,
+                        rx_labels,
+                        traffic_counters["recv"] * 1000 / 8,
+                        MSMetricName.MS_PORT_TRAFFIC_BYTES.value,
                     )
 
                 if "sent" in traffic_counters:
                     tx_labels = create_port_labels(
                         device, port, org_id=org_id, org_name=org_name, direction="tx"
                     )
-                    self._switch_port_traffic.labels(**tx_labels).set(
-                        traffic_counters["sent"] * 1000 / 8
+                    self.parent._set_metric(
+                        self._switch_port_traffic,
+                        tx_labels,
+                        traffic_counters["sent"] * 1000 / 8,
+                        MSMetricName.MS_PORT_TRAFFIC_BYTES.value,
                     )
 
             # Usage counters (total bytes over timespan)
@@ -898,20 +1071,33 @@ class MSCollector(BaseDeviceCollector):
                     rx_labels = create_port_labels(
                         device, port, org_id=org_id, org_name=org_name, direction="rx"
                     )
-                    self._switch_port_usage.labels(**rx_labels).set(usage_counters["recv"] * 1024)
+                    self.parent._set_metric(
+                        self._switch_port_usage,
+                        rx_labels,
+                        usage_counters["recv"] * 1024,
+                        MSMetricName.MS_PORT_USAGE_BYTES.value,
+                    )
 
                 if "sent" in usage_counters:
                     tx_labels = create_port_labels(
                         device, port, org_id=org_id, org_name=org_name, direction="tx"
                     )
-                    self._switch_port_usage.labels(**tx_labels).set(usage_counters["sent"] * 1024)
+                    self.parent._set_metric(
+                        self._switch_port_usage,
+                        tx_labels,
+                        usage_counters["sent"] * 1024,
+                        MSMetricName.MS_PORT_USAGE_BYTES.value,
+                    )
 
                 if "total" in usage_counters:
                     total_labels = create_port_labels(
                         device, port, org_id=org_id, org_name=org_name, direction="total"
                     )
-                    self._switch_port_usage.labels(**total_labels).set(
-                        usage_counters["total"] * 1024
+                    self.parent._set_metric(
+                        self._switch_port_usage,
+                        total_labels,
+                        usage_counters["total"] * 1024,
+                        MSMetricName.MS_PORT_USAGE_BYTES.value,
                     )
 
             # Client count
@@ -919,7 +1105,12 @@ class MSCollector(BaseDeviceCollector):
             port_labels_no_extra = create_port_labels(
                 device, port, org_id=org_id, org_name=org_name
             )
-            self._switch_port_client_count.labels(**port_labels_no_extra).set(client_count)
+            self.parent._set_metric(
+                self._switch_port_client_count,
+                port_labels_no_extra,
+                client_count,
+                MSMetricName.MS_PORT_CLIENT_COUNT.value,
+            )
 
         # Extract POE data from port statuses (POE data is included in port status)
         total_poe_consumption = 0
@@ -929,14 +1120,51 @@ class MSCollector(BaseDeviceCollector):
             poe_info = port.get("poe", {})
             if poe_info.get("isAllocated", False):
                 power_used = port.get("powerUsageInWh", 0)
-                self._switch_poe_port_power.labels(**port_labels).set(power_used)
+                self.parent._set_metric(
+                    self._switch_poe_port_power,
+                    port_labels,
+                    power_used,
+                    MSMetricName.MS_POE_PORT_POWER_WATTHOURS.value,
+                )
                 total_poe_consumption += power_used
             else:
-                self._switch_poe_port_power.labels(**port_labels).set(0)
+                self.parent._set_metric(
+                    self._switch_poe_port_power,
+                    port_labels,
+                    0,
+                    MSMetricName.MS_POE_PORT_POWER_WATTHOURS.value,
+                )
 
-        self._switch_poe_total_power.labels(**device_labels).set(total_poe_consumption)
-        self._switch_power.labels(**device_labels).set(total_poe_consumption)
+        self.parent._set_metric(
+            self._switch_poe_total_power,
+            device_labels,
+            total_poe_consumption,
+            MSMetricName.MS_POE_TOTAL_POWER_WATTHOURS.value,
+        )
+        self.parent._set_metric(
+            self._switch_power,
+            device_labels,
+            total_poe_consumption,
+            MSMetricName.MS_POWER_USAGE_WATTS.value,
+        )
         self._mark_port_usage_collected(serial)
+
+    def _should_collect_stp_priorities(self) -> bool:
+        """Return whether enough time has elapsed to (re)collect STP priorities.
+
+        STP bridge priority is near-static configuration; this collector is
+        invoked every MEDIUM-tier (300s) DeviceCollector cycle but is
+        self-gated here to the SLOW cadence (see F-037), mirroring the
+        ``_should_collect_port_usage`` throttle pattern.
+        """
+        interval = self.settings.update_intervals.slow
+        if interval <= 0:
+            return True
+        return (time.time() - self._last_stp_collection) >= interval
+
+    def _mark_stp_priorities_collected(self) -> None:
+        """Record that STP priorities were just collected for this org."""
+        self._last_stp_collection = time.time()
 
     @with_error_handling(
         operation="Collect STP priorities",
@@ -946,6 +1174,11 @@ class MSCollector(BaseDeviceCollector):
         self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]] | None = None
     ) -> None:
         """Collect STP priorities for all switches in an organization.
+
+        Interval-gated to the SLOW cadence (``settings.update_intervals.slow``)
+        and fans out per-network fetches concurrently via ``ManagedTaskGroup``
+        (bounded by ``settings.api.concurrency_limit``) instead of a sequential
+        loop (see F-037).
 
         Parameters
         ----------
@@ -958,6 +1191,14 @@ class MSCollector(BaseDeviceCollector):
 
         """
         from ...core.domain_models import STPConfiguration
+
+        if not self._should_collect_stp_priorities():
+            logger.debug(
+                "Skipping STP priority collection (interval gate)",
+                org_id=org_id,
+                interval_seconds=self.settings.update_intervals.slow,
+            )
+            return
 
         try:
             # Fetch networks via the shared inventory cache so the network
@@ -978,8 +1219,7 @@ class MSCollector(BaseDeviceCollector):
             # Use provided device lookup or parent's
             devices = device_lookup or getattr(self.parent, "_device_lookup", {})
 
-            # Collect STP data for each network
-            for network in switch_networks:
+            async def _collect_network_stp(network: dict[str, Any]) -> None:
                 network_id = network["id"]
 
                 try:
@@ -988,6 +1228,11 @@ class MSCollector(BaseDeviceCollector):
                         stp_data = await asyncio.to_thread(
                             self.api.switch.getNetworkSwitchStp,
                             network_id,
+                        )
+                        stp_data = validate_response_format(
+                            stp_data,
+                            expected_type=dict,
+                            operation="getNetworkSwitchStp",
                         )
 
                     # Parse the STP configuration
@@ -1008,7 +1253,12 @@ class MSCollector(BaseDeviceCollector):
                         # Create standard device labels
                         labels = create_device_labels(device_info, org_id=org_id, org_name=org_name)
 
-                        self._switch_stp_priority.labels(**labels).set(priority)
+                        self.parent._set_metric(
+                            self._switch_stp_priority,
+                            labels,
+                            priority,
+                            MSMetricName.MS_STP_PRIORITY.value,
+                        )
 
                         logger.debug(
                             "Set STP priority",
@@ -1023,6 +1273,18 @@ class MSCollector(BaseDeviceCollector):
                         "Failed to collect STP data for network",
                         network_id=network_id,
                     )
+
+            async with ManagedTaskGroup(
+                name="ms_stp",
+                max_concurrency=self.settings.api.concurrency_limit,
+            ) as group:
+                for network in switch_networks:
+                    await group.create_task(
+                        _collect_network_stp(network),
+                        name=f"stp_{network['id']}",
+                    )
+
+            self._mark_stp_priorities_collected()
 
         except Exception:
             logger.exception(
@@ -1073,32 +1335,50 @@ class MSCollector(BaseDeviceCollector):
                     operation="getDeviceSwitchPortsStatusesPackets",
                 )
 
-            # Mapping of API descriptions to metric types
+            # Mapping of API descriptions to metric types (gauge + metric-name pairs
+            # for count/rate, so _set_metric can track expiration correctly).
             metric_map = {
-                "Total": (self._switch_port_packets_total, self._switch_port_packets_rate_total),
+                "Total": (
+                    self._switch_port_packets_total,
+                    self._switch_port_packets_rate_total,
+                    MSMetricName.MS_PORT_PACKETS_TOTAL.value,
+                    MSMetricName.MS_PORT_PACKETS_RATE_TOTAL.value,
+                ),
                 "Broadcast": (
                     self._switch_port_packets_broadcast,
                     self._switch_port_packets_rate_broadcast,
+                    MSMetricName.MS_PORT_PACKETS_BROADCAST.value,
+                    MSMetricName.MS_PORT_PACKETS_RATE_BROADCAST.value,
                 ),
                 "Multicast": (
                     self._switch_port_packets_multicast,
                     self._switch_port_packets_rate_multicast,
+                    MSMetricName.MS_PORT_PACKETS_MULTICAST.value,
+                    MSMetricName.MS_PORT_PACKETS_RATE_MULTICAST.value,
                 ),
                 "CRC align errors": (
                     self._switch_port_packets_crcerrors,
                     self._switch_port_packets_rate_crcerrors,
+                    MSMetricName.MS_PORT_PACKETS_CRCERRORS.value,
+                    MSMetricName.MS_PORT_PACKETS_RATE_CRCERRORS.value,
                 ),
                 "Fragments": (
                     self._switch_port_packets_fragments,
                     self._switch_port_packets_rate_fragments,
+                    MSMetricName.MS_PORT_PACKETS_FRAGMENTS.value,
+                    MSMetricName.MS_PORT_PACKETS_RATE_FRAGMENTS.value,
                 ),
                 "Collisions": (
                     self._switch_port_packets_collisions,
                     self._switch_port_packets_rate_collisions,
+                    MSMetricName.MS_PORT_PACKETS_COLLISIONS.value,
+                    MSMetricName.MS_PORT_PACKETS_RATE_COLLISIONS.value,
                 ),
                 "Topology changes": (
                     self._switch_port_packets_topologychanges,
                     self._switch_port_packets_rate_topologychanges,
+                    MSMetricName.MS_PORT_PACKETS_TOPOLOGYCHANGES.value,
+                    MSMetricName.MS_PORT_PACKETS_RATE_TOPOLOGYCHANGES.value,
                 ),
             }
 
@@ -1109,7 +1389,9 @@ class MSCollector(BaseDeviceCollector):
                     desc = packet_type.get("desc", "")
 
                     if desc in metric_map:
-                        count_metric, rate_metric = metric_map[desc]
+                        count_metric, rate_metric, count_metric_name, rate_metric_name = metric_map[
+                            desc
+                        ]
 
                         # Total counts
                         total = packet_type.get("total", 0)
@@ -1128,9 +1410,11 @@ class MSCollector(BaseDeviceCollector):
                         )
 
                         # Set count metrics
-                        count_metric.labels(**total_labels).set(total)
-                        count_metric.labels(**sent_labels).set(sent)
-                        count_metric.labels(**recv_labels).set(recv)
+                        self.parent._set_metric(
+                            count_metric, total_labels, total, count_metric_name
+                        )
+                        self.parent._set_metric(count_metric, sent_labels, sent, count_metric_name)
+                        self.parent._set_metric(count_metric, recv_labels, recv, count_metric_name)
 
                         # Rate per second
                         rate_data = packet_type.get("ratePerSec", {})
@@ -1139,9 +1423,15 @@ class MSCollector(BaseDeviceCollector):
                         rate_recv = rate_data.get("recv", 0)
 
                         # Set rate metrics
-                        rate_metric.labels(**total_labels).set(rate_total)
-                        rate_metric.labels(**sent_labels).set(rate_sent)
-                        rate_metric.labels(**recv_labels).set(rate_recv)
+                        self.parent._set_metric(
+                            rate_metric, total_labels, rate_total, rate_metric_name
+                        )
+                        self.parent._set_metric(
+                            rate_metric, sent_labels, rate_sent, rate_metric_name
+                        )
+                        self.parent._set_metric(
+                            rate_metric, recv_labels, rate_recv, rate_metric_name
+                        )
 
             logger.debug(
                 "Collected packet statistics",
@@ -1180,6 +1470,11 @@ class MSCollector(BaseDeviceCollector):
             self.api.switch.getOrganizationSwitchPortsOverview,
             org_id,
             timespan=43200,  # 12 hours as required
+        )
+        overview = validate_response_format(
+            overview,
+            expected_type=dict,
+            operation="getOrganizationSwitchPortsOverview",
         )
 
         # Parse the counts structure

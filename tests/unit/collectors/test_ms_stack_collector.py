@@ -116,13 +116,82 @@ class TestMSStackCollector:
         for sample in samples:
             assert sample.value == 1.0
 
-    async def test_collect_for_network_first_member_is_primary(
+    async def test_collect_for_network_uses_api_provided_member_roles(
         self,
         stack_collector: MSStackCollector,
         mock_api: MagicMock,
         registry: CollectorRegistry,
     ) -> None:
-        """First serial in list gets role=primary, others get role=member."""
+        """Role labels come from the API's members[].role, not serial position."""
+        mock_api.switch.getNetworkSwitchStacks = MagicMock(
+            return_value=[
+                {
+                    "id": "stack-1",
+                    # Deliberately unordered vs. members[] to prove role is not
+                    # derived from this array's position.
+                    "serials": ["QAAA-MEMBER1", "QAAA-ACTIVE", "QAAA-STANDBY"],
+                    "members": [
+                        {"serial": "QAAA-ACTIVE", "role": "active"},
+                        {"serial": "QAAA-STANDBY", "role": "standby"},
+                        {"serial": "QAAA-MEMBER1", "role": "member"},
+                    ],
+                }
+            ]
+        )
+
+        await stack_collector.collect_for_network(
+            org_id="org1",
+            org_name="Org One",
+            network_id="net1",
+            network_name="Net One",
+        )
+
+        role_by_serial: dict[str, str] = {
+            s.labels["serial"]: s.labels["role"]
+            for s in _get_samples(registry, MSMetricName.MS_STACK_MEMBER_STATUS)
+        }
+        assert role_by_serial["QAAA-ACTIVE"] == "active"
+        assert role_by_serial["QAAA-STANDBY"] == "standby"
+        assert role_by_serial["QAAA-MEMBER1"] == "member"
+
+    async def test_collect_for_network_members_total_counts_members_array(
+        self,
+        stack_collector: MSStackCollector,
+        mock_api: MagicMock,
+        registry: CollectorRegistry,
+    ) -> None:
+        """Member count is derived from members[] when present, not serials[]."""
+        mock_api.switch.getNetworkSwitchStacks = MagicMock(
+            return_value=[
+                {
+                    "id": "stack-1",
+                    "serials": ["QAAA-0001-0001", "QAAA-0001-0002"],
+                    "members": [
+                        {"serial": "QAAA-0001-0001", "role": "active"},
+                        {"serial": "QAAA-0001-0002", "role": "standby"},
+                    ],
+                }
+            ]
+        )
+
+        await stack_collector.collect_for_network(
+            org_id="org1",
+            org_name="Org One",
+            network_id="net1",
+            network_name="Net One",
+        )
+
+        samples = _get_samples(registry, MSMetricName.MS_STACK_MEMBERS_TOTAL)
+        assert len(samples) == 1
+        assert samples[0].value == 2.0
+
+    async def test_collect_for_network_falls_back_to_serials_when_members_absent(
+        self,
+        stack_collector: MSStackCollector,
+        mock_api: MagicMock,
+        registry: CollectorRegistry,
+    ) -> None:
+        """Defensive fallback: no members[] -> positional primary/member roles from serials[]."""
         mock_api.switch.getNetworkSwitchStacks = MagicMock(
             return_value=[
                 {
@@ -146,6 +215,10 @@ class TestMSStackCollector:
         assert role_by_serial["QAAA-PRIMARY"] == "primary"
         assert role_by_serial["QAAA-MEMBER1"] == "member"
         assert role_by_serial["QAAA-MEMBER2"] == "member"
+
+        total_samples = _get_samples(registry, MSMetricName.MS_STACK_MEMBERS_TOTAL)
+        assert len(total_samples) == 1
+        assert total_samples[0].value == 3.0
 
     async def test_collect_for_network_empty_stacks(
         self,

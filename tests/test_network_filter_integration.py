@@ -57,6 +57,11 @@ async def test_ms_stp_uses_parent_inventory() -> None:
     # method short-circuits and we only verify the network fetch path.
     parent.inventory.get_networks.return_value = []
     collector.parent = parent
+    # F-037 gates collect_stp_priorities on the SLOW cadence; satisfy the gate
+    # (fresh instance, never collected) so the network-fetch path runs.
+    collector.settings = MagicMock()
+    collector.settings.update_intervals.slow = 900
+    collector._last_stp_collection = 0.0
 
     await collector.collect_stp_priorities("ORG", "Org Name", device_lookup={})
 
