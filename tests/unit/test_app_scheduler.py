@@ -3,8 +3,9 @@
 Covers the previously-untested scheduler surface:
 
 * ``_startup_collections`` sequencing and background-task bookkeeping.
-* ``_tiered_collection_loop`` happy path and the consecutive-failure
-  escalation that trips ``_shutdown_event`` and re-raises.
+* ``_tiered_collection_loop`` happy path and its behavior when
+  ``collect_tier`` raises (logged and swallowed, no failure-count kill
+  switch - see #528).
 * ``_wait_for_first_collection`` gating.
 * F-044: the ``_wait_for_first_collection`` task is tracked in
   ``_background_tasks`` and therefore cancelled on lifespan shutdown.
@@ -67,49 +68,38 @@ class TestTieredCollectionLoop:
         )
         assert calls >= 1
 
-    async def test_consecutive_failures_escalate_to_shutdown(self, test_settings: Settings) -> None:
-        """Ten consecutive failures set the shutdown event and re-raise (F-162)."""
-        exporter = ExporterApp(test_settings)
-        exporter.collector_manager.get_tier_interval = lambda tier: 0  # type: ignore[assignment]
-        exporter.collector_manager.collect_tier = AsyncMock(  # type: ignore[method-assign]
-            side_effect=RuntimeError("boom")
-        )
+    async def test_collect_tier_failure_is_logged_and_loop_continues(
+        self, test_settings: Settings
+    ) -> None:
+        """A collect_tier exception is swallowed (logged) and the loop keeps running (#528).
 
-        with pytest.raises(RuntimeError, match="boom"):
-            await asyncio.wait_for(
-                exporter._tiered_collection_loop(UpdateTier.FAST, initial_delay=0.0),
-                timeout=5.0,
-            )
-
-        assert exporter._shutdown_event.is_set()
-        # max_consecutive_failures = 10 -> exactly 10 attempts before bailing.
-        assert exporter.collector_manager.collect_tier.await_count == 10
-
-    async def test_failure_counter_resets_on_success(self, test_settings: Settings) -> None:
-        """A success between failures resets the streak so it never escalates."""
+        The dead 10-consecutive-failure kill switch was removed: collect_tier already
+        swallows per-org/per-collector failures at its own boundary (#509), so an
+        exception reaching this loop is unexpected and never actually accumulated a
+        streak. Honest health signals live in /ready + failure_streak instead.
+        """
         exporter = ExporterApp(test_settings)
         exporter.collector_manager.get_tier_interval = lambda tier: 0  # type: ignore[assignment]
 
-        results = [RuntimeError("x"), RuntimeError("x"), None, RuntimeError("x")]
-        idx = 0
+        calls = 0
 
         async def collect(tier: UpdateTier) -> None:
-            nonlocal idx
-            outcome = results[idx] if idx < len(results) else None
-            idx += 1
-            if idx >= len(results) + 1:
+            nonlocal calls
+            calls += 1
+            if calls >= 3:
                 exporter._shutdown_event.set()
-            if isinstance(outcome, Exception):
-                raise outcome
+            raise RuntimeError("boom")
 
         exporter.collector_manager.collect_tier = collect  # type: ignore[method-assign]
 
-        # Should NOT raise: the mid-stream success keeps failures under 10.
+        # Should NOT raise even though every call fails - there is no failure-count
+        # threshold left to trip.
         await asyncio.wait_for(
             exporter._tiered_collection_loop(UpdateTier.FAST, initial_delay=0.0),
             timeout=5.0,
         )
-        assert not exporter._shutdown_event.is_set() or idx > len(results)
+        assert calls >= 3
+        assert exporter._shutdown_event.is_set()
 
     async def test_initial_delay_is_interruptible(self, test_settings: Settings) -> None:
         """A shutdown during the initial delay exits before any collection."""

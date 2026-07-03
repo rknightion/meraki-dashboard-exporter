@@ -408,8 +408,6 @@ class ExporterApp:
             Initial delay in seconds before the first collection run.
 
         """
-        consecutive_failures = 0
-        max_consecutive_failures = 10
         interval = self.collector_manager.get_tier_interval(tier)
 
         logger.debug(
@@ -446,29 +444,20 @@ class ExporterApp:
                         tier=tier,
                         next_run_in=interval,
                     )
-                    # Reset failure counter on success
-                    consecutive_failures = 0
                 except asyncio.CancelledError:
                     logger.info("Collection loop cancelled", tier=tier)
                     raise
                 except Exception:
-                    consecutive_failures += 1
+                    # collect_tier (via CollectorManager) already swallows per-org/per-collector
+                    # failures at its own boundary so sibling tiers keep running; honest health
+                    # signals are surfaced via /ready (503) + failure_streak (see #509). A
+                    # collect_tier exception reaching here is unexpected, so log it and keep the
+                    # loop alive rather than pretend to guard against a failure count that never
+                    # actually accumulates.
                     logger.exception(
                         "Error during metric collection",
                         tier=tier,
-                        consecutive_failures=consecutive_failures,
-                        max_consecutive_failures=max_consecutive_failures,
                     )
-
-                    # Only exit if we have too many consecutive failures
-                    if consecutive_failures >= max_consecutive_failures:
-                        logger.critical(
-                            "Too many consecutive collection failures, exiting",
-                            tier=tier,
-                            consecutive_failures=consecutive_failures,
-                        )
-                        self._shutdown_event.set()
-                        raise
 
                 # Wait for next collection
                 elapsed = time.monotonic() - cycle_start
