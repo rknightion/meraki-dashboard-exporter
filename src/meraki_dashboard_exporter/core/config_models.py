@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Annotated, Any, get_args
+from typing import Annotated, Any, Literal, get_args
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
@@ -72,7 +72,13 @@ class APISettings(BaseModel):
         30,
         ge=10,
         le=300,
-        description="API request timeout in seconds",
+        description=(
+            "Per-request API timeout in seconds (SDK single_request_timeout). Note this "
+            "applies to EACH page request, so a total_pages='all' bulk fetch may make "
+            "many such requests; the overall fetch is additionally bounded by "
+            "per_fetch_deadline_seconds. Reviewed for large-org bulk fetches (#556): "
+            "kept at 30s (raise only if large-org page latencies are observed to exceed it)."
+        ),
     )
     concurrency_limit: int = Field(
         5,
@@ -178,10 +184,15 @@ class APISettings(BaseModel):
         description="Token bucket burst capacity per organization",
     )
     rate_limit_shared_fraction: float = Field(
-        1.0,
+        0.8,
         ge=0.1,
         le=1.0,
-        description="Fraction of org call budget reserved for this exporter",
+        description=(
+            "Fraction of the org API call budget this exporter is allowed to consume. "
+            "Defaults to 0.8 so ~20% headroom is left for other consumers of the same "
+            "org budget (dashboards, other tools, humans); set to 1.0 to claim the whole "
+            "budget (#550)."
+        ),
     )
     rate_limit_jitter_ratio: float = Field(
         0.1,
@@ -246,6 +257,39 @@ class APISettings(BaseModel):
         description=(
             "Maximum wireless clients queried for signal quality per network per cycle "
             "(0 disables the cap). Bounds the sequential per-client API fan-out."
+        ),
+    )
+    retry_after_max_seconds: int = Field(
+        60,
+        ge=1,
+        le=3600,
+        description=(
+            "Upper bound (seconds) honoured for a server-sent Retry-After header when "
+            "backing off a throttled (429/503) request. Caps pathological Retry-After "
+            "values so a single throttled request cannot stall a collection cycle "
+            "indefinitely."
+        ),
+    )
+    executor_workers: int = Field(
+        10,
+        ge=1,
+        le=100,
+        description=(
+            "Size of the thread pool used to run the synchronous Meraki SDK off the "
+            "event loop (the asyncio.to_thread executor). Bounds the number of "
+            "concurrent blocking SDK calls independently of the per-tier API "
+            "concurrency limits."
+        ),
+    )
+    per_fetch_deadline_seconds: int = Field(
+        120,
+        ge=1,
+        le=600,
+        description=(
+            "Wall-clock deadline (seconds) for a single logical fetch, including all "
+            "paginated page requests made under total_pages='all'. Sits between the SDK "
+            "per-request timeout (see 'timeout') and the per-collector timeout so a slow "
+            "bulk fetch fails fast instead of consuming the whole collector budget."
         ),
     )
 
@@ -342,6 +386,66 @@ class MonitoringSettings(BaseModel):
         if v != sorted(v):
             raise ValueError("Bucket values must be in ascending order")
         return v
+
+
+class CardinalitySettings(BaseModel):
+    """Metric cardinality guard-rail settings (SCALE-01 / #540 family).
+
+    Bounds per-metric-family series growth at scale and configures the
+    cardinality monitor. This is only the config surface; the behaviour that
+    consumes these settings (the per-family cap enforcement and the monitor)
+    lives in ``core/cardinality.py`` and the collector emit path.
+    """
+
+    max_series_per_family: int = Field(
+        50000,
+        ge=100,
+        le=10_000_000,
+        description=(
+            "Maximum number of active time series permitted per metric family (metric "
+            "name). When a family exceeds this, ``action`` decides what happens."
+        ),
+    )
+    action: Literal["warn", "drop"] = Field(
+        "warn",
+        description=(
+            "What to do when a metric family exceeds max_series_per_family: 'warn' logs "
+            "and keeps emitting; 'drop' stops emitting new series for that family."
+        ),
+    )
+    # NoDecode disables pydantic-settings JSON-parsing of complex types so the raw
+    # env-var string reaches our _split_csv validator - the documented CSV form
+    # (CARDINALITY__DISABLED_METRICS=a,b,c) would otherwise crash at boot with
+    # SettingsError because a bare CSV string is not valid JSON (same pattern as #514).
+    disabled_metrics: Annotated[set[str], NoDecode] = Field(
+        default_factory=set,
+        description=(
+            "Metric family names to disable entirely (never emitted). Accepts a "
+            "comma-separated string or a JSON array via env "
+            "(MERAKI_EXPORTER_CARDINALITY__DISABLED_METRICS=a,b,c)."
+        ),
+    )
+    monitor_interval_seconds: int = Field(
+        300,
+        ge=10,
+        le=3600,
+        description="How often (seconds) the cardinality monitor samples the registry.",
+    )
+    monitor_max_label_values: int = Field(
+        100,
+        ge=1,
+        le=100000,
+        description=(
+            "Maximum distinct values retained per label when the cardinality monitor "
+            "tracks label-value breakdowns, bounding the monitor's own memory."
+        ),
+    )
+
+    @field_validator("disabled_metrics", mode="before")
+    @classmethod
+    def _split_csv(cls, v: object) -> set[str]:
+        """Accept a set, a comma-separated string, or a JSON array from env vars."""
+        return _split_collector_csv(v)
 
 
 class OTelSettings(BaseModel):

@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import (
     APISettings,
+    CardinalitySettings,
     CollectorSettings,
     LoggingSettings,
     MerakiSettings,
@@ -209,6 +210,108 @@ class TestWebhookAllowInsecure:
     def test_can_enable(self):
         """allow_insecure can be explicitly enabled."""
         assert WebhookSettings(allow_insecure=True).allow_insecure is True
+
+
+class TestApiScaleSettings:
+    """Phase-3 rate-limit/scale config seam on APISettings (#550/#546/RETRY)."""
+
+    def test_shared_fraction_default_is_0_8(self):
+        """rate_limit_shared_fraction now leaves ~20% org headroom by default (#550)."""
+        assert APISettings().rate_limit_shared_fraction == 0.8
+
+    def test_shared_fraction_still_bounded(self):
+        """The fraction keeps its 0.1..1.0 bounds."""
+        assert APISettings(rate_limit_shared_fraction=1.0).rate_limit_shared_fraction == 1.0
+        with pytest.raises(ValidationError):
+            APISettings(rate_limit_shared_fraction=0.0)
+        with pytest.raises(ValidationError):
+            APISettings(rate_limit_shared_fraction=1.5)
+
+    def test_new_scale_field_defaults(self):
+        """New RETRY/deadline/executor fields default to the frozen seam values."""
+        s = APISettings()
+        assert s.retry_after_max_seconds == 60
+        assert s.executor_workers == 10
+        assert s.per_fetch_deadline_seconds == 120
+
+    def test_new_scale_fields_configurable(self):
+        """The new fields accept explicit overrides within bounds."""
+        s = APISettings(
+            retry_after_max_seconds=120,
+            executor_workers=20,
+            per_fetch_deadline_seconds=300,
+        )
+        assert s.retry_after_max_seconds == 120
+        assert s.executor_workers == 20
+        assert s.per_fetch_deadline_seconds == 300
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("retry_after_max_seconds", 0),
+            ("executor_workers", 0),
+            ("per_fetch_deadline_seconds", 0),
+        ],
+    )
+    def test_new_scale_fields_reject_below_min(self, field, value):
+        """Each new field enforces a positive lower bound."""
+        with pytest.raises(ValidationError):
+            APISettings(**{field: value})
+
+    def test_single_request_timeout_default_unchanged(self):
+        """#556: the SDK single_request_timeout default (api.timeout) stays 30s."""
+        assert APISettings().timeout == 30
+
+
+class TestCardinalitySettings:
+    """New CardinalitySettings nested model (SCALE-01 / #540 family)."""
+
+    def test_defaults(self):
+        """All fields default to the frozen seam values."""
+        c = CardinalitySettings()
+        assert c.max_series_per_family == 50000
+        assert c.action == "warn"
+        assert c.disabled_metrics == set()
+        assert c.monitor_interval_seconds == 300
+        assert c.monitor_max_label_values == 100
+
+    def test_action_literal_rejects_unknown(self):
+        """action only accepts 'warn' or 'drop'."""
+        assert CardinalitySettings(action="drop").action == "drop"
+        with pytest.raises(ValidationError):
+            CardinalitySettings(action="explode")
+
+    def test_disabled_metrics_csv_string(self):
+        """A bare comma-separated string parses into a set (NoDecode + CSV, #514 pattern)."""
+        c = CardinalitySettings(disabled_metrics="meraki_foo,meraki_bar")
+        assert c.disabled_metrics == {"meraki_foo", "meraki_bar"}
+
+    def test_disabled_metrics_json_array(self):
+        """The JSON-array form also parses."""
+        c = CardinalitySettings(disabled_metrics='["meraki_foo","meraki_bar"]')
+        assert c.disabled_metrics == {"meraki_foo", "meraki_bar"}
+
+    def test_disabled_metrics_native_set(self):
+        """A native set passes through, whitespace stripped."""
+        c = CardinalitySettings(disabled_metrics={" meraki_foo ", "meraki_bar"})
+        assert c.disabled_metrics == {"meraki_foo", "meraki_bar"}
+
+    def test_disabled_metrics_empty_string(self):
+        """An empty string yields an empty set, not a crash."""
+        assert CardinalitySettings(disabled_metrics="").disabled_metrics == set()
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("max_series_per_family", 0),
+            ("monitor_interval_seconds", 0),
+            ("monitor_max_label_values", 0),
+        ],
+    )
+    def test_numeric_lower_bounds(self, field, value):
+        """Numeric guard-rail fields reject below-minimum values."""
+        with pytest.raises(ValidationError):
+            CardinalitySettings(**{field: value})
 
 
 class TestUnrecognizedEnvVars:

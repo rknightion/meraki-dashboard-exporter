@@ -193,6 +193,49 @@ def test_unrecognized_env_var_warns(monkeypatch):
     assert "bar" not in blob
 
 
+def test_shared_fraction_default_headroom(monkeypatch):
+    """rate_limit_shared_fraction defaults to 0.8 through Settings (#550)."""
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+
+    settings = Settings()
+    assert settings.api.rate_limit_shared_fraction == 0.8
+
+
+def test_new_api_scale_field_defaults(monkeypatch):
+    """New RETRY/deadline/executor API fields default sanely (#546/#550/RETRY seam)."""
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+
+    settings = Settings()
+    assert settings.api.retry_after_max_seconds == 60
+    assert settings.api.executor_workers == 10
+    assert settings.api.per_fetch_deadline_seconds == 120
+
+
+def test_cardinality_settings_defaults(monkeypatch):
+    """CardinalitySettings mounts on Settings with the frozen defaults (SCALE-01)."""
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+
+    settings = Settings()
+    assert settings.cardinality.max_series_per_family == 50000
+    assert settings.cardinality.action == "warn"
+    assert settings.cardinality.disabled_metrics == set()
+    assert settings.cardinality.monitor_interval_seconds == 300
+    assert settings.cardinality.monitor_max_label_values == 100
+
+
+def test_cardinality_env_parsing(monkeypatch):
+    """CARDINALITY__ env vars parse, incl. CSV disabled_metrics (SCALE-01)."""
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+    monkeypatch.setenv("MERAKI_EXPORTER_CARDINALITY__ACTION", "drop")
+    monkeypatch.setenv("MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY", "12345")
+    monkeypatch.setenv("MERAKI_EXPORTER_CARDINALITY__DISABLED_METRICS", "meraki_foo,meraki_bar")
+
+    settings = Settings()
+    assert settings.cardinality.action == "drop"
+    assert settings.cardinality.max_series_per_family == 12345
+    assert settings.cardinality.disabled_metrics == {"meraki_foo", "meraki_bar"}
+
+
 def test_china_base_url_bumps_low_timeout(monkeypatch):
     """api.meraki.cn base URL bumps a sub-45s timeout to 45 (#518)."""
     monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
