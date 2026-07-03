@@ -81,6 +81,57 @@ class TestMTGatewayConnections(BaseCollectorTest):
         with pytest.raises(RetryableAPIError):
             await mt_collector._fetch_gateway_connections("123456")
 
+    # --- #623 enabled_fn gate: sensor-less org disables the whole group ---
+
+    async def test_gateway_connections_skipped_for_sensorless_org(self, mt_collector, settings):
+        """#623: a sensor-less org (sensor_count == 0) disables MT_SENSOR_READINGS.
+
+        The whole endpoint group's enabled_fn is ``shape.sensor_count > 0``, so a
+        real scheduler resolved on a sensor-less shape gates BOTH org-wide fetches
+        off — no getOrganizationSensorGatewaysConnectionsLatest probe is issued
+        (the 1,440-calls/day sensor-less waste this fixes).
+        """
+        from meraki_dashboard_exporter.core.scheduler import EndpointScheduler, OrgShape
+
+        class _RL:
+            def effective_rate_per_second(self) -> float:
+                return 100.0
+
+        scheduler = EndpointScheduler(settings, _RL())  # type: ignore[arg-type]
+        scheduler.register_groups(MTSensorCollector.endpoint_groups)
+        scheduler.resolve(
+            OrgShape(
+                org_id="123456",
+                network_count=1,
+                wireless_network_count=0,
+                switch_network_count=0,
+                appliance_network_count=0,
+                sensor_network_count=0,
+                camera_network_count=0,
+                cellular_network_count=0,
+                device_count=1,
+                ap_count=0,
+                switch_count=0,
+                appliance_count=0,
+                physical_mx_count=0,
+                camera_count=0,
+                sensor_count=0,
+                cellular_count=0,
+            )
+        )
+        # The MT collector consults its parent's scheduler via _should_run_group.
+        mt_collector.parent.scheduler = scheduler
+
+        gateway = MagicMock(return_value=[])
+        mt_collector.api.sensor.getOrganizationSensorGatewaysConnectionsLatest = gateway
+        readings = MagicMock(return_value=[])
+        mt_collector.api.sensor.getOrganizationSensorReadingsLatest = readings
+
+        await mt_collector.collect_sensor_metrics(org_id="123456", org_name="Org")
+
+        gateway.assert_not_called()
+        readings.assert_not_called()
+
     # --- _collect_org_gateway_connections ---
 
     async def test_collect_org_gateway_connections_emits_rssi_and_timestamp(self, mt_collector):

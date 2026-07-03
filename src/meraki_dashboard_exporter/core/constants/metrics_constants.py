@@ -269,6 +269,19 @@ class MRMetricName(StrEnum):
     MR_SSID_ALLOW_LAN_ACCESS = "meraki_mr_ssid_allow_lan_access"
     MR_RF_PROFILE_INFO = "meraki_mr_rf_profile_info"
 
+    # Phase 4B: per-AP signal quality (#324; per-AP fan-out, trailing 1-hour bucket).
+    # Successors to the pre-M1 dead enums meraki_mr_signal_quality_percent /
+    # meraki_mr_signal_noise_ratio_db (deleted in c533579) - API returns snr(dB)/rssi(dBm).
+    MR_SIGNAL_RSSI_DBM = "meraki_mr_signal_rssi_dbm"
+    MR_SIGNAL_SNR_DB = "meraki_mr_signal_snr_db"
+    # Phase 4B: current power mode, one-hot by mode label (#325; no history series)
+    MR_POWER_MODE = "meraki_mr_power_mode"
+    # Phase 4B: Catalyst AP wireless-controller association (#326)
+    MR_WIRELESS_CONTROLLER_INFO = "meraki_mr_wireless_controller_info"
+    MR_WIRELESS_CONTROLLER_JOINED_TIMESTAMP_SECONDS = (
+        "meraki_mr_wireless_controller_joined_timestamp_seconds"
+    )
+
 
 class MXMetricName(StrEnum):
     """MX (Security Appliance) specific metric names."""
@@ -327,6 +340,9 @@ class MXMetricName(StrEnum):
     MX_PORT_FORWARDING_RULES = "meraki_mx_port_forwarding_rules"
     MX_NAT_RULES = "meraki_mx_nat_rules"
     MX_VLANS = "meraki_mx_vlans"
+
+    # Phase 4B: org-wide uplink counts by status; snapshot gauge, verbatim API status keys (#330)
+    MX_UPLINKS_BY_STATUS = "meraki_mx_uplinks_by_status"
     MX_STATIC_ROUTES = "meraki_mx_static_routes"
     MX_STATIC_ROUTES_ENABLED = "meraki_mx_static_routes_enabled"
 
@@ -343,6 +359,14 @@ class MGMetricName(StrEnum):
     # Phase 4 (#618)
     MG_CELLULAR_BANDS = "meraki_mg_cellular_bands"
     MG_SERVING_CELL_INFO = "meraki_mg_serving_cell_info"
+
+    # Phase 4B: eSIM inventory (#327)
+    MG_ESIMS = "meraki_mg_esims"
+    MG_ESIM_INFO = "meraki_mg_esim_info"
+    MG_ESIM_ACTIVE = "meraki_mg_esim_active"
+    # Phase 4B: HA role from org-wide uplinks/statuses (#328; HA fields only, status not re-emitted)
+    MG_HA_ENABLED = "meraki_mg_ha_enabled"
+    MG_HA_ROLE = "meraki_mg_ha_role"
 
 
 class MVMetricName(StrEnum):
@@ -498,6 +522,26 @@ class ClientMetricName(StrEnum):
     # Wireless client signal quality metrics
     WIRELESS_CLIENT_RSSI = "meraki_wireless_client_rssi"
     WIRELESS_CLIENT_SNR = "meraki_wireless_client_snr"
+
+
+class InsightMetricName(StrEnum):
+    """Meraki Insight (license-gated) application-health metric names (#613)."""
+
+    INSIGHT_APPLICATIONS = "meraki_insight_applications"
+    # id-keyed join carrier (#534 Option B): the only Insight series carrying `name`
+    INSIGHT_APPLICATION_INFO = "meraki_insight_application_info"
+    INSIGHT_APPLICATION_WAN_LATENCY_SECONDS = "meraki_insight_application_wan_latency_seconds"
+    INSIGHT_APPLICATION_LAN_LATENCY_SECONDS = "meraki_insight_application_lan_latency_seconds"
+    INSIGHT_APPLICATION_WAN_LOSS_PERCENT = "meraki_insight_application_wan_loss_percent"
+    INSIGHT_APPLICATION_LAN_LOSS_PERCENT = "meraki_insight_application_lan_loss_percent"
+    INSIGHT_APPLICATION_RESPONSE_DURATION_SECONDS = (
+        "meraki_insight_application_response_duration_seconds"
+    )
+    # API kilobytes-per-second x1000 -> bytes/second (decimal-KB repo convention)
+    INSIGHT_APPLICATION_SENT_BYTES_PER_SECOND = "meraki_insight_application_sent_bytes_per_second"
+    INSIGHT_APPLICATION_RECV_BYTES_PER_SECOND = "meraki_insight_application_recv_bytes_per_second"
+    # Windowed count over the most recent bucket (#531 D1), not a Counter
+    INSIGHT_APPLICATION_CLIENTS_COUNT = "meraki_insight_application_clients_count"
 
 
 class CollectorMetricName(StrEnum):

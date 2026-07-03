@@ -99,6 +99,15 @@ EXPECTED_GROUP_NAMES = [
     "mv_onboarding",
     "mg_cellular_config",
     "nh_mesh",
+    # Phase 4B (#618)
+    "mr_signal_quality",
+    "mr_power_mode",
+    "mr_wireless_controller",
+    "mg_esims",
+    "mg_ha",
+    "mx_uplinks_overview",
+    "insight_applications",
+    "insight_app_health",
 ]
 
 
@@ -799,6 +808,7 @@ class TestDiagnostics:
             "cost_per_cycle",
             "demand_rps",
             "last_ran_ago_seconds",
+            "enabled",
         ):
             assert key in entry
         assert entry["last_ran_ago_seconds"] is not None
@@ -844,3 +854,124 @@ class TestOrgShape:
         for s in solved.values():
             assert math.isfinite(s.interval_seconds)
             assert math.isfinite(s.demand_rps)
+
+    def test_new_phase4b_orgshape_fields_default_zero(self) -> None:
+        """Existing keyword constructors omit the 4B fields; they default to 0."""
+        assert SMALL_SHAPE.catalyst_ap_count == 0
+        assert SMALL_SHAPE.signal_quality_ap_count == 0
+
+
+class TestEnabledFnGating:
+    """#623: enabled_fn disables a group's demand + run-gate without deregistering it."""
+
+    @staticmethod
+    def _sensor_group() -> EndpointGroup:
+        return EndpointGroup(
+            name=EndpointGroupName.MT_SENSOR_READINGS,
+            priority=2,
+            floor_seconds=60,
+            cost_fn=lambda s: 5.0,
+            tier=UpdateTier.FAST,
+            enabled_fn=lambda s: s.sensor_count > 0,
+        )
+
+    def test_disabled_group_zero_cost_and_demand(self) -> None:
+        """A disabled group contributes zero cost/demand and stays at base interval."""
+        g = self._sensor_group()
+        solved = solve_intervals(
+            [g], _make_shape(sensors=0), 8.0, 0.7, TIER_INTERVALS, {}, 4.0, 3600.0
+        )
+        s = solved[g.name]
+        assert s.cost_per_cycle == 0.0
+        assert s.demand_rps == 0.0
+        assert s.interval_seconds == 60.0  # max(floor=60, FAST heartbeat=60)
+        assert s.stretch_factor == 1.0
+
+    def test_enabled_group_normal_cost(self) -> None:
+        """The same group with sensors present contributes its cost_fn demand."""
+        g = self._sensor_group()
+        solved = solve_intervals(
+            [g], _make_shape(sensors=10), 8.0, 0.7, TIER_INTERVALS, {}, 4.0, 3600.0
+        )
+        assert solved[g.name].cost_per_cycle == 5.0
+
+    def test_disabled_group_interval_no_flap_under_tight_budget(self) -> None:
+        """Even under a starved budget a disabled group never stretches (stays at base)."""
+        g_disabled = self._sensor_group()  # enabled_fn False when sensors=0
+        g_hungry = EndpointGroup(
+            name=EndpointGroupName.MR_CPU_LOAD,
+            priority=4,
+            floor_seconds=300,
+            cost_fn=lambda s: 100.0,
+            tier=UpdateTier.MEDIUM,
+        )
+        solved = solve_intervals(
+            [g_disabled, g_hungry],
+            _make_shape(sensors=0),
+            0.1,
+            0.7,
+            TIER_INTERVALS,
+            {},
+            4.0,
+            3600.0,
+        )
+        assert solved[g_disabled.name].interval_seconds == 60.0
+        assert solved[g_disabled.name].stretch_factor == 1.0
+        # the enabled hungry group DID absorb the stretch pressure
+        assert solved[g_hungry.name].stretch_factor > 1.0
+
+    def test_should_run_false_when_disabled(self) -> None:
+        """should_run is False for a disabled group post-resolve (never fetched)."""
+        sched = _make_scheduler(groups=[self._sensor_group()])
+        sched.resolve(_make_shape(sensors=0))
+        assert sched.should_run(EndpointGroupName.MT_SENSOR_READINGS) is False
+
+    def test_should_run_true_when_enabled(self) -> None:
+        """should_run is True (never-ran) once the group is enabled by shape."""
+        sched = _make_scheduler(groups=[self._sensor_group()])
+        sched.resolve(_make_shape(sensors=10))
+        assert sched.should_run(EndpointGroupName.MT_SENSOR_READINGS) is True
+
+    def test_re_enables_after_resolve_with_new_shape(self) -> None:
+        """A later resolve with a re-enabling shape makes the group due immediately."""
+        sched = _make_scheduler(groups=[self._sensor_group()])
+        sched.resolve(_make_shape(sensors=0))
+        assert sched.should_run(EndpointGroupName.MT_SENSOR_READINGS) is False
+        sched.resolve(_make_shape(sensors=4))
+        assert sched.should_run(EndpointGroupName.MT_SENSOR_READINGS) is True
+
+    def test_fail_open_pre_resolve(self) -> None:
+        """No shape yet (never resolved) => enabled_fn is not consulted; group runs."""
+        sched = _make_scheduler(groups=[self._sensor_group()])
+        assert sched.should_run(EndpointGroupName.MT_SENSOR_READINGS) is True
+
+    def test_diagnostics_enabled_flag_tracks_shape(self) -> None:
+        """diagnostics()['groups'][i]['enabled'] reflects enabled_fn vs last shape."""
+        sched = _make_scheduler(groups=[self._sensor_group()])
+        sched.resolve(_make_shape(sensors=0))
+        entry = next(g for g in sched.diagnostics()["groups"] if g["name"] == "mt_sensor_readings")
+        assert entry["enabled"] is False
+        sched.resolve(_make_shape(sensors=3))
+        entry = next(g for g in sched.diagnostics()["groups"] if g["name"] == "mt_sensor_readings")
+        assert entry["enabled"] is True
+
+    def test_diagnostics_enabled_true_pre_resolve(self) -> None:
+        """Pre-resolve (no shape) the enabled flag is True (fail-open)."""
+        sched = _make_scheduler(groups=[self._sensor_group()])
+        entry = next(g for g in sched.diagnostics()["groups"] if g["name"] == "mt_sensor_readings")
+        assert entry["enabled"] is True
+
+    def test_always_enabled_group_reports_enabled(self) -> None:
+        """A group with enabled_fn=None is always enabled."""
+        g = EndpointGroup(
+            name=EndpointGroupName.NH_DATA_RATES,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda s: 1.0,
+            tier=UpdateTier.MEDIUM,
+        )
+        sched = _make_scheduler(groups=[g])
+        sched.resolve(_make_shape(sensors=0))
+        entry = next(x for x in sched.diagnostics()["groups"] if x["name"] == "nh_data_rates")
+        assert entry["enabled"] is True
+        assert sched.should_run(EndpointGroupName.NH_DATA_RATES) is True

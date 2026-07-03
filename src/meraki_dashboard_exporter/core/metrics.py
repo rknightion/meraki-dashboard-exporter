@@ -173,6 +173,14 @@ class LabelName(StrEnum):
     RELATED_SERIAL = "related_serial"
     THREAT_TYPE = "threat_type"
 
+    # Phase 4B (#618)
+    CONTROLLER_SERIAL = "controller_serial"  # Catalyst AP's wireless controller cloud ID (#326)
+    COUNTRY_CODE = "country_code"  # ISO-2 country code of a Catalyst AP (#326)
+    EID = "eid"  # Cellular gateway eSIM EID (#327; bounded by physical MG fleet)
+    APPLICATION_ID = (
+        "application_id"  # Meraki Insight monitored-application ID (#613; <=30, capped)
+    )
+
 
 def create_labels(**kwargs: str | None) -> dict[str, str]:
     """Create a label dictionary with validation.

@@ -59,6 +59,31 @@ def _split_collector_csv(v: object) -> set[str]:
     raise ValueError(f"Collector set field got unsupported type: {type(v)!r}")
 
 
+def _split_collector_csv_list(v: object) -> list[str]:
+    """List-preserving, order-stable variant of :func:`_split_collector_csv`.
+
+    Accepts a list/tuple or a comma-separated / JSON-array string of names and
+    returns a de-duplicated-preserving ``list[str]`` (order kept). Used for tag
+    scoping where order/duplicates carry no meaning but a stable list keeps the
+    config surface predictable.
+    """
+    if v is None:
+        return []
+    if isinstance(v, (list, tuple)):
+        return [str(item).strip() for item in v if str(item).strip()]
+    if isinstance(v, str):
+        stripped = v.strip()
+        if not stripped:
+            return []
+        if stripped.startswith("[") and stripped.endswith("]"):
+            import json
+
+            parsed = json.loads(stripped)
+            return [str(item).strip() for item in parsed if str(item).strip()]
+        return [item.strip() for item in stripped.split(",") if item.strip()]
+    raise ValueError(f"Collector list field got unsupported type: {type(v)!r}")
+
+
 class APISettings(BaseModel):
     """API-related configuration settings."""
 
@@ -652,6 +677,7 @@ class CollectorSettings(BaseModel):
             "mtsensoralerts",
             "networkhealth",
             "organization",
+            "insight",
         },
         description="Enabled collector names",
     )
@@ -665,12 +691,49 @@ class CollectorSettings(BaseModel):
         le=600,
         description="Timeout for individual collector runs in seconds",
     )
+    collect_ap_signal_quality: bool = Field(
+        True,
+        description=(
+            "Collect per-AP wireless signal quality (RSSI/SNR). Costs ONE API call per "
+            "selected AP per cycle (hourly cadence; no bulk endpoint exists). Scope the "
+            "fan-out with ap_signal_quality_tags, or disable entirely."
+        ),
+    )
+    # NoDecode disables pydantic-settings JSON-parsing so the raw CSV env string
+    # reaches our list-preserving validator below.
+    ap_signal_quality_tags: Annotated[list[str], NoDecode] = Field(
+        default_factory=list,
+        description=(
+            "Meraki device tags scoping AP signal-quality collection. Empty = all APs; "
+            "non-empty = only APs carrying at least one of these tags (CSV or JSON array)."
+        ),
+    )
+    collect_insight: bool = Field(
+        False,
+        description=(
+            "Enable the Meraki Insight collector (license-gated WAN/application health). "
+            "Off by default; degrades to a debug-level skip when the org lacks Insight."
+        ),
+    )
+    insight_app_health_enabled: bool = Field(
+        True,
+        description=(
+            "When collect_insight is on, also fan out per-network application health "
+            "(one call per network x monitored application per cycle)."
+        ),
+    )
 
     @field_validator("enabled_collectors", "disable_collectors", mode="before")
     @classmethod
     def _split_csv(cls, v: object) -> set[str]:
         """Accept a set, a comma-separated string, or a JSON array from env vars."""
         return _split_collector_csv(v)
+
+    @field_validator("ap_signal_quality_tags", mode="before")
+    @classmethod
+    def _split_tags_csv(cls, v: object) -> list[str]:
+        """Accept a list, a comma-separated string, or a JSON array from env vars."""
+        return _split_collector_csv_list(v)
 
     @property
     def active_collectors(self) -> set[str]:

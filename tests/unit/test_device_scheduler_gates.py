@@ -71,6 +71,13 @@ _EXPECTED_DEVICE_GROUPS = {
     EndpointGroupName.MG_CELLULAR_CONFIG,
     EndpointGroupName.MV_SENSE_CONFIG,
     EndpointGroupName.MV_ONBOARDING,
+    # Phase 4B (#618)
+    EndpointGroupName.MR_SIGNAL_QUALITY,
+    EndpointGroupName.MR_POWER_MODE,
+    EndpointGroupName.MR_WIRELESS_CONTROLLER,
+    EndpointGroupName.MG_ESIMS,
+    EndpointGroupName.MG_HA,
+    EndpointGroupName.MX_UPLINKS_OVERVIEW,
 }
 
 
@@ -130,6 +137,8 @@ class TestDeviceEndpointGroups:
             camera_count=300,
             sensor_count=400,
             cellular_count=20,
+            catalyst_ap_count=100,
+            signal_quality_ap_count=2000,
         )
         for g in DeviceCollector.endpoint_groups:
             cost = g.cost_fn(shape)

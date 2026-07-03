@@ -157,9 +157,13 @@ Enable/disable specific metric collectors
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set[str]` | `["alerts", "clients", "config", "device", "mtsensor", "mtsensoralerts", "networkhealth", "organization"]` | Enabled collector names |
+| `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set[str]` | `["alerts", "clients", "config", "device", "insight", "mtsensor", "mtsensoralerts", "networkhealth", "organization"]` | Enabled collector names |
 | `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` | `set[str]` | `[]` | Explicitly disabled collectors (overrides enabled) |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` | `int` | `240` | Timeout for individual collector runs in seconds (min: 30, max: 600) |
+| `MERAKI_EXPORTER_COLLECTORS__COLLECT_AP_SIGNAL_QUALITY` | `bool` | `True` | Collect per-AP wireless signal quality (RSSI/SNR). Costs ONE API call per selected AP per cycle (hourly cadence; no bulk endpoint exists). Scope the fan-out with ap_signal_quality_tags, or disable entirely. |
+| `MERAKI_EXPORTER_COLLECTORS__AP_SIGNAL_QUALITY_TAGS` | `list[str]` | `[]` | Meraki device tags scoping AP signal-quality collection. Empty = all APs; non-empty = only APs carrying at least one of these tags (CSV or JSON array). |
+| `MERAKI_EXPORTER_COLLECTORS__COLLECT_INSIGHT` | `bool` | `False` | Enable the Meraki Insight collector (license-gated WAN/application health). Off by default; degrades to a debug-level skip when the org lacks Insight. |
+| `MERAKI_EXPORTER_COLLECTORS__INSIGHT_APP_HEALTH_ENABLED` | `bool` | `True` | When collect_insight is on, also fan out per-network application health (one call per network x monitored application per cycle). |
 
 ## Client Settings
 

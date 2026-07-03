@@ -43,6 +43,7 @@ class MTSensorCollector(MetricCollector):
             floor_seconds=60,
             cost_fn=lambda shape: 2 + pages(shape.sensor_count, 100) - 1,
             tier=UpdateTier.FAST,
+            enabled_fn=lambda shape: shape.sensor_count > 0,
         ),
     )
 

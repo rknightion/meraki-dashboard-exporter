@@ -767,6 +767,45 @@ class TestDeviceCollector(BaseCollectorTest):
 
         collector._collect_ms_specific_metrics.assert_called_once()
 
+    async def test_catalyst_ap_triggers_mr_specific_metrics(
+        self, collector, mock_api_builder, metrics
+    ):
+        """A Catalyst CW* access point must still trigger the MR org-wide block.
+
+        Catalyst APs report productType == "wireless" but their model does not
+        start with "MR" (e.g. "CW9166I"). The MR-specific org-wide block must
+        still run for an org containing ONLY such devices - regression test for
+        #624 (the gate previously only matched a model.startswith("MR") prefix).
+        """
+        org = OrganizationFactory.create(org_id="123456")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network")
+        catalyst_ap = DeviceFactory.create(
+            serial="Q2CW-0001",
+            name="Catalyst AP",
+            model="CW9166I",
+            productType="wireless",
+            network_id=network["id"],
+        )
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_devices([catalyst_ap], org_id=org["id"])
+            .with_device_statuses([], org_id=org["id"])
+            .build()
+        )
+        collector.api = api
+        collector.inventory.api = api
+
+        collector._collect_mr_specific_metrics = AsyncMock(
+            wraps=collector._collect_mr_specific_metrics
+        )
+
+        await collector._collect_org_devices(org["id"], org.get("name", "Test Org"))
+
+        collector._collect_mr_specific_metrics.assert_called_once()
+
     async def test_mr_subcollection_failure_increments_error_counter(self, collector, metrics):
         """RES-04/#511: a tolerated MR sub-collection failure must increment error metrics.
 

@@ -11,6 +11,7 @@ from meraki_dashboard_exporter.core.constants.metrics_constants import (
     ClientMetricName,
     CollectorMetricName,
     DeviceMetricName,
+    InsightMetricName,
     MGMetricName,
     MRMetricName,
     MSMetricName,
@@ -556,6 +557,7 @@ DOMAIN_ENUMS: list[type[StrEnum]] = [
     AlertMetricName,
     NetworkHealthMetricName,
     ClientMetricName,
+    InsightMetricName,
 ]
 
 _TOTAL_SUFFIX_ALLOWLIST: set[str] = set()

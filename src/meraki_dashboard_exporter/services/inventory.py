@@ -1181,7 +1181,7 @@ class OrganizationInventory:
         Returns
         -------
         OrgShape
-            Frozen sizing snapshot with all 16 fields populated.
+            Frozen sizing snapshot with all fields populated.
 
         """
         networks = await self.get_networks(org_id)
@@ -1200,6 +1200,29 @@ class OrganizationInventory:
             and not str(d.get("model") or "").upper().startswith("VMX")
         )
 
+        # Phase 4B (#326/#624): Catalyst APs are wireless devices with CW* models.
+        catalyst_ap_count = sum(
+            1
+            for d in devices
+            if d.get("productType") == "wireless"
+            and str(d.get("model") or "").upper().startswith("CW")
+        )
+
+        # Phase 4B (#324): APs selected for per-AP signal-quality collection.
+        collectors = self.settings.collectors
+        if not collectors.collect_ap_signal_quality:
+            signal_quality_ap_count = 0
+        elif not collectors.ap_signal_quality_tags:
+            signal_quality_ap_count = _dev_is("wireless")
+        else:
+            selected_tags = set(collectors.ap_signal_quality_tags)
+            signal_quality_ap_count = sum(
+                1
+                for d in devices
+                if d.get("productType") == "wireless"
+                and selected_tags.intersection(d.get("tags") or [])
+            )
+
         return OrgShape(
             org_id=org_id,
             network_count=len(networks),
@@ -1217,4 +1240,6 @@ class OrganizationInventory:
             camera_count=_dev_is("camera"),
             sensor_count=_dev_is("sensor"),
             cellular_count=_dev_is("cellularGateway"),
+            catalyst_ap_count=catalyst_ap_count,
+            signal_quality_ap_count=signal_quality_ap_count,
         )

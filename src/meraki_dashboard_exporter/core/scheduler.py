@@ -148,6 +148,16 @@ class EndpointGroupName(StrEnum):
     MG_CELLULAR_CONFIG = "mg_cellular_config"
     NH_MESH = "nh_mesh"
 
+    # Phase 4B (#618)
+    MR_SIGNAL_QUALITY = "mr_signal_quality"
+    MR_POWER_MODE = "mr_power_mode"
+    MR_WIRELESS_CONTROLLER = "mr_wireless_controller"
+    MG_ESIMS = "mg_esims"
+    MG_HA = "mg_ha"
+    MX_UPLINKS_OVERVIEW = "mx_uplinks_overview"
+    INSIGHT_APPLICATIONS = "insight_applications"
+    INSIGHT_APP_HEALTH = "insight_app_health"
+
 
 def pages(n: int, per_page: int) -> int:
     """Pagination helper: max(1, ceil(n / per_page)).
@@ -188,6 +198,11 @@ class OrgShape:
     camera_count: int
     sensor_count: int
     cellular_count: int
+    # Phase 4B (#618) — defaulted so existing keyword constructors stay valid.
+    catalyst_ap_count: int = 0  # wireless devices whose model starts with "CW" (#326/#624)
+    signal_quality_ap_count: int = 0  # APs selected for #324: ap_count when
+    # collectors.ap_signal_quality_tags is empty, else wireless devices whose
+    # `tags` intersect the configured set; 0 when collect_ap_signal_quality is False
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,6 +216,9 @@ class EndpointGroup:
     tier: UpdateTier  # servicing heartbeat == owning collector's registered tier
     gated: bool = True  # False = demand-accounting only; should_run always True
     setting_pin: str | None = None  # legacy APISettings field that pins this group
+    enabled_fn: Callable[[OrgShape], bool] | None = (
+        None  # NEW (#623): None => always enabled; evaluated against the last-resolved OrgShape
+    )
 
 
 class SolvedInterval(NamedTuple):
@@ -258,7 +276,8 @@ def solve_intervals(
         base[g.name] = b
         intervals[g.name] = b
         pinned[g.name] = False
-        costs[g.name] = float(g.cost_fn(shape))
+        enabled = g.enabled_fn is None or g.enabled_fn(shape)
+        costs[g.name] = float(g.cost_fn(shape)) if enabled else 0.0
 
     # Step 2: operator overrides / pins.
     for g in group_list:
@@ -294,6 +313,10 @@ def solve_intervals(
         candidates: list[tuple[EndpointGroup, float]] = []
         for g in group_list:
             if pinned[g.name] or not g.gated:
+                continue
+            # Disabled groups contribute zero demand and never stretch, so their
+            # SolvedInterval stays pinned at base (interval never flaps) — #623.
+            if g.enabled_fn is not None and not g.enabled_fn(shape):
                 continue
             cap = min(float(g.floor_seconds) * max_stretch_factor, max_interval_seconds)
             if intervals[g.name] < cap:
@@ -518,6 +541,14 @@ class EndpointScheduler:
         declared = self._groups.get(group)
         if declared is None or not declared.gated:
             return True
+        # #623: skip a group whose enabled_fn is False against the last-resolved
+        # shape. Fail-open pre-resolve (no shape yet) — matches the gated contract.
+        if (
+            declared.enabled_fn is not None
+            and self._last_shape is not None
+            and not declared.enabled_fn(self._last_shape)
+        ):
+            return False
         last_ran = self._last_ran.get(group)
         if last_ran is None:
             return True
@@ -577,6 +608,12 @@ class EndpointScheduler:
                 "cost_per_cycle": solved.cost_per_cycle if solved else None,
                 "demand_rps": solved.demand_rps if solved else None,
                 "last_ran_ago_seconds": (now - last_ran) if last_ran is not None else None,
+                # #623: True when always-enabled, no shape yet, or enabled against last shape.
+                "enabled": (
+                    declared.enabled_fn is None
+                    or self._last_shape is None
+                    or declared.enabled_fn(self._last_shape)
+                ),
             })
         return {
             "mode": str(self._sched("mode")),

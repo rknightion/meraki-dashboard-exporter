@@ -159,6 +159,7 @@ class DeviceCollector(MetricCollector):
             floor_seconds=3600,
             cost_fn=lambda s: 1.0,
             tier=UpdateTier.MEDIUM,
+            enabled_fn=lambda s: s.switch_count > 0,
         ),
         EndpointGroup(
             name=EndpointGroupName.MS_POWER,
@@ -356,6 +357,60 @@ class DeviceCollector(MetricCollector):
             floor_seconds=900,
             cost_fn=lambda s: 1.0,
             tier=UpdateTier.MEDIUM,
+        ),
+        # Phase 4B (#324): per-AP signal quality; 1 call per selected AP, hourly cadence.
+        EndpointGroup(
+            name=EndpointGroupName.MR_SIGNAL_QUALITY,
+            priority=4,
+            floor_seconds=3600,
+            cost_fn=lambda s: float(s.signal_quality_ap_count),
+            tier=UpdateTier.MEDIUM,
+            enabled_fn=lambda s: s.signal_quality_ap_count > 0,
+        ),
+        # Phase 4B (#325): current power mode; org-wide paginated (perPage max 20).
+        EndpointGroup(
+            name=EndpointGroupName.MR_POWER_MODE,
+            priority=3,
+            floor_seconds=900,
+            cost_fn=lambda s: pages(s.ap_count, 20),
+            tier=UpdateTier.MEDIUM,
+            enabled_fn=lambda s: s.ap_count > 0,
+        ),
+        # Phase 4B (#326): Catalyst AP wireless-controller association; org-wide paginated.
+        EndpointGroup(
+            name=EndpointGroupName.MR_WIRELESS_CONTROLLER,
+            priority=4,
+            floor_seconds=3600,
+            cost_fn=lambda s: pages(s.catalyst_ap_count, 1000),
+            tier=UpdateTier.MEDIUM,
+            enabled_fn=lambda s: s.catalyst_ap_count > 0,
+        ),
+        # Phase 4B (#327): eSIM inventory; 1 org-wide call.
+        EndpointGroup(
+            name=EndpointGroupName.MG_ESIMS,
+            priority=4,
+            floor_seconds=3600,
+            cost_fn=lambda s: 1.0,
+            tier=UpdateTier.MEDIUM,
+            enabled_fn=lambda s: s.cellular_count > 0,
+        ),
+        # Phase 4B (#328): HA role from org-wide uplinks/statuses (MX/MG/Z rows).
+        EndpointGroup(
+            name=EndpointGroupName.MG_HA,
+            priority=3,
+            floor_seconds=900,
+            cost_fn=lambda s: pages(s.appliance_count + s.cellular_count, 1000),
+            tier=UpdateTier.MEDIUM,
+            enabled_fn=lambda s: s.cellular_count > 0,
+        ),
+        # Phase 4B (#330): org-wide uplink-status overview aggregate; 1 call.
+        EndpointGroup(
+            name=EndpointGroupName.MX_UPLINKS_OVERVIEW,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: 1.0,
+            tier=UpdateTier.MEDIUM,
+            enabled_fn=lambda s: s.appliance_count > 0,
         ),
     )
 
@@ -1002,8 +1057,16 @@ class DeviceCollector(MetricCollector):
                 logger.exception("Failed to collect memory metrics")
                 self._track_error(ErrorCategory.UNKNOWN)
 
-            # Collect MR-specific metrics
-            if any(d for d in devices if d.get("model", "").startswith(DeviceType.MR)):
+            # Collect MR-specific metrics. Gate on productType == "wireless" in addition
+            # to the "MR"-prefixed model check so Catalyst APs (productType "wireless",
+            # model "CW91xx") are not silently skipped for the org-wide MR block - #624
+            # (same fix shape as the MS gate below / F-030).
+            if any(
+                d
+                for d in devices
+                if d.get("model", "").startswith(DeviceType.MR)
+                or d.get("productType") == "wireless"
+            ):
                 # Use MR collector for all MR-specific metrics
                 await self._collect_mr_specific_metrics(org_id, org_name, devices, device_lookup)
 
