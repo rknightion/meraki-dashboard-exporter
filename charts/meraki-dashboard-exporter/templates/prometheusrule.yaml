@@ -1,0 +1,225 @@
+{{- if .Values.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "meraki-dashboard-exporter.fullname" . }}
+  namespace: {{ .Values.prometheusRule.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "meraki-dashboard-exporter.labels" . | nindent 4 }}
+    {{- with .Values.prometheusRule.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    {{- if .Values.prometheusRule.rules.exporterSelfHealth }}
+    - name: meraki-exporter-self-health
+      rules:
+        - alert: MerakiExporterDown
+          expr: up{job="{{ .Values.prometheusRule.job }}"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Meraki exporter target is down"
+            description: >-
+              Prometheus has not been able to scrape {{ "{{ $labels.instance }}" }} for
+              5 minutes. No Meraki metrics are being refreshed at all while this
+              fires.
+
+        - alert: MerakiExporterFastCollectorStale
+          expr: time() - meraki_exporter_collector_success_timestamp_seconds{tier="fast"} > 180
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "FAST-tier collector ({{ "{{ $labels.collector }}" }}) has not succeeded recently"
+            description: >-
+              {{ "{{ $labels.collector }}" }} (tier=fast) has had no successful collection
+              in over 3 minutes. MT sensor readings are stale.
+
+        - alert: MerakiExporterMediumCollectorStale
+          expr: time() - meraki_exporter_collector_success_timestamp_seconds{tier="medium"} > 900
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "MEDIUM-tier collector ({{ "{{ $labels.collector }}" }}) has not succeeded recently"
+            description: >-
+              {{ "{{ $labels.collector }}" }} (tier=medium) has had no successful
+              collection in over 15 minutes. Device/network/org metrics are stale.
+
+        - alert: MerakiExporterCollectorFailureStreak
+          expr: meraki_exporter_collector_failure_streak >= 3
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ "{{ $labels.collector }}" }} has failed 3+ times in a row"
+            description: >-
+              Collector {{ "{{ $labels.collector }}" }} (tier={{ "{{ $labels.tier }}" }}) has
+              accumulated {{ "{{ $value }}" }} consecutive failures.
+    {{- end }}
+
+    {{- if .Values.prometheusRule.rules.rateLimiting }}
+    - name: meraki-exporter-rate-limiting
+      rules:
+        - alert: MerakiAPIRateLimiterThrottlingHigh
+          expr: sum(rate(meraki_exporter_api_rate_limiter_throttled_total[15m])) > 0.5
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Meraki API client-side rate limiter is throttling heavily"
+            description: >-
+              The exporter's own client-side rate limiter has been waiting on
+              more than 0.5 requests/sec on average over the last 15 minutes -
+              the org-wide request budget is undersized for the current fleet.
+
+        - alert: MerakiSchedulerThrottleBackoffStorm
+          expr: increase(meraki_exporter_scheduler_throttle_backoffs_total[15m]) > 3
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Meraki API is repeatedly returning 429s (adaptive scheduler backing off)"
+            description: >-
+              The adaptive budget scheduler has halved its effective request
+              rate more than 3 times in 15 minutes - the Meraki Dashboard API is
+              rate-limiting this org harder than the configured budget allows.
+    {{- end }}
+
+    {{- if .Values.prometheusRule.rules.collectionHealth }}
+    - name: meraki-exporter-collection-health
+      rules:
+        - alert: MerakiOrgCollectionBackedOff
+          expr: meraki_exporter_org_collection_status == 0
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Organization {{ "{{ $labels.org_id }}" }} collection is in backoff"
+            description: >-
+              Org {{ "{{ $labels.org_id }}" }} has been failing/backed-off for over 15
+              minutes - all metrics for this org are stale.
+
+        - alert: MerakiCollectorErrorsHigh
+          expr: sum by (collector, tier) (increase(meraki_exporter_collector_errors_total[15m])) > 5
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ "{{ $labels.collector }}" }} is generating repeated errors"
+            description: >-
+              Collector {{ "{{ $labels.collector }}" }} (tier={{ "{{ $labels.tier }}" }}) logged
+              more than 5 errors in the last 15 minutes.
+
+        - alert: MerakiCardinalityLimitReached
+          expr: increase(meraki_exporter_cardinality_limit_reached_total[15m]) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Metric family {{ "{{ $labels.metric }}" }} has exceeded its cardinality budget"
+            description: >-
+              {{ "{{ $labels.metric }}" }} exceeded cardinality.max_series_per_family in
+              the last 15 minutes. With action=drop this means older series for
+              this family are being actively shed from the registry.
+    {{- end }}
+
+    {{- if .Values.prometheusRule.rules.deviceAvailability }}
+    - name: meraki-exporter-device-availability
+      rules:
+        {{- if .Values.prometheusRule.webhooksEnabled }}
+        - alert: MerakiDeviceDownFastPath
+          expr: meraki_device_up == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Device {{ "{{ $labels.serial }}" }} is offline (webhook fast path)"
+            description: >-
+              {{ "{{ $labels.model }}" }} ({{ "{{ $labels.serial }}" }}) in network
+              {{ "{{ $labels.network_id }}" }} has been reported offline for over 5
+              minutes. Recovery is still poll-paced (up to ~15m) - there is no
+              whole-device "back online" webhook type.
+        {{- else }}
+        - alert: MerakiDeviceDown
+          expr: meraki_device_up == 0
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Device {{ "{{ $labels.serial }}" }} is offline"
+            description: >-
+              {{ "{{ $labels.model }}" }} ({{ "{{ $labels.serial }}" }}) in network
+              {{ "{{ $labels.network_id }}" }} has been reported offline for over 15
+              minutes (poll-path detection, webhooks disabled).
+        {{- end }}
+    {{- end }}
+
+    {{- if .Values.prometheusRule.rules.networkHealth }}
+    - name: meraki-exporter-network-health
+      rules:
+        - alert: MerakiWirelessConnectionFailuresHigh
+          expr: sum by (network_id) (meraki_mr_ssid_failed_connections_count) > 20
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High wireless connection failure count in network {{ "{{ $labels.network_id }}" }}"
+            description: >-
+              More than 20 failed wireless connection attempts recorded in
+              network {{ "{{ $labels.network_id }}" }} over the last hourly window.
+    {{- end }}
+
+    {{- if .Values.prometheusRule.rules.productSignals }}
+    - name: meraki-exporter-product-signals
+      rules:
+        - alert: MerakiOrgLicensesExpiringSoon
+          expr: meraki_org_licenses_expiring > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Licenses expiring within 30 days in org {{ "{{ $labels.org_id }}" }}"
+            description: >-
+              {{ "{{ $value }}" }} {{ "{{ $labels.license_type }}" }} license(s) in org
+              {{ "{{ $labels.org_id }}" }} are within their 30-day expiry window.
+
+        - alert: MerakiMTWaterDetected
+          expr: meraki_mt_water_detected == 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Water detected by sensor {{ "{{ $labels.serial }}" }}"
+            description: >-
+              MT water sensor {{ "{{ $labels.serial }}" }} ({{ "{{ $labels.model }}" }}) in
+              network {{ "{{ $labels.network_id }}" }} has reported water detection for
+              over 2 minutes.
+
+        - alert: MerakiMTSensorAlertingActive
+          expr: meraki_mt_alerting_sensors_count > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ "{{ $labels.metric }}" }} sensors are alerting in network {{ "{{ $labels.network_id }}" }}"
+            description: >-
+              {{ "{{ $value }}" }} sensor(s) are currently outside their configured
+              {{ "{{ $labels.metric }}" }} threshold in network {{ "{{ $labels.network_id }}" }}
+              (per Meraki's own sensor alert profiles).
+
+        - alert: MerakiOrgHasBetaAPIRiskFlag
+          expr: meraki_org_has_beta_api == 1
+          for: 15m
+          labels:
+            severity: info
+          annotations:
+            summary: "Org {{ "{{ $labels.org_id }}" }} has opted into the Meraki beta API spec"
+            description: >-
+              Org {{ "{{ $labels.org_id }}" }} has an active has_beta_api Early Access
+              opt-in. Beta API responses can change shape without notice -
+              treat this exporter's data for that org as higher-risk of drift.
+    {{- end }}
+{{- end }}

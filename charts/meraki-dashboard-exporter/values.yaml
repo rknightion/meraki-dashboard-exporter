@@ -294,6 +294,32 @@ serviceMonitor:
   # -- Honor labels from the scrape target
   honorLabels: false
 
+# Prometheus Operator PrometheusRule: starter alert rules (#569). Mirrors the
+# curated set in examples/prometheus-rules.yaml - keep the two in sync by hand.
+# See docs/data-freshness.md for the `for:` duration reasoning behind each rule.
+prometheusRule:
+  # -- Enable PrometheusRule creation (requires Prometheus Operator)
+  enabled: false
+  # -- Namespace where the PrometheusRule will be created. Defaults to release namespace.
+  namespace: ""
+  # -- Additional labels to add to the PrometheusRule (e.g. for your Prometheus's ruleSelector)
+  additionalLabels: {}
+  # -- `job` label value to match in the up{} liveness alert. Should match whatever
+  # job label your scrape config / ServiceMonitor actually produces.
+  job: meraki-dashboard-exporter
+  # -- Set true if webhooks.enabled is true for this deployment (see config.webhooksEnabled
+  # below / docs/getting-started.md). Selects the faster (5m) webhook fast-path device-down
+  # alert instead of the poll-path default (15m) - only one of the two is ever rendered.
+  webhooksEnabled: false
+  # -- Per-group toggles so you can adopt the starter rules incrementally.
+  rules:
+    exporterSelfHealth: true
+    rateLimiting: true
+    collectionHealth: true
+    deviceAvailability: true
+    networkHealth: true
+    productSignals: true
+
 # NetworkPolicy (OPTIONAL). When enabled, restricts pod traffic to only what the
 # exporter needs: inbound scrapes/webhooks on the http port, and outbound DNS + HTTPS
 # to the Meraki API (+ the OTLP collector when tracing is on). Requires a CNI that

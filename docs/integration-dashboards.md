@@ -59,6 +59,21 @@ Pre-built Grafana dashboards live in the [dashboards directory](https://github.c
 ## Alerting
 Use PromQL rules with metrics such as `meraki_device_up` or `meraki_exporter_collection_errors_total` to trigger alerts.
 
+A curated set of ~15 starter alert rules — covering device down, API rate-limit
+exhaustion/429 storms, collector failure & backoff, cardinality shedding,
+exporter self-health/liveness, and product signals such as MT sensor alerting,
+license expiry, and the `meraki_org_has_beta_api` risk gauge — ships as a
+Prometheus Operator `PrometheusRule` at
+[`examples/prometheus-rules.yaml`](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/examples/prometheus-rules.yaml).
+Each rule's `for:` duration is derived from the [Data Freshness & Alerting
+Guidance](data-freshness.md) tier table, cited inline as a comment.
+
+If you deploy via the [Helm chart](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/charts/meraki-dashboard-exporter),
+set `prometheusRule.enabled: true` (requires the Prometheus Operator CRDs) to
+have the chart render the same rule set directly — see the `prometheusRule.*`
+values (namespace override, additional labels, per-group toggles, and a
+`webhooksEnabled` switch that picks the matching device-down alert variant).
+
 For more metrics see the [Metrics Reference](metrics/metrics.md).
 Configuration options are documented in the [Configuration](config.md) guide.
 OpenTelemetry tracing is documented in [OpenTelemetry](observability/otel.md).
