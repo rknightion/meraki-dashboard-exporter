@@ -2,8 +2,6 @@ name: CodeQL
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   schedule:
     - cron: '39 3 * * 3'
 permissions: {}
