@@ -79,6 +79,9 @@ meraki_mx_uplink_recv_bytes gauge
 meraki_mx_uplink_sent_bytes gauge
   help: MX per-uplink WAN bytes sent (last 5 minutes)
   labels: device_type,interface,model,network_id,org_id,serial
+meraki_mx_uplinks_by_status gauge
+  help: Number of MX appliance uplinks by status across the organization (point-in-time snapshot)
+  labels: org_id,status
 meraki_mx_vlans gauge
   help: Number of VLANs configured for a network
   labels: network_id,org_id

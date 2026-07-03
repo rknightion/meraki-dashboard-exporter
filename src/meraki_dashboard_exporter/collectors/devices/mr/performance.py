@@ -13,6 +13,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from ....core.constants import MRMetricName
 from ....core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ....core.label_helpers import create_device_labels, create_network_labels
@@ -26,6 +28,29 @@ if TYPE_CHECKING:
     from ...device import DeviceCollector
 
 logger = get_logger(__name__)
+
+
+class _PowerModeEvent(BaseModel):
+    """One power-mode change event for an AP (#325)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    ts: str | None = None
+    powerMode: str | None = None
+
+
+class _PowerModeRow(BaseModel):
+    """One AP's power-mode history row (#325).
+
+    Lenient (``extra="allow"``); only the newest event's ``powerMode`` is used.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    serial: str | None = None
+    model: str | None = None
+    network: dict[str, Any] | None = None
+    events: list[_PowerModeEvent] = Field(default_factory=list)
 
 
 class MRPerformanceCollector:
@@ -357,6 +382,21 @@ class MRPerformanceCollector:
             ],
         )
 
+        # MR current power mode (one-hot by mode; #325)
+        self._mr_power_mode = self.parent._create_gauge(
+            MRMetricName.MR_POWER_MODE,
+            "Access point current power mode (1 = the device's most recent power "
+            "mode within the trailing 1-day window; one series per mode)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.SERIAL,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+                LabelName.MODE,
+            ],
+        )
+
     @log_api_call("getOrganizationWirelessDevicesEthernetStatuses")
     @with_error_handling(
         operation="Collect MR ethernet status",
@@ -564,6 +604,103 @@ class MRPerformanceCollector:
             logger.exception(
                 "Failed to collect ethernet status",
                 org_id=org_id,
+            )
+
+    @log_api_call("getOrganizationWirelessDevicesPowerModeHistory")
+    @with_error_handling(
+        operation="Collect MR power mode",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def collect_power_mode(
+        self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
+    ) -> None:
+        """Collect the current power mode for every MR device (org-wide, #325).
+
+        Emits a one-hot gauge (``meraki_mr_power_mode`` = 1) for each AP's most
+        recent power mode within the trailing 1-day window. No history series is
+        produced; stale mode series expire via the per-series TTL.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        device_lookup : dict[str, dict[str, Any]]
+            Device lookup table for device info.
+
+        """
+        # Scheduler gate: skip the org-wide fetch when not due (#617/#623).
+        if not self.parent._should_run_group(EndpointGroupName.MR_POWER_MODE):
+            return
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.MR_POWER_MODE)
+
+        with LogContext(org_id=org_id):
+            raw_history = await asyncio.to_thread(
+                self.api.wireless.getOrganizationWirelessDevicesPowerModeHistory,
+                org_id,
+                total_pages="all",
+                timespan=86400,
+            )
+        history = validate_response_format(
+            raw_history,
+            expected_type=list,
+            operation="getOrganizationWirelessDevicesPowerModeHistory",
+        )
+
+        # Fetch succeeded — record the run so the gate can stretch (#617).
+        self.parent._mark_group_ran(EndpointGroupName.MR_POWER_MODE)
+
+        allowed_network_ids = (
+            await self.parent.inventory.get_allowed_network_ids(org_id)
+            if self.parent.inventory is not None
+            else None
+        )
+        skipped = 0
+
+        for raw_row in history:
+            row = _PowerModeRow.model_validate(raw_row)
+
+            serial = row.serial
+            if not serial:
+                continue
+
+            network = row.network or {}
+            network_id = network.get("id", "")
+            if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                skipped += 1
+                continue
+
+            # Newest event's power mode (devices with no events are skipped).
+            events = [e for e in row.events if e.powerMode]
+            if not events:
+                continue
+            newest = max(events, key=lambda e: e.ts or "")
+            power_mode = newest.powerMode
+            if not power_mode:
+                continue
+
+            device_info = device_lookup.get(serial, {"serial": serial})
+            device_info["serial"] = serial
+            device_info["networkId"] = network_id
+            device_info["model"] = device_info.get("model") or (row.model or "")
+
+            mode_labels = create_device_labels(
+                device_info, org_id=org_id, org_name=org_name, mode=power_mode
+            )
+            self.parent._set_metric(
+                self._mr_power_mode,
+                mode_labels,
+                1.0,
+                ttl_seconds=ttl,
+            )
+
+        if skipped:
+            logger.debug(
+                "MR power mode: skipped rows outside network filter",
+                org_id=org_id,
+                skipped_count=skipped,
             )
 
     @log_api_call("getOrganizationWirelessDevicesPacketLossByNetwork")

@@ -4,8 +4,8 @@ This page summarizes the collectors that ship with the exporter.
 
 Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_INTERVALS__*`. See the Metrics Overview for tier definitions.
 
-**Total collector classes:** 44
-**Auto-registered collectors:** 8
+**Total collector classes:** 47
+**Auto-registered collectors:** 9
 
 ## Main Collectors (auto-registered)
 
@@ -15,6 +15,7 @@ Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_
 | `ClientsCollector` | MEDIUM | Collector for client-level metrics across all networks. | 25 | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `ConfigCollector` | SLOW | Collector for configuration and security settings. | 17 |  |
 | `DeviceCollector` | MEDIUM | Collector for device-level metrics. | 6 |  |
+| `InsightCollector` | SLOW | Collector for Meraki Insight application-health metrics (#613). | 10 |  |
 | `MTSensorAlertsCollector` | MEDIUM | Collector for network-wide currently-alerting MT sensor counts. | 3 |  |
 | `MTSensorCollector` | FAST | Collector for fast-moving sensor metrics (MT devices). | 24 |  |
 | `NetworkHealthCollector` | MEDIUM | Collector for medium-moving network health metrics. | 9 |  |
@@ -23,7 +24,7 @@ Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_
 ## Coordinator Relationships
 
 - **DeviceCollector** → MGCollector, MRCollector, MSCollector, MSStackCollector, MVCollector, MXCollector, MXUplinkHealthCollector, MXUplinkUsageCollector, MXHACollector, MSPowerCollector
-- **MRCollector** → MRClientsCollector, MRPerformanceCollector, MRWirelessCollector, MRFirewallCollector, MRRfProfilesCollector
+- **MRCollector** → MRClientsCollector, MRPerformanceCollector, MRWirelessCollector, MRFirewallCollector, MRRfProfilesCollector, MRSignalQualityCollector, MRCatalystCollector
 - **MXCollector** → MXVpnCollector, MXFirewallCollector
 - **NetworkHealthCollector** → RFHealthCollector, ConnectionStatsCollector, DataRatesCollector, BluetoothCollector, SSIDPerformanceCollector, LatencyStatsCollector, AirMarshalCollector, MeshCollector
 - **OrganizationCollector** → APIUsageCollector, LicenseCollector, ClientOverviewCollector, FirmwareCollector, DeviceAvailabilityHistoryCollector, TopUsageCollector, WebhookLogsCollector
@@ -34,11 +35,13 @@ Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_
 
 - `BaseDeviceCollector` — Base class for device-specific collectors.
 - `MGCollector` — Collector for MG cellular gateway metrics.
+- `MRCatalystCollector` — Collector for Catalyst (CW*) AP wireless-controller association info.
 - `MRClientsCollector` — Collector for MR wireless client connection metrics.
 - `MRCollector` — Coordinator for Meraki MR (Wireless AP) device collectors.
 - `MRFirewallCollector` — Collector for per-SSID L3/L7 firewall rule counts and LAN-access policy.
 - `MRPerformanceCollector` — Collector for MR wireless performance metrics.
 - `MRRfProfilesCollector` — Collector for per-AP RF profile assignment (config-drift) metrics.
+- `MRSignalQualityCollector` — Collector for per-AP wireless signal quality (RSSI/SNR).
 - `MRWirelessCollector` — Collector for MR wireless radio and SSID metrics.
 - `MSCollector` — Collector for Meraki MS (Switch) devices.
 - `MSPowerCollector` — Collector for MS rackmount switch power-supply (PSU) module status.

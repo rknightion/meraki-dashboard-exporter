@@ -12,6 +12,8 @@ from meraki_dashboard_exporter.collectors.devices.mg import (
     MGCellularBandsDevice,
     MGCellularTowersDevice,
     MGCollector,
+    MGEsimInventoryRow,
+    MGUplinkStatusRow,
 )
 from meraki_dashboard_exporter.core.domain_models import CellularGatewayUplinkStatus
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
@@ -1155,3 +1157,862 @@ class TestMGCollector:
             await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
 
         spy.assert_called_once_with(row)
+
+    # ------------------------------------------------------------------
+    # #327 — eSIM inventory (Phase 4B, spec-only)
+    # ------------------------------------------------------------------
+
+    def _empty_esims(self, mock_api: MagicMock) -> None:
+        mock_api.cellularGateway.getOrganizationCellularGatewayEsimsInventory = MagicMock(
+            return_value=[]
+        )
+
+    def _empty_ha(self, mock_api: MagicMock) -> None:
+        mock_api.organizations.getOrganizationUplinksStatuses = MagicMock(return_value=[])
+
+    def test_mg_esim_gauges_created_on_init(
+        self,
+        mg_collector: MGCollector,
+    ) -> None:
+        """New #327 gauges must be created alongside the existing MG gauges."""
+        assert mg_collector._mg_esims is not None
+        assert mg_collector._mg_esim_info is not None
+        assert mg_collector._mg_esim_active is not None
+
+    async def test_collect_uplink_statuses_also_triggers_esim_and_ha(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The entrypoint device.py already invokes must also fetch #327/#328 data."""
+        mock_api.cellularGateway.getOrganizationCellularGatewayUplinkStatuses = MagicMock(
+            return_value=[]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[]
+        )
+        self._empty_esims(mock_api)
+        self._empty_ha(mock_api)
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        mock_parent._should_run_group.assert_any_call(EndpointGroupName.MG_ESIMS)
+        mock_parent._should_run_group.assert_any_call(EndpointGroupName.MG_HA)
+        mock_api.cellularGateway.getOrganizationCellularGatewayEsimsInventory.assert_called_once_with(
+            "org1"
+        )
+        mock_api.organizations.getOrganizationUplinksStatuses.assert_called_once_with(
+            "org1", total_pages="all", perPage=1000
+        )
+        mock_parent._mark_group_ran.assert_any_call(EndpointGroupName.MG_ESIMS)
+        mock_parent._mark_group_ran.assert_any_call(EndpointGroupName.MG_HA)
+
+    async def test_esim_inventory_gated_by_scheduler_skips_fetch(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """When MG_ESIMS is not due, the fetch must not run."""
+        mock_parent._should_run_group = MagicMock(
+            side_effect=lambda group: group != EndpointGroupName.MG_ESIMS
+        )
+        mock_api.cellularGateway.getOrganizationCellularGatewayUplinkStatuses = MagicMock(
+            return_value=[]
+        )
+        self._empty_ha(mock_api)
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        mock_api.cellularGateway.getOrganizationCellularGatewayEsimsInventory.assert_not_called()
+
+    async def test_ha_status_gated_by_scheduler_skips_fetch(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """When MG_HA is not due, the fetch must not run."""
+        mock_parent._should_run_group = MagicMock(
+            side_effect=lambda group: group != EndpointGroupName.MG_HA
+        )
+        mock_api.cellularGateway.getOrganizationCellularGatewayUplinkStatuses = MagicMock(
+            return_value=[]
+        )
+        self._empty_esims(mock_api)
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        mock_api.organizations.getOrganizationUplinksStatuses.assert_not_called()
+
+    async def test_collect_esim_inventory_basic(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A basic eSIM inventory row emits count + info + active metrics."""
+        self._empty_ha(mock_api)
+        mock_api.cellularGateway.getOrganizationCellularGatewayEsimsInventory = MagicMock(
+            return_value=[
+                {
+                    "eid": "89049...001",
+                    "active": True,
+                    "device": {"serial": "Q2XX-1", "model": "MG21"},
+                    "network": {"id": "N_1"},
+                    "profiles": [
+                        {
+                            "iccid": "12345",
+                            "status": "active",
+                            "serviceProvider": {"name": "Verizon"},
+                        },
+                        {
+                            "iccid": "67890",
+                            "status": "inactive",
+                            "serviceProvider": {"name": "AT&T"},
+                        },
+                    ],
+                }
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        count_calls = [
+            c for c in mock_parent._set_metric.call_args_list if c[0][0] is mg_collector._mg_esims
+        ]
+        assert len(count_calls) == 1
+        assert count_calls[0][0][2] == 1
+        assert count_calls[0][0][1]["org_id"] == "org1"
+
+        info_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_esim_info
+        ]
+        assert len(info_calls) == 1
+        _, info_labels, info_value, *_ = info_calls[0][0]
+        assert info_value == 1
+        assert info_labels["eid"] == "89049...001"
+        assert info_labels["serial"] == "Q2XX-1"
+        assert info_labels["network_id"] == "N_1"
+        # Only the "active" profile's provider is used.
+        assert info_labels["provider"] == "Verizon"
+
+        active_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_esim_active
+        ]
+        assert len(active_calls) == 1
+        _, active_labels, active_value, *_ = active_calls[0][0]
+        assert active_value == 1.0
+        assert active_labels["eid"] == "89049...001"
+        assert active_labels["serial"] == "Q2XX-1"
+        assert "network_id" not in active_labels
+
+    async def test_collect_esim_inventory_no_active_profile_empty_provider(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """When no profile has status 'active', provider must be empty string."""
+        self._empty_ha(mock_api)
+        mock_api.cellularGateway.getOrganizationCellularGatewayEsimsInventory = MagicMock(
+            return_value=[
+                {
+                    "eid": "EID1",
+                    "active": False,
+                    "device": {"serial": "Q2XX-1"},
+                    "network": {"id": "N_1"},
+                    "profiles": [
+                        {"iccid": "1", "status": "inactive", "serviceProvider": {"name": "X"}}
+                    ],
+                }
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        info_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_esim_info
+        ]
+        assert len(info_calls) == 1
+        assert not info_calls[0][0][1]["provider"]
+
+        active_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_esim_active
+        ]
+        assert active_calls[0][0][2] == 0.0
+
+    async def test_collect_esim_inventory_no_profiles_empty_provider(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An eSIM with no profiles at all must not raise and yields empty provider."""
+        self._empty_ha(mock_api)
+        mock_api.cellularGateway.getOrganizationCellularGatewayEsimsInventory = MagicMock(
+            return_value=[
+                {
+                    "eid": "EID1",
+                    "active": True,
+                    "device": {"serial": "Q2XX-1"},
+                    "network": {"id": "N_1"},
+                }
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        info_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_esim_info
+        ]
+        assert len(info_calls) == 1
+        assert not info_calls[0][0][1]["provider"]
+
+    async def test_collect_esim_inventory_does_not_emit_plan_names(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Plan names are multi-valued and must never be emitted as labels (v1 scope)."""
+        self._empty_ha(mock_api)
+        mock_api.cellularGateway.getOrganizationCellularGatewayEsimsInventory = MagicMock(
+            return_value=[
+                {
+                    "eid": "EID1",
+                    "active": True,
+                    "device": {"serial": "Q2XX-1"},
+                    "network": {"id": "N_1"},
+                    "profiles": [
+                        {
+                            "status": "active",
+                            "serviceProvider": {
+                                "name": "Verizon",
+                                "plans": [{"name": "Unlimited", "type": "data"}],
+                            },
+                        }
+                    ],
+                }
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        info_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_esim_info
+        ]
+        for call in info_calls:
+            labels = call[0][1]
+            assert "plans" not in labels
+            assert "plan" not in labels
+
+    async def test_collect_esim_inventory_respects_network_filter(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """eSIMs on excluded networks must not emit info/active metrics."""
+        self._empty_ha(mock_api)
+        mock_api.cellularGateway.getOrganizationCellularGatewayEsimsInventory = MagicMock(
+            return_value=[
+                {
+                    "eid": "EID-IN",
+                    "active": True,
+                    "device": {"serial": "Q-IN"},
+                    "network": {"id": "N_INCLUDED"},
+                    "profiles": [],
+                },
+                {
+                    "eid": "EID-OUT",
+                    "active": True,
+                    "device": {"serial": "Q-OUT"},
+                    "network": {"id": "N_EXCLUDED"},
+                    "profiles": [],
+                },
+            ]
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_INCLUDED"})
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        info_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_esim_info
+        ]
+        assert len(info_calls) == 1
+        assert info_calls[0][0][1]["serial"] == "Q-IN"
+
+        # The org-wide count snapshot is NOT filtered - it reflects total inventory.
+        count_calls = [
+            c for c in mock_parent._set_metric.call_args_list if c[0][0] is mg_collector._mg_esims
+        ]
+        assert count_calls[0][0][2] == 2
+
+    async def test_collect_esim_inventory_empty_response(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An empty eSIM inventory still emits a zero-count snapshot, no crash."""
+        self._empty_ha(mock_api)
+        self._empty_esims(mock_api)
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        count_calls = [
+            c for c in mock_parent._set_metric.call_args_list if c[0][0] is mg_collector._mg_esims
+        ]
+        assert len(count_calls) == 1
+        assert count_calls[0][0][2] == 0
+
+        info_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_esim_info
+        ]
+        assert info_calls == []
+
+    async def test_collect_esim_inventory_api_error_handled_gracefully(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An API error on the eSIM fetch must not raise and must not block HA."""
+        self._empty_ha(mock_api)
+        mock_api.cellularGateway.getOrganizationCellularGatewayEsimsInventory = MagicMock(
+            side_effect=Exception("API connection failed")
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        info_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_esim_info
+        ]
+        assert info_calls == []
+        mock_api.organizations.getOrganizationUplinksStatuses.assert_called_once()
+
+    async def test_collect_esim_inventory_exhausted_retry_error_shape_handled_gracefully(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The SDK exhausted-retry error shape must be absorbed, not raised."""
+        self._empty_ha(mock_api)
+        mock_api.cellularGateway.getOrganizationCellularGatewayEsimsInventory = MagicMock(
+            return_value={"errors": ["internal server error"]}
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        count_calls = [
+            c for c in mock_parent._set_metric.call_args_list if c[0][0] is mg_collector._mg_esims
+        ]
+        assert count_calls == []
+
+    async def test_collect_esim_inventory_validates_rows_via_domain_model(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Each raw row must be validated via MGEsimInventoryRow.model_validate."""
+        self._empty_ha(mock_api)
+        row = {
+            "eid": "EID1",
+            "active": True,
+            "device": {"serial": "Q2XX-1"},
+            "network": {"id": "N_1"},
+            "profiles": [],
+        }
+        mock_api.cellularGateway.getOrganizationCellularGatewayEsimsInventory = MagicMock(
+            return_value=[row]
+        )
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mg.MGEsimInventoryRow.model_validate",
+            wraps=MGEsimInventoryRow.model_validate,
+        ) as spy:
+            await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        spy.assert_called_once_with(row)
+
+    async def test_collect_esim_inventory_tolerates_missing_and_extra_fields(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Missing optional fields and unexpected extra fields must not raise."""
+        self._empty_ha(mock_api)
+        mock_api.cellularGateway.getOrganizationCellularGatewayEsimsInventory = MagicMock(
+            return_value=[
+                {
+                    "eid": "EID1",
+                    "someBrandNewField": {"nested": True},
+                    # "device"/"network"/"active"/"profiles" all omitted
+                }
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        info_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_esim_info
+        ]
+        assert len(info_calls) == 1
+        assert not info_calls[0][0][1]["serial"]
+        assert not info_calls[0][0][1]["network_id"]
+        assert not info_calls[0][0][1]["provider"]
+
+    async def test_collect_esim_inventory_does_not_wipe_other_orgs(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The shared gauges must not be cleared globally (multi-org safety)."""
+        self._empty_ha(mock_api)
+        info_gauge = mg_collector._mg_esim_info
+        info_gauge.labels(
+            org_id="org2", eid="EID-OTHER", serial="Q2ZZ-OTHER", network_id="N_2", provider="X"
+        ).set(1)
+        assert len(info_gauge._metrics) == 1
+
+        mock_api.cellularGateway.getOrganizationCellularGatewayEsimsInventory = MagicMock(
+            return_value=[
+                {
+                    "eid": "EID1",
+                    "active": True,
+                    "device": {"serial": "Q2XX-1"},
+                    "network": {"id": "N_1"},
+                    "profiles": [],
+                }
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        assert len(info_gauge._metrics) == 1
+
+    # ------------------------------------------------------------------
+    # #328 — MG HA role (Phase 4B, spec-only)
+    # ------------------------------------------------------------------
+
+    def test_mg_ha_gauges_created_on_init(
+        self,
+        mg_collector: MGCollector,
+    ) -> None:
+        """New #328 gauges must be created alongside the existing MG gauges."""
+        assert mg_collector._mg_ha_enabled is not None
+        assert mg_collector._mg_ha_role is not None
+
+    async def test_collect_ha_status_basic(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A basic MG HA row emits enabled + role metrics."""
+        self._empty_esims(mock_api)
+        mock_api.organizations.getOrganizationUplinksStatuses = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "serial": "Q2XX-1",
+                    "model": "MG21",
+                    "uplinks": [{"interface": "cellular", "status": "active"}],
+                    "highAvailability": {"enabled": True, "role": "primary"},
+                }
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        enabled_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_ha_enabled
+        ]
+        assert len(enabled_calls) == 1
+        _, enabled_labels, enabled_value, *_ = enabled_calls[0][0]
+        assert enabled_value == 1.0
+        assert enabled_labels["serial"] == "Q2XX-1"
+        assert enabled_labels["network_id"] == "N_1"
+
+        role_calls = [
+            c for c in mock_parent._set_metric.call_args_list if c[0][0] is mg_collector._mg_ha_role
+        ]
+        assert len(role_calls) == 1
+        _, role_labels, role_value, *_ = role_calls[0][0]
+        assert role_value == 1
+        assert role_labels["role"] == "primary"
+
+    async def test_collect_ha_status_spare_role(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A 'spare' role is a valid bounded value and must be emitted."""
+        self._empty_esims(mock_api)
+        mock_api.organizations.getOrganizationUplinksStatuses = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "serial": "Q2XX-1",
+                    "model": "MG21",
+                    "highAvailability": {"enabled": True, "role": "spare"},
+                }
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        role_calls = [
+            c for c in mock_parent._set_metric.call_args_list if c[0][0] is mg_collector._mg_ha_role
+        ]
+        assert len(role_calls) == 1
+        assert role_calls[0][0][1]["role"] == "spare"
+
+    async def test_collect_ha_status_unknown_role_dropped(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An unbounded/unexpected role value must never be emitted as a label."""
+        self._empty_esims(mock_api)
+        mock_api.organizations.getOrganizationUplinksStatuses = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "serial": "Q2XX-1",
+                    "model": "MG21",
+                    "highAvailability": {"enabled": True, "role": "some-unbounded-value"},
+                }
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        role_calls = [
+            c for c in mock_parent._set_metric.call_args_list if c[0][0] is mg_collector._mg_ha_role
+        ]
+        assert role_calls == []
+        # enabled is independent of role validity - it must still be emitted.
+        enabled_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_ha_enabled
+        ]
+        assert len(enabled_calls) == 1
+
+    async def test_collect_ha_status_ignores_mx_rows(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """MX rows in the same org-wide response must not be touched."""
+        self._empty_esims(mock_api)
+        mock_api.organizations.getOrganizationUplinksStatuses = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "serial": "Q-MX-1",
+                    "model": "MX67",
+                    "highAvailability": {"enabled": True, "role": "primary"},
+                },
+                {
+                    "networkId": "N_2",
+                    "serial": "Q-MG-1",
+                    "model": "MG21",
+                    "highAvailability": {"enabled": False, "role": "primary"},
+                },
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        enabled_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_ha_enabled
+        ]
+        assert len(enabled_calls) == 1
+        assert enabled_calls[0][0][1]["serial"] == "Q-MG-1"
+
+    async def test_collect_ha_status_identifies_mg_via_device_lookup_fallback(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """When a row's own model is missing, fall back to the device lookup."""
+        self._empty_esims(mock_api)
+        mock_api.organizations.getOrganizationUplinksStatuses = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "serial": "Q2XX-1",
+                    # "model" intentionally omitted from the row
+                    "highAvailability": {"enabled": True, "role": "primary"},
+                }
+            ]
+        )
+        device_lookup = {
+            "Q2XX-1": {"model": "MG21", "network_id": "N_1", "device_type": "MG"},
+        }
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", device_lookup)
+
+        enabled_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_ha_enabled
+        ]
+        assert len(enabled_calls) == 1
+
+    async def test_collect_ha_status_no_ha_object_skips_emission(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A row with no highAvailability object emits neither metric."""
+        self._empty_esims(mock_api)
+        mock_api.organizations.getOrganizationUplinksStatuses = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "serial": "Q2XX-1",
+                    "model": "MG21",
+                }
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        enabled_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_ha_enabled
+        ]
+        role_calls = [
+            c for c in mock_parent._set_metric.call_args_list if c[0][0] is mg_collector._mg_ha_role
+        ]
+        assert enabled_calls == []
+        assert role_calls == []
+
+    async def test_collect_ha_status_respects_network_filter(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """MG rows on excluded networks must not emit HA metrics."""
+        self._empty_esims(mock_api)
+        mock_api.organizations.getOrganizationUplinksStatuses = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_INCLUDED",
+                    "serial": "Q-IN",
+                    "model": "MG21",
+                    "highAvailability": {"enabled": True, "role": "primary"},
+                },
+                {
+                    "networkId": "N_EXCLUDED",
+                    "serial": "Q-OUT",
+                    "model": "MG21",
+                    "highAvailability": {"enabled": True, "role": "primary"},
+                },
+            ]
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_INCLUDED"})
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        enabled_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_ha_enabled
+        ]
+        assert len(enabled_calls) == 1
+        assert enabled_calls[0][0][1]["serial"] == "Q-IN"
+
+    async def test_collect_ha_status_empty_response(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An empty response must not raise or emit metrics."""
+        self._empty_esims(mock_api)
+        self._empty_ha(mock_api)
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        enabled_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_ha_enabled
+        ]
+        assert enabled_calls == []
+
+    async def test_collect_ha_status_api_error_handled_gracefully(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An API error on the HA fetch must not raise."""
+        self._empty_esims(mock_api)
+        mock_api.organizations.getOrganizationUplinksStatuses = MagicMock(
+            side_effect=Exception("API connection failed")
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        enabled_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_ha_enabled
+        ]
+        assert enabled_calls == []
+
+    async def test_collect_ha_status_exhausted_retry_error_shape_handled_gracefully(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The SDK exhausted-retry error shape must be absorbed, not raised."""
+        self._empty_esims(mock_api)
+        mock_api.organizations.getOrganizationUplinksStatuses = MagicMock(
+            return_value={"errors": ["internal server error"]}
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        enabled_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_ha_enabled
+        ]
+        assert enabled_calls == []
+
+    async def test_collect_ha_status_validates_rows_via_domain_model(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Each raw row must be validated via MGUplinkStatusRow.model_validate."""
+        self._empty_esims(mock_api)
+        row = {
+            "networkId": "N_1",
+            "serial": "Q2XX-1",
+            "model": "MG21",
+            "highAvailability": {"enabled": True, "role": "primary"},
+        }
+        mock_api.organizations.getOrganizationUplinksStatuses = MagicMock(return_value=[row])
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mg.MGUplinkStatusRow.model_validate",
+            wraps=MGUplinkStatusRow.model_validate,
+        ) as spy:
+            await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        spy.assert_called_once_with(row)
+
+    async def test_collect_ha_status_tolerates_missing_and_extra_fields(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Missing optional fields and unexpected extra fields must not raise."""
+        self._empty_esims(mock_api)
+        mock_api.organizations.getOrganizationUplinksStatuses = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-1",
+                    "model": "MG21",
+                    # "networkId" intentionally omitted
+                    "someBrandNewField": {"nested": True},
+                    "highAvailability": {
+                        "enabled": True,
+                        "role": "primary",
+                        "aFutureApiField": "unexpected",
+                    },
+                }
+            ]
+        )
+        device_lookup = {"Q2XX-1": {"network_id": "N_1_FROM_LOOKUP"}}
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", device_lookup)
+
+        enabled_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_ha_enabled
+        ]
+        assert len(enabled_calls) == 1
+        assert enabled_calls[0][0][1]["network_id"] == "N_1_FROM_LOOKUP"
+
+    async def test_collect_ha_status_does_not_wipe_other_orgs(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The shared gauges must not be cleared globally (multi-org safety)."""
+        self._empty_esims(mock_api)
+        role_gauge = mg_collector._mg_ha_role
+        role_gauge.labels(org_id="org2", network_id="N_2", serial="Q2ZZ-OTHER", role="primary").set(
+            1
+        )
+        assert len(role_gauge._metrics) == 1
+
+        mock_api.organizations.getOrganizationUplinksStatuses = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "serial": "Q2XX-1",
+                    "model": "MG21",
+                    "highAvailability": {"enabled": True, "role": "spare"},
+                }
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        assert len(role_gauge._metrics) == 1

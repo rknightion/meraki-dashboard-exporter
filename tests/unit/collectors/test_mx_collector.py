@@ -933,3 +933,185 @@ class TestMXCollector:
         assert parsed.vlanId == 10
         assert parsed.usedCount == 5
         assert parsed.freeCount == 250
+
+    # ------------------------------------------------------------------
+    # #330: org-wide uplink-status overview aggregate
+    # ------------------------------------------------------------------
+
+    def test_mx_uplinks_by_status_gauge_created(
+        self,
+        mx_collector: MXCollector,
+    ) -> None:
+        """Test that the uplinks-by-status gauge metric is created on init."""
+        assert mx_collector._mx_uplinks_by_status is not None
+
+    async def test_collect_uplink_status_overview_emits_all_five_statuses(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """All five API status keys must be emitted every cycle, 0 when absent."""
+        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview = MagicMock(
+            return_value={
+                "counts": {
+                    "byStatus": {
+                        "active": 12,
+                        "ready": 3,
+                        "failed": 1,
+                        # "connecting" and "notConnected" deliberately absent.
+                    }
+                }
+            }
+        )
+
+        await mx_collector.collect_uplink_status_overview("org1", "Test Org")
+
+        assert mock_parent._set_metric.call_count == 5
+        by_status = {c[0][1]["status"]: c[0][2] for c in mock_parent._set_metric.call_args_list}
+        assert by_status == {
+            "active": 12.0,
+            "ready": 3.0,
+            "failed": 1.0,
+            "connecting": 0.0,
+            "notConnected": 0.0,
+        }
+        for call in mock_parent._set_metric.call_args_list:
+            labels = call[0][1]
+            assert labels["org_id"] == "org1"
+            gauge = call[0][0]
+            assert gauge is mx_collector._mx_uplinks_by_status
+
+    async def test_collect_uplink_status_overview_gate_closed_skips_fetch(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """When the mx_uplinks_overview gate is closed, no API call or emission occurs."""
+        mock_parent._should_run_group = MagicMock(return_value=False)
+        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview = MagicMock(
+            return_value={"counts": {"byStatus": {}}}
+        )
+
+        await mx_collector.collect_uplink_status_overview("org1", "Test Org")
+
+        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview.assert_not_called()
+        mock_parent._set_metric.assert_not_called()
+
+    async def test_collect_uplink_status_overview_marks_group_ran_after_success(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A successful fetch marks the mx_uplinks_overview group as run."""
+        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview = MagicMock(
+            return_value={"counts": {"byStatus": {"active": 1}}}
+        )
+
+        await mx_collector.collect_uplink_status_overview("org1", "Test Org")
+
+        mock_parent._mark_group_ran.assert_called_once_with(EndpointGroupName.MX_UPLINKS_OVERVIEW)
+
+    async def test_collect_uplink_status_overview_threads_group_ttl(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The overview _set_metric calls carry the mx_uplinks_overview group's TTL."""
+        mock_parent._group_ttl_seconds = MagicMock(return_value=1800.0)
+        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview = MagicMock(
+            return_value={"counts": {"byStatus": {"active": 1}}}
+        )
+
+        await mx_collector.collect_uplink_status_overview("org1", "Test Org")
+
+        for call in mock_parent._set_metric.call_args_list:
+            assert call.kwargs["ttl_seconds"] == 1800.0
+        mock_parent._group_ttl_seconds.assert_called_with(EndpointGroupName.MX_UPLINKS_OVERVIEW)
+
+    async def test_collect_uplink_status_overview_missing_counts_emits_zeros(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A response missing the counts/byStatus structure still emits five zeros."""
+        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview = MagicMock(
+            return_value={}
+        )
+
+        await mx_collector.collect_uplink_status_overview("org1", "Test Org")
+
+        assert mock_parent._set_metric.call_count == 5
+        values = {c[0][2] for c in mock_parent._set_metric.call_args_list}
+        assert values == {0.0}
+
+    async def test_collect_uplink_status_overview_api_error_handled_gracefully(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """API errors must not propagate and must not mark the group as run."""
+        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview = MagicMock(
+            side_effect=Exception("API connection failed")
+        )
+
+        await mx_collector.collect_uplink_status_overview("org1", "Test Org")
+
+        mock_parent._set_metric.assert_not_called()
+        mock_parent._mark_group_ran.assert_not_called()
+
+    async def test_collect_uplink_statuses_also_collects_overview(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Verify the overview collection is wired via the existing pass.
+
+        collect_uplink_statuses (the existing device.py-invoked pass) also
+        triggers the overview collection, so no device.py call-site edit is
+        needed to wire up #330.
+        """
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses = MagicMock(return_value=[])
+        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview = MagicMock(
+            return_value={"counts": {"byStatus": {"active": 1}}}
+        )
+
+        await mx_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview.assert_called_once_with(
+            "org1"
+        )
+        mock_parent._mark_group_ran.assert_any_call(EndpointGroupName.MX_UPLINKS_OVERVIEW)
+
+    async def test_collect_uplink_statuses_overview_runs_even_when_uplink_status_gate_closed(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """MX_UPLINKS_OVERVIEW has its own independent gate from MX_UPLINK_STATUS.
+
+        If the mx_uplink_status gate is closed (e.g. a tighter 300s floor still
+        mid-interval) the overview aggregate -- on its own, looser 900s floor --
+        must still be collected when its own gate is open.
+        """
+
+        def should_run(group: EndpointGroupName) -> bool:
+            return group != EndpointGroupName.MX_UPLINK_STATUS
+
+        mock_parent._should_run_group = MagicMock(side_effect=should_run)
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses = MagicMock(return_value=[])
+        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview = MagicMock(
+            return_value={"counts": {"byStatus": {"active": 1}}}
+        )
+
+        await mx_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses.assert_not_called()
+        mock_api.appliance.getOrganizationApplianceUplinksStatusesOverview.assert_called_once()

@@ -7,10 +7,12 @@ from typing import TYPE_CHECKING, Any
 from ....core.logging import get_logger
 from ....core.otel_tracing import trace_method
 from ...devices.base import BaseDeviceCollector
+from .catalyst import MRCatalystCollector
 from .clients import MRClientsCollector
 from .firewall import MRFirewallCollector
 from .performance import MRPerformanceCollector
 from .rf_profiles import MRRfProfilesCollector
+from .signal_quality import MRSignalQualityCollector
 from .wireless import MRWirelessCollector
 
 if TYPE_CHECKING:
@@ -49,6 +51,8 @@ class MRCollector(BaseDeviceCollector):
         self.wireless = MRWirelessCollector(parent)
         self.firewall = MRFirewallCollector(parent)
         self.rf_profiles = MRRfProfilesCollector(parent)
+        self.signal_quality = MRSignalQualityCollector(parent)
+        self.catalyst = MRCatalystCollector(parent)
 
         # For backward compatibility, expose metrics from sub-collectors
         # This allows existing code like `mr_collector._ap_clients` to continue working
@@ -125,6 +129,16 @@ class MRCollector(BaseDeviceCollector):
         self._ssid_allow_lan_access = self.firewall._ssid_allow_lan_access
         self._rf_profile_info = self.rf_profiles._rf_profile_info
 
+        # Phase 4B (#618) — per-AP signal quality (#324), power mode (#325),
+        # Catalyst wireless-controller association (#326)
+        self._mr_signal_rssi_dbm = self.signal_quality._mr_signal_rssi_dbm
+        self._mr_signal_snr_db = self.signal_quality._mr_signal_snr_db
+        self._mr_power_mode = self.performance._mr_power_mode
+        self._mr_wireless_controller_info = self.catalyst._mr_wireless_controller_info
+        self._mr_wireless_controller_joined_timestamp_seconds = (
+            self.catalyst._mr_wireless_controller_joined_timestamp_seconds
+        )
+
     def update_api(self, api: DashboardAPI) -> None:
         """Propagate API updates to sub-collectors."""
         super().update_api(api)
@@ -133,6 +147,8 @@ class MRCollector(BaseDeviceCollector):
         self.wireless.api = api
         self.firewall.api = api
         self.rf_profiles.api = api
+        self.signal_quality.api = api
+        self.catalyst.api = api
 
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect per-device wireless AP metrics.
@@ -190,6 +206,11 @@ class MRCollector(BaseDeviceCollector):
 
         """
         await self.performance.collect_ethernet_status(org_id, org_name, device_lookup)
+        # Fold in the current power-mode collection (#325): both are org-wide,
+        # device-indexed power/ethernet data, so reusing this call site keeps
+        # the Phase 4B wiring self-contained within the subpackage (no new
+        # top-level DeviceCollector call site / no device.py edit).
+        await self.performance.collect_power_mode(org_id, org_name, device_lookup)
 
     @trace_method("collect.mr_packet_loss")
     async def collect_packet_loss(
@@ -226,6 +247,11 @@ class MRCollector(BaseDeviceCollector):
 
         """
         await self.performance.collect_cpu_load(org_id, org_name, devices)
+        # Fold in the per-AP signal-quality fan-out (#324): this is the org-wide
+        # MR pass that already receives the full ``devices`` list (carrying tags
+        # + networkId needed for tag-scoping and the per-network endpoint), so
+        # reusing it keeps the wiring inside the subpackage (no device.py edit).
+        await self.signal_quality.collect_signal_quality(org_id, org_name, devices)
 
     @trace_method("collect.mr_ssid_status")
     async def collect_ssid_status(
@@ -251,6 +277,11 @@ class MRCollector(BaseDeviceCollector):
         """
         await self.wireless.collect_ssid_status(org_id, org_name, device_lookup)
         await self.rf_profiles.collect_rf_profile_assignments(org_id, org_name)
+        # Fold in the Catalyst wireless-controller association collection
+        # (#326): another AP/config-level, org-wide, device-indexed dataset, so
+        # reusing this call site avoids a new top-level DeviceCollector call
+        # (no device.py edit), same as the RF-profile fold above.
+        await self.catalyst.collect_wireless_controllers(org_id, org_name)
 
     @trace_method("collect.mr_ssid_usage")
     async def collect_ssid_usage(self, org_id: str, org_name: str) -> None:

@@ -85,6 +85,9 @@ meraki_mr_power_ac_connected gauge
 meraki_mr_power_info gauge
   help: Access point power information
   labels: device_type,mode,model,network_id,org_id,serial
+meraki_mr_power_mode gauge
+  help: Access point current power mode (1 = the device's most recent power mode within the trailing 1-day window; one series per mode)
+  labels: device_type,mode,model,network_id,org_id,serial
 meraki_mr_power_poe_connected gauge
   help: Access point PoE power connection status (1 = connected, 0 = not connected)
   labels: device_type,model,network_id,org_id,serial
@@ -103,6 +106,12 @@ meraki_mr_radio_power_dbm gauge
 meraki_mr_rf_profile_info gauge
   help: AP RF profile assignment (join metric: serial -> rf_profile_id/name; value 1)
   labels: is_default,network_id,org_id,rf_profile_id,rf_profile_name,serial
+meraki_mr_signal_rssi_dbm gauge
+  help: Access point received signal strength indicator in dBm (mean over the trailing 1-hour bucket)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mr_signal_snr_db gauge
+  help: Access point signal-to-noise ratio in dB (mean over the trailing 1-hour bucket)
+  labels: device_type,model,network_id,org_id,serial
 meraki_mr_ssid_allow_lan_access gauge
   help: Whether wireless clients on this SSID may access the LAN (1 = allowed, 0 = blocked)
   labels: network_id,org_id,ssid
@@ -124,3 +133,9 @@ meraki_mr_ssid_usage_total_bytes gauge
 meraki_mr_ssid_usage_upstream_bytes gauge
   help: Upstream data usage in bytes by SSID over the last day
   labels: org_id,ssid
+meraki_mr_wireless_controller_info gauge
+  help: Catalyst access point to wireless-controller association info (1 = associated)
+  labels: controller_serial,country_code,mode,model,network_id,org_id,serial
+meraki_mr_wireless_controller_joined_timestamp_seconds gauge
+  help: Unix timestamp when the Catalyst access point joined its wireless controller
+  labels: network_id,org_id,serial

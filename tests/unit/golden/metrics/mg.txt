@@ -4,6 +4,21 @@
 meraki_mg_cellular_bands gauge
   help: Count of cellular bands in a given state, per SIM slot and radio access technology
   labels: connection_type,device_type,model,network_id,org_id,serial,slot,status
+meraki_mg_esim_active gauge
+  help: Cellular gateway eSIM active status (1 = active)
+  labels: eid,org_id,serial
+meraki_mg_esim_info gauge
+  help: Cellular gateway eSIM inventory info (1 = present)
+  labels: eid,network_id,org_id,provider,serial
+meraki_mg_esims gauge
+  help: Number of eSIMs in the organization's cellular gateway eSIM inventory
+  labels: org_id
+meraki_mg_ha_enabled gauge
+  help: Whether high availability is enabled for the cellular gateway (1 = enabled)
+  labels: network_id,org_id,serial
+meraki_mg_ha_role gauge
+  help: Cellular gateway high-availability role (1 = current role)
+  labels: network_id,org_id,role,serial
 meraki_mg_serving_cell_info gauge
   help: MG cellular gateway current serving cell tower info (1 = present)
   labels: cell_id,device_type,model,network_id,org_id,serial,tac

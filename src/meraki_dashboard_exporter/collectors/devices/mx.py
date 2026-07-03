@@ -23,6 +23,19 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# Frozen (#330): the five verbatim API status keys from
+# getOrganizationApplianceUplinksStatusesOverview's counts.byStatus object.
+# All five are emitted every cycle (0 when absent) so PromQL sums over the
+# label stay stable across cycles rather than only reflecting whichever
+# statuses happened to be present.
+_UPLINK_OVERVIEW_STATUSES: tuple[str, ...] = (
+    "active",
+    "ready",
+    "failed",
+    "connecting",
+    "notConnected",
+)
+
 
 class MXCollector(BaseDeviceCollector):
     """Collector for MX security appliance metrics."""
@@ -100,6 +113,17 @@ class MXCollector(BaseDeviceCollector):
             MXMetricName.MX_DHCP_SUBNET_FREE_IPS,
             "Number of free IPs within a DHCP-served subnet on this MX",
             labelnames=dhcp_subnet_labelnames,
+        )
+
+        # Phase 4B (#330): org-wide uplink counts by status; snapshot gauge.
+        self._mx_uplinks_by_status = self.parent._create_gauge(
+            MXMetricName.MX_UPLINKS_BY_STATUS,
+            "Number of MX appliance uplinks by status across the organization "
+            "(point-in-time snapshot)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.STATUS,
+            ],
         )
 
     def _create_gauge(self, *args: Any, **kwargs: Any) -> Any:
@@ -389,6 +413,15 @@ class MXCollector(BaseDeviceCollector):
             Device lookup table keyed by serial.
 
         """
+        # Phase 4B (#330): fold the org-wide uplink-status-overview aggregate
+        # into this existing device.py-invoked pass so no new device.py
+        # call-site is needed. This has its own independent
+        # mx_uplinks_overview gate/cadence (900s floor), so it is collected
+        # here UNCONDITIONALLY -- i.e. before the mx_uplink_status gate check
+        # below -- so a closed mx_uplink_status gate (300s floor) never
+        # suppresses it.
+        await self.collect_uplink_status_overview(org_id, org_name)
+
         # mx_uplink_status gate (#617): single org-wide call per cycle.
         if not self.parent._should_run_group(EndpointGroupName.MX_UPLINK_STATUS):
             return
@@ -467,4 +500,69 @@ class MXCollector(BaseDeviceCollector):
             org_id=org_id,
             appliance_count=len(uplink_statuses),
             skipped_count=skipped,
+        )
+
+    @log_api_call("getOrganizationApplianceUplinksStatusesOverview")
+    @with_error_handling(
+        operation="Collect MX uplink status overview",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def collect_uplink_status_overview(self, org_id: str, org_name: str) -> None:
+        """Collect the org-wide aggregate uplink-status overview counts (#330).
+
+        Standalone aggregate, not intended to join `MX_UPLINK_INFO`'s per-uplink
+        `status` -- the five label values are the API's own status keys emitted
+        verbatim, and all five are emitted every cycle (0 when absent) so
+        PromQL sums over the label are stable.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name (unused; numeric series are ID-only per #533/#534,
+            kept for call-site symmetry with the other org-wide MX collectors).
+
+        """
+        # mx_uplinks_overview gate (#330/#617): independent cadence (900s floor)
+        # from mx_uplink_status (300s floor) -- see the call site in
+        # collect_uplink_statuses for why this must not be gated together.
+        if not self.parent._should_run_group(EndpointGroupName.MX_UPLINKS_OVERVIEW):
+            return
+
+        resp = await asyncio.to_thread(
+            self.api.appliance.getOrganizationApplianceUplinksStatusesOverview,
+            org_id,
+        )
+
+        resp = validate_response_format(
+            resp,
+            expected_type=dict,
+            operation="getOrganizationApplianceUplinksStatusesOverview",
+        )
+
+        by_status = (resp.get("counts") or {}).get("byStatus") or {}
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_UPLINKS_OVERVIEW)
+
+        for status in _UPLINK_OVERVIEW_STATUSES:
+            count = by_status.get(status) or 0
+            self.parent._set_metric(
+                self._mx_uplinks_by_status,
+                {
+                    "org_id": org_id,
+                    "status": status,
+                },
+                float(count),
+                ttl_seconds=ttl_seconds,
+            )
+
+        # Mark after a successful fetch+emit (failures retry next cycle), matching
+        # collect_uplink_statuses's pattern above.
+        self.parent._mark_group_ran(EndpointGroupName.MX_UPLINKS_OVERVIEW)
+
+        logger.debug(
+            "Collected MX uplink status overview",
+            org_id=org_id,
+            by_status=by_status,
         )

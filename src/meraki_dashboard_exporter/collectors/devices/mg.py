@@ -13,7 +13,7 @@ from ...core.error_handling import ErrorCategory, validate_response_format, with
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
-from ...core.metrics import LabelName
+from ...core.metrics import LabelName, create_labels
 from ...core.scheduler import EndpointGroupName
 from .base import BaseDeviceCollector
 
@@ -108,6 +108,11 @@ class MGCellularTowersDevice(BaseModel):
 # malformed or attacker-influenced API response can never grow cardinality.
 _KNOWN_SLOTS = frozenset({"sim1", "sim2", "sim3"})
 _KNOWN_STATUSES = frozenset({"enabled", "masked", "supported"})
+
+# #328: bounded HA role vocabulary per the OpenAPI spec ("for devices that do
+# not support HA, this will be 'primary'"). Anything else is dropped rather
+# than emitted, so an unexpected API value can never grow label cardinality.
+_KNOWN_HA_ROLES = frozenset({"primary", "spare"})
 
 # Recognized radio-access-technology spellings, normalized to the frozen
 # CONNECTION_TYPE label vocabulary. Anything unrecognized collapses to "other".
@@ -289,6 +294,180 @@ def _parse_float(value: Any) -> float | None:
         return None
 
 
+# ---------------------------------------------------------------------------
+# #327 — eSIM inventory (Phase 4B, spec-only)
+#
+# ⚠ No MG hardware is available to confirm the live response shape; models
+# are kept lenient/defensive (see module docstring above for #304's identical
+# rationale). MUST be re-verified against a live response in Phase 6.
+# ---------------------------------------------------------------------------
+
+
+class MGEsimServiceProvider(BaseModel):
+    """Cellular service-provider info nested in an eSIM profile.
+
+    Not an independently fetched endpoint - nested sub-object of
+    ``MGEsimProfile.serviceProvider``. ``plans`` is deliberately not modeled
+    field-by-field: plan names are multi-valued per profile and are not
+    emitted as metric labels in v1 (unbounded/high-cardinality).
+    """
+
+    __meraki_derived__ = True
+
+    name: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class MGEsimProfile(BaseModel):
+    """A single eSIM profile entry nested in an eSIM inventory row."""
+
+    __meraki_derived__ = True
+
+    iccid: str | None = None
+    status: str | None = None
+    serviceProvider: MGEsimServiceProvider | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class MGEsimDeviceRef(BaseModel):
+    """Device reference nested in an eSIM inventory row."""
+
+    __meraki_derived__ = True
+
+    serial: str = ""
+    model: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class MGEsimNetworkRef(BaseModel):
+    """Network reference nested in an eSIM inventory row."""
+
+    __meraki_derived__ = True
+
+    id: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class MGEsimInventoryRow(BaseModel):
+    """Per-eSIM inventory row.
+
+    Source: ``getOrganizationCellularGatewayEsimsInventory`` (#327).
+    """
+
+    __meraki_op__ = "getOrganizationCellularGatewayEsimsInventory"
+
+    eid: str = ""
+    active: bool | None = None
+    device: MGEsimDeviceRef | None = None
+    network: MGEsimNetworkRef | None = None
+    profiles: list[MGEsimProfile] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+    def resolved_serial(self) -> str:
+        """Resolve the device serial from the nested ``device`` object."""
+        if self.device is not None and self.device.serial:
+            return self.device.serial
+        return ""
+
+    def resolved_network_id(self) -> str | None:
+        """Resolve the network ID from the nested ``network`` object."""
+        if self.network is not None and self.network.id:
+            return self.network.id
+        return None
+
+    def active_provider_name(self) -> str:
+        """Return the active profile's carrier name, or "" if none/absent.
+
+        "Active" here means the profile whose own ``status`` field is
+        ``"active"`` (distinct from the eSIM-level ``active`` boolean).
+        Deliberately does NOT surface plan names (multi-valued).
+        """
+        for profile in self.profiles:
+            if profile.status != "active":
+                continue
+            if profile.serviceProvider is not None and profile.serviceProvider.name:
+                return profile.serviceProvider.name
+            return ""
+        return ""
+
+
+# ---------------------------------------------------------------------------
+# #328 — MG HA role from the device-agnostic org-wide uplinks/statuses
+# endpoint (Phase 4B, spec-only)
+# ---------------------------------------------------------------------------
+
+
+class MGHighAvailability(BaseModel):
+    """High-availability sub-object nested in an org-wide uplink-status row."""
+
+    __meraki_derived__ = True
+
+    enabled: bool | None = None
+    role: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class MGUplinkStatusRow(BaseModel):
+    """Per-device row from the device-agnostic org-wide uplinks/statuses endpoint.
+
+    Source: ``getOrganizationUplinksStatuses`` (#328). This endpoint returns
+    MX/MG/Z rows; only the ``highAvailability`` object of MG rows is consumed
+    here. Per-uplink status/signal is already emitted from the dedicated
+    ``getOrganizationCellularGatewayUplinkStatuses`` call
+    (``_collect_uplink_status_details``) and is deliberately NOT re-emitted
+    from this endpoint; MX rows are left untouched (owned by ``mx.py``).
+    """
+
+    __meraki_op__ = "getOrganizationUplinksStatuses"
+
+    networkId: str | None = None
+    serial: str = ""
+    model: str | None = None
+    highAvailability: MGHighAvailability | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+def _is_mg_row(model: str, serial: str, device_lookup: dict[str, dict[str, Any]]) -> bool:
+    """Identify whether an org-wide uplinks/statuses row belongs to an MG device.
+
+    The endpoint returns MX/MG/Z rows with no dedicated per-product-type
+    filter, so ownership is determined from the row's own ``model`` field
+    first, falling back to the device lookup (by serial) when the row omits
+    or has an empty ``model`` (#328).
+
+    Parameters
+    ----------
+    model : str
+        The row's own ``model`` field (may be empty).
+    serial : str
+        The row's device serial.
+    device_lookup : dict[str, dict[str, Any]]
+        Device lookup table keyed by serial.
+
+    Returns
+    -------
+    bool
+        True if this row should be treated as an MG cellular gateway.
+
+    """
+    if model.upper().startswith("MG"):
+        return True
+    info = device_lookup.get(serial)
+    if info is None:
+        return False
+    looked_up_model = str(info.get("model", ""))
+    if looked_up_model.upper().startswith("MG"):
+        return True
+    return bool(info.get("device_type") == "MG")
+
+
 class MGCollector(BaseDeviceCollector):
     """Collector for MG cellular gateway metrics."""
 
@@ -380,6 +559,57 @@ class MGCollector(BaseDeviceCollector):
             ],
         )
 
+        # Phase 4B (#327): eSIM inventory.
+        self._mg_esims = self.parent._create_gauge(
+            MGMetricName.MG_ESIMS,
+            "Number of eSIMs in the organization's cellular gateway eSIM inventory",
+            labelnames=[LabelName.ORG_ID],
+        )
+
+        self._mg_esim_info = self.parent._create_gauge(
+            MGMetricName.MG_ESIM_INFO,
+            "Cellular gateway eSIM inventory info (1 = present)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.EID,
+                LabelName.SERIAL,
+                LabelName.NETWORK_ID,
+                LabelName.PROVIDER,
+            ],
+        )
+
+        self._mg_esim_active = self.parent._create_gauge(
+            MGMetricName.MG_ESIM_ACTIVE,
+            "Cellular gateway eSIM active status (1 = active)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.EID,
+                LabelName.SERIAL,
+            ],
+        )
+
+        # Phase 4B (#328): HA role from org-wide uplinks/statuses (MG rows only).
+        self._mg_ha_enabled = self.parent._create_gauge(
+            MGMetricName.MG_HA_ENABLED,
+            "Whether high availability is enabled for the cellular gateway (1 = enabled)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.SERIAL,
+            ],
+        )
+
+        self._mg_ha_role = self.parent._create_gauge(
+            MGMetricName.MG_HA_ROLE,
+            "Cellular gateway high-availability role (1 = current role)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.SERIAL,
+                LabelName.ROLE,
+            ],
+        )
+
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect MG-specific metrics.
 
@@ -404,9 +634,10 @@ class MGCollector(BaseDeviceCollector):
 
         This is the single entry point ``DeviceCollector._collect_mg_specific_metrics``
         invokes, so it fans out to every independently-gated MG org-wide concern:
-        uplink status/signal (#617) and cellular band configuration + serving
-        cell info (#304, Phase 4). Each concern is gated by its own scheduler
-        group so a stretched interval on one never blocks the other.
+        uplink status/signal (#617), cellular band configuration + serving
+        cell info (#304, Phase 4), eSIM inventory (#327, Phase 4B), and HA
+        role (#328, Phase 4B). Each concern is gated by its own scheduler
+        group so a stretched interval on one never blocks the others.
 
         Parameters
         ----------
@@ -420,6 +651,8 @@ class MGCollector(BaseDeviceCollector):
         """
         await self._collect_uplink_status_details(org_id, org_name, device_lookup)
         await self._collect_cellular_config(org_id, org_name, device_lookup)
+        await self._collect_esim_inventory(org_id, org_name, device_lookup)
+        await self._collect_ha_status(org_id, org_name, device_lookup)
 
     @log_api_call("getOrganizationCellularGatewayUplinkStatuses")
     @with_error_handling(
@@ -800,6 +1033,245 @@ class MGCollector(BaseDeviceCollector):
             "Collected MG serving cell info",
             org_id=org_id,
             device_count=len(rows),
+            series_emitted=emitted,
+            skipped_count=skipped,
+        )
+
+    @log_api_call("getOrganizationCellularGatewayEsimsInventory")
+    @with_error_handling(
+        operation="Collect MG eSIM inventory",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _collect_esim_inventory(
+        self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
+    ) -> None:
+        """Collect the organization's cellular gateway eSIM inventory (#327).
+
+        ⚠ Spec-only: no MG hardware is available to confirm the live response
+        shape against the OpenAPI spec. Plan names
+        (``profiles[].serviceProvider.plans[]``) are multi-valued and are
+        deliberately NOT emitted as metric labels in v1.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        device_lookup : dict[str, dict[str, Any]]
+            Device lookup table keyed by serial (fallback source for network
+            id resolution when a row omits its nested network reference).
+
+        """
+        if not self.parent._should_run_group(EndpointGroupName.MG_ESIMS):
+            return
+
+        raw = await asyncio.to_thread(
+            self.api.cellularGateway.getOrganizationCellularGatewayEsimsInventory,
+            org_id,
+        )
+
+        rows = validate_response_format(
+            raw,
+            expected_type=list,
+            operation="getOrganizationCellularGatewayEsimsInventory",
+        )
+
+        # Successful fetch: advance the group's last-ran clock.
+        self.parent._mark_group_ran(EndpointGroupName.MG_ESIMS)
+
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MG_ESIMS)
+
+        # Snapshot count reflects the org-wide inventory total - deliberately
+        # NOT filtered by NetworkFilter, matching other org-wide snapshot
+        # gauges (e.g. ORG_DEVICES_BY_MODEL).
+        self.parent._set_metric(
+            self._mg_esims,
+            create_labels(org_id=org_id),
+            len(rows),
+            MGMetricName.MG_ESIMS.value,
+            ttl_seconds=ttl_seconds,
+        )
+
+        if not rows:
+            return
+
+        allowed_network_ids = (
+            await self.parent.inventory.get_allowed_network_ids(org_id)
+            if self.parent.inventory is not None
+            else None
+        )
+
+        skipped = 0
+        emitted = 0
+
+        for row in rows:
+            esim = MGEsimInventoryRow.model_validate(row)
+            serial = esim.resolved_serial()
+            device_info = device_lookup.get(serial, {})
+            network_id = esim.resolved_network_id() or device_info.get("network_id", "")
+
+            if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                skipped += 1
+                continue
+
+            info_labels = create_labels(
+                org_id=org_id,
+                eid=esim.eid,
+                serial=serial,
+                network_id=network_id,
+                provider=esim.active_provider_name(),
+            )
+            self.parent._set_metric(
+                self._mg_esim_info,
+                info_labels,
+                1,
+                MGMetricName.MG_ESIM_INFO.value,
+                ttl_seconds=ttl_seconds,
+            )
+
+            active_labels = create_labels(
+                org_id=org_id,
+                eid=esim.eid,
+                serial=serial,
+            )
+            self.parent._set_metric(
+                self._mg_esim_active,
+                active_labels,
+                1.0 if esim.active else 0.0,
+                MGMetricName.MG_ESIM_ACTIVE.value,
+                ttl_seconds=ttl_seconds,
+            )
+            emitted += 1
+
+        logger.debug(
+            "Collected MG eSIM inventory",
+            org_id=org_id,
+            row_count=len(rows),
+            series_emitted=emitted,
+            skipped_count=skipped,
+        )
+
+    @log_api_call("getOrganizationUplinksStatuses")
+    @with_error_handling(
+        operation="Collect MG HA status",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _collect_ha_status(
+        self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
+    ) -> None:
+        """Collect MG high-availability role from the org-wide uplinks/statuses endpoint (#328).
+
+        This endpoint returns MX/MG/Z rows; ONLY the ``highAvailability``
+        object of MG rows is consumed here. Per-uplink status is already
+        emitted by ``_collect_uplink_status_details`` (dedicated
+        cellularGateway endpoint) and is deliberately NOT re-emitted from
+        this call; MX rows are left untouched (``mx.py`` owns MX uplink
+        status).
+
+        ⚠ Spec-only: no MG hardware is available to confirm the live
+        response shape.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        device_lookup : dict[str, dict[str, Any]]
+            Device lookup table keyed by serial, used to identify MG rows
+            (fallback when a row's own ``model`` is missing/empty) and to
+            resolve network id when a row omits it.
+
+        """
+        if not self.parent._should_run_group(EndpointGroupName.MG_HA):
+            return
+
+        raw = await asyncio.to_thread(
+            self.api.organizations.getOrganizationUplinksStatuses,
+            org_id,
+            total_pages="all",
+            perPage=1000,
+        )
+
+        rows = validate_response_format(
+            raw,
+            expected_type=list,
+            operation="getOrganizationUplinksStatuses",
+        )
+
+        # Successful fetch: advance the group's last-ran clock.
+        self.parent._mark_group_ran(EndpointGroupName.MG_HA)
+
+        if not rows:
+            return
+
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MG_HA)
+        allowed_network_ids = (
+            await self.parent.inventory.get_allowed_network_ids(org_id)
+            if self.parent.inventory is not None
+            else None
+        )
+
+        skipped = 0
+        emitted = 0
+
+        for row in rows:
+            status_row = MGUplinkStatusRow.model_validate(row)
+            serial = status_row.serial
+            model = status_row.model or ""
+
+            if not _is_mg_row(model, serial, device_lookup):
+                continue
+
+            device_info = device_lookup.get(serial, {})
+            network_id = status_row.networkId or device_info.get("network_id", "")
+
+            if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                skipped += 1
+                continue
+
+            ha = status_row.highAvailability
+            if ha is None:
+                continue
+
+            if ha.enabled is not None:
+                enabled_labels = create_labels(
+                    org_id=org_id,
+                    network_id=network_id,
+                    serial=serial,
+                )
+                self.parent._set_metric(
+                    self._mg_ha_enabled,
+                    enabled_labels,
+                    1.0 if ha.enabled else 0.0,
+                    MGMetricName.MG_HA_ENABLED.value,
+                    ttl_seconds=ttl_seconds,
+                )
+
+            if ha.role in _KNOWN_HA_ROLES:
+                role_labels = create_labels(
+                    org_id=org_id,
+                    network_id=network_id,
+                    serial=serial,
+                    role=ha.role,
+                )
+                self.parent._set_metric(
+                    self._mg_ha_role,
+                    role_labels,
+                    1,
+                    MGMetricName.MG_HA_ROLE.value,
+                    ttl_seconds=ttl_seconds,
+                )
+
+            emitted += 1
+
+        logger.debug(
+            "Collected MG HA status",
+            org_id=org_id,
+            row_count=len(rows),
             series_emitted=emitted,
             skipped_count=skipped,
         )

@@ -248,6 +248,7 @@ class CollectorManager:
             clients,
             config,
             device,
+            insight,
             mt_alerts,
             mt_sensor,
             network_health,

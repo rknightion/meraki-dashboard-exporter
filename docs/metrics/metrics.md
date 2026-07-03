@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 311
-- **Gauges:** 288
+- **Total metrics:** 332
+- **Gauges:** 309
 - **Counters:** 19
 - **Histograms:** 3
 - **Info metrics:** 1
@@ -96,6 +96,21 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_device_status_info` | gauge | `org_id`, `network_id`, `serial`, `name`, `model`, `device_type`, `status` | Device status information |  |
 | `meraki_device_up` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Device online status (1 = online, 0 = offline) |  |
 
+### InsightCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_insight_application_clients_count` | gauge | `org_id`, `network_id`, `application_id` | Meraki Insight application client count over the most recent complete 5-minute bucket (windowed count, not a monotonic counter) |  |
+| `meraki_insight_application_info` | gauge | `org_id`, `application_id`, `name` | Meraki Insight application info (application_id -> name); value is always 1 |  |
+| `meraki_insight_application_lan_latency_seconds` | gauge | `org_id`, `network_id`, `application_id` | Meraki Insight application LAN latency in seconds (most recent complete 5-minute bucket over the trailing hour) |  |
+| `meraki_insight_application_lan_loss_percent` | gauge | `org_id`, `network_id`, `application_id` | Meraki Insight application LAN loss percent (most recent complete 5-minute bucket over the trailing hour) |  |
+| `meraki_insight_application_recv_bytes_per_second` | gauge | `org_id`, `network_id`, `application_id` | Meraki Insight application bytes received per second (most recent complete 5-minute bucket over the trailing hour) |  |
+| `meraki_insight_application_response_duration_seconds` | gauge | `org_id`, `network_id`, `application_id` | Meraki Insight application response duration in seconds (most recent complete 5-minute bucket over the trailing hour) |  |
+| `meraki_insight_application_sent_bytes_per_second` | gauge | `org_id`, `network_id`, `application_id` | Meraki Insight application bytes sent per second (most recent complete 5-minute bucket over the trailing hour) |  |
+| `meraki_insight_application_wan_latency_seconds` | gauge | `org_id`, `network_id`, `application_id` | Meraki Insight application WAN latency in seconds (most recent complete 5-minute bucket over the trailing hour) |  |
+| `meraki_insight_application_wan_loss_percent` | gauge | `org_id`, `network_id`, `application_id` | Meraki Insight application WAN loss percent (most recent complete 5-minute bucket over the trailing hour) |  |
+| `meraki_insight_applications` | gauge | `org_id` | Number of applications in the organization's Meraki Insight monitored set |  |
+
 ### LatencyStatsCollector
 
 | Metric | Type | Labels | Description | Notes |
@@ -108,11 +123,23 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
 | `meraki_mg_cellular_bands` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `slot`, `connection_type`, `status` | Count of cellular bands in a given state, per SIM slot and radio access technology |  |
+| `meraki_mg_esim_active` | gauge | `org_id`, `eid`, `serial` | Cellular gateway eSIM active status (1 = active) |  |
+| `meraki_mg_esim_info` | gauge | `org_id`, `eid`, `serial`, `network_id`, `provider` | Cellular gateway eSIM inventory info (1 = present) |  |
+| `meraki_mg_esims` | gauge | `org_id` | Number of eSIMs in the organization's cellular gateway eSIM inventory |  |
+| `meraki_mg_ha_enabled` | gauge | `org_id`, `network_id`, `serial` | Whether high availability is enabled for the cellular gateway (1 = enabled) |  |
+| `meraki_mg_ha_role` | gauge | `org_id`, `network_id`, `serial`, `role` | Cellular gateway high-availability role (1 = current role) |  |
 | `meraki_mg_serving_cell_info` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `cell_id`, `tac` | MG cellular gateway current serving cell tower info (1 = present) |  |
 | `meraki_mg_uplink_roaming` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `interface` | MG cellular gateway uplink roaming status (1 = roaming, 0 = home) |  |
 | `meraki_mg_uplink_signal_rsrp_dbm` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `interface` | MG cellular gateway uplink RSRP signal strength in dBm |  |
 | `meraki_mg_uplink_signal_rsrq_db` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `interface` | MG cellular gateway uplink RSRQ signal quality in dB |  |
 | `meraki_mg_uplink_status_info` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `interface`, `status`, `provider`, `connection_type`, `signal_type`, `roaming_status`, `apn`, `ip` | MG cellular gateway uplink status info (1 = present) |  |
+
+### MRCatalystCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_mr_wireless_controller_info` | gauge | `org_id`, `network_id`, `serial`, `model`, `controller_serial`, `mode`, `country_code` | Catalyst access point to wireless-controller association info (1 = associated) |  |
+| `meraki_mr_wireless_controller_joined_timestamp_seconds` | gauge | `org_id`, `network_id`, `serial` | Unix timestamp when the Catalyst access point joined its wireless controller |  |
 
 ### MRClientsCollector
 
@@ -158,6 +185,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mr_port_poe_info` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `port_name`, `standard` | Access point port PoE information |  |
 | `meraki_mr_power_ac_connected` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Access point AC power connection status (1 = connected, 0 = not connected) |  |
 | `meraki_mr_power_info` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `mode` | Access point power information |  |
+| `meraki_mr_power_mode` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `mode` | Access point current power mode (1 = the device's most recent power mode within the trailing 1-day window; one series per mode) |  |
 | `meraki_mr_power_poe_connected` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Access point PoE power connection status (1 = connected, 0 = not connected) |  |
 
 ### MRRfProfilesCollector
@@ -165,6 +193,13 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
 | `meraki_mr_rf_profile_info` | gauge | `org_id`, `network_id`, `serial`, `rf_profile_id`, `rf_profile_name`, `is_default` | AP RF profile assignment (join metric: serial -> rf_profile_id/name; value 1) |  |
+
+### MRSignalQualityCollector
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_mr_signal_rssi_dbm` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Access point received signal strength indicator in dBm (mean over the trailing 1-hour bucket) |  |
+| `meraki_mr_signal_snr_db` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | Access point signal-to-noise ratio in dB (mean over the trailing 1-hour bucket) |  |
 
 ### MRWirelessCollector
 
@@ -299,6 +334,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mx_dhcp_subnet_used_ips` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `subnet`, `vlan` | Number of IPs in use within a DHCP-served subnet on this MX |  |
 | `meraki_mx_performance_score` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type` | MX appliance performance score (0-100) |  |
 | `meraki_mx_uplink_info` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `interface`, `status` | MX appliance uplink status info (1 = present) |  |
+| `meraki_mx_uplinks_by_status` | gauge | `org_id`, `status` | Number of MX appliance uplinks by status across the organization (point-in-time snapshot) |  |
 
 ### MXFirewallCollector
 
