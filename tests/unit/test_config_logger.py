@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import SecretStr
@@ -12,7 +12,6 @@ from meraki_dashboard_exporter.core import config_logger as config_logger_mod
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_logger import (
     get_env_vars,
-    log_configuration,
     log_startup_summary,
     mask_sensitive_value,
 )
@@ -54,12 +53,32 @@ class TestMaskSensitiveValue:
         assert mask_sensitive_value("my_credential", "c") == "***REDACTED***"
 
     def test_does_not_mask_normal_key(self) -> None:
-        """Test that non-sensitive keys are not masked."""
+        """Test that known-safe keys are not masked."""
         assert mask_sensitive_value("host", "localhost") == "localhost"
 
     def test_case_insensitive(self) -> None:
         """Test that masking is case-insensitive."""
         assert mask_sensitive_value("API_KEY", "val") == "***REDACTED***"
+
+    def test_redacts_unknown_field_by_default(self) -> None:
+        """SEC-07: an unlisted field is redacted by default (allowlist model).
+
+        The old substring heuristic only redacted keys matching known secret
+        substrings, so any new secret-bearing field whose name didn't match was
+        logged in the clear. Inverted model: redact unless the key is known-safe.
+        """
+        # A novel, secret-shaped field that matches NO old heuristic substring:
+        # under the old code this leaked; now it is redacted with no extra wiring.
+        assert mask_sensitive_value("MERAKI_EXPORTER_VAULT__UNSEAL", "hunter2") == "***REDACTED***"
+        # A plausibly-secret field the old substring list also missed.
+        assert mask_sensitive_value("service_passphrase", "correct-horse") == "***REDACTED***"
+        # A completely arbitrary unknown key is redacted by default.
+        assert mask_sensitive_value("totally_unknown_key_name", "x") == "***REDACTED***"
+
+    def test_known_safe_env_var_still_visible(self) -> None:
+        """Known-safe config knobs remain visible for startup diagnostics."""
+        assert mask_sensitive_value("MERAKI_EXPORTER_SERVER__PORT", "9099") == "9099"
+        assert mask_sensitive_value("MERAKI_EXPORTER_API__TIMEOUT", "30") == "30"
 
 
 class TestGetEnvVars:
@@ -72,18 +91,33 @@ class TestGetEnvVars:
 
     @patch.dict(os.environ, {"MERAKI_EXPORTER_FOO": "bar"}, clear=False)
     def test_captures_meraki_exporter_vars(self) -> None:
-        """Test that MERAKI_EXPORTER_ prefixed vars are captured."""
+        """MERAKI_EXPORTER_ prefixed vars are captured but redacted by default (SEC-07).
+
+        Under the redact-by-default (allowlist) model, an unrecognised env var
+        like MERAKI_EXPORTER_FOO is captured but its value is masked rather than
+        logged in the clear.
+        """
         result = get_env_vars()
         assert "MERAKI_EXPORTER_FOO" in result
-        assert result["MERAKI_EXPORTER_FOO"] == "bar"
+        assert result["MERAKI_EXPORTER_FOO"] == "***REDACTED***"
 
-    def test_masks_api_key_env(self) -> None:
-        """Test that MERAKI_API_KEY env var is masked."""
+    @patch.dict(os.environ, {"MERAKI_EXPORTER_SERVER__HOST": "0.0.0.0"}, clear=False)
+    def test_captures_known_safe_var_in_clear(self) -> None:
+        """A known-safe env var is captured and shown in the clear."""
+        result = get_env_vars()
+        assert result["MERAKI_EXPORTER_SERVER__HOST"] == "0.0.0.0"
+
+    def test_bare_api_key_env_not_emitted(self) -> None:
+        """Bare MERAKI_API_KEY is never emitted, even redacted (#529).
+
+        It is never consumed as a config source (only
+        MERAKI_EXPORTER_MERAKI__API_KEY is read by Settings), so the startup env
+        dump must not emit it at all.
+        """
         fake_key = "my-fake-test-value"  # pragma: allowlist secret
         with patch.dict(os.environ, {"MERAKI_API_KEY": fake_key}, clear=False):
             result = get_env_vars()
-        assert "MERAKI_API_KEY" in result
-        assert result["MERAKI_API_KEY"] == "***REDACTED***"
+        assert "MERAKI_API_KEY" not in result
 
     @patch.dict(os.environ, {"UNRELATED_VAR": "val"}, clear=False)
     def test_ignores_unrelated_vars(self) -> None:
@@ -117,12 +151,12 @@ class TestTruncateList:
         assert truncated is True
 
 
-class TestLogConfiguration:
-    """Tests for log_configuration."""
+class TestDeadCodeRemoved:
+    """Guards for CFG-12 cleanup (issue #599)."""
 
-    def test_does_not_raise(self, test_settings: Settings) -> None:
-        """Test that log_configuration runs without error."""
-        log_configuration(test_settings)
+    def test_log_configuration_removed(self) -> None:
+        """The dead `log_configuration()` stub must no longer exist."""
+        assert not hasattr(config_logger_mod, "log_configuration")
 
 
 class TestLogStartupSummary:
@@ -187,35 +221,45 @@ class TestLogStartupSummary:
         test_settings.otel.service_name = "meraki-exporter"
         log_startup_summary(test_settings)
 
-    def _collector_status_lines(self, test_settings: Settings) -> tuple[str, str]:
-        """Capture the Enabled/Disabled Collectors feature-status lines (F-005)."""
+    def test_summary_not_double_logged(self, test_settings: Settings) -> None:
+        """The summary is emitted once, via the unfiltered startup logger (#599).
+
+        Before the CFG-12 cleanup the whole configuration was logged a second
+        time through the module `logger` (the `logger.info(...)` "Feature Status"
+        block). That duplicate is removed, so the module logger must not be used
+        by the startup summary at all.
+        """
         with patch.object(config_logger_mod.logger, "info") as mock_info:
             log_startup_summary(test_settings)
-        lines = [call.args[0] for call in mock_info.call_args_list if call.args]
-        enabled_line = next(line for line in lines if str(line).startswith("  Enabled Collectors:"))
-        disabled_line = next(
-            (line for line in lines if str(line).startswith("  Disabled Collectors:")),
-            "",
-        )
-        return enabled_line, disabled_line
+        assert mock_info.call_count == 0
+
+    def _enabled_collectors(self, test_settings: Settings) -> list[str]:
+        """Capture the enabled-collectors list from the startup summary (F-005).
+
+        The summary is emitted via the unfiltered startup logger, so patch its
+        factory and read the structured `  Enabled Collectors` event.
+        """
+        mock_logger = MagicMock()
+        with patch.object(config_logger_mod, "_get_unfiltered_logger", return_value=mock_logger):
+            log_startup_summary(test_settings)
+        for call in mock_logger.warning.call_args_list:
+            if call.args and call.args[0] == "  Enabled Collectors":
+                return list(call.kwargs.get("collectors", []))
+        raise AssertionError("'  Enabled Collectors' line was not emitted")
 
     def test_networkhealth_and_mtsensor_reported_enabled_by_default(
         self, test_settings: Settings
     ) -> None:
         """Network Health and MT Sensors must show as enabled by default (F-005)."""
-        enabled_line, disabled_line = self._collector_status_lines(test_settings)
+        collectors = self._enabled_collectors(test_settings)
 
-        assert "Network Health" in enabled_line
-        assert "MT Sensors" in enabled_line
-        # And must NOT be wrongly reported as disabled.
-        assert "Network Health" not in disabled_line
-        assert "MT Sensors" not in disabled_line
+        assert "networkhealth" in collectors
+        assert "mtsensor" in collectors
 
     def test_disabled_collector_is_reflected(self, test_settings: Settings) -> None:
         """Disabling a collector via disable_collectors is reflected in the summary (F-005)."""
         test_settings.collectors.disable_collectors = {"networkhealth"}
 
-        enabled_line, disabled_line = self._collector_status_lines(test_settings)
+        collectors = self._enabled_collectors(test_settings)
 
-        assert "Network Health" in disabled_line
-        assert "Network Health" not in enabled_line
+        assert "networkhealth" not in collectors

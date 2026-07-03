@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
+import os
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,7 +20,15 @@ from .config_models import (
     ServerSettings,
     UpdateIntervals,
     WebhookSettings,
+    find_unrecognized_env_vars,
 )
+from .config_sources import FileSecretsSettingsSource
+from .logging import get_logger
+
+if TYPE_CHECKING:
+    from pydantic_settings import PydanticBaseSettingsSource
+
+logger = get_logger(__name__)
 
 
 class Settings(BaseSettings):
@@ -80,13 +89,54 @@ class Settings(BaseSettings):
         description="Network-level filter for restricting which networks are scraped",
     )
 
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Add the ``<ENV_VAR>_FILE`` secret source (#587).
+
+        The file-based secret source is placed **below** ``env_settings`` (and
+        ``dotenv_settings``) so a directly-set env var still wins over a mounted
+        secret file. See :mod:`.config_sources`.
+        """
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            FileSecretsSettingsSource(settings_cls),
+            file_secret_settings,
+        )
+
     @model_validator(mode="after")
     def validate_regional_settings(self) -> Settings:
         """Validate settings based on API region."""
-        # If using a regional endpoint, ensure appropriate timeouts
-        if "china" in self.meraki.api_base_url.lower() and self.api.timeout < 45:
+        # If using a regional endpoint, ensure appropriate timeouts. The canonical
+        # China host is api.meraki.cn, so match on "meraki.cn" (the old "china"
+        # substring never matched the real base URL) (#518).
+        if "meraki.cn" in self.meraki.api_base_url.lower() and self.api.timeout < 45:
             # China region typically needs longer timeouts
             self.api.timeout = 45
+        return self
+
+    @model_validator(mode="after")
+    def warn_unrecognized_env_vars(self) -> Settings:
+        """Emit a WARN for each unknown ``MERAKI_EXPORTER_*`` env var (#515).
+
+        ``extra="ignore"`` silently drops typo'd prefixed env vars, so a
+        misspelled setting looks applied but does nothing. Surface them once at
+        startup. Values are never logged.
+        """
+        for key in find_unrecognized_env_vars(os.environ, type(self)):
+            logger.warning(
+                "Ignoring unrecognized MERAKI_EXPORTER_* environment variable "
+                "(check for a typo; value not logged)",
+                env_var=key,
+            )
         return self
 
     def get_collector_config(self, collector_name: str) -> dict[str, Any]:

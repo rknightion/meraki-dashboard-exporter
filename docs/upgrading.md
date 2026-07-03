@@ -91,17 +91,29 @@ and to clients (join to `meraki_client_info`). The info carriers are `meraki_org
 and `meraki_client_info`. Full detail is in the stability policy's [Name labels are not part of
 numeric series](stability.md#name-labels-are-not-part-of-numeric-series) section.
 
-### Single-org deployment contract
+### Single-org deployment contract (BREAKING)
 
-From 1.0, the recommended and supported deployment model is **one exporter instance per Meraki
-organization**: set `MERAKI_EXPORTER_MERAKI__ORG_ID` to the organization you want that instance
-to poll. Running one instance per org keeps each poller's rate-limit budget, inventory cache, and
-metric cardinality scoped to a single organization.
+**From 1.0, each exporter instance polls exactly one Meraki organization (1 poller = 1 org).**
+This is a deliberate breaking change: it makes each instance's rate-limit budget, inventory cache,
+and metric cardinality well-defined and scoped to a single organization, so per-instance capacity
+can be reasoned about.
 
-`MERAKI_EXPORTER_MERAKI__ORG_ID` remains optional in configuration - if it is unset the exporter
-discovers and polls every organization the API key can see - but for production deployments,
-prefer pinning one org per instance. See the [Configuration](config.md) reference for the key and
-the [Scaling Guide](scaling-guide.md) for per-scale deployment recommendations.
+How the organization is resolved at startup:
+
+- **`MERAKI_EXPORTER_MERAKI__ORG_ID` set** - the exporter polls that organization. This is the
+  recommended production configuration.
+- **`org_id` unset and the API key sees exactly one organization** - that organization is
+  **auto-selected** and the exporter starts normally, so a single-org key needs no `org_id`.
+- **`org_id` unset and the API key sees several organizations** - the exporter **fails fast at
+  startup** (it aborts before serving) with an error listing the visible organizations and telling
+  you to set `MERAKI_EXPORTER_MERAKI__ORG_ID` to one of them.
+
+**What changed:** previously an unset `org_id` caused the exporter to discover and poll *every*
+organization the API key could see. That multi-org polling behaviour is gone. If you relied on a
+single instance covering multiple organizations, split it into **one instance per organization**
+(shard by org). See the [Scaling Guide](scaling-guide.md) for shard-by-org / HA recipes and the
+Helm chart's multi-instance example (`charts/meraki-dashboard-exporter`) for running one release
+per organization, and the [Configuration](config.md) reference for the `org_id` key.
 
 ## Where breaking changes are announced
 

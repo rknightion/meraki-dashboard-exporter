@@ -144,6 +144,138 @@ class TestMainValidationError:
         assert "Configuration Error" in err
 
 
+_FAKE_API_KEY = "test_api_key_at_least_30_characters_long"  # pragma: allowlist secret
+
+
+def _valid_settings() -> object:
+    """Build a valid Settings instance for --check tests (no env dependency)."""
+    from pydantic import SecretStr
+
+    from meraki_dashboard_exporter.core.config import Settings
+    from meraki_dashboard_exporter.core.config_models import MerakiSettings
+
+    return Settings(
+        meraki=MerakiSettings(api_key=SecretStr(_FAKE_API_KEY), org_id="123456"),
+    )
+
+
+class TestCheckMode:
+    """Tests for the --check config-validation / dry-run mode (issue #588)."""
+
+    def test_help_mentions_check_flag(self, capsys: pytest.CaptureFixture) -> None:
+        """--help must advertise the --check flag so operators can find it."""
+        with patch("sys.argv", ["meraki-dashboard-exporter", "--help"]):
+            with pytest.raises(SystemExit):
+                main()
+        out = capsys.readouterr().out
+        assert "--check" in out
+
+    def test_check_valid_config_exits_zero(self) -> None:
+        """--check with valid config exits 0 and does not start the server."""
+        with (
+            patch("sys.argv", ["meraki-dashboard-exporter", "--check"]),
+            patch(
+                "meraki_dashboard_exporter.__main__.Settings",
+                return_value=_valid_settings(),
+            ),
+            patch("meraki_dashboard_exporter.__main__.uvicorn.run") as mock_run,
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+        assert exc_info.value.code == 0
+        mock_run.assert_not_called()
+
+    def test_check_prints_redacted_summary_and_hides_key(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """--check prints a redacted summary that never contains the API key."""
+        with (
+            patch("sys.argv", ["meraki-dashboard-exporter", "--check"]),
+            patch(
+                "meraki_dashboard_exporter.__main__.Settings",
+                return_value=_valid_settings(),
+            ),
+            patch("meraki_dashboard_exporter.__main__.uvicorn.run"),
+        ):
+            with pytest.raises(SystemExit):
+                main()
+        out = capsys.readouterr().out
+        assert "***REDACTED***" in out
+        # The real key value must never be printed.
+        assert _FAKE_API_KEY not in out
+        # A clear validity verdict is shown.
+        assert "VALID" in out
+
+    def test_check_invalid_config_exits_nonzero(self) -> None:
+        """--check with invalid config exits non-zero (validation failure)."""
+        with (
+            patch("sys.argv", ["meraki-dashboard-exporter", "--check"]),
+            patch(
+                "meraki_dashboard_exporter.__main__.Settings",
+                side_effect=_make_other_validation_error(),
+            ),
+            patch("meraki_dashboard_exporter.__main__.uvicorn.run") as mock_run,
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+        assert exc_info.value.code == 1
+        mock_run.assert_not_called()
+
+    def test_check_offline_does_not_probe(self) -> None:
+        """Default --check performs no live auth probe (offline-safe for CI)."""
+        with (
+            patch("sys.argv", ["meraki-dashboard-exporter", "--check"]),
+            patch(
+                "meraki_dashboard_exporter.__main__.Settings",
+                return_value=_valid_settings(),
+            ),
+            patch("meraki_dashboard_exporter.__main__.uvicorn.run"),
+            patch("meraki_dashboard_exporter.__main__._run_auth_probe") as mock_probe,
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+        assert exc_info.value.code == 0
+        mock_probe.assert_not_called()
+
+    def test_check_probe_success_exits_zero(self) -> None:
+        """--check --probe runs the auth probe; success exits 0."""
+        with (
+            patch("sys.argv", ["meraki-dashboard-exporter", "--check", "--probe"]),
+            patch(
+                "meraki_dashboard_exporter.__main__.Settings",
+                return_value=_valid_settings(),
+            ),
+            patch("meraki_dashboard_exporter.__main__.uvicorn.run"),
+            patch(
+                "meraki_dashboard_exporter.__main__._run_auth_probe",
+                return_value=True,
+            ) as mock_probe,
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+        assert exc_info.value.code == 0
+        mock_probe.assert_called_once()
+
+    def test_check_probe_failure_exits_nonzero(self) -> None:
+        """--check --probe with a failing auth probe exits non-zero."""
+        with (
+            patch("sys.argv", ["meraki-dashboard-exporter", "--check", "--probe"]),
+            patch(
+                "meraki_dashboard_exporter.__main__.Settings",
+                return_value=_valid_settings(),
+            ),
+            patch("meraki_dashboard_exporter.__main__.uvicorn.run"),
+            patch(
+                "meraki_dashboard_exporter.__main__._run_auth_probe",
+                return_value=False,
+            ) as mock_probe,
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+        assert exc_info.value.code == 1
+        mock_probe.assert_called_once()
+
+
 def _make_api_key_validation_error() -> Exception:
     """Create a ValidationError that looks like a wholly-missing nested `meraki` model.
 

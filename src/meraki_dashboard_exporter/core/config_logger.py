@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from typing import Any
@@ -15,38 +14,121 @@ from .logging import get_logger
 logger = get_logger(__name__)
 
 
+REDACTED = "***REDACTED***"
+
+# Known-safe field-name substrings that are never sensitive and may be logged in
+# the clear. Matched against the field portion of a config/env key (after the
+# ``MERAKI_EXPORTER_``/``MERAKI_`` prefix is stripped). This is an ALLOWLIST:
+# anything NOT matching one of these is redacted by default (SEC-07). Add a new
+# entry here only for a field you have confirmed carries no secret material.
+_SAFE_KEY_SUBSTRINGS: frozenset[str] = frozenset({
+    "host",
+    "port",
+    "timeout",
+    "retr",  # retries / retry / max_retries
+    "backoff",
+    "concurrency",
+    "batch",
+    "delay",
+    "rate_limit",
+    "requests_per_second",
+    "rps",
+    "burst",
+    "fraction",
+    "jitter",
+    "smoothing",
+    "window",
+    "interval",
+    "fast",
+    "medium",
+    "slow",
+    "tier",
+    "level",
+    "format",
+    "enabled",
+    "endpoint",
+    "service_name",
+    "base_url",
+    "url",
+    "org_id",
+    "resource_attributes",
+    "collector",
+    "use_org_endpoint",
+    "validate_kwargs",
+    "region",
+    "include",
+    "exclude",
+    "filter",
+    "network",
+    "product",
+    "tag",
+})
+
+# Authoritative sensitive-key substrings. These are always redacted even if they
+# also happen to match a safe substring (belt-and-suspenders); the allowlist
+# above already redacts anything unlisted, so this set is a fast, explicit guard
+# for well-known secret shapes.
+_SENSITIVE_KEY_SUBSTRINGS: frozenset[str] = frozenset({
+    "api_key",
+    "apikey",
+    "password",
+    "passwd",
+    "passphrase",
+    "secret",
+    "token",
+    "credential",
+    "private",
+    "cert",
+    "cookie",
+    "session",
+    "bearer",
+    "signature",
+    "salt",
+})
+
+# Env-key prefixes stripped before matching so the ``exporter``/``meraki`` prefix
+# noise cannot accidentally match safe/sensitive substrings.
+_KEY_PREFIXES: tuple[str, ...] = ("meraki_exporter_", "meraki_")
+
+
 def mask_sensitive_value(key: str, value: Any) -> Any:
-    """Mask sensitive configuration values.
+    """Mask configuration values, redacting by default (allowlist model, SEC-07).
+
+    The previous implementation was a substring *denylist*: any field whose name
+    did not match a known secret substring was logged in the clear, so every new
+    secret-bearing config field was a latent leak. This inverts the model to
+    **redact by default** — a value is only shown when its key matches the
+    explicit ``_SAFE_KEY_SUBSTRINGS`` allowlist and does not match the
+    authoritative ``_SENSITIVE_KEY_SUBSTRINGS`` guard.
 
     Parameters
     ----------
     key : str
-        Configuration key name.
+        Configuration key name (may include the ``MERAKI_EXPORTER_`` prefix).
     value : Any
         Configuration value.
 
     Returns
     -------
     Any
-        Masked value if sensitive, original value otherwise.
+        The original value if the key is known-safe, otherwise ``"***REDACTED***"``.
 
     """
-    sensitive_keys = {
-        "api_key",
-        "meraki_api_key",
-        "password",
-        "secret",
-        "token",
-        "credential",
-    }
+    field = key.lower()
+    for prefix in _KEY_PREFIXES:
+        if field.startswith(prefix):
+            field = field[len(prefix) :]
+            break
 
-    # Check if key contains any sensitive terms
-    key_lower = key.lower()
-    if any(sensitive in key_lower for sensitive in sensitive_keys):
-        # Never expose sensitive values (API keys, tokens, secrets).
-        return "***REDACTED***"
+    # Authoritative sensitive guard: always redact known secret shapes.
+    if any(token in field for token in _SENSITIVE_KEY_SUBSTRINGS):
+        return REDACTED
 
-    return value
+    # Redact-by-default: only surface values whose key is explicitly known-safe.
+    if any(token in field for token in _SAFE_KEY_SUBSTRINGS):
+        return value
+
+    return REDACTED
 
 
 def get_env_vars() -> dict[str, str]:
@@ -61,31 +143,16 @@ def get_env_vars() -> dict[str, str]:
     env_vars = {}
     prefix = "MERAKI_EXPORTER_"
 
-    # Also include MERAKI_API_KEY without prefix
-    if "MERAKI_API_KEY" in os.environ:
-        env_vars["MERAKI_API_KEY"] = mask_sensitive_value(
-            "MERAKI_API_KEY", os.environ["MERAKI_API_KEY"]
-        )
-
-    # Get all MERAKI_EXPORTER_* variables
+    # Get all MERAKI_EXPORTER_* variables. The bare `MERAKI_API_KEY` (without the
+    # `MERAKI_EXPORTER_` prefix) is intentionally NOT included here: it is never
+    # consumed as a config source (only `MERAKI_EXPORTER_MERAKI__API_KEY` is read
+    # by Settings), so dumping it was dead/misleading output (#529).
     for key, value in os.environ.items():
-        if key.startswith(prefix) or key == "MERAKI_API_KEY":
+        if key.startswith(prefix):
             masked_value = mask_sensitive_value(key, value)
             env_vars[key] = masked_value
 
     return env_vars
-
-
-def log_configuration(settings: Settings) -> None:
-    """Log the current configuration at startup.
-
-    Parameters
-    ----------
-    settings : Settings
-        Application settings to log.
-
-    """
-    logger.info("=" * 80)
 
 
 def _truncate_list(values: list[str], max_items: int = 20) -> tuple[list[str], bool]:
@@ -288,94 +355,3 @@ def log_startup_summary(
             log_method("  Discovery Errors", errors=errors)
 
     log_method("=" * 80)
-    logger.info("Meraki Dashboard Exporter Configuration")
-    logger.info("=" * 80)
-
-    # Log environment variables
-    env_vars = get_env_vars()
-    if env_vars:
-        logger.info("Environment Variables:")
-        for key, value in sorted(env_vars.items()):
-            logger.info(f"  {key}={value}")
-    else:
-        logger.info("No MERAKI_EXPORTER environment variables found")
-
-    logger.info("-" * 80)
-
-    # Log feature status
-    logger.info("Feature Status:")
-
-    # API Configuration
-    logger.info(f"  API Base URL: {settings.meraki.api_base_url}")
-    logger.info(f"  API Timeout: {settings.api.timeout}s")
-    logger.info(f"  API Max Retries: {settings.api.max_retries}")
-    logger.info(f"  API Max Concurrent Requests: {settings.api.concurrency_limit}")
-    # OpenTelemetry
-    if settings.otel.enabled:
-        logger.info("  OpenTelemetry: ENABLED")
-        logger.info(f"    - Endpoint: {settings.otel.endpoint}")
-        logger.info(f"    - Service Name: {settings.otel.service_name}")
-        logger.info("    - Tracing: enabled")
-        if settings.otel.resource_attributes:
-            logger.info(
-                f"    - Resource Attributes: {json.dumps(settings.otel.resource_attributes)}"
-            )
-    else:
-        logger.info("  OpenTelemetry: DISABLED")
-
-    # Update Intervals
-    logger.info("  Update Intervals:")
-    logger.info(f"    - Fast: {settings.update_intervals.fast}s (sensor metrics)")
-    logger.info(f"    - Medium: {settings.update_intervals.medium}s (device/org metrics)")
-    logger.info(f"    - Slow: {settings.update_intervals.slow}s (config/license metrics)")
-
-    # Server Configuration
-    logger.info("  Server:")
-    logger.info(f"    - Host: {settings.server.host}")
-    logger.info(f"    - Port: {settings.server.port}")
-
-    # Organization Configuration
-    if settings.meraki.org_id:
-        logger.info(f"  Organization Filter: {settings.meraki.org_id}")
-    else:
-        logger.info("  Organization Filter: None (all organizations)")
-
-    # Collector Status
-    # Use the registered collector short-names (no underscores) so this matches
-    # what CollectorManager actually filters on, and report from
-    # active_collectors so disable overrides are reflected (F-005).
-    all_collectors = [
-        "organization",
-        "device",
-        "networkhealth",
-        "alerts",
-        "clients",
-        "config",
-        "mtsensor",
-        "mtsensoralerts",
-    ]
-    enabled = settings.collectors.active_collectors
-    disabled = [c for c in all_collectors if c not in enabled]
-
-    # Format collector names for display
-    display_names = {
-        "organization": "Organization",
-        "device": "Device",
-        "networkhealth": "Network Health",
-        "alerts": "Alerts",
-        "clients": "Clients",
-        "config": "Config Changes",
-        "mtsensor": "MT Sensors",
-        "mtsensoralerts": "MT Sensor Alerts",
-    }
-
-    enabled_display = [display_names.get(c, c) for c in all_collectors if c in enabled]
-    disabled_display = [display_names[c] for c in disabled]
-
-    logger.info(
-        f"  Enabled Collectors: {', '.join(enabled_display) if enabled_display else 'None'}"
-    )
-    if disabled_display:
-        logger.info(f"  Disabled Collectors: {', '.join(disabled_display)}")
-
-    logger.info("=" * 80)

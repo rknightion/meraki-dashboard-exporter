@@ -2,10 +2,61 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from collections.abc import Mapping
+from typing import Annotated, Any, get_args
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import NoDecode
+
+from .constants.config_constants import (
+    MERAKI_API_BASE_URL,
+    MERAKI_API_BASE_URL_CANADA,
+    MERAKI_API_BASE_URL_CHINA,
+    MERAKI_API_BASE_URL_INDIA,
+    MERAKI_API_BASE_URL_US_FED,
+)
+from .logging import get_logger
+
+logger = get_logger(__name__)
+
+#: Well-known Meraki regional API base URLs. A configured ``api_base_url`` that
+#: is well-formed but not in this set is accepted with a warning (custom proxies
+#: and future regions must keep working) - see :class:`MerakiSettings`.
+KNOWN_REGION_BASE_URLS: frozenset[str] = frozenset({
+    MERAKI_API_BASE_URL,
+    MERAKI_API_BASE_URL_CANADA,
+    MERAKI_API_BASE_URL_CHINA,
+    MERAKI_API_BASE_URL_INDIA,
+    MERAKI_API_BASE_URL_US_FED,
+})
+
+
+def _split_collector_csv(v: object) -> set[str]:
+    """Accept a set/list or a comma-separated / JSON-array string of names.
+
+    pydantic-settings does not auto-coerce a CSV env string into a ``set[str]``
+    for nested ``BaseModel`` fields (only at the top ``BaseSettings`` boundary),
+    so - like :class:`NetworkFilterSettings` - we normalise here. This lets the
+    documented ``COLLECTORS__ENABLED_COLLECTORS=a,b,c`` env form boot instead of
+    raising ``SettingsError`` (#514).
+    """
+    if v is None:
+        return set()
+    if isinstance(v, (set, frozenset, list, tuple)):
+        return {str(item).strip() for item in v if str(item).strip()}
+    if isinstance(v, str):
+        stripped = v.strip()
+        if not stripped:
+            return set()
+        # Allow JSON-array form too (consistent with histogram_buckets).
+        if stripped.startswith("[") and stripped.endswith("]"):
+            import json
+
+            parsed = json.loads(stripped)
+            return {str(item).strip() for item in parsed if str(item).strip()}
+        return {item.strip() for item in stripped.split(",") if item.strip()}
+    raise ValueError(f"Collector set field got unsupported type: {type(v)!r}")
 
 
 class APISettings(BaseModel):
@@ -94,6 +145,20 @@ class APISettings(BaseModel):
         description=(
             "When True, the Meraki SDK logs warnings if API methods are called with "
             "unrecognized kwargs. Recommended for dev/CI; off by default in production."
+        ),
+    )
+    requests_proxy: str | None = Field(
+        None,
+        description=(
+            "HTTPS proxy URL for Meraki API requests (SDK requests_proxy); when unset "
+            "the requests HTTPS_PROXY/NO_PROXY env vars still apply."
+        ),
+    )
+    certificate_path: str | None = Field(
+        None,
+        description=(
+            "Path to a custom CA bundle for verifying the Meraki API TLS cert (SDK "
+            "certificate_path); mount into read-only containers as a volume."
         ),
     )
     rate_limit_enabled: bool = Field(
@@ -346,6 +411,13 @@ class ServerSettings(BaseModel):
             "'Authorization: Bearer <token>'."
         ),
     )
+    ui_enabled: bool = Field(
+        True,
+        description=(
+            "When false, sensitive GET UI/status endpoints return 404 "
+            "(metrics/health/ready stay open)."
+        ),
+    )
 
 
 class WebhookSettings(BaseModel):
@@ -363,6 +435,13 @@ class WebhookSettings(BaseModel):
         True,
         description="Require shared secret validation (disable for testing only)",
     )
+    allow_insecure: bool = Field(
+        False,
+        description=(
+            "Explicit opt-in to run the webhook receiver enabled without require_secret; "
+            "startup refuses the insecure combo unless this is true."
+        ),
+    )
     max_payload_size: int = Field(
         1024 * 1024,  # 1MB
         ge=1024,
@@ -374,7 +453,11 @@ class WebhookSettings(BaseModel):
 class CollectorSettings(BaseModel):
     """Collector-specific settings."""
 
-    enabled_collectors: set[str] = Field(
+    # NoDecode disables pydantic-settings JSON-parsing of complex types so the
+    # raw env-var string reaches our _split_csv validator - the documented CSV
+    # form (COLLECTORS__ENABLED_COLLECTORS=a,b,c) would otherwise crash at boot
+    # with SettingsError because a bare CSV string is not valid JSON (#514).
+    enabled_collectors: Annotated[set[str], NoDecode] = Field(
         default_factory=lambda: {
             "alerts",
             "clients",
@@ -387,7 +470,7 @@ class CollectorSettings(BaseModel):
         },
         description="Enabled collector names",
     )
-    disable_collectors: set[str] = Field(
+    disable_collectors: Annotated[set[str], NoDecode] = Field(
         default_factory=set,
         description="Explicitly disabled collectors (overrides enabled)",
     )
@@ -397,6 +480,12 @@ class CollectorSettings(BaseModel):
         le=600,
         description="Timeout for individual collector runs in seconds",
     )
+
+    @field_validator("enabled_collectors", "disable_collectors", mode="before")
+    @classmethod
+    def _split_csv(cls, v: object) -> set[str]:
+        """Accept a set, a comma-separated string, or a JSON array from env vars."""
+        return _split_collector_csv(v)
 
     @property
     def active_collectors(self) -> set[str]:
@@ -464,7 +553,13 @@ class MerakiSettings(BaseModel):
     )
     org_id: str | None = Field(
         None,
-        description="Meraki organization ID (optional, will fetch all orgs if not set)",
+        description=(
+            "Meraki organization ID. For v1 the single-organization contract "
+            "applies (one poller instance = one organization): when the API key "
+            "sees exactly one org it is auto-selected and org_id may be omitted; "
+            "when the key sees several orgs, set org_id explicitly (startup fails "
+            "fast on an ambiguous multi-org key). See discovery.py/app startup."
+        ),
     )
     api_base_url: str = Field(
         "https://api.meraki.com/api/v1",
@@ -479,6 +574,58 @@ class MerakiSettings(BaseModel):
         if not key or len(key) < 30:
             raise ValueError("Invalid API key format")
         return v
+
+    @field_validator("api_base_url", mode="before")
+    @classmethod
+    def validate_api_base_url(cls, v: object) -> str:
+        """Reject malformed base URLs; warn on unknown-but-well-formed regions.
+
+        A typo'd base URL otherwise surfaces much later as an opaque connection
+        failure (#590). We require a well-formed http(s) URL with a host. A
+        well-formed URL that is not a recognised Meraki region is accepted with
+        a warning so custom proxies / future regions keep working (CFG-15).
+        """
+        if not isinstance(v, str):
+            raise ValueError("api_base_url must be a string")
+        url = v.strip()
+        if not url:
+            raise ValueError("api_base_url must not be empty")
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError(
+                f"Invalid api_base_url {url!r}: must be a well-formed http(s) URL "
+                "(e.g. https://api.meraki.com/api/v1)"
+            )
+        if url.rstrip("/") not in {u.rstrip("/") for u in KNOWN_REGION_BASE_URLS}:
+            logger.warning(
+                "api_base_url is not a recognised Meraki region base URL; "
+                "proceeding anyway (custom/proxy endpoint)",
+                api_base_url=url,
+                known_regions=sorted(KNOWN_REGION_BASE_URLS),
+            )
+        return url
+
+    @field_validator("org_id", mode="before")
+    @classmethod
+    def validate_org_id(cls, v: object) -> str | None:
+        """Sanity-check org_id: reject empty/whitespace, warn on non-numeric.
+
+        Meraki organization IDs are numeric strings; a non-numeric value is
+        accepted (defensive - the format could change) but warned about so an
+        obvious typo is visible at startup (#590 / CFG-04).
+        """
+        if v is None:
+            return None
+        org_id = str(v).strip()
+        if not org_id:
+            raise ValueError("org_id must not be empty or whitespace when set")
+        if not org_id.isdigit():
+            logger.warning(
+                "org_id is not numeric; Meraki organization IDs are normally "
+                "numeric - double-check for a typo",
+                org_id=org_id,
+            )
+        return org_id
 
 
 class NetworkFilterSettings(BaseModel):
@@ -589,6 +736,112 @@ class LoggingSettings(BaseModel):
 
     level: str = Field(
         "INFO",
-        description="Logging level",
-        pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$",
+        description="Logging level (case-insensitive; normalised to upper-case)",
     )
+    log_format: str = Field(
+        "logfmt",
+        description="Structured-log renderer: 'logfmt' (default) or 'json'.",
+    )
+
+    @field_validator("level", mode="before")
+    @classmethod
+    def _normalise_level(cls, v: object) -> str:
+        """Accept case-insensitive log levels, normalising to upper-case (#598)."""
+        if not isinstance(v, str):
+            raise ValueError("Logging level must be a string")
+        level = v.strip().upper()
+        allowed = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        if level not in allowed:
+            raise ValueError(
+                f"Invalid log level {v!r}. Must be one of {sorted(allowed)} (case-insensitive)"
+            )
+        return level
+
+    @field_validator("log_format", mode="before")
+    @classmethod
+    def _normalise_log_format(cls, v: object) -> str:
+        """Accept case-insensitive 'logfmt'/'json', normalising to lower-case (#310)."""
+        if not isinstance(v, str):
+            raise ValueError("log_format must be a string")
+        fmt = v.strip().lower()
+        allowed = {"logfmt", "json"}
+        if fmt not in allowed:
+            raise ValueError(
+                f"Invalid log_format {v!r}. Must be one of {sorted(allowed)} (case-insensitive)"
+            )
+        return fmt
+
+
+def _submodel_of(annotation: Any) -> type[BaseModel] | None:
+    """Return the nested ``BaseModel`` subclass in an annotation, if any.
+
+    Handles direct annotations (``MerakiSettings``) and unions
+    (``MerakiSettings | None``); returns ``None`` for scalar/collection leaves
+    so those become terminal env-var names.
+    """
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return annotation
+    for arg in get_args(annotation):
+        if isinstance(arg, type) and issubclass(arg, BaseModel):
+            return arg
+    return None
+
+
+def known_env_var_names(
+    model_cls: type[BaseModel],
+    *,
+    prefix: str = "MERAKI_EXPORTER_",
+    delimiter: str = "__",
+) -> set[str]:
+    """Compute the set of recognised (upper-cased) env-var names for a settings model.
+
+    Recursively walks ``model_fields``, building ``PREFIX + path`` joined by the
+    nested delimiter for every leaf field. Used to reconcile the observed
+    environment against the schema so typo'd ``MERAKI_EXPORTER_*`` vars can be
+    flagged at startup (#515).
+    """
+    names: set[str] = set()
+
+    def _walk(cls: type[BaseModel], cur_prefix: str) -> None:
+        for name, field in cls.model_fields.items():
+            env_name = f"{cur_prefix}{name}".upper()
+            sub = _submodel_of(field.annotation)
+            if sub is not None:
+                _walk(sub, f"{cur_prefix}{name}{delimiter}")
+            else:
+                names.add(env_name)
+
+    _walk(model_cls, prefix)
+    return names
+
+
+def find_unrecognized_env_vars(
+    environ: Mapping[str, str],
+    model_cls: type[BaseModel],
+    *,
+    prefix: str = "MERAKI_EXPORTER_",
+    delimiter: str = "__",
+) -> list[str]:
+    """Return ``MERAKI_EXPORTER_*`` env keys not recognised by the settings schema.
+
+    Typo'd or unknown prefixed env vars are silently ignored by pydantic
+    (``extra="ignore"``), so a misspelled setting looks applied but does nothing.
+    This diffs the observed prefixed environment against the known field set and
+    returns the offending original key names (values are never returned) so the
+    caller can emit a startup WARN (#515). A ``<KNOWN>_FILE`` variant (the
+    file-based secret convention, #587) is treated as recognised.
+    """
+    known = known_env_var_names(model_cls, prefix=prefix, delimiter=delimiter)
+    upper_prefix = prefix.upper()
+    unrecognized: list[str] = []
+    for key in environ:
+        upper = key.upper()
+        if not upper.startswith(upper_prefix):
+            continue
+        if upper in known:
+            continue
+        # Accept the file-based secret convention: MERAKI_EXPORTER_..._FILE
+        if upper.endswith("_FILE") and upper[: -len("_FILE")] in known:
+            continue
+        unrecognized.append(key)
+    return sorted(unrecognized)

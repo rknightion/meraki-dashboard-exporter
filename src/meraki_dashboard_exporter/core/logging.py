@@ -15,13 +15,38 @@ if TYPE_CHECKING:
 _LOGGING_CONFIGURED = False
 
 
+def _select_renderer(log_format: str) -> Processor:
+    """Select the final structlog renderer for the configured log format.
+
+    Parameters
+    ----------
+    log_format : str
+        Desired output format. ``"json"`` selects
+        :class:`structlog.processors.JSONRenderer`; anything else (notably the
+        default ``"logfmt"``) selects :class:`structlog.processors.LogfmtRenderer`.
+
+    Returns
+    -------
+    Processor
+        The structlog renderer to append as the final processor.
+
+    """
+    if log_format.lower() == "json":
+        return structlog.processors.JSONRenderer()
+    return structlog.processors.LogfmtRenderer()
+
+
 def setup_logging(settings: Settings) -> None:
-    """Configure structured logging with structlog using logfmt format.
+    """Configure structured logging with structlog.
+
+    The final renderer is selected by ``settings.logging.log_format``
+    (``"logfmt"`` by default, or ``"json"`` for JSON-native log pipelines such
+    as Loki/Datadog/ELK/CloudWatch).
 
     Parameters
     ----------
     settings : Settings
-        Application settings containing log level.
+        Application settings containing log level and log format.
 
     """
     global _LOGGING_CONFIGURED
@@ -130,7 +155,7 @@ def setup_logging(settings: Settings) -> None:
         logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
         logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
 
-    # Processors for structlog with logfmt output
+    # Processors for structlog output
     processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
@@ -144,8 +169,9 @@ def setup_logging(settings: Settings) -> None:
     if settings.otel.enabled:
         processors.append(add_otel_context)
 
-    # Add the final renderer
-    processors.append(structlog.processors.LogfmtRenderer())
+    # Add the final renderer, selected by the configured log format (logfmt|json).
+    log_format = getattr(settings.logging, "log_format", "logfmt")
+    processors.append(_select_renderer(log_format))
 
     structlog.configure(
         processors=processors,

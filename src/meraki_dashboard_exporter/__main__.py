@@ -13,10 +13,108 @@ from .core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _print_redacted_summary(settings: Settings) -> None:
+    """Print a redacted, human-readable configuration summary to stdout.
+
+    The Meraki API key is NEVER read or printed here - a fixed ``***REDACTED***``
+    placeholder is emitted so the secret cannot leak via the check output.
+
+    Parameters
+    ----------
+    settings : Settings
+        Validated application settings.
+
+    """
+    org_filter = settings.meraki.org_id or "None (all organizations)"
+    lines = [
+        f"  API Base URL:       {settings.meraki.api_base_url}",
+        "  API Key:            ***REDACTED***",
+        f"  Organization:       {org_filter}",
+        f"  Server:             {settings.server.host}:{settings.server.port}",
+        f"  Log Level:          {settings.logging.level}",
+        f"  API Timeout:        {settings.api.timeout}s",
+        f"  API Max Retries:    {settings.api.max_retries}",
+        (
+            "  Update Intervals:   "
+            f"fast={settings.update_intervals.fast}s "
+            f"medium={settings.update_intervals.medium}s "
+            f"slow={settings.update_intervals.slow}s"
+        ),
+        f"  OpenTelemetry:      {'ENABLED' if settings.otel.enabled else 'DISABLED'}",
+        (
+            "  Enabled Collectors: "
+            f"{', '.join(sorted(settings.collectors.active_collectors)) or 'None'}"
+        ),
+    ]
+    for line in lines:
+        print(line)
+
+
+def _run_auth_probe(settings: Settings) -> bool:
+    """Perform a one-shot Meraki auth probe via ``getOrganizations``.
+
+    This is only invoked when ``--probe`` is passed; the default ``--check`` is
+    fully offline. Any exception (auth failure, network error) is treated as a
+    failed probe.
+
+    Parameters
+    ----------
+    settings : Settings
+        Validated application settings (supplies the API key/base URL).
+
+    Returns
+    -------
+    bool
+        ``True`` if ``getOrganizations`` succeeded, ``False`` otherwise.
+
+    """
+    from .api.client import AsyncMerakiClient
+
+    client = AsyncMerakiClient(settings)
+    try:
+        client.api.organizations.getOrganizations()
+    except Exception as exc:  # noqa: BLE001 - CLI probe: any failure is a failure
+        print(f"  auth probe error: {exc}", file=sys.stderr)
+        return False
+    return True
+
+
+def _run_config_check(settings: Settings, *, probe: bool) -> None:
+    """Validate configuration, print a redacted summary, and exit.
+
+    Exits 0 when the configuration is valid (and, if ``--probe`` was requested,
+    the auth probe succeeds); exits non-zero when the probe fails. Invalid
+    configuration never reaches this function - it is rejected earlier by the
+    ``Settings()`` validation path with a non-zero exit.
+
+    Parameters
+    ----------
+    settings : Settings
+        Validated application settings.
+    probe : bool
+        Whether to additionally run a live ``getOrganizations`` auth probe.
+
+    """
+    print("Meraki Dashboard Exporter - configuration check\n")
+    print("Configuration: VALID\n")
+    _print_redacted_summary(settings)
+
+    if probe:
+        print("\nRunning auth probe (getOrganizations)...")
+        if not _run_auth_probe(settings):
+            print("Auth probe: FAILED", file=sys.stderr)
+            sys.exit(1)
+        print("Auth probe: OK")
+
+    sys.exit(0)
+
+
 def main() -> None:
     """Run the Meraki Dashboard Exporter."""
+    args = sys.argv[1:]
+
     # Check for help flag before loading settings
-    if len(sys.argv) > 1 and sys.argv[1] in {"--help", "-h"}:
+    if any(arg in {"--help", "-h"} for arg in args):
         print(
             "Meraki Dashboard Exporter\n"
             "\n"
@@ -27,6 +125,9 @@ def main() -> None:
             "\n"
             "Options:\n"
             "  --help, -h    Show this help message\n"
+            "  --check       Validate configuration, print a redacted summary, and exit\n"
+            "                (non-zero exit on invalid config). Offline by default.\n"
+            "  --probe       With --check, also run a live getOrganizations auth probe\n"
             "\n"
             "Environment Variables:\n"
             "  MERAKI_EXPORTER_MERAKI__API_KEY    Meraki Dashboard API key (required)\n"
@@ -38,6 +139,9 @@ def main() -> None:
             "For more information, visit: https://github.com/rknightion/meraki-dashboard-exporter\n"
         )
         sys.exit(0)
+
+    check_mode = "--check" in args or "--validate" in args
+    probe = "--probe" in args
 
     try:
         settings = Settings()
@@ -69,6 +173,11 @@ def main() -> None:
             print(f"  - {loc}: {error['msg']}", file=sys.stderr)
         print("\nPlease check your configuration and try again.\n", file=sys.stderr)
         sys.exit(1)
+
+    # Config-validation / dry-run mode: validate, summarise, optionally probe, exit.
+    # This never starts the server (no polling).
+    if check_mode:
+        _run_config_check(settings, probe=probe)
 
     # Import the app creation function directly
     from .app import create_app
