@@ -672,6 +672,7 @@ class TestOrganizationCollector(BaseCollectorTest):
             collector.device_availability_history_collector,
             collector.top_usage_collector,
             collector.webhook_logs_collector,
+            collector.early_access_collector,
         ):
             sub.collect = AsyncMock(return_value=True)  # type: ignore[method-assign]
         # Phase 4 (#618): stub the firmware compliance path + the two direct
@@ -728,6 +729,7 @@ class TestOrganizationCollector(BaseCollectorTest):
             "_collect_top_usage_metrics",
             "_collect_webhook_logs_metrics",
             "_collect_firmware_compliance_metrics",
+            "_collect_early_access_metrics",
         ]
         for name in names:
             if name != keep:
@@ -1181,6 +1183,7 @@ class TestOrganizationCollector(BaseCollectorTest):
             collector.device_availability_history_collector,
             collector.top_usage_collector,
             collector.webhook_logs_collector,
+            collector.early_access_collector,
         ):
             sub.collect = AsyncMock(return_value=True)  # type: ignore[method-assign]
         # Phase 4 (#618): stub the firmware compliance path + the two direct

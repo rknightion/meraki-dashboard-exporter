@@ -99,6 +99,11 @@ class OrgMetricName(StrEnum):
     ORG_SAML_ENABLED = "meraki_org_saml_enabled"
     ORG_SAML_IDPS = "meraki_org_saml_idps"
 
+    # Early Access opt-in inventory + beta-API risk signal (#278, #279)
+    ORG_EARLY_ACCESS_OPT_IN_INFO = "meraki_org_early_access_opt_in_info"
+    ORG_EARLY_ACCESS_OPT_IN_SCOPED_NETWORKS = "meraki_org_early_access_opt_in_scoped_networks"
+    ORG_HAS_BETA_API = "meraki_org_has_beta_api"
+
 
 class NetworkMetricName(StrEnum):
     """Network-level metric names."""

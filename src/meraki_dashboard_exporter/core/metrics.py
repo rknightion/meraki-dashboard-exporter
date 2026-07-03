@@ -184,6 +184,10 @@ class LabelName(StrEnum):
     # Phase 4C (#622) — OTel data-log self-observability
     EVENT = "event"  # Built-in data-log event name (bounded by DataLogEvent enum)
 
+    # Early Access opt-ins (#278, #279); bounded — a handful of opt-ins per org
+    FEATURE = "feature"  # Early Access opt-in shortName (e.g. has_beta_api)
+    OPT_IN_ID = "opt_in_id"  # Early Access opt-in id
+
 
 def create_labels(**kwargs: str | None) -> dict[str, str]:
     """Create a label dictionary with validation.

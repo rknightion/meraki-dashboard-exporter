@@ -59,12 +59,21 @@ meraki_org_devices_availability_changes_count gauge
 meraki_org_devices_by_model gauge
   help: Number of devices by specific model
   labels: model,org_id
+meraki_org_early_access_opt_in_info gauge
+  help: Early Access feature opt-in inventory join carrier (value 1): one series per active org opt-in, labelled by feature (shortName) and opt_in_id. Per #534 the mutable feature string lives only here
+  labels: feature,opt_in_id,org_id
+meraki_org_early_access_opt_in_scoped_networks gauge
+  help: Number of networks an Early Access opt-in is scope-limited to (0 = org-wide / not scoped), by feature (shortName)
+  labels: feature,org_id
 meraki_org_firmware_upgrades gauge
   help: Number of firmware upgrade events by product type and status
   labels: org_id,product_type,status
 meraki_org_firmware_upgrades_pending gauge
   help: Number of pending/in-flight firmware upgrade events by product type
   labels: org_id,product_type
+meraki_org_has_beta_api gauge
+  help: Whether the organization has opted into the Meraki beta API spec (1 = has_beta_api opt-in present, 0 = absent). Emitted for every org so absence is queryable rather than a missing series
+  labels: org_id
 meraki_org_licenses gauge
   help: Number of licenses
   labels: license_type,org_id,status

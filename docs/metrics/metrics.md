@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 334
-- **Gauges:** 309
+- **Total metrics:** 337
+- **Gauges:** 312
 - **Counters:** 21
 - **Histograms:** 3
 - **Info metrics:** 1
@@ -438,8 +438,11 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_org_devices_availability` | gauge | `org_id`, `status`, `product_type` | Number of devices by availability status and product type |  |
 | `meraki_org_devices_availability_changes_count` | gauge | `org_id`, `product_type`, `status` | Number of device availability transitions observed in the collection window (tied to the configured MEDIUM update interval, default 300s) by product type and new status |  |
 | `meraki_org_devices_by_model` | gauge | `org_id`, `model` | Number of devices by specific model |  |
+| `meraki_org_early_access_opt_in_info` | gauge | `org_id`, `feature`, `opt_in_id` | Early Access feature opt-in inventory join carrier (value 1): one series per active org opt-in, labelled by feature (shortName) and opt_in_id. Per #534 the mutable feature string lives only here |  |
+| `meraki_org_early_access_opt_in_scoped_networks` | gauge | `org_id`, `feature` | Number of networks an Early Access opt-in is scope-limited to (0 = org-wide / not scoped), by feature (shortName) |  |
 | `meraki_org_firmware_upgrades` | gauge | `org_id`, `product_type`, `status` | Number of firmware upgrade events by product type and status |  |
 | `meraki_org_firmware_upgrades_pending` | gauge | `org_id`, `product_type` | Number of pending/in-flight firmware upgrade events by product type |  |
+| `meraki_org_has_beta_api` | gauge | `org_id` | Whether the organization has opted into the Meraki beta API spec (1 = has_beta_api opt-in present, 0 = absent). Emitted for every org so absence is queryable rather than a missing series |  |
 | `meraki_org_licenses` | gauge | `org_id`, `license_type`, `status` | Number of licenses |  |
 | `meraki_org_licenses_expiring` | gauge | `org_id`, `license_type` | Number of licenses expiring within 30 days |  |
 | `meraki_org_networks` | gauge | `org_id` | Number of networks in the organization |  |

@@ -4,7 +4,7 @@ This page summarizes the collectors that ship with the exporter.
 
 Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_INTERVALS__*`. See the Metrics Overview for tier definitions.
 
-**Total collector classes:** 48
+**Total collector classes:** 49
 **Auto-registered collectors:** 9
 
 ## Main Collectors (auto-registered)
@@ -19,7 +19,7 @@ Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_
 | `MTSensorAlertsCollector` | MEDIUM | Collector for network-wide currently-alerting MT sensor counts. | 3 |  |
 | `MTSensorCollector` | FAST | Collector for fast-moving sensor metrics (MT devices). | 24 |  |
 | `NetworkHealthCollector` | MEDIUM | Collector for medium-moving network health metrics. | 9 |  |
-| `OrganizationCollector` | MEDIUM | Collector for organization-level metrics. | 35 |  |
+| `OrganizationCollector` | MEDIUM | Collector for organization-level metrics. | 38 |  |
 
 ## Coordinator Relationships
 
@@ -27,7 +27,7 @@ Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_
 - **MRCollector** → MRClientsCollector, MRPerformanceCollector, MRWirelessCollector, MRFirewallCollector, MRRfProfilesCollector, MRSignalQualityCollector, MRCatalystCollector, MRClientLogsCollector
 - **MXCollector** → MXVpnCollector, MXFirewallCollector
 - **NetworkHealthCollector** → RFHealthCollector, ConnectionStatsCollector, DataRatesCollector, BluetoothCollector, SSIDPerformanceCollector, LatencyStatsCollector, AirMarshalCollector, MeshCollector
-- **OrganizationCollector** → APIUsageCollector, LicenseCollector, ClientOverviewCollector, FirmwareCollector, DeviceAvailabilityHistoryCollector, TopUsageCollector, WebhookLogsCollector
+- **OrganizationCollector** → APIUsageCollector, LicenseCollector, ClientOverviewCollector, FirmwareCollector, DeviceAvailabilityHistoryCollector, TopUsageCollector, WebhookLogsCollector, EarlyAccessCollector
 
 ## Sub-collector Catalog
 
@@ -74,6 +74,7 @@ Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_
 - `BaseOrganizationCollector` — Base class for organization sub-collectors.
 - `ClientOverviewCollector` — Collector for organization client overview metrics.
 - `DeviceAvailabilityHistoryCollector` — Collector for organization device availability change history metrics.
+- `EarlyAccessCollector` — Collector for organization Early Access opt-in state (#278, #279).
 - `FirmwareCollector` — Collector for organization firmware upgrade metrics.
 - `LicenseCollector` — Collector for organization license metrics.
 - `TopUsageCollector` — Collector for organization-wide top-N usage leaderboards.

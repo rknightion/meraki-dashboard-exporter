@@ -32,6 +32,7 @@ from .organization_collectors import (
     APIUsageCollector,
     ClientOverviewCollector,
     DeviceAvailabilityHistoryCollector,
+    EarlyAccessCollector,
     FirmwareCollector,
     LicenseCollector,
     TopUsageCollector,
@@ -200,6 +201,7 @@ class OrganizationCollector(MetricCollector):
         self.device_availability_history_collector = DeviceAvailabilityHistoryCollector(self)
         self.top_usage_collector = TopUsageCollector(self)
         self.webhook_logs_collector = WebhookLogsCollector(self)
+        self.early_access_collector = EarlyAccessCollector(self)
 
     def _initialize_metrics(self) -> None:
         """Initialize organization metrics."""
@@ -474,6 +476,28 @@ class OrganizationCollector(MetricCollector):
             "(1=all up to date / no pending upgrade, 0=at least one device has a "
             "pending or in-progress upgrade)",
             labelnames=[LabelName.ORG_ID, LabelName.NETWORK_ID],
+        )
+
+        # #278/#279 — Early Access opt-in inventory + beta-API risk signal.
+        self._org_early_access_opt_in_info = self._create_gauge(
+            OrgMetricName.ORG_EARLY_ACCESS_OPT_IN_INFO,
+            "Early Access feature opt-in inventory join carrier (value 1): one "
+            "series per active org opt-in, labelled by feature (shortName) and "
+            "opt_in_id. Per #534 the mutable feature string lives only here",
+            labelnames=[LabelName.ORG_ID, LabelName.FEATURE, LabelName.OPT_IN_ID],
+        )
+        self._org_early_access_opt_in_scoped_networks = self._create_gauge(
+            OrgMetricName.ORG_EARLY_ACCESS_OPT_IN_SCOPED_NETWORKS,
+            "Number of networks an Early Access opt-in is scope-limited to "
+            "(0 = org-wide / not scoped), by feature (shortName)",
+            labelnames=[LabelName.ORG_ID, LabelName.FEATURE],
+        )
+        self._org_has_beta_api = self._create_gauge(
+            OrgMetricName.ORG_HAS_BETA_API,
+            "Whether the organization has opted into the Meraki beta API spec "
+            "(1 = has_beta_api opt-in present, 0 = absent). Emitted for every org "
+            "so absence is queryable rather than a missing series",
+            labelnames=[LabelName.ORG_ID],
         )
 
     async def _collect_impl(self) -> None:
@@ -780,6 +804,7 @@ class OrganizationCollector(MetricCollector):
             "firmware_compliance_metrics",
             self._collect_firmware_compliance_metrics(org_id, org_name),
         )
+        await _attempt("early_access_metrics", self._collect_early_access_metrics(org_id, org_name))
 
         return failed, succeeded
 
@@ -1607,3 +1632,20 @@ class OrganizationCollector(MetricCollector):
 
         """
         return await self.firmware_collector.collect_compliance(org_id, org_name) is True
+
+    async def _collect_early_access_metrics(self, org_id: str, org_name: str) -> bool:
+        """Collect Early Access opt-in + beta-API risk metrics (#278, #279).
+
+        Returns the sub-collector's success/failure signal (see
+        ``_collect_api_metrics``) so an isolated failure is counted by
+        ``OrgHealthTracker`` (F-172).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        return await self.early_access_collector.collect(org_id, org_name) is True
