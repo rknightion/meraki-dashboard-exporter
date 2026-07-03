@@ -1,6 +1,6 @@
 # Collector Reference
 
-The collectors that ship with the exporter are summarized below.
+This page summarizes the collectors that ship with the exporter.
 
 Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_INTERVALS__*`. See the Metrics Overview for tier definitions.
 

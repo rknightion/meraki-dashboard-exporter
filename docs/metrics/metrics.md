@@ -1,6 +1,6 @@
 # Metrics Reference
 
-The Meraki Dashboard Exporter exposes the Prometheus metrics listed on this page.
+This page provides a reference of Prometheus metrics exposed by the Meraki Dashboard Exporter.
 Some metrics are conditional (clients or webhooks); notes are shown where relevant.
 
 ## Summary

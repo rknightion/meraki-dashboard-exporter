@@ -1,6 +1,6 @@
 # HTTP Endpoints
 
-The exporter exposes the HTTP endpoints listed below.
+This page lists HTTP endpoints exposed by the exporter.
 
 | Method | Path | Description | Notes |
 |--------|------|-------------|-------|
