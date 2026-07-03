@@ -154,6 +154,9 @@ class TestNetworkHealthGating(BaseCollectorTest):
 
         async def _rf(org_id, org_name, networks):
             calls["rf"].append(org_id)
+            # collect_org now returns True on a successful org-wide fetch (#629);
+            # the coordinator marks NH_CHANNEL_UTILIZATION ran only on True.
+            return True
 
         async def _conn(network):
             calls["conn"].append(network["id"])

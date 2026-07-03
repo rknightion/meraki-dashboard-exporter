@@ -830,8 +830,16 @@ class DeviceCollector(MetricCollector):
                 # rather than re-emitting them with stale/default statuses.
                 availability_due = self._should_run_group(EndpointGroupName.DEVICE_AVAILABILITY)
                 if availability_due:
-                    availabilities = await self._fetch_device_availabilities(org_id) or []
-                    self._mark_group_ran(EndpointGroupName.DEVICE_AVAILABILITY)
+                    # #629 Gap 1: _fetch_device_availabilities returns None on
+                    # failure (it's @with_error_handling(continue_on_error=True)).
+                    # Only mark the group ran when the fetch actually succeeded
+                    # (non-None, including a successful-empty []); a None return
+                    # must leave the gate open so the next cycle retries instead of
+                    # suppressing the refetch for the full solved interval.
+                    fetched = await self._fetch_device_availabilities(org_id)
+                    availabilities = fetched or []
+                    if fetched is not None:
+                        self._mark_group_ran(EndpointGroupName.DEVICE_AVAILABILITY)
                 else:
                     availabilities = []
 

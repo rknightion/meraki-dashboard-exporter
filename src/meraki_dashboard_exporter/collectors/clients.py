@@ -392,6 +392,12 @@ class ClientsCollector(MetricCollector):
         if not organizations:
             return
 
+        # Track whether ANY network across ANY org fetched clients successfully so
+        # the clients_list group is marked ran only on >=1 successful fetch (#629).
+        # Total failure (every network failed, or every org skipped by backoff)
+        # leaves the gate open so the next heartbeat retries.
+        any_network_succeeded = False
+
         for org in organizations:
             org_id = org["id"]
             org_name = org["name"]
@@ -416,10 +422,14 @@ class ClientsCollector(MetricCollector):
 
             # Process networks directly without batching to avoid lambda issues
             # Since we're already processing one org at a time, this is fine
-            await self._process_network_batch(org_id, org_name, networks)
+            if await self._process_network_batch(org_id, org_name, networks):
+                any_network_succeeded = True
 
-        # Record a successful clients_list cycle so the gate throttles the next.
-        self._mark_group_ran(EndpointGroupName.CLIENTS_LIST)
+        # Record a successful clients_list cycle so the gate throttles the next,
+        # but only when at least one network actually fetched (#629); otherwise
+        # leave the gate open so the next heartbeat retries.
+        if any_network_succeeded:
+            self._mark_group_ran(EndpointGroupName.CLIENTS_LIST)
 
         # Aggregate INFO summary for the whole collection (F-171): the per-network
         # "Fetched client data" / "Updated client data" lines are debug-level.
@@ -449,7 +459,7 @@ class ClientsCollector(MetricCollector):
         org_id: str,
         org_name: str,
         networks: list[Any],
-    ) -> None:
+    ) -> bool:
         """Process a batch of networks for client collection.
 
         Parameters
@@ -461,22 +471,29 @@ class ClientsCollector(MetricCollector):
         networks : list[Any]
             List of networks to process.
 
+        Returns
+        -------
+        bool
+            ``True`` when at least one network's ``getNetworkClients`` fetch
+            succeeded this batch, used by ``_collect_impl`` to decide whether to
+            mark the ``clients_list`` group ran (#629).
+
         """
         if not networks:
-            return
+            return False
 
         batch_size = self.settings.api.client_batch_size
         delay_between_batches = self.settings.api.batch_delay
 
-        async def _process_network(network: dict[str, Any]) -> None:
-            await self._collect_network_clients(
+        async def _process_network(network: dict[str, Any]) -> bool | None:
+            return await self._collect_network_clients(
                 org_id,
                 org_name,
                 network["id"],
                 network["name"],
             )
 
-        await process_in_batches_with_errors(
+        results = await process_in_batches_with_errors(
             networks,
             _process_network,
             batch_size=batch_size,
@@ -494,6 +511,11 @@ class ClientsCollector(MetricCollector):
             },
         )
 
+        # A per-network fetch counts as successful only when it returned the
+        # truthy sentinel; swallowed failures return None/False or surface as an
+        # Exception in the batch results (#629).
+        return any(result is True for _network, result in results)
+
     @with_error_handling(
         operation="Collect network clients",
         continue_on_error=True,
@@ -506,7 +528,7 @@ class ClientsCollector(MetricCollector):
         org_name: str,
         network_id: str,
         network_name: str,
-    ) -> None:
+    ) -> bool:
         """Collect client data for a specific network.
 
         Parameters
@@ -519,6 +541,16 @@ class ClientsCollector(MetricCollector):
             Network ID.
         network_name : str
             Network name.
+
+        Returns
+        -------
+        bool
+            ``True`` when the ``getNetworkClients`` fetch for this network
+            succeeded, ``False`` when it failed. The per-network success signal
+            lets ``_collect_impl`` mark the ``clients_list`` group ran only when
+            at least one network fetched successfully (#629). The outer
+            ``@with_error_handling(continue_on_error=True)`` wrapper returns
+            ``None`` if anything downstream raises, which also counts as failure.
 
         """
         logger.debug(
@@ -548,7 +580,7 @@ class ClientsCollector(MetricCollector):
                 error=str(e),
             )
             self._track_error(ErrorCategory.API_CLIENT_ERROR)
-            return
+            return False
 
         # Validate response format (handles API error responses like rate limits)
         clients_data = validate_response_format(
@@ -605,6 +637,11 @@ class ClientsCollector(MetricCollector):
         await self._collect_wireless_signal_quality(
             org_id, org_name, network_id, network_name, clients
         )
+
+        # The getNetworkClients fetch (the clients_list group) succeeded for this
+        # network; downstream app-usage / signal-quality collection belong to
+        # their own groups and their failures are swallowed independently (#629).
+        return True
 
     def _apply_emission_cap(
         self, org_id: str, network_id: str, network_name: str, clients: list[NetworkClient]

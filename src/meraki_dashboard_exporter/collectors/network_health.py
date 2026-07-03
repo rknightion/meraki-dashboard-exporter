@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from ..core.async_utils import ManagedTaskGroup
@@ -444,17 +445,21 @@ class NetworkHealthCollector(MetricCollector):
             # endpoints return every wireless device/network in the org in one
             # paginated pass each, so per-network fan-out here would be wasteful.
             if self._should_run_group(EndpointGroupName.NH_CHANNEL_UTILIZATION):
-                await self.rf_health_collector.collect_org(
+                channel_util_ok = await self.rf_health_collector.collect_org(
                     org_id, org_name or org_id, wireless_networks
                 )
-                self._mark_group_ran(EndpointGroupName.NH_CHANNEL_UTILIZATION)
+                # Mark ran only if the org-wide fetch achieved >=1 successful
+                # fetch this cycle (#629). Total failure leaves the gate open so
+                # the next cycle retries instead of waiting out the interval.
+                if channel_util_ok:
+                    self._mark_group_ran(EndpointGroupName.NH_CHANNEL_UTILIZATION)
 
             # The six per-network groups share one per-network fan-out. Consult
             # each group's gate ONCE for this cycle (before the fan-out), run the
             # fan-out only for the groups that are due, then mark each ran.
             due_groups = frozenset(g for g in _BUNDLE_GROUPS if self._should_run_group(g))
             if due_groups:
-                await process_in_batches_with_errors(
+                results = await process_in_batches_with_errors(
                     wireless_networks,
                     functools.partial(self._collect_network_health_bundle, due_groups=due_groups),
                     batch_size=self.settings.api.network_batch_size,
@@ -472,8 +477,19 @@ class NetworkHealthCollector(MetricCollector):
                     },
                     on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
                 )
+                # Mark each group ran only if >=1 network fetched THAT group's
+                # data this cycle (#629). Each bundle call reports the set of
+                # groups it fetched successfully for its network; the union
+                # across networks is the set of groups that achieved >=1 success.
+                # A group that failed for every network stays open so the next
+                # cycle retries it (partial fan-out success still counts).
+                succeeded_groups: set[EndpointGroupName] = set()
+                for _network, result in results:
+                    if isinstance(result, frozenset):
+                        succeeded_groups |= result
                 for group in due_groups:
-                    self._mark_group_ran(group)
+                    if group in succeeded_groups:
+                        self._mark_group_ran(group)
         except Exception:
             nh_failed = True
             raise
@@ -506,13 +522,19 @@ class NetworkHealthCollector(MetricCollector):
 
     async def _collect_network_health_bundle(
         self, network: dict[str, Any], due_groups: frozenset[EndpointGroupName]
-    ) -> None:
+    ) -> frozenset[EndpointGroupName]:
         """Collect the per-network health sub-metrics for a single network.
 
         Only the endpoint groups in ``due_groups`` (decided once per cycle by
         the coordinator's per-group gate) run this pass. Channel utilization is
         NOT here — it is an org-wide fetch handled once in
         ``_collect_org_network_health`` (#271).
+
+        Each due group runs under its own guard so one group failing for this
+        network does not abort the siblings (per-group isolation, #629). The
+        returned set drives the coordinator's per-group ``mark_ran`` decision:
+        a group is marked ran only if it fetched successfully for >=1 network
+        across the whole fan-out.
 
         Parameters
         ----------
@@ -521,21 +543,46 @@ class NetworkHealthCollector(MetricCollector):
         due_groups : frozenset[EndpointGroupName]
             The per-network groups that are due this cycle.
 
+        Returns
+        -------
+        frozenset[EndpointGroupName]
+            The subset of ``due_groups`` whose fetch succeeded for this network
+            (a successful fetch returning empty still counts as success).
+
         """
-        if EndpointGroupName.NH_CONNECTION_STATS in due_groups:
-            await self._collect_network_connection_stats(network)
-        if EndpointGroupName.NH_DATA_RATES in due_groups:
-            await self._collect_network_data_rates(network)
-        if EndpointGroupName.NH_BLUETOOTH in due_groups:
-            await self._collect_network_bluetooth_clients(network)
-        if EndpointGroupName.NH_FAILED_CONNECTIONS in due_groups:
-            await self._collect_network_ssid_performance(network)
-        if EndpointGroupName.NH_LATENCY_STATS in due_groups:
-            await self._collect_network_latency_stats(network)
-        if EndpointGroupName.NH_AIR_MARSHAL in due_groups:
-            await self._collect_network_air_marshal(network)
-        if EndpointGroupName.NH_MESH in due_groups:
-            await self._collect_network_mesh(network)
+        # (group, per-network collect coroutine factory) in bundle order.
+        group_calls: tuple[
+            tuple[EndpointGroupName, Callable[[dict[str, Any]], Awaitable[None]]], ...
+        ] = (
+            (EndpointGroupName.NH_CONNECTION_STATS, self._collect_network_connection_stats),
+            (EndpointGroupName.NH_DATA_RATES, self._collect_network_data_rates),
+            (EndpointGroupName.NH_BLUETOOTH, self._collect_network_bluetooth_clients),
+            (EndpointGroupName.NH_FAILED_CONNECTIONS, self._collect_network_ssid_performance),
+            (EndpointGroupName.NH_LATENCY_STATS, self._collect_network_latency_stats),
+            (EndpointGroupName.NH_AIR_MARSHAL, self._collect_network_air_marshal),
+            (EndpointGroupName.NH_MESH, self._collect_network_mesh),
+        )
+
+        succeeded: set[EndpointGroupName] = set()
+        for group, collect in group_calls:
+            if group not in due_groups:
+                continue
+            try:
+                await collect(network)
+            except Exception:
+                # Per-network per-group failure: isolate it so sibling groups
+                # (and other networks) still run, mirror the fan-out's #621
+                # error accounting, and record no success for this group here.
+                self._track_error(ErrorCategory.UNKNOWN)
+                logger.debug(
+                    "Network-health group fetch failed for network",
+                    group=group.value,
+                    network_id=network.get("id"),
+                    network_name=network.get("name"),
+                )
+            else:
+                succeeded.add(group)
+        return frozenset(succeeded)
 
     async def _fetch_networks_for_health(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch networks for health collection via shared inventory cache.

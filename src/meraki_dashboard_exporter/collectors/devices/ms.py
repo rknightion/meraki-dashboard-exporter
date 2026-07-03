@@ -1227,7 +1227,7 @@ class MSCollector(BaseDeviceCollector):
             logger.debug(
                 "Skipping switch port usage collection",
                 serial=serial,
-                interval_seconds=self.settings.api.ms_port_usage_interval,
+                interval_seconds=self.parent._group_interval(EndpointGroupName.MS_PORT_USAGE),
             )
             return
 
@@ -2042,6 +2042,11 @@ class MSCollector(BaseDeviceCollector):
         if not self.parent._should_run_group(EndpointGroupName.MS_PORT_OVERVIEW):
             return
 
+        # #617 §1f: thread the solved MS_PORT_OVERVIEW group TTL onto every
+        # emission so slow-polled (floor-3600s) port-overview series expire on
+        # their own cadence instead of lingering forever after ports change.
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_PORT_OVERVIEW)
+
         # Call the API with required timespan
         overview = await asyncio.to_thread(
             self.api.switch.getOrganizationSwitchPortsOverview,
@@ -2061,8 +2066,20 @@ class MSCollector(BaseDeviceCollector):
         active_count = counts.get("byStatus", {}).get("active", {}).get("total", 0)
         inactive_count = counts.get("byStatus", {}).get("inactive", {}).get("total", 0)
 
-        self._ms_ports_active_total.labels(org_id=org_id).set(active_count)
-        self._ms_ports_inactive_total.labels(org_id=org_id).set(inactive_count)
+        self.parent._set_metric(
+            self._ms_ports_active_total,
+            create_labels(org_id=org_id),
+            active_count,
+            MSMetricName.MS_PORTS_ACTIVE.value,
+            ttl_seconds=ttl,
+        )
+        self.parent._set_metric(
+            self._ms_ports_inactive_total,
+            create_labels(org_id=org_id),
+            inactive_count,
+            MSMetricName.MS_PORTS_INACTIVE.value,
+            ttl_seconds=ttl,
+        )
 
         logger.debug(
             "Set port overview totals",
@@ -2078,20 +2095,24 @@ class MSCollector(BaseDeviceCollector):
         for media_type, media_data in by_media_speed.items():
             # Set total for this media type (active)
             media_total = media_data.get("total", 0)
-            self._ms_ports_by_media_total.labels(
-                org_id=org_id,
-                media=media_type,
-                status="active",
-            ).set(media_total)
+            self.parent._set_metric(
+                self._ms_ports_by_media_total,
+                create_labels(org_id=org_id, media=media_type, status="active"),
+                media_total,
+                MSMetricName.MS_PORTS_BY_MEDIA.value,
+                ttl_seconds=ttl,
+            )
 
             # Set breakdown by link speed
             for speed, count in media_data.items():
                 if speed != "total" and isinstance(count, (int, float)):
-                    self._ms_ports_by_link_speed_total.labels(
-                        org_id=org_id,
-                        media=media_type,
-                        link_speed=str(speed),
-                    ).set(count)
+                    self.parent._set_metric(
+                        self._ms_ports_by_link_speed_total,
+                        create_labels(org_id=org_id, media=media_type, link_speed=str(speed)),
+                        count,
+                        MSMetricName.MS_PORTS_BY_LINK_SPEED.value,
+                        ttl_seconds=ttl,
+                    )
 
                     logger.debug(
                         "Set port link speed count",
@@ -2107,11 +2128,13 @@ class MSCollector(BaseDeviceCollector):
 
         for media_type, media_data in by_media.items():
             media_total = media_data.get("total", 0)
-            self._ms_ports_by_media_total.labels(
-                org_id=org_id,
-                media=media_type,
-                status="inactive",
-            ).set(media_total)
+            self.parent._set_metric(
+                self._ms_ports_by_media_total,
+                create_labels(org_id=org_id, media=media_type, status="inactive"),
+                media_total,
+                MSMetricName.MS_PORTS_BY_MEDIA.value,
+                ttl_seconds=ttl,
+            )
 
         self.parent._mark_group_ran(EndpointGroupName.MS_PORT_OVERVIEW)
 

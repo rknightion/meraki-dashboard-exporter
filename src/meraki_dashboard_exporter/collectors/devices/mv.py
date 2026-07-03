@@ -325,11 +325,16 @@ class MVCollector(BaseDeviceCollector):
         serial = device.get("serial", "")
 
         if self._should_collect_sense(serial):
-            await self._collect_sense_config(
+            # The fetcher is @with_error_handling(continue_on_error=True), so it
+            # returns None on failure and a truthy sentinel on success. Only mark
+            # the group ran when the fetch actually succeeded (#629) - a swallowed
+            # failure must leave the gate open so diagnostics/backoff can retry.
+            sense_ok = await self._collect_sense_config(
                 device, org_id=org_id, org_name=org_name, serial=serial
             )
             self._mark_sense_collected(serial)
-            self.parent._mark_group_ran(EndpointGroupName.MV_SENSE_CONFIG)
+            if sense_ok is not None:
+                self.parent._mark_group_ran(EndpointGroupName.MV_SENSE_CONFIG)
 
         if not self._should_collect_analytics(serial):
             logger.debug(
@@ -339,18 +344,27 @@ class MVCollector(BaseDeviceCollector):
             )
             return
 
-        await self._collect_analytics_zones(device, org_id=org_id, org_name=org_name, serial=serial)
-        await self._collect_analytics_recent(
+        # Each fetcher is @with_error_handling(continue_on_error=True): it returns
+        # None when swallowed and a non-None value on success. Track whether ANY
+        # of the three succeeded so the group is marked ran only on >=1 successful
+        # sub-fetch (#629). Total fan-out failure must leave the gate open so the
+        # next cycle retries rather than silently marking a failed cycle "ran".
+        zones_ok = await self._collect_analytics_zones(
             device, org_id=org_id, org_name=org_name, serial=serial
         )
-        await self._collect_quality_and_retention(
+        recent_ok = await self._collect_analytics_recent(
+            device, org_id=org_id, org_name=org_name, serial=serial
+        )
+        quality_ok = await self._collect_quality_and_retention(
             device, org_id=org_id, org_name=org_name, serial=serial
         )
 
         self._mark_analytics_collected(serial)
-        # Feed the scheduler's diagnostics/last-ran bookkeeping. Gating itself
-        # is per-serial (above); this keeps the group's diagnostics live.
-        self.parent._mark_group_ran(EndpointGroupName.MV_ANALYTICS)
+        # Feed the scheduler's diagnostics/last-ran bookkeeping. Gating itself is
+        # per-serial (above); this keeps the group's diagnostics live, but only
+        # when at least one sub-fetch succeeded (successful-empty still counts).
+        if zones_ok is not None or recent_ok is not None or quality_ok is not None:
+            self.parent._mark_group_ran(EndpointGroupName.MV_ANALYTICS)
 
     def _emit_zone_info(
         self,
@@ -465,7 +479,7 @@ class MVCollector(BaseDeviceCollector):
         org_id: str,
         org_name: str,
         serial: str,
-    ) -> None:
+    ) -> bool:
         """Collect recent per-zone person-count analytics for a camera (#549).
 
         Replaces the DEPRECATED ``getDeviceCameraAnalyticsLive`` endpoint with
@@ -489,6 +503,14 @@ class MVCollector(BaseDeviceCollector):
             Organization name.
         serial : str
             Camera serial number.
+
+        Returns
+        -------
+        bool
+            ``True`` on a successful fetch (used by ``collect`` to decide whether
+            to mark the ``mv_analytics`` group ran, #629). On failure the
+            ``@with_error_handling(continue_on_error=True)`` wrapper returns
+            ``None`` instead.
 
         """
         recent = await asyncio.to_thread(
@@ -519,6 +541,8 @@ class MVCollector(BaseDeviceCollector):
                 ttl_seconds=ttl_seconds,
             )
 
+        return True
+
     @log_api_call("getDeviceCameraQualityAndRetention")
     @with_error_handling(
         operation="Collect MV quality and retention",
@@ -527,7 +551,7 @@ class MVCollector(BaseDeviceCollector):
     )
     async def _collect_quality_and_retention(
         self, device: dict[str, Any], org_id: str, org_name: str, serial: str
-    ) -> None:
+    ) -> bool:
         """Collect quality/retention configuration for a camera.
 
         Parameters
@@ -540,6 +564,14 @@ class MVCollector(BaseDeviceCollector):
             Organization name.
         serial : str
             Camera serial number.
+
+        Returns
+        -------
+        bool
+            ``True`` on a successful fetch (used by ``collect`` to decide whether
+            to mark the ``mv_analytics`` group ran, #629). On failure the
+            ``@with_error_handling(continue_on_error=True)`` wrapper returns
+            ``None`` instead.
 
         """
         quality_retention = await asyncio.to_thread(
@@ -598,6 +630,8 @@ class MVCollector(BaseDeviceCollector):
             ttl_seconds=ttl_seconds,
         )
 
+        return True
+
     @log_api_call("getDeviceCameraSense")
     @with_error_handling(
         operation="Collect MV Sense configuration",
@@ -606,7 +640,7 @@ class MVCollector(BaseDeviceCollector):
     )
     async def _collect_sense_config(
         self, device: dict[str, Any], org_id: str, org_name: str, serial: str
-    ) -> None:
+    ) -> bool:
         """Collect MV Sense enablement/MQTT-broker configuration for a camera (#305).
 
         ⚠ Phase-6 LIVE VERIFICATION: confirm the field names (``senseEnabled``,
@@ -623,6 +657,14 @@ class MVCollector(BaseDeviceCollector):
             Organization name.
         serial : str
             Camera serial number.
+
+        Returns
+        -------
+        bool
+            ``True`` on a successful fetch (used by ``collect`` to decide whether
+            to mark the ``mv_sense_config`` group ran, #629). On failure the
+            ``@with_error_handling(continue_on_error=True)`` wrapper returns
+            ``None`` instead.
 
         """
         sense = await asyncio.to_thread(
@@ -651,6 +693,8 @@ class MVCollector(BaseDeviceCollector):
             MVMetricName.MV_SENSE_MQTT_BROKER_CONFIGURED.value,
             ttl_seconds=ttl_seconds,
         )
+
+        return True
 
     @log_api_call("getOrganizationCameraOnboardingStatuses")
     @with_error_handling(

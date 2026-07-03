@@ -180,7 +180,9 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                 labels = {**labels_base, "utilization_type": util_label}
                 self._set_metric_value(gauge, labels, pct, ttl_seconds=ttl_seconds)
 
-    async def collect_org(self, org_id: str, org_name: str, networks: list[dict[str, Any]]) -> None:
+    async def collect_org(
+        self, org_id: str, org_name: str, networks: list[dict[str, Any]]
+    ) -> bool:
         """Collect org-wide channel utilization and emit per-AP + per-network gauges.
 
         Called once per org per cycle by the coordinator (gated on
@@ -198,10 +200,20 @@ class RFHealthCollector(BaseNetworkHealthCollector):
             The org's filtered wireless networks. Used both as the allow-list
             for org-wide rows and to source per-network label data.
 
+        Returns
+        -------
+        bool
+            ``True`` if the org-wide channel-utilization fetch succeeded this
+            cycle (a successful fetch returning empty still counts), ``False``
+            on total failure (both org endpoints failed / an error was
+            swallowed). The coordinator uses this to decide whether to mark the
+            ``nh_channel_utilization`` group ran (#629): a total failure leaves
+            the gate open so the next cycle retries.
+
         """
         if not org_id:
             logger.warning("No organization ID for channel utilization collection")
-            return
+            return False
 
         allowed_ids = {n.get("id") for n in networks if n.get("id")}
         network_by_id = {n.get("id"): n for n in networks if n.get("id")}
@@ -270,3 +282,9 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                     "Failed to collect RF health channel utilization",
                     org_id=org_id,
                 )
+            # Total failure this cycle: the coordinator must leave the
+            # nh_channel_utilization gate open so the next cycle retries (#629).
+            return False
+
+        # Both org endpoints fetched (empty responses still count as success).
+        return True

@@ -124,6 +124,11 @@ class MRClientsCollector:
             return
         ttl = self.parent._group_ttl_seconds(EndpointGroupName.MR_CONNECTION_STATS)
 
+        # Track whether at least one per-network fetch succeeded so we only
+        # mark the group ran on real progress (#629). Total failure (every
+        # network errored) must leave the gate open for a next-cycle retry.
+        any_success = False
+
         for network in networks:
             network_id = network.get("id", "")
             network_name = network.get("name", network_id)
@@ -146,6 +151,9 @@ class MRClientsCollector:
                         expected_type=list,
                         operation="getNetworkWirelessDevicesConnectionStats",
                     )
+
+                # Fetch succeeded (incl. a successful-empty list) — count it (#629).
+                any_success = True
 
                 # Process each device's connection stats
                 for device_stats in connection_stats:
@@ -182,8 +190,10 @@ class MRClientsCollector:
                     network_id=network_id,
                 )
 
-        # Mark ran after the per-network fan-out completes (#617).
-        self.parent._mark_group_ran(EndpointGroupName.MR_CONNECTION_STATS)
+        # Mark ran only when >=1 network's fetch succeeded (#617/#629). A total
+        # failure leaves the gate open so the next cycle retries the whole org.
+        if any_success:
+            self.parent._mark_group_ran(EndpointGroupName.MR_CONNECTION_STATS)
 
     @log_api_call("getOrganizationWirelessClientsOverviewByDevice")
     @with_error_handling(

@@ -729,15 +729,10 @@ class MRPerformanceCollector:
             return
 
         try:
-            # Fetch network-level packet loss data
+            # Fetch network-level packet loss data. ``None`` means the fetch
+            # failed; a list (even empty) means it succeeded (#629).
             network_packet_loss = await self._fetch_network_packet_loss(org_id)
-
-            if not network_packet_loss:
-                logger.debug(
-                    "No network packet loss data available",
-                    org_id=org_id,
-                )
-                return
+            network_ok = network_packet_loss is not None
 
             # Resolve allowed network IDs for filter enforcement on org-wide responses.
             allowed_network_ids = (
@@ -747,12 +742,22 @@ class MRPerformanceCollector:
             )
             skipped_networks = 0
 
+            if not network_packet_loss:
+                # Empty (successful-empty) or failed fetch: nothing to process
+                # here. The device-level pass still runs below, and the group is
+                # marked ran iff either fetch actually succeeded (#629).
+                if network_ok:
+                    logger.debug(
+                        "No network packet loss data available",
+                        org_id=org_id,
+                    )
+
             # Process network-level packet loss.
             # getOrganizationWirelessDevicesPacketLossByNetwork nests the network
             # under a "network" object ({"id": ..., "name": ...}); there is no
             # top-level networkId/networkName and no per-device "devices" array
             # (device rows come from the separate ...PacketLossByDevice op).
-            for network_data in network_packet_loss:
+            for network_data in network_packet_loss or []:
                 network = network_data.get("network", {})
                 network_id = network.get("id", "")
                 network_name = network.get("name", network_id)
@@ -834,13 +839,19 @@ class MRPerformanceCollector:
             # Device-level packet loss comes from a distinct endpoint
             # (...PacketLossByDevice); the ByNetwork response carries no per-device
             # rows. Fetch and process it separately so the meraki_mr_packets_* /
-            # meraki_mr_packet_loss_* device gauges are actually populated.
-            await self._collect_device_packet_loss(
+            # meraki_mr_packet_loss_* device gauges are actually populated. Runs
+            # regardless of the network-level result (an empty/failed ByNetwork
+            # must not suppress the ByDevice pass). Returns True on a successful
+            # fetch (incl. successful-empty), False on failure.
+            device_ok = await self._collect_device_packet_loss(
                 org_id, org_name, device_lookup, allowed_network_ids
             )
 
-            # Both fetches succeeded — record the run so the gate can stretch (#617).
-            self.parent._mark_group_ran(EndpointGroupName.MR_PACKET_LOSS)
+            # Mark ran when >=1 fetch succeeded, including a successful-empty
+            # response (#617/#629). Only a total failure (both fetches errored)
+            # leaves the gate open so the next cycle retries.
+            if network_ok or device_ok:
+                self.parent._mark_group_ran(EndpointGroupName.MR_PACKET_LOSS)
 
         except Exception:
             logger.exception(
@@ -854,7 +865,7 @@ class MRPerformanceCollector:
         org_name: str,
         device_lookup: dict[str, dict[str, Any]],
         allowed_network_ids: set[str] | None,
-    ) -> None:
+    ) -> bool:
         """Collect per-device MR packet-loss metrics.
 
         Uses getOrganizationWirelessDevicesPacketLossByDevice, whose rows are
@@ -872,10 +883,20 @@ class MRPerformanceCollector:
             Allowed network IDs from the configured NetworkFilter, or None when
             no inventory/filter is available (emit all rows).
 
+        Returns
+        -------
+        bool
+            True when the ByDevice fetch succeeded (including a successful-empty
+            response), False when the fetch failed (helper returned ``None``).
+
         """
         device_packet_loss = await self._fetch_device_packet_loss(org_id)
+        if device_packet_loss is None:
+            # Fetch failed (decorated helper returns None on error).
+            return False
         if not device_packet_loss:
-            return
+            # Successful-empty response: nothing to emit, but the fetch worked.
+            return True
 
         skipped_devices = 0
         for device_data in device_packet_loss:
@@ -957,6 +978,8 @@ class MRPerformanceCollector:
                 org_id=org_id,
                 skipped_count=skipped_devices,
             )
+
+        return True
 
     @log_api_call("getOrganizationWirelessDevicesPacketLossByDevice")
     @with_error_handling(
@@ -1063,11 +1086,17 @@ class MRPerformanceCollector:
             # Process in batches
             batch_size = self.settings.api.batch_size
 
+            # Track whether at least one batch fetch succeeded so we only mark
+            # the group ran on real progress (#629). Total failure (every batch
+            # errored) must leave the gate open for a next-cycle retry.
+            any_success = False
+
             # Process devices in batches (API requires batch processing)
             for i in range(0, len(mr_devices), batch_size):
                 batch = mr_devices[i : i + batch_size]
                 try:
                     await self._process_cpu_load_batch(org_id, org_name, batch)
+                    any_success = True
                 except Exception:
                     logger.exception(
                         "Failed to process CPU load batch",
@@ -1080,8 +1109,10 @@ class MRPerformanceCollector:
                 if i + batch_size < len(mr_devices):
                     await asyncio.sleep(0.5)
 
-            # All batches processed — record the run so the gate can stretch (#617).
-            self.parent._mark_group_ran(EndpointGroupName.MR_CPU_LOAD)
+            # Mark ran only when >=1 batch succeeded (#617/#629). A total failure
+            # leaves the gate open so the next cycle retries.
+            if any_success:
+                self.parent._mark_group_ran(EndpointGroupName.MR_CPU_LOAD)
 
             logger.debug(
                 "Completed MR CPU load collection",
@@ -1121,53 +1152,47 @@ class MRPerformanceCollector:
         if not serials:
             return []
 
-        try:
-            with LogContext(org_id=org_id):
-                cpu_data_raw = await asyncio.to_thread(
-                    self.api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory,
-                    org_id,
-                    serials=serials,
-                    timespan=300,  # 5 minutes
-                    total_pages="all",
-                    perPage=20,  # SDK max; batches are batch_size serials (default 20)
-                )
-                cpu_data = cast(
-                    list[dict[str, Any]],
-                    validate_response_format(
-                        cpu_data_raw,
-                        expected_type=list,
-                        operation="getOrganizationWirelessDevicesSystemCpuLoadHistory",
-                    ),
-                )
-
-            # Process CPU data for each device
-            for item in cpu_data:
-                serial = item.get("serial")
-                if not serial:
-                    continue
-
-                # Find device info
-                device = next((d for d in devices if d.get("serial") == serial), None)
-                if not device:
-                    continue
-
-                # Extract CPU data
-                cpu_value = self._extract_cpu_data(item)
-                if cpu_value is None:
-                    continue
-
-                # Process device CPU data
-                self._process_device_cpu_data(device, cpu_value, org_id, org_name)
-
-            return cpu_data
-
-        except Exception:
-            logger.exception(
-                "Failed to process CPU load batch",
-                org_id=org_id,
-                serial_count=len(serials),
+        # Let fetch/validation failures propagate: the caller (collect_cpu_load)
+        # catches per-batch so it can distinguish a successful batch from a
+        # failed one and only mark the group ran on >=1 success (#629).
+        with LogContext(org_id=org_id):
+            cpu_data_raw = await asyncio.to_thread(
+                self.api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory,
+                org_id,
+                serials=serials,
+                timespan=300,  # 5 minutes
+                total_pages="all",
+                perPage=20,  # SDK max; batches are batch_size serials (default 20)
             )
-            return []
+            cpu_data = cast(
+                list[dict[str, Any]],
+                validate_response_format(
+                    cpu_data_raw,
+                    expected_type=list,
+                    operation="getOrganizationWirelessDevicesSystemCpuLoadHistory",
+                ),
+            )
+
+        # Process CPU data for each device
+        for item in cpu_data:
+            serial = item.get("serial")
+            if not serial:
+                continue
+
+            # Find device info
+            device = next((d for d in devices if d.get("serial") == serial), None)
+            if not device:
+                continue
+
+            # Extract CPU data
+            cpu_value = self._extract_cpu_data(item)
+            if cpu_value is None:
+                continue
+
+            # Process device CPU data
+            self._process_device_cpu_data(device, cpu_value, org_id, org_name)
+
+        return cpu_data
 
     def _extract_cpu_data(
         self,

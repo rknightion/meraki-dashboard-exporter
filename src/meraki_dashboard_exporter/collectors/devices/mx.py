@@ -439,6 +439,11 @@ class MXCollector(BaseDeviceCollector):
         )
 
         if not uplink_statuses:
+            # #629 Gap 3: an empty list is a SUCCESSFUL fetch (org with no MX
+            # uplinks), so mark ran here too — otherwise the gate never closes
+            # and this org re-fetches every cycle. Only a real failure (the
+            # decorator short-circuits before this point) leaves the gate open.
+            self.parent._mark_group_ran(EndpointGroupName.MX_UPLINK_STATUS)
             return
 
         # NB: do NOT clear the gauge's label series here. This runs once per org

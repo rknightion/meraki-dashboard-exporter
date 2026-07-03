@@ -228,6 +228,18 @@ class TestDeviceAvailabilityGate(BaseCollectorTest):
         collector._fetch_device_availabilities = _spy  # type: ignore[method-assign]
         return calls
 
+    @staticmethod
+    def _stub_availabilities(collector, value):
+        """Replace the fetch with a stub returning ``value``; record call org_ids."""
+        calls: list[str] = []
+
+        async def _stub(org_id: str):
+            calls.append(org_id)
+            return value
+
+        collector._fetch_device_availabilities = _stub  # type: ignore[method-assign]
+        return calls
+
     async def test_skips_fetch_and_mark_when_not_due(
         self, mock_api_builder, settings, isolated_registry, inventory
     ) -> None:
@@ -257,6 +269,42 @@ class TestDeviceAvailabilityGate(BaseCollectorTest):
 
         collector = self._build(mock_api_builder, settings, isolated_registry, inventory, sched)
         calls = self._spy_availabilities(collector)
+
+        await collector.collect()
+
+        assert calls == ["org1"]  # fetch happened once
+        marked = [c.args[0] for c in sched.mark_ran.call_args_list]
+        assert EndpointGroupName.DEVICE_AVAILABILITY in marked
+
+    async def test_does_not_mark_when_fetch_fails(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ) -> None:
+        """#629 Gap 1: fetch returns None (failure) ⇒ group NOT marked ⇒ gate stays open."""
+        sched = MagicMock()
+        sched.should_run.return_value = True
+        sched.ttl_seconds_for.return_value = 600.0
+        sched.interval_for.return_value = 300.0
+
+        collector = self._build(mock_api_builder, settings, isolated_registry, inventory, sched)
+        calls = self._stub_availabilities(collector, None)
+
+        await collector.collect()
+
+        assert calls == ["org1"]  # fetch was attempted
+        marked = [c.args[0] for c in sched.mark_ran.call_args_list]
+        assert EndpointGroupName.DEVICE_AVAILABILITY not in marked
+
+    async def test_marks_when_fetch_returns_empty(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ) -> None:
+        """#629: successful-empty fetch ([] not None) ⇒ group IS marked ran."""
+        sched = MagicMock()
+        sched.should_run.return_value = True
+        sched.ttl_seconds_for.return_value = 600.0
+        sched.interval_for.return_value = 300.0
+
+        collector = self._build(mock_api_builder, settings, isolated_registry, inventory, sched)
+        calls = self._stub_availabilities(collector, [])
 
         await collector.collect()
 
