@@ -9,7 +9,11 @@ import pytest
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.error_handling import CollectorError, NothingCollectedError
-from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
+from meraki_dashboard_exporter.core.org_health import (
+    SOURCE_DEVICE,
+    SOURCE_ORGANIZATION,
+    OrgHealthTracker,
+)
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import (
     DeviceFactory,
@@ -852,3 +856,77 @@ class TestDeviceCollectorNothingCollected(BaseCollectorTest):
         await collector.collect()
 
         self.assert_collector_success(collector, metrics)
+
+
+class TestDeviceCollectorOrgHealthReporting(BaseCollectorTest):
+    """#547: DeviceCollector reports its per-org verdict into the shared tracker.
+
+    Verdicts are recorded under the SOURCE_DEVICE failure domain so a device
+    endpoint failing engages backoff for that org even when the organization
+    collector reports success or is disabled entirely; a device recovery clears
+    it. The verdict mirrors the coordinator's raise/return accounting: the worker
+    raises (CollectorError) only when the device fetch fails; any normal or
+    swallowed-error return is a device-domain success.
+    """
+
+    collector_class = DeviceCollector
+    update_tier = UpdateTier.MEDIUM
+
+    async def test_successful_org_records_device_success(self, collector):
+        """A healthy per-org cycle records a SOURCE_DEVICE success."""
+        tracker = OrgHealthTracker(max_consecutive_failures=3)
+        collector.org_health_tracker = tracker
+        # Empty device list is a legitimate no-op success for the worker.
+        collector._fetch_devices = AsyncMock(return_value=[])  # type: ignore[method-assign]
+
+        await collector._collect_org_devices("ORG1", "Org One")
+
+        health = tracker.get_health("ORG1")
+        assert health is not None
+        assert health.source_failures.get(SOURCE_DEVICE) == 0
+        assert health.last_success > 0
+        assert tracker.should_collect("ORG1") is True
+
+    async def test_device_failure_engages_backoff_when_org_disabled(self, collector):
+        """A persistent device-only failure engages backoff (#547 cases 1 and 2).
+
+        The organization collector never writes into the tracker, yet backoff
+        still engages for the org from the device domain alone.
+        """
+        tracker = OrgHealthTracker(max_consecutive_failures=3)
+        collector.org_health_tracker = tracker
+        # Fetch failure -> worker raises CollectorError -> device-domain failure.
+        collector._fetch_devices = AsyncMock(return_value=None)  # type: ignore[method-assign]
+
+        for _ in range(3):
+            with pytest.raises(CollectorError):
+                await collector._collect_org_devices("ORG1", "Org One")
+
+        health = tracker.get_health("ORG1")
+        assert health.source_failures[SOURCE_DEVICE] == 3
+        # Org collector disabled: it contributed no failures of its own.
+        assert SOURCE_ORGANIZATION not in health.source_failures
+        assert tracker.should_collect("ORG1") is False
+
+    async def test_device_recovery_clears_backoff(self, collector):
+        """(3): once the device domain recovers, backoff clears."""
+        tracker = OrgHealthTracker(max_consecutive_failures=3)
+        collector.org_health_tracker = tracker
+        collector._fetch_devices = AsyncMock(return_value=None)  # type: ignore[method-assign]
+        for _ in range(3):
+            with pytest.raises(CollectorError):
+                await collector._collect_org_devices("ORG1", "Org One")
+        assert tracker.should_collect("ORG1") is False
+
+        # A healthy cycle recorded directly by the worker clears the backoff.
+        collector._fetch_devices = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        await collector._collect_org_devices("ORG1", "Org One")
+        assert tracker.should_collect("ORG1") is True
+        assert tracker.get_health("ORG1").consecutive_failures == 0
+
+    async def test_none_tracker_is_noop(self, collector):
+        """With no tracker wired, the worker records nothing (backward compatible)."""
+        assert collector.org_health_tracker is None
+        collector._fetch_devices = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        # Must not raise despite there being no tracker to record into.
+        await collector._collect_org_devices("ORG1", "Org One")

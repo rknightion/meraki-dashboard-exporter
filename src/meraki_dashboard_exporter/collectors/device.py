@@ -52,6 +52,8 @@ if TYPE_CHECKING:
     from ..core.org_health import OrgHealthTracker
     from ..services.inventory import OrganizationInventory
 
+from ..core.org_health import SOURCE_DEVICE
+
 logger = get_logger(__name__)
 
 
@@ -163,9 +165,11 @@ class DeviceCollector(MetricCollector):
         self._subcollectors_ready = False
         super().__init__(api, settings, registry, inventory, expiration_manager, rate_limiter)
 
-        # Shared per-org health tracker (F-169): when present, per-org collection is
-        # skipped for organizations currently in backoff. Gating consumer only -- the
-        # tracker is owned/updated by OrganizationCollector.
+        # Shared per-org health tracker (F-169 / #547): when present, per-org
+        # collection is skipped for organizations currently in backoff, AND this
+        # collector reports its own per-org verdict into the tracker under the
+        # SOURCE_DEVICE failure domain so device-endpoint failures engage backoff
+        # even when the organization collector is healthy or disabled.
         self.org_health_tracker = org_health_tracker
 
         # Initialize device-specific collectors
@@ -424,6 +428,13 @@ class DeviceCollector(MetricCollector):
             Organization name.
 
         """
+        # #547: report this org's device-domain verdict into the shared tracker.
+        # The verdict mirrors the coordinator's raise/return accounting exactly --
+        # the worker "fails" (raises CollectorError) only when the device fetch
+        # fails; every normal or swallowed-error return is a device-domain success.
+        # Recorded in a finally so exactly one verdict is written per org per
+        # cycle, on every control-flow path, before the raise propagates.
+        device_failed = False
         try:
             with LogContext(org_id=org_id):
                 # Local device lookup map - must not be an instance attribute
@@ -688,6 +699,7 @@ class DeviceCollector(MetricCollector):
                 await self._collect_mg_specific_metrics(org_id, org_name, device_lookup)
 
         except CollectorError:
+            device_failed = True
             raise
         except Exception as e:
             logger.exception(
@@ -696,6 +708,32 @@ class DeviceCollector(MetricCollector):
                 error_type=type(e).__name__,
                 error=str(e),
             )
+        finally:
+            self._record_org_health_verdict(org_id, org_name, success=not device_failed)
+
+    def _record_org_health_verdict(self, org_id: str, org_name: str, *, success: bool) -> None:
+        """Report this org's device-domain verdict into the shared tracker (#547).
+
+        No-op when no tracker is wired. Runs synchronously (no await) so
+        concurrent per-org workers never interleave a read-modify-write on the
+        tracker's per-source counters.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        success : bool
+            True to record a device-domain success for this org, False a failure.
+
+        """
+        if self.org_health_tracker is None:
+            return
+        if success:
+            self.org_health_tracker.record_success(org_id, org_name, source=SOURCE_DEVICE)
+        else:
+            self.org_health_tracker.record_failure(org_id, org_name, source=SOURCE_DEVICE)
 
     async def _collect_device_with_timeout(
         self, device: dict[str, Any], device_type: DeviceType

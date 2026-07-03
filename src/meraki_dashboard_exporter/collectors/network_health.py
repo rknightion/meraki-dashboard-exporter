@@ -33,6 +33,8 @@ if TYPE_CHECKING:
     from ..core.org_health import OrgHealthTracker
     from ..services.inventory import OrganizationInventory
 
+from ..core.org_health import SOURCE_NETWORK_HEALTH
+
 logger = get_logger(__name__)
 
 
@@ -53,9 +55,11 @@ class NetworkHealthCollector(MetricCollector):
         """Initialize network health collector with sub-collectors."""
         super().__init__(api, settings, registry, inventory, expiration_manager, rate_limiter)
 
-        # Shared per-org health tracker (F-169): when present, per-org collection is
-        # skipped for organizations currently in backoff. Gating consumer only -- the
-        # tracker is owned/updated by OrganizationCollector.
+        # Shared per-org health tracker (F-169 / #547): when present, per-org
+        # collection is skipped for organizations currently in backoff, AND this
+        # collector reports its own per-org verdict into the tracker under the
+        # SOURCE_NETWORK_HEALTH failure domain so network-endpoint failures engage
+        # backoff even when the organization collector is healthy or disabled.
         self.org_health_tracker = org_health_tracker
 
         # Initialize sub-collectors
@@ -315,40 +319,77 @@ class NetworkHealthCollector(MetricCollector):
             still counts as succeeded) — #509 frozen semantics.
 
         """
-        # Get all networks. A failure here (raised through inventory) means
-        # this org's worker fails; no blanket swallow.
-        networks = await self._fetch_networks_for_health(org_id)
+        # #547: report this org's network-health verdict into the shared tracker.
+        # The verdict mirrors the coordinator's raise/return accounting exactly --
+        # the worker "fails" only when the network fetch raises; per-network bundle
+        # failures are isolated by process_in_batches_with_errors and are a
+        # success for this domain. Recorded in a finally so exactly one verdict is
+        # written per org per cycle, on every path, before the raise propagates.
+        nh_failed = False
+        try:
+            # Get all networks. A failure here (raised through inventory) means
+            # this org's worker fails; no blanket swallow.
+            networks = await self._fetch_networks_for_health(org_id)
 
-        # Add org info to each network
-        for network in networks:
-            network["orgId"] = org_id
-            network["orgName"] = org_name or org_id
+            # Add org info to each network
+            for network in networks:
+                network["orgId"] = org_id
+                network["orgName"] = org_name or org_id
 
-        wireless_networks = [
-            network
-            for network in networks
-            if ProductType.WIRELESS in network.get("productTypes", [])
-        ]
-        if not wireless_networks:
+            wireless_networks = [
+                network
+                for network in networks
+                if ProductType.WIRELESS in network.get("productTypes", [])
+            ]
+            if not wireless_networks:
+                return
+
+            await process_in_batches_with_errors(
+                wireless_networks,
+                self._collect_network_health_bundle,
+                batch_size=self.settings.api.network_batch_size,
+                delay_between_batches=self.settings.api.batch_delay,
+                spread_over_seconds=self._get_smoothing_window(),
+                initial_delay=self._get_smoothing_offset(f"{org_id}:network_health"),
+                min_batch_delay=self.settings.api.smoothing_min_batch_delay,
+                max_batch_delay=self.settings.api.smoothing_max_batch_delay,
+                item_description="network health",
+                error_context_func=lambda network: {
+                    "org_id": org_id,
+                    "org_name": org_name or org_id,
+                    "network_id": network.get("id"),
+                    "network_name": network.get("name"),
+                },
+            )
+        except Exception:
+            nh_failed = True
+            raise
+        finally:
+            self._record_org_health_verdict(org_id, org_name or org_id, success=not nh_failed)
+
+    def _record_org_health_verdict(self, org_id: str, org_name: str, *, success: bool) -> None:
+        """Report this org's network-health verdict into the shared tracker (#547).
+
+        No-op when no tracker is wired. Runs synchronously (no await) so
+        concurrent per-org workers never interleave a read-modify-write on the
+        tracker's per-source counters.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        success : bool
+            True to record a network-health success for this org, False a failure.
+
+        """
+        if self.org_health_tracker is None:
             return
-
-        await process_in_batches_with_errors(
-            wireless_networks,
-            self._collect_network_health_bundle,
-            batch_size=self.settings.api.network_batch_size,
-            delay_between_batches=self.settings.api.batch_delay,
-            spread_over_seconds=self._get_smoothing_window(),
-            initial_delay=self._get_smoothing_offset(f"{org_id}:network_health"),
-            min_batch_delay=self.settings.api.smoothing_min_batch_delay,
-            max_batch_delay=self.settings.api.smoothing_max_batch_delay,
-            item_description="network health",
-            error_context_func=lambda network: {
-                "org_id": org_id,
-                "org_name": org_name or org_id,
-                "network_id": network.get("id"),
-                "network_name": network.get("name"),
-            },
-        )
+        if success:
+            self.org_health_tracker.record_success(org_id, org_name, source=SOURCE_NETWORK_HEALTH)
+        else:
+            self.org_health_tracker.record_failure(org_id, org_name, source=SOURCE_NETWORK_HEALTH)
 
     async def _collect_network_health_bundle(self, network: dict[str, Any]) -> None:
         """Collect all network health sub-metrics for a single network."""

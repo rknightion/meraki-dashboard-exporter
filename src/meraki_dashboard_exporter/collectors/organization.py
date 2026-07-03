@@ -24,7 +24,7 @@ from ..core.logging import get_logger
 from ..core.logging_decorators import log_api_call, log_batch_operation
 from ..core.logging_helpers import LogContext, log_metric_collection_summary
 from ..core.metrics import LabelName, create_labels
-from ..core.org_health import OrgHealthTracker
+from ..core.org_health import SOURCE_ORGANIZATION, OrgHealthTracker
 from ..core.otel_tracing import trace_method
 from ..core.registry import register_collector
 from .organization_collectors import (
@@ -427,10 +427,10 @@ class OrganizationCollector(MetricCollector):
                     org_name=org_name,
                     failed_sub_collections=failed_sub_collections,
                 )
-                self.org_health_tracker.record_failure(org_id, org_name)
+                self.org_health_tracker.record_failure(org_id, org_name, source=SOURCE_ORGANIZATION)
                 self._org_collection_status.labels(**org_labels).set(0)
             else:
-                self.org_health_tracker.record_success(org_id, org_name)
+                self.org_health_tracker.record_success(org_id, org_name, source=SOURCE_ORGANIZATION)
                 self._org_collection_status.labels(**org_labels).set(1)
 
         except Exception:
@@ -441,7 +441,7 @@ class OrganizationCollector(MetricCollector):
                 org_id=org_id,
                 org_name=org_name,
             )
-            self.org_health_tracker.record_failure(org_id, org_name)
+            self.org_health_tracker.record_failure(org_id, org_name, source=SOURCE_ORGANIZATION)
             self._org_collection_status.labels(**org_labels).set(0)
             raise
 

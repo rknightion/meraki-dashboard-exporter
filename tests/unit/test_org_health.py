@@ -6,7 +6,13 @@ from unittest.mock import patch
 
 import pytest
 
-from meraki_dashboard_exporter.core.org_health import OrgHealth, OrgHealthTracker
+from meraki_dashboard_exporter.core.org_health import (
+    SOURCE_DEVICE,
+    SOURCE_NETWORK_HEALTH,
+    SOURCE_ORGANIZATION,
+    OrgHealth,
+    OrgHealthTracker,
+)
 
 
 class TestOrgHealth:
@@ -220,3 +226,106 @@ class TestOrgHealthTracker:
             self.tracker.record_success("org1", "Org One")
 
         assert self.tracker.get_health("org1").last_success == fake_now
+
+
+class TestOrgHealthTrackerMultiWriter:
+    """#547: several collectors report per-org verdicts into ONE shared tracker.
+
+    Backoff must be aware of the device and network-health failure domains, not
+    just the organization collector's verdict. The effective
+    ``consecutive_failures`` is the MAX across all writing domains, so a
+    persistent failure in ANY domain engages backoff, and an org is treated
+    healthy (backoff cleared) only when every writing domain is healthy.
+    """
+
+    def setup_method(self):
+        """Create a fresh tracker for each test."""
+        self.tracker = OrgHealthTracker(
+            max_consecutive_failures=3,
+            base_backoff=60.0,
+            max_backoff=3600.0,
+        )
+
+    def test_default_source_is_organization(self):
+        """The no-source (legacy) API buckets under the organization domain."""
+        self.tracker.record_failure("org1", "Org One")
+        health = self.tracker.get_health("org1")
+        assert health.source_failures.get(SOURCE_ORGANIZATION) == 1
+
+    def test_effective_failures_is_max_across_domains(self):
+        """consecutive_failures is the max of the per-domain failure counters."""
+        self.tracker.record_failure("org1", "Org One", source=SOURCE_DEVICE)
+        self.tracker.record_failure("org1", "Org One", source=SOURCE_DEVICE)
+        self.tracker.record_failure("org1", "Org One", source=SOURCE_NETWORK_HEALTH)
+        assert self.tracker.get_health("org1").consecutive_failures == 2
+
+    def test_device_failure_engages_backoff_despite_org_success(self):
+        """A device-only failure engages backoff (#547 case 1).
+
+        Backoff engages even while the org collector reports success every cycle.
+        """
+        for _ in range(self.tracker.max_consecutive_failures):
+            self.tracker.record_success("org1", "Org One", source=SOURCE_ORGANIZATION)
+            self.tracker.record_failure("org1", "Org One", source=SOURCE_DEVICE)
+
+        assert self.tracker.should_collect("org1") is False
+        assert self.tracker.get_health("org1").consecutive_failures == 3
+
+    def test_network_health_failure_engages_backoff(self):
+        """A network-health-only failure engages backoff for that org."""
+        for _ in range(self.tracker.max_consecutive_failures):
+            self.tracker.record_failure("org1", "Org One", source=SOURCE_NETWORK_HEALTH)
+
+        assert self.tracker.should_collect("org1") is False
+
+    def test_backoff_engages_when_org_collector_disabled(self):
+        """A persistent device failure engages backoff with the org collector off.
+
+        #547 case 2: no organization-source writes at all, yet backoff engages.
+        """
+        for _ in range(self.tracker.max_consecutive_failures):
+            self.tracker.record_failure("org1", "Org One", source=SOURCE_DEVICE)
+
+        assert self.tracker.should_collect("org1") is False
+
+    def test_device_recovery_clears_backoff(self):
+        """(3) Once the failing device domain recovers, backoff clears."""
+        for _ in range(self.tracker.max_consecutive_failures):
+            self.tracker.record_failure("org1", "Org One", source=SOURCE_DEVICE)
+        assert self.tracker.should_collect("org1") is False
+
+        self.tracker.record_success("org1", "Org One", source=SOURCE_DEVICE)
+        assert self.tracker.should_collect("org1") is True
+        assert self.tracker.get_health("org1").consecutive_failures == 0
+
+    def test_success_in_other_domain_does_not_clear_backoff(self):
+        """A healthy domain must NOT clear backoff held by a still-failing domain.
+
+        A healthy org-collector cycle must not clear backoff caused by a
+        still-failing device domain; only the failing domain's own recovery
+        clears it (conservative any-recent-failure => backoff).
+        """
+        for _ in range(self.tracker.max_consecutive_failures):
+            self.tracker.record_failure("org1", "Org One", source=SOURCE_DEVICE)
+        assert self.tracker.should_collect("org1") is False
+
+        # Org collector succeeds, but device is still broken -> still backed off.
+        self.tracker.record_success("org1", "Org One", source=SOURCE_ORGANIZATION)
+        assert self.tracker.should_collect("org1") is False
+
+        # Only when the device domain recovers does backoff clear.
+        self.tracker.record_success("org1", "Org One", source=SOURCE_DEVICE)
+        assert self.tracker.should_collect("org1") is True
+
+    def test_domains_tracked_independently(self):
+        """Recovering one domain leaves another domain's sub-threshold count."""
+        self.tracker.record_failure("org1", "Org One", source=SOURCE_DEVICE)
+        self.tracker.record_failure("org1", "Org One", source=SOURCE_NETWORK_HEALTH)
+        self.tracker.record_failure("org1", "Org One", source=SOURCE_NETWORK_HEALTH)
+
+        # network_health at 2, device at 1 -> max 2.
+        assert self.tracker.get_health("org1").consecutive_failures == 2
+
+        # network_health recovers -> max falls back to device's 1.
+        self.tracker.record_success("org1", "Org One", source=SOURCE_NETWORK_HEALTH)
+        assert self.tracker.get_health("org1").consecutive_failures == 1

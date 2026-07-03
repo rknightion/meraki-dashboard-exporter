@@ -9,7 +9,11 @@ import pytest
 from meraki_dashboard_exporter.collectors.network_health import NetworkHealthCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.error_handling import NothingCollectedError
-from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
+from meraki_dashboard_exporter.core.org_health import (
+    SOURCE_NETWORK_HEALTH,
+    SOURCE_ORGANIZATION,
+    OrgHealthTracker,
+)
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import DeviceFactory, NetworkFactory, OrganizationFactory
 
@@ -958,3 +962,92 @@ class TestNetworkHealthCollectorBluetooth(BaseCollectorTest):
 
         # Verify success
         self.assert_collector_success(collector, metrics)
+
+
+class TestNetworkHealthCollectorOrgHealthReporting(BaseCollectorTest):
+    """#547: NetworkHealthCollector reports its per-org verdict into the tracker.
+
+    Verdicts are recorded under the SOURCE_NETWORK_HEALTH failure domain.
+    A network-endpoint failure engages backoff for that org even when the
+    organization collector reports success or is disabled entirely; a
+    network-health recovery clears it. The verdict mirrors the coordinator's
+    raise/return accounting: the worker raises only when the network fetch fails;
+    per-network bundle failures are isolated and count as a domain success.
+    """
+
+    collector_class = NetworkHealthCollector
+    update_tier = UpdateTier.MEDIUM
+
+    async def test_successful_org_records_network_health_success(self, collector):
+        """A healthy per-org cycle records a SOURCE_NETWORK_HEALTH success."""
+        tracker = OrgHealthTracker(max_consecutive_failures=3)
+        collector.org_health_tracker = tracker
+
+        async def _empty(org_id: str) -> list:
+            return []
+
+        # No networks -> no wireless -> legitimate no-op success for the worker.
+        collector._fetch_networks_for_health = _empty  # type: ignore[method-assign]
+
+        await collector._collect_org_network_health("ORG1", "Org One")
+
+        health = tracker.get_health("ORG1")
+        assert health is not None
+        assert health.source_failures.get(SOURCE_NETWORK_HEALTH) == 0
+        assert health.last_success > 0
+        assert tracker.should_collect("ORG1") is True
+
+    async def test_network_failure_engages_backoff_when_org_disabled(self, collector):
+        """A persistent network-health failure engages backoff (#547 cases 1, 2).
+
+        The organization collector never writes into the tracker, yet backoff
+        still engages for the org from the network-health domain alone.
+        """
+        tracker = OrgHealthTracker(max_consecutive_failures=3)
+        collector.org_health_tracker = tracker
+
+        async def _boom(org_id: str) -> list:
+            raise Exception("Connection error")
+
+        collector._fetch_networks_for_health = _boom  # type: ignore[method-assign]
+
+        for _ in range(3):
+            with pytest.raises(Exception):  # noqa: B017 - CollectorError or raw error
+                await collector._collect_org_network_health("ORG1", "Org One")
+
+        health = tracker.get_health("ORG1")
+        assert health.source_failures[SOURCE_NETWORK_HEALTH] == 3
+        assert SOURCE_ORGANIZATION not in health.source_failures
+        assert tracker.should_collect("ORG1") is False
+
+    async def test_network_recovery_clears_backoff(self, collector):
+        """(3): once the network-health domain recovers, backoff clears."""
+        tracker = OrgHealthTracker(max_consecutive_failures=3)
+        collector.org_health_tracker = tracker
+
+        async def _boom(org_id: str) -> list:
+            raise Exception("Connection error")
+
+        collector._fetch_networks_for_health = _boom  # type: ignore[method-assign]
+        for _ in range(3):
+            with pytest.raises(Exception):  # noqa: B017 - CollectorError or raw error
+                await collector._collect_org_network_health("ORG1", "Org One")
+        assert tracker.should_collect("ORG1") is False
+
+        async def _empty(org_id: str) -> list:
+            return []
+
+        collector._fetch_networks_for_health = _empty  # type: ignore[method-assign]
+        await collector._collect_org_network_health("ORG1", "Org One")
+        assert tracker.should_collect("ORG1") is True
+        assert tracker.get_health("ORG1").consecutive_failures == 0
+
+    async def test_none_tracker_is_noop(self, collector):
+        """With no tracker wired, the worker records nothing (backward compatible)."""
+        assert collector.org_health_tracker is None
+
+        async def _empty(org_id: str) -> list:
+            return []
+
+        collector._fetch_networks_for_health = _empty  # type: ignore[method-assign]
+        await collector._collect_org_network_health("ORG1", "Org One")

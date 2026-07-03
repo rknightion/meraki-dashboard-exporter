@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from meraki_dashboard_exporter.api.client import AsyncMerakiClient
 from meraki_dashboard_exporter.core.constants import UpdateTier
-from meraki_dashboard_exporter.core.org_health import OrgHealth
+from meraki_dashboard_exporter.core.org_health import SOURCE_ORGANIZATION, OrgHealth
 from meraki_dashboard_exporter.services.status import (
     ApiHealthStatus,
     CollectorStatus,
@@ -270,7 +270,9 @@ class TestStatusService:
             "org1": OrgHealth(
                 org_id="org1",
                 org_name="Acme Corp",
-                consecutive_failures=5,
+                # consecutive_failures is now derived (#547): the effective streak
+                # is the max across per-source failure buckets. Seed the org bucket.
+                source_failures={SOURCE_ORGANIZATION: 5},
                 last_failure=980.0,
                 backoff_until=1060.0,
             ),

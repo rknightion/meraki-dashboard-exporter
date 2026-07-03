@@ -38,9 +38,14 @@ logger = get_logger(__name__)
 _SMOOTHING_MAX_INTERVAL_FRACTION = 0.5
 
 # Collectors that consult the shared OrgHealthTracker to skip per-org collection
-# for organizations currently in exponential backoff (F-169). OrganizationCollector
-# additionally *records* success/failure into the tracker; the others are gating
-# consumers only (they read should_collect but never mutate the tracker).
+# for organizations currently in exponential backoff (F-169). Three of them also
+# *record* their per-org verdict into the tracker, each under its own failure
+# domain (#547): OrganizationCollector (SOURCE_ORGANIZATION), DeviceCollector
+# (SOURCE_DEVICE), and NetworkHealthCollector (SOURCE_NETWORK_HEALTH) -- so a
+# persistent failure in any one domain engages backoff even when the org
+# collector is healthy or disabled. ClientsCollector, AlertsCollector, and
+# MTSensorAlertsCollector remain gating consumers only (read should_collect,
+# never mutate the tracker).
 _ORG_HEALTH_TRACKER_COLLECTORS = frozenset({
     "OrganizationCollector",
     "DeviceCollector",
