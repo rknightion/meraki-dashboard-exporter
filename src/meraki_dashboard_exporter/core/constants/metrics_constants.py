@@ -647,6 +647,19 @@ class CollectorMetricName(StrEnum):
     DATA_LOG_RECORDS_EMITTED_TOTAL = "meraki_exporter_data_log_records_emitted_total"
     DATA_LOG_RECORDS_DROPPED_TOTAL = "meraki_exporter_data_log_records_dropped_total"
 
+    # Self-observability for the optional OTLP metrics bridge (#339/#313),
+    # emitted by core/otel_metrics.py::OTelMetricsBridge (only registered when
+    # otel.metrics.enabled). EXPORTS = OTLP export attempts by status; POINTS
+    # EXPORTED/DROPPED = data points shipped / lost to translation failures;
+    # LAST_SUCCESS_TIMESTAMP = heartbeat gauge for OTLP-only liveness alerting
+    # (the parity gap-2 mitigation — always pushed regardless of include mode).
+    OTLP_METRICS_EXPORTS_TOTAL = "meraki_exporter_otlp_metrics_exports_total"
+    OTLP_METRICS_POINTS_EXPORTED_TOTAL = "meraki_exporter_otlp_metrics_points_exported_total"
+    OTLP_METRICS_POINTS_DROPPED_TOTAL = "meraki_exporter_otlp_metrics_points_dropped_total"
+    OTLP_METRICS_LAST_SUCCESS_TIMESTAMP = (
+        "meraki_exporter_otlp_metrics_last_success_timestamp_seconds"
+    )
+
 
 class WebhookMetricName(StrEnum):
     """Webhook receiver metric names for monitoring webhook events (Phase 4.2)."""

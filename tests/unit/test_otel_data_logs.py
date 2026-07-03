@@ -8,6 +8,8 @@ self-observability counters.
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from opentelemetry.sdk._logs.export import InMemoryLogRecordExporter  # noqa: PLC2701
 from prometheus_client import CollectorRegistry
@@ -302,4 +304,65 @@ class TestOTelLogsSettingsValidation:
         assert settings.otel.logs.include_identifiers is False
         assert settings.otel.logs.events is None
         assert settings.otel.logs.endpoint is None
-        assert settings.otel.logs.insecure is None
+
+
+class TestDataLogEmitterExporterCredentials:
+    """#314: the real OTLPLogExporter receives ``credentials=`` from cert paths.
+
+    Uses MagicMock settings (not real ``Settings()``) so this test does not
+    depend on Lane A's cert fields having landed on ``OTelSettings`` yet; only
+    the attribute *access* is exercised, matching how ``_setup_provider`` reads
+    ``settings.otel.ca_cert_path`` etc.
+    """
+
+    def _settings(
+        self,
+        ca_cert_path: str | None = None,
+        client_cert_path: str | None = None,
+        client_key_path: str | None = None,
+    ) -> MagicMock:
+        settings = MagicMock(spec=Settings)
+        settings.otel = MagicMock()
+        settings.otel.logs = MagicMock()
+        settings.otel.logs.enabled = True
+        settings.otel.logs.include_identifiers = False
+        settings.otel.logs.events = None
+        settings.otel.logs_endpoint = "http://otel:4317"
+        settings.otel.logs_insecure = False
+        settings.otel.ca_cert_path = ca_cert_path
+        settings.otel.client_cert_path = client_cert_path
+        settings.otel.client_key_path = client_key_path
+        return settings
+
+    def test_no_cert_paths_passes_none_credentials(self) -> None:
+        """No cert paths configured -> exporter receives credentials=None."""
+        settings = self._settings()
+        with (
+            patch(
+                "opentelemetry.exporter.otlp.proto.grpc._log_exporter.OTLPLogExporter"
+            ) as mock_exporter,
+            patch("meraki_dashboard_exporter.core.otel_data_logs.BatchLogRecordProcessor"),
+        ):
+            DataLogEmitter(settings)
+
+        assert mock_exporter.call_args.kwargs["credentials"] is None
+
+    def test_cert_paths_set_passes_built_credentials(self, tmp_path) -> None:
+        """Cert paths configured -> exporter receives the built ChannelCredentials object."""
+        import grpc
+
+        ca_path = tmp_path / "ca.pem"
+        ca_path.write_bytes(b"CA-BYTES")
+        settings = self._settings(ca_cert_path=str(ca_path))
+
+        with (
+            patch(
+                "opentelemetry.exporter.otlp.proto.grpc._log_exporter.OTLPLogExporter"
+            ) as mock_exporter,
+            patch("meraki_dashboard_exporter.core.otel_data_logs.BatchLogRecordProcessor"),
+        ):
+            DataLogEmitter(settings)
+
+        credentials = mock_exporter.call_args.kwargs["credentials"]
+        assert credentials is not None
+        assert isinstance(credentials, grpc.ChannelCredentials)

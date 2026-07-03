@@ -5,9 +5,9 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 337
+- **Total metrics:** 340
 - **Gauges:** 312
-- **Counters:** 21
+- **Counters:** 24
 - **Histograms:** 3
 - **Info metrics:** 1
 
@@ -527,6 +527,14 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_exporter_cardinality_limit_reached_total` | counter | `metric` | Number of times a metric family exceeded its cardinality budget (cardinality.max_series_per_family). With action=warn (default) series are kept; with action=drop the oldest series in the family are shed. |  |
 | `meraki_exporter_collection_errors_expired_total` | counter | `collector`, `tier` | Total number of metrics expired due to TTL |  |
 | `meraki_exporter_expiration_tracked_metrics` | gauge | `collector` | Number of metrics currently tracked for expiration |  |
+
+### OTelMetricsBridge
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_exporter_otlp_metrics_exports_total` | counter | `status` | OTLP metrics-bridge export attempts, by result status (#339/#313). |  |
+| `meraki_exporter_otlp_metrics_points_dropped_total` | counter | — | Metric data points dropped before export due to translation failures, best-effort (#339/#313). |  |
+| `meraki_exporter_otlp_metrics_points_exported_total` | counter | — | Metric data points successfully shipped via the OTLP metrics bridge (#339/#313). |  |
 
 ### OrgRateLimiter
 

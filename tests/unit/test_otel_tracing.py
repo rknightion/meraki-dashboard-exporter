@@ -6,11 +6,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import grpc
 import pytest
 
 from meraki_dashboard_exporter.__version__ import get_version
 from meraki_dashboard_exporter.core.config import Settings
-from meraki_dashboard_exporter.core.otel_tracing import TracingConfig
+from meraki_dashboard_exporter.core.otel_tracing import TracingConfig, build_otlp_credentials
 
 
 class TestTracingConfigSetup:
@@ -21,6 +22,9 @@ class TestTracingConfigSetup:
         """Create mock settings with configurable OTEL options."""
         settings = MagicMock(spec=Settings)
         settings.otel = MagicMock()
+        settings.otel.ca_cert_path = None
+        settings.otel.client_cert_path = None
+        settings.otel.client_key_path = None
         settings.otel.enabled = False
         settings.otel.endpoint = None
         settings.otel.service_name = "test-service"
@@ -82,6 +86,9 @@ class TestTracingConfigResourceVersion:
         """Create mock settings with OTEL enabled and an endpoint configured."""
         settings = MagicMock(spec=Settings)
         settings.otel = MagicMock()
+        settings.otel.ca_cert_path = None
+        settings.otel.client_cert_path = None
+        settings.otel.client_key_path = None
         settings.otel.enabled = True
         settings.otel.endpoint = "http://otel:4317"
         settings.otel.service_name = "test-service"
@@ -160,6 +167,9 @@ class TestTracingConfigSampling:
     def _settings(self, sampling_rate) -> MagicMock:
         settings = MagicMock(spec=Settings)
         settings.otel = MagicMock()
+        settings.otel.ca_cert_path = None
+        settings.otel.client_cert_path = None
+        settings.otel.client_key_path = None
         settings.otel.sampling_rate = sampling_rate
         return settings
 
@@ -201,6 +211,9 @@ class TestTracingConfigExporterTLS:
     def _settings(self, insecure: bool) -> MagicMock:
         settings = MagicMock(spec=Settings)
         settings.otel = MagicMock()
+        settings.otel.ca_cert_path = None
+        settings.otel.client_cert_path = None
+        settings.otel.client_key_path = None
         settings.otel.enabled = True
         settings.otel.endpoint = "http://otel:4317"
         settings.otel.service_name = "test-service"
@@ -239,6 +252,9 @@ class TestTracingConfigReinitialization:
         """Test that setup_tracing is idempotent."""
         mock_settings = MagicMock(spec=Settings)
         mock_settings.otel = MagicMock()
+        mock_settings.otel.ca_cert_path = None
+        mock_settings.otel.client_cert_path = None
+        mock_settings.otel.client_key_path = None
         mock_settings.otel.enabled = True
         mock_settings.otel.endpoint = "http://otel:4317"
         mock_settings.otel.service_name = "test-service"
@@ -261,3 +277,170 @@ class TestTracingConfigReinitialization:
             # Second setup should be skipped
             config.setup_tracing()
             assert mock_resource.call_count == first_call_count
+
+
+class TestBuildOtlpCredentials:
+    """#314: ``build_otlp_credentials`` is a pure helper shared by all OTLP channels."""
+
+    def test_no_paths_returns_none(self) -> None:
+        """No cert paths configured -> None (system trust store / plaintext preserved)."""
+        assert build_otlp_credentials(None, None, None) is None
+
+    def test_ca_only_builds_credentials(self, tmp_path, monkeypatch) -> None:
+        """A CA-only path builds credentials with just root_certificates set."""
+        ca_path = tmp_path / "ca.pem"
+        ca_path.write_bytes(b"CA-PEM-BYTES")
+
+        captured: dict[str, object] = {}
+
+        def fake_ssl_channel_credentials(
+            root_certificates=None, private_key=None, certificate_chain=None
+        ):
+            captured["root_certificates"] = root_certificates
+            captured["private_key"] = private_key
+            captured["certificate_chain"] = certificate_chain
+            return "FAKE_CREDENTIALS"
+
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.core.otel_tracing.grpc.ssl_channel_credentials",
+            fake_ssl_channel_credentials,
+        )
+
+        result = build_otlp_credentials(str(ca_path), None, None)
+
+        assert result == "FAKE_CREDENTIALS"
+        assert captured["root_certificates"] == b"CA-PEM-BYTES"
+        assert captured["private_key"] is None
+        assert captured["certificate_chain"] is None
+
+    def test_ca_and_client_cert_and_key_builds_full_mtls_credentials(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """CA + client cert + client key builds full mTLS credentials."""
+        ca_path = tmp_path / "ca.pem"
+        ca_path.write_bytes(b"CA-BYTES")
+        cert_path = tmp_path / "client.crt"
+        cert_path.write_bytes(b"CERT-BYTES")
+        key_path = tmp_path / "client.key"
+        key_path.write_bytes(b"KEY-BYTES")
+
+        captured: dict[str, object] = {}
+
+        def fake_ssl_channel_credentials(
+            root_certificates=None, private_key=None, certificate_chain=None
+        ):
+            captured["root_certificates"] = root_certificates
+            captured["private_key"] = private_key
+            captured["certificate_chain"] = certificate_chain
+            return "FAKE_MTLS_CREDENTIALS"
+
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.core.otel_tracing.grpc.ssl_channel_credentials",
+            fake_ssl_channel_credentials,
+        )
+
+        result = build_otlp_credentials(str(ca_path), str(cert_path), str(key_path))
+
+        assert result == "FAKE_MTLS_CREDENTIALS"
+        assert captured["root_certificates"] == b"CA-BYTES"
+        assert captured["private_key"] == b"KEY-BYTES"
+        assert captured["certificate_chain"] == b"CERT-BYTES"
+
+    def test_missing_file_raises(self, tmp_path) -> None:
+        """A configured path that doesn't exist raises rather than silently no-op'ing."""
+        missing = tmp_path / "does-not-exist.pem"
+
+        with pytest.raises(OSError):
+            build_otlp_credentials(str(missing), None, None)
+
+    def test_client_cert_without_key_still_reads_only_configured_paths(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Only client_cert_path set (no key) -> certificate_chain set, others None.
+
+        (XOR validation of cert/key pairing is Lane A's config-model concern;
+        this helper is a pure file-reading function and does not enforce it.)
+        """
+        cert_path = tmp_path / "client.crt"
+        cert_path.write_bytes(b"CERT-ONLY-BYTES")
+
+        captured: dict[str, object] = {}
+
+        def fake_ssl_channel_credentials(
+            root_certificates=None, private_key=None, certificate_chain=None
+        ):
+            captured["root_certificates"] = root_certificates
+            captured["private_key"] = private_key
+            captured["certificate_chain"] = certificate_chain
+            return "FAKE_CREDENTIALS"
+
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.core.otel_tracing.grpc.ssl_channel_credentials",
+            fake_ssl_channel_credentials,
+        )
+
+        result = build_otlp_credentials(None, str(cert_path), None)
+
+        assert result == "FAKE_CREDENTIALS"
+        assert captured["root_certificates"] is None
+        assert captured["private_key"] is None
+        assert captured["certificate_chain"] == b"CERT-ONLY-BYTES"
+
+
+class TestTracingConfigExporterCredentials:
+    """#314: the span exporter receives ``credentials=`` built from settings cert paths."""
+
+    def _settings(
+        self,
+        ca_cert_path: str | None = None,
+        client_cert_path: str | None = None,
+        client_key_path: str | None = None,
+    ) -> MagicMock:
+        settings = MagicMock(spec=Settings)
+        settings.otel = MagicMock()
+        settings.otel.enabled = True
+        settings.otel.endpoint = "http://otel:4317"
+        settings.otel.service_name = "test-service"
+        settings.otel.resource_attributes = {}
+        settings.otel.insecure = False
+        settings.otel.ca_cert_path = ca_cert_path
+        settings.otel.client_cert_path = client_cert_path
+        settings.otel.client_key_path = client_key_path
+        return settings
+
+    def test_no_cert_paths_passes_none_credentials(self) -> None:
+        """No cert paths configured -> exporter receives credentials=None (preserves today's behaviour)."""
+        settings = self._settings()
+        config = TracingConfig(settings)
+        with (
+            patch("meraki_dashboard_exporter.core.otel_tracing.Resource.create"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.TracerProvider"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.OTLPSpanExporter") as mock_exporter,
+            patch("meraki_dashboard_exporter.core.otel_tracing.BatchSpanProcessor"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.trace.set_tracer_provider"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.set_global_textmap"),
+        ):
+            config.setup_tracing()
+
+        assert mock_exporter.call_args.kwargs["credentials"] is None
+
+    def test_cert_paths_set_passes_built_credentials(self, tmp_path) -> None:
+        """Cert paths configured -> exporter receives the built ChannelCredentials object."""
+        ca_path = tmp_path / "ca.pem"
+        ca_path.write_bytes(b"CA-BYTES")
+        settings = self._settings(ca_cert_path=str(ca_path))
+        config = TracingConfig(settings)
+
+        with (
+            patch("meraki_dashboard_exporter.core.otel_tracing.Resource.create"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.TracerProvider"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.OTLPSpanExporter") as mock_exporter,
+            patch("meraki_dashboard_exporter.core.otel_tracing.BatchSpanProcessor"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.trace.set_tracer_provider"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.set_global_textmap"),
+        ):
+            config.setup_tracing()
+
+        credentials = mock_exporter.call_args.kwargs["credentials"]
+        assert credentials is not None
+        assert isinstance(credentials, grpc.ChannelCredentials)

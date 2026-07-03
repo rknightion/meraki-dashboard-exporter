@@ -42,7 +42,7 @@ from prometheus_client.core import REGISTRY
 from .constants.metrics_constants import CollectorMetricName
 from .logging import get_logger
 from .metrics import LabelName
-from .otel_tracing import build_otel_resource
+from .otel_tracing import build_otel_resource, build_otlp_credentials
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -176,9 +176,15 @@ class DataLogEmitter:
                     OTLPLogExporter,
                 )
 
+                credentials = build_otlp_credentials(
+                    self.settings.otel.ca_cert_path,
+                    self.settings.otel.client_cert_path,
+                    self.settings.otel.client_key_path,
+                )
                 otlp_exporter = OTLPLogExporter(
                     endpoint=self.settings.otel.logs_endpoint,
                     insecure=self.settings.otel.logs_insecure,
+                    credentials=credentials,
                 )
                 provider.add_log_record_processor(
                     BatchLogRecordProcessor(

@@ -6,8 +6,10 @@ import functools
 import inspect
 import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
+import grpc
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -67,6 +69,75 @@ def build_otel_resource(settings: Settings) -> Resource:
     })
 
 
+def build_otlp_credentials(
+    ca_cert_path: str | None,
+    client_cert_path: str | None,
+    client_key_path: str | None,
+) -> grpc.ChannelCredentials | None:
+    """Build gRPC TLS channel credentials from PEM file paths (#314).
+
+    Shared by all three OTLP gRPC channels (traces, data logs, metrics) so
+    CA/mTLS configuration is expressed once. Reads each configured path as raw
+    PEM bytes and hands them to ``grpc.ssl_channel_credentials``.
+
+    Parameters
+    ----------
+    ca_cert_path : str | None
+        Path to a PEM-encoded CA certificate used to verify the collector's
+        server certificate (custom-CA / self-signed collector deployments).
+    client_cert_path : str | None
+        Path to a PEM-encoded client certificate for mutual TLS.
+    client_key_path : str | None
+        Path to the PEM-encoded private key matching ``client_cert_path``.
+
+    Returns
+    -------
+    grpc.ChannelCredentials | None
+        Channel credentials built from the provided PEM material, or ``None``
+        when none of the three paths are set — callers should then omit
+        ``credentials=`` entirely so the exporter falls back to today's
+        behaviour (system trust store when ``insecure=False``).
+
+    Raises
+    ------
+    OSError
+        If a configured path cannot be read (missing file, permissions, ...).
+        Callers are expected to guard construction in a try/except (mirroring
+        ``TracingConfig.setup_tracing`` / ``DataLogEmitter._setup_provider``)
+        so a misconfigured cert path logs and disables the channel rather
+        than aborting startup.
+
+    """
+    if ca_cert_path is None and client_cert_path is None and client_key_path is None:
+        return None
+
+    root_certificates: bytes | None = None
+    private_key: bytes | None = None
+    certificate_chain: bytes | None = None
+
+    try:
+        if ca_cert_path is not None:
+            root_certificates = Path(ca_cert_path).read_bytes()
+        if client_key_path is not None:
+            private_key = Path(client_key_path).read_bytes()
+        if client_cert_path is not None:
+            certificate_chain = Path(client_cert_path).read_bytes()
+    except OSError:
+        logger.exception(
+            "Failed to read OTLP TLS certificate/key file",
+            ca_cert_path=ca_cert_path,
+            client_cert_path=client_cert_path,
+            client_key_path=client_key_path,
+        )
+        raise
+
+    return grpc.ssl_channel_credentials(
+        root_certificates=root_certificates,
+        private_key=private_key,
+        certificate_chain=certificate_chain,
+    )
+
+
 class TracingConfig:
     """Configuration and setup for OpenTelemetry tracing."""
 
@@ -115,9 +186,15 @@ class TracingConfig:
             # (F-110): insecure=True (default) uses a plaintext gRPC channel;
             # insecure=False makes the OTLP exporter build a TLS channel using
             # the system trust store.
+            credentials = build_otlp_credentials(
+                self.settings.otel.ca_cert_path,
+                self.settings.otel.client_cert_path,
+                self.settings.otel.client_key_path,
+            )
             otlp_exporter = OTLPSpanExporter(
                 endpoint=self.settings.otel.endpoint,
                 insecure=self.settings.otel.insecure,
+                credentials=credentials,
             )
 
             # Add span processor with batching

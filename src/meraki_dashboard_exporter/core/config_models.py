@@ -609,6 +609,67 @@ class OTelLogsSettings(BaseModel):
     )
 
 
+class OTelMetricsSettings(BaseModel):
+    """OpenTelemetry OTLP *metrics bridge* settings (#313/#339).
+
+    Pushes a periodic snapshot of the Prometheus ``REGISTRY`` via OTLP gRPC.
+    This is INDEPENDENT of ``OTelSettings.enabled`` (tracing) and
+    ``OTelSettings.logs.enabled`` (data logs). Off by default; enabling it does
+    not alter ``/metrics`` scrape output in any way - the registry stays the
+    single source of truth.
+
+    Env prefix: ``MERAKI_EXPORTER_OTEL__METRICS__*``.
+    """
+
+    enabled: bool = Field(
+        False,
+        description=(
+            "Enable the OTLP metrics bridge (push a periodic snapshot of the "
+            "Prometheus registry via OTLP gRPC). Independent of otel.enabled "
+            "(tracing) and otel.logs.enabled. Off by default; the /metrics "
+            "scrape is unchanged either way."
+        ),
+    )
+    endpoint: str | None = Field(
+        None,
+        description=(
+            "OTLP gRPC endpoint for metrics. When None, falls back to "
+            "otel.endpoint. Must resolve (own or inherited) when "
+            "metrics.enabled is True."
+        ),
+    )
+    insecure: bool | None = Field(
+        None,
+        description=(
+            "Send OTLP metrics over an insecure (non-TLS) channel. When None, "
+            "inherits otel.insecure."
+        ),
+    )
+    export_interval_seconds: int = Field(
+        60,
+        ge=10,
+        le=3600,
+        description="Seconds between registry snapshots pushed via OTLP.",
+    )
+    include: Literal["product", "self", "all"] = Field(
+        "all",
+        description=(
+            "Which telemetry plane to push, keyed on the metric-name prefix "
+            'split: "product" = meraki_* excluding meraki_exporter_*; "self" = '
+            "everything else (meraki_exporter_* plus the process/python runtime "
+            'families); "all" = both.'
+        ),
+    )
+    temporality: Literal["cumulative"] = Field(
+        "cumulative",
+        description=(
+            "Counter/histogram temporality. v1 accepts only 'cumulative' "
+            "(Grafana Cloud expects cumulative; prometheus_client counters are "
+            "cumulative-since-start, so this is the only faithful translation)."
+        ),
+    )
+
+
 class OTelSettings(BaseModel):
     """OpenTelemetry configuration settings."""
 
@@ -648,14 +709,43 @@ class OTelSettings(BaseModel):
         default_factory=OTelLogsSettings,
         description="OTLP data-log emitter settings (#622); independent of tracing.",
     )
+    metrics: OTelMetricsSettings = Field(
+        default_factory=OTelMetricsSettings,
+        description="OTLP metrics bridge settings (#313/#339); independent of tracing.",
+    )
+    ca_cert_path: str | None = Field(
+        None,
+        description=(
+            "Path to a CA certificate (PEM) used to verify the OTLP collector's "
+            "TLS certificate, shared by all three OTLP channels (traces, data "
+            "logs, metrics). Paths only - no inline PEM material (#314)."
+        ),
+    )
+    client_cert_path: str | None = Field(
+        None,
+        description=(
+            "Path to a client certificate (PEM) for mTLS to the OTLP collector, "
+            "shared by all three OTLP channels. Must be set together with "
+            "client_key_path (#314)."
+        ),
+    )
+    client_key_path: str | None = Field(
+        None,
+        description=(
+            "Path to a client private key (PEM) for mTLS to the OTLP collector, "
+            "shared by all three OTLP channels. Must be set together with "
+            "client_cert_path (#314)."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_endpoint(self) -> OTelSettings:
         """Ensure an endpoint is provided when tracing and/or data logs are enabled.
 
-        Tracing (``enabled``) and data logs (``logs.enabled``) are independent;
-        the data-log endpoint may be inherited from ``endpoint`` when
-        ``logs.endpoint`` is unset.
+        Tracing (``enabled``), data logs (``logs.enabled``), and the metrics
+        bridge (``metrics.enabled``) are independent; each channel's endpoint
+        may be inherited from ``endpoint`` when its own ``*.endpoint`` is unset.
+        Also validates the shared (#314) cert-path fields.
         """
         if self.enabled and not self.endpoint:
             raise ValueError("OTEL endpoint must be provided when OTEL is enabled")
@@ -664,6 +754,30 @@ class OTelSettings(BaseModel):
                 "OTEL data-log endpoint must be provided (otel.logs.endpoint or "
                 "otel.endpoint) when otel.logs.enabled is True"
             )
+        if self.metrics.enabled and not (self.metrics.endpoint or self.endpoint):
+            raise ValueError(
+                "OTEL metrics endpoint must be provided (otel.metrics.endpoint or "
+                "otel.endpoint) when otel.metrics.enabled is True"
+            )
+        if bool(self.client_cert_path) != bool(self.client_key_path):
+            raise ValueError(
+                "OTEL client_cert_path and client_key_path must both be set "
+                "(mTLS requires both) or both left unset"
+            )
+        cert_fields_set = bool(self.ca_cert_path or self.client_cert_path or self.client_key_path)
+        if cert_fields_set:
+            enabled_channels_insecure = []
+            if self.enabled:
+                enabled_channels_insecure.append(self.insecure)
+            if self.logs.enabled:
+                enabled_channels_insecure.append(self.logs_insecure)
+            if self.metrics.enabled:
+                enabled_channels_insecure.append(self.metrics_insecure)
+            if enabled_channels_insecure and all(enabled_channels_insecure):
+                raise ValueError(
+                    "OTEL cert paths configured but every OTLP channel is "
+                    "insecure - certs would never be used"
+                )
         return self
 
     @property
@@ -675,6 +789,16 @@ class OTelSettings(BaseModel):
     def logs_insecure(self) -> bool:
         """Resolved data-log TLS toggle (own value, else inherited tracing insecure)."""
         return self.insecure if self.logs.insecure is None else self.logs.insecure
+
+    @property
+    def metrics_endpoint(self) -> str | None:
+        """Resolved metrics-bridge OTLP endpoint (own value, else inherited tracing endpoint)."""
+        return self.metrics.endpoint or self.endpoint
+
+    @property
+    def metrics_insecure(self) -> bool:
+        """Resolved metrics-bridge TLS toggle (own value, else inherited tracing insecure)."""
+        return self.insecure if self.metrics.insecure is None else self.metrics.insecure
 
 
 class ServerSettings(BaseModel):

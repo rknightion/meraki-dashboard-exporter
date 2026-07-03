@@ -36,6 +36,7 @@ from .core.logging import get_logger, setup_logging
 from .core.metric_expiration import MetricExpirationManager
 from .core.otel_data_logs import DataLogEmitter
 from .core.otel_logging import OTELLoggingConfig
+from .core.otel_metrics import OTelMetricsBridge
 from .core.otel_tracing import TracingConfig
 from .core.webhook_handler import WebhookHandler, enforce_webhook_security
 from .services.status import StatusService, build_effective_config
@@ -155,6 +156,13 @@ class ExporterApp:
         # high-cardinality per-entity product data. Independent of tracing; hard
         # off by default. Constructing it while disabled is a cheap no-op.
         self.data_log_emitter = DataLogEmitter(self.settings)
+
+        # Initialize the optional OTLP metrics bridge (#339/#313): a periodic
+        # snapshot of the Prometheus registry pushed via OTLP for push-based
+        # pipelines. Independent of tracing/logs; hard off by default; /metrics
+        # scrape stays the sole default surface. Constructing it while disabled
+        # is a cheap no-op. Its export loop is started/stopped in lifespan.
+        self.otel_metrics_bridge = OTelMetricsBridge(self.settings)
 
         self.client = AsyncMerakiClient(self.settings)
 
@@ -441,6 +449,11 @@ class ExporterApp:
         # crash-loop the pod during startup. It now runs inside the background
         # `_startup_collections` task, which already tolerates failure.
 
+        # Start the optional OTLP metrics bridge export loop (#339/#313); it needs
+        # the running event loop, so it starts here rather than in __init__. No-op
+        # when otel.metrics.enabled is False.
+        await self.otel_metrics_bridge.start()
+
         # Start metric expiration manager (Phase 3.2)
         await self.expiration_manager.start()
         logger.info(
@@ -494,6 +507,11 @@ class ExporterApp:
             # Cleanup (client.close also shuts down the dedicated SDK executor)
             await self.client.close()
             self._serving_executor.shutdown(wait=False, cancel_futures=True)
+
+            # Stop the OTLP metrics bridge (#339/#313) before tracing/logging
+            # teardown so its final flush export still has a live channel. No-op
+            # when disabled.
+            await self.otel_metrics_bridge.stop()
 
             # Shutdown tracing
             self.tracing.shutdown()

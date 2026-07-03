@@ -10,18 +10,24 @@ tags:
 
 # OpenTelemetry
 
-The exporter uses OpenTelemetry for two independent, optional planes:
+The exporter uses OpenTelemetry for three independent, optional planes:
 
 - **Traces** — self-observability spans for collection runs and API calls. This is instrumentation
   *about* the exporter, not a mirror of its data.
 - **Structured data logs** — an optional OTLP **log** channel carrying high-cardinality, per-entity
   product data (e.g. per-client wireless packet loss) that must never become a labelled Prometheus
   series. See [Data logs vs. metrics](#data-logs-vs-metrics-the-boundary-rule) below.
+- **OTLP metrics bridge** — an optional, opt-in periodic push of the existing Prometheus registry
+  to an OTLP metrics endpoint, for operators who want push delivery (e.g. no scraper reaches this
+  exporter, or metrics must ride the same collector pipeline as traces/logs). See
+  [OTLP metrics export](#otlp-metrics-export) below.
 
-Prometheus `/metrics` remains the **sole metrics surface** for this exporter. Neither plane above
-exports Prometheus metrics through OTEL — tracing is spans only, and data logs are log records
-only. (A future OTLP *metrics* bridge is tracked separately and, if it ever lands, will be
-documented as its own opt-in plane.)
+Prometheus `/metrics` remains the **sole, default, and supported** metrics surface for this
+exporter. Enabling the OTLP metrics bridge does not change `/metrics` output in any way, and
+disabling it (the default) leaves the exporter's metrics behaviour exactly as before this feature
+existed — the bridge only *pushes a copy* of what the registry already exposes, it never re-emits
+metrics through a parallel OTel instrument pipeline. Tracing remains spans only, and data logs
+remain log records only.
 
 ## Enable OTEL Tracing
 
@@ -61,6 +67,35 @@ prefix.
 
 See [Tracing](tracing.md) for details on spans, sampling behavior, and
 instrumented components.
+
+## TLS / mTLS for OTLP channels
+
+`ca_cert_path`, `client_cert_path`, and `client_key_path` on `OTelSettings` are shared,
+**paths-only** certificate configuration used by all three OTLP gRPC channels — traces, data
+logs, and metrics:
+
+```bash
+export MERAKI_EXPORTER_OTEL__CA_CERT_PATH=/etc/otel/ca.pem
+export MERAKI_EXPORTER_OTEL__CLIENT_CERT_PATH=/etc/otel/client.pem
+export MERAKI_EXPORTER_OTEL__CLIENT_KEY_PATH=/etc/otel/client-key.pem
+```
+
+- **Paths only, never inline PEM.** Inline certificate material in an env var is exactly the kind
+  of secret that ends up leaking into env dumps, `/status`, or log output — mount certs as files
+  (the normal pattern for both Kubernetes and Docker) and point these settings at the mounted
+  paths.
+- **`client_cert_path` and `client_key_path` must be set together or not at all** (mTLS needs both
+  the certificate and its key) — setting only one fails validation at startup.
+- **Certs are only used on a channel whose resolved `insecure` is `false`.** If every enabled OTLP
+  channel resolves to `insecure=true`, configuring any cert path is a startup validation error
+  (it would silently do nothing, which is worse than failing loudly).
+- **One trust domain for v1.** These fields are shared by all channels — there is no per-channel
+  cert override. If you need different CAs per channel (e.g. traces to one collector, metrics to
+  another with a different CA), that is a future extension, not supported today.
+- **How the resolved `insecure` value works, per channel:** `otel.insecure` is the base value used
+  by tracing; `otel.logs.insecure` and `otel.metrics.insecure` each independently inherit it when
+  left `null`/unset, or override it explicitly. The same inheritance pattern applies to
+  `endpoint` (see the data logs and OTLP metrics sections below).
 
 ## Data logs vs. metrics: the boundary rule
 
@@ -149,3 +184,63 @@ explicitly excluded from the [Metric Stability & Deprecation Policy](../stabilit
 policy covers the Prometheus `/metrics` surface only. Event names and attributes may change
 across any release, including patch releases, until the schema is proven out and promoted to a
 documented contract.
+
+## OTLP metrics export
+
+The OTLP metrics bridge periodically takes a snapshot of the same Prometheus `CollectorRegistry`
+that backs `/metrics` and pushes it over OTLP gRPC to a metrics collector endpoint. It is a pure
+**push mirror** of the scrape surface — no separate OTel instrument pipeline exists, no collector
+re-emits metrics through it, and nothing about `/metrics` changes whether this is enabled or not.
+Use it when you want push delivery (no scraper reachable, or you want metrics riding the same
+OTLP collector pipeline as traces/data logs) rather than as a replacement for scraping.
+
+**This plane is experimental** and explicitly excluded from the
+[Metric Stability & Deprecation Policy](../stability.md), which covers the Prometheus `/metrics`
+surface only — the bridge's translation behaviour and its own self-observability metric names may
+still change, including in a patch release, ahead of the Phase-6 live-collector verification
+tracked in the v1-readiness follow-up work.
+
+### Enable the OTLP metrics bridge
+
+```bash
+export MERAKI_EXPORTER_OTEL__METRICS__ENABLED=true
+
+# Optional (defaults shown / inherited)
+export MERAKI_EXPORTER_OTEL__METRICS__ENDPOINT=http://localhost:4317   # inherits otel.endpoint if unset
+export MERAKI_EXPORTER_OTEL__METRICS__INSECURE=true                    # inherits otel.insecure if unset
+export MERAKI_EXPORTER_OTEL__METRICS__EXPORT_INTERVAL_SECONDS=60
+export MERAKI_EXPORTER_OTEL__METRICS__INCLUDE=all
+export MERAKI_EXPORTER_OTEL__METRICS__TEMPORALITY=cumulative
+```
+
+| Setting | Env var | Default | Notes |
+|---|---|---|---|
+| `enabled` | `MERAKI_EXPORTER_OTEL__METRICS__ENABLED` | `false` | Independent of `otel.enabled` (tracing) and `otel.logs.enabled`. Off by default; `/metrics` scrape is unchanged either way. |
+| `endpoint` | `MERAKI_EXPORTER_OTEL__METRICS__ENDPOINT` | `null` (inherits `otel.endpoint`) | OTLP gRPC endpoint for metrics. An endpoint must resolve (own or inherited) when `metrics.enabled` is `true`, or startup fails. |
+| `insecure` | `MERAKI_EXPORTER_OTEL__METRICS__INSECURE` | `null` (inherits `otel.insecure`) | Plaintext vs TLS transport for the metrics OTLP channel. See [TLS / mTLS for OTLP channels](#tls-mtls-for-otlp-channels) above. |
+| `export_interval_seconds` | `MERAKI_EXPORTER_OTEL__METRICS__EXPORT_INTERVAL_SECONDS` | `60` | Seconds between registry snapshots pushed via OTLP. Range 10–3600. |
+| `include` | `MERAKI_EXPORTER_OTEL__METRICS__INCLUDE` | `all` | Which telemetry plane to push, split on the metric-name prefix: `product` = `meraki_*` excluding `meraki_exporter_*`; `self` = everything else (`meraki_exporter_*` plus the process/python runtime families); `all` = both. Defaults to `all` so an OTLP-only deployment (no scraper at all) doesn't silently lose exporter self-observability — `product` is the documented knob for cost-sensitive users who already collect self-obs elsewhere. |
+| `temporality` | `MERAKI_EXPORTER_OTEL__METRICS__TEMPORALITY` | `cumulative` | Only `cumulative` is supported in v1, matching `prometheus_client`'s cumulative-since-start counter semantics and typical backend expectations. Delta temporality is out of scope until a concrete backend need arises. |
+
+The heartbeat gauge described below is **always included in every push regardless of `include`**
+— it is the one deliberate routing exemption, so an `include=product` deployment still gets bridge
+liveness.
+
+### Scrape vs. OTLP: differences to know
+
+Pushing a copy of the registry over OTLP is not byte-identical to scraping `/metrics`. These are
+the known, deliberate differences:
+
+| Area | Scrape (`/metrics`) | OTLP push | Why |
+|---|---|---|---|
+| Liveness / `up` | Prometheus's own `up{job=...}` from the scrape itself | No `up` series is faked. Instead a self-obs gauge `meraki_exporter_otlp_metrics_last_success_timestamp_seconds` (unix timestamp of the last successful export) is pushed on every export, in every `include` mode. | Faking `up` would collide with backend scrape semantics that assume it comes from the scrape loop itself, not from pushed data. Alert on staleness instead: `time() - meraki_exporter_otlp_metrics_last_success_timestamp_seconds > 3 * export_interval_seconds`, plus `absent(meraki_exporter_otlp_metrics_last_success_timestamp_seconds)` to catch a total outage (the metric itself never arriving). |
+| `job` / `instance` identity | Set by the Prometheus scrape config | Derived from the same OTel resource (`service.name` → `job`, `service.instance.id` → `instance`, remaining resource attributes → `target_info`) used by traces and data logs, so dashboard label selectors can target either path with the same values. `service.instance.id` falls back to the `HOSTNAME` env var or the literal `"unknown"` — running multiple instances without `HOSTNAME` set will collide on `instance` (this is pre-existing OTel-resource behaviour, not specific to the metrics bridge). | Reuses the single shared resource-builder so all three OTLP channels stay identity-consistent. |
+| Metric/series names | Prometheus text-exposition names exactly as scraped (`_total`, `_bucket`/`_sum`/`_count`, `_info`, etc.) | Byte-identical to the scrape name: counters keep their `_total` suffix, info series keep `_info`, and the OTLP `Metric.unit` field is always left empty (our names already embed units like `_bytes`/`_seconds`, so a populated `unit` field risks a backend appending a second unit suffix). | The bridge hand-builds the OTLP metric name from the same family/sample name the scrape endpoint would render — no separate normalization step to drift out of sync. |
+| Temporality | N/A (Prometheus counters are cumulative-since-process-start by definition) | `Sum`/`Histogram` are always tagged `AggregationTemporality.CUMULATIVE` | Matches `prometheus_client` semantics; see the `temporality` setting above. |
+| Series lifetime / staleness | A series that `MetricExpirationManager` expires simply stops appearing in the next scrape; Prometheus's own staleness handling marks it stale after the configured lookback. | An expired series likewise stops appearing in the next push, but push-based backends (e.g. Grafana Cloud/Mimir) apply their own ingest-side staleness window (commonly ~5 minutes) before marking it stale — so an expired series can visibly linger longer on the OTLP path than on the scrape path. When a counter is later recreated, its fresh `prometheus_client`-issued `_created` timestamp becomes the pushed point's new OTLP start time, so backends see a clean counter reset rather than a value going backwards. | The bridge has no extra state beyond the live registry snapshot each interval; it relies on `_created` to signal resets. |
+| `_created` series | Present in Prometheus text exposition for every counter/histogram | Never pushed as its own series — `_created` samples are consumed only as each data point's OTLP start time. | `_created` is a Prometheus exposition-format artifact, not real data; the push path has fewer series than the scrape path for this reason alone. |
+
+**Cost note:** `include=all` (the default) pushes both the product-metrics plane and the exporter's
+own self-observability plane every interval. On a large fleet this is a real data-point-per-minute
+cost on a push-based backend; switch to `include=product` if you already collect exporter
+self-observability another way (e.g. you also scrape `/metrics`) and only need product data pushed.

@@ -138,7 +138,7 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
-module = [ "meraki.*", "prometheus_client.*", "opentelemetry.*" ]
+module = [ "meraki.*", "prometheus_client.*", "opentelemetry.*", "grpc.*" ]
 ignore_missing_imports = true
 
 [tool.pydocstyle]

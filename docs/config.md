@@ -143,6 +143,16 @@ OpenTelemetry observability configuration
 | `MERAKI_EXPORTER_OTEL__LOGS__INSECURE` | `bool | None` | `_(none)_` | Send OTLP data logs over an insecure (non-TLS) channel. When None, inherits otel.insecure. |
 | `MERAKI_EXPORTER_OTEL__LOGS__INCLUDE_IDENTIFIERS` | `bool` | `False` | PII opt-in. When False (default), the emitter drops identifier attributes (client.mac / client.hostname / client.description) from every record; only stable IDs (client.id) are emitted. Set True to include the human-readable identifiers. |
 | `MERAKI_EXPORTER_OTEL__LOGS__EVENTS` | `list[str] | None` | `_(none)_` | Per-data-class allowlist of built-in data-log event names (see DataLogEvent in core/otel_data_logs.py, e.g. "meraki.wireless.client.packet_loss"). None (default) enables all built-in events; an explicit list enables only the named events. Env: JSON array. |
+| `MERAKI_EXPORTER_OTEL__METRICS` | `OTelMetricsSettings` | `enabled=False endpoint=None insecure=None export_interval_seconds=60 include='all' temporality='cumulative'` | OTLP metrics bridge settings (#313/#339); independent of tracing. |
+| `MERAKI_EXPORTER_OTEL__METRICS__ENABLED` | `bool` | `False` | Enable the OTLP metrics bridge (push a periodic snapshot of the Prometheus registry via OTLP gRPC). Independent of otel.enabled (tracing) and otel.logs.enabled. Off by default; the /metrics scrape is unchanged either way. |
+| `MERAKI_EXPORTER_OTEL__METRICS__ENDPOINT` | `str | None` | `_(none)_` | OTLP gRPC endpoint for metrics. When None, falls back to otel.endpoint. Must resolve (own or inherited) when metrics.enabled is True. |
+| `MERAKI_EXPORTER_OTEL__METRICS__INSECURE` | `bool | None` | `_(none)_` | Send OTLP metrics over an insecure (non-TLS) channel. When None, inherits otel.insecure. |
+| `MERAKI_EXPORTER_OTEL__METRICS__EXPORT_INTERVAL_SECONDS` | `int` | `60` | Seconds between registry snapshots pushed via OTLP. (min: 10, max: 3600) |
+| `MERAKI_EXPORTER_OTEL__METRICS__INCLUDE` | `product | self | all` | `all` | Which telemetry plane to push, keyed on the metric-name prefix split: "product" = meraki_* excluding meraki_exporter_*; "self" = everything else (meraki_exporter_* plus the process/python runtime families); "all" = both. |
+| `MERAKI_EXPORTER_OTEL__METRICS__TEMPORALITY` | `cumulative` | `cumulative` | Counter/histogram temporality. v1 accepts only 'cumulative' (Grafana Cloud expects cumulative; prometheus_client counters are cumulative-since-start, so this is the only faithful translation). |
+| `MERAKI_EXPORTER_OTEL__CA_CERT_PATH` | `str | None` | `_(none)_` | Path to a CA certificate (PEM) used to verify the OTLP collector's TLS certificate, shared by all three OTLP channels (traces, data logs, metrics). Paths only - no inline PEM material (#314). |
+| `MERAKI_EXPORTER_OTEL__CLIENT_CERT_PATH` | `str | None` | `_(none)_` | Path to a client certificate (PEM) for mTLS to the OTLP collector, shared by all three OTLP channels. Must be set together with client_key_path (#314). |
+| `MERAKI_EXPORTER_OTEL__CLIENT_KEY_PATH` | `str | None` | `_(none)_` | Path to a client private key (PEM) for mTLS to the OTLP collector, shared by all three OTLP channels. Must be set together with client_cert_path (#314). |
 
 ## Monitoring Settings
 

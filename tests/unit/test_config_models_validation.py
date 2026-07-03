@@ -20,6 +20,8 @@ from meraki_dashboard_exporter.core.config_models import (
     CollectorSettings,
     LoggingSettings,
     MerakiSettings,
+    OTelMetricsSettings,
+    OTelSettings,
     SchedulerSettings,
     ServerSettings,
     WebhookSettings,
@@ -399,6 +401,167 @@ class TestSchedulerSettings:
         """A JSON-object string parses into the dict (env-var form)."""
         s = SchedulerSettings(group_interval_overrides='{"nh_connection_stats": 900}')
         assert s.group_interval_overrides == {"nh_connection_stats": 900}
+
+
+class TestOTelMetricsSettings:
+    """New OTelMetricsSettings nested model + #314 cert fields (#313/#339)."""
+
+    def test_defaults(self):
+        """All fields default to the frozen seam values."""
+        m = OTelMetricsSettings()
+        assert m.enabled is False
+        assert m.endpoint is None
+        assert m.insecure is None
+        assert m.export_interval_seconds == 60
+        assert m.include == "all"
+        assert m.temporality == "cumulative"
+
+    def test_export_interval_bounds(self):
+        """export_interval_seconds enforces its 10..3600 bounds."""
+        assert OTelMetricsSettings(export_interval_seconds=10).export_interval_seconds == 10
+        assert OTelMetricsSettings(export_interval_seconds=3600).export_interval_seconds == 3600
+        with pytest.raises(ValidationError):
+            OTelMetricsSettings(export_interval_seconds=9)
+        with pytest.raises(ValidationError):
+            OTelMetricsSettings(export_interval_seconds=3601)
+
+    def test_include_literal_rejects_unknown(self):
+        """include only accepts product|self|all."""
+        assert OTelMetricsSettings(include="product").include == "product"
+        assert OTelMetricsSettings(include="self").include == "self"
+        with pytest.raises(ValidationError):
+            OTelMetricsSettings(include="everything")
+
+    def test_temporality_literal_rejects_unknown(self):
+        """temporality only accepts 'cumulative' in v1."""
+        with pytest.raises(ValidationError):
+            OTelMetricsSettings(temporality="delta")
+
+    def test_nested_default_on_otel_settings(self):
+        """OTelSettings.metrics defaults to a fresh OTelMetricsSettings instance."""
+        s = OTelSettings()
+        assert isinstance(s.metrics, OTelMetricsSettings)
+        assert s.metrics.enabled is False
+
+    def test_cert_fields_default_none(self):
+        """The #314 cert-path fields default to None on the parent OTelSettings."""
+        s = OTelSettings()
+        assert s.ca_cert_path is None
+        assert s.client_cert_path is None
+        assert s.client_key_path is None
+
+    def test_cert_fields_pass_through(self):
+        """Cert paths are stored verbatim when set (with insecure=False so validation passes)."""
+        s = OTelSettings(
+            insecure=False,
+            ca_cert_path="/etc/otel/ca.pem",
+            client_cert_path="/etc/otel/client.pem",
+            client_key_path="/etc/otel/client-key.pem",
+        )
+        assert s.ca_cert_path == "/etc/otel/ca.pem"
+        assert s.client_cert_path == "/etc/otel/client.pem"
+        assert s.client_key_path == "/etc/otel/client-key.pem"
+
+    def test_enabled_without_resolvable_endpoint_rejected(self):
+        """metrics.enabled=True with no own or inherited endpoint is rejected."""
+        with pytest.raises(ValidationError, match="OTEL metrics endpoint must be provided"):
+            OTelSettings(metrics=OTelMetricsSettings(enabled=True))
+
+    def test_enabled_with_own_endpoint_ok(self):
+        """metrics.enabled=True with its own endpoint validates."""
+        s = OTelSettings(metrics=OTelMetricsSettings(enabled=True, endpoint="otel:4317"))
+        assert s.metrics_endpoint == "otel:4317"
+
+    def test_enabled_inherits_parent_endpoint(self):
+        """metrics.enabled=True with no own endpoint inherits the parent endpoint."""
+        s = OTelSettings(endpoint="otel:4317", metrics=OTelMetricsSettings(enabled=True))
+        assert s.metrics_endpoint == "otel:4317"
+
+    def test_metrics_endpoint_property_prefers_own(self):
+        """metrics_endpoint prefers the nested value over the inherited one."""
+        s = OTelSettings(endpoint="parent:4317", metrics=OTelMetricsSettings(endpoint="own:4317"))
+        assert s.metrics_endpoint == "own:4317"
+
+    def test_metrics_insecure_property_inherits_when_none(self):
+        """metrics_insecure inherits otel.insecure when metrics.insecure is None."""
+        s = OTelSettings(insecure=False)
+        assert s.metrics_insecure is False
+
+    def test_metrics_insecure_property_prefers_own(self):
+        """metrics_insecure prefers its own explicit value over the inherited one."""
+        s = OTelSettings(insecure=False, metrics=OTelMetricsSettings(insecure=True))
+        assert s.metrics_insecure is True
+
+    def test_client_cert_without_key_rejected(self):
+        """client_cert_path set without client_key_path is rejected (mTLS needs both)."""
+        with pytest.raises(ValidationError):
+            OTelSettings(insecure=False, client_cert_path="/etc/otel/client.pem")
+
+    def test_client_key_without_cert_rejected(self):
+        """client_key_path set without client_cert_path is rejected (mTLS needs both)."""
+        with pytest.raises(ValidationError):
+            OTelSettings(insecure=False, client_key_path="/etc/otel/client-key.pem")
+
+    def test_client_cert_and_key_together_ok(self):
+        """Both client_cert_path and client_key_path set together validates."""
+        s = OTelSettings(
+            insecure=False,
+            client_cert_path="/etc/otel/client.pem",
+            client_key_path="/etc/otel/client-key.pem",
+        )
+        assert s.client_cert_path == "/etc/otel/client.pem"
+
+    def test_ca_cert_with_all_channels_insecure_rejected(self):
+        """A cert path set while every enabled OTLP channel is insecure is rejected."""
+        with pytest.raises(ValidationError, match="every OTLP channel is insecure"):
+            OTelSettings(
+                enabled=True,
+                endpoint="otel:4317",
+                insecure=True,
+                ca_cert_path="/etc/otel/ca.pem",
+            )
+
+    def test_ca_cert_with_no_channels_enabled_allowed(self):
+        """A cert path set with no OTLP channel enabled at all is allowed (nothing to misconfigure)."""
+        s = OTelSettings(ca_cert_path="/etc/otel/ca.pem")
+        assert s.ca_cert_path == "/etc/otel/ca.pem"
+
+    def test_ca_cert_with_one_secure_channel_allowed(self):
+        """A cert path is allowed when at least one enabled channel resolves insecure=False."""
+        s = OTelSettings(
+            enabled=True,
+            endpoint="otel:4317",
+            insecure=False,
+            metrics=OTelMetricsSettings(enabled=True, insecure=True),
+            ca_cert_path="/etc/otel/ca.pem",
+        )
+        assert s.ca_cert_path == "/etc/otel/ca.pem"
+
+    def test_env_var_round_trip(self, monkeypatch):
+        """MERAKI_EXPORTER_OTEL__METRICS__* env vars populate the nested settings."""
+        monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", _KEY)
+        monkeypatch.setenv("MERAKI_EXPORTER_OTEL__METRICS__ENABLED", "true")
+        monkeypatch.setenv("MERAKI_EXPORTER_OTEL__METRICS__ENDPOINT", "otel-collector:4317")
+        monkeypatch.setenv("MERAKI_EXPORTER_OTEL__METRICS__INSECURE", "false")
+        monkeypatch.setenv("MERAKI_EXPORTER_OTEL__METRICS__EXPORT_INTERVAL_SECONDS", "120")
+        monkeypatch.setenv("MERAKI_EXPORTER_OTEL__METRICS__INCLUDE", "product")
+        settings = Settings()
+        assert settings.otel.metrics.enabled is True
+        assert settings.otel.metrics.endpoint == "otel-collector:4317"
+        assert settings.otel.metrics.insecure is False
+        assert settings.otel.metrics.export_interval_seconds == 120
+        assert settings.otel.metrics.include == "product"
+
+    def test_cert_path_env_var_round_trip(self, monkeypatch):
+        """MERAKI_EXPORTER_OTEL__*_CERT_PATH env vars populate the parent cert fields."""
+        monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", _KEY)
+        monkeypatch.setenv("MERAKI_EXPORTER_OTEL__CA_CERT_PATH", "/etc/otel/ca.pem")
+        monkeypatch.setenv("MERAKI_EXPORTER_OTEL__CLIENT_CERT_PATH", "/etc/otel/client.pem")
+        monkeypatch.setenv("MERAKI_EXPORTER_OTEL__CLIENT_KEY_PATH", "/etc/otel/client-key.pem")
+        settings = Settings()
+        assert settings.otel.ca_cert_path == "/etc/otel/ca.pem"
+        assert settings.otel.client_cert_path == "/etc/otel/client.pem"
+        assert settings.otel.client_key_path == "/etc/otel/client-key.pem"
 
 
 class TestUnrecognizedEnvVars:
