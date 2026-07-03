@@ -157,6 +157,22 @@ class LabelName(StrEnum):
     VERSION = "version"  # Exporter build version (get_version())
     COMMIT = "commit"  # Git commit SHA the build was produced from (get_commit())
 
+    # Phase 4 (#618)
+    RULESET = "ruleset"
+    SUBNET = "subnet"
+    NAT_TYPE = "nat_type"
+    RF_PROFILE_ID = "rf_profile_id"
+    RF_PROFILE_NAME = "rf_profile_name"
+    IS_DEFAULT = "is_default"
+    IS_ALLOWED = "is_allowed"
+    LAG_ID = "lag_id"
+    FIRMWARE = "firmware"
+    PRESS_TYPE = "press_type"
+    CELL_ID = "cell_id"
+    TAC = "tac"
+    RELATED_SERIAL = "related_serial"
+    THREAT_TYPE = "threat_type"
+
 
 def create_labels(**kwargs: str | None) -> dict[str, str]:
     """Create a label dictionary with validation.

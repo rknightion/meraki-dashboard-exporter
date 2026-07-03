@@ -77,6 +77,28 @@ EXPECTED_GROUP_NAMES = [
     "config_org",
     "inventory_warm",
     "org_metadata",
+    # Phase 4 (#618)
+    "mx_security_config",
+    "mx_dhcp_subnets",
+    "mx_vpn_config",
+    "mx_nat_config",
+    "mx_vlan_config",
+    "mr_ssid_firewall",
+    "mr_rf_profiles",
+    "ms_dhcp_security",
+    "ms_power_summary",
+    "ms_link_aggregations",
+    "org_config_templates",
+    "org_adaptive_policy",
+    "org_top_usage",
+    "org_webhook_logs",
+    "org_firmware_compliance",
+    "mt_alert_profiles",
+    "mt_relationships",
+    "mv_sense_config",
+    "mv_onboarding",
+    "mg_cellular_config",
+    "nh_mesh",
 ]
 
 

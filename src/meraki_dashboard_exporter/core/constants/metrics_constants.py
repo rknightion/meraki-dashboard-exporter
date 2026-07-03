@@ -86,6 +86,19 @@ class OrgMetricName(StrEnum):
     # Device availability change history (getOrganizationDevicesAvailabilitiesChangeHistory)
     ORG_DEVICES_AVAILABILITY_CHANGES_COUNT = "meraki_org_devices_availability_changes_count"
 
+    # Phase 4 (#618)
+    ORG_CONFIG_TEMPLATES = "meraki_org_config_templates"
+    ORG_NETWORKS_BOUND_TO_TEMPLATE = "meraki_org_networks_bound_to_template"
+    ORG_ADAPTIVE_POLICY_GROUPS = "meraki_org_adaptive_policy_groups"
+    ORG_ADAPTIVE_POLICY_ACLS = "meraki_org_adaptive_policy_acls"
+    ORG_ADAPTIVE_POLICY_POLICIES = "meraki_org_adaptive_policy_policies"
+    ORG_TOP_CLIENT_USAGE_TOTAL_BYTES = "meraki_org_top_client_usage_total_bytes"
+    ORG_TOP_SSID_USAGE_TOTAL_BYTES = "meraki_org_top_ssid_usage_total_bytes"
+    ORG_TOP_MANUFACTURER_USAGE_TOTAL_BYTES = "meraki_org_top_manufacturer_usage_total_bytes"
+    ORG_WEBHOOK_DELIVERIES_COUNT = "meraki_org_webhook_deliveries_count"
+    ORG_SAML_ENABLED = "meraki_org_saml_enabled"
+    ORG_SAML_IDPS = "meraki_org_saml_idps"
+
 
 class NetworkMetricName(StrEnum):
     """Network-level metric names."""
@@ -99,6 +112,9 @@ class NetworkMetricName(StrEnum):
     # Pre-filter network count (networks discovered before filtering)
     NETWORK_FILTER_NETWORKS = "meraki_network_filter_networks"
 
+    # Phase 4 (#618)
+    NETWORK_FIRMWARE_UP_TO_DATE = "meraki_network_firmware_up_to_date"
+
 
 class DeviceMetricName(StrEnum):
     """Common device metric names."""
@@ -110,6 +126,9 @@ class DeviceMetricName(StrEnum):
     DEVICE_MEMORY_USED_BYTES = "meraki_device_memory_used_bytes"
     DEVICE_MEMORY_FREE_BYTES = "meraki_device_memory_free_bytes"
     DEVICE_MEMORY_TOTAL_BYTES = "meraki_device_memory_total_bytes"
+
+    # Phase 4 (#618)
+    DEVICE_FIRMWARE_INFO = "meraki_device_firmware_info"
 
 
 class MSMetricName(StrEnum):
@@ -178,6 +197,15 @@ class MSMetricName(StrEnum):
     MS_PORT_PACKETS_RATE_COLLISIONS = "meraki_ms_port_packets_rate_collisions"
     MS_PORT_PACKETS_RATE_TOPOLOGYCHANGES = "meraki_ms_port_packets_rate_topologychanges"
 
+    # Phase 4 (#618)
+    MS_DHCP_SERVERS_SEEN_COUNT = "meraki_ms_dhcp_servers_seen_count"
+    MS_DAI_SUPPORTED = "meraki_ms_dai_supported"
+    MS_DAI_TRUSTED_PORT_CONFIGURED = "meraki_ms_dai_trusted_port_configured"
+    MS_ORG_POE_DRAW_WATTS = "meraki_ms_org_poe_draw_watts"
+    MS_LINK_AGGREGATIONS = "meraki_ms_link_aggregations"
+    MS_LINK_AGGREGATION_MEMBER = "meraki_ms_link_aggregation_member"
+    MS_PORT_NEIGHBOR_PRESENT = "meraki_ms_port_neighbor_present"
+
 
 class MRMetricName(StrEnum):
     """MR (Access Point) specific metric names."""
@@ -236,6 +264,11 @@ class MRMetricName(StrEnum):
     MR_SSID_USAGE_PERCENT = "meraki_mr_ssid_usage_percent"
     MR_SSID_CLIENT_COUNT = "meraki_mr_ssid_client_count"
 
+    # Phase 4 (#618)
+    MR_SSID_FIREWALL_RULES = "meraki_mr_ssid_firewall_rules"
+    MR_SSID_ALLOW_LAN_ACCESS = "meraki_mr_ssid_allow_lan_access"
+    MR_RF_PROFILE_INFO = "meraki_mr_rf_profile_info"
+
 
 class MXMetricName(StrEnum):
     """MX (Security Appliance) specific metric names."""
@@ -277,6 +310,26 @@ class MXMetricName(StrEnum):
     MX_VPN_USAGE_RECV_BYTES = "meraki_mx_vpn_usage_recv_bytes"
     MX_VPN_STATS_AVG_LATENCY_SECONDS = "meraki_mx_vpn_stats_avg_latency_seconds"
 
+    # Phase 4 (#618)
+    MX_CONTENT_FILTERING_BLOCKED_CATEGORIES = "meraki_mx_content_filtering_blocked_categories"
+    MX_CONTENT_FILTERING_BLOCKED_URL_PATTERNS = "meraki_mx_content_filtering_blocked_url_patterns"
+    MX_CONTENT_FILTERING_ALLOWED_URL_PATTERNS = "meraki_mx_content_filtering_allowed_url_patterns"
+    MX_MALWARE_PROTECTION_ENABLED = "meraki_mx_malware_protection_enabled"
+    MX_MALWARE_ALLOWED_URLS = "meraki_mx_malware_allowed_urls"
+    MX_MALWARE_ALLOWED_FILES = "meraki_mx_malware_allowed_files"
+    MX_IDS_MODE = "meraki_mx_ids_mode"
+    MX_IDS_RULESET = "meraki_mx_ids_ruleset"
+    MX_DHCP_SUBNET_USED_IPS = "meraki_mx_dhcp_subnet_used_ips"
+    MX_DHCP_SUBNET_FREE_IPS = "meraki_mx_dhcp_subnet_free_ips"
+    MX_VPN_SITE_TO_SITE_MODE = "meraki_mx_vpn_site_to_site_mode"
+    MX_VPN_HUBS = "meraki_mx_vpn_hubs"
+    MX_VPN_SUBNETS_ADVERTISED = "meraki_mx_vpn_subnets_advertised"
+    MX_PORT_FORWARDING_RULES = "meraki_mx_port_forwarding_rules"
+    MX_NAT_RULES = "meraki_mx_nat_rules"
+    MX_VLANS = "meraki_mx_vlans"
+    MX_STATIC_ROUTES = "meraki_mx_static_routes"
+    MX_STATIC_ROUTES_ENABLED = "meraki_mx_static_routes_enabled"
+
 
 class MGMetricName(StrEnum):
     """MG (Cellular Gateway) specific metric names."""
@@ -286,6 +339,10 @@ class MGMetricName(StrEnum):
     MG_UPLINK_SIGNAL_RSRP_DBM = "meraki_mg_uplink_signal_rsrp_dbm"
     MG_UPLINK_SIGNAL_RSRQ_DB = "meraki_mg_uplink_signal_rsrq_db"
     MG_UPLINK_ROAMING = "meraki_mg_uplink_roaming"
+
+    # Phase 4 (#618)
+    MG_CELLULAR_BANDS = "meraki_mg_cellular_bands"
+    MG_SERVING_CELL_INFO = "meraki_mg_serving_cell_info"
 
 
 class MVMetricName(StrEnum):
@@ -301,6 +358,11 @@ class MVMetricName(StrEnum):
     MV_AUDIO_RECORDING_ENABLED = "meraki_mv_audio_recording_enabled"
     MV_RESTRICTED_BANDWIDTH_MODE_ENABLED = "meraki_mv_restricted_bandwidth_mode_enabled"
     MV_QUALITY_RETENTION_INFO = "meraki_mv_quality_retention_info"
+
+    # Phase 4 (#618)
+    MV_SENSE_ENABLED = "meraki_mv_sense_enabled"
+    MV_SENSE_MQTT_BROKER_CONFIGURED = "meraki_mv_sense_mqtt_broker_configured"
+    MV_ONBOARDING_STATUS = "meraki_mv_onboarding_status"
 
 
 class MTMetricName(StrEnum):
@@ -337,6 +399,11 @@ class MTMetricName(StrEnum):
     # Sensor-to-gateway connectivity (getOrganizationSensorGatewaysConnectionsLatest)
     MT_GATEWAY_RSSI = "meraki_mt_gateway_rssi"
     MT_GATEWAY_LAST_CONNECTED_TIMESTAMP = "meraki_mt_gateway_last_connected_timestamp_seconds"
+
+    # Phase 4 (#618)
+    MT_ALERT_PROFILES = "meraki_mt_alert_profiles"
+    MT_BUTTON_LAST_PRESS_TIMESTAMP_SECONDS = "meraki_mt_button_last_press_timestamp_seconds"
+    MT_RELATED_DEVICE_INFO = "meraki_mt_related_device_info"
 
 
 class AlertMetricName(StrEnum):
@@ -390,6 +457,12 @@ class NetworkHealthMetricName(StrEnum):
     MR_AIR_MARSHAL_BSSIDS_COUNT = "meraki_mr_air_marshal_bssids_count"
     MR_AIR_MARSHAL_CONTAINED_BSSIDS_COUNT = "meraki_mr_air_marshal_contained_bssids_count"
     MR_AIR_MARSHAL_WIRED_DETECTED_COUNT = "meraki_mr_air_marshal_wired_detected_count"
+
+    # Phase 4 (#618)
+    MR_MESH_THROUGHPUT_BYTES_PER_SECOND = "meraki_mr_mesh_throughput_bytes_per_second"
+    MR_MESH_ROUTE_METRIC = "meraki_mr_mesh_route_metric"
+    MR_MESH_USAGE_PERCENT = "meraki_mr_mesh_usage_percent"
+    MR_AIR_MARSHAL_BSSIDS_BY_THREAT_TYPE_COUNT = "meraki_mr_air_marshal_bssids_by_threat_type_count"
 
 
 class ClientMetricName(StrEnum):

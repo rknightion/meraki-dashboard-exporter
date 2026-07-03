@@ -28,6 +28,8 @@ SensorMetricTypeStr = Literal[
     "frequency",
     "downstreamPower",
     "remoteLockout",
+    # Phase 4 (#303)
+    "button",
 ]
 
 
@@ -59,6 +61,9 @@ class SensorMetricType(StrEnum):
     DOWNSTREAM_POWER = "downstreamPower"
     REMOTE_LOCKOUT = "remoteLockout"
 
+    # Phase 4 (#303)
+    BUTTON = "button"
+
 
 class SensorDataField(StrEnum):
     """Sensor data field names in API responses."""
@@ -77,3 +82,6 @@ class SensorDataField(StrEnum):
     OPEN = "open"
     PRESENT = "present"
     ENABLED = "enabled"
+
+    # Phase 4 (#303)
+    PRESS_TYPE = "pressType"

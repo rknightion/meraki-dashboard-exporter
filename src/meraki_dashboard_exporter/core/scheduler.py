@@ -125,6 +125,29 @@ class EndpointGroupName(StrEnum):
     INVENTORY_WARM = "inventory_warm"
     ORG_METADATA = "org_metadata"
 
+    # Phase 4 (#618)
+    MX_SECURITY_CONFIG = "mx_security_config"
+    MX_DHCP_SUBNETS = "mx_dhcp_subnets"
+    MX_VPN_CONFIG = "mx_vpn_config"
+    MX_NAT_CONFIG = "mx_nat_config"
+    MX_VLAN_CONFIG = "mx_vlan_config"
+    MR_SSID_FIREWALL = "mr_ssid_firewall"
+    MR_RF_PROFILES = "mr_rf_profiles"
+    MS_DHCP_SECURITY = "ms_dhcp_security"
+    MS_POWER_SUMMARY = "ms_power_summary"
+    MS_LINK_AGGREGATIONS = "ms_link_aggregations"
+    ORG_CONFIG_TEMPLATES = "org_config_templates"
+    ORG_ADAPTIVE_POLICY = "org_adaptive_policy"
+    ORG_TOP_USAGE = "org_top_usage"
+    ORG_WEBHOOK_LOGS = "org_webhook_logs"
+    ORG_FIRMWARE_COMPLIANCE = "org_firmware_compliance"
+    MT_ALERT_PROFILES = "mt_alert_profiles"
+    MT_RELATIONSHIPS = "mt_relationships"
+    MV_SENSE_CONFIG = "mv_sense_config"
+    MV_ONBOARDING = "mv_onboarding"
+    MG_CELLULAR_CONFIG = "mg_cellular_config"
+    NH_MESH = "nh_mesh"
+
 
 def pages(n: int, per_page: int) -> int:
     """Pagination helper: max(1, ceil(n / per_page)).
