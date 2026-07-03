@@ -430,7 +430,9 @@ class TestRealSeriesRemoval:
                 )
 
         # Shed down to 2 — the 3 oldest series should be removed from the Gauge.
-        shed = expiration_manager.check_cardinality(_COLLECTOR, max_cardinality=2)
+        shed = expiration_manager.check_family_cardinality(
+            "meraki_test_cardinality_shed", max_series=2, action="drop"
+        )
         assert shed == 3
         assert ("o1", "s0") not in gauge._metrics
         assert ("o1", "s1") not in gauge._metrics

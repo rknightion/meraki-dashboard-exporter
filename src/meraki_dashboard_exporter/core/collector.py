@@ -10,6 +10,7 @@ from opentelemetry import trace
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, Info
 from prometheus_client.core import REGISTRY
 
+from ..core.cardinality import CardinalityConfig, normalize_metric_name
 from ..core.constants import UpdateTier
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.error_handling import ErrorCategory
@@ -105,6 +106,14 @@ class MetricCollector(ABC):
         self.expiration_manager = expiration_manager
         self.rate_limiter = rate_limiter
         self._metrics: dict[str, Any] = {}
+
+        # Per-metric cardinality control (#309): families named in
+        # cardinality.disabled_metrics are created UNREGISTERED (never exposed
+        # on /metrics) and skipped by expiration tracking. Names are stored
+        # normalized (trailing `_total` stripped) by CardinalityConfig.
+        self._disabled_metrics: frozenset[str] = CardinalityConfig.from_settings(
+            settings
+        ).disabled_metrics
 
         # Initialize performance metrics only once
         if not MetricCollector._metrics_initialized:
@@ -232,6 +241,39 @@ class MetricCollector(ABC):
                 )
                 raise
 
+    def _is_metric_disabled(self, name: str) -> bool:
+        """Whether a metric family is disabled via ``cardinality.disabled_metrics``.
+
+        Parameters
+        ----------
+        name : str
+            Metric family wire name (a trailing ``_total`` is normalized away
+            on both sides, so counters match either spelling).
+
+        Returns
+        -------
+        bool
+            True if the family must not be exposed.
+
+        """
+        return normalize_metric_name(str(name)) in self._disabled_metrics
+
+    def _registry_for(self, name: str) -> CollectorRegistry | None:
+        """Return the registry for a new metric, or None when it is disabled (#309).
+
+        A disabled family is still constructed (so collector code can keep
+        calling ``.labels().set()`` unchanged) but never registered, i.e. it
+        never appears on ``/metrics``.
+        """
+        if self._is_metric_disabled(name):
+            logger.info(
+                "Metric family disabled via cardinality.disabled_metrics; not registering",
+                metric=str(name),
+                collector=self.__class__.__name__,
+            )
+            return None
+        return self.registry
+
     def _create_gauge(
         self,
         name: str,
@@ -259,7 +301,7 @@ class MetricCollector(ABC):
             name,
             documentation,
             labelnames=labelnames or [],
-            registry=self.registry,
+            registry=self._registry_for(name),
         )
         self._metrics[name] = gauge
         return gauge
@@ -291,7 +333,7 @@ class MetricCollector(ABC):
             name,
             documentation,
             labelnames=labelnames or [],
-            registry=self.registry,
+            registry=self._registry_for(name),
         )
         self._metrics[name] = counter
         return counter
@@ -327,7 +369,7 @@ class MetricCollector(ABC):
             documentation,
             labelnames=labelnames or [],
             buckets=buckets or Histogram.DEFAULT_BUCKETS,
-            registry=self.registry,
+            registry=self._registry_for(name),
         )
         self._metrics[name] = histogram
         return histogram
@@ -359,7 +401,7 @@ class MetricCollector(ABC):
             name,
             documentation,
             labelnames=labelnames or [],
-            registry=self.registry,
+            registry=self._registry_for(name),
         )
         self._metrics[name] = info
         return info
@@ -636,12 +678,17 @@ class MetricCollector(ABC):
             # Set the metric value
             metric.labels(**labels).set(value)
 
+            # Get metric name if not provided
+            if metric_name is None:
+                metric_name = getattr(metric, "_name", "unknown")
+
+            # Disabled families (#309) are unregistered no-ops: skip the
+            # expiration bookkeeping so they cost no tracking memory either.
+            if self._is_metric_disabled(metric_name):
+                return
+
             # Track for expiration if manager is available
             if self.expiration_manager:
-                # Get metric name if not provided
-                if metric_name is None:
-                    metric_name = getattr(metric, "_name", "unknown")
-
                 # Track the update (pass the Gauge so the series can be removed on expiry)
                 self.expiration_manager.track_metric_update(
                     collector_name=self.__class__.__name__,

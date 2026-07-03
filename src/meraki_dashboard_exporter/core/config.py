@@ -10,6 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .config_models import (
     APISettings,
+    CardinalitySettings,
     ClientSettings,
     CollectorSettings,
     LoggingSettings,
@@ -79,6 +80,10 @@ class Settings(BaseSettings):
     collectors: CollectorSettings = Field(
         default_factory=CollectorSettings,
         description="Collector-specific settings",
+    )
+    cardinality: CardinalitySettings = Field(
+        default_factory=CardinalitySettings,
+        description="Metric cardinality guard-rail settings",
     )
     clients: ClientSettings = Field(
         default_factory=ClientSettings,

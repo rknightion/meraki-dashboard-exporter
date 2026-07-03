@@ -235,3 +235,95 @@ class TestMetricCollector(BaseCollectorTest):
 
         # The update tier should be set correctly
         assert collector.update_tier == UpdateTier.MEDIUM
+
+
+class TestDisabledMetrics:
+    """Per-metric cardinality controls (#309): cardinality.disabled_metrics.
+
+    Metric families named in ``cardinality.disabled_metrics`` are dropped
+    entirely: created unregistered (never exposed on /metrics) and never
+    tracked with the expiration manager. Names are matched with a trailing
+    ``_total`` normalized on both sides so operators can name counters either
+    way.
+    """
+
+    @pytest.fixture(autouse=True)
+    def setup_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Provide the API key required to build real Settings."""
+        monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+
+    def _make_collector(self, disabled: set[str], registry):
+        """Build a DummyCollectorImpl with a shim adding the CFG3 cardinality seam."""
+        from types import SimpleNamespace
+
+        from meraki_dashboard_exporter.core.config import Settings
+
+        real = Settings()
+
+        class _SettingsShim:
+            cardinality = SimpleNamespace(disabled_metrics=disabled)
+
+            def __getattr__(self, name):
+                return getattr(real, name)
+
+        return DummyCollectorImpl(
+            api=MagicMock(),
+            settings=_SettingsShim(),
+            registry=registry,
+        )
+
+    @staticmethod
+    def _registered_names(registry) -> set[str]:
+        return {family.name for family in registry.collect()}
+
+    def test_disabled_gauge_is_not_registered(self, isolated_registry) -> None:
+        """A disabled family never reaches the registry but stays usable."""
+        collector = self._make_collector({"test_gauge"}, isolated_registry)
+
+        names = self._registered_names(isolated_registry)
+        assert "test_gauge" not in names
+        # Sibling metrics of the same collector remain registered.
+        assert "test_counter" in names
+
+        # The returned object is still usable (no-op), so collector code
+        # touching it never crashes.
+        collector._test_gauge.labels(label1="a", label2="b").set(1.0)
+
+    def test_enabled_metrics_unaffected_when_nothing_disabled(self, isolated_registry) -> None:
+        """An empty disabled set registers everything as before."""
+        self._make_collector(set(), isolated_registry)
+
+        names = self._registered_names(isolated_registry)
+        assert "test_gauge" in names
+        assert "test_counter" in names
+        assert "test_histogram" in names
+
+    def test_disabled_metric_skips_expiration_tracking(self, isolated_registry) -> None:
+        """_set_metric on a disabled family does not track for expiration."""
+        collector = self._make_collector({"test_gauge"}, isolated_registry)
+        collector.expiration_manager = MagicMock()
+
+        collector._set_metric(
+            collector._test_gauge, {"label1": "a", "label2": "b"}, 1.0, "test_gauge"
+        )
+
+        collector.expiration_manager.track_metric_update.assert_not_called()
+
+    def test_enabled_metric_still_tracked(self, isolated_registry) -> None:
+        """_set_metric on an enabled family keeps expiration tracking."""
+        collector = self._make_collector({"something_else"}, isolated_registry)
+        collector.expiration_manager = MagicMock()
+
+        collector._set_metric(
+            collector._test_gauge, {"label1": "a", "label2": "b"}, 1.0, "test_gauge"
+        )
+
+        collector.expiration_manager.track_metric_update.assert_called_once()
+
+    def test_total_suffix_is_normalized(self, isolated_registry) -> None:
+        """Disabling 'test_counter_total' also drops the counter named 'test_counter'."""
+        self._make_collector({"test_counter_total"}, isolated_registry)
+
+        names = self._registered_names(isolated_registry)
+        assert "test_counter" not in names
+        assert "test_gauge" in names

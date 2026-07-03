@@ -451,7 +451,11 @@ class CollectorMetricName(StrEnum):
     EXPORTER_ORG_COLLECTION_STATUS = "meraki_exporter_org_collection_status"
 
     # Cardinality control metrics
-    EXPORTER_CARDINALITY_LIMIT_REACHED = "meraki_exporter_cardinality_limit_reached"
+    # Counter, labelled by metric family: increments each cleanup cycle a family
+    # exceeds cardinality.max_series_per_family (#540). Replaces the pre-v1
+    # per-collector shedding gauge `meraki_exporter_cardinality_limit_reached`
+    # (same base name — a registered gauge would collide with this counter).
+    EXPORTER_CARDINALITY_LIMIT_REACHED_TOTAL = "meraki_exporter_cardinality_limit_reached_total"
     # Gauge (per-cycle snapshot, not a monotonic counter) — must not end in `_total`.
     CARDINALITY_ANALYZED_METRICS = "meraki_exporter_cardinality_analyzed_metrics"
 

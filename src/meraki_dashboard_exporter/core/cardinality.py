@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import itertools
 import time
 from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -21,6 +23,107 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def normalize_metric_name(name: str) -> str:
+    """Normalize a metric family name for comparison.
+
+    Strips one trailing ``_total`` so counters match whether operators write
+    the registered base name or the exposed sample name
+    (prometheus_client strips/re-adds the suffix itself).
+
+    Parameters
+    ----------
+    name : str
+        Metric family wire name.
+
+    Returns
+    -------
+    str
+        Normalized name.
+
+    """
+    if name.endswith("_total"):
+        return name[: -len("_total")]
+    return name
+
+
+def _coerce_int(value: Any, default: int) -> int:
+    """Accept a settings value only if it is a real positive int, else ``default``.
+
+    Deliberately strict (no ``int(...)`` casting): mock objects answer
+    ``__int__`` with 1, which would silently shrink budgets to 1 under test
+    doubles or malformed settings.
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        return default
+    return value if value > 0 else default
+
+
+@dataclass(frozen=True)
+class CardinalityConfig:
+    """Resolved cardinality guard-rail settings (frozen CFG3 seam, #540/#554/#309).
+
+    Defaults here mirror ``CardinalitySettings`` in ``core/config_models.py``
+    (env prefix ``MERAKI_EXPORTER_CARDINALITY__``). Resolution is deliberately
+    defensive: any settings object lacking the ``cardinality`` attribute — or
+    carrying non-coercible values (e.g. test mocks, pre-CFG3 ``Settings``) —
+    resolves to these defaults instead of raising.
+    """
+
+    max_series_per_family: int = 50000
+    action: str = "warn"
+    disabled_metrics: frozenset[str] = field(default_factory=frozenset)
+    monitor_interval_seconds: int = 300
+    monitor_max_label_values: int = 100
+
+    @classmethod
+    def from_settings(cls, settings: Any | None) -> CardinalityConfig:
+        """Resolve cardinality config from an application settings object.
+
+        Parameters
+        ----------
+        settings : Any | None
+            Application ``Settings`` (or any object). A missing/partial
+            ``cardinality`` attribute yields the seam defaults.
+
+        Returns
+        -------
+        CardinalityConfig
+            Resolved, validated configuration.
+
+        """
+        defaults = cls()
+        card = getattr(settings, "cardinality", None) if settings is not None else None
+        if card is None:
+            return defaults
+
+        action = getattr(card, "action", None)
+        if action not in {"warn", "drop"}:
+            action = defaults.action
+
+        raw_disabled = getattr(card, "disabled_metrics", None)
+        if isinstance(raw_disabled, set | frozenset | list | tuple):
+            disabled = frozenset(normalize_metric_name(str(name)) for name in raw_disabled)
+        else:
+            disabled = defaults.disabled_metrics
+
+        return cls(
+            max_series_per_family=_coerce_int(
+                getattr(card, "max_series_per_family", None),
+                defaults.max_series_per_family,
+            ),
+            action=str(action),
+            disabled_metrics=disabled,
+            monitor_interval_seconds=_coerce_int(
+                getattr(card, "monitor_interval_seconds", None),
+                defaults.monitor_interval_seconds,
+            ),
+            monitor_max_label_values=_coerce_int(
+                getattr(card, "monitor_max_label_values", None),
+                defaults.monitor_max_label_values,
+            ),
+        )
+
+
 class CardinalityMonitor:
     """Monitors and reports on metric cardinality.
 
@@ -35,17 +138,16 @@ class CardinalityMonitor:
         Cardinality threshold for warnings (default: 1000).
     critical_threshold : int
         Cardinality threshold for critical alerts (default: 10000).
+    inventory_ready_callback : Any | None
+        Optional callable gating analysis until the inventory cache is warm.
+    settings : Any | None
+        Application settings; ``settings.cardinality`` (CFG3 seam) supplies
+        ``monitor_interval_seconds`` (analysis cadence, exposed as
+        ``analysis_interval_seconds`` for the app's monitor loop) and
+        ``monitor_max_label_values`` (retention cap, #554). Missing or
+        malformed settings fall back to the seam defaults (300s / 100).
 
     """
-
-    #: Hard cap on the number of distinct values retained per label in the
-    #: persistent ``_label_value_distribution`` map (F-003). Without a cap the
-    #: structure accumulates every label value ever seen forever - an unbounded
-    #: memory leak driven by high-churn labels. Once a label reaches this many
-    #: distinct values further values are dropped from the distribution sample;
-    #: per-analysis cardinality counts (computed from live samples) are
-    #: unaffected, so reporting stays accurate for bounded labels.
-    _MAX_LABEL_VALUES_PER_LABEL: int = 1000
 
     def __init__(
         self,
@@ -53,6 +155,7 @@ class CardinalityMonitor:
         warning_threshold: int = 1000,
         critical_threshold: int = 10000,
         inventory_ready_callback: Any | None = None,
+        settings: Any | None = None,
     ) -> None:
         """Initialize the cardinality monitor."""
         self.registry = registry or REGISTRY
@@ -60,14 +163,30 @@ class CardinalityMonitor:
         self.critical_threshold = critical_threshold
         self._inventory_ready_callback = inventory_ready_callback
 
+        config = CardinalityConfig.from_settings(settings)
+        #: How often the app's monitor loop should run analyze_cardinality (#554).
+        self.analysis_interval_seconds: int = config.monitor_interval_seconds
+        #: Cap on distinct values retained per label — both in the persistent
+        #: ``_label_value_distribution`` map (F-003) and in the per-metric
+        #: ``label_values`` samples kept in ``_full_metric_data`` (#554).
+        #: Without a cap these accumulate every label value ever seen forever —
+        #: an unbounded memory leak driven by high-churn labels. Per-analysis
+        #: cardinality COUNTS are computed from the full per-cycle sample set,
+        #: so reporting stays accurate; only the retained value lists are a
+        #: bounded sample.
+        self._max_label_values: int = config.monitor_max_label_values
+
         # Track cardinality over time
         self._cardinality_history: dict[str, list[tuple[float, int]]] = defaultdict(list)
         self._last_check_time = time.time()
 
-        # Cache for expensive analysis results
+        # Cache for expensive analysis results. The cache TTL follows the
+        # analysis interval so on-demand /cardinality endpoint hits cannot
+        # force O(series) registry walks more often than the configured
+        # cadence (#554).
         self._analysis_cache: dict[str, Any] | None = None
         self._cache_timestamp = 0.0
-        self._cache_ttl = 60.0  # Cache for 60 seconds (matching fast tier)
+        self._cache_ttl = float(self.analysis_interval_seconds)
 
         # Track if collectors have run at least once
         self._first_run_complete = False
@@ -359,10 +478,7 @@ class CardinalityMonitor:
                     # Track label value distribution, bounded per label so the
                     # persistent map cannot grow without limit (F-003).
                     distribution = self._label_value_distribution[metric_family.name][label_name]
-                    if (
-                        value_str in distribution
-                        or len(distribution) < self._MAX_LABEL_VALUES_PER_LABEL
-                    ):
+                    if value_str in distribution or len(distribution) < self._max_label_values:
                         distribution.add(value_str)
 
             if sample_count == 0:
@@ -385,7 +501,12 @@ class CardinalityMonitor:
             metric_data = {
                 "cardinality": sample_count,
                 "label_cardinalities": label_cardinalities,
-                "label_values": {label: list(values) for label, values in label_values.items()},
+                # Retain only a bounded sample of values per label (#554);
+                # label_cardinalities above keeps the exact per-cycle counts.
+                "label_values": {
+                    label: list(itertools.islice(values, self._max_label_values))
+                    for label, values in label_values.items()
+                },
                 "type": metric_family.type,
                 "documentation": metric_family.documentation or "No documentation available",
                 "label_count": len(label_cardinalities),

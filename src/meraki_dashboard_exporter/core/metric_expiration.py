@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from prometheus_client import Counter, Gauge
 
+from .cardinality import CardinalityConfig
 from .constants import UpdateTier
 from .constants.metrics_constants import CollectorMetricName
 from .metrics import LabelName
@@ -99,10 +100,12 @@ class MetricExpirationManager:
             labelnames=[LabelName.COLLECTOR.value],
         )
 
-        self._cardinality_limit_reached = Gauge(
-            CollectorMetricName.EXPORTER_CARDINALITY_LIMIT_REACHED.value,
-            "1 if cardinality shedding is active for this collector, 0 otherwise",
-            labelnames=[LabelName.COLLECTOR.value],
+        self._cardinality_limit_reached_total = Counter(
+            CollectorMetricName.EXPORTER_CARDINALITY_LIMIT_REACHED_TOTAL.value,
+            "Number of times a metric family exceeded its cardinality budget "
+            "(cardinality.max_series_per_family). With action=warn (default) series "
+            "are kept; with action=drop the oldest series in the family are shed.",
+            labelnames=[LabelName.METRIC.value],
         )
 
         logger.info(
@@ -313,57 +316,114 @@ class MetricExpirationManager:
                 by_collector=dict(expired_by_collector),
             )
 
-        # Enforce cardinality limits per collector
-        max_cardinality = self.settings.monitoring.max_cardinality_per_collector
-        collectors = set(self._metric_counts.keys())
-        for collector_name in collectors:
-            self.check_cardinality(collector_name, max_cardinality)
+        # Enforce per-family cardinality budgets (#540). Budgets are keyed by
+        # metric family (metric name), NOT by collector — the old shared
+        # per-collector bucket lumped every device sub-collector into one
+        # "DeviceCollector" budget and deleted live series at scale.
+        self._enforce_cardinality_budgets()
 
-    def check_cardinality(self, collector_name: str, max_cardinality: int) -> int:
-        """Check and enforce cardinality limit for a collector.
+    def _enforce_cardinality_budgets(self) -> None:
+        """Enforce ``cardinality.max_series_per_family`` across all tracked families.
 
-        If the collector exceeds max_cardinality, drop the oldest (least-recently-updated)
-        label sets until the count is within the limit.
+        Groups the tracked series once (a single O(n) pass) and applies the
+        configured budget/action to every metric family. With the default
+        ``action="warn"`` an over-budget family only alarms (counter + log);
+        live series are never removed. ``action="drop"`` restores the legacy
+        shedding behaviour, scoped to the offending family.
+        """
+        config = CardinalityConfig.from_settings(self.settings)
+
+        families: defaultdict[str, list[tuple[tuple[str, str, str], float]]] = defaultdict(list)
+        for key, (ts, _tier) in self._metric_timestamps.items():
+            families[key[1]].append((key, ts))
+
+        for metric_name, entries in families.items():
+            if len(entries) <= config.max_series_per_family:
+                continue
+            self._alarm_and_maybe_shed(
+                metric_name, entries, config.max_series_per_family, config.action
+            )
+
+    def check_family_cardinality(
+        self, metric_name: str, max_series: int, action: str = "warn"
+    ) -> int:
+        """Check one metric family against a cardinality budget.
 
         Parameters
         ----------
-        collector_name : str
-            Name of the collector to check.
-        max_cardinality : int
-            Maximum number of tracked label sets allowed for this collector.
+        metric_name : str
+            Metric family (full wire name) to check.
+        max_series : int
+            Maximum number of tracked series allowed for this family.
+        action : str
+            ``"warn"`` (alarm only, keep all series — the default) or
+            ``"drop"`` (shed the oldest series down to the budget).
 
         Returns
         -------
         int
-            Number of label sets shed (0 if within limits).
+            Number of series shed (always 0 with ``action="warn"``).
 
         """
-        collector_metrics = [
+        entries = [
             (key, ts)
             for key, (ts, _tier) in self._metric_timestamps.items()
-            if key[0] == collector_name
+            if key[1] == metric_name
         ]
+        if len(entries) <= max_series:
+            return 0
+        return self._alarm_and_maybe_shed(metric_name, entries, max_series, action)
 
-        if len(collector_metrics) <= max_cardinality:
-            self._cardinality_limit_reached.labels(collector=collector_name).set(0)
+    def _alarm_and_maybe_shed(
+        self,
+        metric_name: str,
+        entries: list[tuple[tuple[str, str, str], float]],
+        max_series: int,
+        action: str,
+    ) -> int:
+        """Alarm for an over-budget family; shed oldest series only when dropping.
+
+        Parameters
+        ----------
+        metric_name : str
+            The over-budget metric family.
+        entries : list[tuple[tuple[str, str, str], float]]
+            The family's tracked ``(key, timestamp)`` entries.
+        max_series : int
+            The configured budget the family exceeded.
+        action : str
+            ``"warn"`` or ``"drop"``.
+
+        Returns
+        -------
+        int
+            Number of series shed (0 in warn mode).
+
+        """
+        self._cardinality_limit_reached_total.labels(metric=metric_name).inc()
+
+        if action != "drop":
+            logger.warning(
+                "Metric family exceeds cardinality budget; keeping all series (action=warn)",
+                metric=metric_name,
+                series=len(entries),
+                budget=max_series,
+            )
             return 0
 
-        # Sort by timestamp ascending (oldest first) and shed excess
-        collector_metrics.sort(key=lambda x: x[1])
-        to_shed = len(collector_metrics) - max_cardinality
-
-        for key, _ts in collector_metrics[:to_shed]:
+        # Legacy behaviour: sort by timestamp ascending (oldest first) and shed excess.
+        entries.sort(key=lambda x: x[1])
+        to_shed = len(entries) - max_series
+        for key, _ts in entries[:to_shed]:
             self._remove_series(key)
             del self._metric_timestamps[key]
-            self._metric_counts[collector_name] -= 1
-
-        self._cardinality_limit_reached.labels(collector=collector_name).set(1)
+            self._metric_counts[key[0]] -= 1
 
         logger.warning(
-            "Cardinality limit reached, shed label sets",
-            collector=collector_name,
+            "Cardinality budget exceeded, shed oldest series (action=drop)",
+            metric=metric_name,
             shed_count=to_shed,
-            remaining=max_cardinality,
+            budget=max_series,
         )
         return to_shed
 

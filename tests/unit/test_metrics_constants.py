@@ -692,3 +692,24 @@ class TestMet06ExporterSelfMetricRenames:
         assert 'CollectorMetricName.INVENTORY_CACHE_SIZE.value + "_tracked_metrics"' not in (
             expiration_src
         )
+
+
+class TestCardinalityLimitReachedCounter:
+    """#540: the per-family cardinality alarm is an enum-backed Counter.
+
+    The old per-collector shedding gauge (meraki_exporter_cardinality_limit_reached)
+    is replaced by a monotonic counter labelled by metric family. The base name is
+    shared, so the gauge enum member must be gone (a registered gauge would collide
+    with the counter's registered base name in prometheus_client).
+    """
+
+    def test_counter_enum_member_wire_name(self) -> None:
+        """The counter's enum member carries the exact wire name."""
+        assert (
+            CollectorMetricName.EXPORTER_CARDINALITY_LIMIT_REACHED_TOTAL.value
+            == "meraki_exporter_cardinality_limit_reached_total"
+        )
+
+    def test_old_gauge_member_removed(self) -> None:
+        """The replaced per-collector gauge member is gone from the enum."""
+        assert "EXPORTER_CARDINALITY_LIMIT_REACHED" not in CollectorMetricName.__members__
