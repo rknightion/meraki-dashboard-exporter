@@ -120,9 +120,7 @@ class TestMVGateSemantics:
         device: dict[str, Any],
     ) -> None:
         """Only zones succeeds (recent + quality fail) ⇒ mv_analytics marked."""
-        mock_api.camera.getDeviceCameraSense = MagicMock(
-            side_effect=Exception("sense boom")
-        )
+        mock_api.camera.getDeviceCameraSense = MagicMock(side_effect=Exception("sense boom"))
         mock_api.camera.getDeviceCameraAnalyticsZones = MagicMock(
             return_value=[{"id": "0", "label": "Entrance", "type": ["person"]}]
         )
@@ -175,9 +173,7 @@ class TestMVGateSemantics:
         device: dict[str, Any],
     ) -> None:
         """A failed sense fetch must not mark mv_sense_config ran."""
-        mock_api.camera.getDeviceCameraSense = MagicMock(
-            side_effect=Exception("sense boom")
-        )
+        mock_api.camera.getDeviceCameraSense = MagicMock(side_effect=Exception("sense boom"))
         # Analytics succeed so only the sense-mark decision is under test.
         mock_api.camera.getDeviceCameraAnalyticsZones = MagicMock(return_value=[])
         mock_api.camera.getDeviceCameraAnalyticsRecent = MagicMock(return_value=[])
@@ -233,11 +229,7 @@ class TestClientsListGateSemantics(BaseCollectorTest):
         settings.clients.enabled = True
         org = OrganizationFactory.create(org_id="123", name="Org")
         net = NetworkFactory.create(network_id="N_123", name="Net", org_id="123")
-        builder = (
-            mock_api_builder
-            .with_organizations([org])
-            .with_networks([net], org_id="123")
-        )
+        builder = mock_api_builder.with_organizations([org]).with_networks([net], org_id="123")
         if fail:
             builder = builder.with_error("getNetworkClients", Exception("Connection error"))
         else:

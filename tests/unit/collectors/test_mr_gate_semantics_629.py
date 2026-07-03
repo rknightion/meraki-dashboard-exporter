@@ -59,9 +59,7 @@ _WIRELESS_NETS = [
 async def test_connection_stats_total_failure_does_not_mark_ran() -> None:
     """Every network's connection-stats fetch errors => group NOT marked ran."""
     parent = _make_parent()
-    parent.api.wireless.getNetworkWirelessDevicesConnectionStats.side_effect = Exception(
-        "boom"
-    )
+    parent.api.wireless.getNetworkWirelessDevicesConnectionStats.side_effect = Exception("boom")
     collector = MRClientsCollector(parent)
 
     await collector.collect_connection_stats("org1", "Org", _WIRELESS_NETS, {})
@@ -81,9 +79,7 @@ async def test_connection_stats_partial_success_marks_ran() -> None:
 
     await collector.collect_connection_stats("org1", "Org", _WIRELESS_NETS, {})
 
-    parent._mark_group_ran.assert_called_once_with(
-        EndpointGroupName.MR_CONNECTION_STATS
-    )
+    parent._mark_group_ran.assert_called_once_with(EndpointGroupName.MR_CONNECTION_STATS)
 
 
 # --------------------------------------------------------------------------- #
@@ -100,8 +96,8 @@ async def test_cpu_load_total_failure_does_not_mark_ran() -> None:
     """Every CPU-load batch fetch errors => group NOT marked ran."""
     parent = _make_parent()
     parent.settings.api.batch_size = 20  # single batch
-    parent.api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory.side_effect = (
-        Exception("boom")
+    parent.api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory.side_effect = Exception(
+        "boom"
     )
     collector = MRPerformanceCollector(parent)
 
@@ -150,11 +146,11 @@ async def test_packet_loss_empty_success_marks_ran() -> None:
 async def test_packet_loss_total_failure_does_not_mark_ran() -> None:
     """Both packet-loss fetches error => group NOT marked ran."""
     parent = _make_parent()
-    parent.api.wireless.getOrganizationWirelessDevicesPacketLossByNetwork.side_effect = (
-        Exception("boom")
+    parent.api.wireless.getOrganizationWirelessDevicesPacketLossByNetwork.side_effect = Exception(
+        "boom"
     )
-    parent.api.wireless.getOrganizationWirelessDevicesPacketLossByDevice.side_effect = (
-        Exception("boom")
+    parent.api.wireless.getOrganizationWirelessDevicesPacketLossByDevice.side_effect = Exception(
+        "boom"
     )
     collector = MRPerformanceCollector(parent)
 

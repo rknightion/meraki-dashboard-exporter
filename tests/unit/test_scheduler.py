@@ -847,9 +847,7 @@ class TestEnabledFnGating:
     def test_disabled_group_zero_cost_and_demand(self) -> None:
         """A disabled group contributes zero cost/demand and stays at base interval."""
         g = self._sensor_group()
-        solved = solve_intervals(
-            [g], _make_shape(sensors=0), 8.0, 0.7, {}, 4.0, 3600.0
-        )
+        solved = solve_intervals([g], _make_shape(sensors=0), 8.0, 0.7, {}, 4.0, 3600.0)
         s = solved[g.name]
         assert s.cost_per_cycle == 0.0
         assert s.demand_rps == 0.0
@@ -859,9 +857,7 @@ class TestEnabledFnGating:
     def test_enabled_group_normal_cost(self) -> None:
         """The same group with sensors present contributes its cost_fn demand."""
         g = self._sensor_group()
-        solved = solve_intervals(
-            [g], _make_shape(sensors=10), 8.0, 0.7, {}, 4.0, 3600.0
-        )
+        solved = solve_intervals([g], _make_shape(sensors=10), 8.0, 0.7, {}, 4.0, 3600.0)
         assert solved[g.name].cost_per_cycle == 5.0
 
     def test_disabled_group_interval_no_flap_under_tight_budget(self) -> None:

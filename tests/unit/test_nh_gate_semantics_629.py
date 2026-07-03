@@ -62,9 +62,7 @@ class TestChannelUtilizationGate(_NHGateBase):
 
     def _sched_only_channel_util(self):
         sched = MagicMock()
-        sched.should_run.side_effect = (
-            lambda g: g is EndpointGroupName.NH_CHANNEL_UTILIZATION
-        )
+        sched.should_run.side_effect = lambda g: g is EndpointGroupName.NH_CHANNEL_UTILIZATION
         return sched
 
     async def test_total_failure_not_marked(

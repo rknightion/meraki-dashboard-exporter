@@ -1246,9 +1246,10 @@ def known_env_var_names(
 # Prefixed env vars that are consumed directly via os.environ rather than the
 # pydantic Settings schema (build metadata baked into the Docker image), so they
 # are legitimate and must not be flagged as typos or redacted (#634).
-KNOWN_NON_SCHEMA_ENV_VARS: frozenset[str] = frozenset(
-    {"MERAKI_EXPORTER_VERSION", "MERAKI_EXPORTER_COMMIT"}
-)
+KNOWN_NON_SCHEMA_ENV_VARS: frozenset[str] = frozenset({
+    "MERAKI_EXPORTER_VERSION",
+    "MERAKI_EXPORTER_COMMIT",
+})
 
 # Env vars removed at v1 (the de-tiering, #631). pydantic-settings silently
 # ignores them, so an operator still setting one gets no effect and no clue.

@@ -189,12 +189,13 @@ class TestCollectorManagerReadiness:
             "collectors": {},
         }
 
-    def test_not_ready_until_every_gating_collector_succeeds(
-        self, test_settings: Settings
-    ) -> None:
+    def test_not_ready_until_every_gating_collector_succeeds(self, test_settings: Settings) -> None:
         """is_ready requires every priority-<=3 gating collector to have succeeded."""
         manager = self._make_manager(test_settings, api_requests=5)
-        manager.collectors = [_gating_collector("DeviceCollector"), _gating_collector("AlertsCollector")]
+        manager.collectors = [
+            _gating_collector("DeviceCollector"),
+            _gating_collector("AlertsCollector"),
+        ]
 
         # Nothing has succeeded yet.
         assert manager.is_ready is False

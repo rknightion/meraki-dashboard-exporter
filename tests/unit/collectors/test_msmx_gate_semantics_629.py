@@ -161,9 +161,7 @@ class TestMSPortOverviewTtl(_MSMXGateBase):
         emitted = {name for (name, _ttl) in records if name in _OVERVIEW_NAMES}
         assert emitted == _OVERVIEW_NAMES
         # And every overview emission carried the group TTL (777.0).
-        assert all(
-            ttl == 777.0 for (name, ttl) in records if name in _OVERVIEW_NAMES
-        )
+        assert all(ttl == 777.0 for (name, ttl) in records if name in _OVERVIEW_NAMES)
         assert EndpointGroupName.MS_PORT_OVERVIEW in sched.marked
 
 
@@ -180,12 +178,10 @@ class TestMXUplinkStatusEmptySuccess(_MSMXGateBase):
         self, mock_api, settings, isolated_registry, inventory
     ) -> None:
         """A successful fetch returning [] marks the group ran (gate closes)."""
-        sched = _FakeScheduler(
-            {
-                EndpointGroupName.MX_UPLINK_STATUS: True,
-                EndpointGroupName.MX_UPLINKS_OVERVIEW: False,
-            }
-        )
+        sched = _FakeScheduler({
+            EndpointGroupName.MX_UPLINK_STATUS: True,
+            EndpointGroupName.MX_UPLINKS_OVERVIEW: False,
+        })
         dc = self._mx_collector(mock_api, settings, isolated_registry, inventory, sched)
         mock_api.appliance.getOrganizationApplianceUplinkStatuses.return_value = []
 
@@ -198,12 +194,10 @@ class TestMXUplinkStatusEmptySuccess(_MSMXGateBase):
         self, mock_api, settings, isolated_registry, inventory
     ) -> None:
         """A successful fetch with data also marks the group ran (regression guard)."""
-        sched = _FakeScheduler(
-            {
-                EndpointGroupName.MX_UPLINK_STATUS: True,
-                EndpointGroupName.MX_UPLINKS_OVERVIEW: False,
-            }
-        )
+        sched = _FakeScheduler({
+            EndpointGroupName.MX_UPLINK_STATUS: True,
+            EndpointGroupName.MX_UPLINKS_OVERVIEW: False,
+        })
         dc = self._mx_collector(mock_api, settings, isolated_registry, inventory, sched)
         mock_api.appliance.getOrganizationApplianceUplinkStatuses.return_value = [
             {
@@ -222,12 +216,10 @@ class TestMXUplinkStatusEmptySuccess(_MSMXGateBase):
         self, mock_api, settings, isolated_registry, inventory
     ) -> None:
         """A real fetch failure (returns None) leaves the gate open (not marked)."""
-        sched = _FakeScheduler(
-            {
-                EndpointGroupName.MX_UPLINK_STATUS: True,
-                EndpointGroupName.MX_UPLINKS_OVERVIEW: False,
-            }
-        )
+        sched = _FakeScheduler({
+            EndpointGroupName.MX_UPLINK_STATUS: True,
+            EndpointGroupName.MX_UPLINKS_OVERVIEW: False,
+        })
         dc = self._mx_collector(mock_api, settings, isolated_registry, inventory, sched)
         mock_api.appliance.getOrganizationApplianceUplinkStatuses.side_effect = Exception(
             "Connection error"

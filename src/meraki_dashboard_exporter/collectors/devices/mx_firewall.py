@@ -344,9 +344,7 @@ class MXFirewallCollector(SubCollectorMixin):
                 "Skipping firewall rules collection (group interval not yet elapsed)",
                 org_id=org_id,
                 network_id=network_id,
-                interval_seconds=self.parent._group_interval(
-                    EndpointGroupName.MX_FIREWALL_CONFIG
-                ),
+                interval_seconds=self.parent._group_interval(EndpointGroupName.MX_FIREWALL_CONFIG),
             )
 
         # Phase 4 (#285/#288/#289): each of these is independently gated/decorated

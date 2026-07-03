@@ -23,7 +23,9 @@ from meraki_dashboard_exporter.core.scheduler import (
 )
 
 
-def _settings(*, failure_retry: int = 300, overrides: dict[str, int] | None = None) -> SimpleNamespace:
+def _settings(
+    *, failure_retry: int = 300, overrides: dict[str, int] | None = None
+) -> SimpleNamespace:
     """A namespace settings object the scheduler reads dynamically."""
     return SimpleNamespace(
         scheduler=SimpleNamespace(

@@ -297,9 +297,7 @@ class CollectorManager:
     def _register_endpoint_groups(self) -> None:
         """Register every collector's endpoint groups with the scheduler (#617)."""
         self.scheduler.register_groups(
-            group
-            for collector in self.collectors
-            for group in collector.get_endpoint_groups()
+            group for collector in self.collectors for group in collector.get_endpoint_groups()
         )
 
     @staticmethod
@@ -353,9 +351,7 @@ class CollectorManager:
             return False
         return lock.locked()
 
-    async def run_collector_once(
-        self, collector: MetricCollector, *, force: bool = False
-    ) -> None:
+    async def run_collector_once(self, collector: MetricCollector, *, force: bool = False) -> None:
         """Run a single collector once with the configured timeout.
 
         When ``force`` is True every endpoint group is fetched regardless of its

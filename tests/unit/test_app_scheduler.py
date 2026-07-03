@@ -82,9 +82,7 @@ class TestCollectorLoop:
         )
         assert calls >= 1
 
-    async def test_run_failure_is_logged_and_loop_continues(
-        self, test_settings: Settings
-    ) -> None:
+    async def test_run_failure_is_logged_and_loop_continues(self, test_settings: Settings) -> None:
         """A run_collector_once exception is swallowed (logged); the loop keeps running (#528).
 
         run_collector_once already swallows per-org/per-collector failures at its own
