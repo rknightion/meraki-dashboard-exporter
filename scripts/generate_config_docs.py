@@ -295,6 +295,18 @@ def generate_configuration_docs() -> str:
             "Client data collection and DNS resolution settings",
         ),
         (
+            "Cardinality Settings",
+            config_models.CardinalitySettings,
+            "MERAKI_EXPORTER_CARDINALITY",
+            "Metric cardinality guard (series-per-family caps and shedding)",
+        ),
+        (
+            "Scheduler Settings",
+            config_models.SchedulerSettings,
+            "MERAKI_EXPORTER_SCHEDULER",
+            "Adaptive budget-aware endpoint scheduler (AIMD, stretch, resolve cadence)",
+        ),
+        (
             "Network Filter Settings",
             config_models.NetworkFilterSettings,
             "MERAKI_EXPORTER_NETWORK_FILTER",

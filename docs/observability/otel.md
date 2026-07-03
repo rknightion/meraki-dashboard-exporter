@@ -143,6 +143,29 @@ Producers gate the underlying API fetch behind `is_event_enabled(...)` before ma
 API call, so a disabled or non-allowlisted event costs zero rate-limit budget — not just zero
 Prometheus cardinality.
 
+### Built-in events and their API cost
+
+The events are **not** equal in cost. The default (`events=null`) enables **all** of them,
+which includes the expensive per-client fan-out — scope `events` to the cheap ones if you don't
+want that.
+
+| Event (`event.name`) | Emits | API cost when enabled |
+|---|---|---|
+| `meraki.wireless.client.packet_loss` | one record per wireless client per cycle (up/down/total loss %) | **Low** — a single org-wide bulk call (`getOrganizationWirelessDevicesPacketLossByClient`). |
+| `meraki.org.webhook.delivery` | one record per outbound webhook delivery attempt | **Low** — reuses the webhook-logs fetch the aggregate metric already makes (no extra call). |
+| `meraki.wireless.client.signal_quality` | one record per wireless client per cycle (RSSI/SNR) | **High — experimental.** One `getNetworkWirelessSignalQualityHistory` call **per client**, not a bulk endpoint. Interval-gated and bounded by `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_MAX_CLIENTS` (default 200) / `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_INTERVAL`, but still linear in client count. |
+
+To ship the cheap events without the per-client fan-out:
+
+```bash
+export MERAKI_EXPORTER_OTEL__LOGS__EVENTS='["meraki.wireless.client.packet_loss","meraki.org.webhook.delivery"]'
+```
+
+Note this data-log event is independent of the `MERAKI_EXPORTER_CLIENTS__SIGNAL_QUALITY_ENABLED`
+metric path — that flag drives the ID-only `wireless_client_rssi`/`snr` **Prometheus** series;
+the `signal_quality` data-log event above is its own per-client fan-out and fires whenever the
+event is enabled. Enabling both runs the fan-out twice.
+
 ### Record shape
 
 Each record carries a bounded, dot-namespaced attribute set: an `event.name` (the `DataLogEvent`

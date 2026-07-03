@@ -10,6 +10,7 @@ else
 fi
 
 "${RUNNER[@]}" "$SCRIPT_DIR/generate_config_docs.py"
+"${RUNNER[@]}" "$SCRIPT_DIR/generate_env_example.py"
 "${RUNNER[@]}" "$SCRIPT_DIR/generate_metrics_docs.py"
 "${RUNNER[@]}" "$SCRIPT_DIR/generate_collector_docs.py"
 "${RUNNER[@]}" "$SCRIPT_DIR/generate_endpoints_docs.py"

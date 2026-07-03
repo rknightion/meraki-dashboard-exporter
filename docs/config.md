@@ -196,6 +196,35 @@ Client data collection and DNS resolution settings
 | `MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_TOTAL` | `int` | `25000` | Global cap on clients emitted as metric series across ALL networks per collection cycle. Clients beyond the cap are dropped from metric emission with a warning and counted in meraki_exporter_clients_over_cap. (min: 100, max: 1000000) |
 | `MERAKI_EXPORTER_CLIENTS__SIGNAL_QUALITY_ENABLED` | `bool` | `False` | Enable per-client wireless signal quality (RSSI/SNR) collection. Costs one API call per wireless client per cycle (interval-gated); prohibitively expensive at scale, so disabled by default. |
 
+## Cardinality Settings
+
+Metric cardinality guard (series-per-family caps and shedding)
+
+| Environment Variable | Type | Default | Description |
+|---------------------|------|---------|-------------|
+| `MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY` | `int` | `50000` | Maximum number of active time series permitted per metric family (metric name). When a family exceeds this, ``action`` decides what happens. (min: 100, max: 10000000) |
+| `MERAKI_EXPORTER_CARDINALITY__ACTION` | `warn | drop` | `warn` | What to do when a metric family exceeds max_series_per_family: 'warn' logs and keeps emitting; 'drop' stops emitting new series for that family. |
+| `MERAKI_EXPORTER_CARDINALITY__DISABLED_METRICS` | `set[str]` | `[]` | Metric family names to disable entirely (never emitted). Accepts a comma-separated string or a JSON array via env (MERAKI_EXPORTER_CARDINALITY__DISABLED_METRICS=a,b,c). |
+| `MERAKI_EXPORTER_CARDINALITY__MONITOR_INTERVAL_SECONDS` | `int` | `300` | How often (seconds) the cardinality monitor samples the registry. (min: 10, max: 3600) |
+| `MERAKI_EXPORTER_CARDINALITY__MONITOR_MAX_LABEL_VALUES` | `int` | `100` | Maximum distinct values retained per label when the cardinality monitor tracks label-value breakdowns, bounding the monitor's own memory. (min: 1, max: 100000) |
+
+## Scheduler Settings
+
+Adaptive budget-aware endpoint scheduler (AIMD, stretch, resolve cadence)
+
+| Environment Variable | Type | Default | Description |
+|---------------------|------|---------|-------------|
+| `MERAKI_EXPORTER_SCHEDULER__MODE` | `adaptive | fixed` | `adaptive` | 'adaptive' (default): solver stretches endpoint-group intervals to fit the API budget. 'fixed': floors/pins only, no stretching, no AIMD (transition fallback). |
+| `MERAKI_EXPORTER_SCHEDULER__TARGET_UTILIZATION` | `float` | `0.7` | Fraction of the effective budget the solver plans to; headroom absorbs bursts. (min: 0.1, max: 1.0) |
+| `MERAKI_EXPORTER_SCHEDULER__MAX_STRETCH_FACTOR` | `float` | `4.0` | Per-group interval cap as a multiple of its volatility floor. (min: 1.0, max: 16.0) |
+| `MERAKI_EXPORTER_SCHEDULER__MAX_INTERVAL_SECONDS` | `int` | `3600` | Absolute per-group interval cap. (min: 300, max: 86400) |
+| `MERAKI_EXPORTER_SCHEDULER__RESOLVE_INTERVAL_SECONDS` | `int` | `900` | How often the solver recomputes from org shape (matches inventory TTL). (min: 60, max: 86400) |
+| `MERAKI_EXPORTER_SCHEDULER__AIMD_ENABLED` | `bool` | `True` | 429/Retry-After budget feedback (adaptive mode only). |
+| `MERAKI_EXPORTER_SCHEDULER__AIMD_BACKOFF_MULTIPLIER` | `float` | `0.5` |  (min: 0.1, max: 0.9) |
+| `MERAKI_EXPORTER_SCHEDULER__AIMD_RECOVERY_RPS_PER_MINUTE` | `float` | `0.1` |  (min: 0.01, max: 5.0) |
+| `MERAKI_EXPORTER_SCHEDULER__AIMD_RESOLVE_HYSTERESIS` | `float` | `0.2` |  (min: 0.05, max: 1.0) |
+| `MERAKI_EXPORTER_SCHEDULER__GROUP_INTERVAL_OVERRIDES` | `dict[str, int]` | `{}` | Per-group interval pins, e.g. {"nh_connection_stats": 900}. Pinned groups are excluded from solver stretching. Env: JSON object. |
+
 ## Network Filter Settings
 
 Restrict which networks are scraped by name glob, ID, or tag
