@@ -181,6 +181,31 @@ def with_error_handling(
     Callable
         Decorated function with error handling and retry logic.
 
+    Notes
+    -----
+    **Single 429 retry owner (#545).** This decorator owns rate-limit (429)
+    retries for the whole exporter: the Meraki SDK is created with
+    ``wait_on_rate_limit=False`` (see ``api/client.py``), so a 429 raises
+    immediately in the worker thread instead of sleeping ``Retry-After``
+    in-thread. The backoff waits happen here via ``await asyncio.sleep`` on
+    the event loop - cancellable, and never holding an executor thread. A
+    server-sent ``Retry-After`` is honoured but capped at
+    ``settings.api.retry_after_max_seconds`` (read from the decorated
+    instance at call time; falls back to ``max_delay``). Total HTTP attempts
+    per logical fetch are therefore bounded by ``1 + max_retries``.
+
+    **Per-fetch deadline & timeout semantics (#546).** When the decorated
+    instance carries ``settings.api``, the entire logical fetch (all attempts
+    plus all backoff waits) runs under
+    ``asyncio.timeout(settings.api.per_fetch_deadline_seconds)``. On expiry
+    the fetch is cancelled, tracked via ``_track_error(TIMEOUT)``, and treated
+    exactly like any other failed fetch: ``None`` is returned (or
+    ``CollectorError`` raised when ``continue_on_error=False``), so no partial
+    result is handed back for metric emission and a slow fetch cannot consume
+    the whole per-collector timeout budget. The underlying SDK worker thread
+    cannot be cancelled mid-request, but it runs on the dedicated bounded SDK
+    executor (#544) and its own HTTP timeouts bound how long it lingers.
+
     """
 
     def decorator(
@@ -200,117 +225,43 @@ def with_error_handling(
                 if hasattr(collector_instance, "update_tier"):
                     context["tier"] = collector_instance.update_tier.value
 
-            retry_count = 0
+            async def _run_attempts() -> T | None:
+                """Run all fetch attempts (and their backoff waits) for one logical fetch."""
+                retry_count = 0
 
-            while True:
-                try:
-                    result = await func(*args, **kwargs)
+                while True:
+                    try:
+                        result = await func(*args, **kwargs)
 
-                    # Log successful operation at debug level
-                    duration = time.time() - start_time
-                    log_context = dict(context)
-                    log_context["duration_seconds"] = round(duration, 2)
-                    if retry_count > 0:
-                        log_context["retry_count"] = retry_count
+                        # Log successful operation at debug level
+                        duration = time.time() - start_time
+                        log_context = dict(context)
+                        log_context["duration_seconds"] = round(duration, 2)
+                        if retry_count > 0:
+                            log_context["retry_count"] = retry_count
 
-                    logger.debug(
-                        f"{operation} completed successfully",
-                        **log_context,
-                    )
-
-                    return result
-
-                except RetryableAPIError as e:
-                    # Handle retryable errors with exponential backoff
-                    if retry_count < max_retries:
-                        retry_count += 1
-                        # Calculate delay with exponential backoff
-                        base_wait = (
-                            e.retry_after
-                            if e.retry_after is not None
-                            else (base_delay * (2 ** (retry_count - 1)))
-                        )
-                        delay = min(base_wait, max_delay)
-                        delay = _apply_jitter(delay)
-
-                        logger.warning(
-                            f"{operation} rate limited, retrying",
-                            retry_count=retry_count,
-                            max_retries=max_retries,
-                            wait_seconds=round(delay, 2),
-                            retry_after_seconds=e.retry_after,
-                            error=str(e),
-                            **context,
+                        logger.debug(
+                            f"{operation} completed successfully",
+                            **log_context,
                         )
 
-                        # Track retry metric if collector available
-                        if collector_instance and hasattr(collector_instance, "_track_retry"):
-                            collector_instance._track_retry(operation, "http_200_rate_limit")
+                        return result
 
-                        await asyncio.sleep(delay)
-                        continue
-
-                    # Max retries exceeded
-                    error_context = dict(context)
-                    error_context["duration_seconds"] = round(time.time() - start_time, 2)
-                    error_context["retry_count"] = retry_count
-
-                    logger.error(
-                        f"{operation} failed after {max_retries} retries",
-                        error=str(e),
-                        error_type="RetryableAPIError",
-                        **error_context,
-                    )
-
-                    # Track error metric if collector available
-                    if collector_instance and hasattr(collector_instance, "_track_error"):
-                        collector_instance._track_error(ErrorCategory.API_RATE_LIMIT)
-
-                    if continue_on_error:
-                        return None
-                    raise CollectorError(
-                        f"{operation} failed after {max_retries} retries: {e}",
-                        ErrorCategory.API_RATE_LIMIT,
-                        error_context,
-                    ) from e
-
-                except TimeoutError as e:
-                    # Create a new context dict with the duration
-                    error_context = dict(context)
-                    error_context["duration_seconds"] = round(time.time() - start_time, 2)
-                    logger.error(
-                        f"{operation} timed out",
-                        error_type="TimeoutError",
-                        **error_context,
-                    )
-
-                    # Track error metric if collector available
-                    if collector_instance and hasattr(collector_instance, "_track_error"):
-                        collector_instance._track_error(ErrorCategory.TIMEOUT)
-
-                    if continue_on_error:
-                        return None
-                    raise CollectorError(
-                        f"{operation} timed out",
-                        ErrorCategory.TIMEOUT,
-                        error_context,
-                    ) from e
-
-                except Exception as e:
-                    duration = time.time() - start_time
-                    error_type = type(e).__name__
-                    error_msg = str(e)
-
-                    if _is_rate_limit_error(e):
-                        retry_after = _get_retry_after_seconds(e)
+                    except RetryableAPIError as e:
+                        # Handle retryable errors with exponential backoff
                         if retry_count < max_retries:
                             retry_count += 1
-                            base_wait = (
-                                retry_after
-                                if retry_after is not None
-                                else (base_delay * (2 ** (retry_count - 1)))
-                            )
-                            delay = min(base_wait, max_delay)
+                            # #545: honour a server-sent Retry-After but cap it
+                            # (settings.api.retry_after_max_seconds) so one
+                            # pathological header cannot stall the whole fetch;
+                            # exponential backoff keeps the max_delay cap.
+                            if e.retry_after is not None:
+                                delay = min(
+                                    e.retry_after,
+                                    _resolve_retry_after_cap(collector_instance, max_delay),
+                                )
+                            else:
+                                delay = min(base_delay * (2 ** (retry_count - 1)), max_delay)
                             delay = _apply_jitter(delay)
 
                             logger.warning(
@@ -318,94 +269,264 @@ def with_error_handling(
                                 retry_count=retry_count,
                                 max_retries=max_retries,
                                 wait_seconds=round(delay, 2),
-                                retry_after_seconds=retry_after,
-                                error_type=error_type,
-                                error=error_msg,
+                                retry_after_seconds=e.retry_after,
+                                error=str(e),
                                 **context,
                             )
 
+                            # Track retry metric if collector available
                             if collector_instance and hasattr(collector_instance, "_track_retry"):
-                                collector_instance._track_retry(operation, "http_429_rate_limit")
+                                collector_instance._track_retry(operation, "http_200_rate_limit")
 
                             await asyncio.sleep(delay)
                             continue
 
-                        # Max retries exceeded for rate limit
-                        rate_context = dict(context)
-                        rate_context.update({
-                            "duration_seconds": round(duration, 2),
-                            "retry_count": retry_count,
-                            "error_type": error_type,
-                            "error": error_msg,
-                        })
+                        # Max retries exceeded
+                        error_context = dict(context)
+                        error_context["duration_seconds"] = round(time.time() - start_time, 2)
+                        error_context["retry_count"] = retry_count
 
-                        logger.warning(
-                            f"{operation} rate limited, retries exhausted",
-                            **rate_context,
+                        logger.error(
+                            f"{operation} failed after {max_retries} retries",
+                            error=str(e),
+                            error_type="RetryableAPIError",
+                            **error_context,
                         )
 
+                        # Track error metric if collector available
                         if collector_instance and hasattr(collector_instance, "_track_error"):
                             collector_instance._track_error(ErrorCategory.API_RATE_LIMIT)
 
                         if continue_on_error:
                             return None
-
                         raise CollectorError(
-                            f"{operation} failed after {max_retries} retries: {error_msg}",
+                            f"{operation} failed after {max_retries} retries: {e}",
                             ErrorCategory.API_RATE_LIMIT,
-                            rate_context,
+                            error_context,
                         ) from e
 
-                    # Determine error category
-                    category = error_category or _categorize_error(e)
-
-                    # Create new context with mixed types
-                    exc_context: dict[str, Any] = dict(context)
-                    exc_context.update({
-                        "duration_seconds": round(duration, 2),
-                        "error_type": error_type,
-                        "error": error_msg,
-                    })
-
-                    # Special handling for 404 errors. Prefer the structured
-                    # HTTP status code (e.g. meraki.APIError.status) over a bare
-                    # substring check: str(APIError) concatenates server-controlled
-                    # body text, so a genuine 500 whose message merely contains
-                    # "404" must not be silently downgraded. Only fall back to the
-                    # substring heuristic for non-APIError exceptions with no status.
-                    status_code = getattr(e, "status", None)
-                    is_not_available = (
-                        status_code == 404 if status_code is not None else "404" in error_msg
-                    )
-                    if is_not_available:
-                        logger.debug(
-                            f"{operation} - API endpoint not available",
-                            **exc_context,
-                        )
-                        category = ErrorCategory.API_NOT_AVAILABLE
-                    else:
-                        logger.exception(
-                            f"{operation} failed",
-                            **exc_context,
+                    except TimeoutError as e:
+                        # Create a new context dict with the duration
+                        error_context = dict(context)
+                        error_context["duration_seconds"] = round(time.time() - start_time, 2)
+                        logger.error(
+                            f"{operation} timed out",
+                            error_type="TimeoutError",
+                            **error_context,
                         )
 
-                    # Track error metric if collector available
-                    if collector_instance and hasattr(collector_instance, "_track_error"):
-                        collector_instance._track_error(category)
+                        # Track error metric if collector available
+                        if collector_instance and hasattr(collector_instance, "_track_error"):
+                            collector_instance._track_error(ErrorCategory.TIMEOUT)
 
-                    if continue_on_error:
-                        return None
+                        if continue_on_error:
+                            return None
+                        raise CollectorError(
+                            f"{operation} timed out",
+                            ErrorCategory.TIMEOUT,
+                            error_context,
+                        ) from e
 
-                    # Re-raise as CollectorError with context
-                    raise CollectorError(
-                        f"{operation} failed: {error_msg}",
-                        category,
-                        context,
-                    ) from e
+                    except Exception as e:
+                        duration = time.time() - start_time
+                        error_type = type(e).__name__
+                        error_msg = str(e)
+
+                        if _is_rate_limit_error(e):
+                            retry_after = _get_retry_after_seconds(e)
+                            if retry_count < max_retries:
+                                retry_count += 1
+                                # #545: same bounded Retry-After handling as above.
+                                if retry_after is not None:
+                                    delay = min(
+                                        retry_after,
+                                        _resolve_retry_after_cap(collector_instance, max_delay),
+                                    )
+                                else:
+                                    delay = min(base_delay * (2 ** (retry_count - 1)), max_delay)
+                                delay = _apply_jitter(delay)
+
+                                logger.warning(
+                                    f"{operation} rate limited, retrying",
+                                    retry_count=retry_count,
+                                    max_retries=max_retries,
+                                    wait_seconds=round(delay, 2),
+                                    retry_after_seconds=retry_after,
+                                    error_type=error_type,
+                                    error=error_msg,
+                                    **context,
+                                )
+
+                                if collector_instance and hasattr(
+                                    collector_instance, "_track_retry"
+                                ):
+                                    collector_instance._track_retry(
+                                        operation, "http_429_rate_limit"
+                                    )
+
+                                await asyncio.sleep(delay)
+                                continue
+
+                            # Max retries exceeded for rate limit
+                            rate_context = dict(context)
+                            rate_context.update({
+                                "duration_seconds": round(duration, 2),
+                                "retry_count": retry_count,
+                                "error_type": error_type,
+                                "error": error_msg,
+                            })
+
+                            logger.warning(
+                                f"{operation} rate limited, retries exhausted",
+                                **rate_context,
+                            )
+
+                            if collector_instance and hasattr(collector_instance, "_track_error"):
+                                collector_instance._track_error(ErrorCategory.API_RATE_LIMIT)
+
+                            if continue_on_error:
+                                return None
+
+                            raise CollectorError(
+                                f"{operation} failed after {max_retries} retries: {error_msg}",
+                                ErrorCategory.API_RATE_LIMIT,
+                                rate_context,
+                            ) from e
+
+                        # Determine error category
+                        category = error_category or _categorize_error(e)
+
+                        # Create new context with mixed types
+                        exc_context: dict[str, Any] = dict(context)
+                        exc_context.update({
+                            "duration_seconds": round(duration, 2),
+                            "error_type": error_type,
+                            "error": error_msg,
+                        })
+
+                        # Special handling for 404 errors. Prefer the structured
+                        # HTTP status code (e.g. meraki.APIError.status) over a bare
+                        # substring check: str(APIError) concatenates server-controlled
+                        # body text, so a genuine 500 whose message merely contains
+                        # "404" must not be silently downgraded. Only fall back to the
+                        # substring heuristic for non-APIError exceptions with no status.
+                        status_code = getattr(e, "status", None)
+                        is_not_available = (
+                            status_code == 404 if status_code is not None else "404" in error_msg
+                        )
+                        if is_not_available:
+                            logger.debug(
+                                f"{operation} - API endpoint not available",
+                                **exc_context,
+                            )
+                            category = ErrorCategory.API_NOT_AVAILABLE
+                        else:
+                            logger.exception(
+                                f"{operation} failed",
+                                **exc_context,
+                            )
+
+                        # Track error metric if collector available
+                        if collector_instance and hasattr(collector_instance, "_track_error"):
+                            collector_instance._track_error(category)
+
+                        if continue_on_error:
+                            return None
+
+                        # Re-raise as CollectorError with context
+                        raise CollectorError(
+                            f"{operation} failed: {error_msg}",
+                            category,
+                            context,
+                        ) from e
+
+            # #546: per-fetch wall-clock deadline. One logical fetch (all HTTP
+            # attempts plus all backoff waits) must finish within
+            # ``settings.api.per_fetch_deadline_seconds``. On expiry the fetch
+            # coroutine is cancelled (``asyncio.timeout``), the failure is
+            # tracked as a TIMEOUT, and ``None`` is returned - so no partial
+            # result is handed back for metric emission and the collector's
+            # remaining budget is preserved. Instances without settings (plain
+            # decorated functions) keep the historic no-deadline behavior.
+            deadline = _resolve_per_fetch_deadline(collector_instance)
+            try:
+                async with asyncio.timeout(deadline):
+                    return await _run_attempts()
+            except TimeoutError as timeout_exc:
+                error_context = dict(context)
+                error_context["duration_seconds"] = round(time.time() - start_time, 2)
+                error_context["deadline_seconds"] = deadline
+
+                logger.error(
+                    f"{operation} exceeded per-fetch deadline",
+                    error_type="TimeoutError",
+                    **error_context,
+                )
+
+                if collector_instance and hasattr(collector_instance, "_track_error"):
+                    collector_instance._track_error(ErrorCategory.TIMEOUT)
+
+                if continue_on_error:
+                    return None
+                raise CollectorError(
+                    f"{operation} exceeded per-fetch deadline",
+                    ErrorCategory.TIMEOUT,
+                    error_context,
+                ) from timeout_exc
 
         return wrapper
 
     return decorator
+
+
+#: Frozen default for ``settings.api.per_fetch_deadline_seconds`` (#546), used
+#: when the decorated instance has ``settings.api`` but the field is absent
+#: (e.g. an older settings snapshot). Kept in sync with ``APISettings``.
+DEFAULT_PER_FETCH_DEADLINE_SECONDS = 120.0
+
+
+def _resolve_api_settings(instance: Any) -> Any:
+    """Return ``instance.settings.api`` if the decorated instance carries it."""
+    settings = getattr(instance, "settings", None)
+    return getattr(settings, "api", None)
+
+
+def _resolve_retry_after_cap(instance: Any, fallback: float) -> float:
+    """Upper bound honoured for a server-sent Retry-After wait (#545).
+
+    Reads ``settings.api.retry_after_max_seconds`` from the decorated instance
+    at call time (the decorator itself has no settings access); falls back to
+    the decorator's ``max_delay`` when the instance has no settings, the field
+    is absent, or the value is unusable.
+    """
+    cap = getattr(_resolve_api_settings(instance), "retry_after_max_seconds", None)
+    # Strict isinstance (not float() coercion): mocks and other proxies can
+    # implement __float__ and would otherwise smuggle in a bogus cap.
+    if isinstance(cap, bool) or not isinstance(cap, (int, float)):
+        return fallback
+    return float(cap)
+
+
+def _resolve_per_fetch_deadline(instance: Any) -> float | None:
+    """Per-fetch wall-clock deadline in seconds, or ``None`` for no deadline (#546).
+
+    Reads ``settings.api.per_fetch_deadline_seconds`` from the decorated
+    instance. Instances with ``settings.api`` but no field (pre-seam) get the
+    frozen 120s default; instances without settings (plain decorated
+    functions) and unusable/non-positive values get no deadline, preserving
+    the historic behavior.
+    """
+    api_settings = _resolve_api_settings(instance)
+    if api_settings is None:
+        return None
+    deadline = getattr(
+        api_settings, "per_fetch_deadline_seconds", DEFAULT_PER_FETCH_DEADLINE_SECONDS
+    )
+    # Strict isinstance (not float() coercion): mocks and other proxies can
+    # implement __float__ and would otherwise impose a bogus ~1s deadline.
+    if isinstance(deadline, bool) or not isinstance(deadline, (int, float)):
+        return None
+    return float(deadline) if deadline > 0 else None
 
 
 def _categorize_error(error: Exception) -> ErrorCategory:

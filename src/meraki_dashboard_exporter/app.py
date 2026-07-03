@@ -8,6 +8,7 @@ import json
 import random
 import time
 from collections.abc import AsyncIterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -144,6 +145,16 @@ class ExporterApp:
 
         self.client = AsyncMerakiClient(self.settings)
 
+        # #544: small dedicated pool for synchronous registry-iteration work
+        # (/metrics generate_latest, _get_metrics_stats, cardinality analysis).
+        # The SDK's own bounded executor (client.executor) becomes the loop's
+        # DEFAULT executor in lifespan, so this separate pool guarantees scrapes
+        # never queue behind blocked SDK threads during a 429 storm (RES-04).
+        self._serving_executor = ThreadPoolExecutor(
+            max_workers=2,
+            thread_name_prefix="registry-serve",
+        )
+
         # Register the static build-info gauge (MET-10): constant value 1 with
         # version/commit labels identifying the running build.
         register_build_info()
@@ -203,6 +214,7 @@ class ExporterApp:
             registry=REGISTRY,
             warning_threshold=1000,
             critical_threshold=10000,
+            settings=self.settings,
         )
 
     def _handle_shutdown(self) -> None:
@@ -340,6 +352,13 @@ class ExporterApp:
             Yields control during application runtime.
 
         """
+        # #544: make the client's dedicated, sized SDK pool the event loop's
+        # default executor. Every SDK call site already uses asyncio.to_thread
+        # (which targets the default executor), so this single line routes all
+        # blocking SDK work onto the bounded "meraki-sdk" pool without touching
+        # the call sites; registry-serving work runs on self._serving_executor.
+        asyncio.get_running_loop().set_default_executor(self.client.executor)
+
         # Enforce the single-organization contract (#585) BEFORE anything reads
         # org_id (inventory warm, discovery, collectors). When org_id is unset
         # and the key sees exactly one org it is auto-selected and written back
@@ -408,8 +427,9 @@ class ExporterApp:
             await self.expiration_manager.stop()
             logger.info("Stopped metric expiration manager")
 
-            # Cleanup
+            # Cleanup (client.close also shuts down the dedicated SDK executor)
             await self.client.close()
+            self._serving_executor.shutdown(wait=False, cancel_futures=True)
 
             # Shutdown tracing
             self.tracing.shutdown()
@@ -594,8 +614,8 @@ class ExporterApp:
 
     async def _cardinality_monitor_loop(self) -> None:
         """Background task for periodic cardinality monitoring."""
-        # Check cardinality every 5 minutes
-        check_interval = 300  # 5 minutes
+        # Cadence is operator-tunable via cardinality.monitor_interval_seconds (#554)
+        check_interval = self.cardinality_monitor.analysis_interval_seconds
 
         # Wait 30 seconds after each collection cycle to ensure metrics are updated
         post_collection_delay = 30  # seconds
@@ -614,8 +634,11 @@ class ExporterApp:
             while not self._shutdown_event.is_set():
                 try:
                     # Run cardinality analysis off the event loop - it iterates
-                    # the whole registry synchronously (F-026).
-                    await asyncio.to_thread(self.cardinality_monitor.analyze_cardinality)
+                    # the whole registry synchronously (F-026) - on the serving
+                    # pool, isolated from blocked SDK threads (#544).
+                    await asyncio.get_running_loop().run_in_executor(
+                        self._serving_executor, self.cardinality_monitor.analyze_cardinality
+                    )
                 except Exception:
                     logger.exception("Error during cardinality analysis")
 
@@ -736,8 +759,10 @@ class ExporterApp:
             org_count = 1 if exporter.settings.meraki.org_id else "All"
 
             # Get real-time metrics stats. This iterates the whole registry
-            # synchronously, so offload it to a worker thread (F-026).
-            metrics_stats = await asyncio.to_thread(exporter._get_metrics_stats)
+            # synchronously, so offload it to the serving pool (F-026/#544).
+            metrics_stats = await asyncio.get_running_loop().run_in_executor(
+                exporter._serving_executor, exporter._get_metrics_stats
+            )
             scheduling = exporter.collector_manager.get_scheduling_diagnostics()
 
             context = {
@@ -796,10 +821,15 @@ class ExporterApp:
         @app.get("/metrics", response_class=Response)
         async def metrics() -> Response:
             """Prometheus metrics endpoint."""
-            # Offload the synchronous registry serialization to a worker thread so
-            # a large registry does not block the event loop (F-026).
+            # Offload the synchronous registry serialization to the dedicated
+            # serving pool so a large registry does not block the event loop
+            # (F-026) and scrapes never queue behind blocked SDK threads (#544:
+            # the default executor is the bounded meraki-sdk pool).
             # prometheus_client's registry is thread-safe.
-            data = await asyncio.to_thread(generate_latest, REGISTRY)
+            exporter = app.state.exporter
+            data = await asyncio.get_running_loop().run_in_executor(
+                exporter._serving_executor, generate_latest, REGISTRY
+            )
 
             return Response(
                 content=data,

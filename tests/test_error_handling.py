@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
@@ -16,6 +17,8 @@ from meraki_dashboard_exporter.core.error_handling import (
     NothingCollectedError,
     RetryableAPIError,
     _categorize_error,  # noqa: PLC2701  (intentionally testing the private categorizer)
+    _resolve_per_fetch_deadline,  # noqa: PLC2701  (deadline seam, #546)
+    _resolve_retry_after_cap,  # noqa: PLC2701  (Retry-After cap seam, #545)
     batch_with_concurrency_limit,
     validate_response_format,
     with_error_handling,
@@ -643,3 +646,227 @@ class TestErrorHandlingIntegration:
 
         # Operation should have taken at least 0.1 seconds
         assert duration >= 0.1
+
+
+class _FakeCollector:
+    """Instance shape used by the runtime settings seams (#545/#546).
+
+    Mirrors just enough of ``MetricCollector``: ``.settings.api.<field>``,
+    ``_track_error`` and ``_track_retry`` recorders.
+    """
+
+    def __init__(self, **api_fields: Any) -> None:
+        self.settings = SimpleNamespace(api=SimpleNamespace(**api_fields))
+        self.tracked_errors: list[ErrorCategory] = []
+        self.tracked_retries: list[tuple[str, str]] = []
+
+    def _track_error(self, category: ErrorCategory) -> None:
+        self.tracked_errors.append(category)
+
+    def _track_retry(self, operation: str, reason: str) -> None:
+        self.tracked_retries.append((operation, reason))
+
+
+class TestRetryAfterCap:
+    """#545: server-sent Retry-After waits are capped by settings."""
+
+    def test_resolve_cap_from_instance_settings(self) -> None:
+        """Cap comes from settings.api.retry_after_max_seconds when present."""
+        instance = _FakeCollector(retry_after_max_seconds=7)
+        assert _resolve_retry_after_cap(instance, 60.0) == 7.0
+
+    def test_resolve_cap_falls_back_without_settings(self) -> None:
+        """No settings on the instance -> the decorator's max_delay fallback."""
+        assert _resolve_retry_after_cap(object(), 60.0) == 60.0
+        assert _resolve_retry_after_cap(None, 45.0) == 45.0
+
+    def test_resolve_cap_falls_back_when_field_missing(self) -> None:
+        """settings.api without the field (pre-seam) -> fallback."""
+        instance = _FakeCollector()
+        assert _resolve_retry_after_cap(instance, 60.0) == 60.0
+
+    @pytest.mark.asyncio
+    async def test_retry_after_wait_capped_by_settings(self) -> None:
+        """A pathological Retry-After (4000s) is bounded to the configured cap."""
+        delays_used: list[float] = []
+
+        async def mock_sleep(delay: float) -> None:
+            delays_used.append(delay)
+
+        instance = _FakeCollector(retry_after_max_seconds=7)
+        call_count = 0
+
+        @with_error_handling(operation="Capped op", max_retries=2, base_delay=1.0)
+        async def method(self: _FakeCollector) -> str:
+            nonlocal call_count
+            call_count += 1
+            raise RetryableAPIError("Rate limit exceeded", retry_after=4000.0)
+
+        with (
+            patch("meraki_dashboard_exporter.core.error_handling.asyncio.sleep", mock_sleep),
+            patch("meraki_dashboard_exporter.core.error_handling.random.uniform", return_value=0),
+        ):
+            result = await method(instance)
+
+        assert result is None
+        assert call_count == 3
+        assert delays_used == [7.0, 7.0]
+
+    @pytest.mark.asyncio
+    async def test_429_status_retry_after_header_capped(self) -> None:
+        """SDK-style 429 (status attr + retry_after) is capped the same way."""
+        delays_used: list[float] = []
+
+        async def mock_sleep(delay: float) -> None:
+            delays_used.append(delay)
+
+        class _RateLimitedError(Exception):
+            status = 429
+            retry_after = 4000.0
+
+        instance = _FakeCollector(retry_after_max_seconds=5)
+        call_count = 0
+
+        @with_error_handling(operation="SDK 429 op", max_retries=3, base_delay=1.0)
+        async def method(self: _FakeCollector) -> str:
+            nonlocal call_count
+            call_count += 1
+            raise _RateLimitedError("429 Too Many Requests")
+
+        with (
+            patch("meraki_dashboard_exporter.core.error_handling.asyncio.sleep", mock_sleep),
+            patch("meraki_dashboard_exporter.core.error_handling.random.uniform", return_value=0),
+        ):
+            result = await method(instance)
+
+        assert result is None
+        # Single 429 owner: exactly 1 + max_retries logical HTTP attempts (#545),
+        # nothing multiplied by an SDK-internal retry loop.
+        assert call_count == 4
+        assert delays_used == [5.0, 5.0, 5.0]
+        assert instance.tracked_errors == [ErrorCategory.API_RATE_LIMIT]
+
+
+class TestPerFetchDeadline:
+    """#546: per-fetch wall-clock deadline with defined timeout semantics."""
+
+    def test_resolve_deadline_from_instance_settings(self) -> None:
+        """The deadline comes from settings.api.per_fetch_deadline_seconds."""
+        instance = _FakeCollector(per_fetch_deadline_seconds=30)
+        assert _resolve_per_fetch_deadline(instance) == 30.0
+
+    def test_resolve_deadline_defaults_when_field_missing(self) -> None:
+        """settings.api present but pre-seam (no field) -> frozen default 120s."""
+        instance = _FakeCollector()
+        assert _resolve_per_fetch_deadline(instance) == 120.0
+
+    def test_resolve_deadline_none_without_settings(self) -> None:
+        """Plain functions (no settings) keep the historic no-deadline behavior."""
+        assert _resolve_per_fetch_deadline(object()) is None
+        assert _resolve_per_fetch_deadline(None) is None
+
+    def test_resolve_deadline_none_for_unusable_values(self) -> None:
+        """Non-positive or mock (non-numeric) values disable the deadline."""
+        instance = _FakeCollector(per_fetch_deadline_seconds=0)
+        assert _resolve_per_fetch_deadline(instance) is None
+        mock_instance = MagicMock()
+        assert _resolve_per_fetch_deadline(mock_instance) is None
+
+    @pytest.mark.asyncio
+    async def test_deadline_cancels_slow_fetch_and_tracks_timeout(self) -> None:
+        """Deadline expiry cancels a slow fetch and tracks a TIMEOUT failure.
+
+        Yields None, so no partial result is returned for emission.
+        """
+        instance = _FakeCollector(per_fetch_deadline_seconds=0.1)
+        started = asyncio.Event()
+
+        @with_error_handling(operation="Slow fetch", continue_on_error=True)
+        async def method(self: _FakeCollector) -> str:
+            started.set()
+            await asyncio.sleep(30)
+            return "late"
+
+        start = asyncio.get_event_loop().time()
+        result = await method(instance)
+        duration = asyncio.get_event_loop().time() - start
+
+        assert started.is_set()
+        assert result is None
+        assert duration < 5.0
+        assert instance.tracked_errors == [ErrorCategory.TIMEOUT]
+
+    @pytest.mark.asyncio
+    async def test_deadline_bounds_rate_limit_backoff(self) -> None:
+        """The deadline also covers 429 backoff waits.
+
+        A throttled fetch cannot sleep past its budget (coordinates #545's
+        bounded, event-loop wait with #546's per-fetch deadline).
+        """
+
+        class _RateLimitedError(Exception):
+            status = 429
+            retry_after = 30.0
+
+        instance = _FakeCollector(
+            per_fetch_deadline_seconds=0.1,
+            retry_after_max_seconds=60,
+        )
+        call_count = 0
+
+        @with_error_handling(operation="Throttled fetch", continue_on_error=True)
+        async def method(self: _FakeCollector) -> str:
+            nonlocal call_count
+            call_count += 1
+            raise _RateLimitedError("429 Too Many Requests")
+
+        start = asyncio.get_event_loop().time()
+        result = await method(instance)
+        duration = asyncio.get_event_loop().time() - start
+
+        assert result is None
+        assert duration < 5.0
+        # First attempt raised instantly; the deadline fired during the first
+        # (event-loop, cancellable) backoff sleep - no further attempts.
+        assert call_count == 1
+        assert instance.tracked_errors == [ErrorCategory.TIMEOUT]
+
+    @pytest.mark.asyncio
+    async def test_deadline_raises_collector_error_when_not_continue(self) -> None:
+        """continue_on_error=False turns deadline expiry into CollectorError(TIMEOUT)."""
+        instance = _FakeCollector(per_fetch_deadline_seconds=0.05)
+
+        @with_error_handling(operation="Strict fetch", continue_on_error=False)
+        async def method(self: _FakeCollector) -> str:
+            await asyncio.sleep(30)
+            return "late"
+
+        with pytest.raises(CollectorError) as exc_info:
+            await method(instance)
+
+        assert exc_info.value.category == ErrorCategory.TIMEOUT
+        assert "deadline" in str(exc_info.value).lower()
+
+    @pytest.mark.asyncio
+    async def test_no_deadline_for_plain_functions(self) -> None:
+        """Undecorated-instance/plain functions run without an implicit deadline."""
+
+        @with_error_handling(operation="Plain op", continue_on_error=True)
+        async def plain_function() -> str:
+            await asyncio.sleep(0.05)
+            return "done"
+
+        assert await plain_function() == "done"
+
+    @pytest.mark.asyncio
+    async def test_func_raised_timeout_still_handled(self) -> None:
+        """A TimeoutError raised *by* the fetch keeps the existing handling."""
+        instance = _FakeCollector(per_fetch_deadline_seconds=60)
+
+        @with_error_handling(operation="Inner timeout", continue_on_error=True)
+        async def method(self: _FakeCollector) -> str:
+            raise TimeoutError("inner timed out")
+
+        result = await method(instance)
+        assert result is None
+        assert instance.tracked_errors == [ErrorCategory.TIMEOUT]

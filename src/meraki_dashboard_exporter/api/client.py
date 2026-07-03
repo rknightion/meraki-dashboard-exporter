@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
 import meraki
@@ -23,10 +24,12 @@ class AsyncMerakiClient:
     """Async wrapper for the Meraki Dashboard API client with comprehensive observability.
 
     Provides:
-    - Async API calls with semaphore-based concurrency control
-    - Automatic retry with exponential backoff on rate limits (429)
-    - Comprehensive metrics (latency, errors, rate limits)
-    - OTEL tracing with detailed span attributes
+    - A dedicated, bounded thread pool for blocking SDK calls (#544), installed
+      by app.py as the event loop's default executor so ``asyncio.to_thread``
+      SDK call sites run on it, isolated from /metrics serving work
+    - SDK 429 retries disabled (#545) - ``core/error_handling.py`` is the
+      single rate-limit retry owner (bounded, event-loop, cancellable waits)
+    - Comprehensive metrics (requests, errors, retries)
     - Thread-safe API client initialization
 
     Parameters
@@ -52,9 +55,25 @@ class AsyncMerakiClient:
         """Initialize the async Meraki client with settings."""
         self.settings = settings
         self._api: meraki.DashboardAPI | None = None
-        self._semaphore = asyncio.Semaphore(settings.api.concurrency_limit)
         self._api_lock = asyncio.Lock()
         self._api_call_count = 0
+
+        # #544: dedicated, sized executor for synchronous SDK calls. app.py
+        # installs it as the event loop's default executor so every existing
+        # ``asyncio.to_thread(self.api...)`` call site runs here, while the
+        # /metrics + registry-iteration work runs on its own small pool - so
+        # scrapes never queue behind blocked SDK threads during a 429 storm.
+        # This pool size is the real global concurrency ceiling for blocking
+        # SDK calls (the per-tier concurrency_limit* knobs are bounded by it);
+        # the former ``_semaphore`` (declared, never acquired) was removed.
+        try:
+            workers = int(getattr(settings.api, "executor_workers", 10))
+        except TypeError, ValueError:
+            workers = 10
+        self._executor = ThreadPoolExecutor(
+            max_workers=workers,
+            thread_name_prefix="meraki-sdk",
+        )
 
         # Initialize API metrics
         self._init_metrics()
@@ -62,9 +81,15 @@ class AsyncMerakiClient:
         logger.debug(
             "Initialized AsyncMerakiClient with observability",
             concurrency_limit=settings.api.concurrency_limit,
+            executor_workers=workers,
             api_timeout=settings.api.timeout,
             max_retries=settings.api.max_retries,
         )
+
+    @property
+    def executor(self) -> ThreadPoolExecutor:
+        """The dedicated thread pool for blocking Meraki SDK calls (#544)."""
+        return self._executor
 
     def _init_metrics(self) -> None:
         """Initialize API client metrics for comprehensive observability."""
@@ -161,7 +186,16 @@ class AsyncMerakiClient:
             maximum_retries=self.settings.api.max_retries,
             action_batch_retry_wait_time=self.settings.api.action_batch_retry_wait,
             nginx_429_retry_wait_time=self.settings.api.rate_limit_retry_wait,
-            wait_on_rate_limit=True,
+            # #545: single 429 retry owner. With wait_on_rate_limit=False the
+            # SDK raises APIError immediately on a 429 (verified against
+            # meraki 3.3.0 RestSession.request: the Retry-After branch is only
+            # entered when _wait_on_rate_limit is truthy) instead of sleeping
+            # int(Retry-After) UNBOUNDED inside the worker thread up to
+            # maximum_retries times. core/error_handling.py::with_error_handling
+            # owns all 429 retries: bounded (retry_after_max_seconds), on the
+            # event loop, cancellable. maximum_retries still governs the SDK's
+            # short (1s) connection-error/5xx/JSON-decode retries.
+            wait_on_rate_limit=False,
             retry_4xx_error=False,  # Don't retry 4xx errors
             caller="merakidashboardexporter rknightion",
             validate_kwargs=self.settings.api.validate_kwargs,
@@ -248,7 +282,12 @@ class AsyncMerakiClient:
         return int(total)
 
     async def close(self) -> None:
-        """Close the API client."""
+        """Close the API client and shut down the dedicated SDK executor.
+
+        Terminal: queued SDK futures are cancelled (#544) and no further SDK
+        calls can be scheduled on this client's executor afterwards.
+        """
         logger.debug("Closing AsyncMerakiClient")
         async with self._api_lock:
             self._api = None
+        self._executor.shutdown(wait=False, cancel_futures=True)
