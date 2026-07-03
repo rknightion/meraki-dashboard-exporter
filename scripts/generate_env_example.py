@@ -114,6 +114,10 @@ def format_default(field_info: FieldInfo) -> str | None:
         return ""
     if isinstance(default, bool):
         return "true" if default else "false"
+    if isinstance(default, (set, frozenset)):
+        # Sort for deterministic output (set iteration order is hash-randomised);
+        # render as a JSON array, which is how pydantic parses a set field from env.
+        return "" if not default else json.dumps(sorted(default, key=str))
     if isinstance(default, (list, dict)):
         return "" if not default else json.dumps(default)
     return str(default)

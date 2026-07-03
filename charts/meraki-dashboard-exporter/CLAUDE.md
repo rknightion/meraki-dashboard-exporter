@@ -33,12 +33,24 @@ container image — the chart is a recent addition (started publishing per the
   exactly the shape that caused the original bug.
   - Both `apiKey` and `existingSecret` set, or neither set, is a hard `fail` at render time (see
     `validateApiKey` above) — that part is intentional, not a bug to relax.
-- **Config is entirely env-var driven**, not a mounted file: `templates/configmap.yaml` maps every
-  `values.yaml` `config.*` / `service.port` / `meraki.organizationId` key to a
-  `MERAKI_EXPORTER_<SECTION>__<KEY>` env var (double-underscore = nested Pydantic Settings
-  delimiter — matches `src/meraki_dashboard_exporter/core/config.py`'s `Settings`). Adding a new
-  configurable setting means adding a `values.yaml` key **and** a corresponding line in
-  `configmap.yaml` (or `deployment.yaml`'s env block for secrets) — the two are not auto-synced.
+- **Config is entirely env-var driven**, not a mounted file: `templates/configmap.yaml` maps
+  `config.*` keys to `MERAKI_EXPORTER_<SECTION>__<KEY>` env vars (double-underscore = nested Pydantic
+  Settings delimiter — matches `src/meraki_dashboard_exporter/core/config.py`'s `Settings`).
+- **The `config:` knobs are GENERATED, not hand-maintained.** Both the `config: {}` block in
+  `values.yaml` and the `MERAKI_EXPORTER_*` mapping in `configmap.yaml` are written between
+  `# >>> BEGIN generated config knobs ... >>>` / `# <<< END ... <<<` markers by
+  `scripts/generate_helm_config.py` (run via `make docgen`). Every non-secret `Settings` leaf is
+  exposed as a friendly camelCase `config.*` key, commented at its schema default. **Do NOT hand-edit
+  inside the markers** — a config-schema change plus a `make docgen` run is the whole workflow; the
+  `values.yaml` key and `configmap.yaml` line are generated together, never separately. Each knob is
+  `hasKey`-guarded and wrapped in `{{- with .Values.config }}`, so an unset/all-default `config`
+  emits nothing and the app falls back to its own defaults. `tests/test_helm_config_drift.py` fails
+  the build if the chart drifts from the schema.
+  - **Hand-wired specials live OUTSIDE the markers** in `configmap.yaml`: `MERAKI__ORG_ID` (from
+    `meraki.organizationId`) and `SERVER__PORT` (from `service.port`). The API key
+    (`MERAKI__API_KEY`) is a Secret (see above), and **secret-typed settings are excluded from the
+    ConfigMap entirely** — e.g. `WEBHOOKS__SHARED_SECRET` / `SERVER__API_TOKEN` must be injected via
+    `extraEnv` from a Secret, never templated into the plaintext ConfigMap.
 - **Pod restart on config/secret change** is via `checksum/config` + `checksum/secret` annotations
   in `deployment.yaml`, computed by hashing the *rendered* configmap.yaml/secret.yaml templates —
   standard Helm pattern, but note `secret.yaml` renders to an empty string when
@@ -114,10 +126,11 @@ helm lint charts/meraki-dashboard-exporter
 set — that's the validation working, not a broken default).
 
 ## Adding a new `config.*` setting
-1. Add the key (with a `# --` doc comment) to `values.yaml` under `config:`.
-2. Add the matching `MERAKI_EXPORTER_<SECTION>__<KEY>` line to `templates/configmap.yaml`.
-3. Confirm the env var name matches the nested Pydantic `Settings` model in
-   `src/meraki_dashboard_exporter/core/config.py` / `config_models.py`.
+The `config:` knobs are generated — you do **not** hand-edit the chart. Add the field to the Pydantic
+`Settings` model (`core/config_models.py`), then run `make docgen` (or
+`python scripts/generate_helm_config.py`). Both the `values.yaml` knob and the `configmap.yaml` env
+line appear automatically. Secret-typed (`SecretStr`) fields are intentionally excluded — expose those
+via `extraEnv` from a Secret. `tests/test_helm_config_drift.py` fails if you forget to regenerate.
 </paved_path>
 
 <fatal_implications>

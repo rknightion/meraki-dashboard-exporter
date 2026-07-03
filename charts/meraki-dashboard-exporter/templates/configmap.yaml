@@ -6,39 +6,341 @@ metadata:
   labels:
     {{- include "meraki-dashboard-exporter.labels" . | nindent 4 }}
 data:
-  # Logging
-  MERAKI_EXPORTER_LOGGING__LEVEL: {{ .Values.config.logLevel | quote }}
-
-  # Meraki API settings
+  # Hand-wired specials sourced from higher-level chart values (NOT config.* knobs).
   {{- if .Values.meraki.organizationId }}
   MERAKI_EXPORTER_MERAKI__ORG_ID: {{ .Values.meraki.organizationId | quote }}
   {{- end }}
-  MERAKI_EXPORTER_MERAKI__API_BASE_URL: {{ .Values.config.apiBaseUrl | quote }}
-
-  # API behaviour
-  MERAKI_EXPORTER_API__TIMEOUT: {{ .Values.config.apiTimeout | quote }}
-  MERAKI_EXPORTER_API__CONCURRENCY_LIMIT: {{ .Values.config.apiConcurrencyLimit | quote }}
-  MERAKI_EXPORTER_API__MAX_RETRIES: {{ .Values.config.apiMaxRetries | quote }}
-
-  # Update intervals
-  MERAKI_EXPORTER_UPDATE_INTERVALS__FAST: {{ .Values.config.updateIntervalFast | quote }}
-  MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM: {{ .Values.config.updateIntervalMedium | quote }}
-  MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW: {{ .Values.config.updateIntervalSlow | quote }}
-
-  # Server
   MERAKI_EXPORTER_SERVER__PORT: {{ .Values.service.port | quote }}
 
-  # Collectors
-  {{- if .Values.config.collectorTimeout }}
-  MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT: {{ .Values.config.collectorTimeout | quote }}
+  # Every config.* knob below is generated from the Pydantic config schema by
+  # scripts/generate_helm_config.py (run `make docgen`). Each renders only when the
+  # operator sets its values key, so an unset/all-default `config` emits nothing here
+  # and the application falls back to its own defaults. Do NOT hand-edit this region.
+  # >>> BEGIN generated config knobs (scripts/generate_helm_config.py) >>>
+  {{- with .Values.config }}
+  {{- if hasKey . "apiBaseUrl" }}
+  MERAKI_EXPORTER_MERAKI__API_BASE_URL: {{ .apiBaseUrl | quote }}
   {{- end }}
-
-  # Webhooks
-  MERAKI_EXPORTER_WEBHOOKS__ENABLED: {{ .Values.config.webhooksEnabled | quote }}
-
-  # OpenTelemetry
-  MERAKI_EXPORTER_OTEL__ENABLED: {{ .Values.config.otelEnabled | quote }}
-  MERAKI_EXPORTER_OTEL__SERVICE_NAME: {{ .Values.config.otelServiceName | quote }}
-  {{- if .Values.config.otelEndpoint }}
-  MERAKI_EXPORTER_OTEL__ENDPOINT: {{ .Values.config.otelEndpoint | quote }}
+  {{- if hasKey . "logLevel" }}
+  MERAKI_EXPORTER_LOGGING__LEVEL: {{ .logLevel | quote }}
   {{- end }}
+  {{- if hasKey . "loggingLogFormat" }}
+  MERAKI_EXPORTER_LOGGING__LOG_FORMAT: {{ .loggingLogFormat | quote }}
+  {{- end }}
+  {{- if hasKey . "apiMaxRetries" }}
+  MERAKI_EXPORTER_API__MAX_RETRIES: {{ .apiMaxRetries | quote }}
+  {{- end }}
+  {{- if hasKey . "apiTimeout" }}
+  MERAKI_EXPORTER_API__TIMEOUT: {{ .apiTimeout | quote }}
+  {{- end }}
+  {{- if hasKey . "apiConcurrencyLimit" }}
+  MERAKI_EXPORTER_API__CONCURRENCY_LIMIT: {{ .apiConcurrencyLimit | quote }}
+  {{- end }}
+  {{- if hasKey . "apiConcurrencyLimitFast" }}
+  MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_FAST: {{ .apiConcurrencyLimitFast | quote }}
+  {{- end }}
+  {{- if hasKey . "apiConcurrencyLimitMedium" }}
+  MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_MEDIUM: {{ .apiConcurrencyLimitMedium | quote }}
+  {{- end }}
+  {{- if hasKey . "apiConcurrencyLimitSlow" }}
+  MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_SLOW: {{ .apiConcurrencyLimitSlow | quote }}
+  {{- end }}
+  {{- if hasKey . "apiBatchSize" }}
+  MERAKI_EXPORTER_API__BATCH_SIZE: {{ .apiBatchSize | quote }}
+  {{- end }}
+  {{- if hasKey . "apiDeviceBatchSize" }}
+  MERAKI_EXPORTER_API__DEVICE_BATCH_SIZE: {{ .apiDeviceBatchSize | quote }}
+  {{- end }}
+  {{- if hasKey . "apiNetworkBatchSize" }}
+  MERAKI_EXPORTER_API__NETWORK_BATCH_SIZE: {{ .apiNetworkBatchSize | quote }}
+  {{- end }}
+  {{- if hasKey . "apiClientBatchSize" }}
+  MERAKI_EXPORTER_API__CLIENT_BATCH_SIZE: {{ .apiClientBatchSize | quote }}
+  {{- end }}
+  {{- if hasKey . "apiBatchDelay" }}
+  MERAKI_EXPORTER_API__BATCH_DELAY: {{ .apiBatchDelay | quote }}
+  {{- end }}
+  {{- if hasKey . "apiRateLimitRetryWait" }}
+  MERAKI_EXPORTER_API__RATE_LIMIT_RETRY_WAIT: {{ .apiRateLimitRetryWait | quote }}
+  {{- end }}
+  {{- if hasKey . "apiActionBatchRetryWait" }}
+  MERAKI_EXPORTER_API__ACTION_BATCH_RETRY_WAIT: {{ .apiActionBatchRetryWait | quote }}
+  {{- end }}
+  {{- if hasKey . "apiValidateKwargs" }}
+  MERAKI_EXPORTER_API__VALIDATE_KWARGS: {{ .apiValidateKwargs | quote }}
+  {{- end }}
+  {{- if hasKey . "apiRequestsProxy" }}
+  MERAKI_EXPORTER_API__REQUESTS_PROXY: {{ .apiRequestsProxy | quote }}
+  {{- end }}
+  {{- if hasKey . "apiCertificatePath" }}
+  MERAKI_EXPORTER_API__CERTIFICATE_PATH: {{ .apiCertificatePath | quote }}
+  {{- end }}
+  {{- if hasKey . "apiRateLimitEnabled" }}
+  MERAKI_EXPORTER_API__RATE_LIMIT_ENABLED: {{ .apiRateLimitEnabled | quote }}
+  {{- end }}
+  {{- if hasKey . "apiRateLimitRequestsPerSecond" }}
+  MERAKI_EXPORTER_API__RATE_LIMIT_REQUESTS_PER_SECOND: {{ .apiRateLimitRequestsPerSecond | quote }}
+  {{- end }}
+  {{- if hasKey . "apiRateLimitBurst" }}
+  MERAKI_EXPORTER_API__RATE_LIMIT_BURST: {{ .apiRateLimitBurst | quote }}
+  {{- end }}
+  {{- if hasKey . "apiRateLimitSharedFraction" }}
+  MERAKI_EXPORTER_API__RATE_LIMIT_SHARED_FRACTION: {{ .apiRateLimitSharedFraction | quote }}
+  {{- end }}
+  {{- if hasKey . "apiRateLimitJitterRatio" }}
+  MERAKI_EXPORTER_API__RATE_LIMIT_JITTER_RATIO: {{ .apiRateLimitJitterRatio | quote }}
+  {{- end }}
+  {{- if hasKey . "apiSmoothingEnabled" }}
+  MERAKI_EXPORTER_API__SMOOTHING_ENABLED: {{ .apiSmoothingEnabled | quote }}
+  {{- end }}
+  {{- if hasKey . "apiSmoothingWindowRatio" }}
+  MERAKI_EXPORTER_API__SMOOTHING_WINDOW_RATIO: {{ .apiSmoothingWindowRatio | quote }}
+  {{- end }}
+  {{- if hasKey . "apiSmoothingMinBatchDelay" }}
+  MERAKI_EXPORTER_API__SMOOTHING_MIN_BATCH_DELAY: {{ .apiSmoothingMinBatchDelay | quote }}
+  {{- end }}
+  {{- if hasKey . "apiSmoothingMaxBatchDelay" }}
+  MERAKI_EXPORTER_API__SMOOTHING_MAX_BATCH_DELAY: {{ .apiSmoothingMaxBatchDelay | quote }}
+  {{- end }}
+  {{- if hasKey . "apiMsPortStatusUseOrgEndpoint" }}
+  MERAKI_EXPORTER_API__MS_PORT_STATUS_USE_ORG_ENDPOINT: {{ .apiMsPortStatusUseOrgEndpoint | quote }}
+  {{- end }}
+  {{- if hasKey . "apiMsPortUsageInterval" }}
+  MERAKI_EXPORTER_API__MS_PORT_USAGE_INTERVAL: {{ .apiMsPortUsageInterval | quote }}
+  {{- end }}
+  {{- if hasKey . "apiMsPacketStatsInterval" }}
+  MERAKI_EXPORTER_API__MS_PACKET_STATS_INTERVAL: {{ .apiMsPacketStatsInterval | quote }}
+  {{- end }}
+  {{- if hasKey . "apiClientAppUsageInterval" }}
+  MERAKI_EXPORTER_API__CLIENT_APP_USAGE_INTERVAL: {{ .apiClientAppUsageInterval | quote }}
+  {{- end }}
+  {{- if hasKey . "apiClientSignalQualityInterval" }}
+  MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_INTERVAL: {{ .apiClientSignalQualityInterval | quote }}
+  {{- end }}
+  {{- if hasKey . "apiClientSignalQualityMaxClients" }}
+  MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_MAX_CLIENTS: {{ .apiClientSignalQualityMaxClients | quote }}
+  {{- end }}
+  {{- if hasKey . "apiRetryAfterMaxSeconds" }}
+  MERAKI_EXPORTER_API__RETRY_AFTER_MAX_SECONDS: {{ .apiRetryAfterMaxSeconds | quote }}
+  {{- end }}
+  {{- if hasKey . "apiExecutorWorkers" }}
+  MERAKI_EXPORTER_API__EXECUTOR_WORKERS: {{ .apiExecutorWorkers | quote }}
+  {{- end }}
+  {{- if hasKey . "apiPerFetchDeadlineSeconds" }}
+  MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS: {{ .apiPerFetchDeadlineSeconds | quote }}
+  {{- end }}
+  {{- if hasKey . "updateIntervalFast" }}
+  MERAKI_EXPORTER_UPDATE_INTERVALS__FAST: {{ .updateIntervalFast | quote }}
+  {{- end }}
+  {{- if hasKey . "updateIntervalMedium" }}
+  MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM: {{ .updateIntervalMedium | quote }}
+  {{- end }}
+  {{- if hasKey . "updateIntervalSlow" }}
+  MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW: {{ .updateIntervalSlow | quote }}
+  {{- end }}
+  {{- if hasKey . "serverHost" }}
+  MERAKI_EXPORTER_SERVER__HOST: {{ .serverHost | quote }}
+  {{- end }}
+  {{- if hasKey . "serverUiEnabled" }}
+  MERAKI_EXPORTER_SERVER__UI_ENABLED: {{ .serverUiEnabled | quote }}
+  {{- end }}
+  {{- if hasKey . "webhooksEnabled" }}
+  MERAKI_EXPORTER_WEBHOOKS__ENABLED: {{ .webhooksEnabled | quote }}
+  {{- end }}
+  {{- if hasKey . "webhooksRequireSecret" }}
+  MERAKI_EXPORTER_WEBHOOKS__REQUIRE_SECRET: {{ .webhooksRequireSecret | quote }}
+  {{- end }}
+  {{- if hasKey . "webhooksAllowInsecure" }}
+  MERAKI_EXPORTER_WEBHOOKS__ALLOW_INSECURE: {{ .webhooksAllowInsecure | quote }}
+  {{- end }}
+  {{- if hasKey . "webhooksMaxPayloadSize" }}
+  MERAKI_EXPORTER_WEBHOOKS__MAX_PAYLOAD_SIZE: {{ .webhooksMaxPayloadSize | quote }}
+  {{- end }}
+  {{- if hasKey . "otelEnabled" }}
+  MERAKI_EXPORTER_OTEL__ENABLED: {{ .otelEnabled | quote }}
+  {{- end }}
+  {{- if hasKey . "otelEndpoint" }}
+  MERAKI_EXPORTER_OTEL__ENDPOINT: {{ .otelEndpoint | quote }}
+  {{- end }}
+  {{- if hasKey . "otelInsecure" }}
+  MERAKI_EXPORTER_OTEL__INSECURE: {{ .otelInsecure | quote }}
+  {{- end }}
+  {{- if hasKey . "otelServiceName" }}
+  MERAKI_EXPORTER_OTEL__SERVICE_NAME: {{ .otelServiceName | quote }}
+  {{- end }}
+  {{- if hasKey . "otelSamplingRate" }}
+  MERAKI_EXPORTER_OTEL__SAMPLING_RATE: {{ .otelSamplingRate | quote }}
+  {{- end }}
+  {{- if hasKey . "otelResourceAttributes" }}
+  MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES: {{ .otelResourceAttributes | quote }}
+  {{- end }}
+  {{- if hasKey . "otelLogsEnabled" }}
+  MERAKI_EXPORTER_OTEL__LOGS__ENABLED: {{ .otelLogsEnabled | quote }}
+  {{- end }}
+  {{- if hasKey . "otelLogsEndpoint" }}
+  MERAKI_EXPORTER_OTEL__LOGS__ENDPOINT: {{ .otelLogsEndpoint | quote }}
+  {{- end }}
+  {{- if hasKey . "otelLogsInsecure" }}
+  MERAKI_EXPORTER_OTEL__LOGS__INSECURE: {{ .otelLogsInsecure | quote }}
+  {{- end }}
+  {{- if hasKey . "otelLogsIncludeIdentifiers" }}
+  MERAKI_EXPORTER_OTEL__LOGS__INCLUDE_IDENTIFIERS: {{ .otelLogsIncludeIdentifiers | quote }}
+  {{- end }}
+  {{- if hasKey . "otelLogsEvents" }}
+  MERAKI_EXPORTER_OTEL__LOGS__EVENTS: {{ .otelLogsEvents | quote }}
+  {{- end }}
+  {{- if hasKey . "otelMetricsEnabled" }}
+  MERAKI_EXPORTER_OTEL__METRICS__ENABLED: {{ .otelMetricsEnabled | quote }}
+  {{- end }}
+  {{- if hasKey . "otelMetricsEndpoint" }}
+  MERAKI_EXPORTER_OTEL__METRICS__ENDPOINT: {{ .otelMetricsEndpoint | quote }}
+  {{- end }}
+  {{- if hasKey . "otelMetricsInsecure" }}
+  MERAKI_EXPORTER_OTEL__METRICS__INSECURE: {{ .otelMetricsInsecure | quote }}
+  {{- end }}
+  {{- if hasKey . "otelMetricsExportIntervalSeconds" }}
+  MERAKI_EXPORTER_OTEL__METRICS__EXPORT_INTERVAL_SECONDS: {{ .otelMetricsExportIntervalSeconds | quote }}
+  {{- end }}
+  {{- if hasKey . "otelMetricsInclude" }}
+  MERAKI_EXPORTER_OTEL__METRICS__INCLUDE: {{ .otelMetricsInclude | quote }}
+  {{- end }}
+  {{- if hasKey . "otelMetricsTemporality" }}
+  MERAKI_EXPORTER_OTEL__METRICS__TEMPORALITY: {{ .otelMetricsTemporality | quote }}
+  {{- end }}
+  {{- if hasKey . "otelCaCertPath" }}
+  MERAKI_EXPORTER_OTEL__CA_CERT_PATH: {{ .otelCaCertPath | quote }}
+  {{- end }}
+  {{- if hasKey . "otelClientCertPath" }}
+  MERAKI_EXPORTER_OTEL__CLIENT_CERT_PATH: {{ .otelClientCertPath | quote }}
+  {{- end }}
+  {{- if hasKey . "otelClientKeyPath" }}
+  MERAKI_EXPORTER_OTEL__CLIENT_KEY_PATH: {{ .otelClientKeyPath | quote }}
+  {{- end }}
+  {{- if hasKey . "monitoringMaxConsecutiveFailures" }}
+  MERAKI_EXPORTER_MONITORING__MAX_CONSECUTIVE_FAILURES: {{ .monitoringMaxConsecutiveFailures | quote }}
+  {{- end }}
+  {{- if hasKey . "monitoringHistogramBuckets" }}
+  MERAKI_EXPORTER_MONITORING__HISTOGRAM_BUCKETS: {{ .monitoringHistogramBuckets | quote }}
+  {{- end }}
+  {{- if hasKey . "monitoringLicenseExpirationWarningDays" }}
+  MERAKI_EXPORTER_MONITORING__LICENSE_EXPIRATION_WARNING_DAYS: {{ .monitoringLicenseExpirationWarningDays | quote }}
+  {{- end }}
+  {{- if hasKey . "monitoringMetricTtlMultiplier" }}
+  MERAKI_EXPORTER_MONITORING__METRIC_TTL_MULTIPLIER: {{ .monitoringMetricTtlMultiplier | quote }}
+  {{- end }}
+  {{- if hasKey . "monitoringMaxCardinalityPerCollector" }}
+  MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR: {{ .monitoringMaxCardinalityPerCollector | quote }}
+  {{- end }}
+  {{- if hasKey . "monitoringLivenessMaxStaleSeconds" }}
+  MERAKI_EXPORTER_MONITORING__LIVENESS_MAX_STALE_SECONDS: {{ .monitoringLivenessMaxStaleSeconds | quote }}
+  {{- end }}
+  {{- if hasKey . "collectorsEnabledCollectors" }}
+  MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS: {{ .collectorsEnabledCollectors | quote }}
+  {{- end }}
+  {{- if hasKey . "collectorsDisableCollectors" }}
+  MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS: {{ .collectorsDisableCollectors | quote }}
+  {{- end }}
+  {{- if hasKey . "collectorTimeout" }}
+  MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT: {{ .collectorTimeout | quote }}
+  {{- end }}
+  {{- if hasKey . "collectorsCollectApSignalQuality" }}
+  MERAKI_EXPORTER_COLLECTORS__COLLECT_AP_SIGNAL_QUALITY: {{ .collectorsCollectApSignalQuality | quote }}
+  {{- end }}
+  {{- if hasKey . "collectorsApSignalQualityTags" }}
+  MERAKI_EXPORTER_COLLECTORS__AP_SIGNAL_QUALITY_TAGS: {{ .collectorsApSignalQualityTags | quote }}
+  {{- end }}
+  {{- if hasKey . "collectorsCollectInsight" }}
+  MERAKI_EXPORTER_COLLECTORS__COLLECT_INSIGHT: {{ .collectorsCollectInsight | quote }}
+  {{- end }}
+  {{- if hasKey . "collectorsInsightAppHealthEnabled" }}
+  MERAKI_EXPORTER_COLLECTORS__INSIGHT_APP_HEALTH_ENABLED: {{ .collectorsInsightAppHealthEnabled | quote }}
+  {{- end }}
+  {{- if hasKey . "cardinalityMaxSeriesPerFamily" }}
+  MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY: {{ .cardinalityMaxSeriesPerFamily | quote }}
+  {{- end }}
+  {{- if hasKey . "cardinalityAction" }}
+  MERAKI_EXPORTER_CARDINALITY__ACTION: {{ .cardinalityAction | quote }}
+  {{- end }}
+  {{- if hasKey . "cardinalityDisabledMetrics" }}
+  MERAKI_EXPORTER_CARDINALITY__DISABLED_METRICS: {{ .cardinalityDisabledMetrics | quote }}
+  {{- end }}
+  {{- if hasKey . "cardinalityMonitorIntervalSeconds" }}
+  MERAKI_EXPORTER_CARDINALITY__MONITOR_INTERVAL_SECONDS: {{ .cardinalityMonitorIntervalSeconds | quote }}
+  {{- end }}
+  {{- if hasKey . "cardinalityMonitorMaxLabelValues" }}
+  MERAKI_EXPORTER_CARDINALITY__MONITOR_MAX_LABEL_VALUES: {{ .cardinalityMonitorMaxLabelValues | quote }}
+  {{- end }}
+  {{- if hasKey . "clientsEnabled" }}
+  MERAKI_EXPORTER_CLIENTS__ENABLED: {{ .clientsEnabled | quote }}
+  {{- end }}
+  {{- if hasKey . "clientsDnsTimeout" }}
+  MERAKI_EXPORTER_CLIENTS__DNS_TIMEOUT: {{ .clientsDnsTimeout | quote }}
+  {{- end }}
+  {{- if hasKey . "clientsDnsCacheTtl" }}
+  MERAKI_EXPORTER_CLIENTS__DNS_CACHE_TTL: {{ .clientsDnsCacheTtl | quote }}
+  {{- end }}
+  {{- if hasKey . "clientsDnsCacheMaxEntries" }}
+  MERAKI_EXPORTER_CLIENTS__DNS_CACHE_MAX_ENTRIES: {{ .clientsDnsCacheMaxEntries | quote }}
+  {{- end }}
+  {{- if hasKey . "clientsCacheTtl" }}
+  MERAKI_EXPORTER_CLIENTS__CACHE_TTL: {{ .clientsCacheTtl | quote }}
+  {{- end }}
+  {{- if hasKey . "clientsMaxClientsPerNetwork" }}
+  MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_PER_NETWORK: {{ .clientsMaxClientsPerNetwork | quote }}
+  {{- end }}
+  {{- if hasKey . "clientsMaxClientsTotal" }}
+  MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_TOTAL: {{ .clientsMaxClientsTotal | quote }}
+  {{- end }}
+  {{- if hasKey . "clientsSignalQualityEnabled" }}
+  MERAKI_EXPORTER_CLIENTS__SIGNAL_QUALITY_ENABLED: {{ .clientsSignalQualityEnabled | quote }}
+  {{- end }}
+  {{- if hasKey . "networkFilterIncludeNames" }}
+  MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_NAMES: {{ .networkFilterIncludeNames | quote }}
+  {{- end }}
+  {{- if hasKey . "networkFilterIncludeIds" }}
+  MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_IDS: {{ .networkFilterIncludeIds | quote }}
+  {{- end }}
+  {{- if hasKey . "networkFilterIncludeTags" }}
+  MERAKI_EXPORTER_NETWORK_FILTER__INCLUDE_TAGS: {{ .networkFilterIncludeTags | quote }}
+  {{- end }}
+  {{- if hasKey . "networkFilterExcludeNames" }}
+  MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_NAMES: {{ .networkFilterExcludeNames | quote }}
+  {{- end }}
+  {{- if hasKey . "networkFilterExcludeIds" }}
+  MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_IDS: {{ .networkFilterExcludeIds | quote }}
+  {{- end }}
+  {{- if hasKey . "networkFilterExcludeTags" }}
+  MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_TAGS: {{ .networkFilterExcludeTags | quote }}
+  {{- end }}
+  {{- if hasKey . "schedulerMode" }}
+  MERAKI_EXPORTER_SCHEDULER__MODE: {{ .schedulerMode | quote }}
+  {{- end }}
+  {{- if hasKey . "schedulerTargetUtilization" }}
+  MERAKI_EXPORTER_SCHEDULER__TARGET_UTILIZATION: {{ .schedulerTargetUtilization | quote }}
+  {{- end }}
+  {{- if hasKey . "schedulerMaxStretchFactor" }}
+  MERAKI_EXPORTER_SCHEDULER__MAX_STRETCH_FACTOR: {{ .schedulerMaxStretchFactor | quote }}
+  {{- end }}
+  {{- if hasKey . "schedulerMaxIntervalSeconds" }}
+  MERAKI_EXPORTER_SCHEDULER__MAX_INTERVAL_SECONDS: {{ .schedulerMaxIntervalSeconds | quote }}
+  {{- end }}
+  {{- if hasKey . "schedulerResolveIntervalSeconds" }}
+  MERAKI_EXPORTER_SCHEDULER__RESOLVE_INTERVAL_SECONDS: {{ .schedulerResolveIntervalSeconds | quote }}
+  {{- end }}
+  {{- if hasKey . "schedulerAimdEnabled" }}
+  MERAKI_EXPORTER_SCHEDULER__AIMD_ENABLED: {{ .schedulerAimdEnabled | quote }}
+  {{- end }}
+  {{- if hasKey . "schedulerAimdBackoffMultiplier" }}
+  MERAKI_EXPORTER_SCHEDULER__AIMD_BACKOFF_MULTIPLIER: {{ .schedulerAimdBackoffMultiplier | quote }}
+  {{- end }}
+  {{- if hasKey . "schedulerAimdRecoveryRpsPerMinute" }}
+  MERAKI_EXPORTER_SCHEDULER__AIMD_RECOVERY_RPS_PER_MINUTE: {{ .schedulerAimdRecoveryRpsPerMinute | quote }}
+  {{- end }}
+  {{- if hasKey . "schedulerAimdResolveHysteresis" }}
+  MERAKI_EXPORTER_SCHEDULER__AIMD_RESOLVE_HYSTERESIS: {{ .schedulerAimdResolveHysteresis | quote }}
+  {{- end }}
+  {{- if hasKey . "schedulerGroupIntervalOverrides" }}
+  MERAKI_EXPORTER_SCHEDULER__GROUP_INTERVAL_OVERRIDES: {{ .schedulerGroupIntervalOverrides | quote }}
+  {{- end }}
+  {{- end }}
+  # <<< END generated config knobs <<<

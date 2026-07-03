@@ -132,36 +132,236 @@ meraki:
   # -- Meraki organization ID. Leave empty to collect metrics from all accessible organizations.
   organizationId: ""
 
-# Application configuration (maps to MERAKI_EXPORTER_* environment variables)
-config:
-  # -- Log level. One of DEBUG, INFO, WARNING, ERROR, CRITICAL.
-  logLevel: "INFO"
-  # -- Meraki API base URL. Change for regional endpoints (e.g. China).
-  apiBaseUrl: "https://api.meraki.com/api/v1"
-  # -- API request timeout in seconds.
-  apiTimeout: "30"
-  # -- Maximum concurrent API requests.
-  apiConcurrencyLimit: "5"
-  # -- Maximum retries for failed API requests.
-  apiMaxRetries: "3"
-  # -- Fast update interval in seconds (sensors, real-time metrics).
-  updateIntervalFast: "60"
-  # -- Medium update interval in seconds (device metrics).
-  updateIntervalMedium: "300"
-  # -- Slow update interval in seconds (configuration, inventory).
-  updateIntervalSlow: "900"
-  # -- Timeout for individual collector runs in seconds. Leave empty ("") to
-  # inherit the application's own default (currently 240s) instead of pinning
-  # a chart-specific value that can drift from it.
-  collectorTimeout: ""
-  # -- Enable webhook receiver endpoint.
-  webhooksEnabled: "false"
-  # -- Enable OpenTelemetry tracing.
-  otelEnabled: "false"
-  # -- OpenTelemetry collector endpoint (OTLP gRPC). Required when otelEnabled is true.
-  otelEndpoint: ""
-  # -- OpenTelemetry service name.
-  otelServiceName: "meraki-dashboard-exporter"
+# Application configuration (maps to MERAKI_EXPORTER_* environment variables).
+#
+# Every tuning knob the exporter exposes is listed below, commented at its schema
+# default with the field's own description. Uncomment and change only what you
+# need -- anything left commented falls through to the application's built-in
+# default. Names are friendly camelCase.
+#
+# GENERATED region: the block between the BEGIN/END markers is written by
+# scripts/generate_helm_config.py from the Pydantic config schema. Do NOT hand-edit
+# it -- run `make docgen` to refresh after a config change. Add non-generated
+# overrides (if ever needed) OUTSIDE the markers.
+config: {}
+  # >>> BEGIN generated config knobs (scripts/generate_helm_config.py) >>>
+  # -- Meraki API base URL (use regional endpoints if needed)
+  # apiBaseUrl: "https://api.meraki.com/api/v1"
+  # -- Logging level (case-insensitive; normalised to upper-case)
+  # logLevel: "INFO"
+  # -- Structured-log renderer: 'logfmt' (default) or 'json'.
+  # loggingLogFormat: "logfmt"
+  # -- Maximum number of retries for API requests (min: 0, max: 10)
+  # apiMaxRetries: "3"
+  # -- Per-request API timeout in seconds (SDK single_request_timeout). Note this applies to EACH page request, so a total_pages='all' bulk fetch may make many such requests; the overall fetch is additionally bounded by per_fetch_deadline_seconds. Reviewed for large-org bulk fetches (#556): kept at 30s (raise only if large-org page latencies are observed to exceed it). (min: 10, max: 300)
+  # apiTimeout: "30"
+  # -- Maximum concurrent API requests (global fallback) (min: 1, max: 20)
+  # apiConcurrencyLimit: "5"
+  # -- Maximum concurrent API requests for FAST tier collectors (min: 1, max: 20)
+  # apiConcurrencyLimitFast: "5"
+  # -- Maximum concurrent API requests for MEDIUM tier collectors (min: 1, max: 20)
+  # apiConcurrencyLimitMedium: "3"
+  # -- Maximum concurrent API requests for SLOW tier collectors (min: 1, max: 20)
+  # apiConcurrencyLimitSlow: "2"
+  # -- Default batch size for API operations (min: 1, max: 100)
+  # apiBatchSize: "20"
+  # -- Batch size for device operations (min: 1, max: 100)
+  # apiDeviceBatchSize: "20"
+  # -- Batch size for network operations (min: 1, max: 100)
+  # apiNetworkBatchSize: "30"
+  # -- Batch size for client operations (e.g., MR client metrics) (min: 1, max: 100)
+  # apiClientBatchSize: "20"
+  # -- Delay between batches in seconds (min: 0.0, max: 5.0)
+  # apiBatchDelay: "0.5"
+  # -- Wait time in seconds when rate limited (min: 1, max: 60)
+  # apiRateLimitRetryWait: "5"
+  # -- Wait time for action batch retries (min: 1, max: 60)
+  # apiActionBatchRetryWait: "10"
+  # -- When True, the Meraki SDK logs warnings if API methods are called with unrecognized kwargs. Recommended for dev/CI; off by default in production.
+  # apiValidateKwargs: "false"
+  # -- HTTPS proxy URL for Meraki API requests (SDK requests_proxy); when unset the requests HTTPS_PROXY/NO_PROXY env vars still apply.
+  # apiRequestsProxy: ""
+  # -- Path to a custom CA bundle for verifying the Meraki API TLS cert (SDK certificate_path); mount into read-only containers as a volume.
+  # apiCertificatePath: ""
+  # -- Enable client-side rate limiting to smooth API calls
+  # apiRateLimitEnabled: "true"
+  # -- Target requests per second per organization (min: 1.0, max: 50.0)
+  # apiRateLimitRequestsPerSecond: "10.0"
+  # -- Token bucket burst capacity per organization (min: 1, max: 100)
+  # apiRateLimitBurst: "20"
+  # -- Fraction of the org API call budget this exporter is allowed to consume. Defaults to 0.8 so ~20% headroom is left for other consumers of the same org budget (dashboards, other tools, humans); set to 1.0 to claim the whole budget (#550). (min: 0.1, max: 1.0)
+  # apiRateLimitSharedFraction: "0.8"
+  # -- Jitter ratio applied to client-side rate limiter waits (min: 0.0, max: 0.5)
+  # apiRateLimitJitterRatio: "0.1"
+  # -- Spread batch work across the collection interval
+  # apiSmoothingEnabled: "true"
+  # -- Fraction of the collection interval used for smoothing (min: 0.1, max: 1.0)
+  # apiSmoothingWindowRatio: "0.8"
+  # -- Minimum delay between batches when smoothing (min: 0.0, max: 60.0)
+  # apiSmoothingMinBatchDelay: "1.0"
+  # -- Maximum delay between batches when smoothing (min: 0.0, max: 300.0)
+  # apiSmoothingMaxBatchDelay: "15.0"
+  # -- Use org-level switch port status endpoint for MS status metrics
+  # apiMsPortStatusUseOrgEndpoint: "true"
+  # -- Minimum seconds between per-switch port usage/POE refreshes (min: 0, max: 3600)
+  # apiMsPortUsageInterval: "600"
+  # -- Minimum seconds between per-switch packet stats refreshes (min: 0, max: 3600)
+  # apiMsPacketStatsInterval: "600"
+  # -- Minimum seconds between client application usage refreshes (min: 0, max: 3600)
+  # apiClientAppUsageInterval: "600"
+  # -- Minimum seconds between per-client wireless signal-quality refreshes (min: 0, max: 3600)
+  # apiClientSignalQualityInterval: "600"
+  # -- Maximum wireless clients queried for signal quality per network per cycle (0 disables the cap). Bounds the sequential per-client API fan-out. (min: 0, max: 5000)
+  # apiClientSignalQualityMaxClients: "200"
+  # -- Upper bound (seconds) honoured for a server-sent Retry-After header when backing off a throttled (429/503) request. Caps pathological Retry-After values so a single throttled request cannot stall a collection cycle indefinitely. (min: 1, max: 3600)
+  # apiRetryAfterMaxSeconds: "60"
+  # -- Size of the thread pool used to run the synchronous Meraki SDK off the event loop (the asyncio.to_thread executor). Bounds the number of concurrent blocking SDK calls independently of the per-tier API concurrency limits. (min: 1, max: 100)
+  # apiExecutorWorkers: "10"
+  # -- Wall-clock deadline (seconds) for a single logical fetch, including all paginated page requests made under total_pages='all'. Sits between the SDK per-request timeout (see 'timeout') and the per-collector timeout so a slow bulk fetch fails fast instead of consuming the whole collector budget. (min: 1, max: 600)
+  # apiPerFetchDeadlineSeconds: "120"
+  # -- Interval for fast-moving data (sensors) in seconds (min: 30, max: 300)
+  # updateIntervalFast: "60"
+  # -- Interval for medium-moving data (device metrics) in seconds (min: 300, max: 1800)
+  # updateIntervalMedium: "300"
+  # -- Interval for slow-moving data (configuration) in seconds (min: 600, max: 3600)
+  # updateIntervalSlow: "900"
+  # -- Host to bind the exporter to
+  # serverHost: "0.0.0.0"
+  # -- When false, sensitive GET UI/status endpoints return 404 (metrics/health/ready stay open).
+  # serverUiEnabled: "true"
+  # -- Enable webhook receiver endpoint
+  # webhooksEnabled: "false"
+  # -- Require shared secret validation (disable for testing only)
+  # webhooksRequireSecret: "true"
+  # -- Explicit opt-in to run the webhook receiver enabled without require_secret; startup refuses the insecure combo unless this is true.
+  # webhooksAllowInsecure: "false"
+  # -- Maximum webhook payload size in bytes (min: 1024, max: 10485760)
+  # webhooksMaxPayloadSize: "1048576"
+  # -- Enable OpenTelemetry tracing
+  # otelEnabled: "false"
+  # -- OpenTelemetry collector endpoint (OTLP gRPC)
+  # otelEndpoint: ""
+  # -- Send OTLP traces over an insecure (non-TLS) channel. Set False to use TLS/system-trust-store transport to the collector endpoint.
+  # otelInsecure: "true"
+  # -- Service name for OpenTelemetry tracing
+  # otelServiceName: "meraki-dashboard-exporter"
+  # -- Trace sampling rate (0.0-1.0). 0 disables sampling, 1 samples every trace, values in between use ratio-based parent sampling. (min: 0.0, max: 1.0)
+  # otelSamplingRate: "0.1"
+  # -- Additional resource attributes for OpenTelemetry
+  # otelResourceAttributes: ""
+  # -- Enable the OTLP data-log emitter for high-cardinality per-entity product data. Independent of otel.enabled (tracing). Off by default.
+  # otelLogsEnabled: "false"
+  # -- OTLP gRPC endpoint for data logs. When None, falls back to otel.endpoint. An endpoint must resolve (own or inherited) when logs.enabled is True.
+  # otelLogsEndpoint: ""
+  # -- Send OTLP data logs over an insecure (non-TLS) channel. When None, inherits otel.insecure.
+  # otelLogsInsecure: ""
+  # -- PII opt-in. When False (default), the emitter drops identifier attributes (client.mac / client.hostname / client.description) from every record; only stable IDs (client.id) are emitted. Set True to include the human-readable identifiers.
+  # otelLogsIncludeIdentifiers: "false"
+  # -- Per-data-class allowlist of built-in data-log event names (see DataLogEvent in core/otel_data_logs.py, e.g. "meraki.wireless.client.packet_loss"). None (default) enables all built-in events; an explicit list enables only the named events. Env: JSON array.
+  # otelLogsEvents: ""
+  # -- Enable the OTLP metrics bridge (push a periodic snapshot of the Prometheus registry via OTLP gRPC). Independent of otel.enabled (tracing) and otel.logs.enabled. Off by default; the /metrics scrape is unchanged either way.
+  # otelMetricsEnabled: "false"
+  # -- OTLP gRPC endpoint for metrics. When None, falls back to otel.endpoint. Must resolve (own or inherited) when metrics.enabled is True.
+  # otelMetricsEndpoint: ""
+  # -- Send OTLP metrics over an insecure (non-TLS) channel. When None, inherits otel.insecure.
+  # otelMetricsInsecure: ""
+  # -- Seconds between registry snapshots pushed via OTLP. (min: 10, max: 3600)
+  # otelMetricsExportIntervalSeconds: "60"
+  # -- Which telemetry plane to push, keyed on the metric-name prefix split: "product" = meraki_* excluding meraki_exporter_*; "self" = everything else (meraki_exporter_* plus the process/python runtime families); "all" = both.
+  # otelMetricsInclude: "all"
+  # -- Counter/histogram temporality. v1 accepts only 'cumulative' (Grafana Cloud expects cumulative; prometheus_client counters are cumulative-since-start, so this is the only faithful translation).
+  # otelMetricsTemporality: "cumulative"
+  # -- Path to a CA certificate (PEM) used to verify the OTLP collector's TLS certificate, shared by all three OTLP channels (traces, data logs, metrics). Paths only - no inline PEM material (#314).
+  # otelCaCertPath: ""
+  # -- Path to a client certificate (PEM) for mTLS to the OTLP collector, shared by all three OTLP channels. Must be set together with client_key_path (#314).
+  # otelClientCertPath: ""
+  # -- Path to a client private key (PEM) for mTLS to the OTLP collector, shared by all three OTLP channels. Must be set together with client_cert_path (#314).
+  # otelClientKeyPath: ""
+  # -- Maximum consecutive failures before alerting (min: 1, max: 100)
+  # monitoringMaxConsecutiveFailures: "10"
+  # -- Histogram buckets for collector duration metrics
+  # monitoringHistogramBuckets: "[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0]"
+  # -- Days before license expiration to start warning (min: 7, max: 90)
+  # monitoringLicenseExpirationWarningDays: "30"
+  # -- Multiplier for metric TTL (collection_interval * multiplier) (min: 1.0, max: 10.0)
+  # monitoringMetricTtlMultiplier: "2.0"
+  # -- Maximum number of tracked label sets per collector before shedding oldest (min: 100, max: 1000000)
+  # monitoringMaxCardinalityPerCollector: "10000"
+  # -- Dead-man switch threshold. /health returns 503 once no collector has completed a successful run within this many seconds, so Kubernetes/Docker restart a wedged exporter instead of leaving it serving stale metrics. 0 (default) auto-derives the threshold from the fastest *enabled* tier's interval (3 x that interval), so a stalled fast loop trips liveness promptly without slower tiers causing false positives. Set a large value to effectively disable. (min: 0, max: 86400)
+  # monitoringLivenessMaxStaleSeconds: "0"
+  # -- Enabled collector names
+  # collectorsEnabledCollectors: "["alerts", "clients", "config", "device", "insight", "mtsensor", "mtsensoralerts", "networkhealth", "organization"]"
+  # -- Explicitly disabled collectors (overrides enabled)
+  # collectorsDisableCollectors: ""
+  # -- Timeout for individual collector runs in seconds (min: 30, max: 600)
+  # collectorTimeout: "240"
+  # -- Collect per-AP wireless signal quality (RSSI/SNR). Costs ONE API call per selected AP per cycle (hourly cadence; no bulk endpoint exists). Scope the fan-out with ap_signal_quality_tags, or disable entirely.
+  # collectorsCollectApSignalQuality: "true"
+  # -- Meraki device tags scoping AP signal-quality collection. Empty = all APs; non-empty = only APs carrying at least one of these tags (CSV or JSON array).
+  # collectorsApSignalQualityTags: ""
+  # -- Enable the Meraki Insight collector (license-gated WAN/application health). Off by default; degrades to a debug-level skip when the org lacks Insight.
+  # collectorsCollectInsight: "false"
+  # -- When collect_insight is on, also fan out per-network application health (one call per network x monitored application per cycle).
+  # collectorsInsightAppHealthEnabled: "true"
+  # -- Maximum number of active time series permitted per metric family (metric name). When a family exceeds this, ``action`` decides what happens. (min: 100, max: 10000000)
+  # cardinalityMaxSeriesPerFamily: "50000"
+  # -- What to do when a metric family exceeds max_series_per_family: 'warn' logs and keeps emitting; 'drop' stops emitting new series for that family.
+  # cardinalityAction: "warn"
+  # -- Metric family names to disable entirely (never emitted). Accepts a comma-separated string or a JSON array via env (MERAKI_EXPORTER_CARDINALITY__DISABLED_METRICS=a,b,c).
+  # cardinalityDisabledMetrics: ""
+  # -- How often (seconds) the cardinality monitor samples the registry. (min: 10, max: 3600)
+  # cardinalityMonitorIntervalSeconds: "300"
+  # -- Maximum distinct values retained per label when the cardinality monitor tracks label-value breakdowns, bounding the monitor's own memory. (min: 1, max: 100000)
+  # cardinalityMonitorMaxLabelValues: "100"
+  # -- Enable client data collection
+  # clientsEnabled: "false"
+  # -- DNS lookup timeout in seconds (min: 0.5, max: 10.0)
+  # clientsDnsTimeout: "5.0"
+  # -- DNS cache TTL in seconds (default: 6 hours) (min: 300, max: 86400)
+  # clientsDnsCacheTtl: "21600"
+  # -- Maximum number of reverse-DNS cache entries (and per-client IP-tracking entries) held in memory. When exceeded, expired entries are pruned first, then the oldest entries are evicted so RSS stays bounded under sustained client churn (#543). (min: 1000, max: 5000000)
+  # clientsDnsCacheMaxEntries: "100000"
+  # -- Client cache TTL in seconds (for ID/hostname mappings, not metrics) (min: 300, max: 86400)
+  # clientsCacheTtl: "3600"
+  # -- Maximum clients to track per network (min: 100, max: 50000)
+  # clientsMaxClientsPerNetwork: "10000"
+  # -- Global cap on clients emitted as metric series across ALL networks per collection cycle. Clients beyond the cap are dropped from metric emission with a warning and counted in meraki_exporter_clients_over_cap. (min: 100, max: 1000000)
+  # clientsMaxClientsTotal: "25000"
+  # -- Enable per-client wireless signal quality (RSSI/SNR) collection. Costs one API call per wireless client per cycle (interval-gated); prohibitively expensive at scale, so disabled by default.
+  # clientsSignalQualityEnabled: "false"
+  # -- Network name globs to include. Supports * and ? wildcards.
+  # networkFilterIncludeNames: ""
+  # -- Exact network IDs (e.g. L_xxx) to include.
+  # networkFilterIncludeIds: ""
+  # -- Network tags to include. A network matches if it carries any of these tags.
+  # networkFilterIncludeTags: ""
+  # -- Network name globs to exclude. Applied AFTER includes.
+  # networkFilterExcludeNames: ""
+  # -- Exact network IDs to exclude.
+  # networkFilterExcludeIds: ""
+  # -- Network tags to exclude.
+  # networkFilterExcludeTags: ""
+  # -- 'adaptive' (default): solver stretches endpoint-group intervals to fit the API budget. 'fixed': floors/pins only, no stretching, no AIMD (transition fallback).
+  # schedulerMode: "adaptive"
+  # -- Fraction of the effective budget the solver plans to; headroom absorbs bursts. (min: 0.1, max: 1.0)
+  # schedulerTargetUtilization: "0.7"
+  # -- Per-group interval cap as a multiple of its volatility floor. (min: 1.0, max: 16.0)
+  # schedulerMaxStretchFactor: "4.0"
+  # -- Absolute per-group interval cap. (min: 300, max: 86400)
+  # schedulerMaxIntervalSeconds: "3600"
+  # -- How often the solver recomputes from org shape (matches inventory TTL). (min: 60, max: 86400)
+  # schedulerResolveIntervalSeconds: "900"
+  # -- 429/Retry-After budget feedback (adaptive mode only).
+  # schedulerAimdEnabled: "true"
+  # -- (min: 0.1, max: 0.9)
+  # schedulerAimdBackoffMultiplier: "0.5"
+  # -- (min: 0.01, max: 5.0)
+  # schedulerAimdRecoveryRpsPerMinute: "0.1"
+  # -- (min: 0.05, max: 1.0)
+  # schedulerAimdResolveHysteresis: "0.2"
+  # -- Per-group interval pins, e.g. {"nh_connection_stats": 900}. Pinned groups are excluded from solver stretching. Env: JSON object.
+  # schedulerGroupIntervalOverrides: ""
+  # <<< END generated config knobs <<<
 
 # -- Resource requests and limits.
 #
