@@ -477,6 +477,42 @@ class TestMXCollector:
         assert labels["org_id"] == "org1"
         assert "org_name" not in labels
 
+    async def test_collect_performance_score_none_response_skips_gracefully(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A None response (#642, e.g. DevNet's MX100) must not raise DataValidationError.
+
+        Some MX models/states have no performance score available at all and the
+        SDK returns None rather than a dict -- that must be treated as "no score
+        available" (no metric, no error), and the serial must still be marked
+        collected so it isn't retry-hammered every cycle.
+        """
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value=None)
+
+        device = {"serial": "Q2AB-1234-5678", "model": "MX68", "orgId": "org1"}
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mx.time.time", return_value=3_000.0
+        ):
+            # Should not raise - the None-guard must trigger before
+            # validate_response_format would otherwise raise DataValidationError.
+            await mx_collector.collect(device)
+        assert mock_api.appliance.getDeviceAppliancePerformance.call_count == 1
+        mock_parent._set_metric.assert_not_called()
+
+        # Immediate second cycle, well inside the 900s group interval: the
+        # serial was marked collected on the None response, so the call is
+        # throttled out rather than repeated every cycle.
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mx.time.time",
+            return_value=3_000.0 + 1,
+        ):
+            await mx_collector.collect(device)
+        assert mock_api.appliance.getDeviceAppliancePerformance.call_count == 1
+
     async def test_collect_skips_performance_score_for_z_series_teleworker_gateway(
         self,
         mx_collector: MXCollector,

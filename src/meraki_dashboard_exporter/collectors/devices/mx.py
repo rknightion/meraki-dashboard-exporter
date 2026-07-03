@@ -300,6 +300,24 @@ class MXCollector(BaseDeviceCollector):
             timespan=1800,
         )
 
+        # #642: some MX models/states (observed on DevNet's MX100) have no
+        # performance score available at all and the SDK returns None rather
+        # than a dict. That is "no score available", not an error -- guard for
+        # it BEFORE validate_response_format (which would otherwise raise
+        # DataValidationError and flood error logs at the ~2/min fan-out rate).
+        # Mark the serial collected so it isn't retry-hammered every cycle,
+        # mirroring the "mark after a successful fetch" ordering below, and
+        # skip emission. Only None is swallowed here -- a genuine error-shaped
+        # dict (e.g. {"errors": [...]}) still falls through to
+        # validate_response_format and is handled/logged as a real failure.
+        if resp is None:
+            self._mark_performance_collected(serial)
+            logger.debug(
+                "No performance score available for MX device",
+                serial=serial,
+            )
+            return
+
         resp = validate_response_format(
             resp,
             expected_type=dict,
