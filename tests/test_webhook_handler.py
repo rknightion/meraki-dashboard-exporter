@@ -153,17 +153,19 @@ class TestWebhookHandlerProcessing:
         assert result.alert_type == "settings_changed"
         assert result.device_serial == "Q2XX-XXXX-XXXX"
 
-        # Check that events were tracked
+        # Metric labels are bounded (SEC-03 / #561): the payload org "org_123"
+        # is not the configured org ("123456") so it buckets to "other"; the
+        # known alert_type "settings_changed" passes through.
         received_metric = REGISTRY.get_sample_value(
             "meraki_webhook_events_received_total",
-            {"org_id": "org_123", "alert_type": "settings_changed"},
+            {"org_id": "other", "alert_type": "settings_changed"},
         )
         assert received_metric is not None
         assert received_metric > 0
 
         processed_metric = REGISTRY.get_sample_value(
             "meraki_webhook_events_processed_total",
-            {"org_id": "org_123", "alert_type": "settings_changed"},
+            {"org_id": "other", "alert_type": "settings_changed"},
         )
         assert processed_metric is not None
         assert processed_metric > 0
@@ -225,10 +227,11 @@ class TestWebhookHandlerProcessing:
         assert result.network_id is None
         assert result.device_serial is None
 
-        # Should track with "unknown" alert type
+        # Should track with bounded labels: unknown org -> "other", missing
+        # alert_type -> "unknown".
         metric_value = REGISTRY.get_sample_value(
             "meraki_webhook_events_received_total",
-            {"org_id": "org_123", "alert_type": "unknown"},
+            {"org_id": "other", "alert_type": "unknown"},
         )
         assert metric_value is not None
         assert metric_value > 0
@@ -242,7 +245,7 @@ class TestWebhookHandlerProcessing:
         # Check that processing duration histogram has samples
         # Note: We can't easily check the actual value, but we can check it exists
         histogram = webhook_handler.processing_duration.labels(
-            org_id="org_123",
+            org_id="other",
             alert_type="settings_changed",
         )
         # The histogram should have been observed at least once
@@ -282,59 +285,71 @@ class TestWebhookHandlerMetrics:
         assert webhook_handler.processing_duration is not None
         assert webhook_handler.validation_failures is not None
 
-    def test_multiple_webhooks_tracked_separately(
+    def test_known_org_and_unknown_org_bounded(
         self, webhook_handler: WebhookHandler, valid_payload: dict
     ) -> None:
-        """Test that webhooks from different orgs are tracked separately."""
-        # Process first webhook
-        webhook_handler.process_webhook(valid_payload)
+        """A configured org keeps its id; an unknown org buckets to 'other' (#561).
 
-        # Process second webhook with different org
+        The handler is configured for org "123456", so a webhook from that org
+        keeps ``org_id="123456"`` while an unknown org id buckets to ``other``
+        (bounded cardinality) rather than minting a new label value.
+        """
+        # First webhook from the configured org.
+        payload1 = valid_payload.copy()
+        payload1["organizationId"] = "123456"
+        webhook_handler.process_webhook(payload1)
+
+        # Second webhook from an unknown org.
         payload2 = valid_payload.copy()
         payload2["organizationId"] = "org_456"
         webhook_handler.process_webhook(payload2)
 
-        # Check that both orgs were tracked
-        org1_metric = REGISTRY.get_sample_value(
+        known_metric = REGISTRY.get_sample_value(
             "meraki_webhook_events_received_total",
-            {"org_id": "org_123", "alert_type": "settings_changed"},
+            {"org_id": "123456", "alert_type": "settings_changed"},
         )
-        org2_metric = REGISTRY.get_sample_value(
+        other_metric = REGISTRY.get_sample_value(
             "meraki_webhook_events_received_total",
-            {"org_id": "org_456", "alert_type": "settings_changed"},
+            {"org_id": "other", "alert_type": "settings_changed"},
         )
 
-        assert org1_metric is not None
-        assert org2_metric is not None
-        assert org1_metric > 0
-        assert org2_metric > 0
+        assert known_metric == 1
+        assert other_metric == 1
+        # The attacker-supplied org id never becomes a label value.
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_webhook_events_received_total",
+                {"org_id": "org_456", "alert_type": "settings_changed"},
+            )
+            is None
+        )
 
     def test_different_alert_types_tracked(
         self, webhook_handler: WebhookHandler, valid_payload: dict
     ) -> None:
-        """Test that different alert types are tracked separately."""
-        # Process first alert type
+        """Test that distinct known alert types are tracked separately."""
+        # First: a known alert type.
         webhook_handler.process_webhook(valid_payload)
 
-        # Process second alert type
+        # Second: a different known alert type.
         payload2 = valid_payload.copy()
-        payload2["alertType"] = "offline_device"
+        payload2["alertType"] = "motion_detected"
         webhook_handler.process_webhook(payload2)
 
-        # Check that both alert types were tracked
+        # Both known alert types are tracked (org buckets to "other").
         settings_metric = REGISTRY.get_sample_value(
             "meraki_webhook_events_received_total",
-            {"org_id": "org_123", "alert_type": "settings_changed"},
+            {"org_id": "other", "alert_type": "settings_changed"},
         )
-        offline_metric = REGISTRY.get_sample_value(
+        motion_metric = REGISTRY.get_sample_value(
             "meraki_webhook_events_received_total",
-            {"org_id": "org_123", "alert_type": "offline_device"},
+            {"org_id": "other", "alert_type": "motion_detected"},
         )
 
         assert settings_metric is not None
-        assert offline_metric is not None
+        assert motion_metric is not None
         assert settings_metric > 0
-        assert offline_metric > 0
+        assert motion_metric > 0
 
 
 class TestWebhookHandlerEdgeCases:

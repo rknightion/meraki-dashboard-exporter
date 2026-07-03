@@ -11,7 +11,11 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from prometheus_client import REGISTRY
+from prometheus_client.registry import CollectorRegistry
+
 from ..core.constants import UpdateTier
+from ..core.constants.metrics_constants import NetworkMetricName
 from ..core.org_health import OrgHealth
 
 if TYPE_CHECKING:
@@ -19,6 +23,7 @@ if TYPE_CHECKING:
     from ..collectors.manager import CollectorManager
     from ..core.config import Settings
     from ..core.metric_expiration import MetricExpirationManager
+    from ..core.webhook_handler import WebhookHandler
 
 
 def _compute_staleness(
@@ -131,6 +136,48 @@ class OrgHealthStatus:
 
 
 @dataclass
+class NetworkFilterStatus:
+    """Effective state of the configured ``NetworkFilter`` (#311).
+
+    Surfaces both the parsed filter rules (so an operator can see whether a
+    glob/tag typo was parsed as intended) and the per-org resolved/total
+    network counts, read from the same ``meraki_network_filter_*`` gauges the
+    inventory already emits (single source of truth).
+    """
+
+    is_active: bool
+    include_names: list[str]
+    include_ids: list[str]
+    include_tags: list[str]
+    exclude_names: list[str]
+    exclude_ids: list[str]
+    exclude_tags: list[str]
+    # [{"org_id": ..., "total_networks": int, "resolved_networks": int}]
+    per_org: list[dict[str, Any]]
+
+
+@dataclass
+class WebhookStatus:
+    """Health of the webhook receiver pipeline (#317).
+
+    Only populated when the webhook receiver is enabled. Counts come from the
+    live ``WebhookHandler`` in-memory counters; ``events_by_type`` keys are the
+    bounded ``alert_type`` values (never raw attacker input).
+    """
+
+    enabled: bool
+    require_secret: bool
+    events_received: int
+    events_processed: int
+    events_failed: int
+    validation_failures: int
+    last_event_time: float | None
+    last_event_ago: str
+    last_alert_type: str | None
+    events_by_type: dict[str, int]
+
+
+@dataclass
 class SystemStatus:
     """Overall system status information."""
 
@@ -138,6 +185,98 @@ class SystemStatus:
     uptime: str
     readiness: dict[str, Any]
     org_health: list[OrgHealthStatus]
+
+
+def _read_network_filter_gauges(
+    registry: CollectorRegistry,
+) -> list[dict[str, Any]]:
+    """Read per-org network-filter counts from the emitted Prometheus gauges.
+
+    Uses ``meraki_network_filter_networks`` (total discovered) and
+    ``meraki_network_filter_resolved`` (included by the filter) so /status
+    renders the same source of truth as the metrics, not a second computation.
+    """
+    total_name = NetworkMetricName.NETWORK_FILTER_NETWORKS.value
+    resolved_name = NetworkMetricName.NETWORK_FILTER_RESOLVED.value
+    totals: dict[str, int] = {}
+    resolved: dict[str, int] = {}
+    for family in registry.collect():
+        if family.name == total_name:
+            for sample in family.samples:
+                org = sample.labels.get("org_id")
+                if org is not None:
+                    totals[org] = int(sample.value)
+        elif family.name == resolved_name:
+            for sample in family.samples:
+                org = sample.labels.get("org_id")
+                if org is not None:
+                    resolved[org] = int(sample.value)
+    per_org: list[dict[str, Any]] = []
+    for org in sorted(set(totals) | set(resolved)):
+        per_org.append({
+            "org_id": org,
+            "total_networks": totals.get(org, 0),
+            "resolved_networks": resolved.get(org, totals.get(org, 0)),
+        })
+    return per_org
+
+
+def build_network_filter_status(
+    settings: Settings,
+    registry: CollectorRegistry | None = None,
+) -> NetworkFilterStatus:
+    """Build the effective ``NetworkFilter`` status view (#311)."""
+    nf = settings.network_filter
+    reg = registry if registry is not None else REGISTRY
+    return NetworkFilterStatus(
+        is_active=nf.is_active,
+        include_names=list(nf.include_names),
+        include_ids=list(nf.include_ids),
+        include_tags=list(nf.include_tags),
+        exclude_names=list(nf.exclude_names),
+        exclude_ids=list(nf.exclude_ids),
+        exclude_tags=list(nf.exclude_tags),
+        per_org=_read_network_filter_gauges(reg),
+    )
+
+
+def build_webhook_status(
+    handler: WebhookHandler | None,
+    settings: Settings,
+    now: float | None = None,
+) -> WebhookStatus | None:
+    """Build the webhook-receiver status view (#317).
+
+    Returns ``None`` when the webhook receiver is disabled (no handler), so the
+    /status surface omits the section entirely rather than reporting zeros.
+    """
+    if handler is None or not settings.webhooks.enabled:
+        return None
+    stats = handler.get_status()
+    return WebhookStatus(
+        enabled=True,
+        require_secret=settings.webhooks.require_secret,
+        events_received=stats["events_received"],
+        events_processed=stats["events_processed"],
+        events_failed=stats["events_failed"],
+        validation_failures=stats["validation_failures"],
+        last_event_time=stats["last_event_time"],
+        last_event_ago=_format_time_ago(stats["last_event_time"], now),
+        last_alert_type=stats["last_alert_type"],
+        events_by_type=stats["events_by_type"],
+    )
+
+
+def build_effective_config(settings: Settings) -> dict[str, Any]:
+    """Build a redacted, JSON-safe view of the effective configuration (#312).
+
+    Redaction relies on Pydantic's ``SecretStr`` masking: ``model_dump(mode="json")``
+    renders every secret field (``meraki.api_key``, ``webhooks.shared_secret``,
+    ``server.api_token``) as ``"**********"`` rather than its value, so this is
+    the single canonical redaction path (aligns with SEC-07 / #564). Never build
+    this dict from raw attribute access, which would bypass that masking.
+    """
+    return settings.model_dump(mode="json")
 
 
 @dataclass
@@ -164,6 +303,8 @@ class StatusSnapshot:
     collectors: list[CollectorStatus]
     api_health: ApiHealthStatus
     data_freshness: DataFreshnessStatus
+    network_filter: NetworkFilterStatus | None = None
+    webhook: WebhookStatus | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the snapshot to a plain dictionary for JSON serialization."""
@@ -180,6 +321,7 @@ class StatusService:
         client: AsyncMerakiClient,
         settings: Settings,
         start_time: float,
+        webhook_handler: WebhookHandler | None = None,
     ) -> None:
         """Initialise the status service.
 
@@ -195,6 +337,9 @@ class StatusService:
             Application settings including update intervals.
         start_time : float
             Unix timestamp when the exporter was started.
+        webhook_handler : WebhookHandler | None
+            The live webhook receiver, when enabled, for surfacing its health
+            on /status (#317). ``None`` when the receiver is disabled.
 
         """
         self._manager = collector_manager
@@ -202,6 +347,7 @@ class StatusService:
         self._client = client
         self._settings = settings
         self._start_time = start_time
+        self._webhook_handler = webhook_handler
 
     def get_snapshot(self) -> StatusSnapshot:
         """Build and return a point-in-time health snapshot of the exporter."""
@@ -305,10 +451,16 @@ class StatusService:
             org_health=org_health_list,
         )
 
+        # Effective NetworkFilter state (#311) and webhook receiver health (#317).
+        network_filter = build_network_filter_status(self._settings)
+        webhook = build_webhook_status(self._webhook_handler, self._settings, now)
+
         return StatusSnapshot(
             timestamp=datetime.now(UTC).isoformat(),
             system=system,
             collectors=collectors,
             api_health=api_health,
             data_freshness=data_freshness,
+            network_filter=network_filter,
+            webhook=webhook,
         )

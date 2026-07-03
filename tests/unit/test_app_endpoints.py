@@ -796,15 +796,15 @@ class TestSettingsHelpers:
         assert "collectors" in result
 
     def test_china_region_timeout_adjustment(self) -> None:
-        """Test that China region URL triggers timeout adjustment."""
+        """Test that the canonical China region URL triggers timeout adjustment (#518)."""
         settings = Settings(
             meraki=MerakiSettings(
                 api_key=SecretStr("test_api_key_at_least_30_characters_long"),
                 org_id="123456",
-                api_base_url="https://api.meraki.china.example.com/api/v1",
+                api_base_url="https://api.meraki.cn/api/v1",
             ),
         )
-        # With "china" in URL and default timeout < 45, should be bumped to 45
+        # With the canonical China host (api.meraki.cn) and default timeout < 45, bump to 45
         assert settings.api.timeout >= 45
 
 

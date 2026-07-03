@@ -139,4 +139,6 @@ class TestStatusEndpointJSON:
             "collectors",
             "api_health",
             "data_freshness",
+            "network_filter",
+            "webhook",
         }

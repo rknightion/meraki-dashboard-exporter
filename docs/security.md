@@ -85,27 +85,88 @@ container environment that holds `MERAKI_EXPORTER_MERAKI__API_KEY` as sensitive.
 
 ### Endpoint authentication
 
-The exporter serves two categories of HTTP endpoint (see the
+The exporter serves three categories of HTTP endpoint (see the
 [HTTP Endpoints reference](reference/endpoints.md) for the full list):
 
-- **Read-only `GET` endpoints** (`/metrics`, `/status`, `/health`, `/ready`,
-  `/clients`, `/cardinality`, ...) are **always unauthenticated**. They expose
-  operational metrics and health data but no secrets and no control surface.
+- **Always-open endpoints** (`/metrics`, `/health`, `/ready`) — `/metrics` must
+  stay reachable by your Prometheus scraper, and `/health` / `/ready` are
+  orchestrator probes. These are never gated.
+- **Sensitive `GET` UIs** (`/`, `/status`, `/config`, `/clients`,
+  `/cardinality*`, `/api/metrics/cardinality`) — these expose PII and
+  operational detail (see the threat model below). They are open by default but
+  can be **token-gated** (`MERAKI_EXPORTER_SERVER__API_TOKEN`) and/or
+  **suppressed entirely** (`MERAKI_EXPORTER_SERVER__UI_ENABLED=false`).
 - **State-changing `POST` control endpoints** — `/api/collectors/trigger`
   (force an on-demand collector run) and `/api/clients/clear-dns-cache` — can
-  optionally be protected by a bearer token.
+  optionally be protected by the same bearer token.
 
-Set `MERAKI_EXPORTER_SERVER__API_TOKEN` to require callers of those two POSTs to
-send `Authorization: Bearer <token>`. When it is unset (the default), those
-POSTs are unauthenticated. The webhook receiver
-(`POST /api/webhooks/meraki`) is gated separately by its own shared secret
+Set `MERAKI_EXPORTER_SERVER__API_TOKEN` to require callers of the sensitive GET
+UIs and the control POSTs to send `Authorization: Bearer <token>` (a
+constant-time compare). When it is unset (the default), those endpoints are
+unauthenticated. The webhook receiver (`POST /api/webhooks/meraki`) is gated
+separately by its own shared secret
 (`MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET`), not by this token.
 
-**Recommended posture.** Because all GETs are unauthenticated and the control
-POSTs default to open, bind the exporter to a trusted interface / private
-network and expose only `/metrics` to your Prometheus scraper. Set
-`MERAKI_EXPORTER_SERVER__API_TOKEN` if the control POSTs are reachable from any
-network segment you do not fully trust.
+### Endpoint exposure & threat model
+
+**Default posture is unauthenticated and plaintext.** The exporter binds
+`0.0.0.0:9099` with no TLS and, by default, no auth on any endpoint. Anyone who
+can reach the port can read everything below. This is acceptable **only** on a
+trusted/private interface; for any other deployment apply the mitigations that
+follow.
+
+What each endpoint exposes:
+
+| Endpoint | Method | Exposes | PII? | Mitigation |
+| --- | --- | --- | --- | --- |
+| `/metrics` | GET | All metric series: full device/network topology, label values | Low (topology) | Keep open for Prometheus; restrict at the network layer |
+| `/` | GET | Collector health, tier schedule, org count | No | `ui_enabled=false` |
+| `/status` | GET | Topology-ish health, org health, network-filter state, webhook health | No | token / `ui_enabled=false` |
+| `/config` | GET | Effective configuration (secrets masked as `**********`) | No (redacted) | token / `ui_enabled=false` |
+| `/clients` | GET | **Client MAC / IP / hostname / username** | **Yes** | token / `ui_enabled=false` |
+| `/cardinality*`, `/api/metrics/cardinality` | GET | Metric + label-value surface | Low | token / `ui_enabled=false` |
+| `/api/collectors/trigger` | POST | Burns org API-rate-limit budget on demand | No | `api_token` |
+| `/api/clients/clear-dns-cache` | POST | Clears DNS cache | No | `api_token` |
+| `/api/webhooks/meraki` | POST | Ingest surface | No | shared secret |
+
+**Mitigations (v1).**
+
+- **Bearer token** — set `MERAKI_EXPORTER_SERVER__API_TOKEN`. Sensitive GET UIs
+  and control POSTs then require `Authorization: Bearer <token>`; `/metrics` and
+  the probes stay open so Prometheus/Kubernetes keep working.
+- **Suppress the UI** — set `MERAKI_EXPORTER_SERVER__UI_ENABLED=false` to drop
+  the human UI surface (`/`, `/status`, `/config`, `/clients`, `/cardinality*`)
+  entirely; they return `404`. Use this when you only need `/metrics` scraped
+  and want no PII/detail surface at all.
+- **Reverse proxy + TLS (recommended for any exposed deployment).** Terminate
+  TLS and authenticate at a reverse proxy (nginx / Traefik / Caddy / an ingress
+  controller) in front of the exporter, and forward only `/metrics` to your
+  scraper. Example nginx sketch:
+
+  ```nginx
+  server {
+    listen 443 ssl;
+    ssl_certificate     /etc/ssl/exporter.crt;
+    ssl_certificate_key /etc/ssl/exporter.key;
+
+    # Only expose /metrics to the scraper; everything else stays internal.
+    location = /metrics {
+      allow 10.0.0.0/8;   # Prometheus subnet
+      deny  all;
+      proxy_pass http://127.0.0.1:9099;
+    }
+    location / { deny all; }
+  }
+  ```
+
+  Native listener TLS/mTLS on the exporter itself is a separate, later roadmap
+  item; for v1 the supported pattern is reverse-proxy termination.
+
+**Recommended posture.** Bind the exporter to a trusted interface / private
+network and expose only `/metrics` (via a reverse proxy where possible). Set
+`MERAKI_EXPORTER_SERVER__API_TOKEN` and/or
+`MERAKI_EXPORTER_SERVER__UI_ENABLED=false` whenever the sensitive GET UIs or
+control POSTs are reachable from any network segment you do not fully trust.
 
 ### Beta API surface
 

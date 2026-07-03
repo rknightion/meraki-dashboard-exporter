@@ -28,18 +28,88 @@ from .core.cardinality import CardinalityMonitor, setup_cardinality_endpoint
 from .core.config import Settings
 from .core.config_logger import log_startup_summary
 from .core.constants import UpdateTier
-from .core.discovery import DiscoveryService
+from .core.discovery import DiscoveryService, resolve_org_id
 from .core.logging import get_logger, setup_logging
 from .core.metric_expiration import MetricExpirationManager
 from .core.otel_logging import OTELLoggingConfig
 from .core.otel_tracing import TracingConfig
-from .core.webhook_handler import WebhookHandler
-from .services.status import StatusService
+from .core.webhook_handler import WebhookHandler, enforce_webhook_security
+from .services.status import StatusService, build_effective_config
 
 if TYPE_CHECKING:
     pass
 
 logger = get_logger(__name__)
+
+
+# SECURITY (SEC-01 / #558): sensitive GET UIs that leak PII (client MAC/IP/
+# hostname), full topology, or metric label surface. When
+# ``server.api_token`` is set these require a bearer token; when
+# ``server.ui_enabled`` is false the human UI surface is suppressed entirely.
+# ``/metrics`` is deliberately NOT gated - Prometheus must scrape it - and
+# ``/health`` / ``/ready`` stay open for orchestrator probes.
+SENSITIVE_UI_PREFIXES: tuple[str, ...] = (
+    "/clients",
+    "/status",
+    "/config",
+    "/cardinality",
+    "/api/metrics/cardinality",
+)
+
+
+def _is_sensitive_ui_path(path: str) -> bool:
+    """Return True if ``path`` is a sensitive GET UI/endpoint (see #558)."""
+    return any(path == p or path.startswith(p + "/") for p in SENSITIVE_UI_PREFIXES)
+
+
+def ui_guard_decision(
+    *,
+    method: str,
+    path: str,
+    ui_enabled: bool,
+    api_token: str | None,
+    auth_header: str,
+) -> tuple[int, str] | None:
+    """Decide whether a request to a sensitive GET UI should be short-circuited.
+
+    Pure function (no I/O) so the gating policy is unit-testable without the
+    config flags being wired yet (#558).
+
+    Parameters
+    ----------
+    method : str
+        HTTP method.
+    path : str
+        Request path (no query string).
+    ui_enabled : bool
+        Effective ``server.ui_enabled`` - when False the human UI is suppressed.
+    api_token : str | None
+        Effective ``server.api_token`` secret value, or None when unset.
+    auth_header : str
+        The raw ``Authorization`` header value.
+
+    Returns
+    -------
+    tuple[int, str] | None
+        ``(status_code, detail)`` to short-circuit the request, or ``None`` to
+        allow it through.
+
+    """
+    if method != "GET":
+        return None
+    is_index = path == "/"
+    is_sensitive = _is_sensitive_ui_path(path)
+    if not (is_index or is_sensitive):
+        return None
+    if not ui_enabled:
+        return (404, "Web UI is disabled")
+    # Token gate applies only to the sensitive PII/detail endpoints, not the
+    # index landing page.
+    if is_sensitive and api_token is not None:
+        scheme, _, provided = auth_header.partition(" ")
+        if scheme.lower() != "bearer" or not hmac.compare_digest(provided, api_token):
+            return (401, "Invalid or missing API token")
+    return None
 
 
 class CollectorTriggerRequest(BaseModel):
@@ -93,6 +163,24 @@ class ExporterApp:
         self._start_time = time.time()
         self._discovery_summary: dict[str, Any] | None = None
 
+        # Setup webhook handler. SECURITY (SEC-03 / #561): refuse the insecure
+        # combination (enabled + require_secret=false) at startup unless the
+        # operator explicitly opted in via webhooks.allow_insecure.
+        enforce_webhook_security(
+            enabled=self.settings.webhooks.enabled,
+            require_secret=self.settings.webhooks.require_secret,
+            # TODO(CFG-BIG): webhooks.allow_insecure lands with the config sweep;
+            # getattr keeps the secure default (False) until then.
+            allow_insecure=getattr(self.settings.webhooks, "allow_insecure", False),
+        )
+        self.webhook_handler: WebhookHandler | None = None
+        if self.settings.webhooks.enabled:
+            self.webhook_handler = WebhookHandler(self.settings)
+            logger.info(
+                "Webhook receiver enabled",
+                require_secret=self.settings.webhooks.require_secret,
+            )
+
         # Initialize status service for /status endpoint
         self.status_service = StatusService(
             collector_manager=self.collector_manager,
@@ -100,6 +188,7 @@ class ExporterApp:
             client=self.client,
             settings=self.settings,
             start_time=self._start_time,
+            webhook_handler=self.webhook_handler,
         )
 
         self._startup_summary_logged = False
@@ -115,15 +204,6 @@ class ExporterApp:
             warning_threshold=1000,
             critical_threshold=10000,
         )
-
-        # Setup webhook handler
-        self.webhook_handler: WebhookHandler | None = None
-        if self.settings.webhooks.enabled:
-            self.webhook_handler = WebhookHandler(self.settings)
-            logger.info(
-                "Webhook receiver enabled",
-                require_secret=self.settings.webhooks.require_secret,
-            )
 
     def _handle_shutdown(self) -> None:
         """Handle shutdown request."""
@@ -260,6 +340,16 @@ class ExporterApp:
             Yields control during application runtime.
 
         """
+        # Enforce the single-organization contract (#585) BEFORE anything reads
+        # org_id (inventory warm, discovery, collectors). When org_id is unset
+        # and the key sees exactly one org it is auto-selected and written back
+        # onto settings; a multi-org key with no org_id raises OrgResolutionError
+        # here, which propagates out of lifespan startup and aborts the process
+        # before it serves any request (fail fast). A configured org_id is used
+        # as-is with no extra API call, so this never adds crash-loop risk to a
+        # correctly-pinned single-org instance.
+        await resolve_org_id(self.client.api, self.settings)
+
         logger.info(
             "Starting Meraki Dashboard Exporter",
             host=self.settings.server.host,
@@ -563,6 +653,34 @@ class ExporterApp:
         app.state.templates = self.templates
         app.state.exporter = self
 
+        @app.middleware("http")
+        async def _ui_exposure_guard(
+            request: Request,
+            call_next: Any,
+        ) -> Response:
+            """Gate sensitive GET UIs by ui_enabled + optional bearer token (#558).
+
+            Default posture is unchanged (open) unless the operator sets
+            ``server.api_token`` (token-gate) or ``server.ui_enabled=false``
+            (suppress the human UI). ``/metrics`` and the probes stay open.
+            """
+            api_token_setting = self.settings.server.api_token
+            decision = ui_guard_decision(
+                method=request.method,
+                path=request.url.path,
+                # TODO(CFG-BIG): server.ui_enabled lands with the config sweep;
+                # getattr keeps the default (True = UI enabled) until then.
+                ui_enabled=getattr(self.settings.server, "ui_enabled", True),
+                api_token=(
+                    api_token_setting.get_secret_value() if api_token_setting is not None else None
+                ),
+                auth_header=request.headers.get("authorization", ""),
+            )
+            if decision is not None:
+                status_code, detail = decision
+                return JSONResponse(status_code=status_code, content={"detail": detail})
+            return await call_next(request)  # type: ignore[no-any-return]
+
         @app.get("/", response_class=HTMLResponse)
         async def root(request: Request) -> HTMLResponse:
             """Root endpoint with HTML landing page."""
@@ -768,6 +886,17 @@ class ExporterApp:
                 context=snapshot.to_dict(),
             )
 
+        @app.get("/config")
+        async def config_view() -> JSONResponse:
+            """Redacted effective-configuration view (#312).
+
+            Returns the resolved settings as JSON with all secrets masked (see
+            ``build_effective_config``). Gated as a sensitive GET by the
+            ui-exposure middleware (ui_enabled + optional bearer token).
+            """
+            exporter = app.state.exporter
+            return JSONResponse(content=build_effective_config(exporter.settings))
+
         @app.post("/api/clients/clear-dns-cache")
         async def clear_dns_cache(request: FastAPIRequest) -> dict[str, str]:
             """Clear the DNS cache."""
@@ -879,9 +1008,7 @@ class ExporterApp:
                     "Invalid content type for webhook",
                     content_type=content_type,
                 )
-                exporter.webhook_handler.validation_failures.labels(
-                    validation_error="invalid_content_type"
-                ).inc()
+                exporter.webhook_handler.record_validation_failure("invalid_content_type")
                 raise HTTPException(
                     status_code=400,
                     detail="Content-Type must be application/json",
@@ -908,9 +1035,7 @@ class ExporterApp:
                         size=declared_size,
                         max_size=max_size,
                     )
-                    exporter.webhook_handler.validation_failures.labels(
-                        validation_error="payload_too_large"
-                    ).inc()
+                    exporter.webhook_handler.record_validation_failure("payload_too_large")
                     raise HTTPException(
                         status_code=413,
                         detail=f"Payload too large (max: {max_size} bytes)",
@@ -925,9 +1050,7 @@ class ExporterApp:
                         size=len(body),
                         max_size=max_size,
                     )
-                    exporter.webhook_handler.validation_failures.labels(
-                        validation_error="payload_too_large"
-                    ).inc()
+                    exporter.webhook_handler.record_validation_failure("payload_too_large")
                     raise HTTPException(
                         status_code=413,
                         detail=f"Payload too large (max: {max_size} bytes)",
@@ -938,9 +1061,7 @@ class ExporterApp:
                 payload_data = json.loads(bytes(body))
             except Exception as e:
                 logger.error("Failed to parse webhook JSON", error=str(e))
-                exporter.webhook_handler.validation_failures.labels(
-                    validation_error="invalid_json"
-                ).inc()
+                exporter.webhook_handler.record_validation_failure("invalid_json")
                 raise HTTPException(
                     status_code=400,
                     detail="Invalid JSON payload",

@@ -189,29 +189,22 @@ def test_webhook_endpoint_valid_payload(
     assert "processed" in response.json()["message"].lower()
 
 
-def test_webhook_endpoint_no_secret_validation(
-    webhook_enabled_settings: Settings, valid_webhook_payload: dict
+def test_webhook_enabled_without_secret_fails_fast(
+    webhook_enabled_settings: Settings,
 ) -> None:
-    """Test webhook endpoint accepts payload when secret validation disabled."""
-    # Disable secret validation
+    """SEC-03 / #561: enabled + require_secret=false without opt-in refuses at startup.
+
+    Previously this insecure combination silently accepted unauthenticated
+    POSTs; it now raises ``WebhookSecurityError`` when the app is constructed,
+    unless the operator explicitly opts in via ``webhooks.allow_insecure=true``.
+    """
+    from meraki_dashboard_exporter.core.webhook_handler import WebhookSecurityError
+
+    # Disable secret validation without opting in.
     webhook_enabled_settings.webhooks.require_secret = False
 
-    exporter = ExporterApp(webhook_enabled_settings)
-    app = exporter.create_app()
-    client = TestClient(app)
-
-    # Don't include shared secret
-    payload = valid_webhook_payload.copy()
-    del payload["sharedSecret"]
-
-    response = client.post(
-        "/api/webhooks/meraki",
-        json=payload,
-        headers={"Content-Type": "application/json"},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["status"] == "success"
+    with pytest.raises(WebhookSecurityError):
+        ExporterApp(webhook_enabled_settings)
 
 
 def test_webhook_endpoint_missing_required_fields(
