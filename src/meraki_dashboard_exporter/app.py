@@ -13,11 +13,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import psutil  # type: ignore[import-untyped]
 from fastapi import FastAPI, HTTPException, Response
 from fastapi import Request as FastAPIRequest
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, Gauge, generate_latest
 from pydantic import BaseModel
 from starlette.requests import Request
 
@@ -29,6 +30,7 @@ from .core.cardinality import CardinalityMonitor, setup_cardinality_endpoint
 from .core.config import Settings
 from .core.config_logger import log_startup_summary
 from .core.constants import UpdateTier
+from .core.constants.metrics_constants import CollectorMetricName
 from .core.discovery import DiscoveryService, resolve_org_id
 from .core.logging import get_logger, setup_logging
 from .core.metric_expiration import MetricExpirationManager
@@ -41,6 +43,11 @@ if TYPE_CHECKING:
     pass
 
 logger = get_logger(__name__)
+
+# #277: cadence for the lightweight exporter process self-resource sampler
+# (see ExporterApp._resource_metrics_loop). Deliberately NOT a full collector
+# tier - just a cheap psutil read on a fixed interval.
+RESOURCE_METRICS_INTERVAL_SECONDS = 30.0
 
 
 # SECURITY (SEC-01 / #558): sensitive GET UIs that leak PII (client MAC/IP/
@@ -158,6 +165,22 @@ class ExporterApp:
         # Register the static build-info gauge (MET-10): constant value 1 with
         # version/commit labels identifying the running build.
         register_build_info()
+
+        # Exporter process self-resource gauges (#277): unlabeled process-level
+        # singletons, sampled periodically by _resource_metrics_loop (a
+        # lightweight lifespan background task, not a full collector tier).
+        # psutil.Process() is created once here; cpu_percent() is primed (its
+        # first call always returns 0.0) at the top of the loop itself.
+        self._resource_process = psutil.Process()
+        self._resource_metrics_interval_seconds = RESOURCE_METRICS_INTERVAL_SECONDS
+        self._resource_memory_gauge = Gauge(
+            CollectorMetricName.EXPORTER_MEMORY_USAGE_BYTES.value,
+            "Resident memory (RSS) used by the exporter process itself, in bytes (#277).",
+        )
+        self._resource_cpu_gauge = Gauge(
+            CollectorMetricName.EXPORTER_CPU_USAGE_PERCENT.value,
+            "CPU utilization percent of the exporter process itself, sampled periodically (#277).",
+        )
 
         # Initialize metric expiration manager (Phase 3.2)
         self.expiration_manager = MetricExpirationManager(settings=self.settings)
@@ -420,6 +443,11 @@ class ExporterApp:
         self._background_tasks.add(cardinality_task)
         cardinality_task.add_done_callback(self._background_tasks.discard)
 
+        # Start periodic exporter process self-resource sampling (#277)
+        resource_metrics_task = asyncio.create_task(self._resource_metrics_loop())
+        self._background_tasks.add(resource_metrics_task)
+        resource_metrics_task.add_done_callback(self._background_tasks.discard)
+
         try:
             yield
         finally:
@@ -672,6 +700,51 @@ class ExporterApp:
 
         except asyncio.CancelledError:
             logger.info("Cardinality monitoring task cancelled")
+            raise
+
+    def _sample_resource_metrics(self) -> None:
+        """Sample the exporter's own RSS + CPU usage and update the gauges (#277).
+
+        Cheap, synchronous psutil reads (no I/O, no event-loop blocking risk) -
+        errors (e.g. the process handle becoming invalid) are logged and
+        swallowed so a transient psutil failure never takes down the sampling
+        loop or the exporter itself.
+        """
+        try:
+            memory_bytes = self._resource_process.memory_info().rss
+            cpu_percent = self._resource_process.cpu_percent()
+        except Exception:
+            logger.exception("Failed to sample exporter process resource metrics")
+            return
+        self._resource_memory_gauge.set(memory_bytes)
+        self._resource_cpu_gauge.set(cpu_percent)
+
+    async def _resource_metrics_loop(self) -> None:
+        """Background task periodically sampling exporter process resources (#277).
+
+        Deliberately not a full collector tier - just a fixed-cadence psutil
+        sample (RSS + CPU percent) feeding two unlabeled singleton gauges.
+        ``psutil.Process.cpu_percent()``'s first call always returns 0.0 (no
+        prior sample to diff against), so it is primed here - once, before the
+        loop's first real reading - regardless of whether shutdown is already
+        signalled.
+        """
+        try:
+            self._resource_process.cpu_percent()  # prime; see docstring
+        except Exception:
+            logger.exception("Failed to prime exporter resource metrics sampler")
+
+        try:
+            while not self._shutdown_event.is_set():
+                self._sample_resource_metrics()
+
+                remaining_time = float(self._resource_metrics_interval_seconds)
+                while remaining_time > 0 and not self._shutdown_event.is_set():
+                    wait_time = min(1.0, remaining_time)
+                    await asyncio.sleep(wait_time)
+                    remaining_time -= wait_time
+        except asyncio.CancelledError:
+            logger.info("Resource metrics sampling task cancelled")
             raise
 
     def create_app(self) -> FastAPI:
