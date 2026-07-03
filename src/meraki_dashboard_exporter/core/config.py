@@ -18,6 +18,7 @@ from .config_models import (
     MonitoringSettings,
     NetworkFilterSettings,
     OTelSettings,
+    SchedulerSettings,
     ServerSettings,
     UpdateIntervals,
     WebhookSettings,
@@ -92,6 +93,10 @@ class Settings(BaseSettings):
     network_filter: NetworkFilterSettings = Field(
         default_factory=NetworkFilterSettings,
         description="Network-level filter for restricting which networks are scraped",
+    )
+    scheduler: SchedulerSettings = Field(
+        default_factory=SchedulerSettings,
+        description="Adaptive budget-aware API scheduler settings",
     )
 
     @classmethod

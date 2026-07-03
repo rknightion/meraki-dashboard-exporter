@@ -506,6 +506,17 @@ class CollectorMetricName(StrEnum):
     COLLECTOR_API_CALLS_TOTAL = "meraki_exporter_collector_api_calls_total"
     COLLECTOR_FAILURE_STREAK = "meraki_exporter_collector_failure_streak"
 
+    # Adaptive budget-aware scheduler (#617). Computed-schedule outputs owned +
+    # emitted by core/scheduler.py::EndpointScheduler.resolve(). Gauges labelled
+    # by LabelName.GROUP (bounded, ~40 static groups) or unlabeled where noted.
+    SCHEDULER_ESTIMATED_DEMAND_RPS = "meraki_exporter_scheduler_estimated_demand_rps"
+    SCHEDULER_BUDGET_RPS = "meraki_exporter_scheduler_budget_rps"
+    SCHEDULER_EFFECTIVE_BUDGET_RPS = "meraki_exporter_scheduler_effective_budget_rps"
+    SCHEDULER_BUDGET_UTILIZATION_RATIO = "meraki_exporter_scheduler_budget_utilization_ratio"
+    SCHEDULER_INTERVAL_SECONDS = "meraki_exporter_scheduler_interval_seconds"
+    SCHEDULER_STRETCH_FACTOR = "meraki_exporter_scheduler_stretch_factor"
+    SCHEDULER_THROTTLE_BACKOFFS_TOTAL = "meraki_exporter_scheduler_throttle_backoffs_total"
+
 
 class WebhookMetricName(StrEnum):
     """Webhook receiver metric names for monitoring webhook events (Phase 4.2)."""

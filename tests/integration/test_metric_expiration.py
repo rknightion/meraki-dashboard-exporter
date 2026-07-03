@@ -269,6 +269,120 @@ class TestMetricNotExpiredBeforeTTL:
 
 
 # ---------------------------------------------------------------------------
+# Tests: per-series ttl_seconds override (#617 §1f / #541 flap fix)
+# ---------------------------------------------------------------------------
+
+
+class TestPerSeriesTTLOverride:
+    """A per-series ttl_seconds overrides the tier-derived TTL (#617 §1f)."""
+
+    def _track_with_ttl(
+        self,
+        manager: MetricExpirationManager,
+        *,
+        tier: UpdateTier | None,
+        ttl_seconds: float | None,
+        serial: str = "Q2KD-XXXX",
+    ) -> None:
+        manager.track_metric_update(
+            collector_name=_COLLECTOR,
+            metric_name=_METRIC,
+            label_values={**_LABELS, "serial": serial},
+            tier=tier,
+            ttl_seconds=ttl_seconds,
+        )
+
+    async def test_ttl_override_survives_past_tier_ttl(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """Flap regression (#541).
+
+        A MEDIUM-tier series pinned to ttl_seconds=900 must SURVIVE cleanup at
+        t=700s (would expire under the old tier×2=600 TTL) and expire only after
+        900s.
+        """
+        base_time = 30_000_000.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            self._track_with_ttl(expiration_manager, tier=UpdateTier.MEDIUM, ttl_seconds=900.0)
+
+        # t = 700s: past the old tier-derived MEDIUM TTL (600s) but under the
+        # per-series 900s TTL — the series must still be tracked.
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + 700.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        assert len(expiration_manager._metric_timestamps) == 1, (
+            "Series gated slower than the tier TTL must not flap (survives to 900s)"
+        )
+        assert expiration_manager._metric_counts[_COLLECTOR] == 1
+
+        # t = 901s: past the per-series TTL — now it expires.
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + 901.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        assert len(expiration_manager._metric_timestamps) == 0
+        assert expiration_manager._metric_counts[_COLLECTOR] == 0
+
+    async def test_no_ttl_seconds_is_identical_old_behaviour(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """ttl_seconds=None ⇒ MEDIUM-tier series still expires at the tier×2 TTL (600s)."""
+        base_time = 31_000_000.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            self._track_with_ttl(expiration_manager, tier=UpdateTier.MEDIUM, ttl_seconds=None)
+
+        # Just before the tier TTL boundary — survives.
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + 599.0
+            await expiration_manager._cleanup_expired_metrics()
+        assert len(expiration_manager._metric_timestamps) == 1
+
+        # Just past the tier TTL boundary — expires (unchanged behaviour).
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + 601.0
+            await expiration_manager._cleanup_expired_metrics()
+        assert len(expiration_manager._metric_timestamps) == 0
+
+    async def test_ttl_override_shorter_than_tier_ttl_expires_early(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """A ttl_seconds shorter than the tier TTL expires the series early."""
+        base_time = 32_000_000.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            # MEDIUM tier TTL would be 600s; pin to 120s instead.
+            self._track_with_ttl(expiration_manager, tier=UpdateTier.MEDIUM, ttl_seconds=120.0)
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + 121.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        assert len(expiration_manager._metric_timestamps) == 0
+
+    async def test_ttl_override_survives_cardinality_pass(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """The cardinality enforcement pass must read the new NamedTuple store."""
+        base_time = 33_000_000.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            self._track_with_ttl(expiration_manager, tier=UpdateTier.MEDIUM, ttl_seconds=900.0)
+
+        # A very high budget so nothing sheds; this exercises the timestamp
+        # unpacking in _enforce_cardinality_budgets / check_family_cardinality.
+        shed = expiration_manager.check_family_cardinality(_METRIC, max_series=1000)
+        assert shed == 0
+        assert len(expiration_manager._metric_timestamps) == 1
+
+
+# ---------------------------------------------------------------------------
 # Tests: TTL calculation per tier
 # ---------------------------------------------------------------------------
 

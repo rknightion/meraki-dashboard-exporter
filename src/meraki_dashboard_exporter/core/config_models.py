@@ -450,6 +450,85 @@ class CardinalitySettings(BaseModel):
         return _split_collector_csv(v)
 
 
+class SchedulerSettings(BaseModel):
+    """Adaptive budget-aware API scheduler settings (#617).
+
+    Env prefix ``MERAKI_EXPORTER_SCHEDULER__*``. Only the config surface; the
+    solver/AIMD behaviour that consumes these settings lives in
+    ``core/scheduler.py`` and the manager/fetch sites. ``UPDATE_INTERVALS__*``
+    remain heartbeat cadences and act as the per-tier lower bound on every
+    group interval; the four existing gate settings on :class:`APISettings`
+    (``ms_port_usage_interval``, ``ms_packet_stats_interval``,
+    ``client_app_usage_interval``, ``client_signal_quality_interval``) survive
+    as operator ``setting_pin``s, detected via ``settings.api.model_fields_set``.
+    """
+
+    mode: Literal["adaptive", "fixed"] = Field(
+        "adaptive",
+        description=(
+            "'adaptive' (default): solver stretches endpoint-group intervals to fit the API "
+            "budget. 'fixed': floors/pins only, no stretching, no AIMD (transition fallback)."
+        ),
+    )
+    target_utilization: float = Field(
+        0.7,
+        ge=0.1,
+        le=1.0,
+        description="Fraction of the effective budget the solver plans to; headroom absorbs bursts.",
+    )
+    max_stretch_factor: float = Field(
+        4.0,
+        ge=1.0,
+        le=16.0,
+        description="Per-group interval cap as a multiple of its volatility floor.",
+    )
+    max_interval_seconds: int = Field(
+        3600,
+        ge=300,
+        le=86400,
+        description="Absolute per-group interval cap.",
+    )
+    resolve_interval_seconds: int = Field(
+        900,
+        ge=60,
+        le=86400,
+        description="How often the solver recomputes from org shape (matches inventory TTL).",
+    )
+    aimd_enabled: bool = Field(
+        True,
+        description="429/Retry-After budget feedback (adaptive mode only).",
+    )
+    aimd_backoff_multiplier: float = Field(0.5, ge=0.1, le=0.9)
+    aimd_recovery_rps_per_minute: float = Field(0.1, ge=0.01, le=5.0)
+    aimd_resolve_hysteresis: float = Field(0.2, ge=0.05, le=1.0)
+    group_interval_overrides: dict[str, int] = Field(
+        default_factory=dict,
+        description=(
+            'Per-group interval pins, e.g. {"nh_connection_stats": 900}. '
+            "Pinned groups are excluded from solver stretching. Env: JSON object."
+        ),
+    )
+
+    @field_validator("group_interval_overrides", mode="before")
+    @classmethod
+    def _parse_overrides(cls, v: object) -> object:
+        """Accept a JSON-object string as well as a native dict.
+
+        The pydantic-settings env source already JSON-decodes complex fields,
+        but direct construction (and any raw-string source) passes the value
+        through verbatim; normalise a JSON-object string to a dict so both
+        layers behave identically.
+        """
+        if isinstance(v, str):
+            stripped = v.strip()
+            if not stripped:
+                return {}
+            import json
+
+            return json.loads(stripped)
+        return v
+
+
 class OTelSettings(BaseModel):
     """OpenTelemetry configuration settings."""
 

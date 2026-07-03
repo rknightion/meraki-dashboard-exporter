@@ -64,7 +64,11 @@ class TestFirmwareCollector:
                 self._api_calls[method_name] = self._api_calls.get(method_name, 0) + 1
 
             def _set_metric_value(
-                self, metric_name: str, labels: dict[str, str], value: float | None
+                self,
+                metric_name: str,
+                labels: dict[str, str],
+                value: float | None,
+                ttl_seconds: float | None = None,
             ) -> None:
                 if value is not None:
                     key = (metric_name, tuple(sorted(labels.items())))

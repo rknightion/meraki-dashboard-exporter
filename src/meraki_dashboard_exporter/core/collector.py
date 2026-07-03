@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol
 
 from opentelemetry import trace
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, Info
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from ..services.inventory import OrganizationInventory
     from .config import Settings
     from .metric_expiration import MetricExpirationManager
+    from .scheduler import EndpointGroup, EndpointGroupName, EndpointScheduler
 
 logger = get_logger(__name__)
 
@@ -44,6 +45,11 @@ class MetricCollector(ABC):
 
     # Default update tier - subclasses should override this
     update_tier: UpdateTier = UpdateTier.MEDIUM
+
+    # Endpoint groups this collector owns for adaptive scheduling (#617 §1c).
+    # Coordinators override this in Wave 2 (sub-collector groups are declared on
+    # their coordinator — one file = one owner); the base declares none.
+    endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = ()
 
     # Class-level performance metrics shared by all collectors
     _collector_duration: Histogram | None = None
@@ -78,6 +84,7 @@ class MetricCollector(ABC):
         inventory: OrganizationInventory | None = None,
         expiration_manager: MetricExpirationManager | None = None,
         rate_limiter: Any | None = None,
+        scheduler: EndpointScheduler | None = None,
     ) -> None:
         """Initialize the metric collector with API client and settings.
 
@@ -97,6 +104,10 @@ class MetricCollector(ABC):
             the _set_metric() helper will automatically track metric updates.
         rate_limiter : Any | None
             Optional rate limiter to gate API calls per organization.
+        scheduler : EndpointScheduler | None
+            Adaptive endpoint scheduler (#617). When provided, the gate helpers
+            (``_should_run_group`` etc.) consult it; when ``None`` (tests /
+            standalone), gates fail open (always-run, no per-series TTL).
 
         """
         self.api = api
@@ -105,6 +116,7 @@ class MetricCollector(ABC):
         self.inventory = inventory
         self.expiration_manager = expiration_manager
         self.rate_limiter = rate_limiter
+        self.scheduler = scheduler
         self._metrics: dict[str, Any] = {}
 
         # Per-metric cardinality control (#309): families named in
@@ -499,6 +511,103 @@ class MetricCollector(ABC):
             # Silently fail if client not available - metrics are optional
             pass
 
+    # -- adaptive scheduling gates (#617 §1c) --------------------------------
+
+    def get_endpoint_groups(self) -> tuple[EndpointGroup, ...]:
+        """Return the endpoint groups this collector contributes to the scheduler.
+
+        Defaults to the class-level ``endpoint_groups`` declaration. Override to
+        drop config-disabled groups (e.g. ``ClientsCollector`` when
+        ``clients.enabled`` is False) so they never enter the solver.
+
+        Returns
+        -------
+        tuple[EndpointGroup, ...]
+            The active endpoint groups (empty on the base class).
+
+        """
+        return type(self).endpoint_groups
+
+    def _should_run_group(self, group: EndpointGroupName) -> bool:
+        """Whether a scheduler-gated endpoint group is due this heartbeat.
+
+        Fails open: with no scheduler injected (tests / standalone) the group
+        always runs. Sub-collectors call this via ``self.parent._should_run_group``.
+
+        Parameters
+        ----------
+        group : EndpointGroupName
+            The endpoint group to gate.
+
+        Returns
+        -------
+        bool
+            True when the group should run now.
+
+        """
+        if self.scheduler is None:
+            return True
+        return self.scheduler.should_run(group)
+
+    def _mark_group_ran(self, group: EndpointGroupName) -> None:
+        """Record a successful fetch of a group (no-op without a scheduler).
+
+        Parameters
+        ----------
+        group : EndpointGroupName
+            The endpoint group that just completed a successful fetch.
+
+        """
+        if self.scheduler is not None:
+            self.scheduler.mark_ran(group)
+
+    def _group_interval(self, group: EndpointGroupName) -> float:
+        """Current solved interval for a group in seconds.
+
+        With a scheduler, delegates to ``interval_for``. Without one, falls back
+        to the group's declared floor (no stretch); if the group is not declared
+        on this collector, returns a large sentinel so any local gate treats the
+        group as not-yet-due rather than re-fetching spuriously.
+
+        Parameters
+        ----------
+        group : EndpointGroupName
+            The endpoint group whose interval is requested.
+
+        Returns
+        -------
+        float
+            Interval in seconds.
+
+        """
+        if self.scheduler is not None:
+            return self.scheduler.interval_for(group)
+        for declared in self.get_endpoint_groups():
+            if declared.name == group:
+                return float(declared.floor_seconds)
+        return float("inf")
+
+    def _group_ttl_seconds(self, group: EndpointGroupName) -> float | None:
+        """Per-series metric TTL for a group, or None without a scheduler.
+
+        Scheduler-gated fetch sites forward this to ``_set_metric`` so a series
+        polled slower than its tier heartbeat does not flap (#617 §1f).
+
+        Parameters
+        ----------
+        group : EndpointGroupName
+            The endpoint group whose TTL is requested.
+
+        Returns
+        -------
+        float | None
+            Fully-resolved TTL in seconds, or None (tier-derived TTL applies).
+
+        """
+        if self.scheduler is None:
+            return None
+        return self.scheduler.ttl_seconds_for(group)
+
     def _get_tier_interval(self) -> int:
         """Return the configured interval for this collector's tier."""
         if self.update_tier == UpdateTier.FAST:
@@ -562,7 +671,11 @@ class MetricCollector(ABC):
             ).set(offset)
 
     def _set_metric_value(
-        self, metric_name: str, labels: dict[str, str], value: float | None
+        self,
+        metric_name: str,
+        labels: dict[str, str],
+        value: float | None,
+        ttl_seconds: float | None = None,
     ) -> None:
         """Safely set a metric value with validation.
 
@@ -577,6 +690,10 @@ class MetricCollector(ABC):
             Labels to apply to the metric.
         value : float | None
             Value to set. If None, the metric will not be updated.
+        ttl_seconds : float | None
+            Fully-resolved per-series TTL forwarded to ``_set_metric`` (#617
+            §1f). Sub-collectors pass this via ``SubCollectorMixin``. ``None``
+            (default) ⇒ the tier-derived TTL applies.
 
         """
         # Skip if value is None - this happens when API returns null values
@@ -603,7 +720,7 @@ class MetricCollector(ABC):
             full_metric_name = getattr(metric, "_name", None)
             if full_metric_name:
                 # Use new helper with expiration tracking
-                self._set_metric(metric, labels, value, full_metric_name)
+                self._set_metric(metric, labels, value, full_metric_name, ttl_seconds=ttl_seconds)
             else:
                 # Fallback to direct set if we can't get metric name
                 try:
@@ -645,6 +762,7 @@ class MetricCollector(ABC):
         labels: dict[str, str],
         value: float,
         metric_name: str | None = None,
+        ttl_seconds: float | None = None,
     ) -> None:
         """Set a metric value with automatic expiration tracking (Phase 3.2).
 
@@ -663,6 +781,11 @@ class MetricCollector(ABC):
         metric_name : str | None
             Full metric name (e.g., "meraki_device_up"). If not provided,
             will attempt to extract from metric object.
+        ttl_seconds : float | None
+            Fully-resolved per-series TTL forwarded to the expiration manager
+            (#617 §1f). Scheduler-gated fetch sites pass
+            ``self._group_ttl_seconds(GROUP)`` so a slow-polled series does not
+            flap. ``None`` (default) ⇒ the tier-derived TTL applies.
 
         Examples
         --------
@@ -696,6 +819,7 @@ class MetricCollector(ABC):
                     label_values=labels,
                     tier=self.update_tier,
                     metric=metric,
+                    ttl_seconds=ttl_seconds,
                 )
 
         except Exception:

@@ -20,6 +20,7 @@ from meraki_dashboard_exporter.core.config_models import (
     CollectorSettings,
     LoggingSettings,
     MerakiSettings,
+    SchedulerSettings,
     ServerSettings,
     WebhookSettings,
     find_unrecognized_env_vars,
@@ -312,6 +313,92 @@ class TestCardinalitySettings:
         """Numeric guard-rail fields reject below-minimum values."""
         with pytest.raises(ValidationError):
             CardinalitySettings(**{field: value})
+
+
+class TestSchedulerSettings:
+    """New SchedulerSettings nested model (#617 adaptive budget-aware scheduler)."""
+
+    def test_defaults(self):
+        """Every field defaults to the frozen BUILD SPEC §1d value."""
+        s = SchedulerSettings()
+        assert s.mode == "adaptive"
+        assert s.target_utilization == 0.7
+        assert s.max_stretch_factor == 4.0
+        assert s.max_interval_seconds == 3600
+        assert s.resolve_interval_seconds == 900
+        assert s.aimd_enabled is True
+        assert s.aimd_backoff_multiplier == 0.5
+        assert s.aimd_recovery_rps_per_minute == 0.1
+        assert s.aimd_resolve_hysteresis == 0.2
+        assert s.group_interval_overrides == {}
+
+    def test_mode_literal_rejects_unknown(self):
+        """mode only accepts 'adaptive' or 'fixed'."""
+        assert SchedulerSettings(mode="fixed").mode == "fixed"
+        with pytest.raises(ValidationError):
+            SchedulerSettings(mode="turbo")
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("target_utilization", 0.05),
+            ("target_utilization", 1.5),
+            ("max_stretch_factor", 0.5),
+            ("max_stretch_factor", 17.0),
+            ("max_interval_seconds", 299),
+            ("max_interval_seconds", 86401),
+            ("resolve_interval_seconds", 59),
+            ("resolve_interval_seconds", 86401),
+            ("aimd_backoff_multiplier", 0.05),
+            ("aimd_backoff_multiplier", 0.95),
+            ("aimd_recovery_rps_per_minute", 0.005),
+            ("aimd_recovery_rps_per_minute", 5.5),
+            ("aimd_resolve_hysteresis", 0.04),
+            ("aimd_resolve_hysteresis", 1.1),
+        ],
+    )
+    def test_numeric_bounds_rejected(self, field, value):
+        """Each numeric knob enforces its frozen ge/le bounds."""
+        with pytest.raises(ValidationError):
+            SchedulerSettings(**{field: value})
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("target_utilization", 1.0),
+            ("target_utilization", 0.1),
+            ("max_stretch_factor", 1.0),
+            ("max_stretch_factor", 16.0),
+            ("max_interval_seconds", 300),
+            ("max_interval_seconds", 86400),
+            ("resolve_interval_seconds", 60),
+            ("resolve_interval_seconds", 86400),
+            ("aimd_backoff_multiplier", 0.1),
+            ("aimd_backoff_multiplier", 0.9),
+            ("aimd_recovery_rps_per_minute", 0.01),
+            ("aimd_recovery_rps_per_minute", 5.0),
+            ("aimd_resolve_hysteresis", 0.05),
+            ("aimd_resolve_hysteresis", 1.0),
+        ],
+    )
+    def test_numeric_bounds_accepted(self, field, value):
+        """Boundary values inside the frozen ge/le range are accepted."""
+        s = SchedulerSettings(**{field: value})
+        assert getattr(s, field) == value
+
+    def test_aimd_toggle(self):
+        """aimd_enabled can be turned off explicitly."""
+        assert SchedulerSettings(aimd_enabled=False).aimd_enabled is False
+
+    def test_group_interval_overrides_dict(self):
+        """group_interval_overrides accepts a native dict[str, int]."""
+        s = SchedulerSettings(group_interval_overrides={"nh_connection_stats": 900})
+        assert s.group_interval_overrides == {"nh_connection_stats": 900}
+
+    def test_group_interval_overrides_json_object_string(self):
+        """A JSON-object string parses into the dict (env-var form)."""
+        s = SchedulerSettings(group_interval_overrides='{"nh_connection_stats": 900}')
+        assert s.group_interval_overrides == {"nh_connection_stats": 900}
 
 
 class TestUnrecognizedEnvVars:

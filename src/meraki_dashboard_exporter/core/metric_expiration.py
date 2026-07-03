@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import structlog
 from prometheus_client import Counter, Gauge
@@ -24,6 +24,19 @@ if TYPE_CHECKING:
     from .config import Settings
 
 logger = structlog.get_logger(__name__)
+
+
+class _TrackedSeries(NamedTuple):
+    """Per-series tracking record stored in ``_metric_timestamps``.
+
+    ``ttl_seconds`` (when not ``None``) is a fully-resolved TTL that overrides
+    the tier-derived TTL — set by scheduler-gated fetch sites so a series polled
+    slower than ``tier_interval × multiplier`` does not flap (#617 §1f / #541).
+    """
+
+    ts: float
+    tier: UpdateTier | None
+    ttl_seconds: float | None
 
 
 class MetricExpirationManager:
@@ -68,10 +81,10 @@ class MetricExpirationManager:
         self.settings = settings
         self._ttl_multiplier = settings.monitoring.metric_ttl_multiplier
 
-        # Track last update time and tier per metric
+        # Track last update time, tier, and optional per-series TTL per metric
         # Key: (collector_name, metric_name, frozen_labels)
-        # Value: (timestamp of last update, tier or None)
-        self._metric_timestamps: dict[tuple[str, str, str], tuple[float, UpdateTier | None]] = {}
+        # Value: _TrackedSeries(ts, tier, ttl_seconds)
+        self._metric_timestamps: dict[tuple[str, str, str], _TrackedSeries] = {}
 
         # Track the actual Gauge object and its label values per metric series so
         # expired/shed entries can be removed from the Prometheus registry (not just
@@ -120,6 +133,7 @@ class MetricExpirationManager:
         label_values: dict[str, str],
         tier: UpdateTier | None = None,
         metric: Gauge | None = None,
+        ttl_seconds: float | None = None,
     ) -> None:
         """Track that a metric was updated.
 
@@ -139,18 +153,24 @@ class MetricExpirationManager:
             Prometheus series is removed (via ``Gauge.remove``) once the entry
             expires or is shed for cardinality. When ``None``, only tracking
             bookkeeping is kept (backward compatible).
+        ttl_seconds : float | None
+            Fully-resolved per-series TTL in seconds. When provided it overrides
+            the tier-derived TTL for this series (#617 §1f) — used by
+            scheduler-gated fetch sites so a series polled slower than
+            ``tier_interval × multiplier`` does not flap. When ``None`` the
+            tier-derived TTL applies (zero behaviour change).
 
         """
         # Create a frozen representation of labels for dict key
         frozen_labels = self._freeze_labels(label_values)
         key = (collector_name, metric_name, frozen_labels)
 
-        # Update timestamp and tier
+        # Update timestamp, tier, and per-series TTL
         current_time = time.time()
         if key not in self._metric_timestamps:
             self._metric_counts[collector_name] += 1
 
-        self._metric_timestamps[key] = (current_time, tier)
+        self._metric_timestamps[key] = _TrackedSeries(current_time, tier, ttl_seconds)
 
         # Remember the actual series so it can be removed from the registry on expiry.
         if metric is not None:
@@ -279,11 +299,19 @@ class MetricExpirationManager:
         # Find expired metrics
         expired_keys = []
         expired_by_collector_tier: defaultdict[tuple[str, str], int] = defaultdict(int)
-        for key, (last_update, tier) in self._metric_timestamps.items():
+        for key, entry in self._metric_timestamps.items():
             collector_name, metric_name, _ = key
-            age = current_time - last_update
+            tier = entry.tier
+            age = current_time - entry.ts
 
-            ttl = self._get_ttl_for_tier(tier) if tier is not None else default_ttl
+            # A per-series ttl_seconds (scheduler-gated sites) wins over the
+            # tier-derived TTL; else fall back to tier TTL (or MEDIUM default).
+            if entry.ttl_seconds is not None:
+                ttl = entry.ttl_seconds
+            elif tier is not None:
+                ttl = self._get_ttl_for_tier(tier)
+            else:
+                ttl = default_ttl
             if age > ttl:
                 expired_keys.append(key)
                 expired_count += 1
@@ -334,8 +362,8 @@ class MetricExpirationManager:
         config = CardinalityConfig.from_settings(self.settings)
 
         families: defaultdict[str, list[tuple[tuple[str, str, str], float]]] = defaultdict(list)
-        for key, (ts, _tier) in self._metric_timestamps.items():
-            families[key[1]].append((key, ts))
+        for key, entry in self._metric_timestamps.items():
+            families[key[1]].append((key, entry.ts))
 
         for metric_name, entries in families.items():
             if len(entries) <= config.max_series_per_family:
@@ -366,8 +394,8 @@ class MetricExpirationManager:
 
         """
         entries = [
-            (key, ts)
-            for key, (ts, _tier) in self._metric_timestamps.items()
+            (key, entry.ts)
+            for key, entry in self._metric_timestamps.items()
             if key[1] == metric_name
         ]
         if len(entries) <= max_series:

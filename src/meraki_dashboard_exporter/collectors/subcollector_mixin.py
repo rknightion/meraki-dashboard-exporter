@@ -29,7 +29,11 @@ class SubCollectorMixin:
     api: DashboardAPI
 
     def _set_metric_value(
-        self, metric_name: str, labels: dict[str, str], value: float | None
+        self,
+        metric_name: str,
+        labels: dict[str, str],
+        value: float | None,
+        ttl_seconds: float | None = None,
     ) -> None:
         """Set a metric value by delegating to the parent collector.
 
@@ -41,10 +45,15 @@ class SubCollectorMixin:
             Labels to apply to the metric.
         value : float | None
             Value to set. If None, the metric will not be updated.
+        ttl_seconds : float | None
+            Fully-resolved per-series TTL forwarded to the parent's
+            ``_set_metric_value`` (#617 §1f). Scheduler-gated sub-collector
+            fetch sites pass ``self.parent._group_ttl_seconds(GROUP)``. ``None``
+            (default) ⇒ the tier-derived TTL applies.
 
         """
         if hasattr(self.parent, "_set_metric_value"):
-            self.parent._set_metric_value(metric_name, labels, value)
+            self.parent._set_metric_value(metric_name, labels, value, ttl_seconds=ttl_seconds)
 
     def _track_api_call(self, method_name: str) -> None:
         """Track an API call by delegating to the parent collector.

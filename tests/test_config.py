@@ -236,6 +236,39 @@ def test_cardinality_env_parsing(monkeypatch):
     assert settings.cardinality.disabled_metrics == {"meraki_foo", "meraki_bar"}
 
 
+def test_scheduler_settings_defaults(monkeypatch):
+    """SchedulerSettings mounts on Settings with the frozen §1d defaults (#617)."""
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+
+    settings = Settings()
+    assert settings.scheduler.mode == "adaptive"
+    assert settings.scheduler.target_utilization == 0.7
+    assert settings.scheduler.max_stretch_factor == 4.0
+    assert settings.scheduler.max_interval_seconds == 3600
+    assert settings.scheduler.resolve_interval_seconds == 900
+    assert settings.scheduler.aimd_enabled is True
+    assert settings.scheduler.aimd_backoff_multiplier == 0.5
+    assert settings.scheduler.aimd_recovery_rps_per_minute == 0.1
+    assert settings.scheduler.aimd_resolve_hysteresis == 0.2
+    assert settings.scheduler.group_interval_overrides == {}
+
+
+def test_scheduler_env_parsing(monkeypatch):
+    """SCHEDULER__ env vars parse, incl. JSON-object group_interval_overrides (#617)."""
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+    monkeypatch.setenv("MERAKI_EXPORTER_SCHEDULER__MODE", "fixed")
+    monkeypatch.setenv("MERAKI_EXPORTER_SCHEDULER__TARGET_UTILIZATION", "0.5")
+    monkeypatch.setenv(
+        "MERAKI_EXPORTER_SCHEDULER__GROUP_INTERVAL_OVERRIDES",
+        '{"nh_connection_stats": 900}',
+    )
+
+    settings = Settings()
+    assert settings.scheduler.mode == "fixed"
+    assert settings.scheduler.target_utilization == 0.5
+    assert settings.scheduler.group_interval_overrides == {"nh_connection_stats": 900}
+
+
 def test_china_base_url_bumps_low_timeout(monkeypatch):
     """api.meraki.cn base URL bumps a sub-45s timeout to 45 (#518)."""
     monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)

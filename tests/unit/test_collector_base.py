@@ -237,6 +237,129 @@ class TestMetricCollector(BaseCollectorTest):
         assert collector.update_tier == UpdateTier.MEDIUM
 
 
+class TestEndpointGroupPlumbing(BaseCollectorTest):
+    """Base scheduler/endpoint-group plumbing (#617 §1c).
+
+    Only the base plumbing is exercised here — no real collector declares
+    endpoint groups until Wave 2.
+    """
+
+    collector_class = DummyCollectorImpl
+    update_tier = UpdateTier.MEDIUM
+
+    def _make(self, isolated_registry, settings, scheduler=None):
+        return DummyCollectorImpl(
+            api=MagicMock(),
+            settings=settings,
+            registry=isolated_registry,
+            scheduler=scheduler,
+        )
+
+    def test_endpoint_groups_default_empty(self, isolated_registry, settings) -> None:
+        """Base endpoint_groups is an empty tuple; get_endpoint_groups mirrors it."""
+        collector = self._make(isolated_registry, settings)
+        assert MetricCollector.endpoint_groups == ()
+        assert collector.get_endpoint_groups() == ()
+
+    def test_scheduler_defaults_to_none(self, isolated_registry, settings) -> None:
+        """The scheduler kwarg defaults to None (existing constructions unaffected)."""
+        collector = self._make(isolated_registry, settings)
+        assert collector.scheduler is None
+
+    def test_scheduler_stored_when_provided(self, isolated_registry, settings) -> None:
+        """A provided scheduler is threaded through to self.scheduler."""
+        sched = MagicMock()
+        collector = self._make(isolated_registry, settings, scheduler=sched)
+        assert collector.scheduler is sched
+
+    def test_gate_helpers_fail_open_when_scheduler_none(self, isolated_registry, settings) -> None:
+        """No scheduler ⇒ always-run, None TTL, floor/large-sentinel interval."""
+        collector = self._make(isolated_registry, settings)
+        group = "device_availability"
+
+        assert collector._should_run_group(group) is True
+        assert collector._group_ttl_seconds(group) is None
+        # No declared groups on the base ⇒ large sentinel, never re-gates falsely.
+        assert collector._group_interval(group) == float("inf")
+        # Marking a run without a scheduler must be a safe no-op.
+        collector._mark_group_ran(group)
+
+    def test_gate_helpers_delegate_to_scheduler(self, isolated_registry, settings) -> None:
+        """With a scheduler set, gate helpers delegate to it."""
+        sched = MagicMock()
+        sched.should_run.return_value = False
+        sched.interval_for.return_value = 1800.0
+        sched.ttl_seconds_for.return_value = 3600.0
+        collector = self._make(isolated_registry, settings, scheduler=sched)
+        group = "device_availability"
+
+        assert collector._should_run_group(group) is False
+        sched.should_run.assert_called_once_with(group)
+
+        assert collector._group_interval(group) == 1800.0
+        sched.interval_for.assert_called_once_with(group)
+
+        assert collector._group_ttl_seconds(group) == 3600.0
+        sched.ttl_seconds_for.assert_called_once_with(group)
+
+        collector._mark_group_ran(group)
+        sched.mark_ran.assert_called_once_with(group)
+
+
+class TestSetMetricTTLPassthrough(BaseCollectorTest):
+    """_set_metric / _set_metric_value forward ttl_seconds to the tracker (#617 §1f)."""
+
+    collector_class = DummyCollectorImpl
+    update_tier = UpdateTier.MEDIUM
+
+    def _make(self, isolated_registry, settings):
+        return DummyCollectorImpl(
+            api=MagicMock(),
+            settings=settings,
+            registry=isolated_registry,
+        )
+
+    def test_set_metric_forwards_ttl_seconds(self, isolated_registry, settings) -> None:
+        """An explicit ttl_seconds reaches track_metric_update."""
+        collector = self._make(isolated_registry, settings)
+        collector.expiration_manager = MagicMock()
+
+        collector._set_metric(
+            collector._test_gauge,
+            {"label1": "a", "label2": "b"},
+            1.0,
+            "test_gauge",
+            ttl_seconds=900.0,
+        )
+
+        _, kwargs = collector.expiration_manager.track_metric_update.call_args
+        assert kwargs["ttl_seconds"] == 900.0
+
+    def test_set_metric_defaults_ttl_seconds_none(self, isolated_registry, settings) -> None:
+        """Omitting ttl_seconds forwards None (tier-derived TTL applies)."""
+        collector = self._make(isolated_registry, settings)
+        collector.expiration_manager = MagicMock()
+
+        collector._set_metric(
+            collector._test_gauge, {"label1": "a", "label2": "b"}, 1.0, "test_gauge"
+        )
+
+        _, kwargs = collector.expiration_manager.track_metric_update.call_args
+        assert kwargs["ttl_seconds"] is None
+
+    def test_set_metric_value_forwards_ttl_seconds(self, isolated_registry, settings) -> None:
+        """The legacy string-based helper threads ttl_seconds through to tracking."""
+        collector = self._make(isolated_registry, settings)
+        collector.expiration_manager = MagicMock()
+
+        collector._set_metric_value(
+            "_test_gauge", {"label1": "a", "label2": "b"}, 1.0, ttl_seconds=900.0
+        )
+
+        _, kwargs = collector.expiration_manager.track_metric_update.call_args
+        assert kwargs["ttl_seconds"] == 900.0
+
+
 class TestDisabledMetrics:
     """Per-metric cardinality controls (#309): cardinality.disabled_metrics.
 

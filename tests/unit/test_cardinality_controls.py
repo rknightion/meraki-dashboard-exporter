@@ -25,7 +25,10 @@ from prometheus_client import Gauge
 
 from meraki_dashboard_exporter.core.cardinality import CardinalityConfig
 from meraki_dashboard_exporter.core.constants import UpdateTier
-from meraki_dashboard_exporter.core.metric_expiration import MetricExpirationManager
+from meraki_dashboard_exporter.core.metric_expiration import (
+    MetricExpirationManager,
+    _TrackedSeries,  # noqa: PLC2701 - internal store record; tests seed entries directly
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -84,7 +87,7 @@ def _add_series(
     ts = timestamp if timestamp is not None else time.time()
     if key not in mgr._metric_timestamps:
         mgr._metric_counts[collector] += 1
-    mgr._metric_timestamps[key] = (ts, UpdateTier.MEDIUM)
+    mgr._metric_timestamps[key] = _TrackedSeries(ts, UpdateTier.MEDIUM, None)
 
 
 def _limit_counter_value(mgr: MetricExpirationManager, metric: str) -> float:
@@ -301,7 +304,7 @@ class TestDropAction:
                 metric=gauge,
             )
             key = (_COLLECTOR, "meraki_test_drop_shed", manager._freeze_labels(labels))
-            manager._metric_timestamps[key] = (base_time + i, UpdateTier.MEDIUM)
+            manager._metric_timestamps[key] = _TrackedSeries(base_time + i, UpdateTier.MEDIUM, None)
 
         shed = manager.check_family_cardinality(
             "meraki_test_drop_shed", max_series=2, action="drop"

@@ -25,7 +25,18 @@ class TestSubCollectorMixin:
         parent = MagicMock()
         collector = ConcreteSubCollector(parent)
         collector._set_metric_value("_my_metric", {"org_id": "123"}, 42.0)
-        parent._set_metric_value.assert_called_once_with("_my_metric", {"org_id": "123"}, 42.0)
+        parent._set_metric_value.assert_called_once_with(
+            "_my_metric", {"org_id": "123"}, 42.0, ttl_seconds=None
+        )
+
+    def test_set_metric_value_forwards_ttl_seconds_to_parent(self) -> None:
+        """ttl_seconds passes through to the parent's _set_metric_value (#617 §1f)."""
+        parent = MagicMock()
+        collector = ConcreteSubCollector(parent)
+        collector._set_metric_value("_my_metric", {"org_id": "123"}, 42.0, ttl_seconds=900.0)
+        parent._set_metric_value.assert_called_once_with(
+            "_my_metric", {"org_id": "123"}, 42.0, ttl_seconds=900.0
+        )
 
     def test_set_metric_value_noop_when_parent_missing_method(self) -> None:
         """Test that _set_metric_value is a no-op when parent lacks the method."""
