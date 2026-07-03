@@ -8,6 +8,7 @@ exhausted-retry error shape instead of emitting false zeros).
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -199,6 +200,70 @@ class TestConfigCollectorResponseValidation(BaseCollectorTest):
             org_id="123",
         )
 
+    async def test_configuration_changes_respects_network_filter(
+        self, collector, mock_api_builder, metrics
+    ):
+        """#513: rows outside the configured NetworkFilter must not be counted.
+
+        Org-level rows (``networkId`` is ``None``) must always be retained;
+        rows scoped to a network excluded by the filter must be dropped.
+        """
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        changes = [
+            {"ts": "2026-07-01T00:00:00Z", "networkId": None, "label": "org-level"},
+            {"ts": "2026-07-01T00:00:01Z", "networkId": "N_INCLUDED", "label": "included"},
+            {"ts": "2026-07-01T00:00:02Z", "networkId": "N_EXCLUDED", "label": "excluded"},
+        ]
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_custom_response("getOrganizationConfigurationChanges", changes)
+            .with_custom_response("getOrganizationLoginSecurity", {})
+            .with_custom_response("getOrganizationAdmins", [])
+            .build()
+        )
+        collector.api = api
+        collector.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_INCLUDED"})
+
+        await self.run_collector(collector)
+
+        # Only the org-level row + the included network's row are counted (2 of 3).
+        metrics.assert_gauge_value(
+            "meraki_org_configuration_changes_count",
+            2,
+            org_id="123",
+        )
+
+    async def test_configuration_changes_no_filter_counts_all_rows(
+        self, collector, mock_api_builder, metrics
+    ):
+        """When no NetworkFilter is active, every row (incl. org-level) is counted."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        changes = [
+            {"ts": "2026-07-01T00:00:00Z", "networkId": None, "label": "org-level"},
+            {"ts": "2026-07-01T00:00:01Z", "networkId": "N_1", "label": "n1"},
+            {"ts": "2026-07-01T00:00:02Z", "networkId": "N_2", "label": "n2"},
+        ]
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_custom_response("getOrganizationConfigurationChanges", changes)
+            .with_custom_response("getOrganizationLoginSecurity", {})
+            .with_custom_response("getOrganizationAdmins", [])
+            .build()
+        )
+        collector.api = api
+        # No filter configured -> get_allowed_network_ids returns None (accept all).
+        collector.inventory.get_allowed_network_ids = AsyncMock(return_value=None)
+
+        await self.run_collector(collector)
+
+        metrics.assert_gauge_value(
+            "meraki_org_configuration_changes_count",
+            3,
+            org_id="123",
+        )
+
 
 class TestConfigCollectorNothingCollected(BaseCollectorTest):
     """#509: total collection failure must raise instead of being swallowed."""
@@ -269,3 +334,91 @@ class TestConfigCollectorNothingCollected(BaseCollectorTest):
         collector.inventory.api = api
 
         await collector.collect()
+
+
+class TestConfigCollectorStrongPasswordsRemoved(BaseCollectorTest):
+    """#523: the meraki_org_login_security_strong_passwords_enabled gauge is gone.
+
+    Meraki always enforces strong passwords, so the gauge was always-true and
+    conveyed nothing; it (and its enum member) were removed entirely.
+    """
+
+    collector_class = ConfigCollector
+    update_tier = UpdateTier.SLOW
+
+    def test_collector_has_no_strong_passwords_gauge(self, collector):
+        """The collector no longer creates the strong-passwords gauge attribute."""
+        assert not hasattr(collector, "_login_security_strong_passwords_enabled")
+
+    async def test_strong_passwords_metric_not_emitted(self, collector, mock_api_builder, metrics):
+        """A healthy login-security collection emits no strong-passwords series (#523)."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_custom_response(
+                "getOrganizationLoginSecurity",
+                {"enforceTwoFactorAuth": True, "enforceStrongPasswords": True},
+            )
+            .with_custom_response("getOrganizationAdmins", [])
+            .with_custom_response("getOrganizationConfigurationChanges", [])
+            .build()
+        )
+        collector.api = api
+
+        await self.run_collector(collector)
+
+        # Login-security collection actually ran...
+        metrics.assert_gauge_value("meraki_org_login_security_two_factor_enabled", 1, org_id="123")
+        # ...but the removed strong-passwords gauge must never appear.
+        self.verify_no_metrics_set(metrics, ["meraki_org_login_security_strong_passwords_enabled"])
+
+
+class TestConfigCollectorSingleOrgFetch(BaseCollectorTest):
+    """#519: the single-org getOrganization fallback normalizes the SDK error shape."""
+
+    collector_class = ConfigCollector
+    update_tier = UpdateTier.SLOW
+
+    async def test_single_org_error_shape_handled_gracefully(
+        self, collector, mock_api_builder, metrics
+    ):
+        """An error-shaped getOrganization response must not masquerade as an org (#519).
+
+        With inventory unavailable and a single configured org_id, the direct
+        fetch hits getOrganization. An exhausted-retry error dict
+        (``{"errors": [...]}``) must be rejected by validate_response_format;
+        the @with_error_handling wrapper then yields no organizations and the
+        cycle no-ops instead of emitting metrics against a bogus org.
+        """
+        collector.inventory = None
+        collector.settings.meraki.org_id = "123"
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganization", {"errors": ["retries exhausted"]}
+        ).build()
+        collector.api = api
+
+        # Must not raise despite the error-shaped response.
+        await collector.collect()
+
+        self.verify_no_metrics_set(metrics, ["meraki_org_login_security_two_factor_enabled"])
+
+    async def test_single_org_valid_dict_is_collected(self, collector, mock_api_builder, metrics):
+        """A valid single-org getOrganization dict is wrapped and collected (#519 regression)."""
+        collector.inventory = None
+        collector.settings.meraki.org_id = "123"
+
+        api = (
+            mock_api_builder
+            .with_custom_response("getOrganization", {"id": "123", "name": "Test Org"})
+            .with_custom_response("getOrganizationLoginSecurity", {"enforceTwoFactorAuth": True})
+            .with_custom_response("getOrganizationAdmins", [])
+            .with_custom_response("getOrganizationConfigurationChanges", [])
+            .build()
+        )
+        collector.api = api
+
+        await collector.collect()
+
+        metrics.assert_gauge_value("meraki_org_login_security_two_factor_enabled", 1, org_id="123")

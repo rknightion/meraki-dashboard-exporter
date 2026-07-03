@@ -40,9 +40,10 @@ class OrgMetricName(StrEnum):
     ORG_APPLICATION_USAGE_DOWNSTREAM_BYTES = "meraki_org_application_usage_downstream_bytes"
     ORG_APPLICATION_USAGE_UPSTREAM_BYTES = "meraki_org_application_usage_upstream_bytes"
     ORG_APPLICATION_USAGE_PERCENT = "meraki_org_application_usage_percent"
-    ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED = (
-        "meraki_org_login_security_strong_passwords_enabled"
-    )
+    # NOTE (#523): meraki_org_login_security_strong_passwords_enabled was
+    # removed - it derived from a deprecated Meraki field (strongPasswordsEnabled
+    # / enforceStrongPasswords) that is now always-true, so the gauge conveyed no
+    # information. The emission in collectors/config.py must be dropped in lockstep.
     ORG_LOGIN_SECURITY_TWO_FACTOR_ENABLED = "meraki_org_login_security_two_factor_enabled"
     ORG_LOGIN_SECURITY_IP_RANGES_ENABLED = "meraki_org_login_security_ip_ranges_enabled"
     ORG_LOGIN_SECURITY_IDLE_TIMEOUT_ENABLED = "meraki_org_login_security_idle_timeout_enabled"

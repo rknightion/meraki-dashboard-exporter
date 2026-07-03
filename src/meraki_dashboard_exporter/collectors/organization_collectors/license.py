@@ -19,6 +19,12 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# The licenses-overview ``states`` counts are org-wide aggregates by license
+# state with no per-device-type breakdown, so state-derived series carry this
+# bounded sentinel as their ``license_type`` label (used for subscription and
+# state-based per-device licensing orgs - #516).
+_AGGREGATE_LICENSE_TYPE = "All"
+
 
 class LicenseCollector(BaseOrganizationCollector):
     """Collector for organization license metrics."""
@@ -155,8 +161,24 @@ class LicenseCollector(BaseOrganizationCollector):
                 )
                 # Process co-termination licensing
                 self._process_licensing_overview(org_id, org_name, overview)
+            elif overview.get("states"):
+                # No licensedDeviceCounts but the overview carries its own
+                # per-state license counts. This covers both per-device and
+                # subscription licensing. Subscription orgs 400 on
+                # getOrganizationLicenses ("does not support per-device
+                # licensing"), so preferring the overview's own state counts
+                # avoids the unsupported call entirely and keeps the org
+                # healthy rather than permanently red (#516, F-100 sibling).
+                logger.debug(
+                    "Organization uses subscription/per-device licensing; "
+                    "using overview state counts",
+                    org_id=org_id,
+                    org_name=org_name,
+                )
+                self._process_licensing_states(org_id, org_name, overview["states"])
             else:
-                # Per-device licensing
+                # Per-device licensing without state counts in the overview:
+                # fetch the full per-device license list.
                 logger.debug(
                     "Organization uses per-device licensing model",
                     org_id=org_id,
@@ -179,15 +201,22 @@ class LicenseCollector(BaseOrganizationCollector):
             return True
 
         except Exception as e:
-            # Check if this is a 404 error (no licensing info)
-            if "404" in str(e):
+            # A 404 means the licensing endpoint isn't available for this org;
+            # a 400 (or an explicit "does not support" message) means the org
+            # uses a licensing model that doesn't support the per-device
+            # endpoint (e.g. subscription licensing). Both are soft-skips, not
+            # failures - otherwise a healthy subscription org would be stuck at
+            # org_collection_status=0 forever (#516).
+            err = str(e)
+            if "404" in err or "400" in err or "does not support" in err.lower():
                 logger.debug(
-                    "No licensing information available for organization",
+                    "Licensing endpoint unavailable/unsupported for organization; "
+                    "soft-skipping license metrics this cycle",
                     org_id=org_id,
                     org_name=org_name,
                 )
                 return True
-            raise  # Let decorator handle non-404 errors (retry + swallow)
+            raise  # Let decorator handle other errors (retry + swallow)
 
     def _process_per_device_licenses(
         self, org_id: str, org_name: str, licenses: list[dict[str, Any]]
@@ -261,6 +290,80 @@ class LicenseCollector(BaseOrganizationCollector):
                 labels,
                 count,
             )
+
+    def _process_licensing_states(self, org_id: str, org_name: str, states: dict[str, Any]) -> None:
+        """Process the licenses-overview ``states`` counts.
+
+        The ``states`` object (``getOrganizationLicensesOverview``) reports
+        org-wide license counts by state (``active``, ``expiring``,
+        ``expired``, ``unused`` ...) with no per-device-type breakdown. This
+        is the co-term/subscription-agnostic source used when the overview
+        carries no ``licensedDeviceCounts`` - notably subscription-licensing
+        orgs, which do not support the per-device ``getOrganizationLicenses``
+        endpoint (#516).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        states : dict[str, Any]
+            The ``states`` object from the licenses overview.
+
+        """
+        org_data = {"id": org_id, "name": org_name}
+
+        # One `_licenses_total` series per state, keyed by the aggregate
+        # sentinel license_type since states carry no per-type breakdown.
+        for state_name, state_data in states.items():
+            count = self._extract_state_count(state_data)
+            if count is None:
+                continue
+            labels = create_org_labels(
+                org_data,
+                license_type=_AGGREGATE_LICENSE_TYPE,
+                status=state_name,
+            )
+            self._set_metric_value("_licenses_total", labels, count)
+
+        # Expiring gauge sourced from states.expiring.count (Meraki's own
+        # expiring bucket), mirroring the co-term/per-device expiring metric.
+        expiring_count = self._extract_state_count(states.get("expiring"))
+        labels = create_org_labels(
+            org_data,
+            license_type=_AGGREGATE_LICENSE_TYPE,
+        )
+        self._set_metric_value("_licenses_expiring", labels, expiring_count or 0)
+
+    @staticmethod
+    def _extract_state_count(state_data: Any) -> int | None:
+        """Extract a ``count`` integer from a licenses-overview state entry.
+
+        Each state entry is normally a dict with a ``count`` key; guard
+        against unexpected shapes (bare ints or missing counts) so a single
+        malformed state cannot break the whole emission.
+
+        Parameters
+        ----------
+        state_data : Any
+            A single value from the overview ``states`` object.
+
+        Returns
+        -------
+        int | None
+            The license count, or ``None`` when no numeric count is present.
+
+        """
+        if isinstance(state_data, dict):
+            count = state_data.get("count")
+        elif isinstance(state_data, (int, float)) and not isinstance(state_data, bool):
+            count = state_data
+        else:
+            count = None
+        return (
+            int(count) if isinstance(count, (int, float)) and not isinstance(count, bool) else None
+        )
 
     def _parse_meraki_date(self, date_str: str) -> datetime | None:
         """Parse a date string from Meraki API.

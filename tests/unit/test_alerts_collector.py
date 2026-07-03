@@ -351,7 +351,12 @@ class TestAlertsCollector(BaseCollectorTest):
         )
 
         # Configure mock API
-        api = mock_api_builder.with_custom_response("getOrganizationAssuranceAlerts", []).build()
+        api = (
+            mock_api_builder
+            .with_custom_response("getOrganization", {"id": "456", "name": "Test Org"})
+            .with_custom_response("getOrganizationAssuranceAlerts", [])
+            .build()
+        )
         collector.api = api
 
         # Run collection
@@ -363,6 +368,49 @@ class TestAlertsCollector(BaseCollectorTest):
         # Should not call getOrganizations (org_id is specified)
         # Should call alerts API with configured org_id
         self.assert_api_call_tracked(collector, metrics, "getOrganizationAssuranceAlerts")
+
+    async def test_fetch_organizations_direct_single_org_validates_response_format(
+        self, mock_api_builder, settings, isolated_registry
+    ):
+        """#519: the single-org getOrganization fallback must reject the SDK exhausted-retry error shape.
+
+        Instead of returning it unwrapped as if it were a valid organization dict.
+        """
+        settings.meraki.org_id = "456"
+
+        collector = AlertsCollector(
+            api=mock_api_builder.build(), settings=settings, registry=isolated_registry
+        )
+        api = mock_api_builder.build()
+        api.organizations.getOrganization = MagicMock(
+            return_value={"errors": ["Internal server error"]}
+        )
+        collector.api = api
+
+        result = await collector._fetch_organizations_direct()
+
+        # with_error_handling(continue_on_error=True) swallows the raised
+        # DataValidationError and returns None rather than propagating.
+        assert result is None
+
+    async def test_fetch_organizations_direct_single_org_returns_org(
+        self, mock_api_builder, settings, isolated_registry
+    ):
+        """A well-formed single-org response is still wrapped in a one-item list."""
+        settings.meraki.org_id = "456"
+
+        collector = AlertsCollector(
+            api=mock_api_builder.build(), settings=settings, registry=isolated_registry
+        )
+        api = mock_api_builder.build()
+        api.organizations.getOrganization = MagicMock(
+            return_value={"id": "456", "name": "Test Org"}
+        )
+        collector.api = api
+
+        result = await collector._fetch_organizations_direct()
+
+        assert result == [{"id": "456", "name": "Test Org"}]
 
     async def test_collect_handles_missing_network_data(self, collector, mock_api_builder, metrics):
         """Test handling of alerts with missing network data."""

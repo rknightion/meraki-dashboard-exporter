@@ -60,12 +60,6 @@ class ConfigCollector(MetricCollector):
             labelnames=[LabelName.ORG_ID],
         )
 
-        self._login_security_strong_passwords_enabled = self._create_gauge(
-            OrgMetricName.ORG_LOGIN_SECURITY_STRONG_PASSWORDS_ENABLED,
-            "Whether strong passwords are enforced (1=enabled, 0=disabled)",
-            labelnames=[LabelName.ORG_ID],
-        )
-
         self._login_security_minimum_password_length = self._create_gauge(
             OrgMetricName.ORG_LOGIN_SECURITY_MINIMUM_PASSWORD_LENGTH,
             "Minimum password length required",
@@ -235,7 +229,10 @@ class ConfigCollector(MetricCollector):
                 self.api.organizations.getOrganization,
                 self.settings.meraki.org_id,
             )
-            return [org]
+            # Normalize the SDK exhausted-retry error shape so an error-shaped
+            # dict raises instead of masquerading as a real organization (#519).
+            org = validate_response_format(org, expected_type=dict, operation="getOrganization")
+            return [cast(dict[str, Any], org)]
         else:
             # All accessible organizations
             organizations = await asyncio.to_thread(self.api.organizations.getOrganizations)
@@ -330,11 +327,6 @@ class ConfigCollector(MetricCollector):
 
             self._login_security_different_passwords_count.labels(org_id).set(
                 security.get("numDifferentPasswords") or 0
-            )
-
-            # Strong passwords
-            self._login_security_strong_passwords_enabled.labels(org_id).set(
-                1 if security.get("enforceStrongPasswords", False) else 0
             )
 
             self._login_security_minimum_password_length.labels(org_id).set(
@@ -510,16 +502,33 @@ class ConfigCollector(MetricCollector):
                     operation="getOrganizationConfigurationChanges",
                 )
 
+            # Rows scoped to a network outside the configured NetworkFilter must
+            # not be counted (#513); org-level rows (networkId is None) are
+            # always retained. None => no filter active, accept every row.
+            allowed_network_ids = (
+                await self.inventory.get_allowed_network_ids(org_id)
+                if self.inventory is not None
+                else None
+            )
+
             # Parse changes using domain model for validation
             parsed_changes = []
             if config_changes:
                 for change in config_changes:
                     try:
                         parsed_change = ConfigurationChange(**change)
-                        parsed_changes.append(parsed_change)
                     except Exception:
                         logger.debug("Failed to parse configuration change", change=change)
                         continue
+
+                    if (
+                        allowed_network_ids is not None
+                        and parsed_change.networkId is not None
+                        and parsed_change.networkId not in allowed_network_ids
+                    ):
+                        continue
+
+                    parsed_changes.append(parsed_change)
 
             # Count the total number of valid changes
             change_count = len(parsed_changes)

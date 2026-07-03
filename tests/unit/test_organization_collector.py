@@ -1229,3 +1229,138 @@ class TestOrganizationCollector(BaseCollectorTest):
         await collector.collect()
 
         self.assert_collector_success(collector, metrics)
+
+
+class TestLicenseCollectorSubscription:
+    """Subscription-licensing handling for LicenseCollector (#516).
+
+    Subscription-licensing orgs carry no ``licensedDeviceCounts`` in the
+    licenses overview and 400 (not 404) on ``getOrganizationLicenses`` ("does
+    not support per-device licensing"). Previously this left them permanently
+    red (``org_collection_status=0``) with zero license metrics. The collector
+    must instead emit the overview's own ``states`` counts and soft-skip an
+    unsupported per-device call.
+    """
+
+    @pytest.fixture
+    def mock_api_builder(self):
+        """Create a mock API builder."""
+        from tests.helpers.mock_api import MockAPIBuilder
+
+        return MockAPIBuilder()
+
+    @pytest.fixture
+    def license_collector(self, mock_api_builder):
+        """Create a LicenseCollector with a minimal mock parent collector."""
+        from pydantic import SecretStr
+
+        from meraki_dashboard_exporter.collectors.organization_collectors.license import (
+            LicenseCollector,
+        )
+        from meraki_dashboard_exporter.core.config import Settings
+        from meraki_dashboard_exporter.core.config_models import MerakiSettings
+
+        test_settings = Settings(
+            meraki=MerakiSettings(
+                api_key=SecretStr("6bec40cf957de430a6f1f2baa056b367d6172e1e"),
+                org_id="test-org-id",
+            )
+        )
+
+        class MockParentCollector:
+            def __init__(self) -> None:
+                self.api = mock_api_builder.build()
+                self.settings = test_settings
+                self._api_calls: dict[str, int] = {}
+                self._metrics: dict[tuple[str, tuple[tuple[str, str], ...]], float] = {}
+
+            def _track_api_call(self, method_name: str) -> None:
+                self._api_calls[method_name] = self._api_calls.get(method_name, 0) + 1
+
+            def _set_metric_value(
+                self, metric_name: str, labels: dict[str, str], value: float | None
+            ) -> None:
+                if value is not None:
+                    key = (metric_name, tuple(sorted(labels.items())))
+                    self._metrics[key] = value
+
+        parent = MockParentCollector()
+        return LicenseCollector(parent=parent)  # type: ignore[arg-type]
+
+    async def test_subscription_licensing_uses_overview_states(
+        self, license_collector, mock_api_builder
+    ):
+        """When licensedDeviceCounts is absent, emit overview `states` counts."""
+        org_id = "sub-1"
+        org_name = "Subscription Org"
+
+        overview_response = {
+            "status": "OK",
+            "states": {
+                "active": {"count": 12},
+                "expiring": {"count": 3},
+                "expired": {"count": 1},
+                "unused": {"count": 5},
+            },
+        }
+
+        api = mock_api_builder.with_custom_response(
+            "getOrganizationLicensesOverview", overview_response
+        ).build()
+        license_collector.api = api
+
+        result = await license_collector.collect(org_id, org_name)
+
+        # Soft, healthy outcome.
+        assert result is True
+
+        # The unsupported per-device endpoint must NOT be called.
+        assert not api.organizations.getOrganizationLicenses.called
+
+        parent = license_collector.parent
+
+        # A `_licenses_total` series per state, keyed by an aggregate license_type.
+        for state, count in [("active", 12), ("expiring", 3), ("expired", 1), ("unused", 5)]:
+            key = (
+                "_licenses_total",
+                (
+                    ("license_type", "All"),
+                    ("org_id", org_id),
+                    ("status", state),
+                ),
+            )
+            assert key in parent._metrics, f"missing {state}"
+            assert parent._metrics[key] == count
+
+        # Expiring gauge sourced from states.expiring.count.
+        key_exp = (
+            "_licenses_expiring",
+            (("license_type", "All"), ("org_id", org_id)),
+        )
+        assert key_exp in parent._metrics
+        assert parent._metrics[key_exp] == 3
+
+    async def test_subscription_licensing_400_soft_skipped(
+        self, license_collector, mock_api_builder
+    ):
+        """A 400 from getOrganizationLicenses is soft-skipped (no red health)."""
+        org_id = "sub-2"
+        org_name = "Subscription Org No States"
+
+        # No licensedDeviceCounts and no states -> falls through to per-device
+        # fetch, which 400s for a subscription org.
+        api = (
+            mock_api_builder
+            .with_custom_response("getOrganizationLicensesOverview", {"status": "OK"})
+            .with_error(
+                "getOrganizationLicenses",
+                Exception("400 Bad Request: organization does not support per-device licensing"),
+            )
+            .build()
+        )
+        license_collector.api = api
+
+        result = await license_collector.collect(org_id, org_name)
+
+        # Soft-skip: True (healthy), not a raised/failed collection.
+        assert result is True

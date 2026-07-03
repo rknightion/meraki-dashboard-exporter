@@ -318,7 +318,8 @@ class AlertsCollector(MetricCollector):
                 self.api.organizations.getOrganization,
                 self.settings.meraki.org_id,
             )
-            return [org]
+            org = validate_response_format(org, expected_type=dict, operation="getOrganization")
+            return [cast(dict[str, Any], org)]
         else:
             orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
             orgs = validate_response_format(orgs, expected_type=list, operation="getOrganizations")
