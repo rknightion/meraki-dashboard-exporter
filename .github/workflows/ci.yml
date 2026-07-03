@@ -164,8 +164,11 @@ jobs:
       - name: Serve smoke test (container up, GET /health + /metrics respond)
         env:
           MERAKI_EXPORTER_MERAKI__API_KEY: "00000000000000000000000000000000deadbeef"
+          # Pin an org so startup skips the single-org auto-select getOrganizations
+          # call (#585); an unpinned key would fail-fast at boot without live API.
+          MERAKI_EXPORTER_MERAKI__ORG_ID: "123456"
         run: |
-          container_id="$(docker run -d --rm -p 9099:9099 -e MERAKI_EXPORTER_MERAKI__API_KEY meraki-dashboard-exporter:test)"
+          container_id="$(docker run -d --rm -p 9099:9099 -e MERAKI_EXPORTER_MERAKI__API_KEY -e MERAKI_EXPORTER_MERAKI__ORG_ID meraki-dashboard-exporter:test)"
           echo "Started container ${container_id}"
 
           cleanup() {
