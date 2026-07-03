@@ -134,7 +134,7 @@ def test_new_config_field_defaults(monkeypatch):
     settings = Settings()
     assert settings.api.requests_proxy is None
     assert settings.api.certificate_path is None
-    assert settings.logging.log_format == "logfmt"
+    assert settings.logging.log_format == "json"
     assert settings.server.ui_enabled is True
     assert settings.webhooks.allow_insecure is False
 

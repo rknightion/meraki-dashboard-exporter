@@ -21,9 +21,9 @@ def _select_renderer(log_format: str) -> Processor:
     Parameters
     ----------
     log_format : str
-        Desired output format. ``"json"`` selects
-        :class:`structlog.processors.JSONRenderer`; anything else (notably the
-        default ``"logfmt"``) selects :class:`structlog.processors.LogfmtRenderer`.
+        Desired output format. ``"json"`` (the default, #640) selects
+        :class:`structlog.processors.JSONRenderer`; anything else (notably
+        ``"logfmt"``) selects :class:`structlog.processors.LogfmtRenderer`.
 
     Returns
     -------

@@ -149,13 +149,13 @@ config: {}
   # apiBaseUrl: "https://api.meraki.com/api/v1"
   # -- Logging level (case-insensitive; normalised to upper-case)
   # logLevel: "INFO"
-  # -- Structured-log renderer: 'logfmt' (default) or 'json'.
-  # loggingLogFormat: "logfmt"
+  # -- Structured-log renderer: 'json' (default) or 'logfmt'. JSON is the default because the primary sinks (Loki/ELK/CloudWatch) parse it cheaply and the multi-line exception field becomes valid nested JSON; set 'logfmt' for human-readable console output (#640).
+  # loggingLogFormat: "json"
   # -- Maximum number of retries for API requests (min: 0, max: 10)
   # apiMaxRetries: "3"
   # -- Per-request API timeout in seconds (SDK single_request_timeout). Note this applies to EACH page request, so a total_pages='all' bulk fetch may make many such requests; the overall fetch is additionally bounded by per_fetch_deadline_seconds. Reviewed for large-org bulk fetches (#556): kept at 30s (raise only if large-org page latencies are observed to exceed it). (min: 10, max: 300)
   # apiTimeout: "30"
-  # -- Maximum concurrent API requests within a collector's fan-out (min: 1, max: 20)
+  # -- Max in-flight sub-requests within a SINGLE collector's fan-out (the ManagedTaskGroup bound in device/network_health/organization collectors). This caps concurrency BREADTH (in-flight memory + SDK executor-thread pressure), which is distinct from the client-side AIMD rate limiter that caps request RATE: the limiter paces how fast requests leave, this caps how many are outstanding at once. Both are needed. Not to be confused with collectors.max_concurrent_collectors, which bounds how many collector loops run at once globally (#636). (min: 1, max: 20)
   # apiConcurrencyLimit: "5"
   # -- Default batch size for API operations (min: 1, max: 100)
   # apiBatchSize: "20"
@@ -283,7 +283,7 @@ config: {}
   # collectorsDisableCollectors: ""
   # -- Timeout for individual collector runs in seconds (min: 30, max: 600)
   # collectorTimeout: "240"
-  # -- Maximum number of collectors whose group-clocked loops may be executing a run concurrently (single global semaphore; replaces the old per-tier concurrency knobs). (min: 1, max: 50)
+  # -- Max number of collectors whose group-clocked loops may be executing a run concurrently, GLOBALLY (single shared semaphore; replaces the old per-tier concurrency knobs). This bounds how many collectors run at once; it is distinct from api.concurrency_limit, which bounds the fan-out breadth INSIDE one collector. The two compose: up to max_concurrent_collectors collectors run, each fanning out up to api.concurrency_limit sub-requests (#636). (min: 1, max: 50)
   # collectorsMaxConcurrentCollectors: "5"
   # -- Collect per-AP wireless signal quality (RSSI/SNR). Costs ONE API call per selected AP per cycle (hourly cadence; no bulk endpoint exists). Scope the fan-out with ap_signal_quality_tags, or disable entirely.
   # collectorsCollectApSignalQuality: "true"

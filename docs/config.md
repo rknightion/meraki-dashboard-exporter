@@ -45,7 +45,7 @@ Logging configuration
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_LOGGING__LEVEL` | `str` | `INFO` | Logging level (case-insensitive; normalised to upper-case) |
-| `MERAKI_EXPORTER_LOGGING__LOG_FORMAT` | `str` | `logfmt` | Structured-log renderer: 'logfmt' (default) or 'json'. |
+| `MERAKI_EXPORTER_LOGGING__LOG_FORMAT` | `str` | `json` | Structured-log renderer: 'json' (default) or 'logfmt'. JSON is the default because the primary sinks (Loki/ELK/CloudWatch) parse it cheaply and the multi-line exception field becomes valid nested JSON; set 'logfmt' for human-readable console output (#640). |
 
 ## API Settings
 
@@ -55,7 +55,7 @@ Configuration for Meraki API interactions
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_API__MAX_RETRIES` | `int` | `3` | Maximum number of retries for API requests (min: 0, max: 10) |
 | `MERAKI_EXPORTER_API__TIMEOUT` | `int` | `30` | Per-request API timeout in seconds (SDK single_request_timeout). Note this applies to EACH page request, so a total_pages='all' bulk fetch may make many such requests; the overall fetch is additionally bounded by per_fetch_deadline_seconds. Reviewed for large-org bulk fetches (#556): kept at 30s (raise only if large-org page latencies are observed to exceed it). (min: 10, max: 300) |
-| `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT` | `int` | `5` | Maximum concurrent API requests within a collector's fan-out (min: 1, max: 20) |
+| `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT` | `int` | `5` | Max in-flight sub-requests within a SINGLE collector's fan-out (the ManagedTaskGroup bound in device/network_health/organization collectors). This caps concurrency BREADTH (in-flight memory + SDK executor-thread pressure), which is distinct from the client-side AIMD rate limiter that caps request RATE: the limiter paces how fast requests leave, this caps how many are outstanding at once. Both are needed. Not to be confused with collectors.max_concurrent_collectors, which bounds how many collector loops run at once globally (#636). (min: 1, max: 20) |
 | `MERAKI_EXPORTER_API__BATCH_SIZE` | `int` | `20` | Default batch size for API operations (min: 1, max: 100) |
 | `MERAKI_EXPORTER_API__DEVICE_BATCH_SIZE` | `int` | `20` | Batch size for device operations (min: 1, max: 100) |
 | `MERAKI_EXPORTER_API__NETWORK_BATCH_SIZE` | `int` | `30` | Batch size for network operations (min: 1, max: 100) |
@@ -161,7 +161,7 @@ Enable/disable specific metric collectors
 | `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set[str]` | `["alerts", "clients", "config", "device", "insight", "mtsensor", "mtsensoralerts", "networkhealth", "organization"]` | Enabled collector names |
 | `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` | `set[str]` | `[]` | Explicitly disabled collectors (overrides enabled) |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` | `int` | `240` | Timeout for individual collector runs in seconds (min: 30, max: 600) |
-| `MERAKI_EXPORTER_COLLECTORS__MAX_CONCURRENT_COLLECTORS` | `int` | `5` | Maximum number of collectors whose group-clocked loops may be executing a run concurrently (single global semaphore; replaces the old per-tier concurrency knobs). (min: 1, max: 50) |
+| `MERAKI_EXPORTER_COLLECTORS__MAX_CONCURRENT_COLLECTORS` | `int` | `5` | Max number of collectors whose group-clocked loops may be executing a run concurrently, GLOBALLY (single shared semaphore; replaces the old per-tier concurrency knobs). This bounds how many collectors run at once; it is distinct from api.concurrency_limit, which bounds the fan-out breadth INSIDE one collector. The two compose: up to max_concurrent_collectors collectors run, each fanning out up to api.concurrency_limit sub-requests (#636). (min: 1, max: 50) |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECT_AP_SIGNAL_QUALITY` | `bool` | `True` | Collect per-AP wireless signal quality (RSSI/SNR). Costs ONE API call per selected AP per cycle (hourly cadence; no bulk endpoint exists). Scope the fan-out with ap_signal_quality_tags, or disable entirely. |
 | `MERAKI_EXPORTER_COLLECTORS__AP_SIGNAL_QUALITY_TAGS` | `list[str]` | `[]` | Meraki device tags scoping AP signal-quality collection. Empty = all APs; non-empty = only APs carrying at least one of these tags (CSV or JSON array). |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECT_INSIGHT` | `bool` | `False` | Enable the Meraki Insight collector (license-gated WAN/application health). Off by default; degrades to a debug-level skip when the org lacks Insight. |

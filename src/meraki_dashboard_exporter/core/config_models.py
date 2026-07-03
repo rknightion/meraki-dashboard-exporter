@@ -109,7 +109,16 @@ class APISettings(BaseModel):
         5,
         ge=1,
         le=20,
-        description="Maximum concurrent API requests within a collector's fan-out",
+        description=(
+            "Max in-flight sub-requests within a SINGLE collector's fan-out (the "
+            "ManagedTaskGroup bound in device/network_health/organization collectors). "
+            "This caps concurrency BREADTH (in-flight memory + SDK executor-thread "
+            "pressure), which is distinct from the client-side AIMD rate limiter that "
+            "caps request RATE: the limiter paces how fast requests leave, this caps how "
+            "many are outstanding at once. Both are needed. Not to be confused with "
+            "collectors.max_concurrent_collectors, which bounds how many collector loops "
+            "run at once globally (#636)."
+        ),
     )
     batch_size: int = Field(
         20,  # Increased from 10 for better throughput
@@ -855,9 +864,12 @@ class CollectorSettings(BaseModel):
         ge=1,
         le=50,
         description=(
-            "Maximum number of collectors whose group-clocked loops may be executing a "
-            "run concurrently (single global semaphore; replaces the old per-tier "
-            "concurrency knobs)."
+            "Max number of collectors whose group-clocked loops may be executing a run "
+            "concurrently, GLOBALLY (single shared semaphore; replaces the old per-tier "
+            "concurrency knobs). This bounds how many collectors run at once; it is "
+            "distinct from api.concurrency_limit, which bounds the fan-out breadth INSIDE "
+            "one collector. The two compose: up to max_concurrent_collectors collectors "
+            "run, each fanning out up to api.concurrency_limit sub-requests (#636)."
         ),
     )
     collect_ap_signal_quality: bool = Field(
@@ -1167,8 +1179,13 @@ class LoggingSettings(BaseModel):
         description="Logging level (case-insensitive; normalised to upper-case)",
     )
     log_format: str = Field(
-        "logfmt",
-        description="Structured-log renderer: 'logfmt' (default) or 'json'.",
+        "json",
+        description=(
+            "Structured-log renderer: 'json' (default) or 'logfmt'. JSON is the "
+            "default because the primary sinks (Loki/ELK/CloudWatch) parse it "
+            "cheaply and the multi-line exception field becomes valid nested "
+            "JSON; set 'logfmt' for human-readable console output (#640)."
+        ),
     )
 
     @field_validator("level", mode="before")

@@ -175,9 +175,9 @@ class TestApiProxyAndCert:
 class TestLogFormat:
     """#310 - structured-log renderer selection (logfmt|json)."""
 
-    def test_default_is_logfmt(self):
-        """The default renderer is logfmt."""
-        assert LoggingSettings().log_format == "logfmt"
+    def test_default_is_json(self):
+        """The default renderer is json (#640): Loki/ELK/CloudWatch parse it cheaply."""
+        assert LoggingSettings().log_format == "json"
 
     @pytest.mark.parametrize("value", ["json", "JSON", "  Json ", "logfmt", "LOGFMT"])
     def test_accepts_case_insensitive(self, value):
