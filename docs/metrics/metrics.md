@@ -5,9 +5,9 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 332
+- **Total metrics:** 334
 - **Gauges:** 309
-- **Counters:** 19
+- **Counters:** 21
 - **Histograms:** 3
 - **Info metrics:** 1
 
@@ -480,6 +480,13 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_exporter_collection_utilization_ratio` | gauge | `collector`, `tier` | Fraction of the tier interval consumed by actual collection (0=instant, 1=full interval) |  |
 | `meraki_exporter_collections_active` | gauge | `collector`, `tier` | Number of parallel organization collections currently active |  |
 | `meraki_exporter_collector_failure_streak` | gauge | `collector`, `tier` | Consecutive failures for each collector since last success |  |
+
+### DataLogEmitter
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_exporter_data_log_records_dropped_total` | counter | `event` | Data-log records dropped before entering the OTLP pipeline (emit raised), by event (#622). Best-effort: batch-queue overflow drops are logged by the SDK, not counted here. |  |
+| `meraki_exporter_data_log_records_emitted_total` | counter | `event` | Data-log records handed to the OTLP log pipeline, by event (#622). |  |
 
 ### EndpointScheduler
 

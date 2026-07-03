@@ -171,6 +171,7 @@ class OrganizationCollector(MetricCollector):
         expiration_manager: MetricExpirationManager | None = None,
         rate_limiter: Any | None = None,
         scheduler: Any | None = None,
+        data_log_emitter: Any | None = None,
         org_health_tracker: OrgHealthTracker | None = None,
     ) -> None:
         """Initialize organization collector with sub-collectors."""
@@ -182,6 +183,7 @@ class OrganizationCollector(MetricCollector):
             expiration_manager,
             rate_limiter,
             scheduler=scheduler,
+            data_log_emitter=data_log_emitter,
         )
 
         # Per-org health tracker for graceful degradation

@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from ..core.collector import MetricCollector
     from ..core.config import Settings
     from ..core.metric_expiration import MetricExpirationManager
+    from ..core.otel_data_logs import DataLogEmitter
     from ..core.scheduler import OrgShape
 
 logger = get_logger(__name__)
@@ -77,11 +78,13 @@ class CollectorManager:
         client: AsyncMerakiClient,
         settings: Settings,
         expiration_manager: MetricExpirationManager | None = None,
+        data_log_emitter: DataLogEmitter | None = None,
     ) -> None:
         """Initialize the collector manager with client and settings."""
         self.client = client
         self.settings = settings
         self.expiration_manager = expiration_manager
+        self.data_log_emitter = data_log_emitter
         self.rate_limiter = OrgRateLimiter(settings)
 
         # Adaptive budget-aware endpoint scheduler (#617). Constructed right after
@@ -296,6 +299,7 @@ class CollectorManager:
                         expiration_manager=self.expiration_manager,
                         rate_limiter=self.rate_limiter,
                         scheduler=self.scheduler,
+                        data_log_emitter=self.data_log_emitter,
                         **extra_kwargs,
                     )
                     self.collectors[tier].append(collector_instance)

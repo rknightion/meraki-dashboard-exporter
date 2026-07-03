@@ -634,6 +634,14 @@ class CollectorMetricName(StrEnum):
     SCHEDULER_STRETCH_FACTOR = "meraki_exporter_scheduler_stretch_factor"
     SCHEDULER_THROTTLE_BACKOFFS_TOTAL = "meraki_exporter_scheduler_throttle_backoffs_total"
 
+    # OTel data-log emitter self-observability (#622). Counters labelled by
+    # LabelName.EVENT (bounded by the built-in DataLogEvent set). Owned +
+    # emitted by core/otel_data_logs.py::DataLogEmitter. EMITTED = records handed
+    # to the OTLP log pipeline; DROPPED = best-effort pipeline-rejection signal
+    # (see DataLogEmitter docstring for exactly what is counted).
+    DATA_LOG_RECORDS_EMITTED_TOTAL = "meraki_exporter_data_log_records_emitted_total"
+    DATA_LOG_RECORDS_DROPPED_TOTAL = "meraki_exporter_data_log_records_dropped_total"
+
 
 class WebhookMetricName(StrEnum):
     """Webhook receiver metric names for monitoring webhook events (Phase 4.2)."""

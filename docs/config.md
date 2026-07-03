@@ -137,6 +137,12 @@ OpenTelemetry observability configuration
 | `MERAKI_EXPORTER_OTEL__SERVICE_NAME` | `str` | `meraki-dashboard-exporter` | Service name for OpenTelemetry tracing |
 | `MERAKI_EXPORTER_OTEL__SAMPLING_RATE` | `float` | `0.1` | Trace sampling rate (0.0-1.0). 0 disables sampling, 1 samples every trace, values in between use ratio-based parent sampling. (min: 0.0, max: 1.0) |
 | `MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES` | `dict[str, str]` | `{}` | Additional resource attributes for OpenTelemetry |
+| `MERAKI_EXPORTER_OTEL__LOGS` | `OTelLogsSettings` | `enabled=False endpoint=None insecure=None include_identifiers=False events=None` | OTLP data-log emitter settings (#622); independent of tracing. |
+| `MERAKI_EXPORTER_OTEL__LOGS__ENABLED` | `bool` | `False` | Enable the OTLP data-log emitter for high-cardinality per-entity product data. Independent of otel.enabled (tracing). Off by default. |
+| `MERAKI_EXPORTER_OTEL__LOGS__ENDPOINT` | `str | None` | `_(none)_` | OTLP gRPC endpoint for data logs. When None, falls back to otel.endpoint. An endpoint must resolve (own or inherited) when logs.enabled is True. |
+| `MERAKI_EXPORTER_OTEL__LOGS__INSECURE` | `bool | None` | `_(none)_` | Send OTLP data logs over an insecure (non-TLS) channel. When None, inherits otel.insecure. |
+| `MERAKI_EXPORTER_OTEL__LOGS__INCLUDE_IDENTIFIERS` | `bool` | `False` | PII opt-in. When False (default), the emitter drops identifier attributes (client.mac / client.hostname / client.description) from every record; only stable IDs (client.id) are emitted. Set True to include the human-readable identifiers. |
+| `MERAKI_EXPORTER_OTEL__LOGS__EVENTS` | `list[str] | None` | `_(none)_` | Per-data-class allowlist of built-in data-log event names (see DataLogEvent in core/otel_data_logs.py, e.g. "meraki.wireless.client.packet_loss"). None (default) enables all built-in events; an explicit list enables only the named events. Env: JSON array. |
 
 ## Monitoring Settings
 

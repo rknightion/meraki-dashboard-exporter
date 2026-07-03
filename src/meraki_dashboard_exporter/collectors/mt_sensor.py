@@ -56,6 +56,7 @@ class MTSensorCollector(MetricCollector):
         expiration_manager: MetricExpirationManager | None = None,
         rate_limiter: Any | None = None,
         scheduler: Any | None = None,
+        data_log_emitter: Any | None = None,
     ) -> None:
         """Initialize MT sensor collector."""
         super().__init__(
@@ -66,6 +67,7 @@ class MTSensorCollector(MetricCollector):
             expiration_manager,
             rate_limiter,
             scheduler=scheduler,
+            data_log_emitter=data_log_emitter,
         )
         # Create MT collector in standalone mode
         self.mt_collector = MTCollector.as_standalone(

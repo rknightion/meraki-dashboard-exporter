@@ -181,6 +181,9 @@ class LabelName(StrEnum):
         "application_id"  # Meraki Insight monitored-application ID (#613; <=30, capped)
     )
 
+    # Phase 4C (#622) — OTel data-log self-observability
+    EVENT = "event"  # Built-in data-log event name (bounded by DataLogEvent enum)
+
 
 def create_labels(**kwargs: str | None) -> dict[str, str]:
     """Create a label dictionary with validation.

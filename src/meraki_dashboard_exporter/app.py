@@ -34,6 +34,7 @@ from .core.constants.metrics_constants import CollectorMetricName
 from .core.discovery import DiscoveryService, resolve_org_id
 from .core.logging import get_logger, setup_logging
 from .core.metric_expiration import MetricExpirationManager
+from .core.otel_data_logs import DataLogEmitter
 from .core.otel_logging import OTELLoggingConfig
 from .core.otel_tracing import TracingConfig
 from .core.webhook_handler import WebhookHandler, enforce_webhook_security
@@ -150,6 +151,11 @@ class ExporterApp:
         if self.settings.otel.enabled:
             self.otel_logging.setup_otel_logging()
 
+        # Initialize the OTLP data-log emitter (#622): a dedicated log channel for
+        # high-cardinality per-entity product data. Independent of tracing; hard
+        # off by default. Constructing it while disabled is a cheap no-op.
+        self.data_log_emitter = DataLogEmitter(self.settings)
+
         self.client = AsyncMerakiClient(self.settings)
 
         # #544: small dedicated pool for synchronous registry-iteration work
@@ -189,6 +195,7 @@ class ExporterApp:
             client=self.client,
             settings=self.settings,
             expiration_manager=self.expiration_manager,
+            data_log_emitter=self.data_log_emitter,
         )
 
         self._background_tasks: set[asyncio.Task[Any]] = set()
@@ -494,6 +501,9 @@ class ExporterApp:
             # Shutdown OTEL logging
             if self.settings.otel.enabled:
                 self.otel_logging.shutdown()
+
+            # Flush + shutdown the data-log emitter (#622); no-op when disabled.
+            self.data_log_emitter.shutdown()
 
             logger.info("Shutdown complete")
 

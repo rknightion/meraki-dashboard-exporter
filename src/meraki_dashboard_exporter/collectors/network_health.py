@@ -134,6 +134,7 @@ class NetworkHealthCollector(MetricCollector):
         expiration_manager: MetricExpirationManager | None = None,
         rate_limiter: Any | None = None,
         scheduler: Any | None = None,
+        data_log_emitter: Any | None = None,
         org_health_tracker: OrgHealthTracker | None = None,
     ) -> None:
         """Initialize network health collector with sub-collectors."""
@@ -145,6 +146,7 @@ class NetworkHealthCollector(MetricCollector):
             expiration_manager,
             rate_limiter,
             scheduler=scheduler,
+            data_log_emitter=data_log_emitter,
         )
 
         # Shared per-org health tracker (F-169 / #547): when present, per-org

@@ -38,6 +38,35 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def build_otel_resource(settings: Settings) -> Resource:
+    """Build the shared OpenTelemetry ``Resource`` for traces and data logs.
+
+    Extracted so the tracing pipeline (``TracingConfig``) and the data-log
+    emitter (``core/otel_data_logs.py::DataLogEmitter``, #622) tag their
+    telemetry with byte-identical resource attributes — service.name/version/
+    instance.id and deployment.environment — instead of duplicating the dict.
+
+    Parameters
+    ----------
+    settings : Settings
+        Application settings (reads ``settings.otel``).
+
+    Returns
+    -------
+    Resource
+        OpenTelemetry resource describing this exporter instance.
+
+    """
+    return Resource.create({
+        "service.name": settings.otel.service_name,
+        "service.version": get_version(),
+        "service.instance.id": os.getenv("HOSTNAME", "unknown"),
+        "deployment.environment": settings.otel.resource_attributes.get(
+            "environment", "production"
+        ),
+    })
+
+
 class TracingConfig:
     """Configuration and setup for OpenTelemetry tracing."""
 
@@ -69,15 +98,9 @@ class TracingConfig:
             return
 
         try:
-            # Create resource with service information
-            resource = Resource.create({
-                "service.name": self.settings.otel.service_name,
-                "service.version": get_version(),
-                "service.instance.id": os.getenv("HOSTNAME", "unknown"),
-                "deployment.environment": self.settings.otel.resource_attributes.get(
-                    "environment", "production"
-                ),
-            })
+            # Create resource with service information (shared with the data-log
+            # emitter via build_otel_resource so traces and logs match exactly).
+            resource = build_otel_resource(self.settings)
 
             # Configure sampling
             sampler = self._create_sampler()

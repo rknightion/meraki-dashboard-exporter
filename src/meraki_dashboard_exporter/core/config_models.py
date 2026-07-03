@@ -554,6 +554,61 @@ class SchedulerSettings(BaseModel):
         return v
 
 
+class OTelLogsSettings(BaseModel):
+    """OpenTelemetry *data-log* emitter settings (#622).
+
+    A dedicated OTLP **log** channel for high-cardinality per-entity product
+    data (e.g. per-client wireless packet loss) that must never become a
+    labelled Prometheus series. This is INDEPENDENT of ``OTelSettings.enabled``
+    (which gates tracing): an operator may want per-client logs without traces,
+    or traces without logs. Hard off by default.
+
+    Env prefix: ``MERAKI_EXPORTER_OTEL__LOGS__*``.
+    """
+
+    enabled: bool = Field(
+        False,
+        description=(
+            "Enable the OTLP data-log emitter for high-cardinality per-entity "
+            "product data. Independent of otel.enabled (tracing). Off by default."
+        ),
+    )
+    endpoint: str | None = Field(
+        None,
+        description=(
+            "OTLP gRPC endpoint for data logs. When None, falls back to "
+            "otel.endpoint. An endpoint must resolve (own or inherited) when "
+            "logs.enabled is True."
+        ),
+    )
+    insecure: bool | None = Field(
+        None,
+        description=(
+            "Send OTLP data logs over an insecure (non-TLS) channel. When None, "
+            "inherits otel.insecure."
+        ),
+    )
+    include_identifiers: bool = Field(
+        False,
+        description=(
+            "PII opt-in. When False (default), the emitter drops identifier "
+            "attributes (client.mac / client.hostname / client.description) from "
+            "every record; only stable IDs (client.id) are emitted. Set True to "
+            "include the human-readable identifiers."
+        ),
+    )
+    events: list[str] | None = Field(
+        None,
+        description=(
+            "Per-data-class allowlist of built-in data-log event names (see "
+            "DataLogEvent in core/otel_data_logs.py, e.g. "
+            '"meraki.wireless.client.packet_loss"). None (default) enables all '
+            "built-in events; an explicit list enables only the named events. "
+            "Env: JSON array."
+        ),
+    )
+
+
 class OTelSettings(BaseModel):
     """OpenTelemetry configuration settings."""
 
@@ -589,13 +644,37 @@ class OTelSettings(BaseModel):
         default_factory=dict,
         description="Additional resource attributes for OpenTelemetry",
     )
+    logs: OTelLogsSettings = Field(
+        default_factory=OTelLogsSettings,
+        description="OTLP data-log emitter settings (#622); independent of tracing.",
+    )
 
     @model_validator(mode="after")
     def validate_endpoint(self) -> OTelSettings:
-        """Ensure endpoint is provided when enabled."""
+        """Ensure an endpoint is provided when tracing and/or data logs are enabled.
+
+        Tracing (``enabled``) and data logs (``logs.enabled``) are independent;
+        the data-log endpoint may be inherited from ``endpoint`` when
+        ``logs.endpoint`` is unset.
+        """
         if self.enabled and not self.endpoint:
             raise ValueError("OTEL endpoint must be provided when OTEL is enabled")
+        if self.logs.enabled and not (self.logs.endpoint or self.endpoint):
+            raise ValueError(
+                "OTEL data-log endpoint must be provided (otel.logs.endpoint or "
+                "otel.endpoint) when otel.logs.enabled is True"
+            )
         return self
+
+    @property
+    def logs_endpoint(self) -> str | None:
+        """Resolved data-log OTLP endpoint (own value, else inherited tracing endpoint)."""
+        return self.logs.endpoint or self.endpoint
+
+    @property
+    def logs_insecure(self) -> bool:
+        """Resolved data-log TLS toggle (own value, else inherited tracing insecure)."""
+        return self.insecure if self.logs.insecure is None else self.logs.insecure
 
 
 class ServerSettings(BaseModel):

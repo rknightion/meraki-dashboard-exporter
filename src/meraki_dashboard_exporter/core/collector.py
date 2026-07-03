@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from ..services.inventory import OrganizationInventory
     from .config import Settings
     from .metric_expiration import MetricExpirationManager
+    from .otel_data_logs import DataLogEmitter
     from .scheduler import EndpointGroup, EndpointGroupName, EndpointScheduler
 
 logger = get_logger(__name__)
@@ -85,6 +86,7 @@ class MetricCollector(ABC):
         expiration_manager: MetricExpirationManager | None = None,
         rate_limiter: Any | None = None,
         scheduler: EndpointScheduler | None = None,
+        data_log_emitter: DataLogEmitter | None = None,
     ) -> None:
         """Initialize the metric collector with API client and settings.
 
@@ -108,6 +110,11 @@ class MetricCollector(ABC):
             Adaptive endpoint scheduler (#617). When provided, the gate helpers
             (``_should_run_group`` etc.) consult it; when ``None`` (tests /
             standalone), gates fail open (always-run, no per-series TTL).
+        data_log_emitter : DataLogEmitter | None
+            Shared OTLP data-log emitter (#622) for high-cardinality per-entity
+            product data. Sub-collectors reach it via
+            ``self.parent.data_log_emitter``; ``None`` (tests / logs disabled)
+            means producers gate on ``is_event_enabled`` and no-op.
 
         """
         self.api = api
@@ -117,6 +124,7 @@ class MetricCollector(ABC):
         self.expiration_manager = expiration_manager
         self.rate_limiter = rate_limiter
         self.scheduler = scheduler
+        self.data_log_emitter = data_log_emitter
         self._metrics: dict[str, Any] = {}
 
         # Per-metric cardinality control (#309): families named in
