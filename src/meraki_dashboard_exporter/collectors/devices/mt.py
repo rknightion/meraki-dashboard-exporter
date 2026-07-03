@@ -263,6 +263,45 @@ class MTCollector(BaseDeviceCollector):
             validate_response_format(raw, expected_type=list, operation="getOrganizationDevices"),
         )
 
+    @log_api_call("getOrganizationSensorReadingsLatest")
+    async def _fetch_sensor_readings(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch the latest sensor readings for an organization.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID. Also consumed by the ``@log_api_call`` decorator so
+            the client-side ``OrgRateLimiter`` acquires against this org's
+            budget (#553) instead of skipping rate-limiting entirely.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of sensor readings for every sensor in the organization.
+
+        Notes
+        -----
+        Deliberately does NOT pass ``serials`` (#553): the org-wide endpoint
+        already returns readings for every sensor without it, and passing every
+        known serial explicitly only bloats the request. Sensors outside the
+        locally-built ``device_map`` (e.g. filtered out by ``NetworkFilter``)
+        are simply skipped in ``collect_batch``.
+
+        """
+        if self.api is None:
+            raise RuntimeError("API client not initialized")
+        raw = await asyncio.to_thread(
+            self.api.sensor.getOrganizationSensorReadingsLatest,
+            org_id,
+            total_pages="all",
+        )
+        return cast(
+            list[dict[str, Any]],
+            validate_response_format(
+                raw, expected_type=list, operation="getOrganizationSensorReadingsLatest"
+            ),
+        )
+
     async def _collect_org_sensors(self, org_id: str, org_name: str | None = None) -> None:
         """Collect sensor metrics for an organization.
 
@@ -318,15 +357,7 @@ class MTCollector(BaseDeviceCollector):
             if sensor_serials:
                 # Use the shared API client (respects the global concurrency limit)
                 # instead of constructing a new AsyncMerakiClient per cycle (#249).
-                raw = await asyncio.to_thread(
-                    self.api.sensor.getOrganizationSensorReadingsLatest,
-                    org_id,
-                    serials=sensor_serials,
-                    total_pages="all",
-                )
-                readings = validate_response_format(
-                    raw, expected_type=list, operation="getOrganizationSensorReadingsLatest"
-                )
+                readings = await self._fetch_sensor_readings(org_id)
 
                 # Process readings
                 self.collect_batch(readings, device_map)

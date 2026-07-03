@@ -444,8 +444,51 @@ class TestMTCollector(BaseCollectorTest):
         await mt_collector._collect_org_sensors("123456", "Test Org")
 
         mt_collector.api.sensor.getOrganizationSensorReadingsLatest.assert_called_once_with(
-            "123456", serials=[test_device["serial"]], total_pages="all"
+            "123456", total_pages="all"
         )
+
+    # --- #553: MT sensor readings fetch is rate-limited and drops the all-serials param ---
+
+    async def test_fetch_sensor_readings_does_not_pass_serials(self, mt_collector, test_device):
+        """#553: the org-wide endpoint returns all sensors without an explicit serials list."""
+        mt_collector.api.sensor.getOrganizationSensorReadingsLatest = MagicMock(return_value=[])
+
+        await mt_collector._fetch_sensor_readings("123456")
+
+        mt_collector.api.sensor.getOrganizationSensorReadingsLatest.assert_called_once_with(
+            "123456", total_pages="all"
+        )
+        call_kwargs = mt_collector.api.sensor.getOrganizationSensorReadingsLatest.call_args.kwargs
+        assert "serials" not in call_kwargs
+
+    async def test_fetch_sensor_readings_acquires_rate_limiter(self, mt_collector):
+        """#553: MT sensor readings fetch counts against the org's rate-limit budget."""
+        mt_collector.api.sensor.getOrganizationSensorReadingsLatest = MagicMock(return_value=[])
+        mock_rate_limiter = MagicMock()
+        mock_rate_limiter.acquire = AsyncMock(return_value=0.0)
+        mt_collector.parent.rate_limiter = mock_rate_limiter
+
+        await mt_collector._fetch_sensor_readings("123456")
+
+        mock_rate_limiter.acquire.assert_awaited_once_with(
+            "123456", "getOrganizationSensorReadingsLatest"
+        )
+
+    async def test_collect_org_sensors_acquires_rate_limiter(self, mt_collector, test_device):
+        """#553: the full _collect_org_sensors path also goes through the rate limiter."""
+        devices = [dict(test_device)]
+        mt_collector.api.organizations.getOrganizationDevices = MagicMock(return_value=devices)
+        mt_collector.api.sensor.getOrganizationSensorReadingsLatest = MagicMock(return_value=[])
+        mock_rate_limiter = MagicMock()
+        mock_rate_limiter.acquire = AsyncMock(return_value=0.0)
+        mt_collector.parent.rate_limiter = mock_rate_limiter
+
+        await mt_collector._collect_org_sensors("123456", "Test Org")
+
+        # The device fetch (fallback path, no inventory) also goes through the
+        # rate limiter -- assert the sensor-readings acquisition specifically,
+        # not that it was the only call.
+        mock_rate_limiter.acquire.assert_any_await("123456", "getOrganizationSensorReadingsLatest")
 
     # --- F-061: validate_response_format on standalone fetchers ---
 
@@ -484,9 +527,10 @@ class TestMTCollector(BaseCollectorTest):
         await mt_collector._collect_org_sensors("123456", "Test Org")
 
         mock_inventory.get_allowed_network_ids.assert_called_once_with("123456")
-        # Only the included-network sensor's serial is queried.
+        # No serials param is sent -- the org-wide endpoint returns everything;
+        # filtering happens locally via device_map when readings are processed.
         mt_collector.api.sensor.getOrganizationSensorReadingsLatest.assert_called_once_with(
-            "123456", serials=["Q2MT-IN"], total_pages="all"
+            "123456", total_pages="all"
         )
 
     async def test_collect_org_sensors_uses_inventory_device_cache(self, mt_collector, test_device):
