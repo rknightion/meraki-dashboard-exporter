@@ -41,6 +41,37 @@ rollout never briefly runs two pods. Optional resources, all off by default: `in
 that manages the single pod; `maxReplicas` is capped at 1). Read the `resources:` sizing guidance in
 `values.yaml` before deploying at scale — the 512Mi default is sized for small orgs only.
 
+### Shutdown behaviour and grace period
+
+On `SIGTERM`, the exporter starts an orderly shutdown: in-flight HTTP requests are allowed to
+finish and running collector work is given a chance to wind down before the process exits. This
+is **best-effort, not guaranteed**, because collector fetches run the synchronous Meraki SDK on a
+background thread pool (`asyncio.to_thread`, sized by `executor_workers`) — a thread genuinely
+blocked inside an SDK HTTP call cannot be cancelled mid-flight from the asyncio event loop, so
+shutdown has to wait for that call to return (either normally or via its own timeout) rather than
+being able to kill it instantly.
+
+Two settings bound how long a single blocked fetch can hold things up:
+
+- `single_request_timeout` (`MERAKI_EXPORTER_API__TIMEOUT`, default `30s`) bounds one HTTP request
+  to the Meraki API.
+- `per_fetch_deadline_seconds` (default `120s`, not yet exposed as a chart value) bounds a whole
+  logical fetch, including every page requested under `total_pages="all"` pagination — so a bulk
+  fetch that keeps making slow page requests still fails fast at 120s instead of hanging for the
+  full per-collector timeout.
+
+Kubernetes only gives a pod `terminationGracePeriodSeconds` after `SIGTERM` before force-killing it
+with `SIGKILL`. If that grace period is shorter than the worst-case blocked fetch, Kubernetes kills
+the pod mid-shutdown, which is harmless (the exporter is stateless and safely restartable) but shows
+up as noisy `SIGKILL`/`terminated: Error` events instead of a clean exit. The Helm chart's
+[`terminationGracePeriodSeconds`](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/charts/meraki-dashboard-exporter/values.yaml)
+value defaults to **150s** — comfortably above the `per_fetch_deadline_seconds` default (120s) with
+a ~30s margin (matching `single_request_timeout`) for the deadline to actually fire and the fetch to
+unwind before Kubernetes gives up. If you raise `per_fetch_deadline_seconds` above its default (via
+`extraEnv`, e.g. `MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS`), raise
+`terminationGracePeriodSeconds` to match — as a rule of thumb, keep it at
+`per_fetch_deadline_seconds + ~30s`.
+
 ## Endpoints
 The exporter exposes endpoints for metrics (`/metrics`), liveness (`/health`),
 readiness (`/ready`), an exporter self-health dashboard (`/status`), cardinality
