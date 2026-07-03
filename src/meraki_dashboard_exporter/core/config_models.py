@@ -512,6 +512,17 @@ class ClientSettings(BaseModel):
         le=86400,  # 24 hours maximum
         description="DNS cache TTL in seconds (default: 6 hours)",
     )
+    dns_cache_max_entries: int = Field(
+        100000,
+        ge=1000,
+        le=5_000_000,
+        description=(
+            "Maximum number of reverse-DNS cache entries (and per-client IP-tracking "
+            "entries) held in memory. When exceeded, expired entries are pruned first, "
+            "then the oldest entries are evicted so RSS stays bounded under sustained "
+            "client churn (#543)."
+        ),
+    )
     cache_ttl: int = Field(
         3600,
         ge=300,

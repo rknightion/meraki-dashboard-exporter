@@ -42,9 +42,17 @@ class DNSResolver:
         self.settings = settings
         self.timeout = settings.clients.dns_timeout
         self.cache_ttl = settings.clients.dns_cache_ttl
+        # Hard upper bound on both in-memory maps so RSS stays bounded under
+        # sustained unique-IP / client churn (#543). Expired entries are pruned
+        # first; if still over the cap, the oldest entries are evicted.
+        self.max_cache_entries = settings.clients.dns_cache_max_entries
         self._cache: dict[str, CacheEntry] = {}
         self._client_tracking: dict[str, dict[str, str]] = {}  # client_id -> {ip, description}
         self._retry = AsyncRetry(max_attempts=3, base_delay=1.0, max_delay=5.0)
+        # Cumulative wall-clock seconds spent in actual reverse-DNS lookups
+        # (excludes cache hits); promoted to a Prometheus counter by the
+        # collector for average-latency queries (#319).
+        self._total_resolution_time: float = 0.0
 
         # Dedicated, bounded thread pool for blocking reverse-DNS lookups (F-075).
         # `socket.gethostbyaddr` cannot be interrupted, so when `with_timeout`
@@ -87,6 +95,7 @@ class DNSResolver:
 
         if previous_info != current_info:
             self._client_tracking[client_id] = current_info
+            self._bound_client_tracking()
             if previous_info and previous_info.get("ip") != current_info["ip"]:
                 # IP changed, invalidate cache for old IP
                 old_ip = previous_info.get("ip")
@@ -160,15 +169,20 @@ class DNSResolver:
             ipaddress.ip_address(ip)
         except ValueError:
             logger.debug("Invalid IP address format", ip=ip)
-            self._cache[ip] = CacheEntry(hostname=None, timestamp=time.time(), client_id=client_id)
+            self._cache_put(
+                ip, CacheEntry(hostname=None, timestamp=time.time(), client_id=client_id)
+            )
             self._stats["failed_lookups"] += 1
             return None
 
-        # Perform reverse DNS lookup with retry
+        # Perform reverse DNS lookup with retry, timing the actual resolution
+        # (cache hits above are excluded) for the resolution-seconds counter (#319).
+        lookup_start = time.perf_counter()
         hostname = await self._retry.execute(
             lambda: self._perform_lookup(ip),
             operation=f"DNS lookup for {ip}",
         )
+        self._total_resolution_time += time.perf_counter() - lookup_start
 
         # Track success/failure
         if hostname:
@@ -179,13 +193,73 @@ class DNSResolver:
             self._stats["failed_lookups"] += 1
 
         # Cache the result
-        self._cache[ip] = CacheEntry(
-            hostname=hostname,
-            timestamp=time.time(),
-            client_id=client_id,
+        self._cache_put(
+            ip,
+            CacheEntry(
+                hostname=hostname,
+                timestamp=time.time(),
+                client_id=client_id,
+            ),
         )
 
         return hostname
+
+    def _cache_put(self, ip: str, entry: CacheEntry) -> None:
+        """Insert a cache entry and enforce the size bound (#543).
+
+        Parameters
+        ----------
+        ip : str
+            IP address key.
+        entry : CacheEntry
+            Cache entry to store.
+
+        """
+        self._cache[ip] = entry
+        if len(self._cache) > self.max_cache_entries:
+            self._prune_cache()
+
+    def _prune_cache(self) -> None:
+        """Bound the reverse-DNS cache: drop expired entries, then evict oldest (#543).
+
+        Called only when the cache exceeds ``max_cache_entries``. Expired entries
+        are removed first (they would be dropped lazily on next access anyway);
+        if the cache is still over the cap, the oldest entries by timestamp are
+        evicted until it fits.
+        """
+        now = time.time()
+        expired = [ip for ip, e in self._cache.items() if now - e.timestamp >= self.cache_ttl]
+        for ip in expired:
+            del self._cache[ip]
+
+        overflow = len(self._cache) - self.max_cache_entries
+        evicted = 0
+        if overflow > 0:
+            oldest = sorted(self._cache.items(), key=lambda kv: kv[1].timestamp)[:overflow]
+            for ip, _entry in oldest:
+                del self._cache[ip]
+            evicted = len(oldest)
+
+        if expired or evicted:
+            logger.debug(
+                "Pruned DNS cache to size bound",
+                expired=len(expired),
+                evicted=evicted,
+                max_entries=self.max_cache_entries,
+                cache_size=len(self._cache),
+            )
+
+    def _bound_client_tracking(self) -> None:
+        """Bound the per-client IP-tracking map with FIFO eviction (#543).
+
+        ``dict`` preserves insertion order, so evicting ``next(iter(...))`` drops
+        the oldest-inserted client. This may cost a missed IP-change cache
+        invalidation for an evicted-then-returning client, which is an acceptable
+        trade for a hard memory bound.
+        """
+        while len(self._client_tracking) > self.max_cache_entries:
+            oldest_key = next(iter(self._client_tracking))
+            del self._client_tracking[oldest_key]
 
     async def _perform_lookup(self, ip: str) -> str | None:
         """Perform the actual DNS lookup.
@@ -338,6 +412,7 @@ class DNSResolver:
             "failed_lookups": 0,
             "cache_hits": 0,
         }
+        self._total_resolution_time = 0.0
         logger.info("DNS cache cleared", entries_cleared=old_size)
 
     @property
@@ -345,13 +420,14 @@ class DNSResolver:
         """Current cache size."""
         return len(self._cache)
 
-    def get_cache_stats(self) -> dict[str, int]:
+    def get_cache_stats(self) -> dict[str, float]:
         """Get cache statistics.
 
         Returns
         -------
-        dict[str, int]
-            Cache statistics including size, valid entries, and expired entries.
+        dict[str, float]
+            Cache statistics including size, valid/expired entries, lookup
+            counters, cumulative resolution time, and cache-hit ratio.
 
         """
         total = len(self._cache)
@@ -365,16 +441,24 @@ class DNSResolver:
             else:
                 expired += 1
 
+        total_lookups = self._stats["total_lookups"]
+        cache_hits = self._stats["cache_hits"]
+        # total_lookups is incremented before the cache check, so it already
+        # includes cache hits -- ratio is over all resolve_hostname calls (#319).
+        hit_ratio = (cache_hits / total_lookups) if total_lookups else 0.0
+
         return {
             "total_entries": total,
             "valid_entries": valid,
             "expired_entries": expired,
             "tracked_clients": len(self._client_tracking),
             "cache_ttl_seconds": self.cache_ttl,
-            "total_lookups": self._stats["total_lookups"],
+            "total_lookups": total_lookups,
             "successful_lookups": self._stats["successful_lookups"],
             "failed_lookups": self._stats["failed_lookups"],
-            "cache_hits": self._stats["cache_hits"],
+            "cache_hits": cache_hits,
+            "cache_hit_ratio": hit_ratio,
+            "total_resolution_time": self._total_resolution_time,
         }
 
     def get_lookup_stats(self) -> dict[str, int]:

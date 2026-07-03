@@ -72,7 +72,7 @@ class ClientsCollector(MetricCollector):
         self.dns_resolver = DNSResolver(self.settings)
 
         # Initialize DNS stats tracking
-        self._last_dns_stats: dict[str, int] | None = None
+        self._last_dns_stats: dict[str, float] | None = None
         self._last_app_usage_by_network: dict[str, float] = {}
         # Per-network throttle for the sequential signal-quality fan-out (F-060).
         self._last_signal_quality_by_network: dict[str, float] = {}
@@ -160,50 +160,65 @@ class ClientsCollector(MetricCollector):
             ],
         )
 
-        # DNS cache metrics
+        # DNS cache metrics (enum-named; #319)
         self.dns_cache_total = self._create_gauge(
-            "meraki_exporter_client_dns_cache_total",
+            CollectorMetricName.CLIENT_DNS_CACHE_TOTAL,
             "Total number of entries in DNS cache",
         )
 
         self.dns_cache_valid = self._create_gauge(
-            "meraki_exporter_client_dns_cache_valid",
+            CollectorMetricName.CLIENT_DNS_CACHE_VALID,
             "Number of valid entries in DNS cache",
         )
 
         self.dns_cache_expired = self._create_gauge(
-            "meraki_exporter_client_dns_cache_expired",
+            CollectorMetricName.CLIENT_DNS_CACHE_EXPIRED,
             "Number of expired entries in DNS cache",
         )
 
+        # Cache-hit ratio over the process lifetime (0..1) = cache_hits/total_lookups (#319).
+        self.dns_cache_hit_ratio = self._create_gauge(
+            CollectorMetricName.CLIENT_DNS_CACHE_HIT_RATIO,
+            "Ratio of reverse-DNS lookups served from cache (0..1), cumulative over "
+            "process lifetime",
+        )
+
         self.dns_lookups_total = self._create_counter(
-            "meraki_exporter_client_dns_lookups_total",
+            CollectorMetricName.CLIENT_DNS_LOOKUPS_TOTAL,
             "Total number of DNS lookups performed",
         )
 
         self.dns_lookups_successful = self._create_counter(
-            "meraki_exporter_client_dns_lookups_successful_total",
+            CollectorMetricName.CLIENT_DNS_LOOKUPS_SUCCESSFUL_TOTAL,
             "Total number of successful DNS lookups",
         )
 
         self.dns_lookups_failed = self._create_counter(
-            "meraki_exporter_client_dns_lookups_failed_total",
+            CollectorMetricName.CLIENT_DNS_LOOKUPS_FAILED_TOTAL,
             "Total number of failed DNS lookups",
         )
 
         self.dns_lookups_cached = self._create_counter(
-            "meraki_exporter_client_dns_lookups_cached_total",
+            CollectorMetricName.CLIENT_DNS_LOOKUPS_CACHED_TOTAL,
             "Total number of DNS lookups served from cache",
+        )
+
+        # Cumulative wall-clock seconds spent in actual reverse-DNS lookups
+        # (excludes cache hits). Divide the delta by the delta of
+        # successful+failed lookups for average lookup latency (#319).
+        self.dns_resolution_seconds = self._create_counter(
+            CollectorMetricName.CLIENT_DNS_RESOLUTION_SECONDS_TOTAL,
+            "Cumulative seconds spent performing reverse-DNS lookups (excludes cache hits)",
         )
 
         # Client store metrics
         self.client_store_total = self._create_gauge(
-            "meraki_exporter_client_store_total",
+            CollectorMetricName.CLIENT_STORE_TOTAL,
             "Total number of clients in the store",
         )
 
         self.client_store_networks = self._create_gauge(
-            "meraki_exporter_client_store_networks",
+            CollectorMetricName.CLIENT_STORE_NETWORKS,
             "Total number of networks with clients",
         )
 
@@ -347,6 +362,18 @@ class ClientsCollector(MetricCollector):
             networks_processed=self._collection_networks,
             total_clients=self._collection_clients,
         )
+
+        # Evict client data for networks no longer seen this cycle (departed
+        # networks) so the store stays bounded (#543). is_network_stale uses the
+        # client cache_ttl (default 1h), so only networks absent for longer than
+        # that TTL are removed -- a network merely skipped this MEDIUM cycle is
+        # not flapped out.
+        evicted_networks = self.client_store.cleanup_stale_networks()
+        if evicted_networks:
+            logger.debug(
+                "Evicted stale networks from client store",
+                networks_evicted=evicted_networks,
+            )
 
         # Update DNS cache and client store metrics after all collections
         self._update_cache_metrics()
@@ -1315,6 +1342,8 @@ class ClientsCollector(MetricCollector):
         self.dns_cache_total.set(dns_stats["total_entries"])
         self.dns_cache_valid.set(dns_stats["valid_entries"])
         self.dns_cache_expired.set(dns_stats["expired_entries"])
+        # Cache-hit ratio is a point-in-time ratio gauge, not a delta (#319).
+        self.dns_cache_hit_ratio.set(dns_stats["cache_hit_ratio"])
 
         # Update DNS lookup counters (these are cumulative counters)
         # We need to track the difference since last update
@@ -1326,6 +1355,9 @@ class ClientsCollector(MetricCollector):
             )
             failed_delta = dns_stats["failed_lookups"] - self._last_dns_stats["failed_lookups"]
             cached_delta = dns_stats["cache_hits"] - self._last_dns_stats["cache_hits"]
+            resolution_delta = (
+                dns_stats["total_resolution_time"] - self._last_dns_stats["total_resolution_time"]
+            )
 
             # Increment counters by the delta using inc()
             if total_delta > 0:
@@ -1336,6 +1368,8 @@ class ClientsCollector(MetricCollector):
                 self.dns_lookups_failed.inc(failed_delta)
             if cached_delta > 0:
                 self.dns_lookups_cached.inc(cached_delta)
+            if resolution_delta > 0:
+                self.dns_resolution_seconds.inc(resolution_delta)
         else:
             # First run - set initial values by incrementing from 0
             if dns_stats["total_lookups"] > 0:
@@ -1346,6 +1380,8 @@ class ClientsCollector(MetricCollector):
                 self.dns_lookups_failed.inc(dns_stats["failed_lookups"])
             if dns_stats["cache_hits"] > 0:
                 self.dns_lookups_cached.inc(dns_stats["cache_hits"])
+            if dns_stats["total_resolution_time"] > 0:
+                self.dns_resolution_seconds.inc(dns_stats["total_resolution_time"])
 
         # Store current stats for next update
         self._last_dns_stats = dns_stats.copy()

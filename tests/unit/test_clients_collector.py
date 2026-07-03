@@ -1168,3 +1168,68 @@ class TestClientsCollector(BaseCollectorTest):
         }
         assert "meraki_client_status" in tracked_metric_names
         assert "meraki_client_info" in tracked_metric_names
+
+
+class TestClientsCollectorMemoryAndDNSMetrics(BaseCollectorTest):
+    """#543 store eviction wiring + #319 DNS resolver metrics."""
+
+    collector_class = ClientsCollector
+    update_tier = UpdateTier.MEDIUM
+
+    @pytest.fixture
+    def settings_with_clients_enabled(self, settings):
+        """Enable client collection on the shared settings fixture."""
+        settings.clients.enabled = True
+        return settings
+
+    @pytest.fixture
+    def collector(self, mock_api, settings_with_clients_enabled, isolated_registry):
+        """Build a clients-enabled collector on the isolated registry."""
+        return self.collector_class(
+            api=mock_api, settings=settings_with_clients_enabled, registry=isolated_registry
+        )
+
+    def _update_collector_api(self, collector: ClientsCollector, api: MagicMock) -> None:
+        """Point both the collector and its API helper at the mock API."""
+        collector.api = api
+        collector.api_helper.api = api
+
+    async def test_collect_invokes_client_store_eviction(
+        self, collector, mock_api_builder, metrics
+    ):
+        """#543: departed-network eviction (cleanup_stale_networks) runs each cycle."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_custom_response("getNetworkClients", [])
+            .build()
+        )
+        self._update_collector_api(collector, api)
+
+        with patch.object(
+            collector.client_store,
+            "cleanup_stale_networks",
+            wraps=collector.client_store.cleanup_stale_networks,
+        ) as spy:
+            await self.run_collector(collector)
+
+        spy.assert_called()
+
+    def test_dns_stats_metrics_emitted(self, collector, metrics):
+        """#319: DNS cache-hit ratio + cumulative resolution seconds are emitted."""
+        resolver = collector.dns_resolver
+        resolver._stats["total_lookups"] = 10
+        resolver._stats["cache_hits"] = 4
+        resolver._stats["successful_lookups"] = 5
+        resolver._stats["failed_lookups"] = 1
+        resolver._total_resolution_time = 2.5
+
+        collector._update_cache_metrics()
+
+        metrics.assert_gauge_value("meraki_exporter_client_dns_cache_hit_ratio", 0.4)
+        metrics.assert_counter_value("meraki_exporter_client_dns_resolution_seconds", 2.5)
+        metrics.assert_counter_value("meraki_exporter_client_dns_lookups", 10)
+        metrics.assert_counter_value("meraki_exporter_client_dns_lookups_cached", 4)

@@ -459,6 +459,23 @@ class CollectorMetricName(StrEnum):
     # (#533). Per-cycle snapshot gauge (0 = within caps), not a Counter.
     CLIENTS_OVER_CAP = "meraki_exporter_clients_over_cap"
 
+    # DNS resolver + client-store instrumentation (#319). Exporter self-metrics
+    # (`meraki_exporter_client_*`), owned/emitted by
+    # ClientsCollector._update_cache_metrics. Global singletons -- no labels.
+    # DNS_CACHE_TOTAL / CLIENT_STORE_TOTAL are pre-1.0 Gauges carrying a legacy
+    # `_total` name (kept as-is; renaming them is a separate breaking change).
+    CLIENT_DNS_CACHE_TOTAL = "meraki_exporter_client_dns_cache_total"
+    CLIENT_DNS_CACHE_VALID = "meraki_exporter_client_dns_cache_valid"
+    CLIENT_DNS_CACHE_EXPIRED = "meraki_exporter_client_dns_cache_expired"
+    CLIENT_DNS_CACHE_HIT_RATIO = "meraki_exporter_client_dns_cache_hit_ratio"
+    CLIENT_DNS_LOOKUPS_TOTAL = "meraki_exporter_client_dns_lookups_total"
+    CLIENT_DNS_LOOKUPS_SUCCESSFUL_TOTAL = "meraki_exporter_client_dns_lookups_successful_total"
+    CLIENT_DNS_LOOKUPS_FAILED_TOTAL = "meraki_exporter_client_dns_lookups_failed_total"
+    CLIENT_DNS_LOOKUPS_CACHED_TOTAL = "meraki_exporter_client_dns_lookups_cached_total"
+    CLIENT_DNS_RESOLUTION_SECONDS_TOTAL = "meraki_exporter_client_dns_resolution_seconds_total"
+    CLIENT_STORE_TOTAL = "meraki_exporter_client_store_total"
+    CLIENT_STORE_NETWORKS = "meraki_exporter_client_store_networks"
+
     # Collection utilization metrics
     EXPORTER_COLLECTION_UTILIZATION_RATIO = "meraki_exporter_collection_utilization_ratio"
 

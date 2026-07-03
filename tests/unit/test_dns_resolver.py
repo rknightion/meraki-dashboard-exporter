@@ -146,3 +146,73 @@ async def test_clear_cache(monkeypatch, resolver):
 
     resolver.clear_cache()
     assert resolver.cache_size == 0
+
+
+@pytest.mark.asyncio
+async def test_cache_is_bounded_under_churn(monkeypatch):
+    """#543: the reverse-DNS cache must stay bounded under unique-IP churn."""
+
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+    settings = Settings()
+    settings.clients.dns_cache_max_entries = 10
+    resolver = DNSResolver(settings)
+
+    async def fake_lookup(ip: str) -> str:
+        return "host.example.com"
+
+    monkeypatch.setattr(resolver, "_perform_lookup", fake_lookup)
+
+    for i in range(500):
+        await resolver.resolve_hostname(f"10.0.{i // 256}.{i % 256}")
+
+    assert resolver.cache_size <= 10
+
+
+@pytest.mark.asyncio
+async def test_client_tracking_is_bounded_under_churn(monkeypatch):
+    """#543: per-client IP tracking must stay bounded under client churn."""
+
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+    settings = Settings()
+    settings.clients.dns_cache_max_entries = 10
+    resolver = DNSResolver(settings)
+
+    for i in range(500):
+        resolver.track_client(f"client-{i}", f"10.0.{i // 256}.{i % 256}", "desc")
+
+    assert len(resolver._client_tracking) <= 10
+
+
+@pytest.mark.asyncio
+async def test_stats_expose_hit_ratio_and_resolution_time(resolver, monkeypatch):
+    """#319: cache-hit ratio and cumulative resolution time are exposed for metrics."""
+
+    async def fake_lookup(ip: str) -> str:
+        return "example.com"
+
+    monkeypatch.setattr(resolver, "_perform_lookup", fake_lookup)
+
+    await resolver.resolve_hostname("1.1.1.1")  # miss -> real lookup
+    await resolver.resolve_hostname("1.1.1.1")  # served from cache
+
+    stats = resolver.get_cache_stats()
+    assert stats["total_lookups"] == 2
+    assert stats["cache_hits"] == 1
+    assert stats["cache_hit_ratio"] == 0.5
+    assert stats["total_resolution_time"] >= 0.0
+
+
+@pytest.mark.asyncio
+async def test_clear_cache_resets_resolution_time(resolver, monkeypatch):
+    """clear_cache resets the cumulative resolution timer (#319)."""
+
+    async def fake_lookup(ip: str) -> str:
+        return "example.com"
+
+    monkeypatch.setattr(resolver, "_perform_lookup", fake_lookup)
+    await resolver.resolve_hostname("1.1.1.1")
+
+    resolver.clear_cache()
+    stats = resolver.get_cache_stats()
+    assert stats["total_resolution_time"] == 0.0
+    assert stats["cache_hit_ratio"] == 0.0
