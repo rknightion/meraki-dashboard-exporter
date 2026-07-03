@@ -41,6 +41,10 @@ class MTCollector(BaseDeviceCollector):
     # Sensor data updates frequently
     update_tier: UpdateTier = UpdateTier.FAST
 
+    # Shared rate limiter. None for sub-collectors (the @log_api_call decorator
+    # falls back to self.parent.rate_limiter); set directly by as_standalone (#270).
+    rate_limiter: Any | None = None
+
     def __init__(self, parent: DeviceCollector) -> None:
         """Initialize MT collector as a sub-collector.
 
@@ -74,6 +78,7 @@ class MTCollector(BaseDeviceCollector):
         cls,
         api: DashboardAPI,
         settings: Settings,
+        rate_limiter: Any | None = None,
     ) -> MTCollector:
         """Create as an independent collector for MTSensorCollector.
 
@@ -83,6 +88,10 @@ class MTCollector(BaseDeviceCollector):
             Meraki API client.
         settings : Settings
             Application settings.
+        rate_limiter : Any | None
+            Shared OrgRateLimiter. Threaded through so the standalone MT
+            fetchers (parent is None) still throttle via @log_api_call, which
+            resolves ``self.rate_limiter`` (#270).
 
         Returns
         -------
@@ -94,6 +103,7 @@ class MTCollector(BaseDeviceCollector):
         instance.parent = None
         instance.api = api
         instance.settings = settings
+        instance.rate_limiter = rate_limiter
         return instance
 
     async def collect(self, device: dict[str, Any]) -> None:
@@ -229,6 +239,12 @@ class MTCollector(BaseDeviceCollector):
 
             if self.api is None:
                 return org_id
+            # Fallback direct call (no @log_api_call here): throttle explicitly.
+            rate_limiter = (
+                getattr(self.parent, "rate_limiter", None) if self.parent is not None else None
+            )
+            if rate_limiter is not None:
+                await rate_limiter.acquire(org_id, "getOrganization")
             org = await asyncio.to_thread(self.api.organizations.getOrganization, org_id)
             return str(org.get("name", org_id))
         except Exception:

@@ -43,7 +43,9 @@ class MTSensorCollector(MetricCollector):
         """Initialize MT sensor collector."""
         super().__init__(api, settings, registry, inventory, expiration_manager, rate_limiter)
         # Create MT collector in standalone mode
-        self.mt_collector = MTCollector.as_standalone(api=api, settings=settings)
+        self.mt_collector = MTCollector.as_standalone(
+            api=api, settings=settings, rate_limiter=self.rate_limiter
+        )
         # Pass this collector as the parent for metric access
         # This allows MTCollector to use MTSensorCollector's metrics
         self.mt_collector.parent = self

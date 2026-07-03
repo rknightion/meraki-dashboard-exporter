@@ -1491,6 +1491,12 @@ class MSCollector(BaseDeviceCollector):
                 try:
                     # Fetch STP configuration for the network
                     with LogContext(network_id=network_id):
+                        # This nested per-network fetch is not decorated with
+                        # @log_api_call, so acquire the rate limiter explicitly
+                        # (keyed by the owning org) to avoid bypassing throttling.
+                        rate_limiter = getattr(self.parent, "rate_limiter", None)
+                        if rate_limiter is not None:
+                            await rate_limiter.acquire(org_id, "getNetworkSwitchStp")
                         stp_data = await asyncio.to_thread(
                             self.api.switch.getNetworkSwitchStp,
                             network_id,

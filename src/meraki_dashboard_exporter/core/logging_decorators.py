@@ -411,11 +411,18 @@ def _extract_context(args: tuple[Any, ...], kwargs: dict[str, Any]) -> dict[str,
 
 
 def _get_rate_limiter(target: Any) -> Any | None:
-    """Resolve a rate limiter instance from collector or parent."""
-    if hasattr(target, "rate_limiter"):
-        return target.rate_limiter
-    if hasattr(target, "parent") and hasattr(target.parent, "rate_limiter"):
-        return target.parent.rate_limiter
+    """Resolve a rate limiter instance from collector or parent.
+
+    A ``rate_limiter`` attribute that is present but ``None`` (e.g. a
+    sub-collector that declares the attribute but relies on its parent's
+    limiter) falls through to the parent rather than short-circuiting.
+    """
+    own = getattr(target, "rate_limiter", None)
+    if own is not None:
+        return own
+    parent = getattr(target, "parent", None)
+    if parent is not None:
+        return getattr(parent, "rate_limiter", None)
     return None
 
 

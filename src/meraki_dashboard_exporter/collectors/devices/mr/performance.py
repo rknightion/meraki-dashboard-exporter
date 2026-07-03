@@ -831,6 +831,7 @@ class MRPerformanceCollector:
         )
         return result
 
+    @log_api_call("getOrganizationWirelessDevicesPacketLossByNetwork")
     async def _fetch_network_packet_loss(self, org_id: str) -> Any:
         """Fetch network packet loss data.
 
@@ -866,7 +867,6 @@ class MRPerformanceCollector:
             )
             return None
 
-    @log_api_call("getOrganizationWirelessDevicesSystemCpuLoadHistory")
     @with_error_handling(
         operation="Collect MR CPU load",
         continue_on_error=True,
@@ -927,6 +927,7 @@ class MRPerformanceCollector:
                 org_id=org_id,
             )
 
+    @log_api_call("getOrganizationWirelessDevicesSystemCpuLoadHistory")
     async def _process_cpu_load_batch(
         self, org_id: str, org_name: str, devices: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
