@@ -555,6 +555,7 @@ class DeviceCollector(MetricCollector):
                             max_batch_delay=max_delay,
                             item_description="MS device",
                             error_context_func=lambda device: {"serial": device["serial"]},
+                            on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
                         )
 
                     if not used_fallback:
@@ -588,6 +589,7 @@ class DeviceCollector(MetricCollector):
                                     max_batch_delay=max_delay,
                                     item_description="MS port usage",
                                     error_context_func=lambda device: {"serial": device["serial"]},
+                                    on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
                                 )
                 else:
                     # Process devices in batches (configurable via device_batch_size)
@@ -603,6 +605,7 @@ class DeviceCollector(MetricCollector):
                         max_batch_delay=max_delay,
                         item_description="MS device",
                         error_context_func=lambda device: {"serial": device["serial"]},
+                        on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
                     )
 
                 # Collect packet statistics with smoothing and interval gating
@@ -618,6 +621,7 @@ class DeviceCollector(MetricCollector):
                         max_batch_delay=max_delay,
                         item_description="MS packet stats",
                         error_context_func=lambda device: {"serial": device["serial"]},
+                        on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
                     )
 
             # Note: MR per-device collection has been replaced with org/network-level
@@ -646,6 +650,7 @@ class DeviceCollector(MetricCollector):
                         delay_between_batches=self.settings.api.batch_delay,
                         item_description=f"{device_type} device",
                         error_context_func=lambda device: {"serial": device["serial"]},
+                        on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
                     )
 
             # Aggregate network-wide POE metrics after all switches are collected

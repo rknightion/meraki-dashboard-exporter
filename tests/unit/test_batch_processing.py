@@ -164,6 +164,62 @@ class TestProcessInBatchesWithErrors:
         assert len(results) == 1
         assert results[0] == ("test", "processed_test")
 
+    async def test_on_error_sink_invoked_per_failure(self):
+        """on_error is invoked exactly once per swallowed per-item exception.
+
+        #621: per-item batch failures must be surfaced to the collector error
+        counter. The sink fires once per failing item while partial results are
+        still returned unchanged.
+        """
+        error_calls = 0
+
+        def on_error() -> None:
+            nonlocal error_calls
+            error_calls += 1
+
+        async def process_item(item: int) -> str:
+            await asyncio.sleep(0.01)
+            if item % 3 == 0:
+                raise ValueError(f"Item {item} failed")
+            return f"processed_{item}"
+
+        items = list(range(9))
+        results = await process_in_batches_with_errors(
+            items,
+            process_item,
+            batch_size=3,
+            item_description="number",
+            on_error=on_error,
+        )
+
+        # Items 0, 3, 6 fail -> 3 sink invocations.
+        assert error_calls == 3
+
+        # Partial results are still returned unchanged (control flow intact).
+        assert len(results) == 9
+        successful = [r for _, r in results if not isinstance(r, Exception)]
+        failed = [r for _, r in results if isinstance(r, Exception)]
+        assert len(successful) == 6
+        assert len(failed) == 3
+
+    async def test_on_error_sink_not_invoked_on_success(self):
+        """on_error is never invoked when every item succeeds."""
+        error_calls = 0
+
+        def on_error() -> None:
+            nonlocal error_calls
+            error_calls += 1
+
+        async def process_item(item: int) -> str:
+            return f"processed_{item}"
+
+        results = await process_in_batches_with_errors(
+            list(range(5)), process_item, batch_size=2, on_error=on_error
+        )
+
+        assert error_calls == 0
+        assert len(results) == 5
+
     async def test_base_exception_filtering(self):
         """Test that non-Exception BaseExceptions are filtered out."""
 

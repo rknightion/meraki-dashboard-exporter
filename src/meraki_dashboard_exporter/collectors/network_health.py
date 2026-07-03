@@ -360,6 +360,7 @@ class NetworkHealthCollector(MetricCollector):
                     "network_id": network.get("id"),
                     "network_name": network.get("name"),
                 },
+                on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
             )
         except Exception:
             nh_failed = True
