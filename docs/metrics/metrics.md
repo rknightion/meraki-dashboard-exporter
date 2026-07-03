@@ -5,9 +5,9 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 247
-- **Gauges:** 227
-- **Counters:** 16
+- **Total metrics:** 249
+- **Gauges:** 228
+- **Counters:** 17
 - **Histograms:** 3
 - **Info metrics:** 1
 
@@ -47,12 +47,14 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_clients_per_ssid_count` | gauge | `org_id`, `network_id`, `ssid` | Count of clients per SSID, over the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_clients_per_vlan_count` | gauge | `org_id`, `network_id`, `vlan` | Count of clients per VLAN, over the last hour | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_cache_expired` | gauge | — | Number of expired entries in DNS cache | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_exporter_client_dns_cache_hit_ratio` | gauge | — | Ratio of reverse-DNS lookups served from cache (0..1), cumulative over process lifetime | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_cache_total` | gauge | — | Total number of entries in DNS cache | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_cache_valid` | gauge | — | Number of valid entries in DNS cache | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_lookups_cached_total` | counter | — | Total number of DNS lookups served from cache | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_lookups_failed_total` | counter | — | Total number of failed DNS lookups | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_lookups_successful_total` | counter | — | Total number of successful DNS lookups | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_lookups_total` | counter | — | Total number of DNS lookups performed | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_exporter_client_dns_resolution_seconds_total` | counter | — | Cumulative seconds spent performing reverse-DNS lookups (excludes cache hits) | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_store_networks` | gauge | — | Total number of networks with clients | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_store_total` | gauge | — | Total number of clients in the store | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_clients_over_cap` | gauge | `org_id`, `network_id` | Clients excluded from metric emission in the most recent cycle because the per-network or global client cap was reached (0 = within caps) | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |

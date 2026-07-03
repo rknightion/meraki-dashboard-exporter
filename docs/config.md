@@ -167,6 +167,7 @@ Client data collection and DNS resolution settings
 | `MERAKI_EXPORTER_CLIENTS__ENABLED` | `bool` | `False` | Enable client data collection |
 | `MERAKI_EXPORTER_CLIENTS__DNS_TIMEOUT` | `float` | `5.0` | DNS lookup timeout in seconds (min: 0.5, max: 10.0) |
 | `MERAKI_EXPORTER_CLIENTS__DNS_CACHE_TTL` | `int` | `21600` | DNS cache TTL in seconds (default: 6 hours) (min: 300, max: 86400) |
+| `MERAKI_EXPORTER_CLIENTS__DNS_CACHE_MAX_ENTRIES` | `int` | `100000` | Maximum number of reverse-DNS cache entries (and per-client IP-tracking entries) held in memory. When exceeded, expired entries are pruned first, then the oldest entries are evicted so RSS stays bounded under sustained client churn (#543). (min: 1000, max: 5000000) |
 | `MERAKI_EXPORTER_CLIENTS__CACHE_TTL` | `int` | `3600` | Client cache TTL in seconds (for ID/hostname mappings, not metrics) (min: 300, max: 86400) |
 | `MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_PER_NETWORK` | `int` | `10000` | Maximum clients to track per network (min: 100, max: 50000) |
 | `MERAKI_EXPORTER_CLIENTS__MAX_CLIENTS_TOTAL` | `int` | `25000` | Global cap on clients emitted as metric series across ALL networks per collection cycle. Clients beyond the cap are dropped from metric emission with a warning and counted in meraki_exporter_clients_over_cap. (min: 100, max: 1000000) |
