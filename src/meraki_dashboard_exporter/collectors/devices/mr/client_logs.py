@@ -18,9 +18,11 @@ disabled event costs **no API calls** at all:
   **no bulk per-client signal source** in the SDK, only the per-client
   ``getNetworkWirelessSignalQualityHistory(clientId=...)`` fan-out — i.e. **one API
   call per active client per cycle**. This is potentially very expensive on large
-  orgs, so it is off by default, ``ManagedTaskGroup``-bounded, and its client universe
-  is derived from the same packet-loss bulk response (active clients only) rather than
-  a separate client enumeration. Treat as experimental until proven.
+  orgs, so it is off by default and ``ManagedTaskGroup``-bounded. Its client universe
+  is enumerated INDEPENDENTLY of packet loss (#637) — the active wireless clients of
+  each allowed network via ``getNetworkClients`` — so a healthy, zero-loss client
+  (which never appears in the packet-loss response) still gets a signal-quality
+  record. Treat as experimental until proven.
 
 Wiring: ``collect_client_logs`` is folded into ``MRCollector.collect_ssid_usage``
 (an existing org-level MR pass that already receives ``org_id``/``org_name``), so no
@@ -55,6 +57,11 @@ PACKET_LOSS_WINDOW_SECONDS = 300
 #: signal-quality collector, ``signal_quality.py``: newest non-null 1-hour bucket).
 SIGNAL_QUALITY_TIMESPAN_SECONDS = 7200
 SIGNAL_QUALITY_RESOLUTION_SECONDS = 3600
+
+#: Window for enumerating active wireless clients as the signal-quality client
+#: universe (#637). Independent of the packet-loss response so healthy,
+#: zero-loss clients are still enumerated and emit a signal-quality record.
+ACTIVE_CLIENTS_WINDOW_SECONDS = 900
 
 
 class _LossDirection(BaseModel):
@@ -168,6 +175,34 @@ class MRClientLogsCollector:
             # Both events disabled → do NOT touch the API (zero rate-limit cost).
             return
 
+        # Packet loss and signal quality are INDEPENDENT producers (#637). The
+        # signal-quality client universe is enumerated from active wireless
+        # clients, NOT derived from the packet-loss response, so a healthy
+        # (zero-loss) client -- which never appears in
+        # ``getOrganizationWirelessDevicesPacketLossByClient`` -- still gets a
+        # signal-quality record. Each producer only touches its own API when its
+        # event is enabled, so non-users still pay zero cost.
+        if want_packet_loss:
+            await self._collect_packet_loss(emitter, org_id, org_name)
+
+        if want_signal_quality:
+            await self._collect_signal_quality(emitter, org_id, org_name)
+
+    async def _collect_packet_loss(
+        self, emitter: DataLogEmitter, org_id: str, org_name: str
+    ) -> None:
+        """Fetch, network-filter, and emit per-client packet-loss records.
+
+        Parameters
+        ----------
+        emitter : DataLogEmitter
+            The (enabled) data-log emitter.
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
         rows = await self._fetch_packet_loss_by_client(org_id)
         if not rows:
             logger.debug("No per-client packet-loss data available", org_id=org_id)
@@ -199,11 +234,7 @@ class MRClientLogsCollector:
                 skipped_count=skipped,
             )
 
-        if want_packet_loss:
-            self._emit_packet_loss(emitter, org_id, org_name, parsed)
-
-        if want_signal_quality:
-            await self._collect_signal_quality(emitter, org_id, org_name, parsed)
+        self._emit_packet_loss(emitter, org_id, org_name, parsed)
 
     @log_api_call("getOrganizationWirelessDevicesPacketLossByClient")
     async def _fetch_packet_loss_by_client(self, org_id: str) -> list[dict[str, Any]] | None:
@@ -303,14 +334,18 @@ class MRClientLogsCollector:
         emitter: DataLogEmitter,
         org_id: str,
         org_name: str,
-        rows: list[_PacketLossByClientRow],
     ) -> None:
         """Fan out per-client signal-quality fetches and emit one record per client.
 
         EXPERIMENTAL / off by default: one ``getNetworkWirelessSignalQualityHistory``
-        call **per client**. The client universe is the active clients from the
-        packet-loss bulk response (deduplicated on network.id + client.id), bounded
-        by ``settings.api.concurrency_limit``.
+        call **per client**. The client universe is enumerated INDEPENDENTLY of
+        packet loss (#637): the active wireless clients of every allowed wireless
+        network (``getNetworkClients`` filtered to wireless), deduplicated on
+        network.id + client.id and bounded by ``settings.api.concurrency_limit``.
+        Enumerating from the client list rather than the packet-loss response
+        means a healthy, zero-loss client -- which never appears in
+        ``getOrganizationWirelessDevicesPacketLossByClient`` -- still gets a
+        signal-quality record.
 
         Parameters
         ----------
@@ -320,27 +355,9 @@ class MRClientLogsCollector:
             Organization ID.
         org_name : str
             Organization name.
-        rows : list[_PacketLossByClientRow]
-            Network-filtered per-client rows (source of the client universe).
 
         """
-        # Deduplicate on (network_id, client_id) — a client can appear once here,
-        # but be defensive against duplicate rows.
-        seen: set[tuple[str, str]] = set()
-        targets: list[tuple[str, str, str | None]] = []
-        for row in rows:
-            client = row.client or _ClientRef()
-            network = row.network or _NetworkRef()
-            client_id = client.id
-            network_id = network.id
-            if not client_id or not network_id:
-                continue
-            key = (network_id, client_id)
-            if key in seen:
-                continue
-            seen.add(key)
-            targets.append((network_id, client_id, client.mac))
-
+        targets = await self._active_wireless_clients(org_id)
         if not targets:
             return
 
@@ -361,6 +378,81 @@ class MRClientLogsCollector:
                     ),
                     name=f"client_signal_quality_{client_id}",
                 )
+
+    async def _active_wireless_clients(self, org_id: str) -> list[tuple[str, str, str | None]]:
+        """Enumerate active wireless clients across the org's allowed networks.
+
+        Returns ``(network_id, client_id, client_mac)`` triples deduplicated on
+        ``(network_id, client_id)``. Networks come from the inventory (so the
+        configured ``NetworkFilter`` is already applied) and only wireless
+        networks are queried. A client is "active" if ``getNetworkClients`` over
+        ``ACTIVE_CLIENTS_WINDOW_SECONDS`` reports it with a wireless connection.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[tuple[str, str, str | None]]
+            ``(network_id, client_id, client_mac)`` per active wireless client.
+
+        """
+        if self.parent.inventory is None:
+            return []
+
+        networks = await self.parent.inventory.get_networks(org_id)
+        seen: set[tuple[str, str]] = set()
+        targets: list[tuple[str, str, str | None]] = []
+        for network in networks:
+            if "wireless" not in (network.get("productTypes") or []):
+                continue
+            network_id = network.get("id")
+            if not network_id:
+                continue
+            for client in await self._fetch_network_wireless_clients(network_id):
+                client_id = client.get("id")
+                if not client_id:
+                    continue
+                # Wireless-only: skip wired clients returned by the same endpoint.
+                if client.get("recentDeviceConnection") != "Wireless" and not client.get("ssid"):
+                    continue
+                key = (network_id, client_id)
+                if key in seen:
+                    continue
+                seen.add(key)
+                targets.append((network_id, client_id, client.get("mac")))
+        return targets
+
+    @log_api_call("getNetworkClients")
+    async def _fetch_network_wireless_clients(self, network_id: str) -> list[dict[str, Any]]:
+        """Fetch a network's recently-active clients (the signal-quality universe).
+
+        Parameters
+        ----------
+        network_id : str
+            Network ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            Client rows (wired + wireless); the caller filters to wireless.
+
+        """
+        with LogContext(network_id=network_id):
+            raw = await asyncio.to_thread(
+                self.api.networks.getNetworkClients,
+                network_id,
+                total_pages="all",
+                timespan=ACTIVE_CLIENTS_WINDOW_SECONDS,
+            )
+        clients = validate_response_format(
+            raw,
+            expected_type=list,
+            operation="getNetworkClients",
+        )
+        return cast("list[dict[str, Any]]", clients)
 
     @log_api_call("getNetworkWirelessSignalQualityHistory")
     @with_error_handling(

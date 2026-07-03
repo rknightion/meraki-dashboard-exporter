@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from ..collectors.manager import CollectorManager
     from ..core.config import Settings
     from ..core.metric_expiration import MetricExpirationManager
+    from ..core.otel_data_logs import DataLogEmitter
     from ..core.webhook_handler import WebhookHandler
 
 
@@ -311,6 +312,11 @@ class StatusSnapshot:
     # until the scheduler has resolved at least once. Additive key on the
     # /status JSON contract.
     scheduler: dict[str, Any] | None = None
+    # OTel data-log flow (#639): the DataLogEmitter's stats() (enabled +
+    # cumulative emitted/dropped totals and per-event breakdown) so an operator
+    # can tell from /status whether data-logs are flowing without a raw /metrics
+    # scrape. ``None`` when no emitter is wired. Additive /status JSON key.
+    data_logs: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the snapshot to a plain dictionary for JSON serialization."""
@@ -328,6 +334,7 @@ class StatusService:
         settings: Settings,
         start_time: float,
         webhook_handler: WebhookHandler | None = None,
+        data_log_emitter: DataLogEmitter | None = None,
     ) -> None:
         """Initialise the status service.
 
@@ -346,6 +353,9 @@ class StatusService:
         webhook_handler : WebhookHandler | None
             The live webhook receiver, when enabled, for surfacing its health
             on /status (#317). ``None`` when the receiver is disabled.
+        data_log_emitter : DataLogEmitter | None
+            The OTel data-log emitter, for surfacing data-log flow (emitted/
+            dropped counts) on /status (#639). ``None`` when not wired.
 
         """
         self._manager = collector_manager
@@ -354,6 +364,7 @@ class StatusService:
         self._settings = settings
         self._start_time = start_time
         self._webhook_handler = webhook_handler
+        self._data_log_emitter = data_log_emitter
 
     def get_snapshot(self) -> StatusSnapshot:
         """Build and return a point-in-time health snapshot of the exporter."""
@@ -460,6 +471,9 @@ class StatusService:
         # or in fixed-mode transition builds, so guard with .get().
         scheduler = self._manager.get_scheduling_diagnostics().get("scheduler")
 
+        # OTel data-log flow (#639): None when no emitter is wired.
+        data_logs = self._data_log_emitter.stats() if self._data_log_emitter is not None else None
+
         return StatusSnapshot(
             timestamp=datetime.now(UTC).isoformat(),
             system=system,
@@ -469,4 +483,5 @@ class StatusService:
             network_filter=network_filter,
             webhook=webhook,
             scheduler=scheduler,
+            data_logs=data_logs,
         )

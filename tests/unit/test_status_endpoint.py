@@ -142,6 +142,7 @@ class TestStatusEndpointJSON:
             "network_filter",
             "webhook",
             "scheduler",
+            "data_logs",
         }
 
 

@@ -219,6 +219,39 @@ class TestDataLogEmitterCounters:
         )
 
 
+class TestDataLogEmitterStats:
+    """stats() surfaces data-log flow for /status (#639)."""
+
+    def test_disabled_stats_report_zero(self) -> None:
+        """A disabled emitter reports enabled=False and zero totals (not absent)."""
+        emitter, _, _ = _make_emitter(enabled=False)
+        stats = emitter.stats()
+        assert stats["enabled"] is False
+        assert stats["total_emitted"] == 0
+        assert stats["total_dropped"] == 0
+        assert stats["emitted_by_event"] == {}
+
+    def test_stats_track_emitted_and_dropped(self) -> None:
+        """stats() reflects cumulative emitted/dropped totals per event."""
+        emitter, _, _ = _make_emitter(enabled=True, endpoint="http://otel:4317")
+        emitter.emit(PACKET_LOSS, {"org.id": "1"})
+        emitter.emit(PACKET_LOSS, {"org.id": "2"})
+
+        class _Boom:
+            def emit(self, **_: object) -> None:
+                raise RuntimeError("pipeline down")
+
+        emitter._logger = _Boom()  # type: ignore[assignment]
+        emitter.emit(PACKET_LOSS, {"org.id": "3"})  # dropped
+
+        stats = emitter.stats()
+        assert stats["enabled"] is True
+        assert stats["total_emitted"] == 2
+        assert stats["total_dropped"] == 1
+        assert stats["emitted_by_event"][PACKET_LOSS] == 2
+        assert stats["dropped_by_event"][PACKET_LOSS] == 1
+
+
 class TestDataLogEmitterShutdown:
     """Shutdown is safe in every state."""
 

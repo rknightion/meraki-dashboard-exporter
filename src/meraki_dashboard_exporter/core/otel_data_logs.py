@@ -135,6 +135,13 @@ class DataLogEmitter:
         self._logger: Any | None = None
         self._emitted_counter: Counter | None = None
         self._dropped_counter: Counter | None = None
+        # Running per-event totals surfaced on /status (#639). A Prometheus
+        # counter only materializes a child series after its first .inc(), so
+        # "never emitted" is otherwise invisible (absent, not zero). These
+        # plain dicts always exist so an operator can see 0 vs N without a raw
+        # /metrics scrape.
+        self._emitted_by_event: dict[str, int] = {}
+        self._dropped_by_event: dict[str, int] = {}
 
         if not self._enabled:
             logger.info("OTel data-log emitter disabled (otel.logs.enabled is False)")
@@ -299,12 +306,36 @@ class DataLogEmitter:
             )
         except Exception:
             logger.exception("Failed to emit data-log record", data_log_event=event_name)
+            self._dropped_by_event[event_name] = self._dropped_by_event.get(event_name, 0) + 1
             if self._dropped_counter is not None:
                 self._dropped_counter.labels(**{LabelName.EVENT.value: event_name}).inc()
             return
 
+        self._emitted_by_event[event_name] = self._emitted_by_event.get(event_name, 0) + 1
         if self._emitted_counter is not None:
             self._emitted_counter.labels(**{LabelName.EVENT.value: event_name}).inc()
+
+    def stats(self) -> dict[str, Any]:
+        """Return a snapshot of data-log flow for the ``/status`` page (#639).
+
+        Lets an operator tell whether data-logs are flowing without a raw
+        ``/metrics`` scrape (a Prometheus counter is *absent*, not zero, until
+        its first increment). Cheap to call.
+
+        Returns
+        -------
+        dict[str, Any]
+            ``enabled`` plus cumulative ``total_emitted``/``total_dropped`` and
+            the per-event breakdowns (``emitted_by_event``/``dropped_by_event``).
+
+        """
+        return {
+            "enabled": self.enabled,
+            "total_emitted": sum(self._emitted_by_event.values()),
+            "total_dropped": sum(self._dropped_by_event.values()),
+            "emitted_by_event": dict(sorted(self._emitted_by_event.items())),
+            "dropped_by_event": dict(sorted(self._dropped_by_event.items())),
+        }
 
     def shutdown(self) -> None:
         """Flush and shut down the private LoggerProvider (idempotent, safe)."""

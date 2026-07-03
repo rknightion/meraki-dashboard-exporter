@@ -251,6 +251,7 @@ class ExporterApp:
             settings=self.settings,
             start_time=self._start_time,
             webhook_handler=self.webhook_handler,
+            data_log_emitter=self.data_log_emitter,
         )
 
         self._startup_summary_logged = False

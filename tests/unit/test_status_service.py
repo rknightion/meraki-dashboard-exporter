@@ -133,7 +133,9 @@ class TestFormatTimeAgo:
 class TestStatusService:
     """Tests for StatusService.get_snapshot()."""
 
-    def _make_service(self) -> tuple[StatusService, MagicMock, MagicMock, MagicMock, MagicMock]:
+    def _make_service(
+        self, *, data_log_emitter: object | None = None
+    ) -> tuple[StatusService, MagicMock, MagicMock, MagicMock, MagicMock]:
         mock_manager = MagicMock()
         mock_expiration = MagicMock()
         mock_client = MagicMock()
@@ -149,8 +151,63 @@ class TestStatusService:
             client=mock_client,
             settings=mock_settings,
             start_time=0.0,
+            data_log_emitter=data_log_emitter,  # type: ignore[arg-type]
         )
         return service, mock_manager, mock_expiration, mock_client, mock_settings
+
+    @staticmethod
+    def _prime_manager_for_snapshot(mock_manager: MagicMock, mock_expiration: MagicMock) -> None:
+        """Minimal manager/expiration mocks so get_snapshot() runs cleanly."""
+        mock_manager.collectors = []
+        mock_manager.collector_health = {}
+        mock_manager.is_collector_running.return_value = False
+        mock_manager.get_readiness_status.return_value = {"ready": True, "collectors": {}}
+        mock_manager.org_health_tracker._orgs = {}
+        mock_manager.rate_limiter._tokens = {}
+        mock_manager.rate_limiter.enabled = True
+        mock_manager.rate_limiter.get_total_throttled.return_value = 0
+        mock_expiration.get_stats.return_value = {
+            "total_tracked": 0,
+            "by_collector": {},
+            "ttl_multiplier": 1.0,
+        }
+
+    def test_data_logs_none_when_no_emitter(self) -> None:
+        """#639: no emitter wired => snapshot.data_logs is None."""
+        service, mock_manager, mock_expiration, mock_client, _ = self._make_service()
+        self._prime_manager_for_snapshot(mock_manager, mock_expiration)
+        mock_client.get_total_api_requests.return_value = 0
+
+        with patch("meraki_dashboard_exporter.services.status.time") as mock_time:
+            mock_time.time.return_value = 1000.0
+            snapshot = service.get_snapshot()
+
+        assert snapshot.data_logs is None
+        assert "data_logs" in snapshot.to_dict()
+
+    def test_data_logs_reflects_emitter_stats(self) -> None:
+        """#639: snapshot.data_logs carries the emitter's stats() dict."""
+        stats = {
+            "enabled": True,
+            "total_emitted": 5,
+            "total_dropped": 0,
+            "emitted_by_event": {"meraki.org.webhook.delivery": 5},
+            "dropped_by_event": {},
+        }
+        emitter = MagicMock()
+        emitter.stats.return_value = stats
+        service, mock_manager, mock_expiration, mock_client, _ = self._make_service(
+            data_log_emitter=emitter
+        )
+        self._prime_manager_for_snapshot(mock_manager, mock_expiration)
+        mock_client.get_total_api_requests.return_value = 0
+
+        with patch("meraki_dashboard_exporter.services.status.time") as mock_time:
+            mock_time.time.return_value = 1000.0
+            snapshot = service.get_snapshot()
+
+        assert snapshot.data_logs == stats
+        assert snapshot.to_dict()["data_logs"]["total_emitted"] == 5
 
     def test_get_snapshot_returns_snapshot(self) -> None:
         """Snapshot includes collector status, API health, and data freshness."""

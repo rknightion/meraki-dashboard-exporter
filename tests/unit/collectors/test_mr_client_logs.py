@@ -73,6 +73,11 @@ def _sq_history() -> list[dict[str, Any]]:
     ]
 
 
+def _wl_client(client_id: str, *, mac: str = "aa:bb:cc:dd:ee:ff") -> dict[str, Any]:
+    """Build one getNetworkClients row for an active wireless client."""
+    return {"id": client_id, "mac": mac, "recentDeviceConnection": "Wireless", "ssid": "corp"}
+
+
 class _FakeParent:
     """Minimal DeviceCollector stand-in for the log producer."""
 
@@ -81,19 +86,32 @@ class _FakeParent:
         emitter: DataLogEmitter | None,
         *,
         allowed_network_ids: set[str] | None = None,
+        wireless_clients: dict[str, list[dict[str, Any]]] | None = None,
     ) -> None:
         self.api = MagicMock()
         self.api.wireless = MagicMock()
+        self.api.networks = MagicMock()
         self.settings = MagicMock()
         self.settings.api.concurrency_limit = 5
         self.data_log_emitter = emitter
         # _create_gauge must NEVER be called by a log producer.
         self._create_gauge = MagicMock()
-        if allowed_network_ids is None:
+        if allowed_network_ids is None and wireless_clients is None:
             self.inventory = None
         else:
             self.inventory = MagicMock()
-            self.inventory.get_allowed_network_ids = AsyncMock(return_value=allowed_network_ids)
+            self.inventory.get_allowed_network_ids = AsyncMock(
+                return_value=allowed_network_ids or set()
+            )
+            # #637: signal-quality enumerates active wireless clients per network
+            # via getNetworkClients, INDEPENDENTLY of the packet-loss response.
+            clients_by_net = wireless_clients or {}
+            self.inventory.get_networks = AsyncMock(
+                return_value=[{"id": nid, "productTypes": ["wireless"]} for nid in clients_by_net]
+            )
+            self.api.networks.getNetworkClients = MagicMock(
+                side_effect=lambda network_id, **_kw: clients_by_net.get(network_id, [])
+            )
 
 
 def _registry_metric_names() -> set[str]:
@@ -209,16 +227,14 @@ class TestGatingZeroCost:
         parent.api.wireless.getOrganizationWirelessDevicesPacketLossByClient.assert_not_called()
         assert len(exp.get_finished_logs()) == 0
 
-    async def test_signal_quality_only_does_not_emit_packet_loss(self) -> None:
-        """Signal quality only does not emit packet loss."""
+    async def test_signal_quality_only_does_not_touch_packet_loss_api(self) -> None:
+        """With only signal-quality enabled, the packet-loss endpoint is never called (#637)."""
         exp = InMemoryLogRecordExporter()
         emitter = _make_emitter(
             exp, enabled=True, endpoint="http://otel:4317", events=[SIGNAL_QUALITY]
         )
-        parent = _FakeParent(emitter)
-        parent.api.wireless.getOrganizationWirelessDevicesPacketLossByClient = MagicMock(
-            return_value=[_pl_row("c1", "N_1")]
-        )
+        parent = _FakeParent(emitter, wireless_clients={"N_1": [_wl_client("c1")]})
+        parent.api.wireless.getOrganizationWirelessDevicesPacketLossByClient = MagicMock()
         parent.api.wireless.getNetworkWirelessSignalQualityHistory = MagicMock(
             return_value=_sq_history()
         )
@@ -228,21 +244,20 @@ class TestGatingZeroCost:
 
         events = {r.log_record.event_name for r in exp.get_finished_logs()}
         assert events == {SIGNAL_QUALITY}
+        # Decoupled: signal-quality no longer reads the packet-loss response.
+        parent.api.wireless.getOrganizationWirelessDevicesPacketLossByClient.assert_not_called()
 
 
 class TestSignalQualityProducer:
     """WIRELESS_CLIENT_SIGNAL_QUALITY (#622) — experimental per-client fan-out."""
 
     async def test_emits_newest_bucket_per_client(self) -> None:
-        """Emits newest bucket per client."""
+        """Emits newest bucket per client (client universe from getNetworkClients)."""
         exp = InMemoryLogRecordExporter()
         emitter = _make_emitter(
             exp, enabled=True, endpoint="http://otel:4317", events=[SIGNAL_QUALITY]
         )
-        parent = _FakeParent(emitter)
-        parent.api.wireless.getOrganizationWirelessDevicesPacketLossByClient = MagicMock(
-            return_value=[_pl_row("c1", "N_1")]
-        )
+        parent = _FakeParent(emitter, wireless_clients={"N_1": [_wl_client("c1")]})
         parent.api.wireless.getNetworkWirelessSignalQualityHistory = MagicMock(
             return_value=_sq_history()
         )
@@ -264,11 +279,62 @@ class TestSignalQualityProducer:
         _, kwargs = parent.api.wireless.getNetworkWirelessSignalQualityHistory.call_args
         assert kwargs["clientId"] == "c1"
 
+    async def test_signal_quality_emits_when_packet_loss_empty(self) -> None:
+        """#637 regression: a healthy client with EMPTY packet loss still emits signal quality.
+
+        The bug: signal-quality's client universe was derived from the
+        packet-loss response, so a zero-loss client (absent from packet loss)
+        never got a signal-quality record. Now the universe is enumerated
+        independently, so it emits regardless of packet-loss presence.
+        """
+        exp = InMemoryLogRecordExporter()
+        emitter = _make_emitter(
+            exp, enabled=True, endpoint="http://otel:4317", events=[SIGNAL_QUALITY]
+        )
+        parent = _FakeParent(emitter, wireless_clients={"N_1": [_wl_client("healthy")]})
+        # Packet loss is EMPTY (the healthy-fleet case) -- must not gate signal quality.
+        parent.api.wireless.getOrganizationWirelessDevicesPacketLossByClient = MagicMock(
+            return_value=[]
+        )
+        parent.api.wireless.getNetworkWirelessSignalQualityHistory = MagicMock(
+            return_value=_sq_history()
+        )
+        collector = MRClientLogsCollector(parent)  # type: ignore[arg-type]
+
+        await collector.collect_client_logs("org1", "Org One")
+
+        records = exp.get_finished_logs()
+        assert len(records) == 1
+        assert records[0].log_record.event_name == SIGNAL_QUALITY
+        assert records[0].log_record.attributes["client.id"] == "healthy"
+
+    async def test_wired_clients_are_not_enumerated(self) -> None:
+        """A wired client returned by getNetworkClients gets no signal-quality fan-out."""
+        exp = InMemoryLogRecordExporter()
+        emitter = _make_emitter(
+            exp, enabled=True, endpoint="http://otel:4317", events=[SIGNAL_QUALITY]
+        )
+        wired = {"id": "wired1", "mac": "aa:bb", "recentDeviceConnection": "Wired"}
+        parent = _FakeParent(emitter, wireless_clients={"N_1": [wired]})
+        parent.api.wireless.getNetworkWirelessSignalQualityHistory = MagicMock(
+            return_value=_sq_history()
+        )
+        collector = MRClientLogsCollector(parent)  # type: ignore[arg-type]
+
+        await collector.collect_client_logs("org1", "Org One")
+
+        assert len(exp.get_finished_logs()) == 0
+        parent.api.wireless.getNetworkWirelessSignalQualityHistory.assert_not_called()
+
     async def test_both_events_emit_both_record_types(self) -> None:
-        """Both events emit both record types."""
+        """Both events emit their record types from their own independent sources."""
         exp = InMemoryLogRecordExporter()
         emitter = _make_emitter(exp, enabled=True, endpoint="http://otel:4317")
-        parent = _FakeParent(emitter)
+        parent = _FakeParent(
+            emitter,
+            allowed_network_ids={"N_1"},
+            wireless_clients={"N_1": [_wl_client("c2")]},
+        )
         parent.api.wireless.getOrganizationWirelessDevicesPacketLossByClient = MagicMock(
             return_value=[_pl_row("c1", "N_1")]
         )
@@ -288,10 +354,7 @@ class TestSignalQualityProducer:
         emitter = _make_emitter(
             exp, enabled=True, endpoint="http://otel:4317", events=[SIGNAL_QUALITY]
         )
-        parent = _FakeParent(emitter)
-        parent.api.wireless.getOrganizationWirelessDevicesPacketLossByClient = MagicMock(
-            return_value=[_pl_row("c1", "N_1")]
-        )
+        parent = _FakeParent(emitter, wireless_clients={"N_1": [_wl_client("c1")]})
         parent.api.wireless.getNetworkWirelessSignalQualityHistory = MagicMock(
             return_value=[{"startTs": "t", "endTs": "t", "snr": None, "rssi": None}]
         )
