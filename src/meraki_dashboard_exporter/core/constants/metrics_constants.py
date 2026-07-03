@@ -13,6 +13,12 @@ class OrgMetricName(StrEnum):
     # Windowed count (1-hour window, resets each cycle) - not a monotonic Counter (#531)
     ORG_API_REQUESTS_COUNT = "meraki_org_api_requests_count"
     ORG_API_REQUESTS_BY_STATUS = "meraki_org_api_requests_by_status"
+    # Per-operation breakdown of API requests in the trailing 1-hour window
+    # (windowed snapshot gauge, NOT a monotonic counter). Bounded by top-N
+    # operation ids with the tail bucketed as "other"; labelled by endpoint
+    # (Meraki operationId, never a URL with IDs) + status_code only - no
+    # adminId/sourceIp/path (PII + unbounded). See #274.
+    ORG_API_REQUESTS_BY_OPERATION = "meraki_org_api_requests_by_operation"
     ORG_NETWORKS = "meraki_org_networks"
     ORG_DEVICES = "meraki_org_devices"
     ORG_DEVICES_BY_MODEL = "meraki_org_devices_by_model"
@@ -482,6 +488,11 @@ class CollectorMetricName(StrEnum):
 
     # Collection utilization metrics
     EXPORTER_COLLECTION_UTILIZATION_RATIO = "meraki_exporter_collection_utilization_ratio"
+
+    # Exporter process self-resource metrics (#277). Gauges sampled from
+    # psutil.Process() by a lightweight periodic task in app.py lifespan.
+    EXPORTER_MEMORY_USAGE_BYTES = "meraki_exporter_memory_usage_bytes"
+    EXPORTER_CPU_USAGE_PERCENT = "meraki_exporter_cpu_usage_percent"
 
     # Metric expiration metrics (core/metric_expiration.py) — #532/MET-06
     EXPIRED_METRICS_TOTAL = "meraki_exporter_collection_errors_expired_total"

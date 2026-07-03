@@ -694,6 +694,27 @@ class TestMet06ExporterSelfMetricRenames:
         )
 
 
+class TestApiRequestsByOperation:
+    """#274: per-operation API request breakdown is a bounded windowed Gauge.
+
+    The metric complements the existing ``meraki_org_api_requests_by_status``
+    gauge with a breakdown by Meraki operation id (bounded, top-N + "other").
+    It is a windowed 1-hour snapshot, NOT a monotonic counter, so — like its
+    ``_by_status`` sibling — it must NOT carry a ``_total`` suffix.
+    """
+
+    def test_enum_member_wire_name(self) -> None:
+        """The gauge's enum member carries the exact wire name."""
+        assert (
+            OrgMetricName.ORG_API_REQUESTS_BY_OPERATION.value
+            == "meraki_org_api_requests_by_operation"
+        )
+
+    def test_not_a_total(self) -> None:
+        """Windowed snapshot gauge must not use the Counter-reserved ``_total``."""
+        assert not OrgMetricName.ORG_API_REQUESTS_BY_OPERATION.value.endswith("_total")
+
+
 class TestCardinalityLimitReachedCounter:
     """#540: the per-family cardinality alarm is an enum-backed Counter.
 

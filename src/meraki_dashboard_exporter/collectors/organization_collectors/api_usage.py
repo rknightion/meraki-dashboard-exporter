@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from collections import defaultdict
 from typing import TYPE_CHECKING, Any, cast
+
+from pydantic import BaseModel, ConfigDict
 
 from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_org_labels
@@ -16,6 +19,29 @@ if TYPE_CHECKING:
     pass
 
 logger = get_logger(__name__)
+
+# Cardinality guard for the per-operation breakdown (#274): the
+# getOrganizationApiRequests endpoint returns one row per request, so we
+# aggregate client-side and only keep the top-N operations by request count;
+# every other operation collapses into a single "other" bucket. Bounded by
+# construction: at most _MAX_TRACKED_OPERATIONS + 1 distinct endpoint labels
+# per org, times the handful of HTTP status codes actually observed.
+_MAX_TRACKED_OPERATIONS = 20
+_OTHER_OPERATION = "other"
+
+
+class ApiRequestEntry(BaseModel):
+    """A single Meraki API request row from getOrganizationApiRequests.
+
+    Only the two bounded, non-PII fields we aggregate on are modelled;
+    ``extra="ignore"`` deliberately drops adminId / sourceIp / path / userAgent
+    so PII can never reach a metric label even by accident (#274).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    operationId: str | None = None
+    responseCode: int | None = None
 
 
 class APIUsageCollector(BaseOrganizationCollector):
@@ -67,6 +93,115 @@ class APIUsageCollector(BaseOrganizationCollector):
                 expected_type=dict,
                 operation="getOrganizationApiRequestsOverview",
             ),
+        )
+
+    @log_api_call("getOrganizationApiRequests")
+    async def _fetch_api_requests(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch the raw per-request API request log for the last hour.
+
+        Returns one row per API request (across all clients of the org's
+        Dashboard API). Callers MUST aggregate client-side before emitting any
+        metric - the row set is unbounded and carries PII fields.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            Raw API request rows.
+
+        """
+        response = await asyncio.to_thread(
+            self.api.organizations.getOrganizationApiRequests,
+            org_id,
+            timespan=3600,  # Last 1 hour, aligned with the overview call
+            total_pages="all",
+        )
+        return cast(
+            list[dict[str, Any]],
+            validate_response_format(
+                response,
+                expected_type=list,
+                operation="getOrganizationApiRequests",
+            ),
+        )
+
+    def _aggregate_requests_by_operation(
+        self, entries: list[dict[str, Any]]
+    ) -> dict[tuple[str, str], int]:
+        """Aggregate raw request rows into bounded (operation, status_code) counts.
+
+        Counts requests per ``(operationId, responseCode)``, then caps the
+        distinct operations to the top ``_MAX_TRACKED_OPERATIONS`` by total
+        request count; every other operation (and any row missing an
+        operationId) collapses into the ``_OTHER_OPERATION`` bucket. This keeps
+        the emitted label set bounded regardless of how many distinct endpoints
+        or admins hit the org's API (#274).
+
+        Parameters
+        ----------
+        entries : list[dict[str, Any]]
+            Raw API request rows.
+
+        Returns
+        -------
+        dict[tuple[str, str], int]
+            Mapping of ``(operation, status_code)`` -> request count, with
+            operations already capped/bucketed.
+
+        """
+        raw_counts: dict[tuple[str, str], int] = defaultdict(int)
+        per_op_totals: dict[str, int] = defaultdict(int)
+
+        for entry in entries:
+            row = ApiRequestEntry.model_validate(entry)
+            operation = row.operationId or _OTHER_OPERATION
+            status_code = "" if row.responseCode is None else str(row.responseCode)
+            raw_counts[(operation, status_code)] += 1
+            per_op_totals[operation] += 1
+
+        # Rank operations by total request count; keep the busiest N named.
+        top_operations = {
+            op
+            for op, _ in sorted(per_op_totals.items(), key=lambda kv: kv[1], reverse=True)[
+                :_MAX_TRACKED_OPERATIONS
+            ]
+        }
+
+        capped: dict[tuple[str, str], int] = defaultdict(int)
+        for (operation, status_code), count in raw_counts.items():
+            key_op = operation if operation in top_operations else _OTHER_OPERATION
+            capped[(key_op, status_code)] += count
+        return dict(capped)
+
+    async def _collect_requests_by_operation(
+        self, org_id: str, org_name: str, org_data: dict[str, str]
+    ) -> None:
+        """Fetch, aggregate and emit the per-operation API request breakdown.
+
+        Best-effort enrichment (#274): a failure here must not lose the primary
+        status-code metrics, so callers invoke this in its own guarded block.
+        """
+        entries = await self._fetch_api_requests(org_id)
+        by_operation = self._aggregate_requests_by_operation(entries)
+
+        for (operation, status_code), count in by_operation.items():
+            labels = create_org_labels(
+                org_data,
+                endpoint=operation,
+                status_code=status_code,
+            )
+            self._set_metric_value("_api_requests_by_operation", labels, count)
+
+        logger.debug(
+            "Collected API requests by operation",
+            org_id=org_id,
+            org_name=org_name,
+            operations=len({op for op, _ in by_operation}),
+            series=len(by_operation),
         )
 
     async def collect(self, org_id: str, org_name: str) -> bool:
@@ -163,6 +298,22 @@ class APIUsageCollector(BaseOrganizationCollector):
                     total_requests=total_requests,
                     unique_status_codes=sum(1 for c in valid_counts.values() if c > 0),
                 )
+
+                # Per-operation breakdown (#274) is best-effort enrichment on a
+                # separate, heavier endpoint: keep its failure from discarding
+                # the status-code metrics already emitted above, and from
+                # flipping the org-health signal returned below.
+                with LogContext(org_id=org_id, org_name=org_name):
+                    try:
+                        await self._collect_requests_by_operation(org_id, org_name, org_data)
+                    except Exception:
+                        logger.warning(
+                            "Failed to collect API requests by operation; "
+                            "status-code metrics are unaffected",
+                            org_id=org_id,
+                            org_name=org_name,
+                            exc_info=True,
+                        )
             else:
                 logger.warning(
                     "No API request overview data available",

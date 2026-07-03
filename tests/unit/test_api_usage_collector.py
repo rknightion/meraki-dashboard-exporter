@@ -405,6 +405,213 @@ class TestAPIUsageCollector:
         assert total_key in parent._metrics
         assert parent._metrics[total_key] == 100
 
+    @staticmethod
+    def _make_request_rows(spec):
+        """Build a list of raw getOrganizationApiRequests rows.
+
+        ``spec`` is an iterable of ``(operationId, responseCode, count)`` and is
+        expanded to ``count`` individual rows (the endpoint returns one row per
+        request). Each row also carries PII-ish fields (adminId/sourceIp/path)
+        that MUST NOT leak into any metric label.
+        """
+        rows = []
+        for op, code, count in spec:
+            for i in range(count):
+                rows.append({
+                    "operationId": op,
+                    "responseCode": code,
+                    "method": "GET",
+                    "path": f"/organizations/123/devices/Q2XX-{i}",
+                    "adminId": "admin-secret-42",
+                    "sourceIp": "203.0.113.7",
+                    "userAgent": "python-meraki/1.0",
+                    "ts": "2026-07-02T00:00:00Z",
+                })
+        return rows
+
+    async def test_collect_api_requests_by_operation(self, api_usage_collector, mock_api_builder):
+        """#274: per-operation counts are aggregated client-side by (operation, status)."""
+        org_id = "op-org-1"
+        org_name = "Op Org"
+
+        rows = self._make_request_rows([
+            ("getOrganizationDevices", 200, 10),
+            ("getOrganizationDevices", 429, 2),
+            ("getOrganizationNetworks", 200, 5),
+        ])
+
+        api = (
+            mock_api_builder
+            .with_custom_response(
+                "getOrganizationApiRequestsOverview", {"responseCodeCounts": {"200": 15}}
+            )
+            .with_custom_response("getOrganizationApiRequests", rows)
+            .build()
+        )
+        api_usage_collector.api = api
+
+        await api_usage_collector.collect(org_id, org_name)
+
+        parent = api_usage_collector.parent
+
+        expected = [
+            ("getOrganizationDevices", "200", 10),
+            ("getOrganizationDevices", "429", 2),
+            ("getOrganizationNetworks", "200", 5),
+        ]
+        for operation, status_code, count in expected:
+            key = (
+                "_api_requests_by_operation",
+                (
+                    ("endpoint", operation),
+                    ("org_id", org_id),
+                    ("status_code", status_code),
+                ),
+            )
+            assert key in parent._metrics, f"missing series for {operation}/{status_code}"
+            assert parent._metrics[key] == count
+
+    async def test_collect_api_requests_no_pii_labels(self, api_usage_collector, mock_api_builder):
+        """#274: adminId / sourceIp / raw path must NEVER appear as metric labels."""
+        org_id = "op-org-2"
+        org_name = "No PII Org"
+
+        rows = self._make_request_rows([("getOrganizationDevices", 200, 3)])
+        api = (
+            mock_api_builder
+            .with_custom_response(
+                "getOrganizationApiRequestsOverview", {"responseCodeCounts": {"200": 3}}
+            )
+            .with_custom_response("getOrganizationApiRequests", rows)
+            .build()
+        )
+        api_usage_collector.api = api
+
+        await api_usage_collector.collect(org_id, org_name)
+
+        parent = api_usage_collector.parent
+        forbidden_label_keys = {"admin_id", "adminid", "source_ip", "sourceip", "path"}
+        forbidden_label_values = {"admin-secret-42", "203.0.113.7"}
+        for metric_name, label_tuple in parent._metrics:
+            for label_key, label_value in label_tuple:
+                assert label_key not in forbidden_label_keys, (
+                    f"PII label key {label_key!r} leaked on {metric_name}"
+                )
+                assert label_value not in forbidden_label_values, (
+                    f"PII label value {label_value!r} leaked on {metric_name}"
+                )
+
+    async def test_collect_api_requests_top_n_bucketing(
+        self, api_usage_collector, mock_api_builder
+    ):
+        """#274: distinct operations are capped to top-N, the rest bucketed as 'other'."""
+        from meraki_dashboard_exporter.collectors.organization_collectors import api_usage
+
+        org_id = "op-org-3"
+        org_name = "Many Ops Org"
+
+        # Build more distinct operations than the cap; give each a descending
+        # count so ranking is deterministic. The high-count ones stay named;
+        # the low-count tail collapses into "other".
+        n = api_usage._MAX_TRACKED_OPERATIONS
+        spec = [(f"getOperation{i:03d}", 200, (n + 5 - i)) for i in range(n + 5)]
+        rows = self._make_request_rows(spec)
+
+        api = (
+            mock_api_builder
+            .with_custom_response(
+                "getOrganizationApiRequestsOverview", {"responseCodeCounts": {"200": 1}}
+            )
+            .with_custom_response("getOrganizationApiRequests", rows)
+            .build()
+        )
+        api_usage_collector.api = api
+
+        await api_usage_collector.collect(org_id, org_name)
+
+        parent = api_usage_collector.parent
+        emitted_ops = {
+            dict(label_tuple)["endpoint"]
+            for name, label_tuple in parent._metrics
+            if name == "_api_requests_by_operation"
+        }
+
+        # At most N named operations + the "other" bucket.
+        assert len(emitted_ops) <= n + 1
+        assert api_usage._OTHER_OPERATION in emitted_ops
+
+        # The single largest operation must survive as a named series.
+        assert "getOperation000" in emitted_ops
+
+        # "other" must aggregate the tail counts (5 smallest ops: counts 5..1 = 15).
+        other_key = (
+            "_api_requests_by_operation",
+            (("endpoint", api_usage._OTHER_OPERATION), ("org_id", org_id), ("status_code", "200")),
+        )
+        assert parent._metrics[other_key] == sum(range(1, 6))
+
+    async def test_collect_api_requests_missing_operation_id_bucketed(
+        self, api_usage_collector, mock_api_builder
+    ):
+        """#274: rows with no operationId collapse into the 'other' bucket, not a label hole."""
+        from meraki_dashboard_exporter.collectors.organization_collectors import api_usage
+
+        org_id = "op-org-4"
+        org_name = "Missing Op Org"
+
+        rows = [
+            {"responseCode": 200, "adminId": "x", "sourceIp": "y"},
+            {"operationId": None, "responseCode": 200},
+        ]
+        api = (
+            mock_api_builder
+            .with_custom_response(
+                "getOrganizationApiRequestsOverview", {"responseCodeCounts": {"200": 2}}
+            )
+            .with_custom_response("getOrganizationApiRequests", rows)
+            .build()
+        )
+        api_usage_collector.api = api
+
+        await api_usage_collector.collect(org_id, org_name)
+
+        parent = api_usage_collector.parent
+        other_key = (
+            "_api_requests_by_operation",
+            (("endpoint", api_usage._OTHER_OPERATION), ("org_id", org_id), ("status_code", "200")),
+        )
+        assert parent._metrics[other_key] == 2
+
+    async def test_collect_api_requests_failure_does_not_break_status_metrics(
+        self, api_usage_collector, mock_api_builder
+    ):
+        """#274: a per-operation fetch failure must not lose the status-code metrics."""
+        org_id = "op-org-5"
+        org_name = "Partial Failure Org"
+
+        api = (
+            mock_api_builder
+            .with_custom_response(
+                "getOrganizationApiRequestsOverview", {"responseCodeCounts": {"200": 7}}
+            )
+            .with_error("getOrganizationApiRequests", Exception("Connection error"))
+            .build()
+        )
+        api_usage_collector.api = api
+
+        result = await api_usage_collector.collect(org_id, org_name)
+
+        parent = api_usage_collector.parent
+        # Status-code metric survives.
+        status_key = (
+            "_api_requests_by_status",
+            (("org_id", org_id), ("status_code", "200")),
+        )
+        assert parent._metrics[status_key] == 7
+        # No per-operation series emitted, and the overall collect still succeeds.
+        assert not any(name == "_api_requests_by_operation" for name, _ in parent._metrics)
+        assert result is True
+
     async def test_fetch_api_requests_overview_parameters(
         self, api_usage_collector, mock_api_builder
     ):
