@@ -402,6 +402,17 @@
 
         <div class="endpoints">
             <h3>⏱️ Polling Diagnostics</h3>
+            {% if scheduling.scheduler %}
+            <p style="margin-bottom: 15px; color: #555;">
+                Adaptive scheduler ({{ scheduling.scheduler.mode }}):
+                <strong>{{ "%.2f"|format(scheduling.scheduler.total_demand_rps) }}</strong> rps demand /
+                <strong>{{ "%.2f"|format(scheduling.scheduler.effective_budget_rps) }}</strong> rps budget
+                {% if scheduling.scheduler.effective_budget_rps and scheduling.scheduler.effective_budget_rps > 0 %}
+                (<strong>{{ "%.0f"|format(scheduling.scheduler.total_demand_rps / scheduling.scheduler.effective_budget_rps * 100) }}%</strong> utilization){% endif %}
+                {% if scheduling.scheduler.over_budget %} &mdash; <strong style="color: #c0392b;">over budget</strong>{% endif %}
+                &middot; <a href="/status" style="color: #1976d2;">details</a>
+            </p>
+            {% endif %}
             <div class="stats">
                 <div class="stat">
                     <div class="stat-value">
@@ -452,26 +463,8 @@
                 </div>
             </div>
 
-            <div class="stats" style="margin-top: 15px;">
-                <div class="stat">
-                    <div class="stat-value">{{ scheduling.endpoint_intervals.ms_port_usage_interval }}s</div>
-                    <div class="stat-label">MS Port Usage</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">{{ scheduling.endpoint_intervals.ms_packet_stats_interval }}s</div>
-                    <div class="stat-label">MS Packet Stats</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">{{ scheduling.endpoint_intervals.client_app_usage_interval }}s</div>
-                    <div class="stat-label">Client App Usage</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">
-                        {% if scheduling.endpoint_intervals.ms_port_status_org_endpoint %}Org{% else %}Device{% endif %}
-                    </div>
-                    <div class="stat-label">MS Port Status Source</div>
-                </div>
-            </div>
+            <!-- Per-endpoint intervals retired into the adaptive-scheduler section (#617);
+                 the summary above and the /status Scheduler section carry per-group intervals. -->
 
             <h4 style="margin-top: 20px;">Tier Schedule</h4>
             <table class="collector-table">

@@ -18,6 +18,7 @@ from ..core.org_health import OrgHealthTracker
 from ..core.otel_tracing import trace_method
 from ..core.rate_limiter import OrgRateLimiter
 from ..core.registry import get_registered_collectors
+from ..core.scheduler import EndpointScheduler
 from ..services.inventory import OrganizationInventory
 
 if TYPE_CHECKING:
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
     from ..core.collector import MetricCollector
     from ..core.config import Settings
     from ..core.metric_expiration import MetricExpirationManager
+    from ..core.scheduler import OrgShape
 
 logger = get_logger(__name__)
 
@@ -81,6 +83,13 @@ class CollectorManager:
         self.settings = settings
         self.expiration_manager = expiration_manager
         self.rate_limiter = OrgRateLimiter(settings)
+
+        # Adaptive budget-aware endpoint scheduler (#617). Constructed right after
+        # the rate limiter so it can read the AIMD-effective budget from the same
+        # limiter, and injected into every collector below. Groups are registered
+        # after collectors are instantiated (see _register_endpoint_groups).
+        self.scheduler = EndpointScheduler(settings, self.rate_limiter)
+
         self.collectors: dict[UpdateTier, list[MetricCollector]] = {
             UpdateTier.FAST: [],
             UpdateTier.MEDIUM: [],
@@ -122,6 +131,7 @@ class CollectorManager:
 
         self._initialize_metrics()
         self._initialize_collectors()
+        self._register_endpoint_groups()
         self._validate_collector_configuration()
 
     def _initialize_metrics(self) -> None:
@@ -284,6 +294,7 @@ class CollectorManager:
                         inventory=self.inventory,
                         expiration_manager=self.expiration_manager,
                         rate_limiter=self.rate_limiter,
+                        scheduler=self.scheduler,
                         **extra_kwargs,
                     )
                     self.collectors[tier].append(collector_instance)
@@ -318,6 +329,21 @@ class CollectorManager:
                         "reason": f"initialization failed: {type(e).__name__}",
                     })
                     # Continue with other collectors even if one fails to initialize
+
+    def _register_endpoint_groups(self) -> None:
+        """Register every collector's endpoint groups with the scheduler (#617).
+
+        Funnels ``get_endpoint_groups()`` from all instantiated collectors (across
+        every tier) into ``scheduler.register_groups``. Groups are empty until the
+        fetch-site gating lands (Wave 2), so this is a no-op at that point and
+        ``resolve()`` degrades to leaving intervals at their tier heartbeats.
+        """
+        self.scheduler.register_groups(
+            group
+            for tier_collectors in self.collectors.values()
+            for collector in tier_collectors
+            for group in collector.get_endpoint_groups()
+        )
 
     @staticmethod
     def _normalize_collector_name(name: str) -> str:
@@ -478,6 +504,13 @@ class CollectorManager:
         except Exception:
             logger.exception("Inventory cache warming failed, continuing with cold cache")
 
+        # Resolve adaptive endpoint-group intervals from the (now warm) inventory
+        # cache and emit the startup demand-vs-budget summary (#617). Safe to run
+        # even on a cold cache — get_org_shape reads cached counts and the solver
+        # degrades to floors/heartbeats. The first tier cycles below then run with
+        # every gate open (never-ran => due), preserving today's warm startup.
+        await self._resolve_and_log_schedule()
+
         # Validate the network filter resolves to at least one network somewhere.
         if self.settings.network_filter.is_active:
             await self._validate_network_filter()
@@ -494,6 +527,83 @@ class CollectorManager:
                     tier=tier,
                 )
                 # Continue with next tier even if this one fails
+
+    async def _resolve_and_log_schedule(self) -> None:
+        """Compute the org shape and resolve endpoint-group intervals (#617).
+
+        Reads the warmed inventory cache to build the single-org shape (#585),
+        runs the scheduler's pure-CPU solve, and emits the one-line startup
+        demand-vs-budget summary (plus an over-budget WARNING naming the
+        priority-3/4 collectors to disable). Any failure is logged and swallowed
+        so startup proceeds with intervals left at their tier heartbeats.
+        """
+        org_id = self.settings.meraki.org_id
+        if org_id is None:
+            # Single-org id is resolved at startup (#585) before collect_initial;
+            # if it is somehow still unset, skip resolving rather than guess.
+            logger.warning(
+                "Skipping scheduler resolve: org_id is not set",
+            )
+            return
+        try:
+            shape = await self.inventory.get_org_shape(org_id)
+            self.scheduler.resolve(shape)
+        except Exception:
+            logger.exception("Scheduler resolve failed during initial collection")
+            return
+        self._log_schedule_summary(shape)
+
+    def _log_schedule_summary(self, shape: OrgShape) -> None:
+        """Emit the one-line startup demand-vs-budget summary + over-budget warning."""
+        diagnostics = self.scheduler.diagnostics()
+        stretched = [
+            f"{group['name']} {group['interval_seconds']:.0f}s ({group['stretch_factor']:.2f}x)"
+            for group in diagnostics.get("groups", [])
+            if (group.get("stretch_factor") or 1.0) > 1.0
+        ]
+        logger.info(
+            "Scheduler solved endpoint-group intervals",
+            org_shape_wireless_networks=shape.wireless_network_count,
+            org_shape_devices=shape.device_count,
+            estimated_demand_rps=round(diagnostics.get("total_demand_rps", 0.0), 2),
+            budget_rps=round(diagnostics.get("budget_rps", 0.0), 2),
+            shared_fraction=self.settings.api.rate_limit_shared_fraction,
+            target_utilization=diagnostics.get("target_utilization"),
+            over_budget=diagnostics.get("over_budget", False),
+            stretched=stretched,
+        )
+        if diagnostics.get("over_budget"):
+            shed = self._priority_shed_collectors()
+            logger.warning(
+                "Estimated API demand exceeds budget even at interval caps; disable "
+                "low-priority (priority 3/4) collectors to fit within the API budget",
+                estimated_demand_rps=round(diagnostics.get("total_demand_rps", 0.0), 2),
+                budget_rps=round(diagnostics.get("budget_rps", 0.0), 2),
+                target_utilization=diagnostics.get("target_utilization"),
+                collectors_to_disable=shed,
+                env_hint=(
+                    "MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS=" + ",".join(shed)
+                    if shed
+                    else None
+                ),
+            )
+
+    def _priority_shed_collectors(self) -> list[str]:
+        """Short names of collectors owning any gated priority-3/4 endpoint group.
+
+        These are the collectors an operator should disable (via
+        ``MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS``) when the estimated
+        demand cannot be squeezed under the budget by stretching alone.
+        """
+        names: set[str] = set()
+        for tier_collectors in self.collectors.values():
+            for collector in tier_collectors:
+                if any(
+                    group.priority >= 3 and group.gated for group in collector.get_endpoint_groups()
+                ):
+                    short = collector.__class__.__name__.replace("Collector", "").lower()
+                    names.add(short)
+        return sorted(names)
 
     async def _validate_network_filter(self) -> None:
         """Verify the configured network filter resolves to at least one network.
@@ -857,12 +967,10 @@ class CollectorManager:
                 "burst": self.settings.api.rate_limit_burst,
                 "share_fraction": self.settings.api.rate_limit_shared_fraction,
             },
-            "endpoint_intervals": {
-                "ms_port_usage_interval": self.settings.api.ms_port_usage_interval,
-                "ms_packet_stats_interval": self.settings.api.ms_packet_stats_interval,
-                "client_app_usage_interval": self.settings.api.client_app_usage_interval,
-                "ms_port_status_org_endpoint": self.settings.api.ms_port_status_use_org_endpoint,
-            },
+            # The legacy per-setting "endpoint_intervals" block is retired into the
+            # scheduler diagnostics (#617): the same operator pins now surface as
+            # per-group solved intervals under scheduler["groups"].
+            "scheduler": self.scheduler.diagnostics(),
         }
 
     def register_collector(self, collector: MetricCollector) -> None:

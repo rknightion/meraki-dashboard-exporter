@@ -256,11 +256,13 @@ def with_error_handling(
                             # pathological header cannot stall the whole fetch;
                             # exponential backoff keeps the max_delay cap.
                             if e.retry_after is not None:
-                                delay = min(
+                                capped_retry_after = min(
                                     e.retry_after,
                                     _resolve_retry_after_cap(collector_instance, max_delay),
                                 )
+                                delay = capped_retry_after
                             else:
+                                capped_retry_after = None
                                 delay = min(base_delay * (2 ** (retry_count - 1)), max_delay)
                             delay = _apply_jitter(delay)
 
@@ -277,6 +279,11 @@ def with_error_handling(
                             # Track retry metric if collector available
                             if collector_instance and hasattr(collector_instance, "_track_retry"):
                                 collector_instance._track_retry(operation, "http_200_rate_limit")
+
+                            # #617: feed the (capped) Retry-After into the AIMD
+                            # budget controller so the effective client-side rate
+                            # backs off; no-op in fixed mode / without a limiter.
+                            _record_throttle_event(collector_instance, capped_retry_after)
 
                             await asyncio.sleep(delay)
                             continue
@@ -338,11 +345,13 @@ def with_error_handling(
                                 retry_count += 1
                                 # #545: same bounded Retry-After handling as above.
                                 if retry_after is not None:
-                                    delay = min(
+                                    capped_retry_after = min(
                                         retry_after,
                                         _resolve_retry_after_cap(collector_instance, max_delay),
                                     )
+                                    delay = capped_retry_after
                                 else:
+                                    capped_retry_after = None
                                     delay = min(base_delay * (2 ** (retry_count - 1)), max_delay)
                                 delay = _apply_jitter(delay)
 
@@ -363,6 +372,10 @@ def with_error_handling(
                                     collector_instance._track_retry(
                                         operation, "http_429_rate_limit"
                                     )
+
+                                # #617: feed the (capped) Retry-After into the AIMD
+                                # budget controller (see the RetryableAPIError branch).
+                                _record_throttle_event(collector_instance, capped_retry_after)
 
                                 await asyncio.sleep(delay)
                                 continue
@@ -505,6 +518,39 @@ def _resolve_retry_after_cap(instance: Any, fallback: float) -> float:
     if isinstance(cap, bool) or not isinstance(cap, (int, float)):
         return fallback
     return float(cap)
+
+
+def _resolve_rate_limiter(instance: Any) -> Any:
+    """Resolve the ``OrgRateLimiter`` from a decorated collector instance (#617).
+
+    Mirrors ``_resolve_retry_after_cap``'s lookup pattern: the limiter hangs off
+    the collector directly (``instance.rate_limiter``) or off its coordinator
+    parent (``instance.parent.rate_limiter``). Returns ``None`` when neither
+    carries one (plain decorated functions, standalone tests).
+    """
+    rate_limiter = getattr(instance, "rate_limiter", None)
+    if rate_limiter is not None:
+        return rate_limiter
+    parent = getattr(instance, "parent", None)
+    if parent is not None:
+        return getattr(parent, "rate_limiter", None)
+    return None
+
+
+def _record_throttle_event(instance: Any, retry_after: float | None) -> None:
+    """Feed a 429/Retry-After event into the AIMD budget controller (#617).
+
+    Resolves the rate limiter off the decorated instance and calls
+    ``record_throttle_event(None, retry_after)`` with the already-extracted,
+    capped Retry-After. No-op when the instance carries no limiter;
+    ``OrgRateLimiter.record_throttle_event`` is itself a no-op in fixed mode or
+    when AIMD is disabled.
+    """
+    rate_limiter = _resolve_rate_limiter(instance)
+    recorder = getattr(rate_limiter, "record_throttle_event", None)
+    if recorder is None:
+        return
+    recorder(None, retry_after)
 
 
 def _resolve_per_fetch_deadline(instance: Any) -> float | None:

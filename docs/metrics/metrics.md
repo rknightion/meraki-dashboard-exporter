@@ -5,9 +5,9 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 251
-- **Gauges:** 229
-- **Counters:** 18
+- **Total metrics:** 258
+- **Gauges:** 235
+- **Counters:** 19
 - **Histograms:** 3
 - **Info metrics:** 1
 
@@ -377,6 +377,17 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_exporter_collections_active` | gauge | `collector`, `tier` | Number of parallel organization collections currently active |  |
 | `meraki_exporter_collector_failure_streak` | gauge | `collector`, `tier` | Consecutive failures for each collector since last success |  |
 
+### EndpointScheduler
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_exporter_scheduler_budget_rps` | gauge | — | Configured API budget in requests/second (rate_limit_requests_per_second x rate_limit_shared_fraction; computed schedule input) |  |
+| `meraki_exporter_scheduler_budget_utilization_ratio` | gauge | — | Total estimated demand divided by the effective budget (computed schedule output, refreshed on each solver resolve) |  |
+| `meraki_exporter_scheduler_effective_budget_rps` | gauge | — | AIMD-adjusted effective API budget in requests/second (computed schedule input, lowered after 429 throttling and recovered additively) |  |
+| `meraki_exporter_scheduler_estimated_demand_rps` | gauge | `group` | Estimated steady-state API demand per endpoint group in requests/second (computed schedule output, refreshed on each solver resolve; not a measured rate) |  |
+| `meraki_exporter_scheduler_interval_seconds` | gauge | `group` | Solved collection interval per endpoint group in seconds (computed schedule output, refreshed on each solver resolve) |  |
+| `meraki_exporter_scheduler_stretch_factor` | gauge | `group` | Solved interval divided by the group's natural cadence (max(floor, tier heartbeat)); 1.0 = unstretched (computed schedule output, refreshed on each solver resolve) |  |
+
 ### ExporterApp
 
 | Metric | Type | Labels | Description | Notes |
@@ -410,6 +421,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_exporter_api_rate_limiter_throttled_total` | counter | `org_id`, `endpoint` | Total number of client-side rate limiter waits |  |
 | `meraki_exporter_api_rate_limiter_tokens` | gauge | `org_id` | Estimated remaining tokens in client-side rate limiter bucket |  |
 | `meraki_exporter_api_rate_limiter_wait_seconds` | histogram | `org_id`, `endpoint` | Seconds spent waiting for client-side rate limiter |  |
+| `meraki_exporter_scheduler_throttle_backoffs_total` | counter | — | Total AIMD multiplicative-decrease backoff events (#617): each increment is one 429/Retry-After-driven halving of the effective client-side rate budget, at most one per 30s cooldown window. Computed feedback signal, not a Meraki API metric. |  |
 
 ### OrganizationInventory
 

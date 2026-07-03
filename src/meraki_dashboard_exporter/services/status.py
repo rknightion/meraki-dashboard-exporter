@@ -305,6 +305,12 @@ class StatusSnapshot:
     data_freshness: DataFreshnessStatus
     network_filter: NetworkFilterStatus | None = None
     webhook: WebhookStatus | None = None
+    # Adaptive scheduler diagnostics (#617): the manager's
+    # get_scheduling_diagnostics()["scheduler"] dict (org shape, per-group
+    # demand, configured+effective budget, solved intervals/stretch). ``None``
+    # until the scheduler has resolved at least once. Additive key on the
+    # /status JSON contract.
+    scheduler: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the snapshot to a plain dictionary for JSON serialization."""
@@ -455,6 +461,12 @@ class StatusService:
         network_filter = build_network_filter_status(self._settings)
         webhook = build_webhook_status(self._webhook_handler, self._settings, now)
 
+        # Adaptive scheduler diagnostics (#617). The manager funnels the
+        # EndpointScheduler snapshot under the "scheduler" key of its scheduling
+        # diagnostics; it is absent (None) until the scheduler has resolved once
+        # or in fixed-mode transition builds, so guard with .get().
+        scheduler = self._manager.get_scheduling_diagnostics().get("scheduler")
+
         return StatusSnapshot(
             timestamp=datetime.now(UTC).isoformat(),
             system=system,
@@ -463,4 +475,5 @@ class StatusService:
             data_freshness=data_freshness,
             network_filter=network_filter,
             webhook=webhook,
+            scheduler=scheduler,
         )

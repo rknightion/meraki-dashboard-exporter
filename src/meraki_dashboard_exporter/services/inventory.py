@@ -21,6 +21,7 @@ from ..api.client import AsyncMerakiClient
 from ..core.constants.metrics_constants import CollectorMetricName, NetworkMetricName
 from ..core.error_handling import validate_response_format
 from ..core.network_filter import NetworkFilter
+from ..core.scheduler import OrgShape
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -1154,3 +1155,66 @@ class OrganizationInventory:
                     org_id=org_id,
                 )
                 return None
+
+    async def get_org_shape(self, org_id: str) -> OrgShape:
+        """Compute the sizing snapshot for the adaptive scheduler (#617).
+
+        Built entirely from cached inventory reads -- ``get_networks`` and
+        ``get_devices`` -- so it costs zero extra API calls in the steady
+        state (both hit the 900s inventory cache). Networks are counted from
+        the ``NetworkFilter``-enforced view (``get_networks`` applies the
+        filter on read), so the shape reflects only the networks the exporter
+        actually polls; devices come from the equally-filtered ``get_devices``
+        view.
+
+        Networks are classified by their ``productTypes`` list membership and
+        devices by their scalar ``productType``. ``physical_mx_count`` counts
+        appliance devices whose ``model`` does NOT start with ``"VMX"``
+        (case-insensitive) -- i.e. it excludes virtual MX (vMX) instances,
+        which have no physical-appliance API cost.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        OrgShape
+            Frozen sizing snapshot with all 16 fields populated.
+
+        """
+        networks = await self.get_networks(org_id)
+        devices = await self.get_devices(org_id)
+
+        def _net_has(product_type: str) -> int:
+            return sum(1 for n in networks if product_type in (n.get("productTypes") or []))
+
+        def _dev_is(product_type: str) -> int:
+            return sum(1 for d in devices if d.get("productType") == product_type)
+
+        physical_mx_count = sum(
+            1
+            for d in devices
+            if d.get("productType") == "appliance"
+            and not str(d.get("model") or "").upper().startswith("VMX")
+        )
+
+        return OrgShape(
+            org_id=org_id,
+            network_count=len(networks),
+            wireless_network_count=_net_has("wireless"),
+            switch_network_count=_net_has("switch"),
+            appliance_network_count=_net_has("appliance"),
+            sensor_network_count=_net_has("sensor"),
+            camera_network_count=_net_has("camera"),
+            cellular_network_count=_net_has("cellularGateway"),
+            device_count=len(devices),
+            ap_count=_dev_is("wireless"),
+            switch_count=_dev_is("switch"),
+            appliance_count=_dev_is("appliance"),
+            physical_mx_count=physical_mx_count,
+            camera_count=_dev_is("camera"),
+            sensor_count=_dev_is("sensor"),
+            cellular_count=_dev_is("cellularGateway"),
+        )

@@ -141,4 +141,100 @@ class TestStatusEndpointJSON:
             "data_freshness",
             "network_filter",
             "webhook",
+            "scheduler",
         }
+
+
+class TestStatusEndpointScheduler:
+    """The scheduler diagnostics section (#617) rides the /status snapshot."""
+
+    def _scheduler_diagnostics(self) -> dict:
+        return {
+            "mode": "adaptive",
+            "org_shape": {
+                "org_id": "123456",
+                "network_count": 500,
+                "wireless_network_count": 500,
+                "switch_network_count": 400,
+                "appliance_network_count": 500,
+                "sensor_network_count": 50,
+                "camera_network_count": 30,
+                "cellular_network_count": 10,
+                "device_count": 5000,
+                "ap_count": 2000,
+                "switch_count": 1500,
+                "appliance_count": 500,
+                "physical_mx_count": 480,
+                "camera_count": 300,
+                "sensor_count": 200,
+                "cellular_count": 20,
+            },
+            "budget_rps": 8.0,
+            "effective_budget_rps": 8.0,
+            "target_utilization": 0.7,
+            "over_budget": False,
+            "total_demand_rps": 4.2,
+            "last_resolve_ts": 1000.0,
+            "groups": [
+                {
+                    "name": "nh_connection_stats",
+                    "priority": 3,
+                    "tier": "medium",
+                    "floor_seconds": 1800.0,
+                    "interval_seconds": 1800.0,
+                    "stretch_factor": 1.0,
+                    "pinned": False,
+                    "cost_per_cycle": 500.0,
+                    "demand_rps": 0.28,
+                    "last_ran_ago_seconds": 42.0,
+                },
+            ],
+        }
+
+    def test_status_json_carries_scheduler_section(self, app_client: TestClient) -> None:
+        """/status?format=json exposes the scheduler diagnostics dict verbatim."""
+        snapshot = _make_snapshot()
+        snapshot.scheduler = self._scheduler_diagnostics()
+        with patch.object(
+            app_client.app.state.exporter.status_service,
+            "get_snapshot",
+            return_value=snapshot,
+        ):
+            response = app_client.get("/status?format=json")
+
+        assert response.status_code == 200
+        sched = response.json()["scheduler"]
+        assert sched["mode"] == "adaptive"
+        assert sched["budget_rps"] == 8.0
+        assert sched["effective_budget_rps"] == 8.0
+        assert sched["org_shape"]["device_count"] == 5000
+        assert sched["groups"][0]["name"] == "nh_connection_stats"
+        assert sched["groups"][0]["interval_seconds"] == 1800.0
+
+    def test_status_json_scheduler_absent_is_null(self, app_client: TestClient) -> None:
+        """When the scheduler has not resolved, the section serializes as null."""
+        with patch.object(
+            app_client.app.state.exporter.status_service,
+            "get_snapshot",
+            return_value=_make_snapshot(),
+        ):
+            response = app_client.get("/status?format=json")
+
+        assert response.status_code == 200
+        assert response.json()["scheduler"] is None
+
+    def test_status_html_renders_scheduler_section(self, app_client: TestClient) -> None:
+        """The HTML page renders the Scheduler card with the org shape + groups."""
+        snapshot = _make_snapshot()
+        snapshot.scheduler = self._scheduler_diagnostics()
+        with patch.object(
+            app_client.app.state.exporter.status_service,
+            "get_snapshot",
+            return_value=snapshot,
+        ):
+            response = app_client.get("/status")
+
+        body = response.text
+        assert "Scheduler" in body
+        assert "nh_connection_stats" in body
+        assert "Org Shape" in body

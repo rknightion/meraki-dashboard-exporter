@@ -870,3 +870,124 @@ class TestPerFetchDeadline:
         result = await method(instance)
         assert result is None
         assert instance.tracked_errors == [ErrorCategory.TIMEOUT]
+
+
+class _RateLimit429Error(Exception):
+    """HTTP 429 shaped like meraki.exceptions.APIError (status + optional retry_after)."""
+
+    def __init__(self, retry_after: float | None = None) -> None:
+        self.status = 429
+        self.retry_after = retry_after
+        super().__init__("429 too many requests")
+
+
+class TestAIMDThrottleFeedback:
+    """#617: the single 429-retry owner feeds record_throttle_event on each retry."""
+
+    @staticmethod
+    async def _instant_sleep(_delay: float) -> None:
+        """Drop-in for asyncio.sleep that never actually waits."""
+        return None
+
+    def _no_sleep(self) -> Any:
+        return patch(
+            "meraki_dashboard_exporter.core.error_handling.asyncio.sleep", self._instant_sleep
+        )
+
+    @staticmethod
+    def _no_jitter() -> Any:
+        return patch("meraki_dashboard_exporter.core.error_handling.random.uniform", return_value=0)
+
+    @pytest.mark.asyncio
+    async def test_http_429_storm_fires_once_per_retry(self) -> None:
+        """A simulated 429 storm records once per retry with the capped Retry-After."""
+        instance = _FakeCollector(retry_after_max_seconds=30)
+        instance.rate_limiter = MagicMock()
+
+        @with_error_handling(operation="429 op", max_retries=3, base_delay=0.01)
+        async def method(self: _FakeCollector) -> str:
+            raise _RateLimit429Error(retry_after=1.0)
+
+        with self._no_sleep(), self._no_jitter():
+            result = await method(instance)
+
+        assert result is None
+        assert instance.rate_limiter.record_throttle_event.call_count == 3
+        for call in instance.rate_limiter.record_throttle_event.call_args_list:
+            assert call.args == (None, 1.0)  # (org_id=None, capped retry_after)
+
+    @pytest.mark.asyncio
+    async def test_http_429_retry_after_capped_before_recording(self) -> None:
+        """A pathological Retry-After is capped before it reaches record_throttle_event."""
+        instance = _FakeCollector(retry_after_max_seconds=7)
+        instance.rate_limiter = MagicMock()
+
+        @with_error_handling(operation="429 op", max_retries=1, base_delay=0.01)
+        async def method(self: _FakeCollector) -> str:
+            raise _RateLimit429Error(retry_after=4000.0)
+
+        with self._no_sleep(), self._no_jitter():
+            await method(instance)
+
+        instance.rate_limiter.record_throttle_event.assert_called_once_with(None, 7.0)
+
+    @pytest.mark.asyncio
+    async def test_retryable_api_error_branch_records_throttle(self) -> None:
+        """The RetryableAPIError (HTTP-200 rate-limit) branch also feeds the controller."""
+        instance = _FakeCollector(retry_after_max_seconds=30)
+        instance.rate_limiter = MagicMock()
+
+        @with_error_handling(operation="200-rl op", max_retries=2, base_delay=0.01)
+        async def method(self: _FakeCollector) -> str:
+            raise RetryableAPIError("Rate limit exceeded", retry_after=2.0)
+
+        with self._no_sleep(), self._no_jitter():
+            await method(instance)
+
+        assert instance.rate_limiter.record_throttle_event.call_count == 2
+        for call in instance.rate_limiter.record_throttle_event.call_args_list:
+            assert call.args == (None, 2.0)
+
+    @pytest.mark.asyncio
+    async def test_no_retry_after_records_none(self) -> None:
+        """With no server Retry-After the recorded value is None (backoff path)."""
+        instance = _FakeCollector(retry_after_max_seconds=30)
+        instance.rate_limiter = MagicMock()
+
+        @with_error_handling(operation="429 op", max_retries=1, base_delay=0.01)
+        async def method(self: _FakeCollector) -> str:
+            raise _RateLimit429Error(retry_after=None)
+
+        with self._no_sleep(), self._no_jitter():
+            await method(instance)
+
+        instance.rate_limiter.record_throttle_event.assert_called_once_with(None, None)
+
+    @pytest.mark.asyncio
+    async def test_rate_limiter_resolved_via_parent(self) -> None:
+        """When the fetch site lacks its own limiter, the coordinator parent's is used."""
+        instance = _FakeCollector(retry_after_max_seconds=30)
+        instance.parent = SimpleNamespace(rate_limiter=MagicMock())
+
+        @with_error_handling(operation="429 op", max_retries=1, base_delay=0.01)
+        async def method(self: _FakeCollector) -> str:
+            raise _RateLimit429Error(retry_after=1.0)
+
+        with self._no_sleep(), self._no_jitter():
+            await method(instance)
+
+        instance.parent.rate_limiter.record_throttle_event.assert_called_once_with(None, 1.0)
+
+    @pytest.mark.asyncio
+    async def test_no_rate_limiter_is_safe_noop(self) -> None:
+        """No limiter on the instance or parent -> the hook is a silent no-op."""
+        instance = _FakeCollector(retry_after_max_seconds=30)
+
+        @with_error_handling(operation="429 op", max_retries=1, base_delay=0.01)
+        async def method(self: _FakeCollector) -> str:
+            raise _RateLimit429Error(retry_after=1.0)
+
+        with self._no_sleep(), self._no_jitter():
+            result = await method(instance)
+
+        assert result is None  # completed without raising despite no limiter

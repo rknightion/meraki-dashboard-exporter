@@ -50,10 +50,19 @@ class NetworkHealthCollector(MetricCollector):
         inventory: OrganizationInventory | None = None,
         expiration_manager: MetricExpirationManager | None = None,
         rate_limiter: Any | None = None,
+        scheduler: Any | None = None,
         org_health_tracker: OrgHealthTracker | None = None,
     ) -> None:
         """Initialize network health collector with sub-collectors."""
-        super().__init__(api, settings, registry, inventory, expiration_manager, rate_limiter)
+        super().__init__(
+            api,
+            settings,
+            registry,
+            inventory,
+            expiration_manager,
+            rate_limiter,
+            scheduler=scheduler,
+        )
 
         # Shared per-org health tracker (F-169 / #547): when present, per-org
         # collection is skipped for organizations currently in backoff, AND this

@@ -158,6 +158,10 @@ def _stub_startup(exporter: ExporterApp) -> None:
     exporter.collector_manager.collect_initial = AsyncMock()  # type: ignore[method-assign]
     exporter.collector_manager.get_tier_interval = lambda tier: 60  # type: ignore[assignment]
     exporter._tiered_collection_loop = AsyncMock()  # type: ignore[method-assign]
+    # #617: the adaptive scheduler resolve loop is a long-running background
+    # task; stub it here so startup-sequencing tests don't spin the real loop
+    # (which would poll inventory/API forever and never drain).
+    exporter._scheduler_resolve_loop = AsyncMock()  # type: ignore[method-assign]
 
 
 class TestStartupCollections:

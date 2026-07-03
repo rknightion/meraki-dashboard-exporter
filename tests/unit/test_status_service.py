@@ -144,6 +144,10 @@ class TestStatusService:
         mock_settings.update_intervals.medium = 300
         mock_settings.update_intervals.slow = 900
 
+        # Scheduling diagnostics without a "scheduler" key => snapshot.scheduler
+        # stays None (the pre-resolve / fixed-mode default). #617.
+        mock_manager.get_scheduling_diagnostics.return_value = {}
+
         service = StatusService(
             collector_manager=mock_manager,
             expiration_manager=mock_expiration,
@@ -298,6 +302,57 @@ class TestStatusService:
         assert org.in_backoff is True
         assert org.backoff_remaining_seconds == 60.0
 
+    def test_get_snapshot_scheduler_none_when_absent(self) -> None:
+        """No 'scheduler' key in diagnostics => snapshot.scheduler is None (#617)."""
+        service, mock_manager, mock_expiration, mock_client, _ = self._make_service()
+        mock_manager.collectors = {UpdateTier.FAST: [], UpdateTier.MEDIUM: [], UpdateTier.SLOW: []}
+        mock_manager.collector_health = {}
+        mock_manager.get_readiness_status.return_value = {
+            "ready": True,
+            "collectors": {"fast": True, "medium": True, "slow": True},
+        }
+        mock_manager.org_health_tracker._orgs = {}
+        mock_manager.rate_limiter._tokens = {}
+        mock_manager.rate_limiter.enabled = True
+        mock_manager.rate_limiter.get_total_throttled.return_value = 0
+        mock_client.get_total_api_requests.return_value = 0
+        mock_expiration.get_stats.return_value = {
+            "total_tracked": 0,
+            "by_collector": {},
+            "ttl_multiplier": 2.0,
+        }
+
+        snapshot = service.get_snapshot()
+
+        assert snapshot.scheduler is None
+
+    def test_get_snapshot_carries_scheduler_diagnostics(self) -> None:
+        """The manager's diagnostics['scheduler'] flows onto the snapshot (#617)."""
+        service, mock_manager, mock_expiration, mock_client, _ = self._make_service()
+        mock_manager.collectors = {UpdateTier.FAST: [], UpdateTier.MEDIUM: [], UpdateTier.SLOW: []}
+        mock_manager.collector_health = {}
+        mock_manager.get_readiness_status.return_value = {
+            "ready": True,
+            "collectors": {"fast": True, "medium": True, "slow": True},
+        }
+        mock_manager.org_health_tracker._orgs = {}
+        mock_manager.rate_limiter._tokens = {}
+        mock_manager.rate_limiter.enabled = True
+        mock_manager.rate_limiter.get_total_throttled.return_value = 0
+        mock_client.get_total_api_requests.return_value = 0
+        mock_expiration.get_stats.return_value = {
+            "total_tracked": 0,
+            "by_collector": {},
+            "ttl_multiplier": 2.0,
+        }
+        sched = {"mode": "adaptive", "budget_rps": 8.0, "groups": []}
+        mock_manager.get_scheduling_diagnostics.return_value = {"scheduler": sched}
+
+        snapshot = service.get_snapshot()
+
+        assert snapshot.scheduler == sched
+        assert snapshot.to_dict()["scheduler"]["mode"] == "adaptive"
+
 
 class TestApiHealthAuthenticated:
     """Tests for ApiHealthStatus.authenticated wiring to the auth-outcome latch (#509)."""
@@ -324,6 +379,7 @@ class TestApiHealthAuthenticated:
         mock_manager.rate_limiter.enabled = True
         mock_manager.rate_limiter.get_total_throttled.return_value = 0
         mock_client.get_total_api_requests.return_value = 0
+        mock_manager.get_scheduling_diagnostics.return_value = {}
         mock_expiration.get_stats.return_value = {
             "total_tracked": 0,
             "by_collector": {},

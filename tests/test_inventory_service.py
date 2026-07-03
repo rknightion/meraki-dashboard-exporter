@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from meraki_dashboard_exporter.core.network_filter import NetworkFilter
 from meraki_dashboard_exporter.services.inventory import OrganizationInventory
 from tests.helpers.factories import DeviceFactory, NetworkFactory, OrganizationFactory
 
@@ -1066,3 +1067,141 @@ class TestOrganizationInventorySingleOrgName:
         assert result1[0]["name"] == "Cached Org"
         assert result2[0]["name"] == "Cached Org"
         assert mock_api.organizations.getOrganization.call_count == 1
+
+
+class TestGetOrgShape:
+    """Tests for OrganizationInventory.get_org_shape (#617, adaptive scheduler)."""
+
+    @staticmethod
+    def _dev(product_type: str, model: str, network_id: str) -> dict:
+        """Build a device dict with the productType field the shape reads."""
+        return DeviceFactory.create(
+            model=model, network_id=network_id, product_type=product_type
+        ) | {"productType": product_type}
+
+    def _inventory_with_filter(self, mock_api, mock_settings, network_filter=None):
+        """Construct an inventory optionally wired with a NetworkFilter."""
+        return OrganizationInventory(mock_api, mock_settings, network_filter=network_filter)
+
+    async def test_mixed_org_counts(self, mock_api, mock_settings):
+        """A mixed org yields correct per-type network and device counts."""
+        inv = self._inventory_with_filter(mock_api, mock_settings)
+        org_id = "O1"
+
+        networks = [
+            NetworkFactory.create(network_id="N_w", product_types=["wireless"]),
+            NetworkFactory.create(network_id="N_ws", product_types=["wireless", "switch"]),
+            NetworkFactory.create(network_id="N_appl", product_types=["appliance"]),
+            NetworkFactory.create(network_id="N_sensor", product_types=["sensor"]),
+            NetworkFactory.create(network_id="N_cam", product_types=["camera"]),
+            NetworkFactory.create(network_id="N_cell", product_types=["cellularGateway"]),
+        ]
+        devices = [
+            self._dev("wireless", "MR36", "N_w"),
+            self._dev("wireless", "MR46", "N_ws"),
+            self._dev("switch", "MS250-48", "N_ws"),
+            self._dev("appliance", "MX64", "N_appl"),
+            self._dev("appliance", "vmx-small", "N_appl"),  # virtual MX (excluded from physical)
+            self._dev("camera", "MV12", "N_cam"),
+            self._dev("sensor", "MT10", "N_sensor"),
+            self._dev("cellularGateway", "MG21", "N_cell"),
+        ]
+        mock_api.organizations.getOrganizationNetworks.return_value = networks
+        mock_api.organizations.getOrganizationDevices.return_value = devices
+
+        shape = await inv.get_org_shape(org_id)
+
+        assert shape.org_id == org_id
+        # Networks (classified by productTypes membership)
+        assert shape.network_count == 6
+        assert shape.wireless_network_count == 2
+        assert shape.switch_network_count == 1
+        assert shape.appliance_network_count == 1
+        assert shape.sensor_network_count == 1
+        assert shape.camera_network_count == 1
+        assert shape.cellular_network_count == 1
+        # Devices (classified by productType)
+        assert shape.device_count == 8
+        assert shape.ap_count == 2
+        assert shape.switch_count == 1
+        assert shape.appliance_count == 2  # incl. vMX
+        assert shape.physical_mx_count == 1  # vMX excluded (model starts VMX, case-insensitive)
+        assert shape.camera_count == 1
+        assert shape.sensor_count == 1
+        assert shape.cellular_count == 1
+
+    async def test_network_filter_reduces_counts(self, mock_api, mock_settings):
+        """NetworkFilter shrinks both the network and device counts."""
+        from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+
+        network_filter = NetworkFilter(NetworkFilterSettings(exclude_tags=["lab"]))
+        inv = self._inventory_with_filter(mock_api, mock_settings, network_filter)
+        org_id = "O1"
+
+        networks = [
+            NetworkFactory.create(network_id="N_prod", product_types=["wireless"], tags=[]),
+            NetworkFactory.create(
+                network_id="N_lab", product_types=["wireless", "switch"], tags=["lab"]
+            ),
+        ]
+        devices = [
+            self._dev("wireless", "MR36", "N_prod"),
+            self._dev("wireless", "MR46", "N_lab"),  # dropped by filter
+            self._dev("switch", "MS250-48", "N_lab"),  # dropped by filter
+        ]
+        mock_api.organizations.getOrganizationNetworks.return_value = networks
+        mock_api.organizations.getOrganizationDevices.return_value = devices
+
+        shape = await inv.get_org_shape(org_id)
+
+        # Only the prod network + its single AP survive the filter.
+        assert shape.network_count == 1
+        assert shape.wireless_network_count == 1
+        assert shape.switch_network_count == 0
+        assert shape.device_count == 1
+        assert shape.ap_count == 1
+        assert shape.switch_count == 0
+
+    async def test_empty_org_all_zeros(self, mock_api, mock_settings):
+        """An org with no networks/devices yields an all-zero shape."""
+        inv = self._inventory_with_filter(mock_api, mock_settings)
+        org_id = "O_empty"
+        mock_api.organizations.getOrganizationNetworks.return_value = []
+        mock_api.organizations.getOrganizationDevices.return_value = []
+
+        shape = await inv.get_org_shape(org_id)
+
+        assert shape.org_id == org_id
+        assert shape.network_count == 0
+        assert shape.wireless_network_count == 0
+        assert shape.switch_network_count == 0
+        assert shape.appliance_network_count == 0
+        assert shape.sensor_network_count == 0
+        assert shape.camera_network_count == 0
+        assert shape.cellular_network_count == 0
+        assert shape.device_count == 0
+        assert shape.ap_count == 0
+        assert shape.switch_count == 0
+        assert shape.appliance_count == 0
+        assert shape.physical_mx_count == 0
+        assert shape.camera_count == 0
+        assert shape.sensor_count == 0
+        assert shape.cellular_count == 0
+
+    async def test_no_extra_api_calls_when_cached(self, mock_api, mock_settings):
+        """get_org_shape triggers at most one networks + one devices fetch."""
+        inv = self._inventory_with_filter(mock_api, mock_settings)
+        org_id = "O1"
+        mock_api.organizations.getOrganizationNetworks.return_value = [
+            NetworkFactory.create(network_id="N_w", product_types=["wireless"])
+        ]
+        mock_api.organizations.getOrganizationDevices.return_value = [
+            TestGetOrgShape._dev("wireless", "MR36", "N_w")
+        ]
+
+        # Warm the cache, then call again -- second call must be cache-only.
+        await inv.get_org_shape(org_id)
+        await inv.get_org_shape(org_id)
+
+        assert mock_api.organizations.getOrganizationNetworks.call_count == 1
+        assert mock_api.organizations.getOrganizationDevices.call_count == 1

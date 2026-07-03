@@ -62,10 +62,19 @@ class OrganizationCollector(MetricCollector):
         inventory: OrganizationInventory | None = None,
         expiration_manager: MetricExpirationManager | None = None,
         rate_limiter: Any | None = None,
+        scheduler: Any | None = None,
         org_health_tracker: OrgHealthTracker | None = None,
     ) -> None:
         """Initialize organization collector with sub-collectors."""
-        super().__init__(api, settings, registry, inventory, expiration_manager, rate_limiter)
+        super().__init__(
+            api,
+            settings,
+            registry,
+            inventory,
+            expiration_manager,
+            rate_limiter,
+            scheduler=scheduler,
+        )
 
         # Per-org health tracker for graceful degradation
         self.org_health_tracker = org_health_tracker or OrgHealthTracker()

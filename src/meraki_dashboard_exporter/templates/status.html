@@ -217,6 +217,84 @@
             {% endif %}
         </div>
 
+        {% if scheduler %}
+        <div class="card">
+            <h2>Scheduler
+                <span class="badge {{ 'badge-stale' if scheduler.over_budget else 'badge-ok' }}" style="margin-left: 8px;">{{ scheduler.mode }}</span>
+                {% if scheduler.over_budget %}<span class="badge badge-stale" style="margin-left: 4px;">over budget</span>{% endif %}
+            </h2>
+            <div class="stat-grid">
+                <div class="stat-item">
+                    <div class="stat-value">{{ "%.2f"|format(scheduler.budget_rps) }}</div>
+                    <div class="stat-label">Configured Budget (rps)</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ "%.2f"|format(scheduler.effective_budget_rps) }}</div>
+                    <div class="stat-label">Effective Budget (rps)</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ "%.2f"|format(scheduler.total_demand_rps) }}</div>
+                    <div class="stat-label">Estimated Demand (rps)</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{% if scheduler.effective_budget_rps and scheduler.effective_budget_rps > 0 %}{{ "%.0f"|format(scheduler.total_demand_rps / scheduler.effective_budget_rps * 100) }}%{% else %}-{% endif %}</div>
+                    <div class="stat-label">Budget Utilization</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ "%.0f"|format(scheduler.target_utilization * 100) }}%</div>
+                    <div class="stat-label">Target Utilization</div>
+                </div>
+            </div>
+
+            {% if scheduler.org_shape %}
+            <h3 style="font-size: 1rem; margin-top: 16px; margin-bottom: 8px;">Org Shape</h3>
+            <div class="stat-grid">
+                <div class="stat-item"><div class="stat-value">{{ scheduler.org_shape.network_count }}</div><div class="stat-label">Networks</div></div>
+                <div class="stat-item"><div class="stat-value">{{ scheduler.org_shape.device_count }}</div><div class="stat-label">Devices</div></div>
+                <div class="stat-item"><div class="stat-value">{{ scheduler.org_shape.ap_count }}</div><div class="stat-label">Access Points (MR)</div></div>
+                <div class="stat-item"><div class="stat-value">{{ scheduler.org_shape.switch_count }}</div><div class="stat-label">Switches (MS)</div></div>
+                <div class="stat-item"><div class="stat-value">{{ scheduler.org_shape.appliance_count }}</div><div class="stat-label">Appliances (MX)</div></div>
+                <div class="stat-item"><div class="stat-value">{{ scheduler.org_shape.camera_count }}</div><div class="stat-label">Cameras (MV)</div></div>
+                <div class="stat-item"><div class="stat-value">{{ scheduler.org_shape.sensor_count }}</div><div class="stat-label">Sensors (MT)</div></div>
+            </div>
+            {% endif %}
+
+            {% if scheduler.groups %}
+            <h3 style="font-size: 1rem; margin-top: 16px; margin-bottom: 8px;">Endpoint Groups ({{ scheduler.groups | length }})</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Group</th>
+                        <th>Priority</th>
+                        <th>Tier</th>
+                        <th>Floor (s)</th>
+                        <th>Interval (s)</th>
+                        <th>Stretch</th>
+                        <th>Demand (rps)</th>
+                        <th>Pinned</th>
+                        <th>Last Ran</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for g in scheduler.groups %}
+                    <tr class="{{ 'row-warning' if g.stretch_factor and g.stretch_factor > 1.0 else 'row-ok' }}">
+                        <td>{{ g.name }}</td>
+                        <td>{{ g.priority }}</td>
+                        <td>{{ g.tier | upper }}</td>
+                        <td>{{ "%.0f"|format(g.floor_seconds) }}</td>
+                        <td>{{ "%.0f"|format(g.interval_seconds) }}</td>
+                        <td>{{ "%.2f"|format(g.stretch_factor) }}x</td>
+                        <td>{% if g.demand_rps is not none %}{{ "%.3f"|format(g.demand_rps) }}{% else %}-{% endif %}</td>
+                        <td>{% if g.pinned %}<span class="badge badge-running">pinned</span>{% else %}no{% endif %}</td>
+                        <td>{% if g.last_ran_ago_seconds is not none %}{{ "%.0f"|format(g.last_ran_ago_seconds) }}s ago{% else %}never{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        {% endif %}
+
         {% if system.org_health %}
         <div class="card">
             <h2>Organization Health</h2>

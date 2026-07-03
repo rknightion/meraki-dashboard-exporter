@@ -255,9 +255,17 @@ class ExporterApp:
         collectors, or every collector disabled).
 
         This is deliberately a single, isolated helper (rather than inlining the
-        loop into ``_liveness_threshold_seconds``) so a future adaptive scheduler
-        (#617) can swap in "fastest computed group cadence" without touching the
-        threshold derivation itself.
+        loop into ``_liveness_threshold_seconds``). It anticipated the #617
+        adaptive scheduler swapping in a "fastest computed group cadence" - but
+        under the frozen gate model that swap is a no-op: endpoint groups never
+        run faster than their owning tier's heartbeat, and a fully-gated
+        collector run still completes a successful heartbeat cycle, so the
+        collector success cadence (what liveness watches) remains exactly the
+        tier interval. The tier derivation below therefore already IS the
+        computed fastest cadence, in both ``adaptive`` and ``fixed`` scheduler
+        modes; the threshold stays correct without reading the scheduler.
+        ``EndpointScheduler.fastest_effective_interval_seconds()`` exists for
+        diagnostics only, not for this liveness threshold (#596/#617).
         """
         manager = self.collector_manager
         for tier in (UpdateTier.FAST, UpdateTier.MEDIUM, UpdateTier.SLOW):
@@ -541,6 +549,14 @@ class ExporterApp:
                 tiers=list(self._tier_tasks.keys()),
             )
 
+            # Start the adaptive scheduler resolve loop (#617). Same background-
+            # task bookkeeping/shutdown pattern as the tier loops above: it
+            # recomputes endpoint-group intervals from the org shape on the
+            # inventory-TTL cadence and early-re-solves on AIMD budget moves.
+            resolve_task = asyncio.create_task(self._scheduler_resolve_loop())
+            self._background_tasks.add(resolve_task)
+            resolve_task.add_done_callback(self._background_tasks.discard)
+
             # Wait for first collection cycle to complete (no-op if already done).
             # Track the task so lifespan shutdown cancels it instead of leaking it
             # (F-044) - mirrors the tier-loop / cardinality-loop bookkeeping.
@@ -700,6 +716,78 @@ class ExporterApp:
 
         except asyncio.CancelledError:
             logger.info("Cardinality monitoring task cancelled")
+            raise
+
+    async def _scheduler_resolve_loop(self) -> None:
+        """Background task recomputing the adaptive scheduler's intervals (#617).
+
+        Two cadences share one loop, checked on a fixed 60s tick:
+
+        * **Every 60s** - ``scheduler.needs_resolve()``: an early re-solve when
+          the AIMD-effective budget has moved past its hysteresis band (a 429
+          burst halved it, or clean-minute recovery lifted it), so the solver
+          reacts to throttling faster than the scheduled cadence.
+        * **Every ``settings.scheduler.resolve_interval_seconds``** (default
+          900, matching the inventory TTL): a scheduled re-solve from a fresh
+          ``OrgShape`` - the "on inventory refresh" hook.
+
+        Both paths call ``inventory.get_org_shape(org_id)`` (cached reads - zero
+        extra API calls in the steady state) then the synchronous, pure-CPU
+        ``scheduler.resolve(shape)``. Exceptions are swallowed and logged so a
+        transient inventory/solve failure never kills the loop; shutdown is
+        honoured with the same 1s-increment interruptible wait as the tier
+        loops, and cancellation exits cleanly.
+
+        The initial resolve already ran inside ``collect_initial`` (the manager
+        lane), so this loop deliberately does not re-solve on entry - the first
+        60s tick only re-solves if AIMD already moved the budget.
+        """
+        scheduler = self.collector_manager.scheduler
+        inventory = self.collector_manager.inventory
+        org_id = self.settings.meraki.org_id
+        if org_id is None:
+            logger.warning("Scheduler resolve loop: no org_id resolved; not starting")
+            return
+
+        resolve_interval = float(self.settings.scheduler.resolve_interval_seconds)
+        check_interval = 60.0
+
+        async def _do_resolve() -> None:
+            shape = await inventory.get_org_shape(org_id)
+            scheduler.resolve(shape)
+
+        logger.debug(
+            "Starting scheduler resolve loop",
+            resolve_interval_seconds=resolve_interval,
+            check_interval_seconds=check_interval,
+        )
+
+        seconds_since_resolve = 0.0
+        try:
+            while not self._shutdown_event.is_set():
+                try:
+                    if seconds_since_resolve >= resolve_interval:
+                        await _do_resolve()
+                        seconds_since_resolve = 0.0
+                    elif scheduler.needs_resolve():
+                        logger.info("Scheduler re-solving early on AIMD budget change")
+                        await _do_resolve()
+                        seconds_since_resolve = 0.0
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.exception("Scheduler resolve loop iteration failed")
+
+                # Interruptible wait in 1s increments (mirrors the tier loops).
+                remaining_time = check_interval
+                while remaining_time > 0 and not self._shutdown_event.is_set():
+                    wait_time = min(1.0, remaining_time)
+                    await asyncio.sleep(wait_time)
+                    remaining_time -= wait_time
+                seconds_since_resolve += check_interval
+
+        except asyncio.CancelledError:
+            logger.info("Scheduler resolve loop cancelled")
             raise
 
     def _sample_resource_metrics(self) -> None:

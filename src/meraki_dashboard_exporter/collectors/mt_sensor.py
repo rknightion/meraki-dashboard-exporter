@@ -39,9 +39,18 @@ class MTSensorCollector(MetricCollector):
         inventory: OrganizationInventory | None = None,
         expiration_manager: MetricExpirationManager | None = None,
         rate_limiter: Any | None = None,
+        scheduler: Any | None = None,
     ) -> None:
         """Initialize MT sensor collector."""
-        super().__init__(api, settings, registry, inventory, expiration_manager, rate_limiter)
+        super().__init__(
+            api,
+            settings,
+            registry,
+            inventory,
+            expiration_manager,
+            rate_limiter,
+            scheduler=scheduler,
+        )
         # Create MT collector in standalone mode
         self.mt_collector = MTCollector.as_standalone(
             api=api, settings=settings, rate_limiter=self.rate_limiter
