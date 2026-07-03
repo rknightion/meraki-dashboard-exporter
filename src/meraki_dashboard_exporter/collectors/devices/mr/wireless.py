@@ -19,6 +19,7 @@ from ....core.logging import get_logger
 from ....core.logging_decorators import log_api_call
 from ....core.logging_helpers import LogContext
 from ....core.metrics import LabelName
+from ....core.scheduler import EndpointGroupName
 
 if TYPE_CHECKING:
     from ...device import DeviceCollector
@@ -171,6 +172,11 @@ class MRWirelessCollector:
             Device lookup table for device info.
 
         """
+        # Scheduler gate: skip the org-wide fetch when not due (#617).
+        if not self.parent._should_run_group(EndpointGroupName.MR_SSID_STATUS):
+            return
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.MR_SSID_STATUS)
+
         try:
             with LogContext(org_id=org_id):
                 ssid_statuses = await asyncio.to_thread(
@@ -184,6 +190,9 @@ class MRWirelessCollector:
                     expected_type=list,
                     operation="getOrganizationWirelessSsidsStatusesByDevice",
                 )
+
+            # Fetch succeeded — record the run so the gate can stretch (#617).
+            self.parent._mark_group_ran(EndpointGroupName.MR_SSID_STATUS)
 
             # Resolve allowed network IDs for filter enforcement on org-wide responses.
             allowed_network_ids = (
@@ -242,6 +251,7 @@ class MRWirelessCollector:
                             self._mr_radio_broadcasting,
                             radio_labels,
                             1 if broadcasting else 0,
+                            ttl_seconds=ttl,
                         )
 
                     if channel is not None:
@@ -249,6 +259,7 @@ class MRWirelessCollector:
                             self._mr_radio_channel,
                             radio_labels,
                             channel,
+                            ttl_seconds=ttl,
                         )
 
                     if channel_width is not None:
@@ -256,6 +267,7 @@ class MRWirelessCollector:
                             self._mr_radio_channel_width,
                             radio_labels,
                             channel_width,
+                            ttl_seconds=ttl,
                         )
 
                     if power is not None:
@@ -263,6 +275,7 @@ class MRWirelessCollector:
                             self._mr_radio_power,
                             radio_labels,
                             power,
+                            ttl_seconds=ttl,
                         )
 
             if skipped:
@@ -295,6 +308,11 @@ class MRWirelessCollector:
             Organization name.
 
         """
+        # Scheduler gate: skip the org-wide summary fetch when not due (#617).
+        if not self.parent._should_run_group(EndpointGroupName.MR_SSID_USAGE):
+            return
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.MR_SSID_USAGE)
+
         try:
             with LogContext(org_id=org_id):
                 # quantity=50 is the endpoint maximum (default is only top 10),
@@ -309,6 +327,9 @@ class MRWirelessCollector:
                     expected_type=list,
                     operation="getOrganizationSummaryTopSsidsByUsage",
                 )
+
+            # Fetch succeeded — record the run so the gate can stretch (#617).
+            self.parent._mark_group_ran(EndpointGroupName.MR_SSID_USAGE)
 
             # Process SSID usage data. Each row is an org-wide total for one SSID
             # name, so we emit exactly one org-level series per SSID (no per-network
@@ -340,30 +361,35 @@ class MRWirelessCollector:
                     self._ssid_usage_total_mb,
                     ssid_labels,
                     total_bytes,
+                    ttl_seconds=ttl,
                 )
 
                 self.parent._set_metric(
                     self._ssid_usage_downstream_mb,
                     ssid_labels,
                     downstream_bytes,
+                    ttl_seconds=ttl,
                 )
 
                 self.parent._set_metric(
                     self._ssid_usage_upstream_mb,
                     ssid_labels,
                     upstream_bytes,
+                    ttl_seconds=ttl,
                 )
 
                 self.parent._set_metric(
                     self._ssid_usage_percentage,
                     ssid_labels,
                     usage_percentage,
+                    ttl_seconds=ttl,
                 )
 
                 self.parent._set_metric(
                     self._ssid_client_count,
                     ssid_labels,
                     client_count,
+                    ttl_seconds=ttl,
                 )
 
         except Exception:

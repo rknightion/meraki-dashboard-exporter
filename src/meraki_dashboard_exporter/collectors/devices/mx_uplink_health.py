@@ -12,6 +12,7 @@ from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.metrics import LabelName
+from ...core.scheduler import EndpointGroupName
 from ..subcollector_mixin import SubCollectorMixin
 
 if TYPE_CHECKING:
@@ -94,6 +95,10 @@ class MXUplinkHealthCollector(SubCollectorMixin):
             Device lookup table keyed by serial.
 
         """
+        # mx_uplink_health gate (#617): single org-wide call per cycle.
+        if not self.parent._should_run_group(EndpointGroupName.MX_UPLINK_HEALTH):
+            return
+
         resp = await asyncio.to_thread(
             self.api.organizations.getOrganizationDevicesUplinksLossAndLatency,
             org_id,
@@ -175,6 +180,7 @@ class MXUplinkHealthCollector(SubCollectorMixin):
                     latency_value if agg["latency"] is None else max(agg["latency"], latency_value)
                 )
 
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_UPLINK_HEALTH)
         for agg in aggregates.values():
             labels = agg["labels"]
             if agg["loss"] is not None:
@@ -183,6 +189,7 @@ class MXUplinkHealthCollector(SubCollectorMixin):
                     labels,
                     float(agg["loss"]),
                     MXMetricName.MX_UPLINK_LOSS_PERCENT.value,
+                    ttl_seconds=ttl_seconds,
                 )
                 emitted += 1
 
@@ -192,8 +199,12 @@ class MXUplinkHealthCollector(SubCollectorMixin):
                     labels,
                     float(agg["latency"]) / 1000,
                     MXMetricName.MX_UPLINK_LATENCY_SECONDS.value,
+                    ttl_seconds=ttl_seconds,
                 )
                 emitted += 1
+
+        # Mark after a successful org-wide fetch (failures retry next cycle).
+        self.parent._mark_group_ran(EndpointGroupName.MX_UPLINK_HEALTH)
 
         logger.debug(
             "Collected MX uplink loss/latency",

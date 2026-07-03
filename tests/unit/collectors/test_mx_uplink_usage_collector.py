@@ -71,6 +71,62 @@ class TestMXUplinkUsageCollector:
         assert collector._mx_uplink_sent_bytes is not None
         assert collector._mx_uplink_recv_bytes is not None
 
+    @staticmethod
+    def _basic_usage_response() -> list[dict]:
+        return [
+            {
+                "networkId": "N_111",
+                "name": "Office Network",
+                "byUplink": [
+                    {
+                        "serial": "Q2AB-1234-5678",
+                        "interface": "wan1",
+                        "sent": 12345,
+                        "received": 67890,
+                    }
+                ],
+            }
+        ]
+
+    async def test_usage_gate_closed_skips_fetch(
+        self,
+        collector: MXUplinkUsageCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A closed mx_uplink_usage gate skips the API call and emits nothing (#617)."""
+        mock_parent._should_run_group = MagicMock(return_value=False)
+        mock_api.appliance.getOrganizationApplianceUplinksUsageByNetwork = MagicMock(
+            return_value=self._basic_usage_response()
+        )
+
+        await collector.collect_uplink_usage("org1", "Test Org", {})
+
+        mock_api.appliance.getOrganizationApplianceUplinksUsageByNetwork.assert_not_called()
+        mock_parent._set_metric.assert_not_called()
+        mock_parent._mark_group_ran.assert_not_called()
+
+    async def test_usage_marks_group_ran_and_threads_ttl(
+        self,
+        collector: MXUplinkUsageCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A successful usage fetch marks mx_uplink_usage and threads its TTL (#617)."""
+        mock_parent._should_run_group = MagicMock(return_value=True)
+        mock_parent._group_ttl_seconds = MagicMock(return_value=600.0)
+        mock_api.appliance.getOrganizationApplianceUplinksUsageByNetwork = MagicMock(
+            return_value=self._basic_usage_response()
+        )
+
+        await collector.collect_uplink_usage("org1", "Test Org", {})
+
+        from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+
+        mock_parent._mark_group_ran.assert_called_once_with(EndpointGroupName.MX_UPLINK_USAGE)
+        for call in mock_parent._set_metric.call_args_list:
+            assert call.kwargs["ttl_seconds"] == 600.0
+
     async def test_basic_emission(
         self,
         collector: MXUplinkUsageCollector,

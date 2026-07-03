@@ -12,6 +12,7 @@ from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.metrics import LabelName
+from ...core.scheduler import EndpointGroupName
 from ..subcollector_mixin import SubCollectorMixin
 
 if TYPE_CHECKING:
@@ -89,6 +90,11 @@ class MSPowerCollector(SubCollectorMixin):
             Device lookup table keyed by serial.
 
         """
+        # #617 gate: single org-wide call (floor 300). Skip when not due.
+        if not self.parent._should_run_group(EndpointGroupName.MS_POWER):
+            return
+        power_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_POWER)
+
         resp = await asyncio.to_thread(
             self.api.organizations.getOrganizationDevicesPowerModulesStatusesByDevice,
             org_id,
@@ -101,6 +107,10 @@ class MSPowerCollector(SubCollectorMixin):
             expected_type=list,
             operation="getOrganizationDevicesPowerModulesStatusesByDevice",
         )
+
+        # Fetch succeeded (empty is a valid result): mark the group ran so the
+        # scheduler stretches from here rather than retrying every heartbeat.
+        self.parent._mark_group_ran(EndpointGroupName.MS_POWER)
 
         if not rows:
             return
@@ -166,6 +176,7 @@ class MSPowerCollector(SubCollectorMixin):
                     labels,
                     1,
                     MSMetricName.MS_POWER_SUPPLY_STATUS.value,
+                    ttl_seconds=power_ttl,
                 )
                 emitted += 1
 

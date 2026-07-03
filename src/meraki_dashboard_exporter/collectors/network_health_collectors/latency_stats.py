@@ -12,6 +12,7 @@ from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.metrics import LabelName
+from ...core.scheduler import EndpointGroupName
 from .base import BaseNetworkHealthCollector
 
 if TYPE_CHECKING:
@@ -158,6 +159,9 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
         org_name = network.get("orgName", org_id)
 
         base_labels = create_network_labels(network, org_id=org_id, org_name=org_name)
+        # Per-series TTL from the group's solved interval (#617 §1f) — this
+        # 3600s-windowed series must not flap under a stretched interval.
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.NH_LATENCY_STATS)
 
         device_rows = await self._fetch_device_latency_stats(network_id)
         if device_rows:
@@ -178,6 +182,7 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
                         labels,
                         float(avg) / 1000,
                         NetworkHealthMetricName.MR_DEVICE_LATENCY_SECONDS.value,
+                        ttl_seconds=ttl_seconds,
                     )
 
         client_rows = await self._fetch_client_latency_stats(network_id)
@@ -203,4 +208,5 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
                     labels,
                     mean(values) / 1000,
                     NetworkHealthMetricName.MR_NETWORK_CLIENT_LATENCY_SECONDS.value,
+                    ttl_seconds=ttl_seconds,
                 )

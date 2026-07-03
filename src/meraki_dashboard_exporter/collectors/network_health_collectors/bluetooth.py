@@ -10,6 +10,7 @@ from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
+from ...core.scheduler import EndpointGroupName
 from .base import BaseNetworkHealthCollector
 
 if TYPE_CHECKING:
@@ -88,11 +89,13 @@ class BluetoothCollector(BaseNetworkHealthCollector):
                 org_name=org_name,
             )
 
-            # Set the metric
+            # Set the metric (per-series TTL from the group interval, #617 §1f).
+            ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.NH_BLUETOOTH)
             self._set_metric_value(
                 "_network_bluetooth_clients_total",
                 labels,
                 client_count,
+                ttl_seconds=ttl_seconds,
             )
 
         except Exception as e:

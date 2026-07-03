@@ -11,7 +11,7 @@ the configured `NetworkFilter` is enforced.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from ..core.async_utils import ManagedTaskGroup
 from ..core.batch_processing import process_in_batches_with_errors
@@ -29,6 +29,7 @@ from ..core.logging_decorators import log_api_call
 from ..core.logging_helpers import LogContext, log_metric_collection_summary
 from ..core.metrics import LabelName, create_labels
 from ..core.registry import register_collector
+from ..core.scheduler import EndpointGroup, EndpointGroupName
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -45,6 +46,18 @@ logger = get_logger(__name__)
 @register_collector(UpdateTier.MEDIUM)
 class MTSensorAlertsCollector(MetricCollector):
     """Collector for network-wide currently-alerting MT sensor counts."""
+
+    # #617 §2: per-sensor-network fetch (getNetworkSensorAlertsCurrentOverviewByMetric);
+    # cost is one call per sensor-capable network.
+    endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = (
+        EndpointGroup(
+            name=EndpointGroupName.MT_SENSOR_ALERTS,
+            priority=2,
+            floor_seconds=300,
+            cost_fn=lambda shape: shape.sensor_network_count,
+            tier=UpdateTier.MEDIUM,
+        ),
+    )
 
     def __init__(
         self,
@@ -97,6 +110,11 @@ class MTSensorAlertsCollector(MetricCollector):
                 "inventory service."
             )
 
+        # #617 gate: skip the whole per-network fan-out when the group is not due.
+        if not self._should_run_group(EndpointGroupName.MT_SENSOR_ALERTS):
+            logger.debug("MT sensor alerts not due this heartbeat; skipping")
+            return
+
         organizations = await self.inventory.get_organizations()
         if not organizations:
             logger.warning("No organizations found for MT sensor alerts collection")
@@ -143,6 +161,9 @@ class MTSensorAlertsCollector(MetricCollector):
                 failed=group.failed_count,
                 skipped_backoff=skipped_backoff,
             )
+
+        # Successful cycle: advance the scheduler's last-ran clock for the group.
+        self._mark_group_ran(EndpointGroupName.MT_SENSOR_ALERTS)
 
         log_metric_collection_summary(
             "MTSensorAlertsCollector",
@@ -222,6 +243,8 @@ class MTSensorAlertsCollector(MetricCollector):
         if not isinstance(counts, dict):
             return
 
+        ttl_seconds = self._group_ttl_seconds(EndpointGroupName.MT_SENSOR_ALERTS)
+
         for metric_name, value in counts.items():
             numeric_value = self._normalize_count(value)
             if numeric_value is None:
@@ -237,6 +260,7 @@ class MTSensorAlertsCollector(MetricCollector):
                 labels,
                 numeric_value,
                 MTMetricName.MT_ALERTING_SENSORS_COUNT.value,
+                ttl_seconds=ttl_seconds,
             )
 
     @staticmethod

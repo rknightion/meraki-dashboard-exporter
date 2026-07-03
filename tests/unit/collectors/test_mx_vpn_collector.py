@@ -160,6 +160,51 @@ class TestMXVpnCollector:
     # Peer status – reachability mapping
     # ------------------------------------------------------------------
 
+    async def test_vpn_statuses_gate_closed_skips_and_does_not_mark(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A closed mx_vpn gate skips VpnStatuses; the statuses call never marks (#617).
+
+        The mx_vpn group spans both VpnStatuses and VpnStats; only collect_vpn_stats
+        (the second call each cycle) sets the run marker, so collect() must never mark.
+        """
+        mock_parent._should_run_group = MagicMock(return_value=False)
+        mock_api.appliance.getOrganizationApplianceVpnStatuses = MagicMock(
+            return_value=[{"networkId": "N_1", "merakiVpnPeers": [], "thirdPartyVpnPeers": []}]
+        )
+
+        await vpn_collector.collect("org1", "Test Org")
+
+        mock_api.appliance.getOrganizationApplianceVpnStatuses.assert_not_called()
+        mock_parent._set_metric.assert_not_called()
+        mock_parent._mark_group_ran.assert_not_called()
+
+    async def test_vpn_statuses_open_gate_does_not_mark(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """collect() (VpnStatuses) runs but must NOT mark the mx_vpn group (#617)."""
+        mock_parent._should_run_group = MagicMock(return_value=True)
+        mock_api.appliance.getOrganizationApplianceVpnStatuses = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "merakiVpnPeers": [{"networkId": "N_2", "reachability": "reachable"}],
+                    "thirdPartyVpnPeers": [],
+                }
+            ]
+        )
+
+        await vpn_collector.collect("org1", "Test Org")
+
+        assert mock_parent._set_metric.called
+        mock_parent._mark_group_ran.assert_not_called()
+
     async def test_reachable_peer_sets_status_1(
         self,
         vpn_collector: MXVpnCollector,
@@ -595,6 +640,58 @@ class TestMXVpnStatsCollector:
         await vpn_collector.collect_vpn_stats("org1", "Test Org")
 
         mock_parent._set_metric.assert_not_called()
+
+    async def test_vpn_stats_gate_closed_skips_fetch(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A closed mx_vpn gate skips VpnStats and does not mark (#617)."""
+        mock_parent._should_run_group = MagicMock(return_value=False)
+        mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(
+            return_value=[{"networkId": "N_1", "merakiVpnPeers": []}]
+        )
+
+        await vpn_collector.collect_vpn_stats("org1", "Test Org")
+
+        mock_api.appliance.getOrganizationApplianceVpnStats.assert_not_called()
+        mock_parent._mark_group_ran.assert_not_called()
+
+    async def test_vpn_stats_marks_group_ran_and_threads_ttl(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """collect_vpn_stats marks mx_vpn (the pair's second call) and threads TTL (#617)."""
+        mock_parent._should_run_group = MagicMock(return_value=True)
+        mock_parent._group_ttl_seconds = MagicMock(return_value=600.0)
+        mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(
+            return_value=[
+                {
+                    "networkId": "N_1",
+                    "merakiVpnPeers": [
+                        {
+                            "networkId": "N_2",
+                            "usageSummary": {
+                                "sentInKilobytes": 1.0,
+                                "receivedInKilobytes": 2.0,
+                            },
+                            "latencySummaries": [],
+                        }
+                    ],
+                }
+            ]
+        )
+
+        await vpn_collector.collect_vpn_stats("org1", "Test Org")
+
+        from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+
+        mock_parent._mark_group_ran.assert_called_once_with(EndpointGroupName.MX_VPN)
+        for call in mock_parent._set_metric.call_args_list:
+            assert call.kwargs["ttl_seconds"] == 600.0
 
     async def test_usage_sent_and_received_emitted(
         self,

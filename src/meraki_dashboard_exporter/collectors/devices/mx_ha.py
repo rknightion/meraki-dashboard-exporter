@@ -12,6 +12,7 @@ from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.metrics import LabelName, create_labels
+from ...core.scheduler import EndpointGroupName
 from ..subcollector_mixin import SubCollectorMixin
 
 if TYPE_CHECKING:
@@ -100,6 +101,10 @@ class MXHACollector(SubCollectorMixin):
             Device lookup table keyed by serial.
 
         """
+        # mx_ha gate (#617): single org-wide call per cycle.
+        if not self.parent._should_run_group(EndpointGroupName.MX_HA):
+            return
+
         resp = await asyncio.to_thread(
             self.api.appliance.getOrganizationApplianceDevicesRedundancyByNetwork,
             org_id,
@@ -128,6 +133,7 @@ class MXHACollector(SubCollectorMixin):
         )
         skipped = 0
         emitted = 0
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_HA)
 
         for raw_row in rows:
             row = ApplianceDeviceRedundancy.model_validate(raw_row)
@@ -149,6 +155,7 @@ class MXHACollector(SubCollectorMixin):
                 network_labels,
                 1.0 if row.enabled else 0.0,
                 MXMetricName.MX_HA_ENABLED.value,
+                ttl_seconds=ttl_seconds,
             )
             emitted += 1
 
@@ -163,6 +170,7 @@ class MXHACollector(SubCollectorMixin):
                 mode_labels,
                 1,
                 MXMetricName.MX_HA_MODE.value,
+                ttl_seconds=ttl_seconds,
             )
             emitted += 1
 
@@ -182,8 +190,12 @@ class MXHACollector(SubCollectorMixin):
                     role_labels,
                     float(priority),
                     MXMetricName.MX_HA_ROLE.value,
+                    ttl_seconds=ttl_seconds,
                 )
                 emitted += 1
+
+        # Mark after a successful org-wide fetch (failures retry next cycle).
+        self.parent._mark_group_ran(EndpointGroupName.MX_HA)
 
         logger.debug(
             "Collected MX HA redundancy",

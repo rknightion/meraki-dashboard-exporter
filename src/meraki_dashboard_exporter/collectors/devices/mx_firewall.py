@@ -12,6 +12,7 @@ from ...core.error_handling import ErrorCategory, validate_response_format, with
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.metrics import LabelName
+from ...core.scheduler import EndpointGroupName
 from ..subcollector_mixin import SubCollectorMixin
 
 if TYPE_CHECKING:
@@ -59,12 +60,13 @@ class MXFirewallCollector(SubCollectorMixin):
         """Return whether enough time has elapsed to (re)collect firewall rules.
 
         Mirrors the ``_should_collect_port_usage``/``_mark_port_usage_collected``
-        throttle pattern in ``ms.py``, keyed on ``settings.update_intervals.slow``
-        instead of a dedicated interval setting, since this collector is meant to
-        run at the SLOW cadence (900s default) but is invoked every MEDIUM-tier
-        (300s) cycle by ``DeviceCollector._collect_mx_specific_metrics``.
+        throttle pattern in ``ms.py``. The interval is read from the
+        ``mx_firewall_config`` endpoint group's solved interval (#617, floor
+        900s) rather than ``settings.update_intervals.slow`` directly, so the
+        adaptive scheduler can stretch it; this collector is invoked every
+        MEDIUM-tier (300s) cycle by ``DeviceCollector._collect_mx_specific_metrics``.
         """
-        interval = self.settings.update_intervals.slow
+        interval = float(self.parent._group_interval(EndpointGroupName.MX_FIREWALL_CONFIG))
         if interval <= 0:
             return True
         last = self._last_firewall_collection.get(network_id, 0.0)
@@ -146,6 +148,7 @@ class MXFirewallCollector(SubCollectorMixin):
             LabelName.ORG_ID: org_id,
             LabelName.NETWORK_ID: network_id,
         }
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_FIREWALL_CONFIG)
 
         # L3 rules. Wrap in validate_response_format so an SDK exhausted-retry
         # error shape (a dict with an "errors" key) raises instead of silently
@@ -168,6 +171,7 @@ class MXFirewallCollector(SubCollectorMixin):
             self._firewall_rules_total,
             {**base_labels, LabelName.RULE_TYPE: "L3"},
             float(len(user_l3_rules)),
+            ttl_seconds=ttl_seconds,
         )
 
         # Default policy: determined from the last rule's policy field
@@ -178,6 +182,7 @@ class MXFirewallCollector(SubCollectorMixin):
                 self._firewall_default_policy,
                 base_labels,
                 1.0 if default_policy == "allow" else 0.0,
+                ttl_seconds=ttl_seconds,
             )
 
         # L7 rules (same error-shape normalization as L3)
@@ -197,6 +202,7 @@ class MXFirewallCollector(SubCollectorMixin):
             self._firewall_rules_total,
             {**base_labels, LabelName.RULE_TYPE: "L7"},
             float(len(l7_rules)),
+            ttl_seconds=ttl_seconds,
         )
 
         self._mark_firewall_rules_collected(network_id)
@@ -236,6 +242,10 @@ class MXFirewallCollector(SubCollectorMixin):
             Organization name.
 
         """
+        # mx_security_events gate (#617): single org-wide call per cycle.
+        if not self.parent._should_run_group(EndpointGroupName.MX_SECURITY_EVENTS):
+            return
+
         timespan = self.settings.update_intervals.medium
 
         events_response = await asyncio.to_thread(
@@ -277,6 +287,7 @@ class MXFirewallCollector(SubCollectorMixin):
         # with zero events this cycle are reclaimed by the metric expiration manager
         # via parent._set_metric tracking instead.
 
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_SECURITY_EVENTS)
         for event_type, count in counts.items():
             self.parent._set_metric(
                 self._security_events_count,
@@ -285,7 +296,11 @@ class MXFirewallCollector(SubCollectorMixin):
                     LabelName.EVENT_TYPE: event_type,
                 },
                 float(count),
+                ttl_seconds=ttl_seconds,
             )
+
+        # Mark after a successful org-wide fetch (failures retry next cycle).
+        self.parent._mark_group_ran(EndpointGroupName.MX_SECURITY_EVENTS)
 
         logger.debug(
             "Collected MX security events",

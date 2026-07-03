@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants import MXMetricName
@@ -11,6 +12,7 @@ from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.metrics import LabelName
+from ...core.scheduler import EndpointGroupName
 from .base import BaseDeviceCollector
 from .mx_firewall import MXFirewallCollector
 from .mx_vpn import MXVpnCollector
@@ -36,6 +38,15 @@ class MXCollector(BaseDeviceCollector):
         super().__init__(parent)
         self.vpn_collector = MXVpnCollector(self)
         self.firewall_collector = MXFirewallCollector(self)
+
+        # Per-serial throttle for the NEW mx_performance gate (#552/#617). The
+        # per-device getDeviceAppliancePerformance call fans out across every
+        # physical MX inside one MEDIUM-tier cycle, so a group-global run gate
+        # (single last_ran) would collect only the first appliance and skip the
+        # rest for the whole cycle. Instead each serial keeps its own timestamp
+        # and reads the interval from the mx_performance endpoint group
+        # (floor 900s), mirroring the per-serial MS gates.
+        self._last_performance_collection: dict[str, float] = {}
 
         self._mx_uplink_info = self.parent._create_gauge(
             MXMetricName.MX_UPLINK_INFO,
@@ -75,6 +86,46 @@ class MXCollector(BaseDeviceCollector):
     def _set_metric(self, *args: Any, **kwargs: Any) -> Any:
         """Delegate metric setting to the parent DeviceCollector."""
         return self.parent._set_metric(*args, **kwargs)
+
+    # -- scheduler gate delegation (#617) ----------------------------------
+    # MXVpnCollector / MXFirewallCollector take *this* MXCollector as their
+    # ``parent``, but the scheduler gate helpers live on the top-level
+    # DeviceCollector.  Forward them the same way _create_gauge/_set_metric are
+    # forwarded so sub-collectors can call ``self.parent._should_run_group`` etc.
+
+    def _should_run_group(self, group: EndpointGroupName) -> bool:
+        """Delegate the run gate to the parent DeviceCollector."""
+        return bool(self.parent._should_run_group(group))
+
+    def _mark_group_ran(self, group: EndpointGroupName) -> None:
+        """Delegate the run-marker to the parent DeviceCollector."""
+        self.parent._mark_group_ran(group)
+
+    def _group_interval(self, group: EndpointGroupName) -> float:
+        """Delegate the solved-interval lookup to the parent DeviceCollector."""
+        return float(self.parent._group_interval(group))
+
+    def _group_ttl_seconds(self, group: EndpointGroupName) -> float | None:
+        """Delegate the per-series TTL lookup to the parent DeviceCollector."""
+        ttl = self.parent._group_ttl_seconds(group)
+        return None if ttl is None else float(ttl)
+
+    def _should_collect_performance(self, serial: str) -> bool:
+        """Return whether enough time has elapsed to (re)collect this MX's perf score.
+
+        Per-serial throttle for the mx_performance endpoint group (#552/#617),
+        reading the interval from the scheduler-solved group interval (floor
+        900s) rather than a raw setting. A non-positive interval disables gating.
+        """
+        interval = self._group_interval(EndpointGroupName.MX_PERFORMANCE)
+        if interval <= 0:
+            return True
+        last = self._last_performance_collection.get(serial, 0.0)
+        return (time.time() - last) >= interval
+
+    def _mark_performance_collected(self, serial: str) -> None:
+        """Record that the perf score was just collected for this serial."""
+        self._last_performance_collection[serial] = time.time()
 
     @property
     def inventory(self) -> Any:
@@ -161,6 +212,13 @@ class MXCollector(BaseDeviceCollector):
         """
         serial = device.get("serial", "")
 
+        # mx_performance gate (#552/#617): throttle the per-physical-MX perf call
+        # to the mx_performance group's interval (floor 900s). Keyed per serial so
+        # every appliance is collected once per interval within the MEDIUM-tier
+        # fan-out rather than only the first one.
+        if not self._should_collect_performance(serial):
+            return
+
         # Pass an explicit timespan so the score reflects a fixed, deterministic
         # window rather than drifting with whatever the API's undocumented
         # default happens to be. 1800s (30 minutes) is the minimum accepted
@@ -179,6 +237,10 @@ class MXCollector(BaseDeviceCollector):
             operation="getDeviceAppliancePerformance",
         )
 
+        # Mark after a successful fetch (before emit) so a failed call retries on
+        # the next cycle rather than being throttled out.
+        self._mark_performance_collected(serial)
+
         perf = resp.get("perfScore")
         if perf is not None:
             labels = create_device_labels(
@@ -191,6 +253,7 @@ class MXCollector(BaseDeviceCollector):
                 labels,
                 float(perf),
                 MXMetricName.MX_PERFORMANCE_SCORE.value,
+                ttl_seconds=self._group_ttl_seconds(EndpointGroupName.MX_PERFORMANCE),
             )
 
     @log_api_call("getOrganizationApplianceUplinkStatuses")
@@ -214,6 +277,10 @@ class MXCollector(BaseDeviceCollector):
             Device lookup table keyed by serial.
 
         """
+        # mx_uplink_status gate (#617): single org-wide call per cycle.
+        if not self.parent._should_run_group(EndpointGroupName.MX_UPLINK_STATUS):
+            return
+
         uplink_statuses = await asyncio.to_thread(
             self.api.appliance.getOrganizationApplianceUplinkStatuses,
             org_id,
@@ -273,7 +340,15 @@ class MXCollector(BaseDeviceCollector):
                     status=status,
                 )
 
-                self.parent._set_metric(self._mx_uplink_info, labels, 1)
+                self.parent._set_metric(
+                    self._mx_uplink_info,
+                    labels,
+                    1,
+                    ttl_seconds=self.parent._group_ttl_seconds(EndpointGroupName.MX_UPLINK_STATUS),
+                )
+
+        # Mark after a successful org-wide fetch (failures retry next cycle).
+        self.parent._mark_group_ran(EndpointGroupName.MX_UPLINK_STATUS)
 
         logger.debug(
             "Collected MX uplink statuses",

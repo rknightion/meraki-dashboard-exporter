@@ -10,6 +10,7 @@ from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
+from ...core.scheduler import EndpointGroupName
 from .base import BaseOrganizationCollector
 
 if TYPE_CHECKING:
@@ -97,6 +98,9 @@ class FirmwareCollector(BaseOrganizationCollector):
             ``OrgHealthTracker`` (F-172).
 
         """
+        if not self.parent._should_run_group(EndpointGroupName.ORG_FIRMWARE):
+            return True
+
         try:
             with LogContext(org_id=org_id, org_name=org_name):
                 upgrades = await self._fetch_firmware_upgrades(org_id)
@@ -105,6 +109,9 @@ class FirmwareCollector(BaseOrganizationCollector):
                     if self.inventory is not None
                     else None
                 )
+
+            # Fetch succeeded — record the group ran so gating stretches.
+            self.parent._mark_group_ran(EndpointGroupName.ORG_FIRMWARE)
 
             if not upgrades:
                 logger.debug("No firmware upgrade events available", org_id=org_id)
@@ -146,6 +153,8 @@ class FirmwareCollector(BaseOrganizationCollector):
             filtering is disabled (accept every row).
 
         """
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.ORG_FIRMWARE)
+
         # Aggregate counts by (product_type, status) - bound cardinality, never per-network/device.
         upgrade_counts: dict[tuple[str, str], int] = {}
         pending_counts: dict[str, int] = {}
@@ -181,7 +190,7 @@ class FirmwareCollector(BaseOrganizationCollector):
                 product_type=stale_product_type,
                 status=stale_status,
             )
-            self._set_metric_value("_org_firmware_upgrades_total", labels, 0)
+            self._set_metric_value("_org_firmware_upgrades_total", labels, 0, ttl_seconds=ttl)
 
         for (product_type, status), count in upgrade_counts.items():
             labels = create_org_labels(
@@ -193,6 +202,7 @@ class FirmwareCollector(BaseOrganizationCollector):
                 "_org_firmware_upgrades_total",
                 labels,
                 count,
+                ttl_seconds=ttl,
             )
         seen_upgrade_keys.clear()
         seen_upgrade_keys.update(upgrade_counts.keys())
@@ -203,7 +213,9 @@ class FirmwareCollector(BaseOrganizationCollector):
                 org_data,
                 product_type=stale_product_type,
             )
-            self._set_metric_value("_org_firmware_upgrades_pending_total", labels, 0)
+            self._set_metric_value(
+                "_org_firmware_upgrades_pending_total", labels, 0, ttl_seconds=ttl
+            )
 
         for product_type, count in pending_counts.items():
             labels = create_org_labels(
@@ -214,6 +226,7 @@ class FirmwareCollector(BaseOrganizationCollector):
                 "_org_firmware_upgrades_pending_total",
                 labels,
                 count,
+                ttl_seconds=ttl,
             )
         seen_pending_product_types.clear()
         seen_pending_product_types.update(pending_counts.keys())

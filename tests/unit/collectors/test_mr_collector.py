@@ -9,6 +9,7 @@ import pytest
 from prometheus_client import Gauge
 
 from meraki_dashboard_exporter.collectors.devices.mr import MRCollector
+from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 
 if TYPE_CHECKING:
     pass
@@ -595,3 +596,230 @@ class TestMRCollector:
             _, labels, _ = call[0]
             assert labels.get("network_id") != "N_EXCLUDED"
             assert labels.get("serial") != "Q-OUT"
+
+
+class TestMRSchedulerGates:
+    """#617 Wave 2: scheduler fetch-site gating for MR groups.
+
+    Each MR fetch site must (a) skip the fetch entirely when the parent
+    scheduler says the endpoint group is not due, and (b) mark the group as
+    having run after a successful fetch. Gate helpers live on the parent
+    ``DeviceCollector`` and are reached via ``self.parent._should_run_group`` /
+    ``self.parent._mark_group_ran``.
+    """
+
+    @pytest.fixture
+    def mock_api(self) -> MagicMock:
+        """Create a mock API client."""
+        api = MagicMock()
+        api.wireless = MagicMock()
+        api.organizations = MagicMock()
+        return api
+
+    @pytest.fixture
+    def mock_parent(self, mock_api: MagicMock) -> MagicMock:
+        """Create a mock parent DeviceCollector with controllable scheduler gates."""
+        parent = MagicMock()
+        parent.api = mock_api
+        parent.settings = MagicMock()
+        parent.settings.api.batch_size = 20
+        parent.rate_limiter = None
+        parent.inventory = None
+        # Gate open by default; individual skip tests flip this.
+        parent._should_run_group = MagicMock(return_value=True)
+        parent._group_ttl_seconds = MagicMock(return_value=600.0)
+
+        gauges: dict[str, Gauge] = {}
+
+        def create_gauge(name, description, labelnames):
+            gauge = Gauge(name.value, description, labelnames)
+            gauges[name.value] = gauge
+            return gauge
+
+        parent._create_gauge = MagicMock(side_effect=create_gauge)
+        parent._gauges = gauges
+        return parent
+
+    @pytest.fixture
+    def mr_collector(self, mock_parent: MagicMock) -> MRCollector:
+        """Create MR collector instance."""
+        return MRCollector(mock_parent)
+
+    # --- data helpers -----------------------------------------------------
+
+    @staticmethod
+    def _wire_success(mock_api: MagicMock) -> None:
+        """Give every MR endpoint a minimal valid response."""
+        mock_api.wireless.getOrganizationWirelessClientsOverviewByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q1",
+                    "network": {"id": "net1", "name": "N1"},
+                    "counts": {"byStatus": {"online": 3}},
+                },
+            ]
+        )
+        mock_api.wireless.getNetworkWirelessDevicesConnectionStats = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q1",
+                    "connectionStats": {"assoc": 1, "auth": 1, "dhcp": 1, "dns": 1, "success": 1},
+                },
+            ]
+        )
+        mock_api.wireless.getOrganizationWirelessDevicesEthernetStatuses = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q1",
+                    "name": "AP1",
+                    "network": {"id": "net1", "name": "N1"},
+                    "power": {"mode": "ac", "ac": {"isConnected": True}},
+                    "ports": [],
+                },
+            ]
+        )
+        mock_api.wireless.getOrganizationWirelessDevicesPacketLossByNetwork = MagicMock(
+            return_value=[
+                {
+                    "network": {"id": "net1", "name": "N1"},
+                    "downstream": {"total": 100, "lost": 1, "lossPercentage": 1.0},
+                    "upstream": {"total": 80, "lost": 1, "lossPercentage": 1.0},
+                },
+            ]
+        )
+        mock_api.wireless.getOrganizationWirelessDevicesPacketLossByDevice = MagicMock(
+            return_value=[]
+        )
+        mock_api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory = MagicMock(
+            return_value=[{"serial": "Q1", "history": [{"load": 10.0}]}]
+        )
+        mock_api.wireless.getOrganizationWirelessSsidsStatusesByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q1",
+                    "network": {"id": "net1", "name": "N1"},
+                    "basicServiceSets": [
+                        {
+                            "radio": {
+                                "band": "5",
+                                "index": 0,
+                                "isBroadcasting": True,
+                                "channel": 36,
+                                "channelWidth": 80,
+                                "power": 20,
+                            }
+                        }
+                    ],
+                },
+            ]
+        )
+        mock_api.organizations.getOrganizationSummaryTopSsidsByUsage = MagicMock(
+            return_value=[
+                {
+                    "name": "SSID1",
+                    "usage": {"total": 1.0, "downstream": 0.5, "upstream": 0.5, "percentage": 10.0},
+                    "clients": {"counts": {"total": 1}},
+                },
+            ]
+        )
+
+    _NETWORKS = [{"id": "net1", "name": "N1", "productTypes": ["wireless"]}]
+    _DEVICES = [{"serial": "Q1", "name": "AP1", "model": "MR46", "networkId": "net1"}]
+
+    async def _invoke(self, mr_collector: MRCollector, group_value: str) -> None:
+        """Invoke the collect method for the given group's fetch site."""
+        if group_value == "mr_wireless_clients":
+            await mr_collector.collect_wireless_clients("org1", "Org", {})
+        elif group_value == "mr_connection_stats":
+            await mr_collector.collect_connection_stats("org1", "Org", self._NETWORKS, {})
+        elif group_value == "mr_ethernet_status":
+            await mr_collector.collect_ethernet_status("org1", "Org", {})
+        elif group_value == "mr_packet_loss":
+            await mr_collector.collect_packet_loss("org1", "Org", {})
+        elif group_value == "mr_cpu_load":
+            await mr_collector.collect_cpu_load("org1", "Org", self._DEVICES)
+        elif group_value == "mr_ssid_status":
+            await mr_collector.collect_ssid_status("org1", "Org", {})
+        elif group_value == "mr_ssid_usage":
+            await mr_collector.collect_ssid_usage("org1", "Org")
+        else:  # pragma: no cover
+            raise AssertionError(group_value)
+
+    _GROUP_API = {
+        "mr_wireless_clients": "getOrganizationWirelessClientsOverviewByDevice",
+        "mr_connection_stats": "getNetworkWirelessDevicesConnectionStats",
+        "mr_ethernet_status": "getOrganizationWirelessDevicesEthernetStatuses",
+        "mr_packet_loss": "getOrganizationWirelessDevicesPacketLossByNetwork",
+        "mr_cpu_load": "getOrganizationWirelessDevicesSystemCpuLoadHistory",
+        "mr_ssid_status": "getOrganizationWirelessSsidsStatusesByDevice",
+        "mr_ssid_usage": "getOrganizationSummaryTopSsidsByUsage",
+    }
+
+    @pytest.mark.parametrize(
+        "group",
+        [
+            EndpointGroupName.MR_WIRELESS_CLIENTS,
+            EndpointGroupName.MR_CONNECTION_STATS,
+            EndpointGroupName.MR_ETHERNET_STATUS,
+            EndpointGroupName.MR_PACKET_LOSS,
+            EndpointGroupName.MR_CPU_LOAD,
+            EndpointGroupName.MR_SSID_STATUS,
+            EndpointGroupName.MR_SSID_USAGE,
+        ],
+    )
+    async def test_gate_closed_skips_fetch(
+        self,
+        mr_collector: MRCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        group: EndpointGroupName,
+    ) -> None:
+        """When the scheduler says the group is not due, no API call is made."""
+        self._wire_success(mock_api)
+        mock_parent._should_run_group = MagicMock(return_value=False)
+
+        await self._invoke(mr_collector, group.value)
+
+        api_name = self._GROUP_API[group.value]
+        controller = (
+            mock_api.organizations
+            if group == EndpointGroupName.MR_SSID_USAGE
+            else mock_api.wireless
+        )
+        getattr(controller, api_name).assert_not_called()
+        # The group is never marked ran when it was skipped.
+        for call in mock_parent._mark_group_ran.call_args_list:
+            assert call[0][0] != group
+
+    @pytest.mark.parametrize(
+        "group",
+        [
+            EndpointGroupName.MR_WIRELESS_CLIENTS,
+            EndpointGroupName.MR_CONNECTION_STATS,
+            EndpointGroupName.MR_ETHERNET_STATUS,
+            EndpointGroupName.MR_PACKET_LOSS,
+            EndpointGroupName.MR_CPU_LOAD,
+            EndpointGroupName.MR_SSID_STATUS,
+            EndpointGroupName.MR_SSID_USAGE,
+        ],
+    )
+    async def test_gate_open_marks_ran_after_success(
+        self,
+        mr_collector: MRCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        group: EndpointGroupName,
+    ) -> None:
+        """After a successful fetch the group is marked ran exactly once."""
+        self._wire_success(mock_api)
+
+        await self._invoke(mr_collector, group.value)
+
+        api_name = self._GROUP_API[group.value]
+        controller = (
+            mock_api.organizations
+            if group == EndpointGroupName.MR_SSID_USAGE
+            else mock_api.wireless
+        )
+        assert getattr(controller, api_name).called
+        mock_parent._mark_group_ran.assert_any_call(group)

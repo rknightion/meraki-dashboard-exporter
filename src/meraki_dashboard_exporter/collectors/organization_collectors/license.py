@@ -12,6 +12,7 @@ from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
+from ...core.scheduler import EndpointGroupName
 from .base import BaseOrganizationCollector
 
 if TYPE_CHECKING:
@@ -135,6 +136,9 @@ class LicenseCollector(BaseOrganizationCollector):
             it is counted by ``OrgHealthTracker`` (F-172).
 
         """
+        if not self.parent._should_run_group(EndpointGroupName.ORG_LICENSES):
+            return True
+
         try:
             with LogContext(org_id=org_id, org_name=org_name):
                 overview = await self._fetch_licenses_overview(org_id)
@@ -151,6 +155,9 @@ class LicenseCollector(BaseOrganizationCollector):
                     org_name=org_name,
                 )
                 return True
+
+            # Overview fetch succeeded — record the group ran so gating stretches.
+            self.parent._mark_group_ran(EndpointGroupName.ORG_LICENSES)
 
             # Check if this is co-termination or per-device licensing
             if overview.get("licensedDeviceCounts"):
@@ -233,6 +240,8 @@ class LicenseCollector(BaseOrganizationCollector):
             List of licenses.
 
         """
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.ORG_LICENSES)
+
         # Count licenses by type and status
         license_counts: dict[tuple[str, str], int] = {}
         expiring_counts: dict[str, int] = {}
@@ -272,6 +281,7 @@ class LicenseCollector(BaseOrganizationCollector):
                 "_licenses_total",
                 labels,
                 count,
+                ttl_seconds=ttl,
             )
 
         # Set expiring license metrics
@@ -289,6 +299,7 @@ class LicenseCollector(BaseOrganizationCollector):
                 "_licenses_expiring",
                 labels,
                 count,
+                ttl_seconds=ttl,
             )
 
     def _process_licensing_states(self, org_id: str, org_name: str, states: dict[str, Any]) -> None:
@@ -313,6 +324,7 @@ class LicenseCollector(BaseOrganizationCollector):
 
         """
         org_data = {"id": org_id, "name": org_name}
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.ORG_LICENSES)
 
         # One `_licenses_total` series per state, keyed by the aggregate
         # sentinel license_type since states carry no per-type breakdown.
@@ -325,7 +337,7 @@ class LicenseCollector(BaseOrganizationCollector):
                 license_type=_AGGREGATE_LICENSE_TYPE,
                 status=state_name,
             )
-            self._set_metric_value("_licenses_total", labels, count)
+            self._set_metric_value("_licenses_total", labels, count, ttl_seconds=ttl)
 
         # Expiring gauge sourced from states.expiring.count (Meraki's own
         # expiring bucket), mirroring the co-term/per-device expiring metric.
@@ -334,7 +346,7 @@ class LicenseCollector(BaseOrganizationCollector):
             org_data,
             license_type=_AGGREGATE_LICENSE_TYPE,
         )
-        self._set_metric_value("_licenses_expiring", labels, expiring_count or 0)
+        self._set_metric_value("_licenses_expiring", labels, expiring_count or 0, ttl_seconds=ttl)
 
     @staticmethod
     def _extract_state_count(state_data: Any) -> int | None:
@@ -428,6 +440,7 @@ class LicenseCollector(BaseOrganizationCollector):
 
         """
         # Extract data from overview
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.ORG_LICENSES)
         status = overview.get("status", "Unknown")
         expiration_date = overview.get("expirationDate")
         licensed_device_counts = overview.get("licensedDeviceCounts", {})
@@ -447,6 +460,7 @@ class LicenseCollector(BaseOrganizationCollector):
                     "_licenses_total",
                     labels,
                     count,
+                    ttl_seconds=ttl,
                 )
         else:
             logger.warning(
@@ -480,6 +494,7 @@ class LicenseCollector(BaseOrganizationCollector):
                                 "_licenses_expiring",
                                 labels,
                                 count,
+                                ttl_seconds=ttl,
                             )
                         else:
                             # Create org labels using helper
@@ -492,6 +507,7 @@ class LicenseCollector(BaseOrganizationCollector):
                                 "_licenses_expiring",
                                 labels,
                                 0,
+                                ttl_seconds=ttl,
                             )
             else:
                 logger.warning(

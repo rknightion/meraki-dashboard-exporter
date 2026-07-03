@@ -12,6 +12,7 @@ from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.metrics import LabelName
+from ...core.scheduler import EndpointGroupName
 from .base import BaseDeviceCollector
 
 if TYPE_CHECKING:
@@ -144,6 +145,11 @@ class MGCollector(BaseDeviceCollector):
             Device lookup table keyed by serial.
 
         """
+        # #617 gate: the mg_uplink_status group is declared on DeviceCollector;
+        # skip the org-wide fetch when it is not due this heartbeat.
+        if not self.parent._should_run_group(EndpointGroupName.MG_UPLINK_STATUS):
+            return
+
         uplink_statuses = await asyncio.to_thread(
             self.api.cellularGateway.getOrganizationCellularGatewayUplinkStatuses,
             org_id,
@@ -156,8 +162,13 @@ class MGCollector(BaseDeviceCollector):
             operation="getOrganizationCellularGatewayUplinkStatuses",
         )
 
+        # Successful fetch: advance the group's last-ran clock.
+        self.parent._mark_group_ran(EndpointGroupName.MG_UPLINK_STATUS)
+
         if not uplink_statuses:
             return
+
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MG_UPLINK_STATUS)
 
         # NB: do NOT clear the gauge's label series here. This runs once per org
         # (concurrently across orgs, sharing one gauge instance), so a global
@@ -223,6 +234,7 @@ class MGCollector(BaseDeviceCollector):
                     info_labels,
                     1,
                     MGMetricName.MG_UPLINK_STATUS_INFO.value,
+                    ttl_seconds=ttl_seconds,
                 )
 
                 signal_labels = create_device_labels(
@@ -240,6 +252,7 @@ class MGCollector(BaseDeviceCollector):
                         signal_labels,
                         rsrp,
                         MGMetricName.MG_UPLINK_SIGNAL_RSRP_DBM.value,
+                        ttl_seconds=ttl_seconds,
                     )
 
                 rsrq = _parse_float(signal.rsrq) if signal is not None else None
@@ -249,6 +262,7 @@ class MGCollector(BaseDeviceCollector):
                         signal_labels,
                         rsrq,
                         MGMetricName.MG_UPLINK_SIGNAL_RSRQ_DB.value,
+                        ttl_seconds=ttl_seconds,
                     )
 
                 if "roaming" in uplink.model_fields_set:
@@ -260,6 +274,7 @@ class MGCollector(BaseDeviceCollector):
                         signal_labels,
                         roaming_value,
                         MGMetricName.MG_UPLINK_ROAMING.value,
+                        ttl_seconds=ttl_seconds,
                     )
 
         logger.debug(

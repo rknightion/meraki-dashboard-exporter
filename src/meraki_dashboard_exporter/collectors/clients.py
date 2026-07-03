@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 
 import structlog
 
@@ -23,15 +23,69 @@ from ..core.label_helpers import create_client_labels, create_network_labels
 from ..core.logging_decorators import log_api_call, log_collection_progress
 from ..core.metrics import LabelName, create_labels
 from ..core.registry import register_collector
+from ..core.scheduler import EndpointGroup, EndpointGroupName
 from ..services.client_store import ClientStore
 from ..services.dns_resolver import DNSResolver
 
 logger = structlog.get_logger(__name__)
 
+# Per-network wireless-client cap used to estimate signal-quality demand (mirrors
+# APISettings.client_signal_quality_max_clients default; cost_fn takes only the
+# OrgShape, so the cap is encoded here rather than read from settings).
+_SIGNAL_QUALITY_CLIENT_CAP = 200
+
 
 @register_collector(UpdateTier.MEDIUM)
 class ClientsCollector(MetricCollector):
     """Collector for client-level metrics across all networks."""
+
+    # Scheduler endpoint groups (#617 §2, MEDIUM tier). ``clients_list`` (pri3)
+    # covers the per-network getNetworkClients fan-out; ``clients_app_usage`` and
+    # ``clients_signal_quality`` (pri4) keep their existing per-network interval
+    # gates but read the interval from the scheduler and are pinned by their
+    # legacy interval settings when the operator sets them. Dropped entirely when
+    # client collection is disabled (see get_endpoint_groups).
+    endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = (
+        EndpointGroup(
+            name=EndpointGroupName.CLIENTS_LIST,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda shape: float(shape.network_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.CLIENTS_APP_USAGE,
+            priority=4,
+            floor_seconds=600,
+            cost_fn=lambda shape: float(shape.network_count),
+            tier=UpdateTier.MEDIUM,
+            setting_pin="client_app_usage_interval",
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.CLIENTS_SIGNAL_QUALITY,
+            priority=4,
+            floor_seconds=600,
+            cost_fn=lambda shape: float(shape.wireless_network_count * _SIGNAL_QUALITY_CLIENT_CAP),
+            tier=UpdateTier.MEDIUM,
+            setting_pin="client_signal_quality_interval",
+        ),
+    )
+
+    def get_endpoint_groups(self) -> tuple[EndpointGroup, ...]:
+        """Return client endpoint groups, or ``()`` when clients are disabled.
+
+        When ``clients.enabled`` is False the collector emits nothing, so its
+        groups must never enter the solver's demand accounting (#617 §1c).
+
+        Returns
+        -------
+        tuple[EndpointGroup, ...]
+            The declared groups when enabled, else an empty tuple.
+
+        """
+        if not self.settings.clients.enabled:
+            return ()
+        return type(self).endpoint_groups
 
     @property
     def is_active(self) -> bool:
@@ -318,6 +372,15 @@ class ClientsCollector(MetricCollector):
             logger.debug("Client collection is disabled, skipping")
             return
 
+        # Scheduler-gated as the ``clients_list`` group (#617 §2): the whole
+        # per-network getNetworkClients fan-out (and its downstream app-usage /
+        # signal-quality collection) is skipped this heartbeat until the group is
+        # due. The app-usage / signal-quality groups keep their own per-network
+        # interval gates layered on top.
+        if not self._should_run_group(EndpointGroupName.CLIENTS_LIST):
+            logger.debug("clients_list group not due this heartbeat; skipping client collection")
+            return
+
         # Reset per-collection aggregate counters (F-171 INFO summary).
         self._collection_networks = 0
         self._collection_clients = 0
@@ -354,6 +417,9 @@ class ClientsCollector(MetricCollector):
             # Process networks directly without batching to avoid lambda issues
             # Since we're already processing one org at a time, this is fine
             await self._process_network_batch(org_id, org_name, networks)
+
+        # Record a successful clients_list cycle so the gate throttles the next.
+        self._mark_group_ran(EndpointGroupName.CLIENTS_LIST)
 
         # Aggregate INFO summary for the whole collection (F-171): the per-network
         # "Fetched client data" / "Updated client data" lines are debug-level.
@@ -588,6 +654,7 @@ class ClientsCollector(MetricCollector):
             create_labels(org_id=org_id, network_id=network_id),
             dropped,
             CollectorMetricName.CLIENTS_OVER_CAP.value,
+            ttl_seconds=self._group_ttl_seconds(EndpointGroupName.CLIENTS_LIST),
         )
 
         if dropped > 0:
@@ -813,6 +880,10 @@ class ClientsCollector(MetricCollector):
             Total items (for logging).
 
         """
+        # Per-series TTL for the clients_list group so a stretched cadence does
+        # not let these series flap between cycles (#617 §1f).
+        ttl = self._group_ttl_seconds(EndpointGroupName.CLIENTS_LIST)
+
         # Track counts for aggregated metrics
         capabilities_count: dict[str, int] = {}
         ssid_count: dict[str, int] = {}
@@ -860,7 +931,11 @@ class ClientsCollector(MetricCollector):
             # Set client status
             status_value = 1 if client.status == "Online" else 0
             self._set_metric(
-                self.client_status, labels, status_value, ClientMetricName.CLIENT_STATUS.value
+                self.client_status,
+                labels,
+                status_value,
+                ClientMetricName.CLIENT_STATUS.value,
+                ttl_seconds=ttl,
             )
 
             # Set usage metrics (as gauges - these are point-in-time measurements)
@@ -875,18 +950,21 @@ class ClientsCollector(MetricCollector):
                     labels,
                     float(sent_kb) * 1000,
                     ClientMetricName.CLIENT_USAGE_SENT_BYTES.value,
+                    ttl_seconds=ttl,
                 )
                 self._set_metric(
                     self.client_usage_recv,
                     labels,
                     float(recv_kb) * 1000,
                     ClientMetricName.CLIENT_USAGE_RECV_BYTES.value,
+                    ttl_seconds=ttl,
                 )
                 self._set_metric(
                     self.client_usage_total,
                     labels,
                     float(total_kb) * 1000,
                     ClientMetricName.CLIENT_USAGE_TOTAL_BYTES.value,
+                    ttl_seconds=ttl,
                 )
 
             # Emit the id-keyed join metric (issue #533): the only client metric
@@ -901,7 +979,13 @@ class ClientsCollector(MetricCollector):
                 hostname=sanitized_hostname,
                 ssid=ssid or "Unknown",
             )
-            self._set_metric(self.client_info, info_labels, 1, ClientMetricName.CLIENT_INFO.value)
+            self._set_metric(
+                self.client_info,
+                info_labels,
+                1,
+                ClientMetricName.CLIENT_INFO.value,
+                ttl_seconds=ttl,
+            )
 
             logger.debug(
                 "Updated client metrics",
@@ -929,6 +1013,7 @@ class ClientsCollector(MetricCollector):
                 cap_labels,
                 count,
                 ClientMetricName.WIRELESS_CLIENT_CAPABILITIES_COUNT.value,
+                ttl_seconds=ttl,
             )
             logger.debug(
                 "Set wireless capability count",
@@ -952,6 +1037,7 @@ class ClientsCollector(MetricCollector):
                 ssid_labels,
                 count,
                 ClientMetricName.CLIENTS_PER_SSID_COUNT.value,
+                ttl_seconds=ttl,
             )
             logger.debug(
                 "Set SSID client count",
@@ -975,6 +1061,7 @@ class ClientsCollector(MetricCollector):
                 vlan_labels,
                 count,
                 ClientMetricName.CLIENTS_PER_VLAN_COUNT.value,
+                ttl_seconds=ttl,
             )
             logger.debug(
                 "Set VLAN client count",
@@ -1016,7 +1103,11 @@ class ClientsCollector(MetricCollector):
         if not clients:
             return
 
-        interval = self.settings.api.client_app_usage_interval
+        # Per-network interval gate now reads its cadence from the scheduler
+        # (#617 §2 clients_app_usage) instead of the raw
+        # ``client_app_usage_interval`` setting; the setting still pins the group
+        # when the operator sets it explicitly (setting_pin).
+        interval = self._group_interval(EndpointGroupName.CLIENTS_APP_USAGE)
         last_run = self._last_app_usage_by_network.get(network_id, 0.0)
         if interval > 0 and (time.time() - last_run) < interval:
             logger.debug(
@@ -1025,6 +1116,9 @@ class ClientsCollector(MetricCollector):
                 interval_seconds=interval,
             )
             return
+
+        # Per-series TTL for the app-usage group (#617 §1f).
+        ttl = self._group_ttl_seconds(EndpointGroupName.CLIENTS_APP_USAGE)
 
         # Extract client IDs
         client_ids = [client.id for client in clients]
@@ -1099,18 +1193,21 @@ class ClientsCollector(MetricCollector):
                             labels,
                             float(sent_kb) * 1000,
                             ClientMetricName.CLIENT_APPLICATION_USAGE_SENT_BYTES.value,
+                            ttl_seconds=ttl,
                         )
                         self._set_metric(
                             self.client_app_usage_recv,
                             labels,
                             float(received_kb) * 1000,
                             ClientMetricName.CLIENT_APPLICATION_USAGE_RECV_BYTES.value,
+                            ttl_seconds=ttl,
                         )
                         self._set_metric(
                             self.client_app_usage_total,
                             labels,
                             float(total_kb) * 1000,
                             ClientMetricName.CLIENT_APPLICATION_USAGE_TOTAL_BYTES.value,
+                            ttl_seconds=ttl,
                         )
 
                         logger.debug(
@@ -1184,8 +1281,11 @@ class ClientsCollector(MetricCollector):
 
         # F-060: gate the whole per-client fan-out behind an interval, mirroring
         # application-usage collection, so we don't drain the shared org rate-limit
-        # budget on every MEDIUM-tier cycle.
-        interval = self.settings.api.client_signal_quality_interval
+        # budget on every MEDIUM-tier cycle. The cadence now comes from the
+        # scheduler (#617 §2 clients_signal_quality); the raw
+        # ``client_signal_quality_interval`` setting still pins the group when the
+        # operator sets it (setting_pin).
+        interval = self._group_interval(EndpointGroupName.CLIENTS_SIGNAL_QUALITY)
         last_run = self._last_signal_quality_by_network.get(network_id, 0.0)
         if interval > 0 and (time.time() - last_run) < interval:
             logger.debug(
@@ -1194,6 +1294,9 @@ class ClientsCollector(MetricCollector):
                 interval_seconds=interval,
             )
             return
+
+        # Per-series TTL for the signal-quality group (#617 §1f).
+        ttl = self._group_ttl_seconds(EndpointGroupName.CLIENTS_SIGNAL_QUALITY)
 
         # Filter to only wireless clients
         wireless_clients = [
@@ -1295,6 +1398,7 @@ class ClientsCollector(MetricCollector):
                         labels,
                         float(rssi),
                         ClientMetricName.WIRELESS_CLIENT_RSSI.value,
+                        ttl_seconds=ttl,
                     )
 
                 if snr is not None:
@@ -1303,6 +1407,7 @@ class ClientsCollector(MetricCollector):
                         labels,
                         float(snr),
                         ClientMetricName.WIRELESS_CLIENT_SNR.value,
+                        ttl_seconds=ttl,
                     )
 
                 logger.debug(

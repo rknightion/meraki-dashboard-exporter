@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
@@ -21,6 +21,7 @@ from ..core.logging_decorators import log_api_call, log_batch_operation
 from ..core.logging_helpers import LogContext, log_metric_collection_summary
 from ..core.metrics import LabelName
 from ..core.registry import register_collector
+from ..core.scheduler import EndpointGroup, EndpointGroupName
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -37,6 +38,26 @@ logger = get_logger(__name__)
 @register_collector(UpdateTier.MEDIUM)
 class AlertsCollector(MetricCollector):
     """Collector for Meraki assurance alerts."""
+
+    # Scheduler endpoint groups (#617 §2, MEDIUM tier). ``alerts_assurance``
+    # (pri1) covers the org-wide getOrganizationAssuranceAlerts fetch; cost is
+    # ~1 page. ``alerts_sensor_overview`` (pri2) is one call per sensor network.
+    endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = (
+        EndpointGroup(
+            name=EndpointGroupName.ALERTS_ASSURANCE,
+            priority=1,
+            floor_seconds=300,
+            cost_fn=lambda shape: 1.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.ALERTS_SENSOR_OVERVIEW,
+            priority=2,
+            floor_seconds=300,
+            cost_fn=lambda shape: float(shape.sensor_network_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+    )
 
     def __init__(
         self,
@@ -217,85 +238,98 @@ class AlertsCollector(MetricCollector):
                 continue
             attempted_org_ids.append(org_id)
 
-        # Collect alerts for each organization (bounded concurrency)
-        org_results = await process_in_batches_with_errors(
-            attempted_org_ids,
-            lambda org_id: self._collect_org_alerts(org_id, org_names.get(org_id, "unknown")),
-            batch_size=self.settings.api.network_batch_size,
-            delay_between_batches=self.settings.api.batch_delay,
-            item_description="organization alerts",
-            error_context_func=lambda org_id: {
-                "org_id": org_id,
-                "org_name": org_names.get(org_id, "unknown"),
-            },
-        )
-
-        # Count successful collections
-        for _, result in org_results:
-            if not isinstance(result, Exception):
-                api_calls_made += 1
-
-        org_failures = sum(1 for _, r in org_results if isinstance(r, Exception))
-        org_successes = len(org_results) - org_failures
-        if org_ids and org_successes == 0 and (org_failures > 0 or not attempted_org_ids):
-            raise NothingCollectedError(
-                self.__class__.__name__,
-                attempted=len(attempted_org_ids),
-                failed=org_failures,
-                skipped_backoff=skipped_backoff,
+        # Assurance alerts (getOrganizationAssuranceAlerts). Scheduler-gated as
+        # the ``alerts_assurance`` group (#617 §2): when the group is not yet due
+        # the whole per-org assurance fan-out is skipped this heartbeat.
+        if self._should_run_group(EndpointGroupName.ALERTS_ASSURANCE):
+            # Collect alerts for each organization (bounded concurrency)
+            org_results = await process_in_batches_with_errors(
+                attempted_org_ids,
+                lambda org_id: self._collect_org_alerts(org_id, org_names.get(org_id, "unknown")),
+                batch_size=self.settings.api.network_batch_size,
+                delay_between_batches=self.settings.api.batch_delay,
+                item_description="organization alerts",
+                error_context_func=lambda org_id: {
+                    "org_id": org_id,
+                    "org_name": org_names.get(org_id, "unknown"),
+                },
             )
 
-        # Collect sensor alerts for networks with MT sensors
+            # Count successful collections
+            for _, result in org_results:
+                if not isinstance(result, Exception):
+                    api_calls_made += 1
+
+            org_failures = sum(1 for _, r in org_results if isinstance(r, Exception))
+            org_successes = len(org_results) - org_failures
+            if org_ids and org_successes == 0 and (org_failures > 0 or not attempted_org_ids):
+                raise NothingCollectedError(
+                    self.__class__.__name__,
+                    attempted=len(attempted_org_ids),
+                    failed=org_failures,
+                    skipped_backoff=skipped_backoff,
+                )
+
+            # Record a successful assurance cycle so the gate throttles the next.
+            self._mark_group_ran(EndpointGroupName.ALERTS_ASSURANCE)
+
+        # Collect sensor alerts for networks with MT sensors. Scheduler-gated as
+        # the ``alerts_sensor_overview`` group (#617 §2): the whole per-sensor-net
+        # fan-out is skipped this heartbeat when the group is not yet due.
         # Only query networks that actually have sensor devices (reduces API calls).
         # Network health alerts no longer need a separate network list here: they
         # are derived from the org-wide getOrganizationAssuranceAlerts response
         # already fetched above in _collect_org_alerts (F-064 / issue #273), which
         # also drops the getNetworkHealthAlerts fan-out this loop used to build.
-        sensor_networks = []
-        for org_id in org_ids:
-            # Skip sensor-alert fan-out for orgs in backoff too (F-169).
-            if self._org_in_backoff(org_id):
-                continue
-            if self.inventory:
-                # Use filtered network list (only networks with sensors)
-                org_sensor_networks = await self.inventory.get_networks_with_device_types(
-                    org_id, ["sensor"]
+        if self._should_run_group(EndpointGroupName.ALERTS_SENSOR_OVERVIEW):
+            sensor_networks = []
+            for org_id in org_ids:
+                # Skip sensor-alert fan-out for orgs in backoff too (F-169).
+                if self._org_in_backoff(org_id):
+                    continue
+                if self.inventory:
+                    # Use filtered network list (only networks with sensors)
+                    org_sensor_networks = await self.inventory.get_networks_with_device_types(
+                        org_id, ["sensor"]
+                    )
+                else:
+                    # Fallback: get all networks (can't filter without inventory)
+                    org_sensor_networks = await self._get_networks(org_id) or []
+                    if org_sensor_networks:
+                        api_calls_made += 1
+
+                # Add org info to networks
+                for network in org_sensor_networks:
+                    network["orgId"] = org_id
+                    network["orgName"] = org_names.get(org_id, org_id)
+                sensor_networks.extend(org_sensor_networks)
+
+            # Collect sensor alerts only for networks with sensors
+            if sensor_networks:
+                logger.debug(
+                    "Collecting sensor alerts for filtered networks",
+                    networks_with_sensors=len(sensor_networks),
                 )
-            else:
-                # Fallback: get all networks (can't filter without inventory)
-                org_sensor_networks = await self._get_networks(org_id) or []
-                if org_sensor_networks:
-                    api_calls_made += 1
+                sensor_results = await process_in_batches_with_errors(
+                    sensor_networks,
+                    self._collect_network_sensor_alerts,
+                    batch_size=self.settings.api.network_batch_size,
+                    delay_between_batches=self.settings.api.batch_delay,
+                    item_description="sensor alert network",
+                    error_context_func=lambda network: {
+                        "org_id": network.get("orgId"),
+                        "network_id": network.get("id"),
+                        "network_name": network.get("name"),
+                    },
+                )
 
-            # Add org info to networks
-            for network in org_sensor_networks:
-                network["orgId"] = org_id
-                network["orgName"] = org_names.get(org_id, org_id)
-            sensor_networks.extend(org_sensor_networks)
+                # Count successful sensor alert collections
+                for _, result in sensor_results:
+                    if not isinstance(result, Exception):
+                        api_calls_made += 1
 
-        # Collect sensor alerts only for networks with sensors
-        if sensor_networks:
-            logger.debug(
-                "Collecting sensor alerts for filtered networks",
-                networks_with_sensors=len(sensor_networks),
-            )
-            sensor_results = await process_in_batches_with_errors(
-                sensor_networks,
-                self._collect_network_sensor_alerts,
-                batch_size=self.settings.api.network_batch_size,
-                delay_between_batches=self.settings.api.batch_delay,
-                item_description="sensor alert network",
-                error_context_func=lambda network: {
-                    "org_id": network.get("orgId"),
-                    "network_id": network.get("id"),
-                    "network_name": network.get("name"),
-                },
-            )
-
-            # Count successful sensor alert collections
-            for _, result in sensor_results:
-                if not isinstance(result, Exception):
-                    api_calls_made += 1
+            # Record a successful sensor-overview cycle for the gate.
+            self._mark_group_ran(EndpointGroupName.ALERTS_SENSOR_OVERVIEW)
 
         # Log collection summary
         duration = time.time() - start_time
@@ -427,6 +461,10 @@ class AlertsCollector(MetricCollector):
         # these aggregation keys too -- they'd otherwise be dead weight. The
         # network_name/org_name join happens downstream via meraki_org_info /
         # meraki_network_info (NI-1, lane A).
+        # Per-series TTL for the assurance group so a slow-polled (stretched)
+        # cadence does not let these series flap between cycles (#617 §1f).
+        ttl = self._group_ttl_seconds(EndpointGroupName.ALERTS_ASSURANCE)
+
         alert_counts: dict[tuple[str, str, str, str, str], int] = {}
         severity_counts = {"critical": 0, "warning": 0, "informational": 0, "other": 0}
         network_counts: dict[str, int] = {}
@@ -503,6 +541,7 @@ class AlertsCollector(MetricCollector):
                 },
                 count,
                 AlertMetricName.ALERTS_ACTIVE.value,
+                ttl_seconds=ttl,
             )
 
         # Set severity summary metrics
@@ -515,6 +554,7 @@ class AlertsCollector(MetricCollector):
                 },
                 count,
                 AlertMetricName.ALERTS_BY_SEVERITY.value,
+                ttl_seconds=ttl,
             )
 
         # Set network summary metrics
@@ -527,6 +567,7 @@ class AlertsCollector(MetricCollector):
                 },
                 count,
                 AlertMetricName.ALERTS_BY_NETWORK.value,
+                ttl_seconds=ttl,
             )
 
         # Set derived network health alert metrics (replaces the deprecated
@@ -542,6 +583,7 @@ class AlertsCollector(MetricCollector):
                 },
                 count,
                 AlertMetricName.NETWORK_HEALTH_ALERTS.value,
+                ttl_seconds=ttl,
             )
 
         logger.debug(
@@ -616,6 +658,9 @@ class AlertsCollector(MetricCollector):
         org_id = network.get("orgId", "")
         org_name = network.get("orgName", org_id)
 
+        # Per-series TTL for the sensor-overview group (#617 §1f).
+        ttl = self._group_ttl_seconds(EndpointGroupName.ALERTS_SENSOR_OVERVIEW)
+
         with LogContext(network_id=network_id, network_name=network_name, org_id=org_id):
             # Get sensor alerts for the last hour
             overview = await asyncio.to_thread(
@@ -657,6 +702,7 @@ class AlertsCollector(MetricCollector):
                             metric_labels,
                             ambient_value,
                             AlertMetricName.SENSOR_ALERTS_COUNT.value,
+                            ttl_seconds=ttl,
                         )
                     elif isinstance(value, (int, float)):
                         # Process regular numeric values
@@ -666,6 +712,7 @@ class AlertsCollector(MetricCollector):
                             metric_labels,
                             value,
                             AlertMetricName.SENSOR_ALERTS_COUNT.value,
+                            ttl_seconds=ttl,
                         )
                     else:
                         logger.warning(

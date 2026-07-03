@@ -11,6 +11,7 @@ from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
 from ...core.metrics import LabelName
+from ...core.scheduler import EndpointGroupName
 from .base import BaseNetworkHealthCollector
 
 if TYPE_CHECKING:
@@ -103,6 +104,9 @@ class SSIDPerformanceCollector(BaseNetworkHealthCollector):
                 org_id=org_id,
                 org_name=org_name,
             )
+            # Per-series TTL from the group's solved interval (#617 §1f) — this
+            # 3600s-windowed series must not flap under a stretched interval.
+            ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.NH_FAILED_CONNECTIONS)
             for (ssid, failure_step), count in failure_counts.items():
                 labels = {
                     **base_labels,
@@ -113,6 +117,7 @@ class SSIDPerformanceCollector(BaseNetworkHealthCollector):
                     "_ssid_failed_connections",
                     labels,
                     count,
+                    ttl_seconds=ttl_seconds,
                 )
 
         except Exception as e:

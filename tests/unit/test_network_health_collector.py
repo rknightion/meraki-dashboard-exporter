@@ -18,6 +18,16 @@ from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import DeviceFactory, NetworkFactory, OrganizationFactory
 
 
+def _band(band: str, total: float, wifi: float, non_wifi: float) -> dict:
+    """Build one org-wide channel-utilization byBand entry (#271 response shape)."""
+    return {
+        "band": band,
+        "total": {"percentage": total},
+        "wifi": {"percentage": wifi},
+        "nonWifi": {"percentage": non_wifi},
+    }
+
+
 def _backed_off_tracker(org_id: str) -> OrgHealthTracker:
     """Build a tracker with ``org_id`` driven into backoff (should_collect False)."""
     tracker = OrgHealthTracker()
@@ -87,6 +97,33 @@ class TestNetworkHealthCollector(BaseCollectorTest):
     collector_class = NetworkHealthCollector
     update_tier = UpdateTier.MEDIUM
 
+    async def test_channel_utilization_fetchers_validate_error_shape(
+        self, collector, mock_api_builder
+    ):
+        """#271: the org-wide fetchers normalize the SDK exhausted-retry error shape.
+
+        A dict with an ``errors`` key (the shape the SDK returns after retry
+        exhaustion) must be surfaced as a RetryableAPIError by
+        validate_response_format rather than returned as data.
+        """
+        from meraki_dashboard_exporter.core.error_handling import RetryableAPIError
+
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        api = mock_api_builder.with_organizations([org]).build()
+        error_shape = {"errors": ["rate limit exceeded"]}
+        api.wireless.getOrganizationWirelessDevicesChannelUtilizationByDevice = MagicMock(
+            return_value=error_shape
+        )
+        api.wireless.getOrganizationWirelessDevicesChannelUtilizationByNetwork = MagicMock(
+            return_value=error_shape
+        )
+        collector.rf_health_collector.api = api
+
+        with pytest.raises(RetryableAPIError):
+            await collector.rf_health_collector._fetch_channel_utilization_by_device("123")
+        with pytest.raises(RetryableAPIError):
+            await collector.rf_health_collector._fetch_channel_utilization_by_network("123")
+
     def test_channel_utilization_help_states_window(self, collector, metrics):
         """MET-09: AP/network channel-utilization HELP must state the 10-min bucket.
 
@@ -126,7 +163,7 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         # NOT counted as a collector API call (F-063 — no cache-hit inflation).
 
     async def test_collect_channel_utilization(self, collector, mock_api_builder, metrics):
-        """Test collection of channel utilization metrics."""
+        """#271: channel utilization is collected from the org-wide byDevice/byNetwork endpoints."""
         # Set up test data
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         network = NetworkFactory.create(
@@ -150,55 +187,36 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             ),
         ]
 
-        # Live field names (evidence/live-api-verification.md Sample 1): the legacy
-        # endpoint returns snake_case utilization/wifi/non_wifi + start_ts/end_ts.
-        # The OpenAPI spec's utilizationTotal/utilization80211/utilizationNon80211/
-        # startTime/endTime do NOT exist on the wire (#512).
-        channel_util_data = [
+        # Org-wide byDevice response (#271). ⚠ Phase-6: band string values +
+        # wifi/nonWifi/total.percentage camelCase key names.
+        by_device = [
             {
                 "serial": "Q2KD-XXXX",
-                "model": "MR36",
-                "wifi0": [  # 2.4GHz
-                    {
-                        "utilization": 45,
-                        "wifi": 30,
-                        "non_wifi": 15,
-                        "start_ts": "2026-07-02T17:20:00Z",
-                        "end_ts": "2026-07-02T17:30:00Z",
-                    }
-                ],
-                "wifi1": [  # 5GHz
-                    {
-                        "utilization": 25,
-                        "wifi": 20,
-                        "non_wifi": 5,
-                        "start_ts": "2026-07-02T17:20:00Z",
-                        "end_ts": "2026-07-02T17:30:00Z",
-                    }
+                "mac": "00:11:22:33:44:55",
+                "network": {"id": network["id"]},
+                "byBand": [
+                    _band("2.4", total=45, wifi=30, non_wifi=15),
+                    _band("5", total=25, wifi=20, non_wifi=5),
                 ],
             },
             {
                 "serial": "Q2KD-YYYY",
-                "model": "MR46",
-                "wifi0": [
-                    {
-                        "utilization": 55,
-                        "wifi": 40,
-                        "non_wifi": 15,
-                        "start_ts": "2026-07-02T17:20:00Z",
-                        "end_ts": "2026-07-02T17:30:00Z",
-                    }
-                ],
-                "wifi1": [
-                    {
-                        "utilization": 35,
-                        "wifi": 30,
-                        "non_wifi": 5,
-                        "start_ts": "2026-07-02T17:20:00Z",
-                        "end_ts": "2026-07-02T17:30:00Z",
-                    }
+                "mac": "00:11:22:33:44:66",
+                "network": {"id": network["id"]},
+                "byBand": [
+                    _band("2.4", total=55, wifi=40, non_wifi=15),
+                    _band("5", total=35, wifi=30, non_wifi=5),
                 ],
             },
+        ]
+        by_network = [
+            {
+                "network": {"id": network["id"]},
+                "byBand": [
+                    _band("2.4", total=50, wifi=35, non_wifi=15),
+                    _band("5", total=30, wifi=25, non_wifi=5),
+                ],
+            }
         ]
 
         # Configure mock API
@@ -207,13 +225,14 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_devices(devices, org_id=org["id"])
-            .with_custom_response("getNetworkNetworkHealthChannelUtilization", channel_util_data)
             .build()
         )
-
-        # The RF health collector calls getOrganizationDevices with specific params
-        # We need to ensure it returns the devices when called with networkIds filter
-        api.organizations.getOrganizationDevices = MagicMock(return_value=devices)
+        api.wireless.getOrganizationWirelessDevicesChannelUtilizationByDevice = MagicMock(
+            return_value=by_device
+        )
+        api.wireless.getOrganizationWirelessDevicesChannelUtilizationByNetwork = MagicMock(
+            return_value=by_network
+        )
 
         collector.api = api
         # Update sub-collectors' API references
@@ -228,16 +247,15 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         # Verify success
         self.assert_collector_success(collector, metrics)
 
-        # Verify API calls were tracked. getOrganizationDevices is served from the
-        # inventory cache here, so it is deliberately NOT counted as a collector API
-        # call (F-063 — no cache-hit inflation); only the real network call is tracked.
+        # The org-wide byDevice fetch is a real API call and must be tracked.
         self.assert_api_call_tracked(
-            collector, metrics, "getNetworkNetworkHealthChannelUtilization"
+            collector,
+            metrics,
+            "getOrganizationWirelessDevicesChannelUtilizationByDevice",
         )
 
-        # Verify metrics were set (ID-only labels; name/org_name/network_name
-        # dropped per #534 - name joins via meraki_device_status_info,
-        # network_name via meraki_network_info).
+        # Per-AP metrics (ID-only labels; model resolved from inventory). #534:
+        # name/org_name/network_name dropped.
         metrics.assert_gauge_value(
             "meraki_ap_channel_utilization_2_4ghz_percent",
             45,
@@ -246,11 +264,8 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             model="MR36",
             device_type="MR",
             network_id=network["id"],
-            utilization_type="total",  # Changed from 'type' to 'utilization_type'
+            utilization_type="total",
         )
-
-        # #512: the non_wifi series was silently 0 because the code read the
-        # non-existent camelCase "nonWifi" key instead of the live "non_wifi".
         metrics.assert_gauge_value(
             "meraki_ap_channel_utilization_2_4ghz_percent",
             15,
@@ -272,20 +287,26 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             utilization_type="non_wifi",
         )
 
-    async def test_channel_utilization_none_ap_name_falls_back_to_serial(
+        # Per-network averages come straight from the byNetwork endpoint.
+        metrics.assert_gauge_value(
+            "meraki_network_channel_utilization_2_4ghz_percent",
+            50,
+            org_id=org["id"],
+            network_id=network["id"],
+            utilization_type="total",
+        )
+        metrics.assert_gauge_value(
+            "meraki_network_channel_utilization_5ghz_percent",
+            25,
+            org_id=org["id"],
+            network_id=network["id"],
+            utilization_type="wifi",
+        )
+
+    async def test_channel_utilization_filters_out_of_scope_networks(
         self, collector, mock_api_builder, metrics
     ):
-        """An AP whose device record has name=None must still emit its metric (F-019).
-
-        Previously ``d.get("name", d["serial"])`` only fell back on a MISSING key,
-        so an explicit ``name: None`` produced a None name label; create_labels
-        then dropped it, Gauge.labels() raised ValueError for the missing
-        labelname, and a bare except silently lost the whole per-AP series. The
-        `name` coalescing still happens internally in rf_health.py (used for the
-        RFHealthData domain-model validation) but `name` is no longer a metric
-        label (#534) - this test now guards that the explicit-None device record
-        still doesn't crash the collector / drop the series.
-        """
+        """#271: org-wide rows for networks outside the wireless/allowed set are dropped."""
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         network = NetworkFactory.create(
             network_id="N_123",
@@ -293,35 +314,27 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             product_types=["wireless"],
             org_id=org["id"],
         )
-        device = DeviceFactory.create_mr(
-            serial="Q2KD-ZZZZ",
-            model="MR36",
-            network_id=network["id"],
-        )
-        device["name"] = None  # explicit None value, not a missing key
-        channel_util_data = [
+        device = DeviceFactory.create_mr(serial="Q2KD-ZZZZ", model="MR36", network_id=network["id"])
+
+        by_device = [
             {
                 "serial": "Q2KD-ZZZZ",
-                "model": "MR36",
-                "wifi0": [
-                    {
-                        "utilization": 42,
-                        "wifi": 30,
-                        "non_wifi": 12,
-                        "start_ts": "2026-07-02T17:20:00Z",
-                        "end_ts": "2026-07-02T17:30:00Z",
-                    }
-                ],
-                "wifi1": [
-                    {
-                        "utilization": 22,
-                        "wifi": 18,
-                        "non_wifi": 4,
-                        "start_ts": "2026-07-02T17:20:00Z",
-                        "end_ts": "2026-07-02T17:30:00Z",
-                    }
-                ],
-            }
+                "network": {"id": network["id"]},
+                "byBand": [_band("2.4", total=42, wifi=30, non_wifi=12)],
+            },
+            {
+                # Belongs to a network NOT in the wireless/allowed set -> dropped.
+                "serial": "Q2KD-OTHR",
+                "network": {"id": "N_OTHER"},
+                "byBand": [_band("2.4", total=99, wifi=90, non_wifi=9)],
+            },
+        ]
+        by_network = [
+            {
+                "network": {"id": network["id"]},
+                "byBand": [_band("2.4", total=42, wifi=30, non_wifi=12)],
+            },
+            {"network": {"id": "N_OTHER"}, "byBand": [_band("2.4", total=99, wifi=90, non_wifi=9)]},
         ]
 
         api = (
@@ -329,17 +342,20 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_devices([device], org_id=org["id"])
-            .with_custom_response("getNetworkNetworkHealthChannelUtilization", channel_util_data)
             .build()
         )
-        api.organizations.getOrganizationDevices = MagicMock(return_value=[device])
+        api.wireless.getOrganizationWirelessDevicesChannelUtilizationByDevice = MagicMock(
+            return_value=by_device
+        )
+        api.wireless.getOrganizationWirelessDevicesChannelUtilizationByNetwork = MagicMock(
+            return_value=by_network
+        )
         collector.api = api
         collector.rf_health_collector.api = api
 
         await self.run_collector(collector)
-
         self.assert_collector_success(collector, metrics)
-        # Series still emitted (not dropped) despite the explicit None name.
+
         metrics.assert_gauge_value(
             "meraki_ap_channel_utilization_2_4ghz_percent",
             42,
@@ -348,6 +364,13 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             model="MR36",
             device_type="MR",
             network_id=network["id"],
+            utilization_type="total",
+        )
+        # The out-of-scope network's row must NOT have produced a series.
+        metrics.assert_metric_not_set(
+            "meraki_network_channel_utilization_2_4ghz_percent",
+            org_id=org["id"],
+            network_id="N_OTHER",
             utilization_type="total",
         )
 
@@ -608,10 +631,10 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             network_id=network["id"],
         )
 
-    async def test_channel_utilization_wifi1_only_does_not_crash(
+    async def test_channel_utilization_single_band_does_not_crash(
         self, collector, mock_api_builder, metrics
     ):
-        """F-017: an AP reporting only wifi1 (5GHz) must not raise UnboundLocalError."""
+        """#271: an AP reporting only the 5GHz band still emits its 5GHz series."""
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         network = NetworkFactory.create(
             network_id="N_123",
@@ -628,12 +651,12 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             ),
         ]
 
-        # Only wifi1 present, no wifi0 — pre-fix this used base_labels before assignment.
-        channel_util_data = [
+        # Only the 5GHz band present in byBand.
+        by_device = [
             {
                 "serial": "Q2KD-AAAA",
-                "model": "MR36",
-                "wifi1": [{"utilization": 30, "wifi": 25, "nonWifi": 5}],
+                "network": {"id": network["id"]},
+                "byBand": [_band("5", total=30, wifi=25, non_wifi=5)],
             }
         ]
 
@@ -642,18 +665,21 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             .with_organizations([org])
             .with_networks([network], org_id=org["id"])
             .with_devices(devices, org_id=org["id"])
-            .with_custom_response("getNetworkNetworkHealthChannelUtilization", channel_util_data)
             .build()
         )
-        api.organizations.getOrganizationDevices = MagicMock(return_value=devices)
+        api.wireless.getOrganizationWirelessDevicesChannelUtilizationByDevice = MagicMock(
+            return_value=by_device
+        )
+        api.wireless.getOrganizationWirelessDevicesChannelUtilizationByNetwork = MagicMock(
+            return_value=[]
+        )
         collector.api = api
         collector.rf_health_collector.api = api
 
         await self.run_collector(collector)
         self.assert_collector_success(collector, metrics)
 
-        # 5GHz metric emitted even though wifi0 is absent.
-        # ID-only; org_name/name/network_name dropped per #534.
+        # 5GHz metric emitted even though the 2.4GHz band is absent.
         metrics.assert_gauge_value(
             "meraki_ap_channel_utilization_5ghz_percent",
             30,
@@ -668,7 +694,7 @@ class TestNetworkHealthCollector(BaseCollectorTest):
     async def test_channel_utilization_fetch_pins_query_params(
         self, collector, mock_api_builder, metrics
     ):
-        """F-017: the fetch must pin timespan/resolution/perPage, not just total_pages."""
+        """#271: the org-wide byDevice/byNetwork fetches pin timespan/interval/perPage/total_pages."""
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         network = NetworkFactory.create(
             network_id="N_123",
@@ -684,25 +710,28 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             .with_devices([], org_id=org["id"])
             .build()
         )
-        channel_mock = MagicMock(return_value=[])
-        api.networks.getNetworkNetworkHealthChannelUtilization = channel_mock
+        by_device_mock = MagicMock(return_value=[])
+        by_network_mock = MagicMock(return_value=[])
+        api.wireless.getOrganizationWirelessDevicesChannelUtilizationByDevice = by_device_mock
+        api.wireless.getOrganizationWirelessDevicesChannelUtilizationByNetwork = by_network_mock
         collector.api = api
         collector.rf_health_collector.api = api
 
         await self.run_collector(collector)
         self.assert_collector_success(collector, metrics)
 
-        channel_mock.assert_called_once()
-        _, kwargs = channel_mock.call_args
-        assert kwargs.get("timespan") == 600
-        assert kwargs.get("resolution") == 600
-        assert kwargs.get("perPage") == 100
-        assert kwargs.get("total_pages") == "all"
+        for mock in (by_device_mock, by_network_mock):
+            mock.assert_called_once()
+            _, kwargs = mock.call_args
+            assert kwargs.get("timespan") == 600
+            assert kwargs.get("interval") == 600
+            assert kwargs.get("perPage") == 1000
+            assert kwargs.get("total_pages") == "all"
 
-    async def test_channel_utilization_picks_latest_bucket(
+    async def test_channel_utilization_error_is_swallowed(
         self, collector, mock_api_builder, metrics
     ):
-        """F-017: buckets must be sorted by end time; the newest reading wins."""
+        """#271: a channel-util fetch error must not fail the org's collection cycle."""
         org = OrganizationFactory.create(org_id="123", name="Test Org")
         network = NetworkFactory.create(
             network_id="N_123",
@@ -710,66 +739,30 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             product_types=["wireless"],
             org_id=org["id"],
         )
-        devices = [
-            DeviceFactory.create_mr(
-                serial="Q2KD-AAAA",
-                name="AP1",
-                model="MR36",
-                network_id=network["id"],
-            ),
-        ]
-
-        # Oldest bucket listed first; the collector must still pick the newest.
-        # Live buckets sort by "end_ts" (evidence Sample 1) — NOT the spec's
-        # non-existent "endTime" (#512), so this fixture uses the live key.
-        channel_util_data = [
-            {
-                "serial": "Q2KD-AAAA",
-                "model": "MR36",
-                "wifi0": [
-                    {
-                        "start_ts": "2024-01-01T11:40:00Z",
-                        "end_ts": "2024-01-01T11:50:00Z",
-                        "utilization": 10,
-                        "wifi": 5,
-                        "non_wifi": 5,
-                    },
-                    {
-                        "start_ts": "2024-01-01T11:50:00Z",
-                        "end_ts": "2024-01-01T12:00:00Z",
-                        "utilization": 80,
-                        "wifi": 60,
-                        "non_wifi": 20,
-                    },
-                ],
-            }
-        ]
 
         api = (
             mock_api_builder
             .with_organizations([org])
             .with_networks([network], org_id=org["id"])
-            .with_devices(devices, org_id=org["id"])
-            .with_custom_response("getNetworkNetworkHealthChannelUtilization", channel_util_data)
+            .with_devices([], org_id=org["id"])
             .build()
         )
-        api.organizations.getOrganizationDevices = MagicMock(return_value=devices)
+        api.wireless.getOrganizationWirelessDevicesChannelUtilizationByDevice = MagicMock(
+            side_effect=Exception("400 Bad Request")
+        )
+        api.wireless.getOrganizationWirelessDevicesChannelUtilizationByNetwork = MagicMock(
+            return_value=[]
+        )
         collector.api = api
         collector.rf_health_collector.api = api
 
+        # The whole cycle still succeeds despite the channel-util failure.
         await self.run_collector(collector)
         self.assert_collector_success(collector, metrics)
-
-        # ID-only; org_name/name/network_name dropped per #534.
-        metrics.assert_gauge_value(
+        metrics.assert_metric_not_set(
             "meraki_ap_channel_utilization_2_4ghz_percent",
-            80,
             org_id=org["id"],
-            serial="Q2KD-AAAA",
-            model="MR36",
-            device_type="MR",
             network_id=network["id"],
-            utilization_type="total",
         )
 
     async def test_data_rate_help_text_states_kilobytes(self, collector, mock_api_builder, metrics):

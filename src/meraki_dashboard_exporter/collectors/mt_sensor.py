@@ -6,7 +6,7 @@ This collector handles environmental sensor metrics from MT devices.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from ..core.collector import MetricCollector
 from ..core.constants import MTMetricName, UpdateTier
@@ -14,6 +14,7 @@ from ..core.logging import get_logger
 from ..core.logging_helpers import log_metric_collection_summary
 from ..core.metrics import LabelName
 from ..core.registry import register_collector
+from ..core.scheduler import EndpointGroup, EndpointGroupName, pages
 from .devices import MTCollector
 
 if TYPE_CHECKING:
@@ -30,6 +31,20 @@ logger = get_logger(__name__)
 @register_collector(UpdateTier.FAST)
 class MTSensorCollector(MetricCollector):
     """Collector for fast-moving sensor metrics (MT devices)."""
+
+    # #617 §2 (FAST heartbeat). One group spans both org-wide fetches this
+    # collector issues per cycle: the latest sensor readings and the
+    # sensor-to-gateway connections. cost_fn: 1 page for gateway connections
+    # plus pages(MT, 100) for readings (perPage ⚠ Phase-6-verify).
+    endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = (
+        EndpointGroup(
+            name=EndpointGroupName.MT_SENSOR_READINGS,
+            priority=2,
+            floor_seconds=60,
+            cost_fn=lambda shape: 2 + pages(shape.sensor_count, 100) - 1,
+            tier=UpdateTier.FAST,
+        ),
+    )
 
     def __init__(
         self,

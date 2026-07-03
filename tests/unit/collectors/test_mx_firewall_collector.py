@@ -42,6 +42,12 @@ class TestMXFirewallCollector:
         # No inventory means no NetworkFilter — collector emits all rows.
         parent.inventory = None
         parent._create_gauge = MagicMock(side_effect=_make_gauge)
+        # #617: the firewall-config throttle now reads its interval from the
+        # mx_firewall_config endpoint group (via the parent's _group_interval),
+        # not settings.update_intervals.slow directly. Default to the 900s floor.
+        parent._group_interval = MagicMock(return_value=900)
+        parent._group_ttl_seconds = MagicMock(return_value=None)
+        parent._should_run_group = MagicMock(return_value=True)
         return parent
 
     @pytest.fixture
@@ -516,6 +522,61 @@ class TestMXFirewallCollector:
     # Org-wide security events (getOrganizationApplianceSecurityEvents)
     # ------------------------------------------------------------------
 
+    async def test_security_events_gate_closed_skips_fetch(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A closed mx_security_events gate skips the API call and does not mark (#617)."""
+        mock_parent._should_run_group = MagicMock(return_value=False)
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=[{"eventType": "IDS Alert", "networkId": "N_1"}]
+        )
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        mock_api.appliance.getOrganizationApplianceSecurityEvents.assert_not_called()
+        mock_parent._set_metric.assert_not_called()
+        mock_parent._mark_group_ran.assert_not_called()
+
+    async def test_security_events_marks_group_ran_and_threads_ttl(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A successful security-events fetch marks mx_security_events and threads TTL (#617)."""
+        mock_parent._should_run_group = MagicMock(return_value=True)
+        mock_parent._group_ttl_seconds = MagicMock(return_value=600.0)
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=[{"eventType": "IDS Alert", "networkId": "N_1"}]
+        )
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+
+        mock_parent._mark_group_ran.assert_called_once_with(EndpointGroupName.MX_SECURITY_EVENTS)
+        for call in mock_parent._set_metric.call_args_list:
+            assert call.kwargs["ttl_seconds"] == 600.0
+
+    async def test_firewall_config_throttle_reads_group_interval(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The firewall-config SLOW throttle sources its interval from the group (#617)."""
+        mock_parent._group_interval = MagicMock(return_value=900)
+        self._set_l3_l7_responses(mock_api)
+
+        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+
+        from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+
+        mock_parent._group_interval.assert_any_call(EndpointGroupName.MX_FIREWALL_CONFIG)
+
     async def test_security_events_aggregated_by_event_type(
         self,
         firewall_collector: MXFirewallCollector,
@@ -856,8 +917,9 @@ class TestMXFirewallCollector:
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """A non-positive SLOW interval must disable gating (always collect)."""
+        """A non-positive group interval must disable gating (always collect)."""
         mock_parent.settings.update_intervals.slow = 0
+        mock_parent._group_interval = MagicMock(return_value=0)
         self._set_l3_l7_responses(mock_api)
 
         await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")

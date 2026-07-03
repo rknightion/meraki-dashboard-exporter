@@ -20,6 +20,7 @@ from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.metrics import LabelName
+from ...core.scheduler import EndpointGroupName
 from .base import BaseNetworkHealthCollector
 
 if TYPE_CHECKING:
@@ -141,28 +142,35 @@ class AirMarshalCollector(BaseNetworkHealthCollector):
                 wired_detected_total += 1
 
         labels = create_network_labels(network, org_id=org_id, org_name=org_name)
+        # Per-series TTL from the group's solved interval (#617 §1f) — this
+        # 3600s-windowed series must not flap under a stretched interval.
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.NH_AIR_MARSHAL)
 
         self.parent._set_metric(
             self._air_marshal_ssids_total,
             labels,
             float(ssids_total),
             NetworkHealthMetricName.MR_AIR_MARSHAL_SSIDS_COUNT.value,
+            ttl_seconds=ttl_seconds,
         )
         self.parent._set_metric(
             self._air_marshal_bssids_total,
             labels,
             float(bssids_total),
             NetworkHealthMetricName.MR_AIR_MARSHAL_BSSIDS_COUNT.value,
+            ttl_seconds=ttl_seconds,
         )
         self.parent._set_metric(
             self._air_marshal_contained_bssids_total,
             labels,
             float(contained_bssids_total),
             NetworkHealthMetricName.MR_AIR_MARSHAL_CONTAINED_BSSIDS_COUNT.value,
+            ttl_seconds=ttl_seconds,
         )
         self.parent._set_metric(
             self._air_marshal_wired_detected_total,
             labels,
             float(wired_detected_total),
             NetworkHealthMetricName.MR_AIR_MARSHAL_WIRED_DETECTED_COUNT.value,
+            ttl_seconds=ttl_seconds,
         )

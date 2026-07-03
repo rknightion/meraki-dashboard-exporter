@@ -20,6 +20,7 @@ from ....core.logging import get_logger
 from ....core.logging_decorators import log_api_call
 from ....core.logging_helpers import LogContext
 from ....core.metrics import LabelName
+from ....core.scheduler import EndpointGroupName
 
 if TYPE_CHECKING:
     from ...device import DeviceCollector
@@ -377,6 +378,11 @@ class MRPerformanceCollector:
             Device lookup table for device info.
 
         """
+        # Scheduler gate: skip the org-wide fetch when not due (#617).
+        if not self.parent._should_run_group(EndpointGroupName.MR_ETHERNET_STATUS):
+            return
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.MR_ETHERNET_STATUS)
+
         try:
             with LogContext(org_id=org_id):
                 ethernet_statuses = await asyncio.to_thread(
@@ -391,6 +397,9 @@ class MRPerformanceCollector:
                 expected_type=list,
                 operation="getOrganizationWirelessDevicesEthernetStatuses",
             )
+
+            # Fetch succeeded — record the run so the gate can stretch (#617).
+            self.parent._mark_group_ran(EndpointGroupName.MR_ETHERNET_STATUS)
 
             logger.debug(
                 "Successfully fetched MR ethernet status",
@@ -441,6 +450,7 @@ class MRPerformanceCollector:
                         self._mr_power_info,
                         power_labels,
                         1,
+                        ttl_seconds=ttl,
                     )
 
                 # AC power status - using P3.2 pattern
@@ -450,6 +460,7 @@ class MRPerformanceCollector:
                     self._mr_power_ac_connected,
                     device_labels,
                     1 if ac_connected else 0,
+                    ttl_seconds=ttl,
                 )
 
                 # PoE power status - using P3.2 pattern
@@ -459,6 +470,7 @@ class MRPerformanceCollector:
                     self._mr_power_poe_connected,
                     device_labels,
                     1 if poe_connected else 0,
+                    ttl_seconds=ttl,
                 )
 
                 # Process port information
@@ -483,6 +495,7 @@ class MRPerformanceCollector:
                             self._mr_port_poe_info,
                             poe_labels,
                             1,
+                            ttl_seconds=ttl,
                         )
 
                     # Link negotiation information
@@ -500,6 +513,7 @@ class MRPerformanceCollector:
                             self._mr_port_link_negotiation_info,
                             link_labels,
                             1,
+                            ttl_seconds=ttl,
                         )
 
                     speed = link_negotiation.get("speed")
@@ -514,6 +528,7 @@ class MRPerformanceCollector:
                             self._mr_port_link_negotiation_speed,
                             speed_labels,
                             speed,
+                            ttl_seconds=ttl,
                         )
 
                     # Track aggregation
@@ -527,6 +542,7 @@ class MRPerformanceCollector:
                     self._mr_aggregation_enabled,
                     device_labels,
                     1 if aggregation_enabled else 0,
+                    ttl_seconds=ttl,
                 )
 
                 if aggregation_enabled and total_speed > 0:
@@ -534,6 +550,7 @@ class MRPerformanceCollector:
                         self._mr_aggregation_speed,
                         device_labels,
                         total_speed,
+                        ttl_seconds=ttl,
                     )
 
             if skipped:
@@ -570,6 +587,10 @@ class MRPerformanceCollector:
             Device lookup table for device info.
 
         """
+        # Scheduler gate: skip both packet-loss fetches when not due (#617).
+        if not self.parent._should_run_group(EndpointGroupName.MR_PACKET_LOSS):
+            return
+
         try:
             # Fetch network-level packet loss data
             network_packet_loss = await self._fetch_network_packet_loss(org_id)
@@ -680,6 +701,9 @@ class MRPerformanceCollector:
             await self._collect_device_packet_loss(
                 org_id, org_name, device_lookup, allowed_network_ids
             )
+
+            # Both fetches succeeded — record the run so the gate can stretch (#617).
+            self.parent._mark_group_ran(EndpointGroupName.MR_PACKET_LOSS)
 
         except Exception:
             logger.exception(
@@ -887,6 +911,10 @@ class MRPerformanceCollector:
             List of device data.
 
         """
+        # Scheduler gate: skip the batched CPU-load fetch when not due (#617).
+        if not self.parent._should_run_group(EndpointGroupName.MR_CPU_LOAD):
+            return
+
         try:
             # Filter for MR devices
             mr_devices = [d for d in devices if d.get("model", "").startswith("MR")]
@@ -914,6 +942,9 @@ class MRPerformanceCollector:
                 # Delay between batches (except for last)
                 if i + batch_size < len(mr_devices):
                     await asyncio.sleep(0.5)
+
+            # All batches processed — record the run so the gate can stretch (#617).
+            self.parent._mark_group_ran(EndpointGroupName.MR_CPU_LOAD)
 
             logger.debug(
                 "Completed MR CPU load collection",
@@ -1060,6 +1091,7 @@ class MRPerformanceCollector:
             self._mr_cpu_load_5min,
             device_labels,
             cpu_load,
+            ttl_seconds=self.parent._group_ttl_seconds(EndpointGroupName.MR_CPU_LOAD),
         )
 
     def _set_packet_metric_value(
@@ -1102,7 +1134,14 @@ class MRPerformanceCollector:
                 # Update cache with new non-zero value
                 self._packet_value_cache[cache_key] = value
 
-        # Use parent's _set_metric with P3.2 pattern for expiration tracking
+        # Use parent's _set_metric with P3.2 pattern for expiration tracking.
+        # Packet-loss series belong to the mr_packet_loss group; give them that
+        # group's per-series TTL so a stretched gate doesn't flap (#617).
         metric = getattr(self, metric_name, None)
         if metric and value is not None:
-            self.parent._set_metric(metric, labels, value)
+            self.parent._set_metric(
+                metric,
+                labels,
+                value,
+                ttl_seconds=self.parent._group_ttl_seconds(EndpointGroupName.MR_PACKET_LOSS),
+            )

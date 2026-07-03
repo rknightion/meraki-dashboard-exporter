@@ -196,8 +196,13 @@ class TestMetricsIntegration:
         # Mock network health APIs
         # Note: Network health collector will use organization devices API with filtering
         # Already mocked above in getOrganizationDevices
-        mock_api_client.api.networks.getNetworkNetworkHealthChannelUtilization = MagicMock(
-            return_value=[]
+        # #271: channel utilization now comes from the org-wide byDevice/byNetwork
+        # endpoints instead of the per-network getNetworkNetworkHealthChannelUtilization.
+        mock_api_client.api.wireless.getOrganizationWirelessDevicesChannelUtilizationByDevice = (
+            MagicMock(return_value=[])
+        )
+        mock_api_client.api.wireless.getOrganizationWirelessDevicesChannelUtilizationByNetwork = (
+            MagicMock(return_value=[])
         )
         mock_api_client.api.wireless.getNetworkWirelessConnectionStats = MagicMock(
             return_value={"assoc": 100, "auth": 95, "dhcp": 90, "dns": 85, "success": 80}
@@ -260,12 +265,16 @@ class TestMetricsIntegration:
             "123456", total_pages="all"
         )
 
-        # Now collect FAST tier again to verify repeat collection also works
+        # Collect the FAST tier again immediately. Under the #617 adaptive
+        # scheduler the mt_sensor_readings group has a 60s volatility floor, so a
+        # second cycle within that window is intentionally gated (coalesced) and
+        # does NOT re-hit the API — the call count stays at 1. In production the
+        # FAST loop waits its heartbeat between cycles, so the gate opens normally.
         from meraki_dashboard_exporter.core.constants import UpdateTier
 
         await manager.collect_tier(UpdateTier.FAST)
 
-        assert mock_api_client.api.sensor.getOrganizationSensorReadingsLatest.call_count == 2
+        assert mock_api_client.api.sensor.getOrganizationSensorReadingsLatest.call_count == 1
 
     @pytest.mark.asyncio
     async def test_tiered_collection(self, mock_api_client, mock_settings, monkeypatch):

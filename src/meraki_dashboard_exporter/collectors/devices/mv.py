@@ -6,9 +6,10 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
+from pydantic import BaseModel, ConfigDict
+
 from ...core.constants import MVMetricName
 from ...core.domain_models import (
-    CameraAnalyticsLive,
     CameraAnalyticsZone,
     CameraQualityAndRetention,
 )
@@ -17,12 +18,37 @@ from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.metrics import LabelName, create_labels
+from ...core.scheduler import EndpointGroupName
 from .base import BaseDeviceCollector
 
 if TYPE_CHECKING:
     from ..device import DeviceCollector
 
 logger = get_logger(__name__)
+
+
+class CameraAnalyticsRecentZone(BaseModel):
+    """One per-zone record from ``getDeviceCameraAnalyticsRecent`` (#549).
+
+    Replacement for the DEPRECATED ``getDeviceCameraAnalyticsLive`` per-zone
+    ``person`` count. The ``recent`` endpoint returns the most recent
+    aggregated record per analytics zone; ``averageCount`` is used as the
+    person-count analog for ``meraki_mv_people_count``.
+
+    ⚠ Phase-6 LIVE VERIFICATION (APIORG-01 lesson): confirm the response field
+    names (``zoneId``/``averageCount``) and the person-count semantics against
+    the live spec (v1.72.0+) before freezing. ``extra="allow"`` keeps parsing
+    forward-compatible until then. Should be relocated to
+    ``core/domain_models.py`` (with ``__meraki_op__`` for apidrift tracking)
+    during the #617 integration/wiring pass — it lives here to keep the MV lane
+    within its owned file set while ``domain_models.py`` is a shared seam.
+    """
+
+    zoneId: str | int | None = None
+    entrances: float | None = None
+    averageCount: float | None = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class MVCollector(BaseDeviceCollector):
@@ -39,21 +65,17 @@ class MVCollector(BaseDeviceCollector):
         """
         super().__init__(parent)
 
-        # Tracks the last time near-static per-camera config (analytics zones,
-        # quality/retention) was collected, keyed by serial, so the SLOW
-        # cadence can be self-enforced even though collect() is dispatched
-        # every MEDIUM-tier (300s) cycle by DeviceCollector's per-device
-        # fan-out (see F-027). Mirrors the
-        # _should_collect_firewall_rules/_should_collect_port_usage throttle
-        # pattern in mx_firewall.py/ms.py.
-        self._last_static_config_collection: dict[str, float] = {}
-        # Cache of the last known zone_id -> zone_label map per camera
-        # serial, so meraki_mv_zone_info (the id-keyed join carrier for
-        # zone_name, issue #534) can still be re-emitted on cycles where the
-        # SLOW-gated zones call is skipped - the id-only meraki_mv_people_count
-        # series would otherwise have no live zone_name join target between
-        # zones-API fetches.
-        self._last_zone_maps: dict[str, dict[str, str]] = {}
+        # Tracks the last time the mv_analytics group (analytics zones, recent
+        # person-count, quality/retention) was collected, keyed by serial, so
+        # the group cadence can be self-enforced per-camera even though
+        # collect() is dispatched every MEDIUM-tier (300s) cycle by
+        # DeviceCollector's per-device fan-out (see F-027). The interval comes
+        # from the #617 scheduler (parent._group_interval(MV_ANALYTICS), floor
+        # 900s), NOT from a raw setting. Mirrors the per-serial gate pattern in
+        # mx_firewall.py/ms.py, which the #617 spec carves out for per-device
+        # fan-outs (a single group-level should_run gate would incorrectly skip
+        # every camera after the first within one cycle).
+        self._last_analytics_collection: dict[str, float] = {}
 
         # Common device label set shared by every MV gauge. Kept as a local
         # variable (not a module constant) so the metrics doc generator, which
@@ -126,25 +148,30 @@ class MVCollector(BaseDeviceCollector):
             ],
         )
 
-    def _should_collect_static_config(self, serial: str) -> bool:
-        """Return whether enough time has elapsed to (re)collect near-static camera config.
+    def _analytics_ttl_seconds(self) -> float | None:
+        """Solved per-series TTL for the mv_analytics group (#617 §1f)."""
+        ttl: float | None = self.parent._group_ttl_seconds(EndpointGroupName.MV_ANALYTICS)
+        return ttl
 
-        Mirrors the ``_should_collect_firewall_rules``/``_should_collect_port_usage``
-        throttle pattern in ``mx_firewall.py``/``ms.py``, keyed on
-        ``settings.update_intervals.slow`` instead of a dedicated interval
-        setting: analytics-zone layout and quality/retention config change
-        infrequently, but ``collect()`` is invoked every MEDIUM-tier (300s)
-        cycle by ``DeviceCollector``'s per-device fan-out (see F-027).
+    def _should_collect_analytics(self, serial: str) -> bool:
+        """Return whether the mv_analytics group is due for this camera.
+
+        Reads the group interval from the #617 scheduler
+        (``parent._group_interval(MV_ANALYTICS)``, floor 900s) rather than a
+        raw setting; a non-positive interval disables gating (always collect).
+        ``collect()`` is invoked every MEDIUM-tier (300s) cycle by
+        ``DeviceCollector``'s per-device fan-out, so this per-serial timestamp
+        gate self-enforces the SLOW-class group cadence.
         """
-        interval = self.settings.update_intervals.slow
+        interval: float = self.parent._group_interval(EndpointGroupName.MV_ANALYTICS)
         if interval <= 0:
             return True
-        last = self._last_static_config_collection.get(serial, 0.0)
+        last = self._last_analytics_collection.get(serial, 0.0)
         return (time.time() - last) >= interval
 
-    def _mark_static_config_collected(self, serial: str) -> None:
-        """Record that near-static config was just collected for this camera."""
-        self._last_static_config_collection[serial] = time.time()
+    def _mark_analytics_collected(self, serial: str) -> None:
+        """Record that the mv_analytics group was just collected for this camera."""
+        self._last_analytics_collection[serial] = time.time()
 
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect MV-specific metrics.
@@ -152,20 +179,19 @@ class MVCollector(BaseDeviceCollector):
         Common device metrics (device_up, status_info, uptime) are handled
         by DeviceCollector._collect_common_metrics() before this is called.
 
-        Runs at the parent DeviceCollector's MEDIUM (300s) per-device cadence,
-        but only the live-analytics (person-count) call is genuinely volatile
-        enough to warrant that cadence. The analytics-zones and
-        quality/retention calls are near-static camera configuration, so they
-        are self-gated to the SLOW cadence (``settings.update_intervals.slow``,
-        900s default) via ``_should_collect_static_config`` (see F-027) - this
-        cuts steady-state per-camera API traffic from 3 calls/cycle to
-        effectively 1 call/cycle plus 2 calls every third cycle. The
-        zone-id -> zone-label map from the last static-config collection is
-        cached (``_last_zone_maps``) so ``meraki_mv_zone_info`` (the id-keyed
-        join carrier for zone_name, issue #534) can be re-emitted on cycles
-        where the zones call is skipped, keeping the join target live between
-        fetches. The three calls are independent so a failure in one does not
-        block the others.
+        All three analytics fetches - configured zones, recent per-zone
+        person-count, and quality/retention config - belong to the single
+        SLOW-class ``mv_analytics`` scheduler group (#617, floor 900s,
+        priority 4). ``collect()`` runs at the parent DeviceCollector's MEDIUM
+        (300s) per-device cadence, so a per-serial timestamp gate
+        (``_should_collect_analytics``) self-enforces the group cadence, and
+        the solved TTL (``_analytics_ttl_seconds``) is threaded onto every
+        emitted series so a series polled slower than its tier heartbeat does
+        not flap (#617 §1f). ``org_id`` is passed explicitly to each fetcher so
+        the client-side rate limiter is keyed to the org bucket (#549 / #270).
+        The three calls are independent (each ``@with_error_handling``
+        ``continue_on_error=True``) so a failure in one does not block the
+        others.
 
         Parameters
         ----------
@@ -177,26 +203,26 @@ class MVCollector(BaseDeviceCollector):
         org_name = device.get("orgName", org_id)
         serial = device.get("serial", "")
 
-        if self._should_collect_static_config(serial):
-            zone_map = await self._collect_analytics_zones(device, org_id, org_name, serial)
-            if zone_map is not None:
-                self._last_zone_maps[serial] = zone_map
-            await self._collect_quality_and_retention(device, org_id, org_name, serial)
-            self._mark_static_config_collected(serial)
-        else:
+        if not self._should_collect_analytics(serial):
             logger.debug(
-                "Skipping MV static config collection (SLOW-tier cadence not yet elapsed)",
+                "Skipping MV analytics collection (mv_analytics cadence not yet elapsed)",
                 serial=serial,
-                interval_seconds=self.settings.update_intervals.slow,
+                interval_seconds=self.parent._group_interval(EndpointGroupName.MV_ANALYTICS),
             )
-            # meraki_mv_zone_info is only (re)emitted from a fresh zones-API
-            # fetch in _collect_analytics_zones - re-emit from the cached map
-            # here so the id-keyed join carrier doesn't go stale/expire on a
-            # cycle where that fetch is skipped (mirrors how the live call
-            # used to resolve zone names from this same cache).
-            self._emit_zone_info(device, org_id, org_name, self._last_zone_maps.get(serial, {}))
+            return
 
-        await self._collect_analytics_live(device, org_id, org_name, serial)
+        await self._collect_analytics_zones(device, org_id=org_id, org_name=org_name, serial=serial)
+        await self._collect_analytics_recent(
+            device, org_id=org_id, org_name=org_name, serial=serial
+        )
+        await self._collect_quality_and_retention(
+            device, org_id=org_id, org_name=org_name, serial=serial
+        )
+
+        self._mark_analytics_collected(serial)
+        # Feed the scheduler's diagnostics/last-ran bookkeeping. Gating itself
+        # is per-serial (above); this keeps the group's diagnostics live.
+        self.parent._mark_group_ran(EndpointGroupName.MV_ANALYTICS)
 
     def _emit_zone_info(
         self,
@@ -229,6 +255,7 @@ class MVCollector(BaseDeviceCollector):
         """
         network_id = device.get("networkId", "")
         serial = device.get("serial", "")
+        ttl_seconds = self._analytics_ttl_seconds()
         for zone_id, zone_name in zone_map.items():
             labels = create_labels(
                 org_id=org_id,
@@ -242,6 +269,7 @@ class MVCollector(BaseDeviceCollector):
                 labels,
                 1,
                 MVMetricName.MV_ZONE_INFO.value,
+                ttl_seconds=ttl_seconds,
             )
 
     @log_api_call("getDeviceCameraAnalyticsZones")
@@ -254,6 +282,9 @@ class MVCollector(BaseDeviceCollector):
         self, device: dict[str, Any], org_id: str, org_name: str, serial: str
     ) -> dict[str, str]:
         """Collect configured analytics zones for a camera.
+
+        Emits ``meraki_mv_analytics_zones`` (count) and, via
+        ``_emit_zone_info``, the ``meraki_mv_zone_info`` id->name join carrier.
 
         Parameters
         ----------
@@ -269,8 +300,7 @@ class MVCollector(BaseDeviceCollector):
         Returns
         -------
         dict[str, str]
-            Mapping of zone ID (as string) to zone label, for use by the
-            live-analytics call.
+            Mapping of zone ID (as string) to zone label.
 
         """
         zones = await asyncio.to_thread(
@@ -288,31 +318,38 @@ class MVCollector(BaseDeviceCollector):
             device_labels,
             len(zone_models),
             MVMetricName.MV_ANALYTICS_ZONES.value,
+            ttl_seconds=self._analytics_ttl_seconds(),
         )
 
         zone_map = {str(zone.id): (zone.label or "") for zone in zone_models}
         self._emit_zone_info(device, org_id, org_name, zone_map)
         return zone_map
 
-    @log_api_call("getDeviceCameraAnalyticsLive")
+    @log_api_call("getDeviceCameraAnalyticsRecent")
     @with_error_handling(
-        operation="Collect MV analytics live",
+        operation="Collect MV analytics recent",
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def _collect_analytics_live(
+    async def _collect_analytics_recent(
         self,
         device: dict[str, Any],
         org_id: str,
         org_name: str,
         serial: str,
     ) -> None:
-        """Collect live person-count analytics per zone for a camera.
+        """Collect recent per-zone person-count analytics for a camera (#549).
+
+        Replaces the DEPRECATED ``getDeviceCameraAnalyticsLive`` endpoint with
+        ``getDeviceCameraAnalyticsRecent``; ``averageCount`` is used as the
+        per-zone person-count analog for ``meraki_mv_people_count``.
 
         ``zone_name`` is no longer a label on ``meraki_mv_people_count`` (issue
         #534, decision D2) - it joins via ``meraki_mv_zone_info`` on
-        ``(serial, zone_id)`` instead, so this call no longer needs the
-        zone-id -> zone-label map.
+        ``(serial, zone_id)``.
+
+        ⚠ Phase-6: the replacement endpoint's field names/semantics
+        (``zoneId``/``averageCount``) need live verification (v1.72.0+).
 
         Parameters
         ----------
@@ -326,28 +363,32 @@ class MVCollector(BaseDeviceCollector):
             Camera serial number.
 
         """
-        live = await asyncio.to_thread(
-            self.api.camera.getDeviceCameraAnalyticsLive,
+        recent = await asyncio.to_thread(
+            self.api.camera.getDeviceCameraAnalyticsRecent,
             serial,
         )
-        live = validate_response_format(
-            live, expected_type=dict, operation="getDeviceCameraAnalyticsLive"
+        recent = validate_response_format(
+            recent, expected_type=list, operation="getDeviceCameraAnalyticsRecent"
         )
-        live_model = CameraAnalyticsLive.model_validate(live)
+        records = [CameraAnalyticsRecentZone.model_validate(record) for record in recent]
 
-        for zone_id, zone_data in live_model.zones.items():
-            person_count = zone_data.person
+        ttl_seconds = self._analytics_ttl_seconds()
+        for record in records:
+            if record.zoneId is None:
+                continue
+            person_count = record.averageCount if record.averageCount is not None else 0.0
             labels = create_device_labels(
                 device,
                 org_id=org_id,
                 org_name=org_name,
-                zone_id=str(zone_id),
+                zone_id=str(record.zoneId),
             )
             self.parent._set_metric(
                 self._mv_people_count,
                 labels,
                 person_count,
                 MVMetricName.MV_PEOPLE_COUNT.value,
+                ttl_seconds=ttl_seconds,
             )
 
     @log_api_call("getDeviceCameraQualityAndRetention")
@@ -385,24 +426,28 @@ class MVCollector(BaseDeviceCollector):
         qr_model = CameraQualityAndRetention.model_validate(quality_retention)
 
         device_labels = create_device_labels(device, org_id=org_id, org_name=org_name)
+        ttl_seconds = self._analytics_ttl_seconds()
 
         self.parent._set_metric(
             self._mv_motion_based_retention_enabled,
             device_labels,
             1.0 if qr_model.motionBasedRetentionEnabled else 0.0,
             MVMetricName.MV_MOTION_BASED_RETENTION_ENABLED.value,
+            ttl_seconds=ttl_seconds,
         )
         self.parent._set_metric(
             self._mv_audio_recording_enabled,
             device_labels,
             1.0 if qr_model.audioRecordingEnabled else 0.0,
             MVMetricName.MV_AUDIO_RECORDING_ENABLED.value,
+            ttl_seconds=ttl_seconds,
         )
         self.parent._set_metric(
             self._mv_restricted_bandwidth_mode_enabled,
             device_labels,
             1.0 if qr_model.restrictedBandwidthModeEnabled else 0.0,
             MVMetricName.MV_RESTRICTED_BANDWIDTH_MODE_ENABLED.value,
+            ttl_seconds=ttl_seconds,
         )
 
         # quality/resolution/profileId are all documented as nullable in the
@@ -422,4 +467,5 @@ class MVCollector(BaseDeviceCollector):
             quality_labels,
             1,
             MVMetricName.MV_QUALITY_RETENTION_INFO.value,
+            ttl_seconds=ttl_seconds,
         )

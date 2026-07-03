@@ -42,12 +42,32 @@ class TestMSCollector:
 
         # Mock _set_metric to behave like the real MetricCollector helper (minus
         # expiration tracking, which is exercised elsewhere) so gauge values set
-        # via parent._set_metric are actually observable in the registry.
-        def set_metric(metric, labels, value, metric_name=None):
+        # via parent._set_metric are actually observable in the registry. Accepts
+        # the #617 ttl_seconds passthrough so scheduler-gated call sites work.
+        def set_metric(metric, labels, value, metric_name=None, ttl_seconds=None):
             metric.labels(**labels).set(value)
 
         parent._create_gauge = MagicMock(side_effect=create_gauge)
         parent._set_metric = MagicMock(side_effect=set_metric)
+
+        # #617 scheduler gate helpers (no scheduler ⇒ groups always run). The
+        # per-serial/STP interval gates source their interval from _group_interval,
+        # mapped here onto the same legacy settings knobs the tests configure so
+        # existing throttle assertions keep their meaning.
+        from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+
+        def group_interval(group):
+            mapping = {
+                EndpointGroupName.MS_PORT_USAGE: parent.settings.api.ms_port_usage_interval,
+                EndpointGroupName.MS_PACKET_STATS: parent.settings.api.ms_packet_stats_interval,
+                EndpointGroupName.MS_STP: parent.settings.update_intervals.slow,
+            }
+            return mapping.get(group, 300.0)
+
+        parent._should_run_group = MagicMock(return_value=True)
+        parent._mark_group_ran = MagicMock()
+        parent._group_interval = MagicMock(side_effect=group_interval)
+        parent._group_ttl_seconds = MagicMock(return_value=None)
         return parent
 
     @pytest.fixture

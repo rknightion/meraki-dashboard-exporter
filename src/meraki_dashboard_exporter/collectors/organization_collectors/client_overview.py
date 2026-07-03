@@ -11,6 +11,7 @@ from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
+from ...core.scheduler import EndpointGroupName
 from .base import BaseOrganizationCollector
 
 if TYPE_CHECKING:
@@ -89,6 +90,10 @@ class ClientOverviewCollector(BaseOrganizationCollector):
             by ``OrgHealthTracker`` (F-172) instead of being silently swallowed.
 
         """
+        if not self.parent._should_run_group(EndpointGroupName.ORG_CLIENT_OVERVIEW):
+            return True
+
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.ORG_CLIENT_OVERVIEW)
         try:
             with LogContext(org_id=org_id, org_name=org_name):
                 # Use 1-hour timespan for reliable data
@@ -100,6 +105,9 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                     has_data=bool(client_overview),
                     data_keys=list(client_overview.keys()) if client_overview else [],
                 )
+
+            # Fetch succeeded — record the group ran so gating stretches.
+            self.parent._mark_group_ran(EndpointGroupName.ORG_CLIENT_OVERVIEW)
 
             if client_overview:
                 # Extract client count
@@ -188,24 +196,28 @@ class ClientOverviewCollector(BaseOrganizationCollector):
                     "_clients_total",
                     org_labels,
                     total_clients,
+                    ttl_seconds=ttl,
                 )
 
                 self._set_metric_value(
                     "_usage_total_kb",
                     org_labels,
                     total_kb,
+                    ttl_seconds=ttl,
                 )
 
                 self._set_metric_value(
                     "_usage_downstream_kb",
                     org_labels,
                     downstream_kb,
+                    ttl_seconds=ttl,
                 )
 
                 self._set_metric_value(
                     "_usage_upstream_kb",
                     org_labels,
                     upstream_kb,
+                    ttl_seconds=ttl,
                 )
 
             else:

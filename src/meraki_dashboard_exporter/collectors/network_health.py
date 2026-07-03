@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+import functools
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from ..core.async_utils import ManagedTaskGroup
 from ..core.batch_processing import process_in_batches_with_errors
@@ -16,6 +17,7 @@ from ..core.logging_helpers import log_metric_collection_summary
 from ..core.metrics import LabelName
 from ..core.otel_tracing import trace_method
 from ..core.registry import register_collector
+from ..core.scheduler import EndpointGroup, EndpointGroupName, pages
 from .network_health_collectors.air_marshal import AirMarshalCollector
 from .network_health_collectors.bluetooth import BluetoothCollector
 from .network_health_collectors.connection_stats import ConnectionStatsCollector
@@ -38,9 +40,79 @@ from ..core.org_health import SOURCE_NETWORK_HEALTH
 logger = get_logger(__name__)
 
 
+# Per-network endpoint groups gated once per collection cycle before the
+# per-network fan-out (#617 §2). NH_CHANNEL_UTILIZATION is org-wide (#271) and
+# gated separately, so it is NOT part of this bundle set.
+_BUNDLE_GROUPS: tuple[EndpointGroupName, ...] = (
+    EndpointGroupName.NH_CONNECTION_STATS,
+    EndpointGroupName.NH_DATA_RATES,
+    EndpointGroupName.NH_BLUETOOTH,
+    EndpointGroupName.NH_FAILED_CONNECTIONS,
+    EndpointGroupName.NH_LATENCY_STATS,
+    EndpointGroupName.NH_AIR_MARSHAL,
+)
+
+
 @register_collector(UpdateTier.MEDIUM)
 class NetworkHealthCollector(MetricCollector):
     """Collector for medium-moving network health metrics."""
+
+    # Endpoint-group declarations for the adaptive scheduler (#617 §2). All
+    # network-health groups run on the MEDIUM heartbeat at priority 3
+    # (perf/health). #541 folds the windowed floors (connection-stats 1800s;
+    # failed-connections / latency / air-marshal 3600s). Channel-utilization is
+    # the org-wide #271 rewrite, costed as two paginated org endpoints.
+    endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = (
+        EndpointGroup(
+            name=EndpointGroupName.NH_CHANNEL_UTILIZATION,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda shape: 2 * pages(shape.ap_count, 1000),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.NH_CONNECTION_STATS,
+            priority=3,
+            floor_seconds=1800,
+            cost_fn=lambda shape: float(shape.wireless_network_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.NH_DATA_RATES,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda shape: float(shape.wireless_network_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.NH_BLUETOOTH,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda shape: float(shape.wireless_network_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.NH_FAILED_CONNECTIONS,
+            priority=3,
+            floor_seconds=3600,
+            cost_fn=lambda shape: float(shape.wireless_network_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.NH_LATENCY_STATS,
+            priority=3,
+            floor_seconds=3600,
+            cost_fn=lambda shape: 2.0 * shape.wireless_network_count,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.NH_AIR_MARSHAL,
+            priority=3,
+            floor_seconds=3600,
+            cost_fn=lambda shape: float(shape.wireless_network_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+    )
 
     def __init__(
         self,
@@ -353,24 +425,41 @@ class NetworkHealthCollector(MetricCollector):
             if not wireless_networks:
                 return
 
-            await process_in_batches_with_errors(
-                wireless_networks,
-                self._collect_network_health_bundle,
-                batch_size=self.settings.api.network_batch_size,
-                delay_between_batches=self.settings.api.batch_delay,
-                spread_over_seconds=self._get_smoothing_window(),
-                initial_delay=self._get_smoothing_offset(f"{org_id}:network_health"),
-                min_batch_delay=self.settings.api.smoothing_min_batch_delay,
-                max_batch_delay=self.settings.api.smoothing_max_batch_delay,
-                item_description="network health",
-                error_context_func=lambda network: {
-                    "org_id": org_id,
-                    "org_name": org_name or org_id,
-                    "network_id": network.get("id"),
-                    "network_name": network.get("name"),
-                },
-                on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
-            )
+            # Channel utilization is an org-wide fetch (#271) gated on its own
+            # group and executed once per cycle (not per network). The two org
+            # endpoints return every wireless device/network in the org in one
+            # paginated pass each, so per-network fan-out here would be wasteful.
+            if self._should_run_group(EndpointGroupName.NH_CHANNEL_UTILIZATION):
+                await self.rf_health_collector.collect_org(
+                    org_id, org_name or org_id, wireless_networks
+                )
+                self._mark_group_ran(EndpointGroupName.NH_CHANNEL_UTILIZATION)
+
+            # The six per-network groups share one per-network fan-out. Consult
+            # each group's gate ONCE for this cycle (before the fan-out), run the
+            # fan-out only for the groups that are due, then mark each ran.
+            due_groups = frozenset(g for g in _BUNDLE_GROUPS if self._should_run_group(g))
+            if due_groups:
+                await process_in_batches_with_errors(
+                    wireless_networks,
+                    functools.partial(self._collect_network_health_bundle, due_groups=due_groups),
+                    batch_size=self.settings.api.network_batch_size,
+                    delay_between_batches=self.settings.api.batch_delay,
+                    spread_over_seconds=self._get_smoothing_window(),
+                    initial_delay=self._get_smoothing_offset(f"{org_id}:network_health"),
+                    min_batch_delay=self.settings.api.smoothing_min_batch_delay,
+                    max_batch_delay=self.settings.api.smoothing_max_batch_delay,
+                    item_description="network health",
+                    error_context_func=lambda network: {
+                        "org_id": org_id,
+                        "org_name": org_name or org_id,
+                        "network_id": network.get("id"),
+                        "network_name": network.get("name"),
+                    },
+                    on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
+                )
+                for group in due_groups:
+                    self._mark_group_ran(group)
         except Exception:
             nh_failed = True
             raise
@@ -401,15 +490,36 @@ class NetworkHealthCollector(MetricCollector):
         else:
             self.org_health_tracker.record_failure(org_id, org_name, source=SOURCE_NETWORK_HEALTH)
 
-    async def _collect_network_health_bundle(self, network: dict[str, Any]) -> None:
-        """Collect all network health sub-metrics for a single network."""
-        await self._collect_network_rf_health(network)
-        await self._collect_network_connection_stats(network)
-        await self._collect_network_data_rates(network)
-        await self._collect_network_bluetooth_clients(network)
-        await self._collect_network_ssid_performance(network)
-        await self._collect_network_latency_stats(network)
-        await self._collect_network_air_marshal(network)
+    async def _collect_network_health_bundle(
+        self, network: dict[str, Any], due_groups: frozenset[EndpointGroupName]
+    ) -> None:
+        """Collect the per-network health sub-metrics for a single network.
+
+        Only the endpoint groups in ``due_groups`` (decided once per cycle by
+        the coordinator's per-group gate) run this pass. Channel utilization is
+        NOT here — it is an org-wide fetch handled once in
+        ``_collect_org_network_health`` (#271).
+
+        Parameters
+        ----------
+        network : dict[str, Any]
+            Network data (already wireless-filtered by the coordinator).
+        due_groups : frozenset[EndpointGroupName]
+            The per-network groups that are due this cycle.
+
+        """
+        if EndpointGroupName.NH_CONNECTION_STATS in due_groups:
+            await self._collect_network_connection_stats(network)
+        if EndpointGroupName.NH_DATA_RATES in due_groups:
+            await self._collect_network_data_rates(network)
+        if EndpointGroupName.NH_BLUETOOTH in due_groups:
+            await self._collect_network_bluetooth_clients(network)
+        if EndpointGroupName.NH_FAILED_CONNECTIONS in due_groups:
+            await self._collect_network_ssid_performance(network)
+        if EndpointGroupName.NH_LATENCY_STATS in due_groups:
+            await self._collect_network_latency_stats(network)
+        if EndpointGroupName.NH_AIR_MARSHAL in due_groups:
+            await self._collect_network_air_marshal(network)
 
     async def _fetch_networks_for_health(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch networks for health collection via shared inventory cache.
@@ -440,17 +550,6 @@ class NetworkHealthCollector(MetricCollector):
         # inventory cache (the cache accounts for its own real upstream calls);
         # counting it here inflated the exporter's API-budget telemetry on cache hits.
         return await self.inventory.get_networks(org_id)
-
-    async def _collect_network_rf_health(self, network: dict[str, Any]) -> None:
-        """Collect RF health metrics for a network.
-
-        Parameters
-        ----------
-        network : dict[str, Any]
-            Network data.
-
-        """
-        await self.rf_health_collector.collect(network)
 
     async def _collect_network_connection_stats(self, network: dict[str, Any]) -> None:
         """Collect network-wide wireless connection statistics.

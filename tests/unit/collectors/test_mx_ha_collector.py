@@ -70,6 +70,57 @@ class TestMXHACollector:
         assert collector._mx_ha_mode is not None
         assert collector._mx_ha_role is not None
 
+    @staticmethod
+    def _basic_ha_response() -> list[dict]:
+        return [
+            {
+                "networkId": "N_111",
+                "name": "Office Network",
+                "enabled": True,
+                "mode": "active-active",
+                "designations": [{"serial": "Q2AB-0001", "priority": 1}],
+            }
+        ]
+
+    async def test_ha_gate_closed_skips_fetch(
+        self,
+        collector: MXHACollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A closed mx_ha gate skips the API call and emits nothing (#617)."""
+        mock_parent._should_run_group = MagicMock(return_value=False)
+        mock_api.appliance.getOrganizationApplianceDevicesRedundancyByNetwork = MagicMock(
+            return_value=self._basic_ha_response()
+        )
+
+        await collector.collect_redundancy("org1", "Test Org", {})
+
+        mock_api.appliance.getOrganizationApplianceDevicesRedundancyByNetwork.assert_not_called()
+        mock_parent._set_metric.assert_not_called()
+        mock_parent._mark_group_ran.assert_not_called()
+
+    async def test_ha_marks_group_ran_and_threads_ttl(
+        self,
+        collector: MXHACollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A successful HA fetch marks mx_ha and threads its group TTL (#617)."""
+        mock_parent._should_run_group = MagicMock(return_value=True)
+        mock_parent._group_ttl_seconds = MagicMock(return_value=600.0)
+        mock_api.appliance.getOrganizationApplianceDevicesRedundancyByNetwork = MagicMock(
+            return_value=self._basic_ha_response()
+        )
+
+        await collector.collect_redundancy("org1", "Test Org", {})
+
+        from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+
+        mock_parent._mark_group_ran.assert_called_once_with(EndpointGroupName.MX_HA)
+        for call in mock_parent._set_metric.call_args_list:
+            assert call.kwargs["ttl_seconds"] == 600.0
+
     async def test_active_active_pair_basic_emission(
         self,
         collector: MXHACollector,

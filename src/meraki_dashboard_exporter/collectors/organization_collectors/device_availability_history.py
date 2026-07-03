@@ -10,6 +10,7 @@ from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
+from ...core.scheduler import EndpointGroupName
 from .base import BaseOrganizationCollector
 
 if TYPE_CHECKING:
@@ -97,6 +98,9 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
             ``OrgHealthTracker`` (F-172).
 
         """
+        if not self.parent._should_run_group(EndpointGroupName.ORG_AVAILABILITY_HISTORY):
+            return True
+
         try:
             with LogContext(org_id=org_id, org_name=org_name):
                 events = await self._fetch_availability_change_history(org_id)
@@ -105,6 +109,9 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
                     if self.inventory is not None
                     else None
                 )
+
+            # Fetch succeeded — record the group ran so gating stretches.
+            self.parent._mark_group_ran(EndpointGroupName.ORG_AVAILABILITY_HISTORY)
 
             if not events:
                 logger.debug("No device availability change events available", org_id=org_id)
@@ -146,6 +153,8 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
             filtering is disabled (accept every row).
 
         """
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.ORG_AVAILABILITY_HISTORY)
+
         # Aggregate counts by (product_type, new_status) - bound cardinality, never per-device.
         change_counts: dict[tuple[str, str], int] = {}
         skipped = 0
@@ -181,7 +190,9 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
                 product_type=stale_product_type,
                 status=stale_status,
             )
-            self._set_metric_value("_org_devices_availability_changes_total", labels, 0)
+            self._set_metric_value(
+                "_org_devices_availability_changes_total", labels, 0, ttl_seconds=ttl
+            )
 
         for (product_type, new_status), count in change_counts.items():
             labels = create_org_labels(
@@ -193,6 +204,7 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
                 "_org_devices_availability_changes_total",
                 labels,
                 count,
+                ttl_seconds=ttl,
             )
         seen_change_keys.clear()
         seen_change_keys.update(change_counts.keys())

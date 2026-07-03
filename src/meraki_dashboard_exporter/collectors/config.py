@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
@@ -22,6 +22,7 @@ from ..core.logging_decorators import log_api_call
 from ..core.logging_helpers import LogContext, log_metric_collection_summary
 from ..core.metrics import LabelName
 from ..core.registry import register_collector
+from ..core.scheduler import EndpointGroup, EndpointGroupName
 
 if TYPE_CHECKING:
     pass
@@ -32,6 +33,19 @@ logger = get_logger(__name__)
 @register_collector(UpdateTier.SLOW)
 class ConfigCollector(MetricCollector):
     """Collector for configuration and security settings."""
+
+    # Scheduler endpoint group (#617 §2, SLOW tier). ``config_org`` (pri4) covers
+    # the whole per-org config cycle (login security + admins + config changes =
+    # 3 API calls); floor 900s, stretchable to 3600s.
+    endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = (
+        EndpointGroup(
+            name=EndpointGroupName.CONFIG_ORG,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda shape: 3.0,
+            tier=UpdateTier.SLOW,
+        ),
+    )
 
     def _initialize_metrics(self) -> None:
         """Initialize configuration metrics."""
@@ -154,6 +168,13 @@ class ConfigCollector(MetricCollector):
         metrics_collected = 0
         api_calls_made = 0
 
+        # Scheduler-gated as the ``config_org`` group (#617 §2): the whole SLOW
+        # config cycle is skipped this heartbeat until the group is due (floor
+        # 900s, stretchable to 3600s).
+        if not self._should_run_group(EndpointGroupName.CONFIG_ORG):
+            logger.debug("config_org group not due this heartbeat; skipping config collection")
+            return
+
         # Get organizations from cache or API. Org-fetch failure propagates
         # out of _collect_impl (no blanket except) so the manager records a
         # real cycle failure instead of a swallowed one (#509).
@@ -207,6 +228,9 @@ class ConfigCollector(MetricCollector):
                 attempted=len(organizations),
                 failed=failures,
             )
+
+        # Record a successful config cycle so the gate throttles the next one.
+        self._mark_group_ran(EndpointGroupName.CONFIG_ORG)
 
     @log_api_call("getOrganization")
     @with_error_handling(
@@ -415,6 +439,10 @@ class ConfigCollector(MetricCollector):
                     admins, expected_type=list, operation="getOrganizationAdmins"
                 )
 
+            # Per-series TTL for the config_org group so a stretched (>2x tier)
+            # cadence does not let the admin series flap between cycles (#617 §1f).
+            ttl = self._group_ttl_seconds(EndpointGroupName.CONFIG_ORG)
+
             # Pre-zero the full bounded cross product so a combo that drops to zero
             # this cycle is reported as 0 rather than left stale or missing.
             for auth_method in self._KNOWN_AUTHENTICATION_METHODS:
@@ -427,6 +455,7 @@ class ConfigCollector(MetricCollector):
                             LabelName.ACCOUNT_STATUS: account_status,
                         },
                         0,
+                        ttl_seconds=ttl,
                     )
 
             counts: dict[tuple[str, str], int] = {}
@@ -450,12 +479,14 @@ class ConfigCollector(MetricCollector):
                         LabelName.ACCOUNT_STATUS: account_status,
                     },
                     count,
+                    ttl_seconds=ttl,
                 )
 
             self._set_metric(
                 self._org_admins_two_factor_enabled_total,
                 {LabelName.ORG_ID: org_id},
                 two_factor_count,
+                ttl_seconds=ttl,
             )
 
             logger.debug(

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from prometheus_client import Gauge
 
 from meraki_dashboard_exporter.collectors.devices.mx import MXCollector
+from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 
 if TYPE_CHECKING:
     pass
@@ -38,6 +39,13 @@ class TestMXCollector:
             return Gauge(name.value, description, labelnames)
 
         parent._create_gauge = MagicMock(side_effect=create_gauge)
+        # #617 scheduler gate helpers (real numbers so the per-serial
+        # mx_performance throttle's numeric comparison works). Default: gate open,
+        # 900s interval, no explicit TTL override.
+        parent._should_run_group = MagicMock(return_value=True)
+        parent._mark_group_ran = MagicMock()
+        parent._group_interval = MagicMock(return_value=900)
+        parent._group_ttl_seconds = MagicMock(return_value=None)
         return parent
 
     @pytest.fixture
@@ -541,6 +549,152 @@ class TestMXCollector:
         await mx_collector.collect(device)
 
         mock_parent._set_metric.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # #617 scheduler gates
+    # ------------------------------------------------------------------
+
+    async def test_mx_performance_gate_throttles_per_mx_call_to_900s(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The NEW mx_performance gate throttles the per-MX perf call to its 900s group.
+
+        getDeviceAppliancePerformance is a per-physical-MX call fanned out every
+        MEDIUM (300s) cycle. With the mx_performance group interval at its 900s
+        floor, a given appliance must be fetched at most once per 900s: a second
+        dispatch inside the window is skipped, and the call resumes once the
+        interval has elapsed.
+        """
+        mock_parent._group_interval = MagicMock(return_value=900)
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={"perfScore": 87})
+
+        device = {"serial": "Q2AB-1234-5678", "model": "MX68", "orgId": "org1"}
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mx.time.time", return_value=1_000.0
+        ):
+            await mx_collector.collect(device)
+        assert mock_api.appliance.getDeviceAppliancePerformance.call_count == 1
+
+        # Next MEDIUM-tier dispatch, well inside the 900s group interval: skipped.
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mx.time.time", return_value=1_000.0 + 300
+        ):
+            await mx_collector.collect(device)
+        assert mock_api.appliance.getDeviceAppliancePerformance.call_count == 1
+
+        # Past the 900s interval: the per-MX perf call resumes.
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mx.time.time", return_value=1_000.0 + 901
+        ):
+            await mx_collector.collect(device)
+        assert mock_api.appliance.getDeviceAppliancePerformance.call_count == 2
+
+    async def test_mx_performance_gate_is_per_serial_no_within_cycle_blocking(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Every physical MX is collected within one cycle (gate is per-serial).
+
+        A group-global run gate would mark after the first appliance and skip the
+        rest for the whole cycle; the per-serial throttle must not do that.
+        """
+        mock_parent._group_interval = MagicMock(return_value=900)
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={"perfScore": 50})
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mx.time.time", return_value=2_000.0
+        ):
+            await mx_collector.collect({"serial": "Q2AB-0001", "model": "MX68", "orgId": "org1"})
+            await mx_collector.collect({"serial": "Q2AB-0002", "model": "MX250", "orgId": "org1"})
+
+        assert mock_api.appliance.getDeviceAppliancePerformance.call_count == 2
+        fetched_serials = {
+            c.args[0] for c in mock_api.appliance.getDeviceAppliancePerformance.call_args_list
+        }
+        assert fetched_serials == {"Q2AB-0001", "Q2AB-0002"}
+
+    async def test_mx_performance_disabled_when_interval_non_positive(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A non-positive solved interval disables the throttle (always collect)."""
+        mock_parent._group_interval = MagicMock(return_value=0)
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={"perfScore": 42})
+
+        device = {"serial": "Q2AB-1234-5678", "model": "MX68", "orgId": "org1"}
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mx.time.time", return_value=5_000.0
+        ):
+            await mx_collector.collect(device)
+            await mx_collector.collect(device)
+
+        assert mock_api.appliance.getDeviceAppliancePerformance.call_count == 2
+
+    async def test_mx_performance_threads_group_ttl(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The perf-score _set_metric carries the mx_performance group's TTL."""
+        mock_parent._group_ttl_seconds = MagicMock(return_value=1800.0)
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(return_value={"perfScore": 87})
+
+        await mx_collector.collect({"serial": "Q2AB-1234-5678", "model": "MX68", "orgId": "org1"})
+
+        _, kwargs = mock_parent._set_metric.call_args
+        assert kwargs["ttl_seconds"] == 1800.0
+        mock_parent._group_ttl_seconds.assert_called_with(EndpointGroupName.MX_PERFORMANCE)
+
+    async def test_uplink_statuses_gate_closed_skips_fetch(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """When the mx_uplink_status gate is closed, no API call or emission occurs."""
+        mock_parent._should_run_group = MagicMock(return_value=False)
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses = MagicMock(return_value=[])
+
+        await mx_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses.assert_not_called()
+        mock_parent._set_metric.assert_not_called()
+        mock_parent._mark_group_ran.assert_not_called()
+
+    async def test_uplink_statuses_marks_group_ran_after_success(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A successful uplink-status fetch marks the mx_uplink_status group as run."""
+        mock_api.appliance.getOrganizationApplianceUplinkStatuses = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2AB-1234-5678",
+                    "networkId": "N_111",
+                    "model": "MX68",
+                    "uplinks": [{"interface": "wan1", "status": "active"}],
+                }
+            ]
+        )
+
+        await mx_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        mock_parent._mark_group_ran.assert_called_once_with(EndpointGroupName.MX_UPLINK_STATUS)
+        # TTL for the emitted uplink series comes from the group.
+        _, kwargs = mock_parent._set_metric.call_args
+        assert "ttl_seconds" in kwargs
 
     async def test_collect_uplink_statuses_respects_network_filter(
         self,

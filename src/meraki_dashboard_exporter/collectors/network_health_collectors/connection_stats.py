@@ -11,6 +11,7 @@ from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
+from ...core.scheduler import EndpointGroupName
 from .base import BaseNetworkHealthCollector
 
 if TYPE_CHECKING:
@@ -93,6 +94,10 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
                 org_name=org_name,
             )
 
+            # Per-series TTL from the group's solved interval (#617 §1f) so the
+            # 1800s-windowed series does not flap under a stretched interval.
+            ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.NH_CONNECTION_STATS)
+
             # Set metrics for each connection stat type
             for stat_type in ("assoc", "auth", "dhcp", "dns", "success"):
                 value = getattr(network_stats.connectionStats, stat_type, 0)
@@ -102,6 +107,7 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
                     "_network_connection_stats",
                     stat_labels,
                     value,
+                    ttl_seconds=ttl_seconds,
                 )
 
         except Exception as e:

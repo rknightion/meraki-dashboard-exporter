@@ -12,6 +12,7 @@ from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.metrics import LabelName
+from ...core.scheduler import EndpointGroupName
 from ..subcollector_mixin import SubCollectorMixin
 
 if TYPE_CHECKING:
@@ -92,6 +93,10 @@ class MXUplinkUsageCollector(SubCollectorMixin):
             Device lookup table keyed by serial.
 
         """
+        # mx_uplink_usage gate (#617): single org-wide call per cycle.
+        if not self.parent._should_run_group(EndpointGroupName.MX_UPLINK_USAGE):
+            return
+
         resp = await asyncio.to_thread(
             self.api.appliance.getOrganizationApplianceUplinksUsageByNetwork,
             org_id,
@@ -115,6 +120,7 @@ class MXUplinkUsageCollector(SubCollectorMixin):
         )
         skipped = 0
         emitted = 0
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_UPLINK_USAGE)
 
         for raw_row in rows:
             row = ApplianceUplinkUsage.model_validate(raw_row)
@@ -157,6 +163,7 @@ class MXUplinkUsageCollector(SubCollectorMixin):
                         labels,
                         float(sent),
                         MXMetricName.MX_UPLINK_SENT_BYTES.value,
+                        ttl_seconds=ttl_seconds,
                     )
                     emitted += 1
 
@@ -166,8 +173,12 @@ class MXUplinkUsageCollector(SubCollectorMixin):
                         labels,
                         float(received),
                         MXMetricName.MX_UPLINK_RECV_BYTES.value,
+                        ttl_seconds=ttl_seconds,
                     )
                     emitted += 1
+
+        # Mark after a successful org-wide fetch (failures retry next cycle).
+        self.parent._mark_group_ran(EndpointGroupName.MX_UPLINK_USAGE)
 
         logger.debug(
             "Collected MX uplink usage",

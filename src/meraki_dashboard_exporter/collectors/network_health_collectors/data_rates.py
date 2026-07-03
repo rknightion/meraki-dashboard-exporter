@@ -10,6 +10,7 @@ from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
+from ...core.scheduler import EndpointGroupName
 from .base import BaseNetworkHealthCollector
 
 if TYPE_CHECKING:
@@ -108,17 +109,22 @@ class DataRatesCollector(BaseNetworkHealthCollector):
                     org_name=org_name,
                 )
 
+                # Per-series TTL from the group's solved interval (#617 §1f).
+                ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.NH_DATA_RATES)
+
                 # Set the metrics
                 self._set_metric_value(
                     "_network_wireless_download_kbps",
                     labels,
                     download_bytes_per_second,
+                    ttl_seconds=ttl_seconds,
                 )
 
                 self._set_metric_value(
                     "_network_wireless_upload_kbps",
                     labels,
                     upload_bytes_per_second,
+                    ttl_seconds=ttl_seconds,
                 )
 
         except Exception as e:

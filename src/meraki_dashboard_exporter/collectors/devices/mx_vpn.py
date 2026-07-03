@@ -11,6 +11,7 @@ from ...core.error_handling import ErrorCategory, validate_response_format, with
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.metrics import LabelName, create_labels
+from ...core.scheduler import EndpointGroupName
 from ..subcollector_mixin import SubCollectorMixin
 
 if TYPE_CHECKING:
@@ -112,6 +113,14 @@ class MXVpnCollector(SubCollectorMixin):
             Organization name.
 
         """
+        # mx_vpn gate (#617): the mx_vpn group covers BOTH this VpnStatuses call
+        # and collect_vpn_stats' VpnStats call (cost 2/cycle). Both consult the
+        # same group gate; the run-marker is set only by collect_vpn_stats (the
+        # second call each cycle per DeviceCollector._collect_mx_specific_metrics)
+        # so marking here would not throttle the pair out mid-cycle.
+        if not self.parent._should_run_group(EndpointGroupName.MX_VPN):
+            return
+
         vpn_statuses = await asyncio.to_thread(
             self.api.appliance.getOrganizationApplianceVpnStatuses,
             org_id,
@@ -131,6 +140,7 @@ class MXVpnCollector(SubCollectorMixin):
             else None
         )
         skipped = 0
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_VPN)
 
         for status in vpn_statuses:
             network_id = status.get("networkId", "")
@@ -152,6 +162,7 @@ class MXVpnCollector(SubCollectorMixin):
                     LabelName.NETWORK_ID: network_id,
                 },
                 float(len(all_peers)),
+                ttl_seconds=ttl_seconds,
             )
 
             for peer in all_peers:
@@ -176,6 +187,7 @@ class MXVpnCollector(SubCollectorMixin):
                     self._vpn_peer_status,
                     peer_labels,
                     1.0 if reachability == "reachable" else 0.0,
+                    ttl_seconds=ttl_seconds,
                 )
 
         logger.debug(
@@ -221,6 +233,14 @@ class MXVpnCollector(SubCollectorMixin):
         # (300s) scrape interval with 3x headroom, matching the widening the issue
         # itself suggests (600 or 900), while staying far short of the spec's 1-day
         # default so the data stays reasonably fresh.
+        #
+        # mx_vpn gate (#617): second of the two mx_vpn-group calls per cycle (see
+        # collect()). Consult the same group gate and set the run-marker here,
+        # after this call succeeds, so the VpnStatuses/VpnStats pair runs together
+        # once per solved interval.
+        if not self.parent._should_run_group(EndpointGroupName.MX_VPN):
+            return
+
         resp = await asyncio.to_thread(
             self.api.appliance.getOrganizationApplianceVpnStats,
             org_id,
@@ -242,6 +262,7 @@ class MXVpnCollector(SubCollectorMixin):
         )
         skipped = 0
         emitted = 0
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_VPN)
 
         for raw_row in rows:
             row = ApplianceVpnStats.model_validate(raw_row)
@@ -269,6 +290,7 @@ class MXVpnCollector(SubCollectorMixin):
                         labels,
                         float(sent) * 1000,
                         MXMetricName.MX_VPN_USAGE_SENT_BYTES.value,
+                        ttl_seconds=ttl_seconds,
                     )
                     emitted += 1
 
@@ -279,6 +301,7 @@ class MXVpnCollector(SubCollectorMixin):
                         labels,
                         float(received) * 1000,
                         MXMetricName.MX_VPN_USAGE_RECV_BYTES.value,
+                        ttl_seconds=ttl_seconds,
                     )
                     emitted += 1
 
@@ -293,8 +316,14 @@ class MXVpnCollector(SubCollectorMixin):
                         labels,
                         (sum(latency_values) / len(latency_values)) / 1000,
                         MXMetricName.MX_VPN_STATS_AVG_LATENCY_SECONDS.value,
+                        ttl_seconds=ttl_seconds,
                     )
                     emitted += 1
+
+        # Mark after a successful org-wide fetch (failures retry next cycle). This
+        # is the second mx_vpn-group call each cycle, so marking here throttles the
+        # VpnStatuses/VpnStats pair together on the next cycle.
+        self.parent._mark_group_ran(EndpointGroupName.MX_VPN)
 
         logger.debug(
             "Collected MX VPN usage/latency stats",

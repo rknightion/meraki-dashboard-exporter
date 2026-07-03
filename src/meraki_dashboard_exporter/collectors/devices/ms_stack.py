@@ -12,6 +12,7 @@ from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
 from ...core.metrics import LabelName
+from ...core.scheduler import EndpointGroupName
 from ..subcollector_mixin import SubCollectorMixin
 
 if TYPE_CHECKING:
@@ -97,6 +98,11 @@ class MSStackCollector(SubCollectorMixin):
 
         """
 
+        # #617: per-network fetch inside the collect_for_org fan-out; the group
+        # gate lives on collect_for_org (once per cycle). Thread the MS_STACKS
+        # solved TTL onto every emission here.
+        stacks_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_STACKS)
+
         with LogContext(org_id=org_id, network_id=network_id):
             stacks = await asyncio.to_thread(
                 self.api.switch.getNetworkSwitchStacks,
@@ -142,6 +148,7 @@ class MSStackCollector(SubCollectorMixin):
                 },
                 len(members) if members else len(serials),
                 MSMetricName.MS_STACK_MEMBERS.value,
+                ttl_seconds=stacks_ttl,
             )
 
             if members:
@@ -161,6 +168,7 @@ class MSStackCollector(SubCollectorMixin):
                         },
                         1,
                         MSMetricName.MS_STACK_MEMBER_STATUS.value,
+                        ttl_seconds=stacks_ttl,
                     )
             else:
                 # Defensive fallback for responses without a members array:
@@ -179,6 +187,7 @@ class MSStackCollector(SubCollectorMixin):
                         },
                         1,
                         MSMetricName.MS_STACK_MEMBER_STATUS.value,
+                        ttl_seconds=stacks_ttl,
                     )
 
     async def collect_for_org(
@@ -199,6 +208,12 @@ class MSStackCollector(SubCollectorMixin):
             All networks for the organization (will be filtered to switch networks).
 
         """
+        # #617 gate: consult MS_STACKS once per cycle BEFORE the per-network
+        # fan-out (a mark_ran inside collect_for_network would skip the rest of
+        # the batch); mark_ran after the fan-out completes.
+        if not self.parent._should_run_group(EndpointGroupName.MS_STACKS):
+            return
+
         switch_networks = [n for n in networks if "switch" in n.get("productTypes", [])]
 
         logger.debug(
@@ -220,3 +235,5 @@ class MSStackCollector(SubCollectorMixin):
                     self.collect_for_network(org_id, org_name, network_id, network_name),
                     name=f"stack_{network_id}",
                 )
+
+        self.parent._mark_group_ran(EndpointGroupName.MS_STACKS)

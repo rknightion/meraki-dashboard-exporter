@@ -58,6 +58,15 @@ class TestAPIUsageCollector:
                 self._api_calls: dict[str, int] = {}
                 self._metrics: dict[tuple[str, tuple[tuple[str, str], ...]], float] = {}
 
+            def _should_run_group(self, group: object) -> bool:
+                return True
+
+            def _mark_group_ran(self, group: object) -> None:
+                pass
+
+            def _group_ttl_seconds(self, group: object) -> float | None:
+                return None
+
             def _track_api_call(self, method_name: str) -> None:
                 self._api_calls[method_name] = self._api_calls.get(method_name, 0) + 1
 

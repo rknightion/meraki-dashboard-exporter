@@ -58,7 +58,7 @@ Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_
 - `ConnectionStatsCollector` — Collector for network-wide wireless connection statistics.
 - `DataRatesCollector` — Collector for network-wide wireless data rate metrics.
 - `LatencyStatsCollector` — Collector for MR wireless latency statistics.
-- `RFHealthCollector` — Collector for wireless RF health metrics including channel utilization.
+- `RFHealthCollector` — Collector for org-wide wireless RF channel utilization (#271).
 - `SSIDPerformanceCollector` — Collector for per-SSID wireless performance metrics.
 
 ### Organization Sub-collectors

@@ -12,6 +12,7 @@ from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
 from ...core.otel_tracing import trace_method
+from ...core.scheduler import EndpointGroupName
 from ..subcollector_mixin import SubCollectorMixin
 
 if TYPE_CHECKING:
@@ -99,6 +100,13 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
             Optional device lookup table. If not provided, uses parent's _device_lookup.
 
         """
+        # #617: gate the org-wide memory-history fetch by the device_memory group.
+        # When it isn't due this cycle we skip the fetch and let the memory series
+        # ride on their (stretched) TTL.
+        if not self.parent._should_run_group(EndpointGroupName.DEVICE_MEMORY):
+            return
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.DEVICE_MEMORY)
+
         try:
             # Use a short timespan (300 seconds = 5 minutes) with 300 second interval
             # This gives us the most recent memory data block
@@ -119,6 +127,10 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                 expected_type=list,
                 operation="getOrganizationDevicesSystemMemoryUsageHistoryByInterval",
             )
+
+            # Fetch succeeded (response normalized) — record the group run so
+            # failures retry on the next heartbeat rather than being marked ran.
+            self.parent._mark_group_ran(EndpointGroupName.DEVICE_MEMORY)
 
             if memory_data:
                 logger.debug(
@@ -163,6 +175,7 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                         "_device_memory_total_bytes",
                         labels,
                         provisioned_kb * 1024,  # Convert KB to bytes
+                        ttl_seconds=ttl_seconds,
                     )
 
                 # Get the most recent interval data
@@ -185,6 +198,7 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                                 "_device_memory_used_bytes",
                                 used_labels,
                                 used_stats["maximum"] * 1024,  # Convert KB to bytes
+                                ttl_seconds=ttl_seconds,
                             )
 
                         # Memory usage percentage (use maximum percentage)
@@ -194,6 +208,7 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                                 "_device_memory_usage_percent",
                                 labels,
                                 percentages["maximum"],
+                                ttl_seconds=ttl_seconds,
                             )
 
                     # Free memory stats
@@ -209,6 +224,7 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                                 "_device_memory_free_bytes",
                                 free_labels,
                                 free_stats["minimum"] * 1024,  # Convert KB to bytes
+                                ttl_seconds=ttl_seconds,
                             )
 
             if skipped:

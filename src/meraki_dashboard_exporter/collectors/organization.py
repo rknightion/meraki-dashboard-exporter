@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Coroutine
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from ..core.api_helpers import create_api_helper
 from ..core.async_utils import ManagedTaskGroup
@@ -27,6 +27,7 @@ from ..core.metrics import LabelName, create_labels
 from ..core.org_health import SOURCE_ORGANIZATION, OrgHealthTracker
 from ..core.otel_tracing import trace_method
 from ..core.registry import register_collector
+from ..core.scheduler import EndpointGroup, EndpointGroupName, pages
 from .organization_collectors import (
     APIUsageCollector,
     ClientOverviewCollector,
@@ -53,6 +54,74 @@ _APPLICATION_USAGE_MAX_QUANTITY = 50
 @register_collector(UpdateTier.MEDIUM)
 class OrganizationCollector(MetricCollector):
     """Collector for organization-level metrics."""
+
+    # #617 §2 — org endpoint groups (fetch-site gated below). All MEDIUM tier;
+    # cost_fn estimates API calls per one execution over the org shape.
+    endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = (
+        EndpointGroup(
+            name=EndpointGroupName.ORG_AVAILABILITIES,
+            priority=1,
+            floor_seconds=120,
+            cost_fn=lambda shape: pages(shape.device_count, 500),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.ORG_AVAILABILITY_HISTORY,
+            priority=2,
+            floor_seconds=300,
+            cost_fn=lambda shape: 1,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.ORG_API_USAGE,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda shape: 2,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.ORG_CLIENT_OVERVIEW,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda shape: 1,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.ORG_DEVICE_MODEL_OVERVIEW,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda shape: 1,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.ORG_PACKET_CAPTURES,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda shape: 1,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.ORG_APP_USAGE,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda shape: 1,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.ORG_FIRMWARE,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda shape: 1,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.ORG_LICENSES,
+            priority=4,
+            floor_seconds=1800,
+            cost_fn=lambda shape: 2,
+            tier=UpdateTier.MEDIUM,
+        ),
+    )
 
     def __init__(
         self,
@@ -758,6 +827,9 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
+        if not self._should_run_group(EndpointGroupName.ORG_DEVICE_MODEL_OVERVIEW):
+            return
+
         network_ids: list[str] | None = None
         if self.inventory:
             allowed_network_ids = await self.inventory.get_allowed_network_ids(org_id)
@@ -785,6 +857,10 @@ class OrganizationCollector(MetricCollector):
                     f"{overview['errors']}",
                     {"errors": overview["errors"]},
                 )
+
+        # Fetch succeeded — record the group ran so gating stretches from here.
+        self._mark_group_ran(EndpointGroupName.ORG_DEVICE_MODEL_OVERVIEW)
+        ttl = self._group_ttl_seconds(EndpointGroupName.ORG_DEVICE_MODEL_OVERVIEW)
 
         counts: list[dict[str, Any]] | None = None
         if isinstance(overview, dict) and "counts" in overview:
@@ -821,6 +897,7 @@ class OrganizationCollector(MetricCollector):
                     labels,
                     count,
                     OrgMetricName.ORG_DEVICES_BY_MODEL.value,
+                    ttl_seconds=ttl,
                 )
         else:
             logger.error("_devices_by_model_total metric not initialized")
@@ -860,6 +937,9 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
+        if not self._should_run_group(EndpointGroupName.ORG_AVAILABILITIES):
+            return
+
         with LogContext(org_id=org_id, org_name=org_name):
             # Use inventory cache if available
             if self.inventory:
@@ -882,6 +962,10 @@ class OrganizationCollector(MetricCollector):
                         operation="getOrganizationDevicesAvailabilities",
                     ),
                 )
+
+        # Fetch succeeded — record the group ran so gating stretches from here.
+        self._mark_group_ran(EndpointGroupName.ORG_AVAILABILITIES)
+        ttl = self._group_ttl_seconds(EndpointGroupName.ORG_AVAILABILITIES)
 
         # Group by status and product type
         availability_counts: dict[tuple[str, str], int] = {}
@@ -909,6 +993,7 @@ class OrganizationCollector(MetricCollector):
                     labels,
                     count,
                     OrgMetricName.ORG_DEVICES_AVAILABILITY.value,
+                    ttl_seconds=ttl,
                 )
         else:
             logger.error("_devices_availability_total metric not initialized")
@@ -952,6 +1037,9 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
+        if not self._should_run_group(EndpointGroupName.ORG_PACKET_CAPTURES):
+            return
+
         network_ids: list[str] | None = None
         if self.inventory:
             allowed_network_ids = await self.inventory.get_allowed_network_ids(org_id)
@@ -977,6 +1065,11 @@ class OrganizationCollector(MetricCollector):
                     f"{response['errors']}",
                     {"errors": response["errors"]},
                 )
+
+        # Fetch succeeded — record the group ran so gating stretches from here.
+        # (These two gauges use direct .set(), not _set_metric, so no per-series
+        # TTL applies — they never enter expiration tracking.)
+        self._mark_group_ran(EndpointGroupName.ORG_PACKET_CAPTURES)
 
         # Extract meta counts
         if isinstance(response, dict) and "meta" in response and "counts" in response["meta"]:
@@ -1085,6 +1178,9 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
+        if not self._should_run_group(EndpointGroupName.ORG_APP_USAGE):
+            return
+
         with LogContext(org_id=org_id, org_name=org_name):
             raw_response = await asyncio.to_thread(
                 self.api.organizations.getOrganizationSummaryTopApplicationsCategoriesByUsage,
@@ -1099,6 +1195,10 @@ class OrganizationCollector(MetricCollector):
                     operation="getOrganizationSummaryTopApplicationsCategoriesByUsage",
                 ),
             )
+
+        # Fetch succeeded — record the group ran so gating stretches from here.
+        # (These gauges use direct .set(), not _set_metric, so no per-series TTL.)
+        self._mark_group_ran(EndpointGroupName.ORG_APP_USAGE)
 
         # Process each category
         for category_data in response:

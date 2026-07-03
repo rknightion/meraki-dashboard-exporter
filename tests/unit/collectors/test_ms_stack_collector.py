@@ -52,11 +52,15 @@ class TestMSStackCollector:
         # tracking, exercised elsewhere) so values set via parent._set_metric are
         # observable in the registry while still recording the call for F-175
         # routing assertions.
-        def set_metric(metric, labels, value, metric_name=None):  # type: ignore[no-untyped-def]
+        def set_metric(metric, labels, value, metric_name=None, ttl_seconds=None):  # type: ignore[no-untyped-def]
             metric.labels(**labels).set(value)
 
         parent._create_gauge = MagicMock(side_effect=create_gauge)
         parent._set_metric = MagicMock(side_effect=set_metric)
+        # #617 scheduler gate helpers (no scheduler ⇒ MS_STACKS always runs).
+        parent._should_run_group = MagicMock(return_value=True)
+        parent._mark_group_ran = MagicMock()
+        parent._group_ttl_seconds = MagicMock(return_value=None)
         return parent
 
     @pytest.fixture

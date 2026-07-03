@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -26,6 +26,7 @@ from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
 from ...core.metrics import create_labels
+from ...core.scheduler import EndpointGroupName
 from .base import BaseDeviceCollector
 
 logger = get_logger(__name__)
@@ -163,6 +164,13 @@ class MTCollector(BaseDeviceCollector):
             orgs = await self._fetch_organizations()
             org_ids = [org["id"] for org in orgs]
 
+        # #617: gate both org-wide fetches (readings + gateway connections) as a
+        # single endpoint group. Compute due-ness once; the fetch sites re-check
+        # (fail-open) and this heartbeat marks the group ran only on success so
+        # the scheduler's last-ran clock advances exactly once per real cycle.
+        group = EndpointGroupName.MT_SENSOR_READINGS
+        due = self.parent._should_run_group(group) if self.parent is not None else True
+
         # Collect sensors for each organization
         succeeded = 0
         failed = 0
@@ -194,6 +202,10 @@ class MTCollector(BaseDeviceCollector):
                 attempted=len(org_ids),
                 failed=failed,
             )
+
+        # Mark the group ran only when it was due and at least one org succeeded.
+        if due and succeeded > 0 and self.parent is not None:
+            self.parent._mark_group_ran(group)
 
     @log_api_call("getOrganizations")
     async def _fetch_organizations(self) -> list[dict[str, Any]]:
@@ -334,6 +346,12 @@ class MTCollector(BaseDeviceCollector):
                 logger.error("API client not initialized")
                 return
 
+            # #617 gate: skip the sensor-readings fetch when the group is not due.
+            if self.parent is not None and not self.parent._should_run_group(
+                EndpointGroupName.MT_SENSOR_READINGS
+            ):
+                return
+
             inventory = self.parent.inventory if self.parent is not None else None
 
             # Get MT devices. Prefer the shared inventory cache (also enforces the
@@ -375,8 +393,14 @@ class MTCollector(BaseDeviceCollector):
                 # instead of constructing a new AsyncMerakiClient per cycle (#249).
                 readings = await self._fetch_sensor_readings(org_id)
 
-                # Process readings
-                self.collect_batch(readings, device_map)
+                # Process readings (#617: thread the group's per-series TTL so a
+                # stretched-interval poll does not flap the emitted series).
+                ttl_seconds = (
+                    self.parent._group_ttl_seconds(EndpointGroupName.MT_SENSOR_READINGS)
+                    if self.parent is not None
+                    else None
+                )
+                self.collect_batch(readings, device_map, ttl_seconds=ttl_seconds)
 
         except Exception:
             logger.exception(
@@ -434,6 +458,12 @@ class MTCollector(BaseDeviceCollector):
                 logger.error("API client not initialized")
                 return
 
+            # #617 gate: sensor-to-gateway connections share the readings group.
+            if self.parent is not None and not self.parent._should_run_group(
+                EndpointGroupName.MT_SENSOR_READINGS
+            ):
+                return
+
             with LogContext(org_id=org_id):
                 connections = await self._fetch_gateway_connections(org_id)
 
@@ -445,6 +475,12 @@ class MTCollector(BaseDeviceCollector):
             allowed_network_ids = (
                 await self.parent.inventory.get_allowed_network_ids(org_id)
                 if self.parent is not None and self.parent.inventory is not None
+                else None
+            )
+
+            ttl_seconds = (
+                self.parent._group_ttl_seconds(EndpointGroupName.MT_SENSOR_READINGS)
+                if self.parent is not None
                 else None
             )
 
@@ -462,10 +498,14 @@ class MTCollector(BaseDeviceCollector):
                     gateway_serial=item.gateway.serial,
                 )
 
-                self._set_metric_value("_sensor_gateway_rssi", labels, item.rssi)
+                self._set_metric_value(
+                    "_sensor_gateway_rssi", labels, item.rssi, ttl_seconds=ttl_seconds
+                )
 
                 epoch = self._parse_iso_timestamp(item.lastConnectedAt)
-                self._set_metric_value("_sensor_gateway_last_connected", labels, epoch)
+                self._set_metric_value(
+                    "_sensor_gateway_last_connected", labels, epoch, ttl_seconds=ttl_seconds
+                )
 
         except Exception:
             logger.exception(
@@ -506,7 +546,10 @@ class MTCollector(BaseDeviceCollector):
     # expiration manager for automatic stale-series cleanup (issues #246 / #269).
 
     def collect_batch(
-        self, sensor_readings: list[dict[str, Any]], device_map: dict[str, dict[str, Any]]
+        self,
+        sensor_readings: list[dict[str, Any]],
+        device_map: dict[str, dict[str, Any]],
+        ttl_seconds: float | None = None,
     ) -> None:
         """Collect sensor metrics from batch API response.
 
@@ -516,6 +559,9 @@ class MTCollector(BaseDeviceCollector):
             List of sensor readings from the API.
         device_map : dict[str, dict[str, Any]]
             Mapping of serial numbers to device info.
+        ttl_seconds : float | None
+            Fully-resolved per-series TTL for the ``mt_sensor_readings`` group
+            (#617 §1f), threaded to every emitted series. ``None`` ⇒ tier TTL.
 
         """
         for sensor_data in sensor_readings:
@@ -555,7 +601,7 @@ class MTCollector(BaseDeviceCollector):
                 if measurements:
                     # Process validated measurements
                     for measurement in measurements:
-                        self._process_validated_metric(device, measurement)
+                        self._process_validated_metric(device, measurement, ttl_seconds=ttl_seconds)
             except Exception as e:
                 logger.debug(
                     "Failed to parse sensor data to domain model", serial=serial, error=str(e)
@@ -575,6 +621,7 @@ class MTCollector(BaseDeviceCollector):
                         device=device,
                         metric_type=metric_type,
                         metric_data=metric_data,
+                        ttl_seconds=ttl_seconds,
                     )
 
     def _extract_metric_value(self, metric_type: str, metric_data: dict[str, Any]) -> float | None:
@@ -640,10 +687,38 @@ class MTCollector(BaseDeviceCollector):
             return 1 if locked else 0 if locked is not None else None
         return None
 
+    # Maps a sensor metric type (or the ``remoteLockoutSwitch`` raw key) to its
+    # gauge attribute name. Shared by ``_process_validated_metric`` and the
+    # ``_process_metric`` fallback so the two paths can never diverge.
+    _METRIC_ATTR_BY_TYPE: ClassVar[dict[str, str]] = {
+        SensorMetricType.TEMPERATURE: "_sensor_temperature",
+        SensorMetricType.HUMIDITY: "_sensor_humidity",
+        SensorMetricType.DOOR: "_sensor_door",
+        SensorMetricType.WATER: "_sensor_water",
+        SensorMetricType.CO2: "_sensor_co2",
+        SensorMetricType.TVOC: "_sensor_tvoc",
+        SensorMetricType.PM25: "_sensor_pm25",
+        SensorMetricType.NO2: "_sensor_no2",
+        SensorMetricType.O3: "_sensor_o3",
+        SensorMetricType.PM10: "_sensor_pm10",
+        SensorMetricType.NOISE: "_sensor_noise",
+        SensorMetricType.BATTERY: "_sensor_battery",
+        SensorMetricType.INDOOR_AIR_QUALITY: "_sensor_air_quality",
+        SensorMetricType.VOLTAGE: "_sensor_voltage",
+        SensorMetricType.CURRENT: "_sensor_current",
+        SensorMetricType.REAL_POWER: "_sensor_real_power",
+        SensorMetricType.APPARENT_POWER: "_sensor_apparent_power",
+        SensorMetricType.POWER_FACTOR: "_sensor_power_factor",
+        SensorMetricType.FREQUENCY: "_sensor_frequency",
+        SensorMetricType.DOWNSTREAM_POWER: "_sensor_downstream_power",
+        "remoteLockoutSwitch": "_sensor_remote_lockout",
+    }
+
     def _process_validated_metric(
         self,
         device: dict[str, Any],
         measurement: SensorMeasurement,
+        ttl_seconds: float | None = None,
     ) -> None:
         """Process a validated sensor measurement.
 
@@ -653,33 +728,12 @@ class MTCollector(BaseDeviceCollector):
             Device data with org/network info.
         measurement : SensorMeasurement
             Validated sensor measurement.
+        ttl_seconds : float | None
+            Fully-resolved per-series TTL for the ``mt_sensor_readings`` group
+            (#617 §1f). ``None`` ⇒ tier-derived TTL.
 
         """
-        metric_map = {
-            SensorMetricType.TEMPERATURE: "_sensor_temperature",
-            SensorMetricType.HUMIDITY: "_sensor_humidity",
-            SensorMetricType.DOOR: "_sensor_door",
-            SensorMetricType.WATER: "_sensor_water",
-            SensorMetricType.CO2: "_sensor_co2",
-            SensorMetricType.TVOC: "_sensor_tvoc",
-            SensorMetricType.PM25: "_sensor_pm25",
-            SensorMetricType.NO2: "_sensor_no2",
-            SensorMetricType.O3: "_sensor_o3",
-            SensorMetricType.PM10: "_sensor_pm10",
-            SensorMetricType.NOISE: "_sensor_noise",
-            SensorMetricType.BATTERY: "_sensor_battery",
-            SensorMetricType.INDOOR_AIR_QUALITY: "_sensor_air_quality",
-            SensorMetricType.VOLTAGE: "_sensor_voltage",
-            SensorMetricType.CURRENT: "_sensor_current",
-            SensorMetricType.REAL_POWER: "_sensor_real_power",
-            SensorMetricType.APPARENT_POWER: "_sensor_apparent_power",
-            SensorMetricType.POWER_FACTOR: "_sensor_power_factor",
-            SensorMetricType.FREQUENCY: "_sensor_frequency",
-            SensorMetricType.DOWNSTREAM_POWER: "_sensor_downstream_power",
-            "remoteLockoutSwitch": "_sensor_remote_lockout",
-        }
-
-        metric_attr = metric_map.get(measurement.metric)
+        metric_attr = self._METRIC_ATTR_BY_TYPE.get(measurement.metric)
         if metric_attr:
             # Extract org info from device data
             org_id = device.get("orgId", "")
@@ -692,6 +746,7 @@ class MTCollector(BaseDeviceCollector):
                 metric_attr,
                 labels,
                 measurement.value,
+                ttl_seconds=ttl_seconds,
             )
 
     def _process_metric(
@@ -699,8 +754,9 @@ class MTCollector(BaseDeviceCollector):
         device: dict[str, Any],
         metric_type: str,
         metric_data: dict[str, Any],
+        ttl_seconds: float | None = None,
     ) -> None:
-        """Process a single metric reading.
+        """Process a single metric reading (fallback when domain validation fails).
 
         Parameters
         ----------
@@ -710,6 +766,9 @@ class MTCollector(BaseDeviceCollector):
             Type of metric (temperature, humidity, etc.).
         metric_data : dict[str, Any]
             Metric-specific data.
+        ttl_seconds : float | None
+            Fully-resolved per-series TTL for the ``mt_sensor_readings`` group
+            (#617 §1f). ``None`` ⇒ tier-derived TTL.
 
         """
         # Validate parent exists (skip check in standalone mode)
@@ -729,203 +788,28 @@ class MTCollector(BaseDeviceCollector):
             if metric_type == "rawTemperature":
                 return
 
-            if metric_type == SensorMetricType.TEMPERATURE:
-                celsius = metric_data.get(SensorDataField.CELSIUS)
-                if celsius is not None:
-                    self._set_metric_value(
-                        "_sensor_temperature",
-                        labels,
-                        celsius,
-                    )
-
-            elif metric_type == SensorMetricType.HUMIDITY:
-                humidity = metric_data.get(SensorDataField.RELATIVE_PERCENTAGE)
-                if humidity is not None:
-                    self._set_metric_value(
-                        "_sensor_humidity",
-                        labels,
-                        humidity,
-                    )
-
-            elif metric_type == SensorMetricType.DOOR:
-                is_open = metric_data.get(SensorDataField.OPEN)
-                if is_open is not None:
-                    self._set_metric_value(
-                        "_sensor_door",
-                        labels,
-                        1 if is_open else 0,
-                    )
-
-            elif metric_type == SensorMetricType.WATER:
-                # Note: The API example doesn't show water sensors, but keeping for completeness
-                is_present = metric_data.get(SensorDataField.PRESENT, False)
-                self._set_metric_value(
-                    "_sensor_water",
-                    labels,
-                    1 if is_present else 0,
-                )
-
-            elif metric_type == SensorMetricType.CO2:
-                concentration = metric_data.get(SensorDataField.CONCENTRATION)
-                if concentration is not None:
-                    self._set_metric_value(
-                        "_sensor_co2",
-                        labels,
-                        concentration,
-                    )
-
-            elif metric_type == SensorMetricType.TVOC:
-                concentration = metric_data.get(SensorDataField.CONCENTRATION)
-                if concentration is not None:
-                    self._set_metric_value(
-                        "_sensor_tvoc",
-                        labels,
-                        concentration,
-                    )
-
-            elif metric_type == SensorMetricType.PM25:
-                concentration = metric_data.get(SensorDataField.CONCENTRATION)
-                if concentration is not None:
-                    self._set_metric_value(
-                        "_sensor_pm25",
-                        labels,
-                        concentration,
-                    )
-
-            elif metric_type == SensorMetricType.NO2:
-                concentration = metric_data.get(SensorDataField.CONCENTRATION)
-                if concentration is not None:
-                    self._set_metric_value(
-                        "_sensor_no2",
-                        labels,
-                        concentration,
-                    )
-
-            elif metric_type == SensorMetricType.O3:
-                concentration = metric_data.get(SensorDataField.CONCENTRATION)
-                if concentration is not None:
-                    self._set_metric_value(
-                        "_sensor_o3",
-                        labels,
-                        concentration,
-                    )
-
-            elif metric_type == SensorMetricType.PM10:
-                concentration = metric_data.get(SensorDataField.CONCENTRATION)
-                if concentration is not None:
-                    self._set_metric_value(
-                        "_sensor_pm10",
-                        labels,
-                        concentration,
-                    )
-
-            elif metric_type == SensorMetricType.NOISE:
-                ambient = metric_data.get(SensorDataField.AMBIENT, {})
-                level = ambient.get(SensorDataField.LEVEL)
-                if level is not None:
-                    self._set_metric_value(
-                        "_sensor_noise",
-                        labels,
-                        level,
-                    )
-
-            elif metric_type == SensorMetricType.BATTERY:
-                percentage = metric_data.get(SensorDataField.PERCENTAGE)
-                if percentage is not None:
-                    self._set_metric_value(
-                        "_sensor_battery",
-                        labels,
-                        percentage,
-                    )
-
-            elif metric_type == SensorMetricType.INDOOR_AIR_QUALITY:
-                score = metric_data.get(SensorDataField.SCORE)
-                if score is not None:
-                    self._set_metric_value(
-                        "_sensor_air_quality",
-                        labels,
-                        score,
-                    )
-
-            elif metric_type == SensorMetricType.VOLTAGE:
-                level = metric_data.get(SensorDataField.LEVEL)
-                if level is not None:
-                    self._set_metric_value(
-                        "_sensor_voltage",
-                        labels,
-                        level,
-                    )
-
-            elif metric_type == SensorMetricType.CURRENT:
-                draw = metric_data.get(SensorDataField.DRAW)
-                if draw is not None:
-                    self._set_metric_value(
-                        "_sensor_current",
-                        labels,
-                        draw,
-                    )
-
-            elif metric_type == SensorMetricType.REAL_POWER:
-                draw = metric_data.get(SensorDataField.DRAW)
-                if draw is not None:
-                    self._set_metric_value(
-                        "_sensor_real_power",
-                        labels,
-                        draw,
-                    )
-
-            elif metric_type == SensorMetricType.APPARENT_POWER:
-                draw = metric_data.get(SensorDataField.DRAW)
-                if draw is not None:
-                    self._set_metric_value(
-                        "_sensor_apparent_power",
-                        labels,
-                        draw,
-                    )
-
-            elif metric_type == SensorMetricType.POWER_FACTOR:
-                percentage = metric_data.get(SensorDataField.PERCENTAGE)
-                if percentage is not None:
-                    self._set_metric_value(
-                        "_sensor_power_factor",
-                        labels,
-                        percentage,
-                    )
-
-            elif metric_type == SensorMetricType.FREQUENCY:
-                level = metric_data.get(SensorDataField.LEVEL)
-                if level is not None:
-                    self._set_metric_value(
-                        "_sensor_frequency",
-                        labels,
-                        level,
-                    )
-
-            elif metric_type == SensorMetricType.DOWNSTREAM_POWER:
-                enabled = metric_data.get(SensorDataField.ENABLED)
-                if enabled is not None:
-                    self._set_metric_value(
-                        "_sensor_downstream_power",
-                        labels,
-                        1 if enabled else 0,
-                    )
-
-            elif metric_type == "remoteLockoutSwitch":
-                locked = metric_data.get("locked")
-                if locked is not None:
-                    self._set_metric_value(
-                        "_sensor_remote_lockout",
-                        labels,
-                        1 if locked else 0,
-                    )
-
-            else:
+            metric_attr = self._METRIC_ATTR_BY_TYPE.get(metric_type)
+            if metric_attr is None:
                 logger.debug(
                     "Unknown sensor metric type",
                     serial=device.get("serial", ""),
                     metric_type=metric_type,
                     metric_data=metric_data,
                 )
+                return
+
+            # Reuse the shared extractor so value semantics match the validated
+            # path exactly (door/water/downstream/lockout coercions included).
+            value = self._extract_metric_value(metric_type, metric_data)
+            if value is None:
+                return
+
+            self._set_metric_value(
+                metric_attr,
+                labels,
+                value,
+                ttl_seconds=ttl_seconds,
+            )
 
         except Exception:
             logger.exception(

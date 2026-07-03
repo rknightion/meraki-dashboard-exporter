@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from ..core.async_utils import ManagedTaskGroup
 from ..core.batch_processing import process_in_batches_with_errors
@@ -29,6 +29,7 @@ from ..core.logging_helpers import LogContext, log_metric_collection_summary
 from ..core.metrics import LabelName
 from ..core.otel_tracing import trace_method
 from ..core.registry import register_collector
+from ..core.scheduler import EndpointGroup, EndpointGroupName, pages
 from .devices import (
     MGCollector,
     MRCollector,
@@ -60,6 +61,197 @@ logger = get_logger(__name__)
 @register_collector(UpdateTier.MEDIUM)
 class DeviceCollector(MetricCollector):
     """Collector for device-level metrics."""
+
+    # #617 §2 — every MEDIUM endpoint group owned by DeviceCollector (including
+    # those whose fetch sites live in the per-device-type sub-collectors, which
+    # gate against these declarations via ``self.parent._should_run_group``).
+    # cost_fn returns the estimated API calls (incl. pagination) for ONE run.
+    endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = (
+        EndpointGroup(
+            name=EndpointGroupName.DEVICE_AVAILABILITY,
+            priority=1,
+            floor_seconds=120,
+            cost_fn=lambda s: pages(s.device_count, 500),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.DEVICE_MEMORY,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda s: pages(s.device_count, 20),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MR_WIRELESS_CLIENTS,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda s: pages(s.ap_count, 1000),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MR_CONNECTION_STATS,
+            priority=3,
+            floor_seconds=1800,
+            cost_fn=lambda s: float(s.wireless_network_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MR_ETHERNET_STATUS,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda s: pages(s.ap_count, 1000),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MR_PACKET_LOSS,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda s: 2 * pages(s.ap_count, 1000),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MR_CPU_LOAD,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda s: pages(s.ap_count, 20),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MR_SSID_STATUS,
+            priority=2,
+            floor_seconds=300,
+            cost_fn=lambda s: pages(s.ap_count, 500),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MR_SSID_USAGE,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: 1.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MS_PORT_STATUS,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda s: pages(s.switch_count, 20),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MS_PORT_USAGE,
+            priority=3,
+            floor_seconds=600,
+            cost_fn=lambda s: pages(s.switch_count, 50) + pages(s.switch_count, 20),
+            tier=UpdateTier.MEDIUM,
+            setting_pin="ms_port_usage_interval",
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MS_PACKET_STATS,
+            priority=3,
+            floor_seconds=600,
+            cost_fn=lambda s: float(s.switch_count),
+            tier=UpdateTier.MEDIUM,
+            setting_pin="ms_packet_stats_interval",
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MS_PORT_OVERVIEW,
+            priority=4,
+            floor_seconds=3600,
+            cost_fn=lambda s: 1.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MS_POWER,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda s: pages(s.switch_count, 1000),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MS_STACKS,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: float(s.switch_network_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MS_STP,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: float(s.switch_network_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MX_UPLINK_STATUS,
+            priority=1,
+            floor_seconds=300,
+            cost_fn=lambda s: pages(s.appliance_count, 1000),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MX_UPLINK_HEALTH,
+            priority=1,
+            floor_seconds=300,
+            cost_fn=lambda s: 1.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MX_UPLINK_USAGE,
+            priority=3,
+            floor_seconds=300,
+            cost_fn=lambda s: 1.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MX_PERFORMANCE,
+            priority=3,
+            floor_seconds=900,
+            cost_fn=lambda s: float(s.physical_mx_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MX_HA,
+            priority=2,
+            floor_seconds=300,
+            cost_fn=lambda s: 1.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MX_VPN,
+            priority=2,
+            floor_seconds=300,
+            cost_fn=lambda s: 2.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MX_SECURITY_EVENTS,
+            priority=2,
+            floor_seconds=300,
+            cost_fn=lambda s: 1.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MX_FIREWALL_CONFIG,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: 2 * s.appliance_network_count,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MV_ANALYTICS,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: 3 * s.camera_count,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.MG_UPLINK_STATUS,
+            priority=1,
+            floor_seconds=300,
+            cost_fn=lambda s: 1.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+    )
 
     @property
     def api(self) -> DashboardAPI:
@@ -462,14 +654,28 @@ class DeviceCollector(MetricCollector):
                     logger.info("No devices found", org_id=org_id)
                     return
 
-                # Fetch availabilities with error handling
-                availabilities = await self._fetch_device_availabilities(org_id) or []
+                # #617: gate the org-wide availabilities fetch by the
+                # device_availability endpoint group. When the scheduler says the
+                # group isn't due this cycle we skip the refetch entirely and let
+                # the device_up/status_info series ride on their (stretched) TTL
+                # rather than re-emitting them with stale/default statuses.
+                availability_due = self._should_run_group(EndpointGroupName.DEVICE_AVAILABILITY)
+                if availability_due:
+                    availabilities = await self._fetch_device_availabilities(org_id) or []
+                    self._mark_group_ran(EndpointGroupName.DEVICE_AVAILABILITY)
+                else:
+                    availabilities = []
 
                 logger.debug(
                     "Processing devices",
                     device_count=len(devices),
                     availability_count=len(availabilities),
+                    availability_due=availability_due,
                 )
+
+            # Resolved TTL for the device_availability group's series (device_up,
+            # status_info); None when no scheduler ⇒ tier-derived TTL applies.
+            availability_ttl = self._group_ttl_seconds(EndpointGroupName.DEVICE_AVAILABILITY)
 
             # Create availability lookup by serial
             availability_map = {
@@ -524,7 +730,13 @@ class DeviceCollector(MetricCollector):
                 device["orgName"] = org_name
 
                 # Collect common metrics
-                self._collect_common_metrics(device, org_id, org_name)
+                self._collect_common_metrics(
+                    device,
+                    org_id,
+                    org_name,
+                    availability_due=availability_due,
+                    availability_ttl=availability_ttl,
+                )
 
                 # Group devices by type for batch processing
                 if device_type not in devices_by_type:
@@ -1099,7 +1311,15 @@ class DeviceCollector(MetricCollector):
 
         return device_type_str
 
-    def _collect_common_metrics(self, device: dict[str, Any], org_id: str, org_name: str) -> None:
+    def _collect_common_metrics(
+        self,
+        device: dict[str, Any],
+        org_id: str,
+        org_name: str,
+        *,
+        availability_due: bool = True,
+        availability_ttl: float | None = None,
+    ) -> None:
         """Collect common device metrics.
 
         Parameters
@@ -1110,6 +1330,15 @@ class DeviceCollector(MetricCollector):
             Organization ID.
         org_name : str
             Organization name.
+        availability_due : bool
+            When False the device_availability endpoint group was gated out this
+            cycle (#617); the availability-derived series (``meraki_device_up``,
+            ``meraki_device_status_info``) are left to ride on their TTL rather
+            than being re-emitted with stale/default statuses.
+        availability_ttl : float | None
+            Resolved per-series TTL for the device_availability group, forwarded
+            to the availability-derived ``_set_metric`` calls (#617 §1f). ``None``
+            ⇒ the tier-derived TTL applies.
 
         """
         availability_status = device.get("availability_status", DEFAULT_DEVICE_STATUS)
@@ -1122,50 +1351,59 @@ class DeviceCollector(MetricCollector):
         # longer emits it, so it's supplied here as an explicit extra label.
         device_name = device.get("name", device.get("serial", ""))
 
-        # Device up/down status
-        is_online = 1 if availability_status == DeviceStatus.ONLINE else 0
-        self._set_metric_value(
-            "_device_up",
-            labels,
-            is_online,
-        )
+        # Availability-derived series are emitted only when the device_availability
+        # group ran this cycle; otherwise they survive on their TTL (#617).
+        if availability_due:
+            # Device up/down status
+            is_online = 1 if availability_status == DeviceStatus.ONLINE else 0
+            self._set_metric_value(
+                "_device_up",
+                labels,
+                is_online,
+                ttl_seconds=availability_ttl,
+            )
 
-        # Remove stale status label series for this device
-        # (status is a label, so transitions leave old series at 1)
-        for stale_status in DeviceStatus:
-            if stale_status.value != availability_status:
-                stale_labels = create_device_labels(
-                    device,
-                    org_id=org_id,
-                    org_name=org_name,
-                    name=device_name,
-                    status=stale_status.value,
-                )
-                try:
-                    self._device_status_info.remove(*[
-                        stale_labels[ln.value]
-                        for ln in [
-                            LabelName.ORG_ID,
-                            LabelName.NETWORK_ID,
-                            LabelName.SERIAL,
-                            LabelName.NAME,
-                            LabelName.MODEL,
-                            LabelName.DEVICE_TYPE,
-                            LabelName.STATUS,
-                        ]
-                    ])
-                except KeyError:
-                    pass  # Label combination doesn't exist
+            # Remove stale status label series for this device
+            # (status is a label, so transitions leave old series at 1)
+            for stale_status in DeviceStatus:
+                if stale_status.value != availability_status:
+                    stale_labels = create_device_labels(
+                        device,
+                        org_id=org_id,
+                        org_name=org_name,
+                        name=device_name,
+                        status=stale_status.value,
+                    )
+                    try:
+                        self._device_status_info.remove(*[
+                            stale_labels[ln.value]
+                            for ln in [
+                                LabelName.ORG_ID,
+                                LabelName.NETWORK_ID,
+                                LabelName.SERIAL,
+                                LabelName.NAME,
+                                LabelName.MODEL,
+                                LabelName.DEVICE_TYPE,
+                                LabelName.STATUS,
+                            ]
+                        ])
+                    except KeyError:
+                        pass  # Label combination doesn't exist
 
-        # Device status info metric
-        status_labels = create_device_labels(
-            device, org_id=org_id, org_name=org_name, name=device_name, status=availability_status
-        )
-        self._set_metric_value(
-            "_device_status_info",
-            status_labels,
-            1,
-        )
+            # Device status info metric
+            status_labels = create_device_labels(
+                device,
+                org_id=org_id,
+                org_name=org_name,
+                name=device_name,
+                status=availability_status,
+            )
+            self._set_metric_value(
+                "_device_status_info",
+                status_labels,
+                1,
+                ttl_seconds=availability_ttl,
+            )
 
         # Uptime
         if "uptimeInSeconds" in device:

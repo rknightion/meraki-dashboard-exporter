@@ -72,6 +72,59 @@ class TestMXUplinkHealthCollector:
         assert collector._mx_uplink_loss_percent is not None
         assert collector._mx_uplink_latency_seconds is not None
 
+    @staticmethod
+    def _basic_health_response() -> list[dict]:
+        return [
+            {
+                "networkId": "N_111",
+                "serial": "Q2AB-1234-5678",
+                "uplink": "wan1",
+                "ip": "8.8.8.8",
+                "timeSeries": [
+                    {"ts": "2026-07-01T00:01:00Z", "lossPercent": 0.5, "latencyMs": 12.5},
+                ],
+            }
+        ]
+
+    async def test_health_gate_closed_skips_fetch(
+        self,
+        collector: MXUplinkHealthCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A closed mx_uplink_health gate skips the API call and emits nothing (#617)."""
+        mock_parent._should_run_group = MagicMock(return_value=False)
+        mock_api.organizations.getOrganizationDevicesUplinksLossAndLatency = MagicMock(
+            return_value=self._basic_health_response()
+        )
+
+        await collector.collect_uplink_loss_latency("org1", "Test Org", {})
+
+        mock_api.organizations.getOrganizationDevicesUplinksLossAndLatency.assert_not_called()
+        mock_parent._set_metric.assert_not_called()
+        mock_parent._mark_group_ran.assert_not_called()
+
+    async def test_health_marks_group_ran_and_threads_ttl(
+        self,
+        collector: MXUplinkHealthCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A successful health fetch marks mx_uplink_health and threads its TTL (#617)."""
+        mock_parent._should_run_group = MagicMock(return_value=True)
+        mock_parent._group_ttl_seconds = MagicMock(return_value=600.0)
+        mock_api.organizations.getOrganizationDevicesUplinksLossAndLatency = MagicMock(
+            return_value=self._basic_health_response()
+        )
+
+        await collector.collect_uplink_loss_latency("org1", "Test Org", {})
+
+        from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+
+        mock_parent._mark_group_ran.assert_called_once_with(EndpointGroupName.MX_UPLINK_HEALTH)
+        for call in mock_parent._set_metric.call_args_list:
+            assert call.kwargs["ttl_seconds"] == 600.0
+
     async def test_basic_emission_latest_point(
         self,
         collector: MXUplinkHealthCollector,

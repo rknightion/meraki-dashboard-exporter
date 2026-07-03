@@ -10,7 +10,6 @@ resolves ``self.rate_limiter``/``self.parent.rate_limiter`` and calls
   non-calling ``collect_cpu_load`` wrapper — the wrapper made no direct SDK call, so
   decorating it acquired one token per invocation while N batch calls ran un-throttled;
   moving it also prevents double-acquire)
-* ``RFHealthCollector._fetch_organization_devices`` inventory-less fallback (explicit)
 * ``MTCollector._get_org_name`` inventory-less fallback (explicit, parent-None safe)
 * ``MSCollector.collect_stp_priorities``'s nested per-network STP fetch (explicit)
 
@@ -29,9 +28,6 @@ from meraki_dashboard_exporter.collectors.devices.mr.performance import (
 )
 from meraki_dashboard_exporter.collectors.devices.ms import MSCollector
 from meraki_dashboard_exporter.collectors.devices.mt import MTCollector
-from meraki_dashboard_exporter.collectors.network_health_collectors.rf_health import (
-    RFHealthCollector,
-)
 
 
 def _limiter() -> MagicMock:
@@ -109,21 +105,6 @@ async def test_mr_cpu_load_acquires_exactly_once_no_double() -> None:
 # --------------------------------------------------------------------------- #
 
 
-async def test_rf_health_org_devices_fallback_acquires() -> None:
-    """RFHealth org-devices fallback (inventory unavailable) throttles by org."""
-    parent = MagicMock()
-    parent.api = MagicMock()
-    parent.api.organizations.getOrganizationDevices = MagicMock(return_value=[])
-    parent.settings = MagicMock()
-    parent.inventory = None  # forces the direct-fetch fallback branch
-    parent.rate_limiter = _limiter()
-    collector = RFHealthCollector(parent)
-
-    await collector._fetch_organization_devices("123456", "N_1")
-
-    parent.rate_limiter.acquire.assert_awaited_once_with("123456", "getOrganizationDevices")
-
-
 async def test_mt_get_org_name_fallback_acquires() -> None:
     """MT _get_org_name direct fallback throttles when inventory has no match."""
     parent = MagicMock()
@@ -173,11 +154,16 @@ async def test_ms_stp_fetch_acquires_per_network() -> None:
     def create_gauge(name, description, labelnames):
         return Gauge(name.value, description, labelnames)
 
-    def set_metric(metric, labels, value, metric_name=None):
+    def set_metric(metric, labels, value, metric_name=None, ttl_seconds=None):
         metric.labels(**labels).set(value)
 
     parent._create_gauge = MagicMock(side_effect=create_gauge)
     parent._set_metric = MagicMock(side_effect=set_metric)
+    # #617 gate helpers: STP self-gates on the MS_STP interval (floor 900s).
+    parent._should_run_group = MagicMock(return_value=True)
+    parent._mark_group_ran = MagicMock()
+    parent._group_interval = MagicMock(return_value=900.0)
+    parent._group_ttl_seconds = MagicMock(return_value=None)
 
     parent.api.switch.getNetworkSwitchStp = MagicMock(
         return_value={"rstpEnabled": True, "stpBridgePriority": []}

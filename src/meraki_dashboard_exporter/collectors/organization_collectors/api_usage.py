@@ -13,6 +13,7 @@ from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
+from ...core.scheduler import EndpointGroupName
 from .base import BaseOrganizationCollector
 
 if TYPE_CHECKING:
@@ -188,13 +189,14 @@ class APIUsageCollector(BaseOrganizationCollector):
         entries = await self._fetch_api_requests(org_id)
         by_operation = self._aggregate_requests_by_operation(entries)
 
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.ORG_API_USAGE)
         for (operation, status_code), count in by_operation.items():
             labels = create_org_labels(
                 org_data,
                 endpoint=operation,
                 status_code=status_code,
             )
-            self._set_metric_value("_api_requests_by_operation", labels, count)
+            self._set_metric_value("_api_requests_by_operation", labels, count, ttl_seconds=ttl)
 
         logger.debug(
             "Collected API requests by operation",
@@ -223,6 +225,10 @@ class APIUsageCollector(BaseOrganizationCollector):
             by ``OrgHealthTracker`` (F-172) instead of being silently swallowed.
 
         """
+        if not self.parent._should_run_group(EndpointGroupName.ORG_API_USAGE):
+            return True
+
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.ORG_API_USAGE)
         try:
             with LogContext(org_id=org_id, org_name=org_name):
                 overview = await self._fetch_api_requests_overview(org_id)
@@ -232,6 +238,9 @@ class APIUsageCollector(BaseOrganizationCollector):
                     has_data=bool(overview),
                     response_type=type(overview).__name__,
                 )
+
+            # Overview fetch succeeded — record the group ran so gating stretches.
+            self.parent._mark_group_ran(EndpointGroupName.ORG_API_USAGE)
 
             if overview and isinstance(overview, dict) and "responseCodeCounts" in overview:
                 response_codes = overview["responseCodeCounts"]
@@ -274,6 +283,7 @@ class APIUsageCollector(BaseOrganizationCollector):
                         "_api_requests_by_status",
                         labels,
                         count,
+                        ttl_seconds=ttl,
                     )
                     logger.debug(
                         "Set API request metric",
@@ -289,6 +299,7 @@ class APIUsageCollector(BaseOrganizationCollector):
                     "_api_requests_total",
                     org_labels,
                     total_requests,
+                    ttl_seconds=ttl,
                 )
 
                 logger.info(

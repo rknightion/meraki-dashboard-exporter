@@ -12,6 +12,7 @@ from ....core.logging import get_logger
 from ....core.logging_decorators import log_api_call
 from ....core.logging_helpers import LogContext
 from ....core.metrics import LabelName
+from ....core.scheduler import EndpointGroupName
 
 if TYPE_CHECKING:
     from ...device import DeviceCollector
@@ -118,6 +119,11 @@ class MRClientsCollector:
             Device lookup table for device info.
 
         """
+        # Scheduler gate: skip the whole per-network fan-out when not due (#617).
+        if not self.parent._should_run_group(EndpointGroupName.MR_CONNECTION_STATS):
+            return
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.MR_CONNECTION_STATS)
+
         for network in networks:
             network_id = network.get("id", "")
             network_name = network.get("name", network_id)
@@ -166,6 +172,7 @@ class MRClientsCollector:
                             self._ap_connection_stats,
                             labels,
                             value,
+                            ttl_seconds=ttl,
                         )
 
             except Exception:
@@ -174,6 +181,9 @@ class MRClientsCollector:
                     org_id=org_id,
                     network_id=network_id,
                 )
+
+        # Mark ran after the per-network fan-out completes (#617).
+        self.parent._mark_group_ran(EndpointGroupName.MR_CONNECTION_STATS)
 
     @log_api_call("getOrganizationWirelessClientsOverviewByDevice")
     @with_error_handling(
@@ -196,6 +206,11 @@ class MRClientsCollector:
             Device lookup table for device info.
 
         """
+        # Scheduler gate: skip the org-wide fetch when not due (#617).
+        if not self.parent._should_run_group(EndpointGroupName.MR_WIRELESS_CLIENTS):
+            return
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.MR_WIRELESS_CLIENTS)
+
         try:
             with LogContext(org_id=org_id):
                 client_overview = await asyncio.to_thread(
@@ -208,6 +223,9 @@ class MRClientsCollector:
                     expected_type=list,
                     operation="getOrganizationWirelessClientsOverviewByDevice",
                 )
+
+            # Fetch succeeded — record the run so the gate can stretch (#617).
+            self.parent._mark_group_ran(EndpointGroupName.MR_WIRELESS_CLIENTS)
 
             # Resolve allowed network IDs for filter enforcement on org-wide responses.
             allowed_network_ids = (
@@ -248,6 +266,7 @@ class MRClientsCollector:
                     self._ap_clients,
                     labels,
                     online_clients,
+                    ttl_seconds=ttl,
                 )
 
             if skipped:

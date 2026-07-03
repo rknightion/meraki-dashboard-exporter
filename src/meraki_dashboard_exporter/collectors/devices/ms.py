@@ -15,6 +15,7 @@ from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
 from ...core.metrics import LabelName, create_labels
 from ...core.otel_tracing import trace_method
+from ...core.scheduler import EndpointGroupName
 from .base import BaseDeviceCollector
 
 if TYPE_CHECKING:
@@ -455,7 +456,9 @@ class MSCollector(BaseDeviceCollector):
             )
 
     def _should_collect_port_usage(self, serial: str) -> bool:
-        interval = self.settings.api.ms_port_usage_interval
+        # Interval sourced from the scheduler's solved MS_PORT_USAGE interval
+        # (#617): floor 600s, stretchable, pinnable via ms_port_usage_interval.
+        interval: float = self.parent._group_interval(EndpointGroupName.MS_PORT_USAGE)
         if interval <= 0:
             return True
         last = self._last_port_usage.get(serial, 0.0)
@@ -465,7 +468,9 @@ class MSCollector(BaseDeviceCollector):
         self._last_port_usage[serial] = time.time()
 
     def _should_collect_packet_stats(self, serial: str) -> bool:
-        interval = self.settings.api.ms_packet_stats_interval
+        # Interval sourced from the scheduler's solved MS_PACKET_STATS interval
+        # (#617): floor 600s, stretchable, pinnable via ms_packet_stats_interval.
+        interval: float = self.parent._group_interval(EndpointGroupName.MS_PACKET_STATS)
         if interval <= 0:
             return True
         last = self._last_packet_stats.get(serial, 0.0)
@@ -479,6 +484,7 @@ class MSCollector(BaseDeviceCollector):
         device: dict[str, Any],
         port: dict[str, Any],
         org_id: str,
+        ttl_seconds: float | None = None,
     ) -> None:
         """Emit the ``meraki_ms_port_info`` join series for a port (#534).
 
@@ -496,6 +502,9 @@ class MSCollector(BaseDeviceCollector):
             Port status data from the API (source of ``portId``/``name``).
         org_id : str
             Organization ID.
+        ttl_seconds : float | None
+            Per-series TTL for the MS_PORT_STATUS group (#617), forwarded to
+            ``_set_metric``. ``None`` ⇒ tier-derived TTL.
 
         """
         port_id = str(port.get("portId", ""))
@@ -512,6 +521,7 @@ class MSCollector(BaseDeviceCollector):
             info_labels,
             1,
             MSMetricName.MS_PORT_INFO.value,
+            ttl_seconds=ttl_seconds,
         )
 
     def _emit_port_error_warning_metrics(
@@ -520,6 +530,7 @@ class MSCollector(BaseDeviceCollector):
         port: dict[str, Any],
         org_id: str,
         org_name: str,
+        ttl_seconds: float | None = None,
     ) -> None:
         """Emit gauges for a port's currently active errors/warnings.
 
@@ -541,6 +552,9 @@ class MSCollector(BaseDeviceCollector):
             Organization ID.
         org_name : str
             Organization name.
+        ttl_seconds : float | None
+            Per-series TTL for the MS_PORT_STATUS group (#617), forwarded to
+            ``_set_metric``. ``None`` ⇒ tier-derived TTL.
 
         """
         for error_type in port.get("errors") or []:
@@ -552,6 +566,7 @@ class MSCollector(BaseDeviceCollector):
                 error_labels,
                 1,
                 MSMetricName.MS_PORT_ERROR_ACTIVE.value,
+                ttl_seconds=ttl_seconds,
             )
 
         for warning_type in port.get("warnings") or []:
@@ -563,6 +578,7 @@ class MSCollector(BaseDeviceCollector):
                 warning_labels,
                 1,
                 MSMetricName.MS_PORT_WARNING_ACTIVE.value,
+                ttl_seconds=ttl_seconds,
             )
 
     def _remove_stale_label_series(
@@ -596,6 +612,7 @@ class MSCollector(BaseDeviceCollector):
         port: dict[str, Any],
         org_id: str,
         org_name: str,
+        ttl_seconds: float | None = None,
     ) -> None:
         """Emit gauges for a port's STP state and 802.1X/secure-port auth status.
 
@@ -622,6 +639,9 @@ class MSCollector(BaseDeviceCollector):
             Organization ID.
         org_name : str
             Organization name.
+        ttl_seconds : float | None
+            Per-series TTL for the MS_PORT_STATUS group (#617), forwarded to
+            ``_set_metric``. ``None`` ⇒ tier-derived TTL.
 
         """
         serial = device.get("serial", "")
@@ -640,6 +660,7 @@ class MSCollector(BaseDeviceCollector):
                 stp_labels,
                 1,
                 MSMetricName.MS_PORT_STP_STATE.value,
+                ttl_seconds=ttl_seconds,
             )
 
         previous_states = self._emitted_stp_states.get(port_key, set())
@@ -677,6 +698,7 @@ class MSCollector(BaseDeviceCollector):
             active_labels,
             1 if active else 0,
             MSMetricName.MS_PORT_8021X_ACTIVE.value,
+            ttl_seconds=ttl_seconds,
         )
 
         auth = secure.get("authenticationStatus")
@@ -690,6 +712,7 @@ class MSCollector(BaseDeviceCollector):
                 status_labels,
                 1,
                 MSMetricName.MS_PORT_8021X_STATUS.value,
+                ttl_seconds=ttl_seconds,
             )
 
         previous_statuses = self._emitted_8021x_statuses.get(port_key, set())
@@ -718,6 +741,12 @@ class MSCollector(BaseDeviceCollector):
         devices: list[dict[str, Any]],
     ) -> bool:
         """Collect port status metrics using the org-level switch endpoint."""
+        # #617 gate: skip when MS_PORT_STATUS is not due this cycle. Return True
+        # (not a failure) so the coordinator does not fall back to per-device.
+        if not self.parent._should_run_group(EndpointGroupName.MS_PORT_STATUS):
+            return True
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_PORT_STATUS)
+
         if self._org_port_status_supported is None:
             self._org_port_status_supported = hasattr(
                 self.api.switch,
@@ -790,12 +819,18 @@ class MSCollector(BaseDeviceCollector):
                     port_labels,
                     is_connected,
                     MSMetricName.MS_PORT_STATUS.value,
+                    ttl_seconds=ttl,
                 )
 
-                self._emit_port_error_warning_metrics(device_data, port, org_id, org_name)
-                self._emit_port_stp_8021x_metrics(device_data, port, org_id, org_name)
-                self._emit_port_info(device_data, port, org_id)
+                self._emit_port_error_warning_metrics(
+                    device_data, port, org_id, org_name, ttl_seconds=ttl
+                )
+                self._emit_port_stp_8021x_metrics(
+                    device_data, port, org_id, org_name, ttl_seconds=ttl
+                )
+                self._emit_port_info(device_data, port, org_id, ttl_seconds=ttl)
 
+        self.parent._mark_group_ran(EndpointGroupName.MS_PORT_STATUS)
         return True
 
     @trace_method("process.device")
@@ -824,6 +859,15 @@ class MSCollector(BaseDeviceCollector):
         serial_key = device_labels["serial"]
         self._active_serials.add(serial_key)
 
+        # #617: this is the per-device fallback path (org endpoint unavailable /
+        # failed), invoked once per device inside a batch fan-out, so it is NOT
+        # group-gated here (a group mark_ran mid-batch would skip the remaining
+        # devices). It emits both the port-status family and the port-usage/PoE
+        # family from a single getDeviceSwitchPortsStatuses call, so thread each
+        # family's solved TTL onto its own emissions.
+        status_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_PORT_STATUS)
+        usage_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_PORT_USAGE)
+
         try:
             # Get port statuses with 1-hour timespan
             with LogContext(serial=device_labels["serial"], name=device.get("name", "")):
@@ -851,16 +895,21 @@ class MSCollector(BaseDeviceCollector):
                     port_labels,
                     is_connected,
                     MSMetricName.MS_PORT_STATUS.value,
+                    ttl_seconds=status_ttl,
                 )
 
                 # Active port errors/warnings (expire automatically once cleared)
-                self._emit_port_error_warning_metrics(device, port, org_id, org_name)
+                self._emit_port_error_warning_metrics(
+                    device, port, org_id, org_name, ttl_seconds=status_ttl
+                )
 
                 # STP state and 802.1X/secure-port auth status (same payload)
-                self._emit_port_stp_8021x_metrics(device, port, org_id, org_name)
+                self._emit_port_stp_8021x_metrics(
+                    device, port, org_id, org_name, ttl_seconds=status_ttl
+                )
 
                 # Port info join series (#534): port_name keyed on serial+port_id
-                self._emit_port_info(device, port, org_id)
+                self._emit_port_info(device, port, org_id, ttl_seconds=status_ttl)
 
                 # Traffic counters (rate in bytes per second)
                 if "trafficInKbps" in port:
@@ -875,6 +924,7 @@ class MSCollector(BaseDeviceCollector):
                             rx_labels,
                             traffic_counters["recv"] * 1000 / 8,  # Convert kbps to bytes/sec
                             MSMetricName.MS_PORT_TRAFFIC_BYTES_PER_SECOND.value,
+                            ttl_seconds=usage_ttl,
                         )
 
                     if "sent" in traffic_counters:
@@ -886,6 +936,7 @@ class MSCollector(BaseDeviceCollector):
                             tx_labels,
                             traffic_counters["sent"] * 1000 / 8,  # Convert kbps to bytes/sec
                             MSMetricName.MS_PORT_TRAFFIC_BYTES_PER_SECOND.value,
+                            ttl_seconds=usage_ttl,
                         )
 
                 # Usage counters (total bytes over timespan)
@@ -902,6 +953,7 @@ class MSCollector(BaseDeviceCollector):
                             usage_counters["recv"]
                             * 1000,  # decimal KB->bytes (D5: x1000, not KiB x1024)
                             MSMetricName.MS_PORT_USAGE_BYTES.value,
+                            ttl_seconds=usage_ttl,
                         )
 
                     if "sent" in usage_counters:
@@ -914,6 +966,7 @@ class MSCollector(BaseDeviceCollector):
                             usage_counters["sent"]
                             * 1000,  # decimal KB->bytes (D5: x1000, not KiB x1024)
                             MSMetricName.MS_PORT_USAGE_BYTES.value,
+                            ttl_seconds=usage_ttl,
                         )
 
                     if "total" in usage_counters:
@@ -926,6 +979,7 @@ class MSCollector(BaseDeviceCollector):
                             usage_counters["total"]
                             * 1000,  # decimal KB->bytes (D5: x1000, not KiB x1024)
                             MSMetricName.MS_PORT_USAGE_BYTES.value,
+                            ttl_seconds=usage_ttl,
                         )
 
                 # Client count
@@ -939,6 +993,7 @@ class MSCollector(BaseDeviceCollector):
                     port_labels_no_extra,
                     client_count,
                     MSMetricName.MS_PORT_CLIENT_COUNT.value,
+                    ttl_seconds=usage_ttl,
                 )
 
             # Extract POE data from port statuses (POE data is included in port status)
@@ -961,6 +1016,7 @@ class MSCollector(BaseDeviceCollector):
                         port_labels,
                         power_used * 3600,  # Wh -> J
                         MSMetricName.MS_POE_PORT_ENERGY_JOULES.value,
+                        ttl_seconds=usage_ttl,
                     )
                     total_poe_consumption += power_used
                 else:
@@ -970,6 +1026,7 @@ class MSCollector(BaseDeviceCollector):
                         port_labels,
                         0,
                         MSMetricName.MS_POE_PORT_ENERGY_JOULES.value,
+                        ttl_seconds=usage_ttl,
                     )
 
             # Set switch-level POE total (Wh -> J)
@@ -978,6 +1035,7 @@ class MSCollector(BaseDeviceCollector):
                 device_labels,
                 total_poe_consumption * 3600,
                 MSMetricName.MS_POE_TOTAL_ENERGY_JOULES.value,
+                ttl_seconds=usage_ttl,
             )
 
             # Set total switch power usage (POE consumption is the main power draw)
@@ -989,6 +1047,7 @@ class MSCollector(BaseDeviceCollector):
                 device_labels,
                 total_poe_consumption,
                 MSMetricName.MS_POWER_USAGE_WATTS.value,
+                ttl_seconds=usage_ttl,
             )
 
             # Note: POE budget is not available via API, would need a lookup table by model
@@ -1025,6 +1084,9 @@ class MSCollector(BaseDeviceCollector):
         org_id = device.get("orgId", "")
         org_name = device.get("orgName", org_id)
         device_labels = create_device_labels(device, org_id=org_id, org_name=org_name)
+        # #617: per-device usage fallback, gated per-serial above; thread the
+        # MS_PORT_USAGE solved TTL onto every emission.
+        usage_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_PORT_USAGE)
 
         with LogContext(serial=device_labels["serial"], name=device_labels["name"]):
             port_statuses = await asyncio.to_thread(
@@ -1050,6 +1112,7 @@ class MSCollector(BaseDeviceCollector):
                         rx_labels,
                         traffic_counters["recv"] * 1000 / 8,
                         MSMetricName.MS_PORT_TRAFFIC_BYTES_PER_SECOND.value,
+                        ttl_seconds=usage_ttl,
                     )
 
                 if "sent" in traffic_counters:
@@ -1061,6 +1124,7 @@ class MSCollector(BaseDeviceCollector):
                         tx_labels,
                         traffic_counters["sent"] * 1000 / 8,
                         MSMetricName.MS_PORT_TRAFFIC_BYTES_PER_SECOND.value,
+                        ttl_seconds=usage_ttl,
                     )
 
             # Usage counters (total bytes over timespan)
@@ -1076,6 +1140,7 @@ class MSCollector(BaseDeviceCollector):
                         rx_labels,
                         usage_counters["recv"] * 1000,  # decimal KB x1000
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
+                        ttl_seconds=usage_ttl,
                     )
 
                 if "sent" in usage_counters:
@@ -1087,6 +1152,7 @@ class MSCollector(BaseDeviceCollector):
                         tx_labels,
                         usage_counters["sent"] * 1000,  # decimal KB x1000
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
+                        ttl_seconds=usage_ttl,
                     )
 
                 if "total" in usage_counters:
@@ -1098,6 +1164,7 @@ class MSCollector(BaseDeviceCollector):
                         total_labels,
                         usage_counters["total"] * 1000,  # decimal KB x1000
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
+                        ttl_seconds=usage_ttl,
                     )
 
             # Client count
@@ -1110,6 +1177,7 @@ class MSCollector(BaseDeviceCollector):
                 port_labels_no_extra,
                 client_count,
                 MSMetricName.MS_PORT_CLIENT_COUNT.value,
+                ttl_seconds=usage_ttl,
             )
 
         # Extract POE data from port statuses (POE data is included in port status)
@@ -1128,6 +1196,7 @@ class MSCollector(BaseDeviceCollector):
                     port_labels,
                     power_used * 3600,  # Wh -> J
                     MSMetricName.MS_POE_PORT_ENERGY_JOULES.value,
+                    ttl_seconds=usage_ttl,
                 )
                 total_poe_consumption += power_used
             else:
@@ -1136,6 +1205,7 @@ class MSCollector(BaseDeviceCollector):
                     port_labels,
                     0,
                     MSMetricName.MS_POE_PORT_ENERGY_JOULES.value,
+                    ttl_seconds=usage_ttl,
                 )
 
         self.parent._set_metric(
@@ -1143,6 +1213,7 @@ class MSCollector(BaseDeviceCollector):
             device_labels,
             total_poe_consumption * 3600,  # Wh -> J
             MSMetricName.MS_POE_TOTAL_ENERGY_JOULES.value,
+            ttl_seconds=usage_ttl,
         )
         # Unconverted (Wh treated as a watts stand-in) - MS_POWER_USAGE_WATTS is
         # out of scope for #531 (checked-OK, see spec §3).
@@ -1151,6 +1222,7 @@ class MSCollector(BaseDeviceCollector):
             device_labels,
             total_poe_consumption,
             MSMetricName.MS_POWER_USAGE_WATTS.value,
+            ttl_seconds=usage_ttl,
         )
         self._mark_port_usage_collected(serial)
 
@@ -1198,6 +1270,12 @@ class MSCollector(BaseDeviceCollector):
             the coordinator to fall back to the per-device loop.
 
         """
+        # #617 gate: skip when MS_PORT_USAGE is not due this cycle. Return True
+        # (not a failure) so the coordinator does not fall back to per-device.
+        if not self.parent._should_run_group(EndpointGroupName.MS_PORT_USAGE):
+            return True
+        usage_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_PORT_USAGE)
+
         if self._org_port_usage_supported is None:
             self._org_port_usage_supported = hasattr(
                 self.api.switch,
@@ -1331,6 +1409,7 @@ class MSCollector(BaseDeviceCollector):
                         rx_labels,
                         (sum(bw_down_samples) / len(bw_down_samples)) * 1000 / 8,
                         MSMetricName.MS_PORT_TRAFFIC_BYTES_PER_SECOND.value,
+                        ttl_seconds=usage_ttl,
                     )
                 if bw_up_samples:
                     tx_labels = create_port_labels(
@@ -1341,6 +1420,7 @@ class MSCollector(BaseDeviceCollector):
                         tx_labels,
                         (sum(bw_up_samples) / len(bw_up_samples)) * 1000 / 8,
                         MSMetricName.MS_PORT_TRAFFIC_BYTES_PER_SECOND.value,
+                        ttl_seconds=usage_ttl,
                     )
 
                 # Usage bytes over the window. Decimal KB -> bytes = *1000 (D5:
@@ -1354,6 +1434,7 @@ class MSCollector(BaseDeviceCollector):
                         rx_labels,
                         usage_down_kb * 1000,
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
+                        ttl_seconds=usage_ttl,
                     )
                     tx_labels = create_port_labels(
                         device_data, port, org_id=org_id, org_name=org_name, direction="tx"
@@ -1363,6 +1444,7 @@ class MSCollector(BaseDeviceCollector):
                         tx_labels,
                         usage_up_kb * 1000,
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
+                        ttl_seconds=usage_ttl,
                     )
                     total_labels = create_port_labels(
                         device_data, port, org_id=org_id, org_name=org_name, direction="total"
@@ -1372,6 +1454,7 @@ class MSCollector(BaseDeviceCollector):
                         total_labels,
                         usage_total_kb * 1000,
                         MSMetricName.MS_PORT_USAGE_BYTES.value,
+                        ttl_seconds=usage_ttl,
                     )
 
                 # Client count (default 0 for ports with no online clients).
@@ -1383,6 +1466,7 @@ class MSCollector(BaseDeviceCollector):
                     port_labels_no_extra,
                     client_counts.get((serial, port_id), 0),
                     MSMetricName.MS_PORT_CLIENT_COUNT.value,
+                    ttl_seconds=usage_ttl,
                 )
 
                 # Per-port PoE (Wh delivered over the window, converted to
@@ -1393,6 +1477,7 @@ class MSCollector(BaseDeviceCollector):
                     port_labels_no_extra,
                     energy_wh * 3600,  # Wh -> J
                     MSMetricName.MS_POE_PORT_ENERGY_JOULES.value,
+                    ttl_seconds=usage_ttl,
                 )
                 total_poe_consumption += energy_wh
 
@@ -1403,16 +1488,19 @@ class MSCollector(BaseDeviceCollector):
                 device_labels,
                 total_poe_consumption * 3600,
                 MSMetricName.MS_POE_TOTAL_ENERGY_JOULES.value,
+                ttl_seconds=usage_ttl,
             )
             self.parent._set_metric(
                 self._switch_power,
                 device_labels,
                 total_poe_consumption,
                 MSMetricName.MS_POWER_USAGE_WATTS.value,
+                ttl_seconds=usage_ttl,
             )
 
             self._mark_port_usage_collected(serial)
 
+        self.parent._mark_group_ran(EndpointGroupName.MS_PORT_USAGE)
         return True
 
     def _should_collect_stp_priorities(self) -> bool:
@@ -1422,8 +1510,12 @@ class MSCollector(BaseDeviceCollector):
         invoked every MEDIUM-tier (300s) DeviceCollector cycle but is
         self-gated here to the SLOW cadence (see F-037), mirroring the
         ``_should_collect_port_usage`` throttle pattern.
+
+        The interval is sourced from the scheduler's solved MS_STP interval
+        (#617, floor 900s) rather than the raw SLOW setting, so solver
+        stretching/pins apply.
         """
-        interval = self.settings.update_intervals.slow
+        interval: float = self.parent._group_interval(EndpointGroupName.MS_STP)
         if interval <= 0:
             return True
         return (time.time() - self._last_stp_collection) >= interval
@@ -1462,9 +1554,11 @@ class MSCollector(BaseDeviceCollector):
             logger.debug(
                 "Skipping STP priority collection (interval gate)",
                 org_id=org_id,
-                interval_seconds=self.settings.update_intervals.slow,
+                interval_seconds=self.parent._group_interval(EndpointGroupName.MS_STP),
             )
             return
+
+        stp_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_STP)
 
         try:
             # Fetch networks via the shared inventory cache so the network
@@ -1537,6 +1631,7 @@ class MSCollector(BaseDeviceCollector):
                             labels,
                             priority,
                             MSMetricName.MS_STP_PRIORITY.value,
+                            ttl_seconds=stp_ttl,
                         )
 
                         logger.debug(
@@ -1596,9 +1691,12 @@ class MSCollector(BaseDeviceCollector):
             logger.debug(
                 "Skipping packet statistics collection",
                 serial=serial,
-                interval_seconds=self.settings.api.ms_packet_stats_interval,
+                interval_seconds=self.parent._group_interval(EndpointGroupName.MS_PACKET_STATS),
             )
             return
+
+        # #617: thread the MS_PACKET_STATS solved TTL onto every emission.
+        packet_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_PACKET_STATS)
 
         try:
             # Get packet statistics with 5-minute timespan
@@ -1690,10 +1788,26 @@ class MSCollector(BaseDeviceCollector):
 
                         # Set count metrics
                         self.parent._set_metric(
-                            count_metric, total_labels, total, count_metric_name
+                            count_metric,
+                            total_labels,
+                            total,
+                            count_metric_name,
+                            ttl_seconds=packet_ttl,
                         )
-                        self.parent._set_metric(count_metric, sent_labels, sent, count_metric_name)
-                        self.parent._set_metric(count_metric, recv_labels, recv, count_metric_name)
+                        self.parent._set_metric(
+                            count_metric,
+                            sent_labels,
+                            sent,
+                            count_metric_name,
+                            ttl_seconds=packet_ttl,
+                        )
+                        self.parent._set_metric(
+                            count_metric,
+                            recv_labels,
+                            recv,
+                            count_metric_name,
+                            ttl_seconds=packet_ttl,
+                        )
 
                         # Rate per second
                         rate_data = packet_type.get("ratePerSec", {})
@@ -1703,13 +1817,25 @@ class MSCollector(BaseDeviceCollector):
 
                         # Set rate metrics
                         self.parent._set_metric(
-                            rate_metric, total_labels, rate_total, rate_metric_name
+                            rate_metric,
+                            total_labels,
+                            rate_total,
+                            rate_metric_name,
+                            ttl_seconds=packet_ttl,
                         )
                         self.parent._set_metric(
-                            rate_metric, sent_labels, rate_sent, rate_metric_name
+                            rate_metric,
+                            sent_labels,
+                            rate_sent,
+                            rate_metric_name,
+                            ttl_seconds=packet_ttl,
                         )
                         self.parent._set_metric(
-                            rate_metric, recv_labels, rate_recv, rate_metric_name
+                            rate_metric,
+                            recv_labels,
+                            rate_recv,
+                            rate_metric_name,
+                            ttl_seconds=packet_ttl,
                         )
 
             logger.debug(
@@ -1744,6 +1870,11 @@ class MSCollector(BaseDeviceCollector):
             Organization name.
 
         """
+        # #617 gate: MS_PORT_OVERVIEW is a low-volatility single org call (floor
+        # 3600). Skip when not due; mark_ran after a successful fetch.
+        if not self.parent._should_run_group(EndpointGroupName.MS_PORT_OVERVIEW):
+            return
+
         # Call the API with required timespan
         overview = await asyncio.to_thread(
             self.api.switch.getOrganizationSwitchPortsOverview,
@@ -1814,6 +1945,8 @@ class MSCollector(BaseDeviceCollector):
                 media=media_type,
                 status="inactive",
             ).set(media_total)
+
+        self.parent._mark_group_ran(EndpointGroupName.MS_PORT_OVERVIEW)
 
         logger.debug(
             "Completed switch port overview collection",
