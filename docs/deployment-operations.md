@@ -157,6 +157,56 @@ docker compose up -d
   check the `meraki_network_filter_*` metrics instead (see
   [Network Filter](#network-filter) below).
 
+### Alerting on partial collection failures
+
+A collector cycle can **succeed overall** — `/ready` stays `200`, and the coordinator does not
+raise — while one or more *sub-phases* inside it fail and are silently tolerated. This is
+deliberate resilience (a single broken endpoint, e.g. one MX VPN fetch or one org's config
+sub-collection, must never abort the rest of that cycle's collection), but it means the honest
+top-level failure signals introduced for [#509](https://github.com/rknightion/meraki-dashboard-exporter/issues/509)
+(a raised `_collect_impl()`, `/ready` flipping, `meraki_exporter_org_collection_status`) can stay
+green for cycles that are nonetheless degraded.
+
+Every one of those tolerated sub-phase failures increments the same counter used for full
+collector failures — **`meraki_exporter_collector_errors_total`** (labels: `collector`, `tier`,
+`error_type`) — so it is the only signal that surfaces this class of degradation. Alert on its
+rate rather than waiting for a full-cycle failure:
+
+```promql
+# Any tolerated sub-phase failure in the last 15 minutes, broken out by
+# collector/tier/error_type so you can see which sub-system is degraded.
+sum by (collector, tier, error_type) (
+  rate(meraki_exporter_collector_errors_total[15m])
+) > 0
+```
+
+```promql
+# Sustained partial failure: a collector/tier has logged errors continuously
+# for the last hour. Good candidate for a paging alert (vs. the query above,
+# which is better suited to a dashboard panel or a low-severity notification).
+min_over_time(
+  (sum by (collector, tier) (rate(meraki_exporter_collector_errors_total[15m])) > 0)[1h:]
+) == 1
+```
+
+Because this counter increments for tolerated *and* fatal failures alike, corroborate a firing
+alert against the [#509](https://github.com/rknightion/meraki-dashboard-exporter/issues/509) health
+signals before treating it as critical:
+
+- `up{job="meraki-dashboard-exporter"}` / `/health` - process liveness (unaffected either way).
+- `/ready` and its backing readiness gate - only trips for a **total** cycle failure in a FAST or
+  MEDIUM tier collector (SLOW tier is excluded from readiness by design).
+- `meraki_exporter_org_collection_status{org_id="..."}` - per-organization gauge, `0` only when
+  *every* sub-collection failed for that org this cycle (see `OrganizationCollector`/`OrgHealthTracker`
+  in `core/org_health.py`).
+
+If `meraki_exporter_collector_errors_total` is climbing but `/ready` is `200` and
+`meraki_exporter_org_collection_status` is `1`, the cycle is completing with **partial** data loss
+for the affected sub-phase (e.g. one MR/MS/MX sub-collection, one config sub-collection, or one
+org's sensor gateway connections) - worth investigating, but not an outage. If `/ready` also flips
+or the org status gauge drops to `0`, treat it as the higher-severity, already-covered #509 failure
+case instead.
+
 ## Network Filter
 For large organisations, restrict scraping to a subset of networks via the
 `MERAKI_EXPORTER_NETWORK_FILTER__*` settings (include/exclude by name glob, ID,

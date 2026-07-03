@@ -171,8 +171,12 @@ class BaseCollectorTest:
         """
         collector_name = collector.__class__.__name__
 
+        # NOTE: `assert_counter_incremented` appends the `_total` suffix itself
+        # (Counters are registered under the bare name - prometheus_client
+        # strips a trailing `_total` from the family name), so the name passed
+        # here must NOT include it (matching `assert_api_call_tracked` above).
         metrics.assert_counter_incremented(
-            "meraki_exporter_collector_errors_total",
+            "meraki_exporter_collector_errors",
             collector=collector_name,
             tier=(self.update_tier.value if self.update_tier else "medium"),
             error_type=error_type,

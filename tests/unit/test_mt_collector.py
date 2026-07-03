@@ -624,6 +624,53 @@ class TestMTSensorFailureAccounting(BaseCollectorTest):
 
         await collector.collect()
 
+    async def test_partial_org_failure_increments_error_counter(
+        self, mock_api_builder, settings, isolated_registry, inventory, metrics
+    ):
+        """RES-04/#511: a single org's sensor-collection failure increments the error counter.
+
+        `meraki_exporter_collector_errors_total` must increment even though the
+        cycle overall succeeds (the other org's sensors were collected) and
+        therefore never raises `NothingCollectedError`.
+        """
+        org_ok = OrganizationFactory.create(org_id="orgOK2", name="OK Org")
+        org_bad = OrganizationFactory.create(org_id="orgBAD2", name="Bad Org")
+
+        device = {
+            "serial": "Q2MT-OK2",
+            "name": "Sensor1",
+            "model": "MT10",
+            "networkId": "N_OK2",
+            "networkName": "Net OK",
+        }
+
+        api = (
+            mock_api_builder
+            .with_organizations([org_ok, org_bad])
+            .with_devices([device], org_id="orgOK2")
+            .with_error("getOrganizationDevices", Exception("Connection error"), org_id="orgBAD2")
+            .with_custom_response(
+                "getOrganizationSensorReadingsLatest",
+                [
+                    {
+                        "serial": device["serial"],
+                        "network": {"id": device["networkId"], "name": device["networkName"]},
+                        "readings": [{"metric": "temperature", "celsius": 21.0}],
+                    }
+                ],
+            )
+            .build()
+        )
+        inventory.api = api
+        collector = MTSensorCollector(
+            api=api, settings=settings, registry=isolated_registry, inventory=inventory
+        )
+
+        # Should not raise even though one org failed.
+        await collector.collect()
+
+        self.assert_collector_error(collector, metrics, error_type="unknown")
+
 
 class TestMTExpirationTracking(BaseCollectorTest):
     """F-088 / F-021: MT metrics must route through parent._set_metric expiration tracking."""

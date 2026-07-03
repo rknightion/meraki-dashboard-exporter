@@ -579,6 +579,25 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         assert "license_metrics" in network_calls
 
+    async def test_partial_subcollection_failure_increments_error_counter(self, collector, metrics):
+        """RES-04/#511: a tolerated sub-collection failure increments the error counter.
+
+        `meraki_exporter_collector_errors_total` must increment so the failure
+        is visible in metrics even though the org cycle itself still succeeds
+        (F-040's resilience property is preserved - see the sibling test above).
+        """
+        org = OrganizationFactory.create(org_id="781", name="Partially Broken Org 2")
+
+        async def _boom(*_args: object, **_kwargs: object) -> None:
+            raise Exception("500 Internal Server Error")
+
+        collector._collect_network_metrics = _boom  # type: ignore[method-assign]
+
+        # Must not raise - only one of several sub-collections failed.
+        await collector._collect_org_metrics(org)
+
+        self.assert_collector_error(collector, metrics, error_type="unknown")
+
     async def test_org_metrics_backoff_engages_after_consecutive_failures(self, collector, metrics):
         """Persistent per-cycle failures must eventually engage backoff.
 

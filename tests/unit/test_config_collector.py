@@ -71,6 +71,38 @@ class TestConfigCollectorConcurrency(BaseCollectorTest):
 
         assert set(processed) == {"0", "2", "3"}
 
+    async def test_sub_collection_failure_increments_error_counter(
+        self, collector, mock_api_builder, metrics
+    ):
+        """RES-04/#511: a tolerated config sub-collection failure increments the error counter.
+
+        `meraki_exporter_collector_errors_total` must increment.
+        `_collect_org_config` isolates each of its three sub-collections (login
+        security, admins, configuration changes) so one broken endpoint never
+        blocks the others; only when all three fail does the org itself fail.
+        A single failure here must still be visible in the exporter's own
+        error metrics.
+        """
+        org = OrganizationFactory.create(org_id="900", name="Partially Broken Config Org")
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_custom_response("getOrganizationAdmins", [])
+            .with_custom_response("getOrganizationConfigurationChanges", [])
+            .build()
+        )
+        collector.api = api
+
+        async def _boom(*_args: object, **_kwargs: object) -> None:
+            raise Exception("500 Internal Server Error")
+
+        collector._collect_login_security = _boom  # type: ignore[method-assign]
+
+        # Must not raise - only 1 of 3 sub-collections failed.
+        await collector._collect_org_config(org)
+
+        self.assert_collector_error(collector, metrics, error_type="unknown")
+
 
 class TestConfigCollectorResponseValidation(BaseCollectorTest):
     """F-034: error-shaped dict responses must raise, not emit false zeros."""

@@ -276,6 +276,7 @@ class ConfigCollector(MetricCollector):
                     org_id=org_id,
                     org_name=org_name,
                 )
+                self._track_error(ErrorCategory.UNKNOWN)
                 failed.append(name)
 
         if len(failed) == 3:

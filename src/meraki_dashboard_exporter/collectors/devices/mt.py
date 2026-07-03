@@ -20,7 +20,7 @@ from ...core.constants import (
     UpdateTier,
 )
 from ...core.domain_models import SensorGatewayConnection, SensorMeasurement
-from ...core.error_handling import NothingCollectedError, validate_response_format
+from ...core.error_handling import ErrorCategory, NothingCollectedError, validate_response_format
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -173,6 +173,8 @@ class MTCollector(BaseDeviceCollector):
                     "Failed to collect sensors for organization",
                     org_id=organization_id,
                 )
+                if self.parent is not None:
+                    self.parent._track_error(ErrorCategory.UNKNOWN)
                 failed += 1
                 # Continue with next organization
 
@@ -423,6 +425,8 @@ class MTCollector(BaseDeviceCollector):
                 "Failed to collect sensor gateway connections for organization",
                 org_id=org_id,
             )
+            if self.parent is not None:
+                self.parent._track_error(ErrorCategory.UNKNOWN)
 
     @staticmethod
     def _parse_iso_timestamp(value: str | None) -> float | None:
@@ -882,3 +886,5 @@ class MTCollector(BaseDeviceCollector):
                 serial=device.get("serial", ""),
                 metric_type=metric_type,
             )
+            if self.parent is not None:
+                self.parent._track_error(ErrorCategory.UNKNOWN)

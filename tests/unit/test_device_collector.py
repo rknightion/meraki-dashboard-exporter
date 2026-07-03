@@ -767,6 +767,59 @@ class TestDeviceCollector(BaseCollectorTest):
 
         collector._collect_ms_specific_metrics.assert_called_once()
 
+    async def test_mr_subcollection_failure_increments_error_counter(self, collector, metrics):
+        """RES-04/#511: a tolerated MR sub-collection failure must increment error metrics.
+
+        `meraki_exporter_collector_errors_total` must increment, not just
+        log-and-swallow silently. `_collect_mr_specific_metrics` wraps each MR sub-collection call in its
+        own try/except that logs and continues (never raises), so a broken
+        SSID-usage fetch must neither abort the other MR sub-collections nor
+        disappear from the exporter's own error metrics.
+        """
+        collector.inventory = None  # skip the networks fetch, irrelevant here
+        collector.mr_collector.collect_ssid_usage = AsyncMock(
+            side_effect=Exception("500 Internal Server Error")
+        )
+
+        # Must not raise - a single MR sub-collection failure is tolerated.
+        await collector._collect_mr_specific_metrics("123456", "Test Org", [], {})
+
+        self.assert_collector_error(collector, metrics, error_type="unknown")
+
+    async def test_org_devices_top_level_failure_increments_error_counter(
+        self, collector, mock_api_builder, metrics
+    ):
+        """RES-04/#511: the top-level catch-all must also increment the error counter.
+
+        `_collect_org_devices`'s top-level catch-all must increment the error
+        counter, not just log the exception. This is the outermost tolerated
+        swallow for the per-org device worker:
+        any unexpected (non-CollectorError) exception reaching it is logged and
+        swallowed without failing the org's device-domain health verdict, so it
+        must remain observable via the error counter.
+        """
+        org = OrganizationFactory.create(org_id="654321", name="Test Org")
+        api = mock_api_builder.with_organizations([org]).build()
+        collector.api = api
+
+        async def _boom(_org_id: str) -> None:
+            raise Exception("unexpected failure")
+
+        collector._fetch_networks_for_poe = _boom  # type: ignore[method-assign]
+
+        # The devices fetch itself must succeed so we reach the code past it.
+        collector._fetch_devices = AsyncMock(
+            return_value=[
+                DeviceFactory.create(serial="Q2XX-0001", model="MR36", network_id="N_1"),
+            ]
+        )
+        collector._fetch_device_availabilities = AsyncMock(return_value=[])
+
+        # Must not raise - this is a tolerated (not a CollectorError) failure.
+        await collector._collect_org_devices(org["id"], org["name"])
+
+        self.assert_collector_error(collector, metrics, error_type="unknown")
+
 
 class TestDeviceCollectorNothingCollected(BaseCollectorTest):
     """#509: total collection failure must raise instead of being swallowed.

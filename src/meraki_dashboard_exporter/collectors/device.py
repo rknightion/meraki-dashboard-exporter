@@ -653,12 +653,14 @@ class DeviceCollector(MetricCollector):
                 await self._aggregate_network_poe(org_id, org_name, devices)
             except Exception:
                 logger.exception("Failed to aggregate POE metrics")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect switch port overview metrics
             try:
                 await self.ms_collector.collect_port_overview(org_id, org_name)
             except Exception:
                 logger.exception("Failed to collect switch port overview")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect memory metrics for all devices
             try:
@@ -666,6 +668,7 @@ class DeviceCollector(MetricCollector):
                 await self.ms_collector.collect_memory_metrics(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect memory metrics")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect MR-specific metrics
             if any(d for d in devices if d.get("model", "").startswith(DeviceType.MR)):
@@ -708,6 +711,7 @@ class DeviceCollector(MetricCollector):
                 error_type=type(e).__name__,
                 error=str(e),
             )
+            self._track_error(ErrorCategory.UNKNOWN)
         finally:
             self._record_org_health_verdict(org_id, org_name, success=not device_failed)
 
@@ -802,6 +806,7 @@ class DeviceCollector(MetricCollector):
                 await self.mr_collector.collect_wireless_clients(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect wireless client counts")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect connection stats (network-level - replaces per-device getDeviceWirelessConnectionStats)
             if networks:
@@ -811,42 +816,49 @@ class DeviceCollector(MetricCollector):
                     )
                 except Exception:
                     logger.exception("Failed to collect MR connection stats")
+                    self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect MR ethernet status
             try:
                 await self.mr_collector.collect_ethernet_status(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect MR ethernet status")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect MR packet loss metrics
             try:
                 await self.mr_collector.collect_packet_loss(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect MR packet loss metrics")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect MR CPU load metrics
             try:
                 await self.mr_collector.collect_cpu_load(org_id, org_name, devices)
             except Exception:
                 logger.exception("Failed to collect MR CPU load metrics")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect MR SSID status metrics
             try:
                 await self.mr_collector.collect_ssid_status(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect MR SSID status metrics")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect MR SSID usage metrics
             try:
                 await self.mr_collector.collect_ssid_usage(org_id, org_name)
             except Exception:
                 logger.exception("Failed to collect MR SSID usage metrics")
+                self._track_error(ErrorCategory.UNKNOWN)
 
         except Exception:
             logger.exception(
                 "Failed to collect MR-specific metrics",
                 org_id=org_id,
             )
+            self._track_error(ErrorCategory.UNKNOWN)
 
     @trace_method("collect.ms_metrics")
     async def _collect_ms_specific_metrics(
@@ -876,6 +888,7 @@ class DeviceCollector(MetricCollector):
                 await self.ms_collector.collect_stp_priorities(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect STP priorities")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect switch stack metrics
             try:
@@ -885,17 +898,20 @@ class DeviceCollector(MetricCollector):
                 await self.ms_stack_collector.collect_for_org(org_id, org_name, networks)
             except Exception:
                 logger.exception("Failed to collect switch stack metrics")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect power-supply module status (org-wide, single call)
             try:
                 await self.ms_power_collector.collect_power_modules(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect MS power module statuses")
+                self._track_error(ErrorCategory.UNKNOWN)
         except Exception:
             logger.exception(
                 "Failed to collect MS-specific metrics",
                 org_id=org_id,
             )
+            self._track_error(ErrorCategory.UNKNOWN)
 
     @trace_method("collect.mx_metrics")
     async def _collect_mx_specific_metrics(
@@ -922,6 +938,7 @@ class DeviceCollector(MetricCollector):
                 await self.mx_collector.collect_uplink_statuses(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect MX uplink statuses")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect per-uplink WAN loss & latency (org-wide, single call)
             try:
@@ -930,6 +947,7 @@ class DeviceCollector(MetricCollector):
                 )
             except Exception:
                 logger.exception("Failed to collect MX uplink loss and latency")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect per-uplink WAN bandwidth usage (org-wide, single call)
             try:
@@ -938,24 +956,28 @@ class DeviceCollector(MetricCollector):
                 )
             except Exception:
                 logger.exception("Failed to collect MX uplink usage")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect HA / warm-spare redundancy status (org-wide, paginated)
             try:
                 await self.mx_ha_collector.collect_redundancy(org_id, org_name, device_lookup)
             except Exception:
                 logger.exception("Failed to collect MX HA redundancy")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect VPN health metrics (point-in-time statuses)
             try:
                 await self.mx_collector.vpn_collector.collect(org_id, org_name)
             except Exception:
                 logger.exception("Failed to collect MX VPN metrics")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect VPN history stats (usage volume + per-peer-pair latency)
             try:
                 await self.mx_collector.vpn_collector.collect_vpn_stats(org_id, org_name)
             except Exception:
                 logger.exception("Failed to collect MX VPN stats")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect security events (org-wide, single call per org)
             try:
@@ -964,6 +986,7 @@ class DeviceCollector(MetricCollector):
                 )
             except Exception:
                 logger.exception("Failed to collect MX security events")
+                self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect firewall rules (SLOW tier: per-network API calls)
             try:
@@ -991,12 +1014,14 @@ class DeviceCollector(MetricCollector):
                         )
             except Exception:
                 logger.exception("Failed to collect MX firewall metrics")
+                self._track_error(ErrorCategory.UNKNOWN)
 
         except Exception:
             logger.exception(
                 "Failed to collect MX-specific metrics",
                 org_id=org_id,
             )
+            self._track_error(ErrorCategory.UNKNOWN)
 
     @trace_method("collect.mg_metrics")
     async def _collect_mg_specific_metrics(
@@ -1024,6 +1049,7 @@ class DeviceCollector(MetricCollector):
                 "Failed to collect MG-specific metrics",
                 org_id=org_id,
             )
+            self._track_error(ErrorCategory.UNKNOWN)
 
     def _get_device_type(self, device: dict[str, Any]) -> str:
         """Get device type from device model.
@@ -1246,6 +1272,7 @@ class DeviceCollector(MetricCollector):
                 "Failed to aggregate network POE metrics",
                 org_id=org_id,
             )
+            self._track_error(ErrorCategory.UNKNOWN)
 
     @with_error_handling(
         operation="Fetch devices",

@@ -523,6 +523,7 @@ class OrganizationCollector(MetricCollector):
                     org_name=org_name,
                     sub_collection=name,
                 )
+                self._track_error(ErrorCategory.UNKNOWN)
                 failed.append(name)
             else:
                 # Delegating sub-collectors signal a real (non-404) failure by
