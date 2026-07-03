@@ -396,6 +396,89 @@ class TestHealthEndpoint:
         assert response.status_code == 503
 
 
+class TestLivenessThresholdFastestTier:
+    """The auto-derived liveness threshold tracks the fastest *enabled* tier (#596)."""
+
+    def test_derives_from_fast_tier_when_fast_collectors_enabled(
+        self, app_and_manager_health: tuple[TestClient, MagicMock]
+    ) -> None:
+        """With a FAST-tier collector enabled, the threshold is 3x the FAST interval."""
+        _client, mock_manager = app_and_manager_health
+        exporter = mock_manager._exporter_ref
+        mock_manager.collectors = {
+            UpdateTier.FAST: [MagicMock()],
+            UpdateTier.MEDIUM: [MagicMock()],
+            UpdateTier.SLOW: [MagicMock()],
+        }
+        mock_manager.get_tier_interval.side_effect = {
+            UpdateTier.FAST: 60,
+            UpdateTier.MEDIUM: 300,
+            UpdateTier.SLOW: 900,
+        }.get
+
+        assert exporter._liveness_threshold_seconds() == pytest.approx(60 * 3.0)
+
+    def test_derives_from_slow_tier_when_only_slow_enabled(
+        self, app_and_manager_health: tuple[TestClient, MagicMock]
+    ) -> None:
+        """With only a SLOW-tier collector enabled, falls back to the old behavior."""
+        _client, mock_manager = app_and_manager_health
+        exporter = mock_manager._exporter_ref
+        mock_manager.collectors = {
+            UpdateTier.FAST: [],
+            UpdateTier.MEDIUM: [],
+            UpdateTier.SLOW: [MagicMock()],
+        }
+        mock_manager.get_tier_interval.side_effect = {
+            UpdateTier.FAST: 60,
+            UpdateTier.MEDIUM: 300,
+            UpdateTier.SLOW: 900,
+        }.get
+
+        assert exporter._liveness_threshold_seconds() == pytest.approx(900 * 3.0)
+
+    def test_changing_fast_interval_moves_the_threshold(
+        self, app_and_manager_health: tuple[TestClient, MagicMock]
+    ) -> None:
+        """Shrinking the FAST interval shrinks the derived threshold accordingly."""
+        _client, mock_manager = app_and_manager_health
+        exporter = mock_manager._exporter_ref
+        mock_manager.collectors = {
+            UpdateTier.FAST: [MagicMock()],
+            UpdateTier.MEDIUM: [],
+            UpdateTier.SLOW: [],
+        }
+
+        mock_manager.get_tier_interval.side_effect = {UpdateTier.FAST: 60}.get
+        original_threshold = exporter._liveness_threshold_seconds()
+
+        mock_manager.get_tier_interval.side_effect = {UpdateTier.FAST: 30}.get
+        faster_threshold = exporter._liveness_threshold_seconds()
+
+        assert original_threshold == pytest.approx(60 * 3.0)
+        assert faster_threshold == pytest.approx(30 * 3.0)
+        assert faster_threshold < original_threshold
+
+    def test_medium_tier_used_when_fast_disabled(
+        self, app_and_manager_health: tuple[TestClient, MagicMock]
+    ) -> None:
+        """MEDIUM is picked when FAST has no enabled collectors."""
+        _client, mock_manager = app_and_manager_health
+        exporter = mock_manager._exporter_ref
+        mock_manager.collectors = {
+            UpdateTier.FAST: [],
+            UpdateTier.MEDIUM: [MagicMock()],
+            UpdateTier.SLOW: [MagicMock()],
+        }
+        mock_manager.get_tier_interval.side_effect = {
+            UpdateTier.FAST: 60,
+            UpdateTier.MEDIUM: 300,
+            UpdateTier.SLOW: 900,
+        }.get
+
+        assert exporter._liveness_threshold_seconds() == pytest.approx(300 * 3.0)
+
+
 # ---------------------------------------------------------------------------
 # Tests for GET /metrics
 # ---------------------------------------------------------------------------

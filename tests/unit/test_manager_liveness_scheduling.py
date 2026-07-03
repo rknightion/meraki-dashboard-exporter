@@ -105,6 +105,80 @@ class TestSmoothingOffsetClamp:
 
 
 # ---------------------------------------------------------------------------
+# #591 - initial collection must skip the smoothing offset delay
+# ---------------------------------------------------------------------------
+
+
+class TestInitialCollectionSkipsSmoothing:
+    """The first collection cycle of each tier must run without the smoothing offset.
+
+    The deterministic per-collector offset adds up to 0.5x the tier interval of
+    latency on every startup/rolling restart, delaying /ready. Smoothing must
+    apply only from the 2nd cycle onward; steady-state cadence is unchanged.
+    """
+
+    def _prepare(self, manager: CollectorManager, collector: object) -> str:
+        import asyncio
+
+        name = collector.__class__.__name__
+        manager.collectors[UpdateTier.FAST] = [collector]  # type: ignore[list-item]
+        manager.collector_health[name] = {
+            "last_success_time": None,
+            "failure_streak": 0,
+            "total_runs": 0,
+            "total_successes": 0,
+            "total_failures": 0,
+        }
+        manager._collector_locks[name] = asyncio.Lock()
+        return name
+
+    async def test_first_cycle_skips_offset(self) -> None:
+        """On the very first cycle the offset passed to each collector is 0."""
+        settings = _settings(smoothing_enabled=True)
+        manager = _bare_manager(settings)
+        collector = _SucceedingCollector()
+        name = self._prepare(manager, collector)
+
+        # Sanity: this collector has a non-zero configured smoothing offset.
+        assert manager._get_collector_offset(name, UpdateTier.FAST) > 0
+        assert manager._tier_initial_complete["fast"] is False
+
+        captured: list[float] = []
+
+        async def _capture(coll, tier, timeout, offset, window):  # type: ignore[no-untyped-def]
+            captured.append(offset)
+
+        with patch.object(manager, "_run_collector_with_delay", side_effect=_capture):
+            await manager.collect_tier(UpdateTier.FAST)
+
+        assert captured == [0.0]
+        assert manager.collector_offsets[(name, "fast")] == 0.0
+
+    async def test_subsequent_cycle_applies_offset(self) -> None:
+        """Once the tier's initial cycle is complete, the real offset is applied."""
+        settings = _settings(smoothing_enabled=True)
+        manager = _bare_manager(settings)
+        collector = _SucceedingCollector()
+        name = self._prepare(manager, collector)
+
+        # Simulate the initial cycle already having completed.
+        manager._tier_initial_complete["fast"] = True
+        expected = manager._get_collector_offset(name, UpdateTier.FAST)
+        assert expected > 0
+
+        captured: list[float] = []
+
+        async def _capture(coll, tier, timeout, offset, window):  # type: ignore[no-untyped-def]
+            captured.append(offset)
+
+        with patch.object(manager, "_run_collector_with_delay", side_effect=_capture):
+            await manager.collect_tier(UpdateTier.FAST)
+
+        assert captured == [expected]
+        assert manager.collector_offsets[(name, "fast")] == expected
+
+
+# ---------------------------------------------------------------------------
 # F-105 - tier readiness reflects real success, not just an attempted cycle
 # ---------------------------------------------------------------------------
 

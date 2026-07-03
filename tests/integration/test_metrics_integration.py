@@ -254,8 +254,10 @@ class TestMetricsIntegration:
         # MTSensorCollector has already run and hit the shared API client directly
         # (#249: it used to construct its own throwaway AsyncMerakiClient and silently
         # swallow the resulting network error, so this call was never actually observed).
+        # #553: the serials param is dropped -- the org-wide endpoint returns
+        # readings for every sensor without it.
         mock_api_client.api.sensor.getOrganizationSensorReadingsLatest.assert_called_once_with(
-            "123456", serials=["Q2MT-XXXX"], total_pages="all"
+            "123456", total_pages="all"
         )
 
         # Now collect FAST tier again to verify repeat collection also works

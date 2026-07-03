@@ -222,19 +222,40 @@ class ExporterApp:
         logger.info("Shutdown requested, stopping collection...")
         self._shutdown_event.set()
 
+    def _fastest_enabled_tier_interval_seconds(self) -> float:
+        """Return the update interval of the fastest tier with an enabled collector.
+
+        Checks tiers in FAST, MEDIUM, SLOW order and returns the interval of the
+        first one that has at least one instantiated collector (see
+        ``CollectorManager.collectors``). Falls back to the SLOW interval if,
+        pathologically, no tier has any collectors (e.g. before startup wires
+        collectors, or every collector disabled).
+
+        This is deliberately a single, isolated helper (rather than inlining the
+        loop into ``_liveness_threshold_seconds``) so a future adaptive scheduler
+        (#617) can swap in "fastest computed group cadence" without touching the
+        threshold derivation itself.
+        """
+        manager = self.collector_manager
+        for tier in (UpdateTier.FAST, UpdateTier.MEDIUM, UpdateTier.SLOW):
+            if manager.collectors.get(tier):
+                return float(manager.get_tier_interval(tier))
+        return float(manager.get_tier_interval(UpdateTier.SLOW))
+
     def _liveness_threshold_seconds(self) -> float:
         """Return the dead-man staleness threshold in seconds (F-043).
 
         Uses ``monitoring.liveness_max_stale_seconds`` when set (>0), otherwise
-        auto-derives a generous threshold of three SLOW-tier intervals so that
-        only a genuinely wedged exporter (nothing collecting for a long time)
-        trips the liveness probe.
+        auto-derives the threshold as three times the **fastest enabled tier's**
+        interval (RES-08) - so a stalled fast loop trips liveness promptly while
+        slower tiers don't cause false positives. This keeps the wedge-to-restart
+        window close to the metric TTL (``metric_ttl_multiplier`` x interval)
+        instead of the much longer fixed SLOW-tier-derived window used previously.
         """
         configured = self.settings.monitoring.liveness_max_stale_seconds
         if configured > 0:
             return float(configured)
-        slow_interval = self.collector_manager.get_tier_interval(UpdateTier.SLOW)
-        return float(slow_interval) * 3.0
+        return self._fastest_enabled_tier_interval_seconds() * 3.0
 
     def _liveness_check(self) -> tuple[bool, str]:
         """Evaluate the dead-man liveness switch (F-043).

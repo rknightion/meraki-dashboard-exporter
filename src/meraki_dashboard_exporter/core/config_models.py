@@ -370,8 +370,10 @@ class MonitoringSettings(BaseModel):
             "Dead-man switch threshold. /health returns 503 once no collector has "
             "completed a successful run within this many seconds, so Kubernetes/Docker "
             "restart a wedged exporter instead of leaving it serving stale metrics. "
-            "0 (default) auto-derives the threshold from the SLOW tier interval "
-            "(3 x slow interval). Set a large value to effectively disable."
+            "0 (default) auto-derives the threshold from the fastest *enabled* tier's "
+            "interval (3 x that interval), so a stalled fast loop trips liveness "
+            "promptly without slower tiers causing false positives. Set a large value "
+            "to effectively disable."
         ),
     )
 

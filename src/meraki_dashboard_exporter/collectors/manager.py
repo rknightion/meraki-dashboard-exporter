@@ -574,6 +574,14 @@ class CollectorManager:
 
         smoothing_window = self._get_smoothing_window(tier)
 
+        # Skip the deterministic smoothing offset on the tier's FIRST collection
+        # cycle (#591). The offset delays each collector up to 0.5x the tier
+        # interval, which on every startup/rolling restart adds that latency to
+        # /ready (FAST+MEDIUM gated). Applying smoothing only once the tier has
+        # completed its initial cycle keeps steady-state cadence smoothing
+        # unchanged while making readiness fast after a restart.
+        apply_smoothing = self._tier_initial_complete.get(tier.value, False)
+
         # Run collectors in parallel with bounded concurrency
         async with ManagedTaskGroup(
             name=f"tier_{tier.value}",
@@ -581,7 +589,9 @@ class CollectorManager:
         ) as group:
             for collector in tier_collectors:
                 collector_name = collector.__class__.__name__
-                offset = self._get_collector_offset(collector_name, tier)
+                offset = (
+                    self._get_collector_offset(collector_name, tier) if apply_smoothing else 0.0
+                )
                 self.collector_offsets[(collector_name, tier.value)] = offset
                 await group.create_task(
                     self._run_collector_with_delay(
