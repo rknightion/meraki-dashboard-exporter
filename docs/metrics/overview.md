@@ -112,6 +112,26 @@ All metrics include relevant labels for filtering and grouping:
 | `collector` | Collector name (infrastructure metrics) | `DeviceCollector` |
 | `tier` | Collection tier | `medium` |
 
+## Metrics vs. OTel data logs: the cardinality boundary
+
+Not every signal the exporter can collect belongs on `/metrics`. The dividing line:
+
+- **Metrics** (this page, `/metrics`) carry bounded, fleet-shaped aggregates — label sets drawn
+  from stable inventory (org / network / device serial / SSID number / port / band) or top-N sets
+  bounded by construction.
+- **OTel data logs** (opt-in, off by default) carry per-entity detail where the entity population
+  is unbounded or churny — a client ID/MAC, a per-delivery-attempt row, any signal that fans out
+  per-request rather than per-inventory-item.
+
+No new client-keyed (or otherwise unbounded per-entity) labelled metric may be added. New
+per-client/per-entity signals route to the OTel data-log emitter instead; see [OTel data logs
+vs. metrics](../observability/otel.md#data-logs-vs-metrics-the-boundary-rule) for the full
+doctrine, config, and record shape. The existing opt-in `meraki_client_*`/`meraki_clients_*`
+numeric series (`collectors/clients.py`) are grandfathered under the ID-only +
+`meraki_client_info` join contract (#533, see the [Stability
+Policy](../stability.md#name-labels-are-not-part-of-numeric-series)) — they predate this doctrine
+and are not migrated by it.
+
 ## Metric Categories
 
 <div class="grid cards" markdown>

@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 <system_context>
-Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects metrics from Cisco Meraki Dashboard API and exposes them for monitoring. Supports OpenTelemetry **tracing only** (spans, not a metrics mirror — Prometheus `/metrics` remains the sole metrics surface; see `core/otel_tracing.py` and `docs/observability/otel.md`) and includes comprehensive collectors for devices, networks, organizations, and sensor data.
+Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects metrics from Cisco Meraki Dashboard API and exposes them for monitoring. Supports OpenTelemetry **traces for self-observability** plus an optional **structured data-log** channel for per-entity product data (both not a metrics mirror — Prometheus `/metrics` remains the sole metrics surface; see `core/otel_tracing.py`, `core/otel_data_logs.py`, and `docs/observability/otel.md`) and includes comprehensive collectors for devices, networks, organizations, and sensor data.
 </system_context>
 
 <critical_notes>
@@ -104,6 +104,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **NEVER call `getOrganizationNetworks` directly from a collector** - go through `OrganizationInventory.get_networks(org_id)` so `NetworkFilter` is enforced. Only `core/discovery.py::DiscoveryService` (audit logging, unfiltered), `collectors/alerts.py::AlertsCollector._fetch_networks_direct`, and `core/api_helpers.py::APIHelper._fetch_networks_direct` (both inventory-unavailable fallbacks that reapply `NetworkFilter` manually) are permitted to bypass.
 - **NEVER forget metric tracking** - use `parent._set_metric()` for automatic expiration
 - **NEVER edit `dashboards/*.json` as part of a code fix**, and NEVER defer/park a code fix because it "might break a dashboard" — dashboards are frozen until their dedicated rebuild task (see `dashboards/CLAUDE.md`)
+- **NEVER add a new client-keyed (or otherwise unbounded per-entity) labelled Prometheus metric** — metrics carry bounded, fleet-shaped aggregates (org/network/device serial/SSID number/port/band, or top-N bounded by construction); a new per-client/per-entity signal (client ID/MAC, per-delivery row, anything that fans out per-request) routes to the OTel data-log emitter (`core/otel_data_logs.py`, see `docs/observability/otel.md#data-logs-vs-metrics-the-boundary-rule`) instead. The existing opt-in `collectors/clients.py` ID-only numeric series + `meraki_client_info` join (#533) is grandfathered and unaffected by this rule.
 </fatal_implications>
 
 <roadmap_workflow>

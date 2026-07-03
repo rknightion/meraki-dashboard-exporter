@@ -4,7 +4,7 @@ This page summarizes the collectors that ship with the exporter.
 
 Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_INTERVALS__*`. See the Metrics Overview for tier definitions.
 
-**Total collector classes:** 47
+**Total collector classes:** 48
 **Auto-registered collectors:** 9
 
 ## Main Collectors (auto-registered)
@@ -24,7 +24,7 @@ Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_
 ## Coordinator Relationships
 
 - **DeviceCollector** → MGCollector, MRCollector, MSCollector, MSStackCollector, MVCollector, MXCollector, MXUplinkHealthCollector, MXUplinkUsageCollector, MXHACollector, MSPowerCollector
-- **MRCollector** → MRClientsCollector, MRPerformanceCollector, MRWirelessCollector, MRFirewallCollector, MRRfProfilesCollector, MRSignalQualityCollector, MRCatalystCollector
+- **MRCollector** → MRClientsCollector, MRPerformanceCollector, MRWirelessCollector, MRFirewallCollector, MRRfProfilesCollector, MRSignalQualityCollector, MRCatalystCollector, MRClientLogsCollector
 - **MXCollector** → MXVpnCollector, MXFirewallCollector
 - **NetworkHealthCollector** → RFHealthCollector, ConnectionStatsCollector, DataRatesCollector, BluetoothCollector, SSIDPerformanceCollector, LatencyStatsCollector, AirMarshalCollector, MeshCollector
 - **OrganizationCollector** → APIUsageCollector, LicenseCollector, ClientOverviewCollector, FirmwareCollector, DeviceAvailabilityHistoryCollector, TopUsageCollector, WebhookLogsCollector
@@ -36,6 +36,7 @@ Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_
 - `BaseDeviceCollector` — Base class for device-specific collectors.
 - `MGCollector` — Collector for MG cellular gateway metrics.
 - `MRCatalystCollector` — Collector for Catalyst (CW*) AP wireless-controller association info.
+- `MRClientLogsCollector` — Emits per-client wireless data-log records (packet loss + signal quality).
 - `MRClientsCollector` — Collector for MR wireless client connection metrics.
 - `MRCollector` — Coordinator for Meraki MR (Wireless AP) device collectors.
 - `MRFirewallCollector` — Collector for per-SSID L3/L7 firewall rule counts and LAN-access policy.

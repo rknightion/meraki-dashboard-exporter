@@ -8,6 +8,7 @@ from ....core.logging import get_logger
 from ....core.otel_tracing import trace_method
 from ...devices.base import BaseDeviceCollector
 from .catalyst import MRCatalystCollector
+from .client_logs import MRClientLogsCollector
 from .clients import MRClientsCollector
 from .firewall import MRFirewallCollector
 from .performance import MRPerformanceCollector
@@ -53,6 +54,10 @@ class MRCollector(BaseDeviceCollector):
         self.rf_profiles = MRRfProfilesCollector(parent)
         self.signal_quality = MRSignalQualityCollector(parent)
         self.catalyst = MRCatalystCollector(parent)
+        # Phase 4C-2 (#323/#622) — per-client wireless DATA-LOG producers (packet
+        # loss + experimental signal quality). Emits OTLP log records only; owns
+        # NO Prometheus metrics, so there is nothing to re-expose below.
+        self.client_logs = MRClientLogsCollector(parent)
 
         # For backward compatibility, expose metrics from sub-collectors
         # This allows existing code like `mr_collector._ap_clients` to continue working
@@ -149,6 +154,7 @@ class MRCollector(BaseDeviceCollector):
         self.rf_profiles.api = api
         self.signal_quality.api = api
         self.catalyst.api = api
+        self.client_logs.api = api
 
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect per-device wireless AP metrics.
@@ -287,6 +293,14 @@ class MRCollector(BaseDeviceCollector):
     async def collect_ssid_usage(self, org_id: str, org_name: str) -> None:
         """Collect SSID usage metrics (org-level).
 
+        Also fans out to the per-client wireless DATA-LOG producers (#323 packet
+        loss + #622 signal quality). Both take only ``org_id``/``org_name`` and are
+        org-wide, so reusing this existing org-level MR call site keeps the Phase
+        4C-2 (#618) wiring self-contained within the subpackage (no new top-level
+        DeviceCollector call site / no ``device.py`` edit). The producers emit
+        nothing and skip all API calls unless the OTel data-log emitter is enabled
+        for their event, so this fold is free for non-users.
+
         Parameters
         ----------
         org_id : str
@@ -296,6 +310,7 @@ class MRCollector(BaseDeviceCollector):
 
         """
         await self.wireless.collect_ssid_usage(org_id, org_name)
+        await self.client_logs.collect_client_logs(org_id, org_name)
 
     @trace_method("collect.mr_connection_stats")
     async def collect_connection_stats(

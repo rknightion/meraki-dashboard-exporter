@@ -68,6 +68,12 @@ class DataLogEvent(StrEnum):
 
     # #323 — per-client wireless packet loss (first producer, Lane 2).
     WIRELESS_CLIENT_PACKET_LOSS = "meraki.wireless.client.packet_loss"
+    # #622 — per-client wireless signal quality (SNR/RSSI); the per-client half of
+    # #324 (the bounded per-AP variant stays a metric).
+    WIRELESS_CLIENT_SIGNAL_QUALITY = "meraki.wireless.client.signal_quality"
+    # #300/#622 — per-delivery webhook HTTP delivery-attempt log (complements the
+    # bounded meraki_org_webhook_deliveries_count aggregate metric).
+    ORG_WEBHOOK_DELIVERY = "meraki.org.webhook.delivery"
 
 
 #: The bounded universe of built-in event names (bounds counter cardinality).
