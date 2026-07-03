@@ -110,9 +110,10 @@ poll-path only, as described above.
 
 ## Recommended alert `for:` durations
 
-These are the source-of-truth durations the starter alert-rule examples should use. They're
-derived directly from the tier intervals above (default settings) plus headroom for one missed
-scrape/eval cycle, so a transient blip in a single collection cycle doesn't page anyone.
+The recommended `for:` durations below are the source-of-truth durations the starter alert-rule
+examples should use. They're derived directly from the tier intervals above (default settings) plus
+headroom for one missed scrape/eval cycle, so a transient blip in a single collection cycle doesn't
+page anyone.
 
 | Signal | Tier | Recommended `for:` | Why |
 | --- | --- | --- | --- |

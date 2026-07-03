@@ -25,21 +25,24 @@ export MERAKI_EXPORTER_OTEL__SAMPLING_RATE=0.1
 Tracing requires OTEL to be enabled with an endpoint. Disable OTEL to stop traces.
 
 Sampling behavior:
-- `0.0` disables tracing
-- `0.1` samples ~10% of traces (default)
-- `1.0` samples all traces
-- Child spans follow parent sampling decisions
+
+| Value | Effect |
+|---|---|
+| `0.0` | Disables tracing |
+| `0.1` | Samples ~10% of traces (default) |
+| `1.0` | Samples all traces |
+
+Child spans follow parent sampling decisions.
 
 ## Instrumented Components
 
-- **Meraki SDK (requests)**: API call timing, status, rate-limit headers. The
-  Meraki Python SDK still uses `requests` under the hood, so every Dashboard API
-  call produces a span via `RequestsInstrumentor`.
-- **httpx**: Any httpx usage is traced
-- **FastAPI**: All endpoints except `/health` and `/metrics` (the `/status`
-  health-dashboard page is traced)
-- **Threading**: `asyncio.to_thread()` operations
-- **Logging**: Trace IDs added to logfmt output
+| Component | What's traced |
+|---|---|
+| Meraki SDK (requests) | API call timing, status, rate-limit headers. The Meraki Python SDK still uses `requests` under the hood, so every Dashboard API call produces a span via `RequestsInstrumentor`. |
+| httpx | Any httpx usage is traced |
+| FastAPI | All endpoints except `/health` and `/metrics` (the `/status` health-dashboard page is traced) |
+| Threading | `asyncio.to_thread()` operations |
+| Logging | Trace IDs added to logfmt output |
 
 ## Span Attributes
 

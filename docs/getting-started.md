@@ -5,7 +5,7 @@ description: Install and run the exporter
 
 # Getting Started
 
-This section shows the quickest way to run the exporter.
+The quickest way to run the exporter is with Docker.
 
 ## Requirements
 - Docker

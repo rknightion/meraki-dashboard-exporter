@@ -10,9 +10,9 @@ tags:
 
 # Upgrading
 
-This page explains how to upgrade the exporter safely and what to check before and after each
-upgrade. It also documents the deliberate, one-time breaking changes made immediately before
-**1.0**, so dashboards and alerts built against pre-1.0 metric names can be migrated cleanly.
+Upgrading the exporter safely means checking a few things before and after each release; this page
+covers those steps. It also documents the deliberate, one-time breaking changes made immediately
+before **1.0**, so dashboards and alerts built against pre-1.0 metric names can be migrated cleanly.
 
 If you only read one thing: the 1.0 release includes a **single, deliberate breaking sweep** of
 metric names and labels. After 1.0, Stable metrics only change through the dual-publish

@@ -68,14 +68,15 @@ When deploying this exporter:
 
 ### Webhook receiver
 
-If you enable the optional Meraki webhook receiver
-(`MERAKI_EXPORTER_WEBHOOKS__ENABLED=true`), the exporter will accept JSON
-POSTs at `/api/webhooks/meraki`. By default it requires a shared secret
-(`MERAKI_EXPORTER_WEBHOOKS__REQUIRE_SECRET=true`); configure
-`MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET` to match the value set in your
-Meraki Dashboard webhook configuration. Disabling the secret check is
-intended for local testing only. Payloads larger than
-`MERAKI_EXPORTER_WEBHOOKS__MAX_PAYLOAD_SIZE` (default 1 MB) are rejected.
+The optional Meraki webhook receiver accepts JSON POSTs at `/api/webhooks/meraki` once enabled
+(`MERAKI_EXPORTER_WEBHOOKS__ENABLED=true`). It is configured with:
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `MERAKI_EXPORTER_WEBHOOKS__ENABLED` | disabled | Set to `true` to enable the webhook receiver. |
+| `MERAKI_EXPORTER_WEBHOOKS__REQUIRE_SECRET` | `true` | Requires a shared secret on incoming webhooks. Disabling the check is intended for local testing only. |
+| `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET` | — | Must match the value set in your Meraki Dashboard webhook configuration. |
+| `MERAKI_EXPORTER_WEBHOOKS__MAX_PAYLOAD_SIZE` | `1 MB` | Payloads larger than this are rejected. |
 
 ### API key handling
 

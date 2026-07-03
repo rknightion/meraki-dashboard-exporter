@@ -55,12 +55,10 @@ being able to kill it instantly.
 
 Two settings bound how long a single blocked fetch can hold things up:
 
-- `single_request_timeout` (`MERAKI_EXPORTER_API__TIMEOUT`, default `30s`) bounds one HTTP request
-  to the Meraki API.
-- `per_fetch_deadline_seconds` (default `120s`, not yet exposed as a chart value) bounds a whole
-  logical fetch, including every page requested under `total_pages="all"` pagination — so a bulk
-  fetch that keeps making slow page requests still fails fast at 120s instead of hanging for the
-  full per-collector timeout.
+| Setting | Default | Description |
+| --- | --- | --- |
+| `single_request_timeout` (`MERAKI_EXPORTER_API__TIMEOUT`) | `30s` | Bounds one HTTP request to the Meraki API. |
+| `per_fetch_deadline_seconds` | `120s` (not yet exposed as a chart value) | Bounds a whole logical fetch, including every page requested under `total_pages="all"` pagination — so a bulk fetch that keeps making slow page requests still fails fast at 120s instead of hanging for the full per-collector timeout. |
 
 Kubernetes only gives a pod `terminationGracePeriodSeconds` after `SIGTERM` before force-killing it
 with `SIGKILL`. If that grace period is shorter than the worst-case blocked fetch, Kubernetes kills
@@ -300,7 +298,7 @@ loki.source.docker "meraki" {
 
 ### Example LogQL Queries
 
-These assume the default `MERAKI_EXPORTER_LOGGING__LOG_FORMAT=logfmt`, where the `| logfmt` parser
+These example queries assume the default `MERAKI_EXPORTER_LOGGING__LOG_FORMAT=logfmt`, where the `| logfmt` parser
 stage extracts each structured field (e.g. `collector`, `duration`) as a label you can filter or
 group on. The line-filter (`|=`/`|~`) portion of every query below also works unchanged against
 `log_format=json` output — the raw text still contains the same substrings — but the `| logfmt`

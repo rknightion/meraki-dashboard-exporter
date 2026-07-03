@@ -10,7 +10,7 @@ tags:
 
 # Metrics Overview
 
-The Meraki Dashboard Exporter provides comprehensive metrics across all aspects of your Meraki infrastructure. This guide explains the metric collection system and available metrics.
+The Meraki Dashboard Exporter provides comprehensive metrics across all aspects of your Meraki infrastructure. The metric collection system and available metrics are covered below.
 
 ## Collection Tiers
 
@@ -51,7 +51,7 @@ graph TD
 
 All metrics follow Prometheus best practices:
 
-```
+```text
 meraki_<category>_<metric>_<unit>
 ```
 

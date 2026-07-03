@@ -34,7 +34,7 @@
 
 ## Per-Org Calls (Efficient)
 
-These calls fetch data for an entire organization in one request, which is the optimal pattern.
+Per-org calls fetch data for an entire organization in one request, which is the optimal pattern.
 
 | Endpoint | Collector File | Notes |
 |----------|---------------|-------|
@@ -69,7 +69,7 @@ These calls fetch data for an entire organization in one request, which is the o
 
 ## Per-Network Calls (May Have Org-Wide Equivalents)
 
-These calls iterate over all networks and make one API request per network. Some endpoints have no org-wide alternative; others could potentially be consolidated.
+Per-network calls iterate over all networks and make one API request per network. Some endpoints have no org-wide alternative; others could potentially be consolidated.
 
 | Endpoint | Collector File | Org-Wide Equivalent | Notes |
 |----------|---------------|-------------------|-------|
@@ -94,7 +94,7 @@ These calls iterate over all networks and make one API request per network. Some
 
 ## Per-Device Calls (Highest Reduction Potential)
 
-These calls make one API request per device, which creates high API call volume at scale. All current per-device calls have org-level alternatives already being used or available.
+Per-device calls make one API request per device, which creates high API call volume at scale. All current per-device calls have org-level alternatives already being used or available.
 
 | Endpoint | Collector File | Can Replace With | Estimated Savings |
 |----------|---------------|-----------------|---------|
@@ -122,7 +122,7 @@ The `OrganizationInventory` service (`services/inventory.py`) caches the followi
 
 ## Remaining bypasses
 
-These endpoints are still called outside the shared `OrganizationInventory`
+The following remaining-bypass endpoints are still called outside the shared `OrganizationInventory`
 cache. The bypasses previously flagged for `NetworkHealthCollector`,
 `MSCollector.collect_stp_priorities`, `MRWirelessCollector._build_ssid_to_network_mapping`,
 and `RFHealthCollector` have been resolved (they now use

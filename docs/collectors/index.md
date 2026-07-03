@@ -1,6 +1,6 @@
 # Collectors Overview
 
-This page summarizes how collectors run and how they are organized.
+Collectors run and are organized as summarized below.
 
 ## Organization
 - **CollectorManager** orchestrates collection runs and loads auto-registered collectors.

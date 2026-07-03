@@ -1,6 +1,6 @@
 # Configuration Reference
 
-This document provides a comprehensive reference for all configuration options available in the Meraki Dashboard Exporter.
+A comprehensive reference for all configuration options available in the Meraki Dashboard Exporter.
 
 ## Overview
 
