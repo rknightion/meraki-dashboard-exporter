@@ -12,7 +12,7 @@ drives ``should_run``/``mark_ran``/``ttl_seconds_for`` deterministically.
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 from prometheus_client import Gauge
@@ -87,17 +87,35 @@ class TestMTSensorAlertsGating(BaseCollectorTest):
     update_tier = UpdateTier.MEDIUM
 
     def test_declares_mt_sensor_alerts_group(self) -> None:
-        """The collector declares one group matching the §2 row."""
+        """The collector declares three groups: alerts + #302 profiles + #308 relationships.
+
+        Phase 4 (#618) folded MT_ALERT_PROFILES (#302) and MT_RELATIONSHIPS
+        (#308) into this same collector; each is a per-sensor-network fetch that
+        gates independently, so all three are declared here.
+        """
         groups = MTSensorAlertsCollector.endpoint_groups
-        assert len(groups) == 1
-        group = groups[0]
-        assert group.name == EndpointGroupName.MT_SENSOR_ALERTS
-        assert group.priority == 2
-        assert group.floor_seconds == 300
-        assert group.tier == UpdateTier.MEDIUM
-        assert group.gated is True
-        assert group.setting_pin is None
-        assert group.cost_fn(_make_shape(sensor_network_count=7)) == 7
+        assert len(groups) == 3
+        by_name = {g.name: g for g in groups}
+
+        alerts = by_name[EndpointGroupName.MT_SENSOR_ALERTS]
+        assert alerts.priority == 2
+        assert alerts.floor_seconds == 300
+        assert alerts.tier == UpdateTier.MEDIUM
+        assert alerts.gated is True
+        assert alerts.setting_pin is None
+        assert alerts.cost_fn(_make_shape(sensor_network_count=7)) == 7
+
+        profiles = by_name[EndpointGroupName.MT_ALERT_PROFILES]
+        assert profiles.priority == 4
+        assert profiles.floor_seconds == 900
+        assert profiles.tier == UpdateTier.MEDIUM
+        assert profiles.cost_fn(_make_shape(sensor_network_count=7)) == 7
+
+        relationships = by_name[EndpointGroupName.MT_RELATIONSHIPS]
+        assert relationships.priority == 4
+        assert relationships.floor_seconds == 900
+        assert relationships.tier == UpdateTier.MEDIUM
+        assert relationships.cost_fn(_make_shape(sensor_network_count=7)) == 7
 
     async def test_gate_skips_fetch_when_not_due(self, collector) -> None:
         """A not-due heartbeat skips the whole per-network fan-out."""
@@ -124,11 +142,23 @@ class TestMTSensorAlertsGating(BaseCollectorTest):
         collector._fetch_network_alerts_overview = AsyncMock(
             return_value={"supportedMetrics": ["temperature"], "counts": {"temperature": 2}}
         )
+        # Phase 4 fold: profiles (#302) and relationships (#308) are also due when
+        # the fake scheduler reports every group due, so their per-network fetches
+        # run too. Stub them to valid-but-empty responses for determinism (an
+        # empty profile list is the documented "0 configured" case).
+        collector._fetch_network_alert_profiles = AsyncMock(return_value=[])
+        collector._fetch_network_sensor_relationships = AsyncMock(return_value=[])
         collector._set_metric = MagicMock()
 
         await collector._collect_impl()
 
-        assert fake.marked == [EndpointGroupName.MT_SENSOR_ALERTS]
+        # All three groups are due this heartbeat, so all three are marked ran, in
+        # _collect_impl's order (alerts -> profiles -> relationships).
+        assert fake.marked == [
+            EndpointGroupName.MT_SENSOR_ALERTS,
+            EndpointGroupName.MT_ALERT_PROFILES,
+            EndpointGroupName.MT_RELATIONSHIPS,
+        ]
         assert collector._set_metric.called
         _, kwargs = collector._set_metric.call_args
         assert kwargs["ttl_seconds"] == 999.0
@@ -296,7 +326,15 @@ class TestMGUplinkGating:
 
         await mg_collector.collect_uplink_statuses("O1", "Org1", {})
 
-        mock_parent._mark_group_ran.assert_called_once_with(EndpointGroupName.MG_UPLINK_STATUS)
+        # #304 fold: collect_uplink_statuses now dispatches both the uplink-status
+        # fetch (MG_UPLINK_STATUS) and the cellular-config fetch
+        # (MG_CELLULAR_CONFIG), each with its own gate + mark. When both are due
+        # (_should_run_group -> True), _mark_group_ran is called twice, in dispatch
+        # order (uplink status first, cellular config second).
+        assert mock_parent._mark_group_ran.call_args_list == [
+            call(EndpointGroupName.MG_UPLINK_STATUS),
+            call(EndpointGroupName.MG_CELLULAR_CONFIG),
+        ]
         assert mock_parent._set_metric.called
-        for call in mock_parent._set_metric.call_args_list:
-            assert call.kwargs["ttl_seconds"] == 555.0
+        for emit_call in mock_parent._set_metric.call_args_list:
+            assert emit_call.kwargs["ttl_seconds"] == 555.0

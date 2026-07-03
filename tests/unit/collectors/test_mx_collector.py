@@ -730,3 +730,206 @@ class TestMXCollector:
         _, labels, _ = mock_parent._set_metric.call_args_list[0][0]
         assert labels["network_id"] == "N_INCLUDED"
         assert labels["serial"] == "Q-IN"
+
+    # ------------------------------------------------------------------
+    # #286: per-MX-device DHCP subnet utilization
+    # ------------------------------------------------------------------
+
+    def test_dhcp_subnet_gauges_created(
+        self,
+        mx_collector: MXCollector,
+    ) -> None:
+        """Test that the DHCP subnet gauge metrics are created on init."""
+        assert mx_collector._dhcp_subnet_used_ips is not None
+        assert mx_collector._dhcp_subnet_free_ips is not None
+
+    async def test_collect_dhcp_subnets_basic(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Test that DHCP subnet usage/free counts are emitted per subnet."""
+        mock_api.appliance.getDeviceApplianceDhcpSubnets = MagicMock(
+            return_value=[
+                {"subnet": "10.0.0.0/24", "vlanId": 10, "usedCount": 42, "freeCount": 212},
+                {"subnet": "10.0.1.0/24", "vlanId": 20, "usedCount": 5, "freeCount": 249},
+            ]
+        )
+
+        device = {
+            "serial": "Q2AB-1234-5678",
+            "name": "Office MX",
+            "model": "MX68",
+            "networkId": "N_111",
+            "networkName": "Office Network",
+            "orgId": "org1",
+            "orgName": "Test Org",
+        }
+
+        await mx_collector.collect(device)
+
+        used_calls = {
+            c[0][1]["vlan"]: c[0][2]
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mx_collector._dhcp_subnet_used_ips
+        }
+        free_calls = {
+            c[0][1]["vlan"]: c[0][2]
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mx_collector._dhcp_subnet_free_ips
+        }
+        assert used_calls == {"10": 42.0, "20": 5.0}
+        assert free_calls == {"10": 212.0, "20": 249.0}
+
+        # Labels must carry subnet/vlan plus ID-only device labels.
+        used_call = next(
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mx_collector._dhcp_subnet_used_ips and c[0][1]["vlan"] == "10"
+        )
+        _, labels, _ = used_call[0]
+        assert labels["subnet"] == "10.0.0.0/24"
+        assert labels["serial"] == "Q2AB-1234-5678"
+        assert labels["org_id"] == "org1"
+        assert labels["network_id"] == "N_111"
+        assert "org_name" not in labels
+        assert "network_name" not in labels
+
+    async def test_collect_dhcp_subnets_empty_list_is_normal(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An empty list (no DHCP-serving VLANs) must not set any metric or raise."""
+        mock_api.appliance.getDeviceApplianceDhcpSubnets = MagicMock(return_value=[])
+
+        device = {"serial": "Q2AB-1234-5678", "model": "MX68", "orgId": "org1"}
+
+        await mx_collector.collect(device)
+
+        mock_parent._set_metric.assert_not_called()
+
+    async def test_collect_dhcp_subnets_skips_z_series(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Z-series teleworker gateways must not trigger the DHCP subnets call."""
+        mock_api.appliance.getDeviceApplianceDhcpSubnets = MagicMock(
+            return_value=[{"subnet": "10.0.0.0/24", "vlanId": 1, "usedCount": 1, "freeCount": 1}]
+        )
+
+        device = {"serial": "Q2ZZ-0001", "model": "Z3", "orgId": "org1"}
+
+        await mx_collector.collect(device)
+
+        mock_api.appliance.getDeviceApplianceDhcpSubnets.assert_not_called()
+
+    async def test_collect_dhcp_subnets_api_error_handled_gracefully(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An API exception must not propagate."""
+        mock_api.appliance.getDeviceApplianceDhcpSubnets = MagicMock(
+            side_effect=Exception("API connection failed")
+        )
+
+        device = {"serial": "Q2AB-1234-5678", "model": "MX68", "orgId": "org1"}
+
+        # Should not raise.
+        await mx_collector.collect(device)
+
+        mock_parent._set_metric.assert_not_called()
+
+    async def test_dhcp_subnets_gate_throttles_per_mx_call_to_900s(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The mx_dhcp_subnets gate throttles the per-MX call to its 900s group."""
+        mock_parent._group_interval = MagicMock(return_value=900)
+        mock_api.appliance.getDeviceApplianceDhcpSubnets = MagicMock(
+            return_value=[{"subnet": "10.0.0.0/24", "vlanId": 1, "usedCount": 1, "freeCount": 1}]
+        )
+
+        device = {"serial": "Q2AB-1234-5678", "model": "MX68", "orgId": "org1"}
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mx.time.time", return_value=1_000.0
+        ):
+            await mx_collector.collect(device)
+        assert mock_api.appliance.getDeviceApplianceDhcpSubnets.call_count == 1
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mx.time.time", return_value=1_000.0 + 300
+        ):
+            await mx_collector.collect(device)
+        assert mock_api.appliance.getDeviceApplianceDhcpSubnets.call_count == 1
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mx.time.time", return_value=1_000.0 + 901
+        ):
+            await mx_collector.collect(device)
+        assert mock_api.appliance.getDeviceApplianceDhcpSubnets.call_count == 2
+
+    async def test_dhcp_subnets_gate_is_per_serial(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Every physical MX must get its own DHCP subnets throttle state."""
+        mock_parent._group_interval = MagicMock(return_value=900)
+        mock_api.appliance.getDeviceApplianceDhcpSubnets = MagicMock(return_value=[])
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mx.time.time", return_value=2_000.0
+        ):
+            await mx_collector.collect({"serial": "Q2AB-0001", "model": "MX68", "orgId": "org1"})
+            await mx_collector.collect({"serial": "Q2AB-0002", "model": "MX250", "orgId": "org1"})
+
+        assert mock_api.appliance.getDeviceApplianceDhcpSubnets.call_count == 2
+
+    async def test_dhcp_subnets_threads_group_ttl(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The DHCP subnet _set_metric calls carry the mx_dhcp_subnets group's TTL."""
+        mock_parent._group_ttl_seconds = MagicMock(return_value=1234.0)
+        mock_api.appliance.getDeviceApplianceDhcpSubnets = MagicMock(
+            return_value=[{"subnet": "10.0.0.0/24", "vlanId": 1, "usedCount": 1, "freeCount": 1}]
+        )
+
+        await mx_collector.collect({"serial": "Q2AB-1234-5678", "model": "MX68", "orgId": "org1"})
+
+        dhcp_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] in {mx_collector._dhcp_subnet_used_ips, mx_collector._dhcp_subnet_free_ips}
+        ]
+        assert dhcp_calls
+        for call in dhcp_calls:
+            assert call.kwargs["ttl_seconds"] == 1234.0
+
+    def test_dhcp_subnet_row_validates_via_domain_model(self) -> None:
+        """The DHCP subnets response is parsed via a typed Pydantic domain model."""
+        from meraki_dashboard_exporter.core.domain_models import ApplianceDhcpSubnet
+
+        parsed = ApplianceDhcpSubnet.model_validate({
+            "subnet": "10.0.0.0/24",
+            "vlanId": 10,
+            "usedCount": 5,
+            "freeCount": 250,
+        })
+        assert parsed.subnet == "10.0.0.0/24"
+        assert parsed.vlanId == 10
+        assert parsed.usedCount == 5
+        assert parsed.freeCount == 250

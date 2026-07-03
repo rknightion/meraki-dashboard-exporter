@@ -10,6 +10,7 @@ from meraki_dashboard_exporter.collectors.mt_alerts import MTSensorAlertsCollect
 from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.error_handling import NothingCollectedError
 from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
+from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import NetworkFactory, OrganizationFactory
 
@@ -388,3 +389,290 @@ def test_sensor_alerts_overview_validates_via_domain_model() -> None:
 
     assert overview.supportedMetrics == ["temperature", "humidity", "noise"]
     assert overview.counts == {"temperature": 2, "humidity": 1, "noise": {"ambient": 3}}
+
+
+PROFILES_METRIC_NAME = "meraki_mt_alert_profiles"
+RELATED_DEVICE_METRIC_NAME = "meraki_mt_related_device_info"
+
+
+class TestMTAlertProfiles(BaseCollectorTest):
+    """#302: configured sensor alert profile count per network."""
+
+    collector_class = MTSensorAlertsCollector
+    update_tier = UpdateTier.MEDIUM
+
+    async def test_collect_network_alert_profiles_emits_count(self, collector, metrics) -> None:
+        """A non-empty profiles list emits its length."""
+        collector.api.sensor.getNetworkSensorAlertsProfiles = MagicMock(
+            return_value=[{"id": "1"}, {"id": "2"}]
+        )
+
+        network = {"id": "N_1", "orgId": "123456", "orgName": "Test Org"}
+        await collector._collect_network_alert_profiles(network)
+
+        collector.api.sensor.getNetworkSensorAlertsProfiles.assert_called_once_with("N_1")
+        metrics.assert_gauge_value(
+            PROFILES_METRIC_NAME,
+            2,
+            org_id="123456",
+            network_id="N_1",
+        )
+
+    async def test_collect_network_alert_profiles_empty_list_emits_zero(
+        self, collector, metrics
+    ) -> None:
+        """An empty list ([]) is the documented normal case and IS emitted as 0."""
+        collector.api.sensor.getNetworkSensorAlertsProfiles = MagicMock(return_value=[])
+
+        network = {"id": "N_1", "orgId": "123456", "orgName": "Test Org"}
+        await collector._collect_network_alert_profiles(network)
+
+        metrics.assert_gauge_value(
+            PROFILES_METRIC_NAME,
+            0,
+            org_id="123456",
+            network_id="N_1",
+        )
+
+    async def test_collect_network_alert_profiles_error_skips_emission(
+        self, collector, metrics
+    ) -> None:
+        """A fetch error (not an empty list) must skip emission entirely."""
+        collector.api.sensor.getNetworkSensorAlertsProfiles = MagicMock(
+            side_effect=Exception("boom")
+        )
+
+        network = {"id": "N_1", "orgId": "123456", "orgName": "Test Org"}
+        await collector._collect_network_alert_profiles(network)
+
+        metrics.assert_metric_not_set(PROFILES_METRIC_NAME, network_id="N_1")
+
+    async def test_collect_impl_end_to_end_with_profiles(
+        self, collector, mock_api_builder, metrics
+    ) -> None:
+        """Full cycle emits both the alerting-count and the alert-profiles metrics."""
+        org = OrganizationFactory.create(org_id="123456", name="Test Org")
+        network = NetworkFactory.create(
+            network_id="N_1", name="Net 1", org_id="123456", product_types=["sensor"]
+        )
+
+        mock_api_builder.with_organizations([org]).with_networks([network], org_id="123456")
+        collector.api = mock_api_builder.build()
+        collector.inventory.api = collector.api
+        collector.api.sensor.getNetworkSensorAlertsCurrentOverviewByMetric = MagicMock(
+            return_value={"supportedMetrics": ["temperature"], "counts": {"temperature": 1}}
+        )
+        collector.api.sensor.getNetworkSensorAlertsProfiles = MagicMock(return_value=[{"id": "1"}])
+
+        await self.run_collector(collector)
+
+        metrics.assert_gauge_value(
+            PROFILES_METRIC_NAME,
+            1,
+            org_id="123456",
+            network_id="N_1",
+        )
+
+
+class TestMTRelatedDeviceInfo(BaseCollectorTest):
+    """#308: MT sensor <-> related-device relationship join carrier."""
+
+    collector_class = MTSensorAlertsCollector
+    update_tier = UpdateTier.MEDIUM
+
+    async def test_collect_network_relationships_emits_one_series_per_link(
+        self, collector, metrics
+    ) -> None:
+        """One series per sensor->related-device link."""
+        collector.api.sensor.getNetworkSensorRelationships = MagicMock(
+            return_value=[
+                {
+                    "device": {"serial": "Q2XX-SENSOR"},
+                    "relationships": {
+                        "livestream": {
+                            "relatedDevices": [
+                                {"serial": "Q2YY-CAMERA", "productType": "camera"},
+                            ]
+                        }
+                    },
+                }
+            ]
+        )
+
+        network = {"id": "N_1", "orgId": "123456", "orgName": "Test Org"}
+        await collector._collect_network_relationships(network)
+
+        collector.api.sensor.getNetworkSensorRelationships.assert_called_once_with("N_1")
+        metrics.assert_gauge_value(
+            RELATED_DEVICE_METRIC_NAME,
+            1,
+            org_id="123456",
+            network_id="N_1",
+            sensor_serial="Q2XX-SENSOR",
+            related_serial="Q2YY-CAMERA",
+            product_type="camera",
+        )
+
+    async def test_collect_network_relationships_multiple_related_devices(
+        self, collector, metrics
+    ) -> None:
+        """Multiple related devices under one sensor each get their own series."""
+        collector.api.sensor.getNetworkSensorRelationships = MagicMock(
+            return_value=[
+                {
+                    "device": {"serial": "Q2XX-SENSOR"},
+                    "relationships": {
+                        "livestream": {
+                            "relatedDevices": [
+                                {"serial": "Q2YY-CAM1", "productType": "camera"},
+                                {"serial": "Q2ZZ-CAM2", "productType": "camera"},
+                            ]
+                        }
+                    },
+                }
+            ]
+        )
+
+        network = {"id": "N_1", "orgId": "123456", "orgName": "Test Org"}
+        await collector._collect_network_relationships(network)
+
+        metrics.assert_gauge_value(
+            RELATED_DEVICE_METRIC_NAME,
+            1,
+            org_id="123456",
+            network_id="N_1",
+            sensor_serial="Q2XX-SENSOR",
+            related_serial="Q2YY-CAM1",
+            product_type="camera",
+        )
+        metrics.assert_gauge_value(
+            RELATED_DEVICE_METRIC_NAME,
+            1,
+            org_id="123456",
+            network_id="N_1",
+            sensor_serial="Q2XX-SENSOR",
+            related_serial="Q2ZZ-CAM2",
+            product_type="camera",
+        )
+
+    async def test_collect_network_relationships_no_livestream_is_noop(
+        self, collector, metrics
+    ) -> None:
+        """A sensor entry with no relationships.livestream emits nothing."""
+        collector.api.sensor.getNetworkSensorRelationships = MagicMock(
+            return_value=[{"device": {"serial": "Q2XX-SENSOR"}, "relationships": {}}]
+        )
+
+        network = {"id": "N_1", "orgId": "123456", "orgName": "Test Org"}
+        await collector._collect_network_relationships(network)
+
+        metrics.assert_metric_not_set(RELATED_DEVICE_METRIC_NAME, network_id="N_1")
+
+    async def test_collect_network_relationships_missing_device_serial_skipped(
+        self, collector, metrics
+    ) -> None:
+        """An entry with no device.serial is skipped entirely."""
+        collector.api.sensor.getNetworkSensorRelationships = MagicMock(
+            return_value=[
+                {
+                    "device": {},
+                    "relationships": {
+                        "livestream": {
+                            "relatedDevices": [{"serial": "Q2YY-CAM1", "productType": "camera"}]
+                        }
+                    },
+                }
+            ]
+        )
+
+        network = {"id": "N_1", "orgId": "123456", "orgName": "Test Org"}
+        await collector._collect_network_relationships(network)
+
+        metrics.assert_metric_not_set(RELATED_DEVICE_METRIC_NAME, network_id="N_1")
+
+    async def test_collect_network_relationships_error_skips_emission(
+        self, collector, metrics
+    ) -> None:
+        """A fetch error skips emission entirely."""
+        collector.api.sensor.getNetworkSensorRelationships = MagicMock(
+            side_effect=Exception("boom")
+        )
+
+        network = {"id": "N_1", "orgId": "123456", "orgName": "Test Org"}
+        await collector._collect_network_relationships(network)
+
+        metrics.assert_metric_not_set(RELATED_DEVICE_METRIC_NAME, network_id="N_1")
+
+
+class TestMTSensorAlertsCollectorGroupIndependence(BaseCollectorTest):
+    """#302/#308: each new group's due-ness gates independently of MT_SENSOR_ALERTS."""
+
+    collector_class = MTSensorAlertsCollector
+    update_tier = UpdateTier.MEDIUM
+
+    async def test_collect_org_sensor_alerts_defaults_only_run_alerts(self, collector) -> None:
+        """The legacy 2-arg call shape (org_id, org_name) runs only the alerting-count fetch.
+
+        Not the two new Phase 4 fetches - this keeps direct callers/tests that
+        predate #618 backward compatible.
+        """
+        sensor_network = NetworkFactory.create(
+            network_id="N_1", org_id="123456", product_types=["sensor"]
+        )
+        collector.inventory.get_networks = AsyncMock(return_value=[sensor_network])
+        collector.api.sensor.getNetworkSensorAlertsCurrentOverviewByMetric = MagicMock(
+            return_value={"supportedMetrics": [], "counts": {}}
+        )
+        collector.api.sensor.getNetworkSensorAlertsProfiles = MagicMock(return_value=[])
+        collector.api.sensor.getNetworkSensorRelationships = MagicMock(return_value=[])
+
+        await collector._collect_org_sensor_alerts("123456", "Test Org")
+
+        collector.api.sensor.getNetworkSensorAlertsCurrentOverviewByMetric.assert_called_once()
+        collector.api.sensor.getNetworkSensorAlertsProfiles.assert_not_called()
+        collector.api.sensor.getNetworkSensorRelationships.assert_not_called()
+
+    async def test_collect_org_sensor_alerts_explicit_dues_gate_each_fetch(self, collector) -> None:
+        """Each of the three fetches only runs when its own due flag is True."""
+        sensor_network = NetworkFactory.create(
+            network_id="N_1", org_id="123456", product_types=["sensor"]
+        )
+        collector.inventory.get_networks = AsyncMock(return_value=[sensor_network])
+        collector.api.sensor.getNetworkSensorAlertsCurrentOverviewByMetric = MagicMock(
+            return_value={"supportedMetrics": [], "counts": {}}
+        )
+        collector.api.sensor.getNetworkSensorAlertsProfiles = MagicMock(return_value=[])
+        collector.api.sensor.getNetworkSensorRelationships = MagicMock(return_value=[])
+
+        await collector._collect_org_sensor_alerts(
+            "123456",
+            "Test Org",
+            alerts_due=False,
+            profiles_due=True,
+            relationships_due=False,
+        )
+
+        collector.api.sensor.getNetworkSensorAlertsCurrentOverviewByMetric.assert_not_called()
+        collector.api.sensor.getNetworkSensorAlertsProfiles.assert_called_once()
+        collector.api.sensor.getNetworkSensorRelationships.assert_not_called()
+
+    async def test_collect_impl_marks_only_due_groups(self, collector) -> None:
+        """_collect_impl only advances the scheduler clock for groups it computed as due."""
+        org = OrganizationFactory.create(org_id="123456", name="Test Org")
+        sensor_network = NetworkFactory.create(
+            network_id="N_1", org_id="123456", product_types=["sensor"]
+        )
+        collector.inventory.get_organizations = AsyncMock(return_value=[org])
+        collector.inventory.get_networks = AsyncMock(return_value=[sensor_network])
+        collector.api.sensor.getNetworkSensorAlertsCurrentOverviewByMetric = MagicMock(
+            return_value={"supportedMetrics": [], "counts": {}}
+        )
+
+        collector._should_run_group = MagicMock(  # type: ignore[method-assign]
+            side_effect=lambda group: str(group) == "mt_sensor_alerts"
+        )
+        collector._mark_group_ran = MagicMock()  # type: ignore[method-assign]
+
+        await collector._collect_impl()
+
+        collector._mark_group_ran.assert_called_once_with(EndpointGroupName.MT_SENSOR_ALERTS)

@@ -670,8 +670,21 @@ class TestOrganizationCollector(BaseCollectorTest):
             collector.client_overview_collector,
             collector.firmware_collector,
             collector.device_availability_history_collector,
+            collector.top_usage_collector,
+            collector.webhook_logs_collector,
         ):
             sub.collect = AsyncMock(return_value=True)  # type: ignore[method-assign]
+        # Phase 4 (#618): stub the firmware compliance path + the two direct
+        # coordinator sub-collections so they don't hit the unconfigured mock.
+        collector.firmware_collector.collect_compliance = AsyncMock(  # type: ignore[method-assign]
+            return_value=True
+        )
+        collector._collect_config_templates = AsyncMock(  # type: ignore[method-assign]
+            return_value=None
+        )
+        collector._collect_adaptive_policy = AsyncMock(  # type: ignore[method-assign]
+            return_value=None
+        )
 
         await collector._collect_org_metrics(org)
 
@@ -709,6 +722,12 @@ class TestOrganizationCollector(BaseCollectorTest):
             "_collect_client_overview",
             "_collect_packet_capture_metrics",
             "_collect_application_usage_metrics",
+            # Phase 4 (#618) additions.
+            "_collect_config_templates",
+            "_collect_adaptive_policy",
+            "_collect_top_usage_metrics",
+            "_collect_webhook_logs_metrics",
+            "_collect_firmware_compliance_metrics",
         ]
         for name in names:
             if name != keep:
@@ -1160,8 +1179,21 @@ class TestOrganizationCollector(BaseCollectorTest):
             collector.client_overview_collector,
             collector.firmware_collector,
             collector.device_availability_history_collector,
+            collector.top_usage_collector,
+            collector.webhook_logs_collector,
         ):
             sub.collect = AsyncMock(return_value=True)  # type: ignore[method-assign]
+        # Phase 4 (#618): stub the firmware compliance path + the two direct
+        # coordinator sub-collections so they don't hit the unconfigured mock.
+        collector.firmware_collector.collect_compliance = AsyncMock(  # type: ignore[method-assign]
+            return_value=True
+        )
+        collector._collect_config_templates = AsyncMock(  # type: ignore[method-assign]
+            return_value=None
+        )
+        collector._collect_adaptive_policy = AsyncMock(  # type: ignore[method-assign]
+            return_value=None
+        )
 
         async def _boom(*_args: object, **_kwargs: object) -> None:
             raise Exception("Connection error")

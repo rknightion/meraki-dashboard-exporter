@@ -32,6 +32,9 @@ class TestMRCollector:
         parent = MagicMock()
         parent.api = mock_api
         parent.settings = MagicMock()
+        # Phase 4 (#618): the firewall sub-collector fans out per-network via
+        # ManagedTaskGroup, which needs a real int for asyncio.Semaphore.
+        parent.settings.api.concurrency_limit = 5
         parent.rate_limiter = None
         # No inventory means no NetworkFilter — collectors emit all rows.
         parent.inventory = None
@@ -623,6 +626,9 @@ class TestMRSchedulerGates:
         parent.api = mock_api
         parent.settings = MagicMock()
         parent.settings.api.batch_size = 20
+        # Phase 4 (#618): the firewall sub-collector fans out per-network via
+        # ManagedTaskGroup, which needs a real int for asyncio.Semaphore.
+        parent.settings.api.concurrency_limit = 5
         parent.rate_limiter = None
         parent.inventory = None
         # Gate open by default; individual skip tests flip this.

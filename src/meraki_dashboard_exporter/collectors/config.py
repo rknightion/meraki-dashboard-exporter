@@ -35,14 +35,15 @@ class ConfigCollector(MetricCollector):
     """Collector for configuration and security settings."""
 
     # Scheduler endpoint group (#617 §2, SLOW tier). ``config_org`` (pri4) covers
-    # the whole per-org config cycle (login security + admins + config changes =
-    # 3 API calls); floor 900s, stretchable to 3600s.
+    # the whole per-org config cycle (login security + admins + config changes +
+    # SAML posture ≈ 4 API calls, +1 when SAML is enabled); floor 900s,
+    # stretchable to 3600s.
     endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = (
         EndpointGroup(
             name=EndpointGroupName.CONFIG_ORG,
             priority=4,
             floor_seconds=900,
-            cost_fn=lambda shape: 3.0,
+            cost_fn=lambda shape: 4.0,
             tier=UpdateTier.SLOW,
         ),
     )
@@ -143,6 +144,20 @@ class ConfigCollector(MetricCollector):
         self._org_admins_two_factor_enabled_total = self._create_gauge(
             OrgMetricName.ORG_ADMINS_TWO_FACTOR_ENABLED,
             "Number of org dashboard admins with two-factor auth enabled",
+            labelnames=[LabelName.ORG_ID],
+        )
+
+        # SAML/SSO posture (#301). getOrganizationSamlIdps is only called when
+        # SAML is enabled; both metrics report 0 when SAML is disabled/unavailable.
+        self._org_saml_enabled = self._create_gauge(
+            OrgMetricName.ORG_SAML_ENABLED,
+            "Whether SAML SSO is enabled for the organization (1=enabled, 0=disabled)",
+            labelnames=[LabelName.ORG_ID],
+        )
+
+        self._org_saml_idps = self._create_gauge(
+            OrgMetricName.ORG_SAML_IDPS,
+            "Number of SAML IdPs configured for the organization",
             labelnames=[LabelName.ORG_ID],
         )
 
@@ -268,10 +283,10 @@ class ConfigCollector(MetricCollector):
     async def _collect_org_config(self, org: dict[str, Any]) -> None:
         """Collect configuration for a specific organization.
 
-        Each of the three sub-collections is isolated: one broken endpoint
-        never blocks the other two (partial failure = org success). Only
-        when ALL THREE sub-collections fail does this org count as failed
-        for the coordinator's #509 all-orgs-failed accounting.
+        Each sub-collection is isolated: one broken endpoint never blocks the
+        others (partial failure = org success). Only when ALL sub-collections
+        fail does this org count as failed for the coordinator's #509
+        all-orgs-failed accounting.
 
         Parameters
         ----------
@@ -282,12 +297,14 @@ class ConfigCollector(MetricCollector):
         org_id = org["id"]
         org_name = org["name"]
 
-        failed: list[str] = []
-        for name, fn in (
+        sub_collections = (
             ("login_security", self._collect_login_security),
             ("admins", self._collect_admins),
+            ("saml", self._collect_saml),
             ("configuration_changes", self._collect_configuration_changes),
-        ):
+        )
+        failed: list[str] = []
+        for name, fn in sub_collections:
             try:
                 await fn(org_id, org_name)
             except Exception:
@@ -300,7 +317,7 @@ class ConfigCollector(MetricCollector):
                 self._track_error(ErrorCategory.UNKNOWN)
                 failed.append(name)
 
-        if len(failed) == 3:
+        if len(failed) == len(sub_collections):
             raise CollectorError(
                 f"All config sub-collections failed for org {org_id}",
                 ErrorCategory.API_CLIENT_ERROR,
@@ -503,6 +520,89 @@ class ConfigCollector(MetricCollector):
                 org_name=org_name,
             )
             raise
+
+    @log_api_call("getOrganizationSaml")
+    async def _collect_saml(self, org_id: str, org_name: str) -> None:
+        """Collect SAML/SSO posture metrics (#301).
+
+        ``getOrganizationSamlIdps`` is only called when SAML is enabled; when
+        SAML is disabled the endpoint typically 400/404s, so it is skipped. A
+        400/404 on the SAML settings endpoint itself is treated as "not
+        available" (emit 0/0) rather than a failure.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        try:
+            with LogContext(org_id=org_id, org_name=org_name):
+                saml = await asyncio.to_thread(
+                    self.api.organizations.getOrganizationSaml,
+                    org_id,
+                )
+                saml = validate_response_format(
+                    saml, expected_type=dict, operation="getOrganizationSaml"
+                )
+
+            enabled = bool(saml.get("enabled", False))
+            self._org_saml_enabled.labels(org_id).set(1 if enabled else 0)
+
+            idp_count = 0
+            if enabled:
+                # Only query IdPs when SAML is enabled; the endpoint may 400/404
+                # when SAML is off, which is a benign skip rather than a failure.
+                try:
+                    with LogContext(org_id=org_id, org_name=org_name):
+                        idps = await asyncio.to_thread(
+                            self.api.organizations.getOrganizationSamlIdps,
+                            org_id,
+                        )
+                        idps = validate_response_format(
+                            idps, expected_type=list, operation="getOrganizationSamlIdps"
+                        )
+                    idp_count = len(idps)
+                except Exception as e:
+                    if "400" in str(e) or "404" in str(e):
+                        logger.debug(
+                            "SAML IdPs not available for organization",
+                            org_id=org_id,
+                            org_name=org_name,
+                        )
+                    else:
+                        raise
+
+            self._org_saml_idps.labels(org_id).set(idp_count)
+
+            logger.debug(
+                "Successfully collected SAML posture metrics",
+                org_id=org_id,
+                saml_enabled=enabled,
+                idp_count=idp_count,
+            )
+
+        except Exception as e:
+            err = str(e)
+            if "400" in err or "404" in err or "Bad Request" in err:
+                logger.debug(
+                    "SAML settings API not available",
+                    org_id=org_id,
+                    org_name=org_name,
+                    error=err,
+                )
+                # Emit explicit zeros when SAML is not available for this org.
+                self._org_saml_enabled.labels(org_id).set(0)
+                self._org_saml_idps.labels(org_id).set(0)
+            else:
+                logger.exception(
+                    "Failed to collect SAML posture metrics",
+                    org_id=org_id,
+                    org_name=org_name,
+                )
+                raise
 
     @log_api_call("getOrganizationConfigurationChanges")
     async def _collect_configuration_changes(self, org_id: str, org_name: str) -> None:

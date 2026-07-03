@@ -64,7 +64,7 @@ class TestMXVpnCollector:
         no gauges are created for those — per-peer performance data instead comes
         from collect_vpn_stats (MX_VPN_USAGE_SENT_BYTES/RECV_BYTES/STATS_AVG_LATENCY_SECONDS).
         """
-        assert mock_parent._create_gauge.call_count == 5
+        assert mock_parent._create_gauge.call_count == 8
 
         created_names = {call.args[0] for call in mock_parent._create_gauge.call_args_list}
         assert MXMetricName.MX_VPN_PEER_STATUS in created_names
@@ -72,6 +72,10 @@ class TestMXVpnCollector:
         assert MXMetricName.MX_VPN_USAGE_SENT_BYTES in created_names
         assert MXMetricName.MX_VPN_USAGE_RECV_BYTES in created_names
         assert MXMetricName.MX_VPN_STATS_AVG_LATENCY_SECONDS in created_names
+        # Phase 4 (#287): site-to-site VPN topology
+        assert MXMetricName.MX_VPN_SITE_TO_SITE_MODE in created_names
+        assert MXMetricName.MX_VPN_HUBS in created_names
+        assert MXMetricName.MX_VPN_SUBNETS_ADVERTISED in created_names
 
     def test_initialisation_stores_parent_api_settings(
         self,
@@ -953,3 +957,273 @@ def test_vpn_stats_row_validates_via_domain_model() -> None:
     assert peer.usageSummary is not None
     assert peer.usageSummary.sentInKilobytes == 123.4
     assert [s.avgLatencyMs for s in peer.latencySummaries] == [10.0, None]
+
+
+class TestMXVpnSiteToSiteTopology:
+    """Test MXVpnCollector.collect_site_to_site_topology / _collect_site_to_site_for_network (#287)."""
+
+    @pytest.fixture
+    def mock_api(self) -> MagicMock:
+        """Create a mock Meraki DashboardAPI client."""
+        api = MagicMock()
+        api.appliance = MagicMock()
+        return api
+
+    @pytest.fixture
+    def mock_parent(self, mock_api: MagicMock) -> MagicMock:
+        """Create a mock parent collector (MXCollector) instance."""
+        parent = MagicMock()
+        parent.api = mock_api
+        parent.settings = MagicMock()
+        parent.settings.api.concurrency_limit = 5
+        parent.rate_limiter = None
+        parent.inventory = MagicMock()
+        parent.inventory.get_networks = AsyncMock(
+            return_value=[
+                {"id": "N_1", "name": "HQ", "productTypes": ["appliance"]},
+            ]
+        )
+        parent._create_gauge = MagicMock(side_effect=_make_gauge)
+        parent._should_run_group = MagicMock(return_value=True)
+        parent._mark_group_ran = MagicMock()
+        parent._group_ttl_seconds = MagicMock(return_value=None)
+        return parent
+
+    @pytest.fixture
+    def vpn_collector(self, mock_parent: MagicMock) -> MXVpnCollector:
+        """Create an MXVpnCollector instance backed by mock parent."""
+        return MXVpnCollector(mock_parent)
+
+    async def test_gate_closed_skips_and_does_not_mark(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A closed mx_vpn_config gate must skip the fan-out entirely."""
+        mock_parent._should_run_group = MagicMock(return_value=False)
+        mock_api.appliance.getNetworkApplianceVpnSiteToSiteVpn = MagicMock(
+            return_value={"mode": "none", "hubs": [], "subnets": []}
+        )
+
+        await vpn_collector.collect_site_to_site_topology("org1", "Test Org")
+
+        mock_parent.inventory.get_networks.assert_not_called()
+        mock_api.appliance.getNetworkApplianceVpnSiteToSiteVpn.assert_not_called()
+        mock_parent._mark_group_ran.assert_not_called()
+
+    async def test_no_inventory_is_a_no_op(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Without an inventory, the fan-out must skip gracefully (no crash)."""
+        mock_parent.inventory = None
+
+        await vpn_collector.collect_site_to_site_topology("org1", "Test Org")
+
+        mock_parent._set_metric.assert_not_called()
+        mock_parent._mark_group_ran.assert_not_called()
+
+    async def test_filters_to_appliance_networks_only(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Only networks whose productTypes include 'appliance' must be fetched."""
+        mock_parent.inventory.get_networks = AsyncMock(
+            return_value=[
+                {"id": "N_APPLIANCE", "name": "HQ", "productTypes": ["appliance"]},
+                {"id": "N_WIRELESS", "name": "Guest", "productTypes": ["wireless"]},
+            ]
+        )
+        mock_api.appliance.getNetworkApplianceVpnSiteToSiteVpn = MagicMock(
+            return_value={"mode": "none", "hubs": [], "subnets": []}
+        )
+
+        await vpn_collector.collect_site_to_site_topology("org1", "Test Org")
+
+        mock_api.appliance.getNetworkApplianceVpnSiteToSiteVpn.assert_called_once_with(
+            "N_APPLIANCE"
+        )
+
+    async def test_marks_group_ran_after_fan_out(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The mx_vpn_config group must be marked ran once after the whole fan-out."""
+        mock_api.appliance.getNetworkApplianceVpnSiteToSiteVpn = MagicMock(
+            return_value={"mode": "none", "hubs": [], "subnets": []}
+        )
+
+        await vpn_collector.collect_site_to_site_topology("org1", "Test Org")
+
+        from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+
+        mock_parent._mark_group_ran.assert_called_once_with(EndpointGroupName.MX_VPN_CONFIG)
+
+    async def test_mode_none_is_emitted_not_skipped(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """mode == 'none' is a normal response and must still be emitted as a one-hot series."""
+        mock_api.appliance.getNetworkApplianceVpnSiteToSiteVpn = MagicMock(
+            return_value={"mode": "none", "hubs": [], "subnets": []}
+        )
+
+        await vpn_collector.collect_site_to_site_topology("org1", "Test Org")
+
+        mode_call = next(
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is vpn_collector._vpn_site_to_site_mode
+        )
+        _, labels, value = mode_call[0]
+        assert labels["mode"] == "none"
+        assert value == 1.0
+
+    async def test_hub_mode_emits_hub_count(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Hub mode must emit the configured hub count and mode label."""
+        mock_api.appliance.getNetworkApplianceVpnSiteToSiteVpn = MagicMock(
+            return_value={
+                "mode": "spoke",
+                "hubs": [{"hubId": "N_HUB1"}, {"hubId": "N_HUB2"}],
+                "subnets": [
+                    {"localSubnet": "10.0.0.0/24", "useVpn": True},
+                    {"localSubnet": "10.0.1.0/24", "useVpn": False},
+                ],
+            }
+        )
+
+        await vpn_collector.collect_site_to_site_topology("org1", "Test Org")
+
+        calls = {c[0][0]: c[0] for c in mock_parent._set_metric.call_args_list}
+        mode_call = calls[vpn_collector._vpn_site_to_site_mode]
+        assert mode_call[1]["mode"] == "spoke"
+
+        hubs_call = calls[vpn_collector._vpn_hubs]
+        assert hubs_call[2] == 2.0
+
+        subnets_call = calls[vpn_collector._vpn_subnets_advertised]
+        assert subnets_call[2] == 1.0
+
+    async def test_no_advertised_subnets_emits_zero(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A network with subnets but none using VPN must emit 0 advertised subnets."""
+        mock_api.appliance.getNetworkApplianceVpnSiteToSiteVpn = MagicMock(
+            return_value={
+                "mode": "hub",
+                "hubs": [],
+                "subnets": [{"localSubnet": "10.0.0.0/24", "useVpn": False}],
+            }
+        )
+
+        await vpn_collector.collect_site_to_site_topology("org1", "Test Org")
+
+        calls = {c[0][0]: c[0][2] for c in mock_parent._set_metric.call_args_list}
+        assert calls[vpn_collector._vpn_subnets_advertised] == 0.0
+        assert calls[vpn_collector._vpn_hubs] == 0.0
+
+    async def test_one_network_api_error_does_not_block_others(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A per-network API exception must not abort the fan-out for other networks."""
+        mock_parent.inventory.get_networks = AsyncMock(
+            return_value=[
+                {"id": "N_BAD", "name": "Bad", "productTypes": ["appliance"]},
+                {"id": "N_GOOD", "name": "Good", "productTypes": ["appliance"]},
+            ]
+        )
+
+        def side_effect(network_id: str) -> dict[str, object]:
+            if network_id == "N_BAD":
+                raise Exception("connection reset")
+            return {"mode": "none", "hubs": [], "subnets": []}
+
+        mock_api.appliance.getNetworkApplianceVpnSiteToSiteVpn = MagicMock(side_effect=side_effect)
+
+        # Should not raise.
+        await vpn_collector.collect_site_to_site_topology("org1", "Test Org")
+
+        mode_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is vpn_collector._vpn_site_to_site_mode
+        ]
+        assert len(mode_calls) == 1
+        assert mode_calls[0][0][1]["network_id"] == "N_GOOD"
+        # The whole fan-out still completes and marks the group ran.
+        mock_parent._mark_group_ran.assert_called_once()
+
+    async def test_labels_are_id_only(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """org_id/network_id only -- no org_name/network_name labels (issue #534)."""
+        mock_api.appliance.getNetworkApplianceVpnSiteToSiteVpn = MagicMock(
+            return_value={"mode": "none", "hubs": [], "subnets": []}
+        )
+
+        await vpn_collector.collect_site_to_site_topology("org-abc", "My Org")
+
+        for call in mock_parent._set_metric.call_args_list:
+            _, labels, _ = call[0]
+            assert labels["org_id"] == "org-abc"
+            assert labels["network_id"] == "N_1"
+            assert "org_name" not in labels
+            assert "network_name" not in labels
+
+    async def test_threads_group_ttl(
+        self,
+        vpn_collector: MXVpnCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """_set_metric calls must carry the mx_vpn_config group's TTL."""
+        mock_parent._group_ttl_seconds = MagicMock(return_value=777.0)
+        mock_api.appliance.getNetworkApplianceVpnSiteToSiteVpn = MagicMock(
+            return_value={"mode": "none", "hubs": [], "subnets": []}
+        )
+
+        await vpn_collector.collect_site_to_site_topology("org1", "Test Org")
+
+        for call in mock_parent._set_metric.call_args_list:
+            assert call.kwargs["ttl_seconds"] == 777.0
+
+    def test_site_to_site_validates_via_domain_model(self) -> None:
+        """The site-to-site VPN response is parsed via a typed Pydantic domain model."""
+        from meraki_dashboard_exporter.core.domain_models import ApplianceVpnSiteToSite
+
+        parsed = ApplianceVpnSiteToSite.model_validate({
+            "mode": "spoke",
+            "hubs": [{"hubId": "N_HUB1"}],
+            "subnets": [{"localSubnet": "10.0.0.0/24", "useVpn": True}],
+        })
+
+        assert parsed.mode == "spoke"
+        assert parsed.hubs[0].hubId == "N_HUB1"
+        assert parsed.subnets[0].useVpn is True
+
+        # mode:"none" default when omitted.
+        default_parsed = ApplianceVpnSiteToSite.model_validate({})
+        assert default_parsed.mode == "none"

@@ -1033,6 +1033,10 @@ class DeviceCollector(MetricCollector):
             if any(d for d in devices if d.get("model", "").startswith(DeviceType.MG)):
                 await self._collect_mg_specific_metrics(org_id, org_name, device_lookup)
 
+            # Collect MV-specific org-wide metrics (#306)
+            if any(d for d in devices if d.get("model", "").startswith(DeviceType.MV)):
+                await self.mv_collector.collect_onboarding_statuses(org_id, org_name)
+
         except CollectorError:
             device_failed = True
             raise

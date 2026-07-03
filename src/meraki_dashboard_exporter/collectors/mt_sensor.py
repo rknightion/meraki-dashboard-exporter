@@ -352,6 +352,23 @@ class MTSensorCollector(MetricCollector):
             ],
         )
 
+        # MT20/MT30 button presses (#303). Rides this collector's existing
+        # getOrganizationSensorReadingsLatest fetch - zero new API calls.
+        self._sensor_button_last_press = self._create_gauge(
+            MTMetricName.MT_BUTTON_LAST_PRESS_TIMESTAMP_SECONDS,
+            "Unix timestamp (seconds) of the last observed press via polling; "
+            "individual presses between polls are not guaranteed to be captured - "
+            "webhook sensorAlert events are the reliable path",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.SERIAL,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+                LabelName.PRESS_TYPE,
+            ],
+        )
+
     async def _collect_impl(self) -> None:
         """Collect sensor metrics by delegating to MT collector.
 

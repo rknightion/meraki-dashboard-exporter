@@ -1,10 +1,11 @@
 """Tests for NetworkHealthCollector scheduler gating + endpoint-group declarations (#617).
 
-Covers the Wave-2 fetch-site gating for the network-health lane: the seven
-``nh_*`` endpoint groups declared on ``NetworkHealthCollector``, the per-group
+Covers the Wave-2 fetch-site gating for the network-health lane: the eight
+``nh_*`` endpoint groups declared on ``NetworkHealthCollector`` (seven
+original + ``NH_MESH`` added by #307/#618), the per-group
 ``_should_run_group``/``_mark_group_ran`` gates threaded through
 ``_collect_org_network_health`` (org-wide channel-util) and
-``_collect_network_health_bundle`` (the six per-network groups), and the
+``_collect_network_health_bundle`` (the seven per-network groups), and the
 ``ttl_seconds`` threading into sub-collector metric writes.
 """
 
@@ -27,6 +28,7 @@ _ALL_NH_GROUPS = {
     EndpointGroupName.NH_FAILED_CONNECTIONS,
     EndpointGroupName.NH_LATENCY_STATS,
     EndpointGroupName.NH_AIR_MARSHAL,
+    EndpointGroupName.NH_MESH,
 }
 
 _BUNDLE_GROUPS = _ALL_NH_GROUPS - {EndpointGroupName.NH_CHANNEL_UTILIZATION}
@@ -83,10 +85,10 @@ class FakeScheduler:
 
 
 class TestEndpointGroupDeclarations:
-    """The seven nh_* groups are declared on NetworkHealthCollector with #541 floors."""
+    """The eight nh_* groups are declared on NetworkHealthCollector with #541/#307 floors."""
 
-    def test_all_seven_groups_declared(self) -> None:
-        """All seven network-health endpoint groups are declared."""
+    def test_all_eight_groups_declared(self) -> None:
+        """All eight network-health endpoint groups are declared."""
         groups = {g.name: g for g in NetworkHealthCollector.endpoint_groups}
         assert set(groups) == _ALL_NH_GROUPS
 
@@ -101,6 +103,7 @@ class TestEndpointGroupDeclarations:
             EndpointGroupName.NH_FAILED_CONNECTIONS: 3600,
             EndpointGroupName.NH_LATENCY_STATS: 3600,
             EndpointGroupName.NH_AIR_MARSHAL: 3600,
+            EndpointGroupName.NH_MESH: 3600,
         }
         for name, floor in expected_floor.items():
             assert groups[name].floor_seconds == floor, name
@@ -121,6 +124,7 @@ class TestEndpointGroupDeclarations:
         assert groups[EndpointGroupName.NH_FAILED_CONNECTIONS].cost_fn(shape) == w
         assert groups[EndpointGroupName.NH_LATENCY_STATS].cost_fn(shape) == 2 * w
         assert groups[EndpointGroupName.NH_AIR_MARSHAL].cost_fn(shape) == w
+        assert groups[EndpointGroupName.NH_MESH].cost_fn(shape) == w
 
 
 class TestNetworkHealthGating(BaseCollectorTest):
@@ -145,7 +149,7 @@ class TestNetworkHealthGating(BaseCollectorTest):
     def _instrument(self, collector) -> dict[str, list[Any]]:
         """Replace every sub-collector entry point with a call recorder."""
         calls: dict[str, list[Any]] = {
-            name: [] for name in ("rf", "conn", "data", "bt", "ssid", "lat", "air")
+            name: [] for name in ("rf", "conn", "data", "bt", "ssid", "lat", "air", "mesh")
         }
 
         async def _rf(org_id, org_name, networks):
@@ -169,6 +173,9 @@ class TestNetworkHealthGating(BaseCollectorTest):
         async def _air(network):
             calls["air"].append(network["id"])
 
+        async def _mesh(network):
+            calls["mesh"].append(network["id"])
+
         collector.rf_health_collector.collect_org = _rf  # type: ignore[method-assign]
         collector.connection_stats_collector.collect = _conn  # type: ignore[method-assign]
         collector.data_rates_collector.collect = _data  # type: ignore[method-assign]
@@ -176,6 +183,7 @@ class TestNetworkHealthGating(BaseCollectorTest):
         collector.ssid_performance_collector.collect = _ssid  # type: ignore[method-assign]
         collector.latency_stats_collector.collect = _lat  # type: ignore[method-assign]
         collector.air_marshal_collector.collect = _air  # type: ignore[method-assign]
+        collector.mesh_collector.collect = _mesh  # type: ignore[method-assign]
         return calls
 
     @staticmethod
@@ -198,7 +206,7 @@ class TestNetworkHealthGating(BaseCollectorTest):
         await collector._collect_org_network_health("O1", "Org")
 
         assert calls["rf"] == ["O1"]
-        for key in ("conn", "data", "bt", "ssid", "lat", "air"):
+        for key in ("conn", "data", "bt", "ssid", "lat", "air", "mesh"):
             assert calls[key] == ["N1"], key
         assert set(scheduler.marked) == _ALL_NH_GROUPS
 
@@ -219,14 +227,14 @@ class TestNetworkHealthGating(BaseCollectorTest):
 
         assert calls["rf"] == ["O1"]
         assert calls["conn"] == ["N1"]
-        for key in ("data", "bt", "ssid", "lat", "air"):
+        for key in ("data", "bt", "ssid", "lat", "air", "mesh"):
             assert calls[key] == [], key
         assert set(scheduler.marked) == due
 
     async def test_channel_util_not_due_skips_org_fetch(
         self, settings, isolated_registry, inventory, mock_api_builder
     ):
-        """Channel-util not due => org-wide fetch skipped, other six still run."""
+        """Channel-util not due => org-wide fetch skipped, other seven still run."""
         scheduler = FakeScheduler(due=_BUNDLE_GROUPS)
         collector = self._build(settings, isolated_registry, inventory, mock_api_builder, scheduler)
         calls = self._instrument(collector)
@@ -239,7 +247,7 @@ class TestNetworkHealthGating(BaseCollectorTest):
 
         assert calls["rf"] == []
         assert EndpointGroupName.NH_CHANNEL_UTILIZATION not in scheduler.marked
-        for key in ("conn", "data", "bt", "ssid", "lat", "air"):
+        for key in ("conn", "data", "bt", "ssid", "lat", "air", "mesh"):
             assert calls[key] == ["N1"], key
 
     async def test_nothing_due_marks_nothing(

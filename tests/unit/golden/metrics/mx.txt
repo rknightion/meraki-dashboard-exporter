@@ -1,6 +1,21 @@
 # golden metrics exposition contract: family=mx
 # fields: NAME / TYPE / HELP / LABELS (label KEY sets, values normalized out)
 
+meraki_mx_content_filtering_allowed_url_patterns gauge
+  help: Number of allowed URL patterns configured for content filtering
+  labels: network_id,org_id
+meraki_mx_content_filtering_blocked_categories gauge
+  help: Number of blocked URL categories configured for content filtering
+  labels: network_id,org_id
+meraki_mx_content_filtering_blocked_url_patterns gauge
+  help: Number of blocked URL patterns configured for content filtering
+  labels: network_id,org_id
+meraki_mx_dhcp_subnet_free_ips gauge
+  help: Number of free IPs within a DHCP-served subnet on this MX
+  labels: device_type,model,network_id,org_id,serial,subnet,vlan
+meraki_mx_dhcp_subnet_used_ips gauge
+  help: Number of IPs in use within a DHCP-served subnet on this MX
+  labels: device_type,model,network_id,org_id,serial,subnet,vlan
 meraki_mx_firewall_default_policy gauge
   help: Firewall default policy for L3 rules (1=allow, 0=deny)
   labels: network_id,org_id
@@ -16,12 +31,39 @@ meraki_mx_ha_mode gauge
 meraki_mx_ha_role gauge
   help: MX warm spare designation priority for a device
   labels: network_id,org_id,serial
+meraki_mx_ids_mode gauge
+  help: IDS/IPS mode one-hot indicator (1=active mode for this network)
+  labels: mode,network_id,org_id
+meraki_mx_ids_ruleset gauge
+  help: IDS/IPS ruleset one-hot indicator (1=active ruleset for this network)
+  labels: network_id,org_id,ruleset
+meraki_mx_malware_allowed_files gauge
+  help: Number of files excluded from Advanced Malware Protection scanning
+  labels: network_id,org_id
+meraki_mx_malware_allowed_urls gauge
+  help: Number of URLs excluded from Advanced Malware Protection scanning
+  labels: network_id,org_id
+meraki_mx_malware_protection_enabled gauge
+  help: Advanced Malware Protection enablement (1=enabled, 0=disabled)
+  labels: network_id,org_id
+meraki_mx_nat_rules gauge
+  help: Number of NAT rules configured for a network by type
+  labels: nat_type,network_id,org_id
 meraki_mx_performance_score gauge
   help: MX appliance performance score (0-100)
   labels: device_type,model,network_id,org_id,serial
+meraki_mx_port_forwarding_rules gauge
+  help: Number of port forwarding rules configured for a network
+  labels: network_id,org_id
 meraki_mx_security_events_count gauge
   help: Security events by type in the current collection window (not a monotonic total)
   labels: event_type,org_id
+meraki_mx_static_routes gauge
+  help: Total number of static routes configured for a network
+  labels: network_id,org_id
+meraki_mx_static_routes_enabled gauge
+  help: Number of enabled static routes configured for a network
+  labels: network_id,org_id
 meraki_mx_uplink_info gauge
   help: MX appliance uplink status info (1 = present)
   labels: device_type,interface,model,network_id,org_id,serial,status
@@ -37,15 +79,27 @@ meraki_mx_uplink_recv_bytes gauge
 meraki_mx_uplink_sent_bytes gauge
   help: MX per-uplink WAN bytes sent (last 5 minutes)
   labels: device_type,interface,model,network_id,org_id,serial
+meraki_mx_vlans gauge
+  help: Number of VLANs configured for a network
+  labels: network_id,org_id
+meraki_mx_vpn_hubs gauge
+  help: Number of configured VPN hubs for a network (spoke mode)
+  labels: network_id,org_id
 meraki_mx_vpn_peer_status gauge
   help: VPN peer reachability status (1=reachable, 0=unreachable)
   labels: network_id,org_id,peer_network_id,peer_type
 meraki_mx_vpn_peers gauge
   help: Number of VPN peers configured for a network
   labels: network_id,org_id
+meraki_mx_vpn_site_to_site_mode gauge
+  help: Site-to-site VPN mode one-hot indicator (1=active mode for this network)
+  labels: mode,network_id,org_id
 meraki_mx_vpn_stats_avg_latency_seconds gauge
   help: Average VPN latency in seconds to a peer network (15-min avg), averaged across all sender/receiver uplink combinations
   labels: network_id,org_id,peer_network_id
+meraki_mx_vpn_subnets_advertised gauge
+  help: Number of local subnets advertised to the site-to-site VPN
+  labels: network_id,org_id
 meraki_mx_vpn_usage_recv_bytes gauge
   help: VPN usage received in bytes over the last 15 minutes, per peer network
   labels: network_id,org_id,peer_network_id

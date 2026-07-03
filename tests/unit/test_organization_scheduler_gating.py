@@ -1,7 +1,7 @@
 """Tests for #617 scheduler gating on the OrganizationCollector lane.
 
-Covers the nine org endpoint-group declarations (names/priority/floor/tier/cost)
-and the fetch-site gates on the coordinator-direct methods and the five org
+Covers the fourteen org endpoint-group declarations (names/priority/floor/tier/
+cost) and the fetch-site gates on the coordinator-direct methods and the five org
 sub-collectors (should_run gate, mark_ran on success, ttl_seconds threading).
 """
 
@@ -32,6 +32,12 @@ _EXPECTED = {
     EndpointGroupName.ORG_APP_USAGE: (4, 900.0),
     EndpointGroupName.ORG_FIRMWARE: (4, 900.0),
     EndpointGroupName.ORG_LICENSES: (4, 1800.0),
+    # Phase 4 (#618) additions: #297/#298/#299/#300/#611.
+    EndpointGroupName.ORG_CONFIG_TEMPLATES: (4, 900.0),
+    EndpointGroupName.ORG_ADAPTIVE_POLICY: (4, 900.0),
+    EndpointGroupName.ORG_TOP_USAGE: (4, 900.0),
+    EndpointGroupName.ORG_WEBHOOK_LOGS: (4, 300.0),
+    EndpointGroupName.ORG_FIRMWARE_COMPLIANCE: (4, 900.0),
 }
 
 
@@ -91,10 +97,10 @@ class _FakeScheduler:
 
 
 class TestOrgEndpointGroupDeclarations:
-    """Validate the nine declared org endpoint groups."""
+    """Validate the fourteen declared org endpoint groups."""
 
-    def test_all_nine_groups_declared(self) -> None:
-        """All nine org rows are declared, no more, no less."""
+    def test_all_fourteen_groups_declared(self) -> None:
+        """All fourteen org rows are declared, no more, no less."""
         groups = {g.name: g for g in OrganizationCollector.endpoint_groups}
         assert set(groups) == set(_EXPECTED)
 

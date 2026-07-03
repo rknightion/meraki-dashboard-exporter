@@ -17,6 +17,7 @@ from prometheus_client import Gauge
 
 from meraki_dashboard_exporter.collectors.devices.mv import (
     CameraAnalyticsRecentZone,
+    CameraOnboardingStatusEntry,
     MVCollector,
 )
 from meraki_dashboard_exporter.core.domain_models import (
@@ -892,6 +893,305 @@ class TestMVCollector:
         assert value_for(mv_collector._mv_motion_based_retention_enabled) == 0.0
         assert value_for(mv_collector._mv_audio_recording_enabled) == 0.0
         assert value_for(mv_collector._mv_restricted_bandwidth_mode_enabled) == 0.0
+
+    # ------------------------------------------------------------------
+    # #305: MV Sense enablement
+    # ------------------------------------------------------------------
+
+    def test_mv_sense_gauges_created(self, mv_collector: MVCollector) -> None:
+        """The two MV Sense gauges exist as attributes on the collector."""
+        assert mv_collector._mv_sense_enabled is not None
+        assert mv_collector._mv_sense_mqtt_broker_configured is not None
+
+    async def test_collect_sense_enabled_and_mqtt_configured(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """senseEnabled=True and a non-null mqttBrokerId both emit 1.0."""
+        mock_api.camera.getDeviceCameraSense = MagicMock(
+            return_value={"senseEnabled": True, "mqttBrokerId": "12345"}
+        )
+
+        await mv_collector.collect(device)
+
+        def value_for(gauge):
+            for call in mock_parent._set_metric.call_args_list:
+                if call[0][0] is gauge:
+                    return call[0][2]
+            raise AssertionError("gauge not set")
+
+        assert value_for(mv_collector._mv_sense_enabled) == 1.0
+        assert value_for(mv_collector._mv_sense_mqtt_broker_configured) == 1.0
+        mock_api.camera.getDeviceCameraSense.assert_called_once_with(device["serial"])
+
+    async def test_collect_sense_disabled_and_no_mqtt(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """senseEnabled=False and a null mqttBrokerId both emit 0.0."""
+        mock_api.camera.getDeviceCameraSense = MagicMock(
+            return_value={"senseEnabled": False, "mqttBrokerId": None}
+        )
+
+        await mv_collector.collect(device)
+
+        def value_for(gauge):
+            for call in mock_parent._set_metric.call_args_list:
+                if call[0][0] is gauge:
+                    return call[0][2]
+            raise AssertionError("gauge not set")
+
+        assert value_for(mv_collector._mv_sense_enabled) == 0.0
+        assert value_for(mv_collector._mv_sense_mqtt_broker_configured) == 0.0
+
+    async def test_sense_gating_is_per_camera_and_independent_cadence(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """A second immediate cycle must not re-fetch MV Sense (per-serial gate)."""
+        mock_api.camera.getDeviceCameraSense = MagicMock(
+            return_value={"senseEnabled": True, "mqttBrokerId": None}
+        )
+        self._set_all_responses(mock_api)
+
+        await mv_collector.collect(device)
+        assert mock_api.camera.getDeviceCameraSense.call_count == 1
+
+        await mv_collector.collect(device)
+        assert mock_api.camera.getDeviceCameraSense.call_count == 1
+
+    async def test_sense_collected_again_after_group_interval_elapses(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """Once the mv_sense_config interval elapses, the next cycle re-fetches."""
+        mock_api.camera.getDeviceCameraSense = MagicMock(
+            return_value={"senseEnabled": True, "mqttBrokerId": None}
+        )
+        self._set_all_responses(mock_api)
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mv.time.time",
+            return_value=1_000.0,
+        ):
+            await mv_collector.collect(device)
+        assert mock_api.camera.getDeviceCameraSense.call_count == 1
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mv.time.time",
+            return_value=1_000.0 + 901,
+        ):
+            await mv_collector.collect(device)
+        assert mock_api.camera.getDeviceCameraSense.call_count == 2
+
+    async def test_mark_group_ran_called_for_sense(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """A completed sense-config fetch marks the mv_sense_config group as run."""
+        mock_api.camera.getDeviceCameraSense = MagicMock(
+            return_value={"senseEnabled": True, "mqttBrokerId": None}
+        )
+        self._set_all_responses(mock_api)
+
+        await mv_collector.collect(device)
+
+        mock_parent._mark_group_ran.assert_any_call(EndpointGroupName.MV_SENSE_CONFIG)
+
+    async def test_collect_sense_tolerates_error_response(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        device: dict,
+    ) -> None:
+        """An API error fetching sense config must not raise or block analytics."""
+        mock_api.camera.getDeviceCameraSense = MagicMock(side_effect=Exception("boom"))
+        self._set_all_responses(mock_api)
+
+        await mv_collector.collect(device)  # must not raise
+
+        sense_calls = [
+            call
+            for call in mock_parent._set_metric.call_args_list
+            if call[0][0] is mv_collector._mv_sense_enabled
+        ]
+        assert sense_calls == []
+
+    # ------------------------------------------------------------------
+    # #306: camera onboarding status (org-wide)
+    # ------------------------------------------------------------------
+
+    def test_mv_onboarding_status_gauge_created(self, mv_collector: MVCollector) -> None:
+        """The onboarding status gauge exists as an attribute on the collector."""
+        assert mv_collector._mv_onboarding_status is not None
+
+    async def test_collect_onboarding_statuses_emits_status_per_entry(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Each entry emits a series labeled with its (bounded) status value."""
+        mock_api.camera.getOrganizationCameraOnboardingStatuses = MagicMock(
+            return_value=[
+                {"serial": "Q2CC-0001", "network": {"id": "N_1"}, "status": "complete"},
+            ]
+        )
+
+        await mv_collector.collect_onboarding_statuses("org1", "Test Org")
+
+        mock_api.camera.getOrganizationCameraOnboardingStatuses.assert_called_once_with("org1")
+        mock_parent._set_metric.assert_any_call(
+            mv_collector._mv_onboarding_status,
+            {
+                "org_id": "org1",
+                "network_id": "N_1",
+                "serial": "Q2CC-0001",
+                "status": "complete",
+            },
+            1,
+            "meraki_mv_onboarding_status",
+            ttl_seconds=mock_parent._group_ttl_seconds.return_value,
+        )
+
+    async def test_collect_onboarding_statuses_unknown_status_normalizes_to_other(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A status value outside the bounded allow-list normalizes to 'other'."""
+        mock_api.camera.getOrganizationCameraOnboardingStatuses = MagicMock(
+            return_value=[
+                {"serial": "Q2CC-0001", "network": {"id": "N_1"}, "status": "somethingNew"},
+            ]
+        )
+
+        await mv_collector.collect_onboarding_statuses("org1", "Test Org")
+
+        calls = [
+            call
+            for call in mock_parent._set_metric.call_args_list
+            if call[0][0] is mv_collector._mv_onboarding_status
+        ]
+        assert len(calls) == 1
+        assert calls[0][0][1]["status"] == "other"
+
+    async def test_collect_onboarding_statuses_empty_list_marks_group_ran(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An empty response is a legitimate no-op that still marks the group ran."""
+        mock_api.camera.getOrganizationCameraOnboardingStatuses = MagicMock(return_value=[])
+
+        await mv_collector.collect_onboarding_statuses("org1", "Test Org")
+
+        mock_parent._set_metric.assert_not_called()
+        mock_parent._mark_group_ran.assert_called_once_with(EndpointGroupName.MV_ONBOARDING)
+
+    async def test_collect_onboarding_statuses_not_due_skips_fetch(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The group's own should_run gate is honoured before fetching."""
+        mock_parent._should_run_group = MagicMock(return_value=False)
+        mock_api.camera.getOrganizationCameraOnboardingStatuses = MagicMock(return_value=[])
+
+        await mv_collector.collect_onboarding_statuses("org1", "Test Org")
+
+        mock_api.camera.getOrganizationCameraOnboardingStatuses.assert_not_called()
+
+    async def test_collect_onboarding_statuses_filters_by_network_filter(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A network outside the allowed set is skipped."""
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_allowed"})
+        mock_api.camera.getOrganizationCameraOnboardingStatuses = MagicMock(
+            return_value=[
+                {"serial": "Q2CC-0001", "network": {"id": "N_allowed"}, "status": "complete"},
+                {"serial": "Q2CC-0002", "network": {"id": "N_excluded"}, "status": "complete"},
+            ]
+        )
+
+        await mv_collector.collect_onboarding_statuses("org1", "Test Org")
+
+        serials = {
+            call[0][1]["serial"]
+            for call in mock_parent._set_metric.call_args_list
+            if call[0][0] is mv_collector._mv_onboarding_status
+        }
+        assert serials == {"Q2CC-0001"}
+
+    async def test_collect_onboarding_statuses_missing_serial_skipped(
+        self,
+        mv_collector: MVCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An entry with no serial is skipped."""
+        mock_api.camera.getOrganizationCameraOnboardingStatuses = MagicMock(
+            return_value=[{"network": {"id": "N_1"}, "status": "complete"}]
+        )
+
+        await mv_collector.collect_onboarding_statuses("org1", "Test Org")
+
+        mock_parent._set_metric.assert_not_called()
+
+
+class TestCameraOnboardingStatusEntry:
+    """Unit tests for the inline onboarding-status response model (#306)."""
+
+    def test_parses_nested_network_id(self) -> None:
+        """A nested network.id is resolved."""
+        model = CameraOnboardingStatusEntry.model_validate({
+            "serial": "Q2CC-0001",
+            "network": {"id": "N_1"},
+            "status": "complete",
+        })
+        assert model.serial == "Q2CC-0001"
+        assert model.resolved_network_id == "N_1"
+
+    def test_parses_flat_network_id(self) -> None:
+        """A flat networkId (no nested network object) is resolved as a fallback."""
+        model = CameraOnboardingStatusEntry.model_validate({
+            "serial": "Q2CC-0001",
+            "networkId": "N_2",
+            "status": "complete",
+        })
+        assert model.resolved_network_id == "N_2"
+
+    def test_tolerates_missing_and_extra_fields(self) -> None:
+        """Missing optional fields and unexpected extras must not raise."""
+        model = CameraOnboardingStatusEntry.model_validate({
+            "serial": "Q2CC-0001",
+            "aFutureApiField": "unexpected",
+        })
+        assert model.status is None
+        assert not model.resolved_network_id
 
 
 class TestCameraAnalyticsRecentZone:

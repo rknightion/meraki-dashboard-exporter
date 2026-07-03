@@ -100,9 +100,18 @@ meraki_mr_radio_channel_width_mhz gauge
 meraki_mr_radio_power_dbm gauge
   help: Access point radio transmit power in dBm
   labels: band,device_type,model,network_id,org_id,radio_index,serial
+meraki_mr_rf_profile_info gauge
+  help: AP RF profile assignment (join metric: serial -> rf_profile_id/name; value 1)
+  labels: is_default,network_id,org_id,rf_profile_id,rf_profile_name,serial
+meraki_mr_ssid_allow_lan_access gauge
+  help: Whether wireless clients on this SSID may access the LAN (1 = allowed, 0 = blocked)
+  labels: network_id,org_id,ssid
 meraki_mr_ssid_client_count gauge
   help: Number of clients connected to SSID over the last day
   labels: org_id,ssid
+meraki_mr_ssid_firewall_rules gauge
+  help: Number of user-defined SSID firewall rules by type (excludes the implicit default rule)
+  labels: network_id,org_id,rule_type,ssid
 meraki_mr_ssid_usage_downstream_bytes gauge
   help: Downstream data usage in bytes by SSID over the last day
   labels: org_id,ssid

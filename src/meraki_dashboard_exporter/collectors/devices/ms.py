@@ -432,6 +432,96 @@ class MSCollector(BaseDeviceCollector):
             ],
         )
 
+        # Rogue/unauthorized DHCP servers seen (#292). Windowed (1-day, API
+        # default timespan) count that resets every collection cycle - both
+        # is_allowed label values are always emitted (0 when none seen) so the
+        # absence of rogue servers is an explicit, observable state rather
+        # than a missing series.
+        self._ms_dhcp_servers_seen = self.parent._create_gauge(
+            MSMetricName.MS_DHCP_SERVERS_SEEN_COUNT,
+            "Number of DHCPv4 servers seen on the network by allow-list status "
+            "(1-day window, resets each collection cycle)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.IS_ALLOWED,
+            ],
+        )
+
+        # Dynamic ARP Inspection coverage (#293). Rows carry serial, not
+        # model/device_type (the source endpoint doesn't return a model).
+        self._ms_dai_supported = self.parent._create_gauge(
+            MSMetricName.MS_DAI_SUPPORTED,
+            "Switch supports Dynamic ARP Inspection (1 = supported, 0 = not supported)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.SERIAL,
+            ],
+        )
+
+        self._ms_dai_trusted_port = self.parent._create_gauge(
+            MSMetricName.MS_DAI_TRUSTED_PORT_CONFIGURED,
+            "Switch has at least one Dynamic ARP Inspection trusted port configured "
+            "(1 = configured, 0 = not configured)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.SERIAL,
+            ],
+        )
+
+        # Org-wide PoE draw (#294), sourced from a bucketed history endpoint -
+        # the most recent bucket lags real-time by roughly the bucket width
+        # (~20 minutes).
+        self._ms_org_poe_draw_watts = self.parent._create_gauge(
+            MSMetricName.MS_ORG_POE_DRAW_WATTS,
+            "Organization-wide switch PoE power draw in watts (most recent history "
+            "bucket; lags real-time by ~20 minutes)",
+            labelnames=[
+                LabelName.ORG_ID,
+            ],
+        )
+
+        # Link aggregation (LACP) groups + membership (#295).
+        self._ms_link_aggregations = self.parent._create_gauge(
+            MSMetricName.MS_LINK_AGGREGATIONS,
+            "Number of link aggregation (LACP) groups configured in the network",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+            ],
+        )
+
+        self._ms_link_aggregation_member = self.parent._create_gauge(
+            MSMetricName.MS_LINK_AGGREGATION_MEMBER,
+            "Switch port is a member of a link aggregation group (value 1)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.LAG_ID,
+                LabelName.SERIAL,
+                LabelName.PORT_ID,
+            ],
+        )
+
+        # CDP/LLDP neighbor presence (#296) - reuses the cdp/lldp objects
+        # already present in the port-status payload, no additional API call.
+        self._switch_port_neighbor_present = self.parent._create_gauge(
+            MSMetricName.MS_PORT_NEIGHBOR_PRESENT,
+            "Switch port has an advertised CDP/LLDP neighbor this cycle (value 1; "
+            "series absent when no neighbor is advertised via this protocol)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.SERIAL,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+                LabelName.PORT_ID,
+                LabelName.TYPE,
+            ],
+        )
+
     def _evict_stale_serials(self, active_serials: set[str]) -> None:
         """Remove timestamp cache entries for serials not seen this collection cycle.
 
@@ -729,6 +819,58 @@ class MSCollector(BaseDeviceCollector):
         else:
             self._emitted_8021x_statuses.pop(port_key, None)
 
+    def _emit_port_neighbor_metrics(
+        self,
+        device: dict[str, Any],
+        port: dict[str, Any],
+        org_id: str,
+        org_name: str,
+        ttl_seconds: float | None = None,
+    ) -> None:
+        """Emit CDP/LLDP neighbor-presence flags for a port (#296).
+
+        Reuses the ``cdp``/``lldp`` objects already present in the port-status
+        payload (both the org-wide ``getOrganizationSwitchPortsStatusesBySwitch``
+        and per-device ``getDeviceSwitchPortsStatuses`` responses share this
+        shape) - no additional API call. Only *presence* of a neighbor
+        advertisement is emitted (value 1); the remote system name/platform
+        strings inside the cdp/lldp objects are deliberately NOT emitted
+        (attacker-influenced free text - cardinality/injection risk). Absence
+        is conveyed by the series not being (re-)set this cycle - mirrors
+        ``MS_PORT_ERROR_ACTIVE``: no explicit zero or removal, TTL expiration
+        is the sole backstop once a neighbor stops being advertised.
+
+        Parameters
+        ----------
+        device : dict[str, Any]
+            Device (or device-like) data used for label construction.
+        port : dict[str, Any]
+            Port status data from the API, potentially containing ``cdp``
+            and/or ``lldp`` objects.
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        ttl_seconds : float | None
+            Per-series TTL for the MS_PORT_STATUS group (#617), forwarded to
+            ``_set_metric``. ``None`` ⇒ tier-derived TTL.
+
+        """
+        for protocol in ("cdp", "lldp"):
+            neighbor = port.get(protocol)
+            if not neighbor:
+                continue
+            neighbor_labels = create_port_labels(
+                device, port, org_id=org_id, org_name=org_name, type=protocol
+            )
+            self.parent._set_metric(
+                self._switch_port_neighbor_present,
+                neighbor_labels,
+                1,
+                MSMetricName.MS_PORT_NEIGHBOR_PRESENT.value,
+                ttl_seconds=ttl_seconds,
+            )
+
     @log_api_call("getOrganizationSwitchPortsStatusesBySwitch")
     @with_error_handling(
         operation="Collect MS switch port statuses (org)",
@@ -829,6 +971,9 @@ class MSCollector(BaseDeviceCollector):
                     device_data, port, org_id, org_name, ttl_seconds=ttl
                 )
                 self._emit_port_info(device_data, port, org_id, ttl_seconds=ttl)
+                self._emit_port_neighbor_metrics(
+                    device_data, port, org_id, org_name, ttl_seconds=ttl
+                )
 
         self.parent._mark_group_ran(EndpointGroupName.MS_PORT_STATUS)
         return True
@@ -910,6 +1055,11 @@ class MSCollector(BaseDeviceCollector):
 
                 # Port info join series (#534): port_name keyed on serial+port_id
                 self._emit_port_info(device, port, org_id, ttl_seconds=status_ttl)
+
+                # CDP/LLDP neighbor presence (#296), same payload
+                self._emit_port_neighbor_metrics(
+                    device, port, org_id, org_name, ttl_seconds=status_ttl
+                )
 
                 # Traffic counters (rate in bytes per second)
                 if "trafficInKbps" in port:
@@ -1550,6 +1700,16 @@ class MSCollector(BaseDeviceCollector):
         """
         from ...core.domain_models import STPConfiguration
 
+        # #292/#293/#295 (Phase 4, #618): DHCP-security posture (rogue DHCP +
+        # DAI coverage) and link-aggregation membership ride this already
+        # per-org-invoked call site instead of adding new device.py
+        # invocations. Each is independently gated via its own scheduler group
+        # (MS_DHCP_SECURITY / MS_LINK_AGGREGATIONS) - NOT the STP timestamp
+        # gate below - so their cadence is unaffected by MS_STP's solved
+        # interval.
+        await self.collect_dhcp_security(org_id, org_name)
+        await self.collect_link_aggregations(org_id, org_name)
+
         if not self._should_collect_stp_priorities():
             logger.debug(
                 "Skipping STP priority collection (interval gate)",
@@ -1870,6 +2030,13 @@ class MSCollector(BaseDeviceCollector):
             Organization name.
 
         """
+        # #294 (Phase 4, #618): org-wide PoE draw rides this already
+        # per-org-invoked single-org-call site instead of adding a new
+        # device.py invocation. Independently gated via MS_POWER_SUMMARY, so
+        # it runs on its own cadence regardless of the MS_PORT_OVERVIEW gate
+        # checked below.
+        await self.collect_power_history(org_id, org_name)
+
         # #617 gate: MS_PORT_OVERVIEW is a low-volatility single org call (floor
         # 3600). Skip when not due; mark_ran after a successful fetch.
         if not self.parent._should_run_group(EndpointGroupName.MS_PORT_OVERVIEW):
@@ -1952,3 +2119,346 @@ class MSCollector(BaseDeviceCollector):
             "Completed switch port overview collection",
             org_id=org_id,
         )
+
+    @log_api_call("getOrganizationSummarySwitchPowerHistory")
+    @with_error_handling(
+        operation="Collect MS org-wide PoE draw",
+        continue_on_error=True,
+    )
+    async def collect_power_history(self, org_id: str, org_name: str) -> None:
+        """Collect org-wide switch PoE power draw (#294).
+
+        Single org-wide bulk call (``getOrganizationSummarySwitchPowerHistory``)
+        returning a history of PoE-draw datapoints; only the MOST-RECENT
+        datapoint is emitted (a snapshot-from-history pattern), since this is a
+        Gauge, not a time series import. The response is bucketed, so the
+        latest datapoint lags real-time by roughly the bucket width
+        (documented as ~20 minutes - unconfirmed against a live org, see #618
+        Phase-6 verification notes).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name (unused; kept for call-site symmetry with
+            sibling org-wide collectors).
+
+        """
+        # #617 gate: MS_POWER_SUMMARY is a single org-wide call (floor 900).
+        if not self.parent._should_run_group(EndpointGroupName.MS_POWER_SUMMARY):
+            return
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_POWER_SUMMARY)
+
+        with LogContext(org_id=org_id):
+            response = await asyncio.to_thread(
+                self.api.switch.getOrganizationSummarySwitchPowerHistory,
+                org_id,
+            )
+            history = validate_response_format(
+                response,
+                expected_type=list,
+                operation="getOrganizationSummarySwitchPowerHistory",
+            )
+
+        if not history:
+            logger.debug(
+                "No switch power history datapoints returned",
+                org_id=org_id,
+            )
+            self.parent._mark_group_ran(EndpointGroupName.MS_POWER_SUMMARY)
+            return
+
+        # Most-recent datapoint: the endpoint documents a chronological
+        # history, so prefer the latest end-of-window timestamp when present
+        # (falls back to array order otherwise). ⚠ field name unverified
+        # against a live org - see #618 Phase-6 notes.
+        latest = max(
+            history,
+            key=lambda dp: dp.get("endTs") or dp.get("startTs") or "",
+        )
+        draw = latest.get("draw", latest.get("usage"))
+        if draw is None:
+            logger.debug(
+                "Switch power history datapoint missing draw/usage field",
+                org_id=org_id,
+                datapoint_keys=list(latest.keys()),
+            )
+            self.parent._mark_group_ran(EndpointGroupName.MS_POWER_SUMMARY)
+            return
+
+        labels = create_labels(org_id=org_id)
+        self.parent._set_metric(
+            self._ms_org_poe_draw_watts,
+            labels,
+            draw,
+            MSMetricName.MS_ORG_POE_DRAW_WATTS.value,
+            ttl_seconds=ttl,
+        )
+
+        self.parent._mark_group_ran(EndpointGroupName.MS_POWER_SUMMARY)
+
+    @with_error_handling(
+        operation="Collect MS DHCP security posture",
+        continue_on_error=True,
+    )
+    async def collect_dhcp_security(self, org_id: str, org_name: str) -> None:
+        """Collect rogue-DHCP (#292) and DAI coverage (#293) posture per switch network.
+
+        Two calls per switch network: ``getNetworkSwitchDhcpV4ServersSeen``
+        (rogue/unauthorized DHCP servers seen in the last day) and
+        ``getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice``
+        (Dynamic ARP Inspection coverage by device). Fanned out concurrently
+        via ``ManagedTaskGroup`` bounded by ``settings.api.concurrency_limit``,
+        matching the ``collect_stp_priorities`` pattern.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        # #617 gate: MS_DHCP_SECURITY covers both calls, gated as one family.
+        if not self.parent._should_run_group(EndpointGroupName.MS_DHCP_SECURITY):
+            return
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_DHCP_SECURITY)
+        rate_limiter = getattr(self.parent, "rate_limiter", None)
+
+        try:
+            with LogContext(org_id=org_id):
+                networks = await self.parent.inventory.get_networks(org_id)
+
+            switch_networks = [n for n in networks if "switch" in n.get("productTypes", [])]
+
+            async def _collect_network_dhcp_security(network: dict[str, Any]) -> None:
+                network_id = network["id"]
+
+                # Rogue/unauthorized DHCP servers seen (#292).
+                try:
+                    with LogContext(network_id=network_id):
+                        if rate_limiter is not None:
+                            await rate_limiter.acquire(org_id, "getNetworkSwitchDhcpV4ServersSeen")
+                        servers_response = await asyncio.to_thread(
+                            self.api.switch.getNetworkSwitchDhcpV4ServersSeen,
+                            network_id,
+                            total_pages="all",
+                        )
+                        servers_seen = validate_response_format(
+                            servers_response,
+                            expected_type=list,
+                            operation="getNetworkSwitchDhcpV4ServersSeen",
+                        )
+
+                    # Aggregate by is_allowed only (never label by the
+                    # attacker-influenced server MAC - cardinality/PII risk).
+                    # Both label values are always emitted (0 when absent) so
+                    # this windowed count resets cleanly every cycle instead
+                    # of leaving a stale nonzero value behind via TTL.
+                    allowed_count = 0
+                    not_allowed_count = 0
+                    for server in servers_seen:
+                        # ⚠ field name unverified against a live org (#618
+                        # Phase-6 notes) - defaults to "not allowed" (the
+                        # safer/more alerting-visible assumption) if absent.
+                        if server.get("isAllowed", False):
+                            allowed_count += 1
+                        else:
+                            not_allowed_count += 1
+
+                    self.parent._set_metric(
+                        self._ms_dhcp_servers_seen,
+                        create_labels(org_id=org_id, network_id=network_id, is_allowed="true"),
+                        allowed_count,
+                        MSMetricName.MS_DHCP_SERVERS_SEEN_COUNT.value,
+                        ttl_seconds=ttl,
+                    )
+                    self.parent._set_metric(
+                        self._ms_dhcp_servers_seen,
+                        create_labels(org_id=org_id, network_id=network_id, is_allowed="false"),
+                        not_allowed_count,
+                        MSMetricName.MS_DHCP_SERVERS_SEEN_COUNT.value,
+                        ttl_seconds=ttl,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to collect DHCPv4 servers seen",
+                        network_id=network_id,
+                    )
+
+                # Dynamic ARP Inspection coverage (#293).
+                try:
+                    with LogContext(network_id=network_id):
+                        if rate_limiter is not None:
+                            await rate_limiter.acquire(
+                                org_id,
+                                "getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice",
+                            )
+                        dai_response = await asyncio.to_thread(
+                            self.api.switch.getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice,
+                            network_id,
+                            total_pages="all",
+                        )
+                        dai_rows = validate_response_format(
+                            dai_response,
+                            expected_type=list,
+                            operation=(
+                                "getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice"
+                            ),
+                        )
+
+                    for row in dai_rows:
+                        serial = row.get("serial")
+                        if not serial:
+                            continue
+                        # Rows carry serial only, not model (#618 spec) - do
+                        # NOT use create_device_labels here.
+                        dai_labels = create_labels(
+                            org_id=org_id, network_id=network_id, serial=serial
+                        )
+
+                        # ⚠ field names unverified against a live org (#618
+                        # Phase-6 notes). Only emit when present so an
+                        # unrecognized row shape doesn't fabricate a false 0.
+                        supports_inspection = row.get("supportsInspection")
+                        if supports_inspection is not None:
+                            self.parent._set_metric(
+                                self._ms_dai_supported,
+                                dai_labels,
+                                1 if supports_inspection else 0,
+                                MSMetricName.MS_DAI_SUPPORTED.value,
+                                ttl_seconds=ttl,
+                            )
+
+                        has_trusted_port = row.get("hasTrustedPort")
+                        if has_trusted_port is not None:
+                            self.parent._set_metric(
+                                self._ms_dai_trusted_port,
+                                dai_labels,
+                                1 if has_trusted_port else 0,
+                                MSMetricName.MS_DAI_TRUSTED_PORT_CONFIGURED.value,
+                                ttl_seconds=ttl,
+                            )
+                except Exception:
+                    logger.exception(
+                        "Failed to collect DAI coverage",
+                        network_id=network_id,
+                    )
+
+            async with ManagedTaskGroup(
+                name="ms_dhcp_security",
+                max_concurrency=self.settings.api.concurrency_limit,
+            ) as group:
+                for network in switch_networks:
+                    await group.create_task(
+                        _collect_network_dhcp_security(network),
+                        name=f"dhcp_security_{network['id']}",
+                    )
+
+            self.parent._mark_group_ran(EndpointGroupName.MS_DHCP_SECURITY)
+
+        except Exception:
+            logger.exception(
+                "Failed to collect MS DHCP security posture",
+                org_id=org_id,
+            )
+
+    @with_error_handling(
+        operation="Collect MS link aggregations",
+        continue_on_error=True,
+    )
+    async def collect_link_aggregations(self, org_id: str, org_name: str) -> None:
+        """Collect link aggregation (LACP) groups + membership per switch network (#295).
+
+        One call per switch network (``getNetworkSwitchLinkAggregations``).
+        Fanned out concurrently via ``ManagedTaskGroup`` bounded by
+        ``settings.api.concurrency_limit``, matching ``collect_stp_priorities``.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        if not self.parent._should_run_group(EndpointGroupName.MS_LINK_AGGREGATIONS):
+            return
+        ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_LINK_AGGREGATIONS)
+        rate_limiter = getattr(self.parent, "rate_limiter", None)
+
+        try:
+            with LogContext(org_id=org_id):
+                networks = await self.parent.inventory.get_networks(org_id)
+
+            switch_networks = [n for n in networks if "switch" in n.get("productTypes", [])]
+
+            async def _collect_network_lags(network: dict[str, Any]) -> None:
+                network_id = network["id"]
+                try:
+                    with LogContext(network_id=network_id):
+                        if rate_limiter is not None:
+                            await rate_limiter.acquire(org_id, "getNetworkSwitchLinkAggregations")
+                        response = await asyncio.to_thread(
+                            self.api.switch.getNetworkSwitchLinkAggregations,
+                            network_id,
+                        )
+                        lags = validate_response_format(
+                            response,
+                            expected_type=list,
+                            operation="getNetworkSwitchLinkAggregations",
+                        )
+
+                    self.parent._set_metric(
+                        self._ms_link_aggregations,
+                        create_labels(org_id=org_id, network_id=network_id),
+                        len(lags),
+                        MSMetricName.MS_LINK_AGGREGATIONS.value,
+                        ttl_seconds=ttl,
+                    )
+
+                    # ⚠ shape unverified against a live org (#618 Phase-6
+                    # notes): expects each LAG as {"id": ..., "switchPorts":
+                    # [{"serial": ..., "portId": ...}, ...]}.
+                    for lag in lags:
+                        lag_id = str(lag.get("id", ""))
+                        for member in lag.get("switchPorts", []) or []:
+                            member_serial = member.get("serial", "")
+                            member_port_id = str(member.get("portId", ""))
+                            self.parent._set_metric(
+                                self._ms_link_aggregation_member,
+                                create_labels(
+                                    org_id=org_id,
+                                    network_id=network_id,
+                                    lag_id=lag_id,
+                                    serial=member_serial,
+                                    port_id=member_port_id,
+                                ),
+                                1,
+                                MSMetricName.MS_LINK_AGGREGATION_MEMBER.value,
+                                ttl_seconds=ttl,
+                            )
+                except Exception:
+                    logger.exception(
+                        "Failed to collect link aggregations",
+                        network_id=network_id,
+                    )
+
+            async with ManagedTaskGroup(
+                name="ms_link_aggregations",
+                max_concurrency=self.settings.api.concurrency_limit,
+            ) as group:
+                for network in switch_networks:
+                    await group.create_task(
+                        _collect_network_lags(network),
+                        name=f"link_agg_{network['id']}",
+                    )
+
+            self.parent._mark_group_ran(EndpointGroupName.MS_LINK_AGGREGATIONS)
+
+        except Exception:
+            logger.exception(
+                "Failed to collect MS link aggregations",
+                org_id=org_id,
+            )

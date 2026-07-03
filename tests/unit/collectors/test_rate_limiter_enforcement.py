@@ -160,7 +160,13 @@ async def test_ms_stp_fetch_acquires_per_network() -> None:
     parent._create_gauge = MagicMock(side_effect=create_gauge)
     parent._set_metric = MagicMock(side_effect=set_metric)
     # #617 gate helpers: STP self-gates on the MS_STP interval (floor 900s).
-    parent._should_run_group = MagicMock(return_value=True)
+    # #292/#293/#295 fold: collect_stp_priorities now also drives
+    # collect_dhcp_security (#292/#293) and collect_link_aggregations (#295),
+    # which would add their own per-network acquires. This test isolates the STP
+    # fetch alone, so gate those folded groups OFF (they check _should_run_group;
+    # STP does NOT - it self-gates via _should_collect_stp_priorities) to keep the
+    # original "once per network for STP" intent and the 2-acquire expectation.
+    parent._should_run_group = MagicMock(return_value=False)
     parent._mark_group_ran = MagicMock()
     parent._group_interval = MagicMock(return_value=900.0)
     parent._group_ttl_seconds = MagicMock(return_value=None)

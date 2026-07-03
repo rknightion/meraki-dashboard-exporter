@@ -56,10 +56,11 @@ class TestConfigEndpointGroups:
         assert g.floor_seconds == 900
         assert g.setting_pin is None
 
-    def test_cost_is_three_calls(self) -> None:
-        """cost_fn is a flat 3 API calls per cycle."""
-        # login security + admins + config changes = 3 API calls per cycle.
-        assert ConfigCollector.endpoint_groups[0].cost_fn(_shape()) == 3
+    def test_cost_is_four_calls(self) -> None:
+        """cost_fn is a flat 4 API calls per cycle."""
+        # login security + admins + config changes + SAML posture (#301) = ~4
+        # API calls per cycle (+1 more when SAML is enabled, not modelled).
+        assert ConfigCollector.endpoint_groups[0].cost_fn(_shape()) == 4
 
 
 class TestConfigOrgGate(BaseCollectorTest):

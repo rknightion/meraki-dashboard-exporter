@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 from ..core.api_helpers import create_api_helper
 from ..core.async_utils import ManagedTaskGroup
 from ..core.collector import MetricCollector
-from ..core.constants import NetworkMetricName, OrgMetricName, UpdateTier
+from ..core.constants import DeviceMetricName, NetworkMetricName, OrgMetricName, UpdateTier
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.error_handling import (
     CollectorError,
@@ -34,6 +34,8 @@ from .organization_collectors import (
     DeviceAvailabilityHistoryCollector,
     FirmwareCollector,
     LicenseCollector,
+    TopUsageCollector,
+    WebhookLogsCollector,
 )
 
 if TYPE_CHECKING:
@@ -121,6 +123,43 @@ class OrganizationCollector(MetricCollector):
             cost_fn=lambda shape: 2,
             tier=UpdateTier.MEDIUM,
         ),
+        # Phase 4 (#618) — single/fixed org calls, so cost_fns are org-wide
+        # constants rather than shape-derived.
+        EndpointGroup(
+            name=EndpointGroupName.ORG_CONFIG_TEMPLATES,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda shape: 1.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.ORG_ADAPTIVE_POLICY,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda shape: 1.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.ORG_TOP_USAGE,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda shape: 3.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.ORG_WEBHOOK_LOGS,
+            priority=4,
+            floor_seconds=300,
+            cost_fn=lambda shape: 1.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+        EndpointGroup(
+            name=EndpointGroupName.ORG_FIRMWARE_COMPLIANCE,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda shape: 1.0,
+            tier=UpdateTier.MEDIUM,
+        ),
     )
 
     def __init__(
@@ -157,6 +196,8 @@ class OrganizationCollector(MetricCollector):
         self.client_overview_collector = ClientOverviewCollector(self)
         self.firmware_collector = FirmwareCollector(self)
         self.device_availability_history_collector = DeviceAvailabilityHistoryCollector(self)
+        self.top_usage_collector = TopUsageCollector(self)
+        self.webhook_logs_collector = WebhookLogsCollector(self)
 
     def _initialize_metrics(self) -> None:
         """Initialize organization metrics."""
@@ -341,6 +382,96 @@ class OrganizationCollector(MetricCollector):
             OrgMetricName.ORG_APPLICATION_USAGE_PERCENT,
             "Application usage percent by category over the trailing 1-day window",
             labelnames=[LabelName.ORG_ID, LabelName.CATEGORY],
+        )
+
+        # --- Phase 4 (#618) organization signal expansion ---
+
+        # #297 — Config templates + template binding.
+        self._org_config_templates = self._create_gauge(
+            OrgMetricName.ORG_CONFIG_TEMPLATES,
+            "Number of configuration templates defined in the organization",
+            labelnames=[LabelName.ORG_ID],
+        )
+        self._org_networks_bound_to_template = self._create_gauge(
+            OrgMetricName.ORG_NETWORKS_BOUND_TO_TEMPLATE,
+            "Number of NetworkFilter-visible networks bound to a configuration template "
+            "(counts only networks within the configured NetworkFilter, not the whole org)",
+            labelnames=[LabelName.ORG_ID],
+        )
+
+        # #298 — Adaptive policy overview (absent unless the org is licensed for
+        # adaptive policy; the endpoint 404s otherwise and the metrics stay unset).
+        self._org_adaptive_policy_groups = self._create_gauge(
+            OrgMetricName.ORG_ADAPTIVE_POLICY_GROUPS,
+            "Number of adaptive policy groups in the organization",
+            labelnames=[LabelName.ORG_ID],
+        )
+        self._org_adaptive_policy_acls = self._create_gauge(
+            OrgMetricName.ORG_ADAPTIVE_POLICY_ACLS,
+            "Number of adaptive policy custom ACLs in the organization",
+            labelnames=[LabelName.ORG_ID],
+        )
+        self._org_adaptive_policy_policies = self._create_gauge(
+            OrgMetricName.ORG_ADAPTIVE_POLICY_POLICIES,
+            "Number of adaptive policies in the organization",
+            labelnames=[LabelName.ORG_ID],
+        )
+
+        # #299 — Org-wide top-N usage over the trailing 1-day window. Bounded to
+        # the top 10 entries per dimension.
+        self._org_top_client_usage_total_bytes = self._create_gauge(
+            OrgMetricName.ORG_TOP_CLIENT_USAGE_TOTAL_BYTES,
+            "Total bytes used by each top-N client over the trailing 1-day window "
+            "(labelled by client_id only per #533; join client_id -> name via "
+            "meraki_client_info, which may miss clients on untracked networks)",
+            labelnames=[LabelName.ORG_ID, LabelName.CLIENT_ID],
+        )
+        self._org_top_ssid_usage_total_bytes = self._create_gauge(
+            OrgMetricName.ORG_TOP_SSID_USAGE_TOTAL_BYTES,
+            "Total bytes used by each top-N SSID over the trailing 1-day window",
+            labelnames=[LabelName.ORG_ID, LabelName.SSID],
+        )
+        self._org_top_manufacturer_usage_total_bytes = self._create_gauge(
+            OrgMetricName.ORG_TOP_MANUFACTURER_USAGE_TOTAL_BYTES,
+            "Total bytes used by each top-N client-device manufacturer over the "
+            "trailing 1-day window",
+            labelnames=[LabelName.ORG_ID, LabelName.MANUFACTURER],
+        )
+
+        # #300 — Webhook delivery log. Windowed 1-hour count of delivery attempts
+        # by HTTP response status code, resampled each cycle (a _count, not a
+        # monotonic _total). Deliveries with a non-2xx code are failures
+        # (status_code!~"2.." in PromQL); the URL is deliberately not a label.
+        self._org_webhook_deliveries_count = self._create_gauge(
+            OrgMetricName.ORG_WEBHOOK_DELIVERIES_COUNT,
+            "Number of Meraki webhook delivery attempts in the trailing 1-hour window "
+            "by HTTP response status code (windowed count, resets each cycle; failures "
+            'are status_code!~"2..")',
+            labelnames=[LabelName.ORG_ID, LabelName.STATUS_CODE],
+        )
+
+        # #611 — Firmware compliance. Per-device firmware info join carrier (value
+        # 1, one series per device, joins on serial) and a per-network up-to-date
+        # gauge derived from the firmware-upgrades-by-device endpoint.
+        self._device_firmware_info = self._create_gauge(
+            DeviceMetricName.DEVICE_FIRMWARE_INFO,
+            "Device firmware join metric (value 1): maps serial -> running firmware. "
+            "Numeric device series join firmware via on(serial) group_left(firmware)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.SERIAL,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+                LabelName.FIRMWARE,
+            ],
+        )
+        self._network_firmware_up_to_date = self._create_gauge(
+            NetworkMetricName.NETWORK_FIRMWARE_UP_TO_DATE,
+            "Whether every device in the network is on its latest firmware "
+            "(1=all up to date / no pending upgrade, 0=at least one device has a "
+            "pending or in-progress upgrade)",
+            labelnames=[LabelName.ORG_ID, LabelName.NETWORK_ID],
         )
 
     async def _collect_impl(self) -> None:
@@ -635,6 +766,17 @@ class OrganizationCollector(MetricCollector):
         await _attempt(
             "application_usage_metrics",
             self._collect_application_usage_metrics(org_id, org_name),
+        )
+        # Phase 4 (#618): #297 config templates + #298 adaptive policy are direct
+        # sub-collections (raise on failure); #299 top usage, #300 webhook logs and
+        # #611 firmware compliance delegate to sub-collectors returning a bool.
+        await _attempt("config_templates", self._collect_config_templates(org_id, org_name))
+        await _attempt("adaptive_policy", self._collect_adaptive_policy(org_id, org_name))
+        await _attempt("top_usage_metrics", self._collect_top_usage_metrics(org_id, org_name))
+        await _attempt("webhook_logs_metrics", self._collect_webhook_logs_metrics(org_id, org_name))
+        await _attempt(
+            "firmware_compliance_metrics",
+            self._collect_firmware_compliance_metrics(org_id, org_name),
         )
 
         return failed, succeeded
@@ -1238,3 +1380,228 @@ class OrganizationCollector(MetricCollector):
             org_id=org_id,
             categories_count=len(response),
         )
+
+    # --- Phase 4 (#618) organization signal expansion ---
+
+    @log_api_call("getOrganizationConfigTemplates")
+    async def _fetch_config_templates(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch the organization's configuration templates.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            Configuration templates (empty list when none are defined).
+
+        """
+        self._track_api_call("getOrganizationConfigTemplates")
+        response = await asyncio.to_thread(
+            self.api.organizations.getOrganizationConfigTemplates,
+            org_id,
+        )
+        return cast(
+            list[dict[str, Any]],
+            validate_response_format(
+                response,
+                expected_type=list,
+                operation="getOrganizationConfigTemplates",
+            ),
+        )
+
+    async def _collect_config_templates(self, org_id: str, org_name: str) -> None:
+        """Collect config-template count and template-binding metrics (#297).
+
+        Raises on a real API failure so the coordinator's per-org accounting
+        counts it. An empty template list is normal (org has no templates).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        if not self._should_run_group(EndpointGroupName.ORG_CONFIG_TEMPLATES):
+            return
+
+        with LogContext(org_id=org_id, org_name=org_name):
+            templates = await self._fetch_config_templates(org_id)
+            # Zero extra API call: derive the bound-network count from the
+            # already-cached, NetworkFilter-applied inventory networks.
+            networks = await self.inventory.get_networks(org_id) if self.inventory else []
+
+        self._mark_group_ran(EndpointGroupName.ORG_CONFIG_TEMPLATES)
+        ttl = self._group_ttl_seconds(EndpointGroupName.ORG_CONFIG_TEMPLATES)
+
+        bound_count = sum(1 for n in networks if n.get("isBoundToConfigTemplate"))
+        labels = create_org_labels({"id": org_id, "name": org_name})
+        self._set_metric(
+            self._org_config_templates,
+            labels,
+            len(templates),
+            OrgMetricName.ORG_CONFIG_TEMPLATES.value,
+            ttl_seconds=ttl,
+        )
+        self._set_metric(
+            self._org_networks_bound_to_template,
+            labels,
+            bound_count,
+            OrgMetricName.ORG_NETWORKS_BOUND_TO_TEMPLATE.value,
+            ttl_seconds=ttl,
+        )
+        logger.debug(
+            "Collected config template metrics",
+            org_id=org_id,
+            template_count=len(templates),
+            networks_bound=bound_count,
+        )
+
+    @log_api_call("getOrganizationAdaptivePolicyOverview")
+    async def _fetch_adaptive_policy_overview(self, org_id: str) -> dict[str, Any]:
+        """Fetch the organization's adaptive-policy aggregate statistics.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+
+        Returns
+        -------
+        dict[str, Any]
+            Adaptive-policy overview (``counts`` object).
+
+        """
+        self._track_api_call("getOrganizationAdaptivePolicyOverview")
+        response = await asyncio.to_thread(
+            self.api.organizations.getOrganizationAdaptivePolicyOverview,
+            org_id,
+        )
+        return cast(
+            dict[str, Any],
+            validate_response_format(
+                response,
+                expected_type=dict,
+                operation="getOrganizationAdaptivePolicyOverview",
+            ),
+        )
+
+    async def _collect_adaptive_policy(self, org_id: str, org_name: str) -> None:
+        """Collect adaptive-policy overview counts (#298).
+
+        Adaptive policy is absent unless the organization is licensed for it;
+        the endpoint 404s (or 400s) otherwise, which is a benign soft-skip
+        rather than a collection failure (mirrors the license.py pattern).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        if not self._should_run_group(EndpointGroupName.ORG_ADAPTIVE_POLICY):
+            return
+
+        try:
+            with LogContext(org_id=org_id, org_name=org_name):
+                overview = await self._fetch_adaptive_policy_overview(org_id)
+        except Exception as e:
+            if "404" in str(e) or "400" in str(e):
+                logger.debug(
+                    "Adaptive policy overview not available (org not licensed)",
+                    org_id=org_id,
+                    org_name=org_name,
+                )
+                return
+            raise
+
+        self._mark_group_ran(EndpointGroupName.ORG_ADAPTIVE_POLICY)
+        ttl = self._group_ttl_seconds(EndpointGroupName.ORG_ADAPTIVE_POLICY)
+
+        counts = overview.get("counts", {}) if isinstance(overview, dict) else {}
+        labels = create_org_labels({"id": org_id, "name": org_name})
+        self._set_metric(
+            self._org_adaptive_policy_groups,
+            labels,
+            counts.get("groups") or 0,
+            OrgMetricName.ORG_ADAPTIVE_POLICY_GROUPS.value,
+            ttl_seconds=ttl,
+        )
+        self._set_metric(
+            self._org_adaptive_policy_acls,
+            labels,
+            counts.get("customAcls") or 0,
+            OrgMetricName.ORG_ADAPTIVE_POLICY_ACLS.value,
+            ttl_seconds=ttl,
+        )
+        self._set_metric(
+            self._org_adaptive_policy_policies,
+            labels,
+            counts.get("policies") or 0,
+            OrgMetricName.ORG_ADAPTIVE_POLICY_POLICIES.value,
+            ttl_seconds=ttl,
+        )
+        logger.debug(
+            "Collected adaptive policy metrics",
+            org_id=org_id,
+            groups=counts.get("groups"),
+            custom_acls=counts.get("customAcls"),
+            policies=counts.get("policies"),
+        )
+
+    async def _collect_top_usage_metrics(self, org_id: str, org_name: str) -> bool:
+        """Collect org-wide top-N usage metrics (#299).
+
+        Returns the sub-collector's success/failure signal (see
+        ``_collect_api_metrics``) so an isolated failure is counted by
+        ``OrgHealthTracker`` (F-172).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        return await self.top_usage_collector.collect(org_id, org_name) is True
+
+    async def _collect_webhook_logs_metrics(self, org_id: str, org_name: str) -> bool:
+        """Collect webhook delivery-log metrics (#300).
+
+        Returns the sub-collector's success/failure signal (see
+        ``_collect_api_metrics``) so an isolated failure is counted by
+        ``OrgHealthTracker`` (F-172).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        return await self.webhook_logs_collector.collect(org_id, org_name) is True
+
+    async def _collect_firmware_compliance_metrics(self, org_id: str, org_name: str) -> bool:
+        """Collect firmware compliance metrics (#611).
+
+        Returns the sub-collector's success/failure signal (see
+        ``_collect_api_metrics``) so an isolated failure is counted by
+        ``OrgHealthTracker`` (F-172).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        return await self.firmware_collector.collect_compliance(org_id, org_name) is True

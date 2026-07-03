@@ -23,6 +23,7 @@ from .network_health_collectors.bluetooth import BluetoothCollector
 from .network_health_collectors.connection_stats import ConnectionStatsCollector
 from .network_health_collectors.data_rates import DataRatesCollector
 from .network_health_collectors.latency_stats import LatencyStatsCollector
+from .network_health_collectors.mesh import MeshCollector
 from .network_health_collectors.rf_health import RFHealthCollector
 from .network_health_collectors.ssid_performance import SSIDPerformanceCollector
 
@@ -50,6 +51,7 @@ _BUNDLE_GROUPS: tuple[EndpointGroupName, ...] = (
     EndpointGroupName.NH_FAILED_CONNECTIONS,
     EndpointGroupName.NH_LATENCY_STATS,
     EndpointGroupName.NH_AIR_MARSHAL,
+    EndpointGroupName.NH_MESH,
 )
 
 
@@ -112,6 +114,15 @@ class NetworkHealthCollector(MetricCollector):
             cost_fn=lambda shape: float(shape.wireless_network_count),
             tier=UpdateTier.MEDIUM,
         ),
+        # Wireless mesh link health (#307, Phase 4/#618). Repeater topology
+        # changes rarely; floored the same as the other 1h-windowed groups.
+        EndpointGroup(
+            name=EndpointGroupName.NH_MESH,
+            priority=3,
+            floor_seconds=3600,
+            cost_fn=lambda shape: float(shape.wireless_network_count),
+            tier=UpdateTier.MEDIUM,
+        ),
     )
 
     def __init__(
@@ -151,6 +162,7 @@ class NetworkHealthCollector(MetricCollector):
         self.ssid_performance_collector = SSIDPerformanceCollector(self)
         self.latency_stats_collector = LatencyStatsCollector(self)
         self.air_marshal_collector = AirMarshalCollector(self)
+        self.mesh_collector = MeshCollector(self)
 
     def _initialize_metrics(self) -> None:
         """Initialize network health metrics."""
@@ -520,6 +532,8 @@ class NetworkHealthCollector(MetricCollector):
             await self._collect_network_latency_stats(network)
         if EndpointGroupName.NH_AIR_MARSHAL in due_groups:
             await self._collect_network_air_marshal(network)
+        if EndpointGroupName.NH_MESH in due_groups:
+            await self._collect_network_mesh(network)
 
     async def _fetch_networks_for_health(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch networks for health collection via shared inventory cache.
@@ -616,3 +630,14 @@ class NetworkHealthCollector(MetricCollector):
 
         """
         await self.air_marshal_collector.collect(network)
+
+    async def _collect_network_mesh(self, network: dict[str, Any]) -> None:
+        """Collect wireless mesh link health for a network's repeater APs (#307).
+
+        Parameters
+        ----------
+        network : dict[str, Any]
+            Network data.
+
+        """
+        await self.mesh_collector.collect(network)

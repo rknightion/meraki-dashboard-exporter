@@ -1,6 +1,24 @@
 # golden metrics exposition contract: family=ms
 # fields: NAME / TYPE / HELP / LABELS (label KEY sets, values normalized out)
 
+meraki_ms_dai_supported gauge
+  help: Switch supports Dynamic ARP Inspection (1 = supported, 0 = not supported)
+  labels: network_id,org_id,serial
+meraki_ms_dai_trusted_port_configured gauge
+  help: Switch has at least one Dynamic ARP Inspection trusted port configured (1 = configured, 0 = not configured)
+  labels: network_id,org_id,serial
+meraki_ms_dhcp_servers_seen_count gauge
+  help: Number of DHCPv4 servers seen on the network by allow-list status (1-day window, resets each collection cycle)
+  labels: is_allowed,network_id,org_id
+meraki_ms_link_aggregation_member gauge
+  help: Switch port is a member of a link aggregation group (value 1)
+  labels: lag_id,network_id,org_id,port_id,serial
+meraki_ms_link_aggregations gauge
+  help: Number of link aggregation (LACP) groups configured in the network
+  labels: network_id,org_id
+meraki_ms_org_poe_draw_watts gauge
+  help: Organization-wide switch PoE power draw in watts (most recent history bucket; lags real-time by ~20 minutes)
+  labels: org_id
 meraki_ms_poe_budget_watts gauge
   help: Total POE power budget for switch in watts
   labels: device_type,model,network_id,org_id,serial
@@ -28,6 +46,9 @@ meraki_ms_port_error_active gauge
 meraki_ms_port_info gauge
   help: Switch port info (value 1); join port_name via on(serial, port_id)
   labels: network_id,org_id,port_id,port_name,serial
+meraki_ms_port_neighbor_present gauge
+  help: Switch port has an advertised CDP/LLDP neighbor this cycle (value 1; series absent when no neighbor is advertised via this protocol)
+  labels: device_type,model,network_id,org_id,port_id,serial,type
 meraki_ms_port_packets_broadcast_count gauge
   help: Broadcast packets on switch port (5-minute window)
   labels: device_type,direction,model,network_id,org_id,port_id,serial

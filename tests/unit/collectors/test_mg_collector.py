@@ -8,8 +8,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from prometheus_client import Gauge
 
-from meraki_dashboard_exporter.collectors.devices.mg import MGCollector
+from meraki_dashboard_exporter.collectors.devices.mg import (
+    MGCellularBandsDevice,
+    MGCellularTowersDevice,
+    MGCollector,
+)
 from meraki_dashboard_exporter.core.domain_models import CellularGatewayUplinkStatus
+from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 
 if TYPE_CHECKING:
     pass
@@ -23,6 +28,7 @@ class TestMGCollector:
         """Create a mock API client."""
         api = MagicMock()
         api.cellularGateway = MagicMock()
+        api.organizations = MagicMock()
         return api
 
     @pytest.fixture
@@ -34,6 +40,9 @@ class TestMGCollector:
         parent.rate_limiter = None
         # No inventory means no NetworkFilter — collectors emit all rows.
         parent.inventory = None
+        parent._should_run_group = MagicMock(return_value=True)
+        parent._mark_group_ran = MagicMock()
+        parent._group_ttl_seconds = MagicMock(return_value=None)
 
         def create_gauge(name, description, labelnames):
             return Gauge(name.value, description, labelnames)
@@ -553,3 +562,596 @@ class TestMGCollector:
         assert value == 1
         assert labels["model"] == "MG21-FROM-LOOKUP"
         assert labels["serial"] == "Q2XX-1"
+
+    # ------------------------------------------------------------------
+    # #304 — Cellular band config + serving cell (Phase 4, spec-only)
+    # ------------------------------------------------------------------
+
+    def test_mg_cellular_gauges_created_on_init(
+        self,
+        mg_collector: MGCollector,
+        mock_parent: MagicMock,
+    ) -> None:
+        """New #304 gauges must be created alongside the existing MG gauges."""
+        assert mg_collector._mg_cellular_bands is not None
+        assert mg_collector._mg_serving_cell_info is not None
+
+    async def test_collect_uplink_statuses_also_triggers_cellular_config(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The entrypoint device.py already invokes must also fetch #304 data.
+
+        collect_uplink_statuses must also gate + fetch the #304
+        cellular-config groups, since device.py is not being modified to add
+        a second call site.
+        """
+        mock_api.cellularGateway.getOrganizationCellularGatewayUplinkStatuses = MagicMock(
+            return_value=[]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        mock_parent._should_run_group.assert_any_call(EndpointGroupName.MG_UPLINK_STATUS)
+        mock_parent._should_run_group.assert_any_call(EndpointGroupName.MG_CELLULAR_CONFIG)
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice.assert_called_once()
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice.assert_called_once()
+        mock_parent._mark_group_ran.assert_any_call(EndpointGroupName.MG_CELLULAR_CONFIG)
+
+    async def test_cellular_config_gated_by_scheduler_skips_both_fetches(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """When MG_CELLULAR_CONFIG is not due, neither fetch should run."""
+        mock_parent._should_run_group = MagicMock(
+            side_effect=lambda group: group != EndpointGroupName.MG_CELLULAR_CONFIG
+        )
+        mock_api.cellularGateway.getOrganizationCellularGatewayUplinkStatuses = MagicMock(
+            return_value=[]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice.assert_not_called()
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice.assert_not_called()
+        assert (
+            mock_parent._mark_group_ran.call_args_list.count((
+                (EndpointGroupName.MG_CELLULAR_CONFIG,),
+                {},
+            ))
+            == 0
+        )
+
+    async def test_collect_cellular_bands_nested_rat_shape(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Nested {slot: {rat: {status: [bands]}}} shape is counted correctly."""
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-1",
+                    "model": "MG21",
+                    "network": {"id": "N_1"},
+                    "bands": {
+                        "sim1": {
+                            "lte": {"enabled": ["B2", "B4"], "masked": ["B66"]},
+                            "5gNsa": {"enabled": ["n41"]},
+                        }
+                    },
+                }
+            ]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        band_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_cellular_bands
+        ]
+        by_key = {
+            (c[0][1]["slot"], c[0][1]["connection_type"], c[0][1]["status"]): c[0][2]
+            for c in band_calls
+        }
+        assert by_key[("sim1", "lte", "enabled")] == 2
+        assert by_key[("sim1", "lte", "masked")] == 1
+        assert by_key[("sim1", "5gNsa", "enabled")] == 1
+        # ID-only labels: serial/model present, no name-family labels.
+        assert band_calls[0][0][1]["serial"] == "Q2XX-1"
+        assert band_calls[0][0][1]["network_id"] == "N_1"
+
+    async def test_collect_cellular_bands_flat_list_shape(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Fallback flat-list-of-entries shape is also handled defensively."""
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-1",
+                    "model": "MG21",
+                    "networkId": "N_1",
+                    "bands": {
+                        "sim1": [
+                            {"connectionType": "lte", "status": "enabled", "band": "B2"},
+                            {"connectionType": "lte", "status": "enabled", "band": "B4"},
+                            {"type": "unknownRat", "status": "supported", "band": "X"},
+                        ]
+                    },
+                }
+            ]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        band_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_cellular_bands
+        ]
+        by_key = {
+            (c[0][1]["slot"], c[0][1]["connection_type"], c[0][1]["status"]): c[0][2]
+            for c in band_calls
+        }
+        assert by_key[("sim1", "lte", "enabled")] == 2
+        # Unrecognized RAT strings collapse to the bounded "other" bucket.
+        assert by_key[("sim1", "other", "supported")] == 1
+
+    async def test_collect_cellular_bands_unknown_slot_and_status_dropped(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Unknown slot keys and unbounded status strings must never be emitted."""
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-1",
+                    "model": "MG21",
+                    "networkId": "N_1",
+                    "bands": {
+                        "simX": {"lte": {"enabled": ["B2"]}},
+                        "sim1": {"lte": {"weird-unbounded-status": ["B2"]}},
+                    },
+                }
+            ]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        band_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_cellular_bands
+        ]
+        assert band_calls == []
+
+    async def test_collect_cellular_bands_respects_network_filter(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Devices in excluded networks must not emit band-count metrics."""
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q-IN",
+                    "networkId": "N_INCLUDED",
+                    "bands": {"sim1": {"lte": {"enabled": ["B2"]}}},
+                },
+                {
+                    "serial": "Q-OUT",
+                    "networkId": "N_EXCLUDED",
+                    "bands": {"sim1": {"lte": {"enabled": ["B2"]}}},
+                },
+            ]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[]
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_INCLUDED"})
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        band_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_cellular_bands
+        ]
+        assert len(band_calls) == 1
+        assert band_calls[0][0][1]["serial"] == "Q-IN"
+
+    async def test_collect_cellular_bands_empty_response(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Empty bands response must not raise or emit metrics."""
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        band_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_cellular_bands
+        ]
+        assert band_calls == []
+
+    async def test_collect_cellular_bands_api_error_handled_gracefully(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An API error on the bands call must not raise.
+
+        It also must not block the independent towers fetch.
+        """
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            side_effect=Exception("API connection failed")
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[
+                {"serial": "Q2XX-1", "networkId": "N_1", "towers": [{"cellId": "1", "tac": "2"}]}
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        band_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_cellular_bands
+        ]
+        serving_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_serving_cell_info
+        ]
+        assert band_calls == []
+        assert len(serving_calls) == 1
+
+    async def test_collect_cellular_bands_exhausted_retry_error_shape_handled_gracefully(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The SDK exhausted-retry error shape must be absorbed, not raised."""
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value={"errors": ["internal server error"]}
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        band_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_cellular_bands
+        ]
+        assert band_calls == []
+
+    async def test_collect_cellular_bands_validates_rows_via_domain_model(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Each raw row must be validated via MGCellularBandsDevice.model_validate."""
+        row = {
+            "serial": "Q2XX-1",
+            "networkId": "N_1",
+            "bands": {"sim1": {"lte": {"enabled": ["B2"]}}},
+        }
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[row]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[]
+        )
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mg.MGCellularBandsDevice.model_validate",
+            wraps=MGCellularBandsDevice.model_validate,
+        ) as spy:
+            await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        spy.assert_called_once_with(row)
+
+    async def test_collect_cellular_bands_tolerates_missing_and_extra_fields(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Missing optional fields and unexpected extra fields must not raise."""
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-1",
+                    # "model" and "network"/"networkId" intentionally omitted
+                    "someBrandNewField": {"nested": True},
+                    "bands": {"sim1": {"lte": {"enabled": ["B2"]}}},
+                }
+            ]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[]
+        )
+
+        device_lookup = {
+            "Q2XX-1": {"model": "MG21-FROM-LOOKUP", "network_id": "N_1"},
+        }
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", device_lookup)
+
+        band_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_cellular_bands
+        ]
+        assert len(band_calls) == 1
+        assert band_calls[0][0][1]["model"] == "MG21-FROM-LOOKUP"
+        assert band_calls[0][0][1]["network_id"] == "N_1"
+
+    async def test_collect_cellular_bands_does_not_wipe_other_orgs(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The shared gauge must not be cleared globally (multi-org safety)."""
+        bands_gauge = mg_collector._mg_cellular_bands
+        bands_gauge.labels(
+            org_id="org2",
+            network_id="N_2",
+            serial="Q2ZZ-OTHER",
+            model="MG21",
+            device_type="MG",
+            slot="sim1",
+            connection_type="lte",
+            status="enabled",
+        ).set(3)
+        assert len(bands_gauge._metrics) == 1
+
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-1",
+                    "networkId": "N_1",
+                    "bands": {"sim1": {"lte": {"enabled": ["B2"]}}},
+                }
+            ]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        # _set_metric is mocked (as in the sibling uplink-status test above),
+        # so it never touches the real gauge here - the assertion that
+        # matters is that org2's pre-seeded series is untouched, i.e. nothing
+        # in the collection path calls a global bands_gauge.clear()/wipe.
+        assert len(bands_gauge._metrics) == 1
+
+    # ------------------------------------------------------------------
+    # #304 — serving cell info
+    # ------------------------------------------------------------------
+
+    async def test_collect_serving_cell_basic(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A single tower entry emits one serving-cell info series."""
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-1",
+                    "model": "MG21",
+                    "network": {"id": "N_1"},
+                    "towers": [{"cellId": "12345", "tac": "6789"}],
+                }
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        serving_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_serving_cell_info
+        ]
+        assert len(serving_calls) == 1
+        _, labels, value, *_ = serving_calls[0][0]
+        assert value == 1
+        assert labels["cell_id"] == "12345"
+        assert labels["tac"] == "6789"
+        assert labels["serial"] == "Q2XX-1"
+        assert labels["network_id"] == "N_1"
+
+    async def test_collect_serving_cell_prefers_serving_flagged_entry(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """When multiple tower entries exist, prefer one flagged as serving."""
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-1",
+                    "networkId": "N_1",
+                    "towers": [
+                        {"cellId": "111", "tac": "1"},
+                        {"cellId": "222", "tac": "2", "serving": True},
+                    ],
+                }
+            ]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        serving_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_serving_cell_info
+        ]
+        assert len(serving_calls) == 1
+        assert serving_calls[0][0][1]["cell_id"] == "222"
+        assert serving_calls[0][0][1]["tac"] == "2"
+
+    async def test_collect_serving_cell_no_usable_id_skips_emission(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A towers list with no usable cell-id field emits no metric."""
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[{"serial": "Q2XX-1", "networkId": "N_1", "towers": [{"foo": "bar"}]}]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        serving_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_serving_cell_info
+        ]
+        assert serving_calls == []
+
+    async def test_collect_serving_cell_empty_towers_list_skips_emission(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An empty towers list for a device emits no metric (no crash)."""
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[{"serial": "Q2XX-1", "networkId": "N_1", "towers": []}]
+        )
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        serving_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_serving_cell_info
+        ]
+        assert serving_calls == []
+
+    async def test_collect_serving_cell_respects_network_filter(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Devices in excluded networks must not emit serving-cell metrics."""
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q-IN",
+                    "networkId": "N_INCLUDED",
+                    "towers": [{"cellId": "1", "tac": "2"}],
+                },
+                {
+                    "serial": "Q-OUT",
+                    "networkId": "N_EXCLUDED",
+                    "towers": [{"cellId": "3", "tac": "4"}],
+                },
+            ]
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_INCLUDED"})
+
+        await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        serving_calls = [
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is mg_collector._mg_serving_cell_info
+        ]
+        assert len(serving_calls) == 1
+        assert serving_calls[0][0][1]["serial"] == "Q-IN"
+
+    async def test_collect_serving_cell_validates_rows_via_domain_model(
+        self,
+        mg_collector: MGCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Each raw towers row must be validated via MGCellularTowersDevice.model_validate."""
+        row = {
+            "serial": "Q2XX-1",
+            "networkId": "N_1",
+            "towers": [{"cellId": "1", "tac": "2"}],
+        }
+        mock_api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice = MagicMock(
+            return_value=[]
+        )
+        mock_api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice = MagicMock(
+            return_value=[row]
+        )
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mg.MGCellularTowersDevice.model_validate",
+            wraps=MGCellularTowersDevice.model_validate,
+        ) as spy:
+            await mg_collector.collect_uplink_statuses("org1", "Test Org", {})
+
+        spy.assert_called_once_with(row)

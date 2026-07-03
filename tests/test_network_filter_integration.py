@@ -68,7 +68,16 @@ async def test_ms_stp_uses_parent_inventory() -> None:
 
     await collector.collect_stp_priorities("ORG", "Org Name", device_lookup={})
 
-    parent.inventory.get_networks.assert_awaited_once_with("ORG")
+    # #292/#293/#295 fold: collect_stp_priorities now also invokes
+    # collect_dhcp_security (#292 rogue DHCP + #293 DAI) and
+    # collect_link_aggregations (#295) from this same per-org call site, and each
+    # independently fetches networks via the CACHED
+    # self.parent.inventory.get_networks(org_id). That is 3 awaits total
+    # (dhcp-security + LACP + STP), all keyed by the same org; get_networks is
+    # cached so the extra awaits are harmless.
+    assert parent.inventory.get_networks.await_count == 3
+    for call in parent.inventory.get_networks.await_args_list:
+        assert call.args == ("ORG",)
 
 
 async def test_mr_ssid_usage_does_not_fetch_per_network() -> None:

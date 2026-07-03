@@ -7,6 +7,9 @@ meraki_ap_channel_utilization_2_4ghz_percent gauge
 meraki_ap_channel_utilization_5ghz_percent gauge
   help: 5GHz channel utilization percentage per AP, 10-min bucket
   labels: device_type,model,network_id,org_id,serial,utilization_type
+meraki_mr_air_marshal_bssids_by_threat_type_count gauge
+  help: Number of Air Marshal BSSIDs observed by threat type, last hour (rogue/spoof/other; entries without a threat-type field are not counted)
+  labels: network_id,org_id,threat_type
 meraki_mr_air_marshal_bssids_count gauge
   help: Total number of BSSIDs across all Air Marshal SSID entries, last hour
   labels: network_id,org_id
@@ -22,6 +25,15 @@ meraki_mr_air_marshal_wired_detected_count gauge
 meraki_mr_device_latency_seconds gauge
   help: MR access point average wireless latency in seconds by traffic class, 1-h window
   labels: network_id,org_id,serial,traffic_class
+meraki_mr_mesh_route_metric gauge
+  help: Wireless mesh route quality metric from repeater to gateway AP, unitless, lower is better
+  labels: network_id,org_id,serial
+meraki_mr_mesh_throughput_bytes_per_second gauge
+  help: Wireless mesh repeater link throughput in bytes per second (API Mbps x1e6/8)
+  labels: network_id,org_id,serial
+meraki_mr_mesh_usage_percent gauge
+  help: Wireless mesh link utilization percentage (0-100)
+  labels: network_id,org_id,serial
 meraki_mr_network_client_latency_seconds gauge
   help: Network-wide average wireless client latency in seconds by traffic class, 1-h window
   labels: network_id,org_id,traffic_class

@@ -528,6 +528,186 @@ class ApplianceFirewallRules(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+# Phase 4 MX config-drift models (#285-#289, v1-readiness). ⚠ spec-only (no MX
+# hardware available) — all fields optional/lenient pending Phase-6 live verification.
+
+
+class ApplianceContentFiltering(BaseModel):
+    """Content-filtering configuration for a network.
+
+    Source: ``getNetworkApplianceContentFiltering``.
+    """
+
+    __meraki_op__ = "getNetworkApplianceContentFiltering"
+
+    blockedUrlCategories: list[dict[str, Any]] = Field(default_factory=list)
+    blockedUrlPatterns: list[str] = Field(default_factory=list)
+    allowedUrlPatterns: list[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceSecurityMalwareSettings(BaseModel):
+    """Advanced Malware Protection (AMP) configuration for a network.
+
+    Source: ``getNetworkApplianceSecurityMalware``. Returns 400/404 when the
+    network's org lacks an Advanced Security license -- callers must treat that
+    as a debug-log skip, not an error.
+    """
+
+    __meraki_op__ = "getNetworkApplianceSecurityMalware"
+
+    mode: str | None = None
+    allowedUrls: list[dict[str, Any]] = Field(default_factory=list)
+    allowedFiles: list[dict[str, Any]] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceSecurityIntrusionSettings(BaseModel):
+    """IDS/IPS (intrusion detection/prevention) configuration for a network.
+
+    Source: ``getNetworkApplianceSecurityIntrusion``. Returns 400/404 when the
+    network's org lacks an Advanced Security license -- callers must treat that
+    as a debug-log skip, not an error.
+    """
+
+    __meraki_op__ = "getNetworkApplianceSecurityIntrusion"
+
+    mode: str | None = None
+    idsRulesets: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceDhcpSubnet(BaseModel):
+    """A single DHCP-served subnet's IP utilization row for an MX device.
+
+    Source: ``getDeviceApplianceDhcpSubnets`` (returns a bare list; empty when
+    the device serves no DHCP VLANs).
+    """
+
+    __meraki_op__ = "getDeviceApplianceDhcpSubnets"
+
+    subnet: str | None = None
+    vlanId: int | None = None
+    usedCount: int | None = None
+    freeCount: int | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceVpnSiteToSiteHub(BaseModel):
+    """A single configured VPN hub within a site-to-site VPN config."""
+
+    # apidrift: nested sub-object of ApplianceVpnSiteToSite.hubs; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
+    hubId: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceVpnSiteToSiteSubnet(BaseModel):
+    """A single locally-advertised subnet within a site-to-site VPN config."""
+
+    # apidrift: nested sub-object of ApplianceVpnSiteToSite.subnets; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
+    localSubnet: str | None = None
+    useVpn: bool | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceVpnSiteToSite(BaseModel):
+    """Site-to-site VPN topology configuration for a network.
+
+    Source: ``getNetworkApplianceVpnSiteToSiteVpn``. ``mode: "none"`` is a
+    normal, expected response (VPN not configured for this network).
+    """
+
+    __meraki_op__ = "getNetworkApplianceVpnSiteToSiteVpn"
+
+    mode: str = "none"
+    hubs: list[ApplianceVpnSiteToSiteHub] = Field(default_factory=list)
+    subnets: list[ApplianceVpnSiteToSiteSubnet] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class AppliancePortForwardingRules(BaseModel):
+    """Port-forwarding rules configured for a network.
+
+    Source: ``getNetworkApplianceFirewallPortForwardingRules``. An empty
+    ``rules`` list is a normal, expected response.
+    """
+
+    __meraki_op__ = "getNetworkApplianceFirewallPortForwardingRules"
+
+    rules: list[dict[str, Any]] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceOneToOneNatRules(BaseModel):
+    """1:1 NAT rules configured for a network.
+
+    Source: ``getNetworkApplianceFirewallOneToOneNatRules``. An empty
+    ``rules`` list is a normal, expected response.
+    """
+
+    __meraki_op__ = "getNetworkApplianceFirewallOneToOneNatRules"
+
+    rules: list[dict[str, Any]] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceOneToManyNatRules(BaseModel):
+    """1:many NAT rules configured for a network.
+
+    Source: ``getNetworkApplianceFirewallOneToManyNatRules``. An empty
+    ``rules`` list is a normal, expected response.
+    """
+
+    __meraki_op__ = "getNetworkApplianceFirewallOneToManyNatRules"
+
+    rules: list[dict[str, Any]] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceVlan(BaseModel):
+    """A single configured VLAN row for a network.
+
+    Source: ``getNetworkApplianceVlans`` (returns a bare list; the endpoint
+    itself returns HTTP 400 when VLANs are not enabled for the network --
+    callers must treat that as a debug-log skip, not an error).
+    """
+
+    __meraki_op__ = "getNetworkApplianceVlans"
+
+    id: str | int | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ApplianceStaticRoute(BaseModel):
+    """A single configured static route row for a network.
+
+    Source: ``getNetworkApplianceStaticRoutes`` (returns a bare list).
+    """
+
+    __meraki_op__ = "getNetworkApplianceStaticRoutes"
+
+    enabled: bool | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
 # Sensor overview / gateway-connection Models (M3 new-signal fetchers, F-023)
 
 
@@ -896,6 +1076,115 @@ class ClientData(BaseModel):
     def display_name(self) -> str:
         """Get best available display name."""
         return self.description or self.hostname or self.mac
+
+    model_config = ConfigDict(extra="allow")
+
+
+# Wireless (MR) SSID Firewall Models (Phase 4, #290)
+
+
+class WirelessSsid(BaseModel):
+    """A single SSID configuration row for a network.
+
+    Source: ``getNetworkWirelessSsids``.
+    """
+
+    __meraki_op__ = "getNetworkWirelessSsids"
+
+    number: int | None = None
+    name: str | None = None
+    enabled: bool | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class WirelessSsidFirewallRule(BaseModel):
+    """A single L3 or L7 firewall rule for an SSID.
+
+    Only ``comment``/``policy`` (used for default-rule exclusion) are pinned;
+    the differing L7 rule fields are permitted via extras.
+    """
+
+    # apidrift: nested sub-object of WirelessSsidFirewallL3Rules/L7Rules.rules;
+    # not an independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
+    comment: str | None = None
+    policy: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class WirelessSsidFirewallL3Rules(BaseModel):
+    """The L3 firewall rules response for an SSID (includes ``allowLanAccess``).
+
+    Source: ``getNetworkWirelessSsidFirewallL3FirewallRules``.
+    """
+
+    __meraki_op__ = "getNetworkWirelessSsidFirewallL3FirewallRules"
+
+    rules: list[WirelessSsidFirewallRule] = Field(default_factory=list)
+    allowLanAccess: bool | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class WirelessSsidFirewallL7Rules(BaseModel):
+    """The L7 firewall rules response for an SSID.
+
+    Source: ``getNetworkWirelessSsidFirewallL7FirewallRules``.
+    """
+
+    __meraki_op__ = "getNetworkWirelessSsidFirewallL7FirewallRules"
+
+    rules: list[WirelessSsidFirewallRule] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+# Wireless (MR) RF Profile Assignment Models (Phase 4, #291)
+
+
+class WirelessRfProfileNetworkRef(BaseModel):
+    """A network reference nested within an RF-profile-assignment row."""
+
+    # apidrift: nested sub-object of WirelessRfProfileAssignment.network; not an
+    # independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
+    id: str | None = None
+    name: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class WirelessRfProfileRef(BaseModel):
+    """The RF profile reference nested within an RF-profile-assignment row."""
+
+    # apidrift: nested sub-object of WirelessRfProfileAssignment.rfProfile; not
+    # an independently-mapped response (parent-op drift is caught by oasdiff).
+    __meraki_derived__ = True
+
+    id: str | int | None = None
+    name: str | None = None
+    isIndoorDefault: bool | None = None
+    isOutdoorDefault: bool | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class WirelessRfProfileAssignment(BaseModel):
+    """Per-device RF profile assignment row.
+
+    Source: ``getOrganizationWirelessRfProfilesAssignmentsByDevice``.
+    """
+
+    __meraki_op__ = "getOrganizationWirelessRfProfilesAssignmentsByDevice"
+
+    serial: str | None = None
+    name: str | None = None
+    network: WirelessRfProfileNetworkRef | None = None
+    rfProfile: WirelessRfProfileRef | None = None
 
     model_config = ConfigDict(extra="allow")
 

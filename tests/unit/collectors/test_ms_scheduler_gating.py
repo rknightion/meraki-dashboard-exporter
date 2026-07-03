@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import time
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -317,6 +318,96 @@ class TestMSStacksGate(_MSGatingBase):
         assert EndpointGroupName.MS_STACKS in sched.marked
 
 
+class TestMSDhcpSecurityGate(_MSGatingBase):
+    """MS_DHCP_SECURITY per-network fan-out gate (#292/#293)."""
+
+    async def test_dhcp_security_gate_skips_fetch(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """A not-due gate skips the whole per-network fan-out."""
+        sched = _FakeScheduler({EndpointGroupName.MS_DHCP_SECURITY: False})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        await dc.ms_collector.collect_dhcp_security("org1", "Org")
+        mock_api.switch.getNetworkSwitchDhcpV4ServersSeen.assert_not_called()
+        assert EndpointGroupName.MS_DHCP_SECURITY not in sched.marked
+
+    async def test_dhcp_security_runs_and_marks(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """A due gate fetches for every switch network and marks the group."""
+        sched = _FakeScheduler({EndpointGroupName.MS_DHCP_SECURITY: True})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        ttls = self._spy_set_metric(dc)
+        mock_api.switch.getNetworkSwitchDhcpV4ServersSeen.return_value = []
+        mock_api.switch.getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice.return_value = []
+        inventory.get_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[{"id": "net1", "name": "Net 1", "productTypes": ["switch"]}]
+        )
+        await dc.ms_collector.collect_dhcp_security("org1", "Org")
+        mock_api.switch.getNetworkSwitchDhcpV4ServersSeen.assert_called_once()
+        assert EndpointGroupName.MS_DHCP_SECURITY in sched.marked
+        assert 777.0 in ttls
+
+
+class TestMSLinkAggregationsGate(_MSGatingBase):
+    """MS_LINK_AGGREGATIONS per-network fan-out gate (#295)."""
+
+    async def test_link_aggregations_gate_skips_fetch(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """A not-due gate skips the whole per-network fan-out."""
+        sched = _FakeScheduler({EndpointGroupName.MS_LINK_AGGREGATIONS: False})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        await dc.ms_collector.collect_link_aggregations("org1", "Org")
+        mock_api.switch.getNetworkSwitchLinkAggregations.assert_not_called()
+        assert EndpointGroupName.MS_LINK_AGGREGATIONS not in sched.marked
+
+    async def test_link_aggregations_runs_and_marks(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """A due gate fetches for every switch network and marks the group."""
+        sched = _FakeScheduler({EndpointGroupName.MS_LINK_AGGREGATIONS: True})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        ttls = self._spy_set_metric(dc)
+        mock_api.switch.getNetworkSwitchLinkAggregations.return_value = []
+        inventory.get_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[{"id": "net1", "name": "Net 1", "productTypes": ["switch"]}]
+        )
+        await dc.ms_collector.collect_link_aggregations("org1", "Org")
+        mock_api.switch.getNetworkSwitchLinkAggregations.assert_called_once()
+        assert EndpointGroupName.MS_LINK_AGGREGATIONS in sched.marked
+        assert 777.0 in ttls
+
+
+class TestMSPowerSummaryGate(_MSGatingBase):
+    """MS_POWER_SUMMARY single-call gate behaviour (#294)."""
+
+    async def test_power_summary_gate_skips_fetch(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """A not-due gate skips the org-wide PoE draw fetch."""
+        sched = _FakeScheduler({EndpointGroupName.MS_POWER_SUMMARY: False})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        await dc.ms_collector.collect_power_history("org1", "Org")
+        mock_api.switch.getOrganizationSummarySwitchPowerHistory.assert_not_called()
+        assert EndpointGroupName.MS_POWER_SUMMARY not in sched.marked
+
+    async def test_power_summary_runs_and_marks(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """A due gate fetches the org-wide history and marks the group."""
+        sched = _FakeScheduler({EndpointGroupName.MS_POWER_SUMMARY: True})
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        ttls = self._spy_set_metric(dc)
+        mock_api.switch.getOrganizationSummarySwitchPowerHistory.return_value = [
+            {"startTs": "t0", "endTs": "t1", "draw": 55.0}
+        ]
+        await dc.ms_collector.collect_power_history("org1", "Org")
+        mock_api.switch.getOrganizationSummarySwitchPowerHistory.assert_called_once()
+        assert EndpointGroupName.MS_POWER_SUMMARY in sched.marked
+        assert 777.0 in ttls
+
+
 @pytest.mark.parametrize(
     "group",
     [
@@ -327,6 +418,9 @@ class TestMSStacksGate(_MSGatingBase):
         EndpointGroupName.MS_POWER,
         EndpointGroupName.MS_STACKS,
         EndpointGroupName.MS_STP,
+        EndpointGroupName.MS_DHCP_SECURITY,
+        EndpointGroupName.MS_POWER_SUMMARY,
+        EndpointGroupName.MS_LINK_AGGREGATIONS,
     ],
 )
 def test_ms_groups_declared_on_device_collector(group: EndpointGroupName) -> None:

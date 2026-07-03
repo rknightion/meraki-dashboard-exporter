@@ -10,6 +10,9 @@ meraki_mv_audio_recording_enabled gauge
 meraki_mv_motion_based_retention_enabled gauge
   help: Whether motion-based retention is enabled (1 = enabled)
   labels: device_type,model,network_id,org_id,serial
+meraki_mv_onboarding_status gauge
+  help: MV camera onboarding status (1 = current status; bounded enum, unknown values normalize to 'other')
+  labels: network_id,org_id,serial,status
 meraki_mv_people_count gauge
   help: Current person count reported by MV camera analytics zone
   labels: device_type,model,network_id,org_id,serial,zone_id
@@ -18,6 +21,12 @@ meraki_mv_quality_retention_info gauge
   labels: device_type,model,network_id,org_id,profile_id,quality,resolution,serial
 meraki_mv_restricted_bandwidth_mode_enabled gauge
   help: Whether restricted bandwidth mode is enabled (1 = enabled)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mv_sense_enabled gauge
+  help: Whether MV Sense is enabled on the camera (1 = enabled)
+  labels: device_type,model,network_id,org_id,serial
+meraki_mv_sense_mqtt_broker_configured gauge
+  help: Whether an MQTT broker is configured for MV Sense (1 = configured)
   labels: device_type,model,network_id,org_id,serial
 meraki_mv_zone_info gauge
   help: MV camera analytics zone ID to zone name mapping (1 = present)

@@ -8,7 +8,9 @@ from ....core.logging import get_logger
 from ....core.otel_tracing import trace_method
 from ...devices.base import BaseDeviceCollector
 from .clients import MRClientsCollector
+from .firewall import MRFirewallCollector
 from .performance import MRPerformanceCollector
+from .rf_profiles import MRRfProfilesCollector
 from .wireless import MRWirelessCollector
 
 if TYPE_CHECKING:
@@ -45,6 +47,8 @@ class MRCollector(BaseDeviceCollector):
         self.clients = MRClientsCollector(parent)
         self.performance = MRPerformanceCollector(parent)
         self.wireless = MRWirelessCollector(parent)
+        self.firewall = MRFirewallCollector(parent)
+        self.rf_profiles = MRRfProfilesCollector(parent)
 
         # For backward compatibility, expose metrics from sub-collectors
         # This allows existing code like `mr_collector._ap_clients` to continue working
@@ -116,12 +120,19 @@ class MRCollector(BaseDeviceCollector):
         self._ssid_client_count = self.wireless._ssid_client_count
         self._packet_value_cache = self.performance._packet_value_cache
 
+        # Phase 4 (#618) — SSID firewall (#290) / RF profile assignment (#291)
+        self._ssid_firewall_rules = self.firewall._ssid_firewall_rules
+        self._ssid_allow_lan_access = self.firewall._ssid_allow_lan_access
+        self._rf_profile_info = self.rf_profiles._rf_profile_info
+
     def update_api(self, api: DashboardAPI) -> None:
         """Propagate API updates to sub-collectors."""
         super().update_api(api)
         self.clients.api = api
         self.performance.api = api
         self.wireless.api = api
+        self.firewall.api = api
+        self.rf_profiles.api = api
 
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect per-device wireless AP metrics.
@@ -222,6 +233,12 @@ class MRCollector(BaseDeviceCollector):
     ) -> None:
         """Collect SSID status metrics (org-level).
 
+        Also fans out to the RF profile assignment collector (#291): both are
+        AP/radio-config-level, org-wide, device-indexed data, and folding the
+        new call in here (rather than a new top-level DeviceCollector call
+        site) keeps the Phase 4 (#618) wiring self-contained within this
+        subpackage.
+
         Parameters
         ----------
         org_id : str
@@ -233,6 +250,7 @@ class MRCollector(BaseDeviceCollector):
 
         """
         await self.wireless.collect_ssid_status(org_id, org_name, device_lookup)
+        await self.rf_profiles.collect_rf_profile_assignments(org_id, org_name)
 
     @trace_method("collect.mr_ssid_usage")
     async def collect_ssid_usage(self, org_id: str, org_name: str) -> None:
@@ -258,6 +276,11 @@ class MRCollector(BaseDeviceCollector):
     ) -> None:
         """Collect wireless connection statistics for MR devices (network-level).
 
+        Also fans out to the SSID firewall rule collector (#290), reusing the
+        same pre-filtered ``networks`` list already passed in here (rather
+        than a new top-level DeviceCollector call site) so the Phase 4 (#618)
+        wiring stays self-contained within this subpackage.
+
         Parameters
         ----------
         org_id : str
@@ -271,3 +294,4 @@ class MRCollector(BaseDeviceCollector):
 
         """
         await self.clients.collect_connection_stats(org_id, org_name, networks, device_lookup)
+        await self.firewall.collect_ssid_firewall(org_id, org_name, networks)

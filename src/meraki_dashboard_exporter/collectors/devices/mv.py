@@ -27,6 +27,53 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+class CameraSenseConfig(BaseModel):
+    """Response of ``getDeviceCameraSense`` (#305).
+
+    ⚠ Phase-6 LIVE VERIFICATION (APIORG-01 lesson): confirm the field names
+    (``senseEnabled``, ``mqttBrokerId``) against the live spec before
+    freezing - no MV Sense-capable camera exists in the homelab.
+    ``extra="allow"`` keeps parsing forward-compatible until then.
+    """
+
+    senseEnabled: bool | None = None
+    mqttBrokerId: str | int | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class CameraOnboardingNetworkRef(BaseModel):
+    """The ``network`` object of a camera onboarding-status entry (#306)."""
+
+    id: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class CameraOnboardingStatusEntry(BaseModel):
+    """One row from ``getOrganizationCameraOnboardingStatuses`` (#306).
+
+    ⚠ Phase-6 LIVE VERIFICATION: no verified sample response was available for
+    this endpoint. Both a nested ``network.id`` and a flat ``networkId`` are
+    accepted (only one is expected to actually appear) so parsing degrades
+    gracefully either way; ``extra="allow"`` keeps it forward-compatible.
+    """
+
+    serial: str | None = None
+    networkId: str | None = None
+    network: CameraOnboardingNetworkRef | None = None
+    status: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+    @property
+    def resolved_network_id(self) -> str:
+        """Best-effort network ID from either the nested or flat field."""
+        if self.network is not None and self.network.id:
+            return self.network.id
+        return self.networkId or ""
+
+
 class CameraAnalyticsRecentZone(BaseModel):
     """One per-zone record from ``getDeviceCameraAnalyticsRecent`` (#549).
 
@@ -76,6 +123,11 @@ class MVCollector(BaseDeviceCollector):
         # fan-outs (a single group-level should_run gate would incorrectly skip
         # every camera after the first within one cycle).
         self._last_analytics_collection: dict[str, float] = {}
+
+        # Phase 4 (#305): analogous per-serial gate for the mv_sense_config
+        # group (floor 900s, 1 call/camera) - independent cadence bookkeeping
+        # from mv_analytics even though both currently share the same floor.
+        self._last_sense_collection: dict[str, float] = {}
 
         # Common device label set shared by every MV gauge. Kept as a local
         # variable (not a module constant) so the metrics doc generator, which
@@ -148,6 +200,33 @@ class MVCollector(BaseDeviceCollector):
             ],
         )
 
+        # Phase 4 (#305): MV Sense enablement/MQTT-broker configuration.
+        self._mv_sense_enabled = self.parent._create_gauge(
+            MVMetricName.MV_SENSE_ENABLED,
+            "Whether MV Sense is enabled on the camera (1 = enabled)",
+            labelnames=device_labels,
+        )
+        self._mv_sense_mqtt_broker_configured = self.parent._create_gauge(
+            MVMetricName.MV_SENSE_MQTT_BROKER_CONFIGURED,
+            "Whether an MQTT broker is configured for MV Sense (1 = configured)",
+            labelnames=device_labels,
+        )
+
+        # Phase 4 (#306): org-wide camera onboarding status (id-only labels -
+        # no model/device_type since the source endpoint is org-wide, not
+        # per-device).
+        self._mv_onboarding_status = self.parent._create_gauge(
+            MVMetricName.MV_ONBOARDING_STATUS,
+            "MV camera onboarding status (1 = current status; bounded enum, "
+            "unknown values normalize to 'other')",
+            labelnames=[
+                LabelName.ORG_ID.value,
+                LabelName.NETWORK_ID.value,
+                LabelName.SERIAL.value,
+                LabelName.STATUS.value,
+            ],
+        )
+
     def _analytics_ttl_seconds(self) -> float | None:
         """Solved per-series TTL for the mv_analytics group (#617 §1f)."""
         ttl: float | None = self.parent._group_ttl_seconds(EndpointGroupName.MV_ANALYTICS)
@@ -173,6 +252,42 @@ class MVCollector(BaseDeviceCollector):
         """Record that the mv_analytics group was just collected for this camera."""
         self._last_analytics_collection[serial] = time.time()
 
+    def _sense_ttl_seconds(self) -> float | None:
+        """Solved per-series TTL for the mv_sense_config group (#305)."""
+        ttl: float | None = self.parent._group_ttl_seconds(EndpointGroupName.MV_SENSE_CONFIG)
+        return ttl
+
+    def _should_collect_sense(self, serial: str) -> bool:
+        """Return whether the mv_sense_config group is due for this camera.
+
+        Mirrors ``_should_collect_analytics`` (#305): a per-serial timestamp
+        gate reading the interval from the #617 scheduler
+        (``parent._group_interval(MV_SENSE_CONFIG)``, floor 900s), since
+        ``collect()`` is invoked every MEDIUM-tier (300s) cycle by
+        ``DeviceCollector``'s per-device fan-out.
+        """
+        interval: float = self.parent._group_interval(EndpointGroupName.MV_SENSE_CONFIG)
+        if interval <= 0:
+            return True
+        last = self._last_sense_collection.get(serial, 0.0)
+        return (time.time() - last) >= interval
+
+    def _mark_sense_collected(self, serial: str) -> None:
+        """Record that the mv_sense_config group was just collected for this camera."""
+        self._last_sense_collection[serial] = time.time()
+
+    @staticmethod
+    def _normalize_onboarding_status(status: str | None) -> str:
+        """Bound the onboarding ``status`` value to a fixed enum (#306).
+
+        ⚠ Phase-6 LIVE VERIFICATION: this allow-list is a best-effort guess
+        pending a verified live sample; any value outside it (including the
+        true live value set, until verified) normalizes to ``"other"`` so
+        cardinality stays bounded regardless.
+        """
+        allowed = {"complete", "onboarding", "failed", "settingUp"}
+        return status if status in allowed else "other"
+
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect MV-specific metrics.
 
@@ -193,6 +308,12 @@ class MVCollector(BaseDeviceCollector):
         ``continue_on_error=True``) so a failure in one does not block the
         others.
 
+        MV Sense enablement (#305, ``mv_sense_config`` group) is gated and
+        collected independently via its own per-serial timestamp gate
+        (``_should_collect_sense``) before the analytics block, so its cadence
+        can diverge from ``mv_analytics`` under adaptive budgeting even though
+        both currently share the same 900s floor.
+
         Parameters
         ----------
         device : dict[str, Any]
@@ -202,6 +323,13 @@ class MVCollector(BaseDeviceCollector):
         org_id = device.get("orgId", "")
         org_name = device.get("orgName", org_id)
         serial = device.get("serial", "")
+
+        if self._should_collect_sense(serial):
+            await self._collect_sense_config(
+                device, org_id=org_id, org_name=org_name, serial=serial
+            )
+            self._mark_sense_collected(serial)
+            self.parent._mark_group_ran(EndpointGroupName.MV_SENSE_CONFIG)
 
         if not self._should_collect_analytics(serial):
             logger.debug(
@@ -469,3 +597,150 @@ class MVCollector(BaseDeviceCollector):
             MVMetricName.MV_QUALITY_RETENTION_INFO.value,
             ttl_seconds=ttl_seconds,
         )
+
+    @log_api_call("getDeviceCameraSense")
+    @with_error_handling(
+        operation="Collect MV Sense configuration",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _collect_sense_config(
+        self, device: dict[str, Any], org_id: str, org_name: str, serial: str
+    ) -> None:
+        """Collect MV Sense enablement/MQTT-broker configuration for a camera (#305).
+
+        ⚠ Phase-6 LIVE VERIFICATION: confirm the field names (``senseEnabled``,
+        ``mqttBrokerId``) against the live API - no MV Sense-capable camera
+        exists in the homelab to verify against.
+
+        Parameters
+        ----------
+        device : dict[str, Any]
+            Device data.
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        serial : str
+            Camera serial number.
+
+        """
+        sense = await asyncio.to_thread(
+            self.api.camera.getDeviceCameraSense,
+            serial,
+        )
+        sense = validate_response_format(
+            sense, expected_type=dict, operation="getDeviceCameraSense"
+        )
+        sense_model = CameraSenseConfig.model_validate(sense)
+
+        device_labels = create_device_labels(device, org_id=org_id, org_name=org_name)
+        ttl_seconds = self._sense_ttl_seconds()
+
+        self.parent._set_metric(
+            self._mv_sense_enabled,
+            device_labels,
+            1.0 if sense_model.senseEnabled else 0.0,
+            MVMetricName.MV_SENSE_ENABLED.value,
+            ttl_seconds=ttl_seconds,
+        )
+        self.parent._set_metric(
+            self._mv_sense_mqtt_broker_configured,
+            device_labels,
+            1.0 if sense_model.mqttBrokerId else 0.0,
+            MVMetricName.MV_SENSE_MQTT_BROKER_CONFIGURED.value,
+            ttl_seconds=ttl_seconds,
+        )
+
+    @log_api_call("getOrganizationCameraOnboardingStatuses")
+    @with_error_handling(
+        operation="Collect MV camera onboarding statuses",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def collect_onboarding_statuses(self, org_id: str, org_name: str) -> None:
+        """Collect org-wide camera onboarding status (#306).
+
+        Single org-wide call via ``getOrganizationCameraOnboardingStatuses``
+        (the SDK method takes no ``total_pages``/pagination kwarg - this
+        endpoint is not paginated). Stale ``status`` label transitions are
+        removed by the metric-expiration manager (``parent._set_metric``
+        tracking), not by an explicit gauge-clear - mirrors
+        ``mx.py``'s ``collect_uplink_statuses``.
+
+        This is NOT invoked by ``DeviceCollector`` yet (#618 Phase-4 lane
+        boundary: this lane does not edit ``device.py``) - see the wiring
+        snippet in the accompanying issue/PR description for the exact
+        call-site the integration pass should add.
+
+        ⚠ Phase-6 LIVE VERIFICATION: confirm the response shape (the network
+        ID field name, and the bounded ``status`` value set in
+        ``_normalize_onboarding_status``) against a live org - no verified
+        sample response was available.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name. Retained for call-site symmetry with other
+            org-wide collectors (e.g. ``mx.py``'s ``collect_uplink_statuses``);
+            NOT emitted (id-only numeric series, issue #534).
+
+        """
+        if not self.parent._should_run_group(EndpointGroupName.MV_ONBOARDING):
+            return
+
+        raw = await asyncio.to_thread(
+            self.api.camera.getOrganizationCameraOnboardingStatuses,
+            org_id,
+        )
+        raw = validate_response_format(
+            raw, expected_type=list, operation="getOrganizationCameraOnboardingStatuses"
+        )
+
+        if not raw:
+            self.parent._mark_group_ran(EndpointGroupName.MV_ONBOARDING)
+            return
+
+        allowed_network_ids = (
+            await self.parent.inventory.get_allowed_network_ids(org_id)
+            if self.parent.inventory is not None
+            else None
+        )
+
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MV_ONBOARDING)
+
+        for raw_entry in raw:
+            try:
+                entry = CameraOnboardingStatusEntry.model_validate(raw_entry)
+            except Exception:
+                logger.debug(
+                    "Failed to parse camera onboarding status entry",
+                    org_id=org_id,
+                )
+                continue
+
+            if not entry.serial:
+                continue
+
+            network_id = entry.resolved_network_id
+            if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                continue
+
+            status = self._normalize_onboarding_status(entry.status)
+            labels = create_labels(
+                org_id=org_id,
+                network_id=network_id,
+                serial=entry.serial,
+                status=status,
+            )
+            self.parent._set_metric(
+                self._mv_onboarding_status,
+                labels,
+                1,
+                MVMetricName.MV_ONBOARDING_STATUS.value,
+                ttl_seconds=ttl_seconds,
+            )
+
+        self.parent._mark_group_ran(EndpointGroupName.MV_ONBOARDING)

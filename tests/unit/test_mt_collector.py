@@ -793,3 +793,163 @@ def test_sensor_gateway_connection_validates_via_domain_model() -> None:
     assert item.network.id == "N_1"
     assert item.sensor.serial == "Q2MT-1"
     assert item.gateway.name is None
+
+
+class TestMTButtonPresses(BaseCollectorTest):
+    """#303: MT20/MT30 button presses ride the existing sensor readings fetch."""
+
+    collector_class = MTSensorCollector
+    update_tier = UpdateTier.FAST
+
+    @pytest.fixture
+    def device_collector(self, mock_api, settings, isolated_registry):
+        """Create a device collector for testing MT device metrics."""
+        return DeviceCollector(api=mock_api, settings=settings)
+
+    @pytest.fixture
+    def mt_collector(self, device_collector):
+        """Get the MT collector from the device collector."""
+        return device_collector.mt_collector
+
+    @pytest.fixture
+    def test_device(self):
+        """Create a test button-capable device."""
+        return {
+            "serial": "Q2XB-XXXX",
+            "name": "Button1",
+            "model": "MT20",
+            "networkId": "N_123",
+            "networkName": "Test Network",
+            "orgId": "123456",
+            "orgName": "Test Org",
+        }
+
+    def test_process_button_reading_short_press_sets_epoch_timestamp(
+        self, mt_collector, test_device
+    ) -> None:
+        """A short press emits the reading's ts as epoch seconds, labeled press_type=short."""
+        mock_metric = MagicMock()
+        mt_collector.parent._sensor_button_last_press = mock_metric
+
+        reading = {
+            "ts": "2024-01-01T00:00:00Z",
+            "metric": "button",
+            "button": {"pressType": "short"},
+        }
+        mt_collector._process_button_reading(test_device, reading)
+
+        expected_labels = {
+            "org_id": test_device["orgId"],
+            "network_id": test_device["networkId"],
+            "serial": test_device["serial"],
+            "model": test_device["model"],
+            "device_type": "MT",
+            "press_type": "short",
+        }
+        mock_metric.labels.assert_called_once_with(**expected_labels)
+        # 2024-01-01T00:00:00Z == 1704067200.0
+        mock_metric.labels().set.assert_called_once_with(1704067200.0)
+
+    def test_process_button_reading_long_press(self, mt_collector, test_device) -> None:
+        """A long press is labeled press_type=long."""
+        mock_metric = MagicMock()
+        mt_collector.parent._sensor_button_last_press = mock_metric
+
+        reading = {
+            "ts": "2024-01-01T00:00:00Z",
+            "metric": "button",
+            "button": {"pressType": "long"},
+        }
+        mt_collector._process_button_reading(test_device, reading)
+
+        _, kwargs = mock_metric.labels.call_args
+        assert kwargs["press_type"] == "long"
+
+    def test_process_button_reading_missing_press_type_skipped(
+        self, mt_collector, test_device
+    ) -> None:
+        """A missing pressType value is skipped (not emitted)."""
+        mock_metric = MagicMock()
+        mt_collector.parent._sensor_button_last_press = mock_metric
+
+        reading = {"ts": "2024-01-01T00:00:00Z", "metric": "button", "button": {}}
+        mt_collector._process_button_reading(test_device, reading)
+
+        mock_metric.labels.assert_not_called()
+
+    def test_process_button_reading_unexpected_press_type_skipped(
+        self, mt_collector, test_device
+    ) -> None:
+        """An unexpected pressType value (not short/long) is skipped."""
+        mock_metric = MagicMock()
+        mt_collector.parent._sensor_button_last_press = mock_metric
+
+        reading = {
+            "ts": "2024-01-01T00:00:00Z",
+            "metric": "button",
+            "button": {"pressType": "double"},
+        }
+        mt_collector._process_button_reading(test_device, reading)
+
+        mock_metric.labels.assert_not_called()
+
+    def test_process_button_reading_missing_ts_skipped(self, mt_collector, test_device) -> None:
+        """A missing/unparseable ts is skipped (no timestamp to emit)."""
+        mock_metric = MagicMock()
+        mt_collector.parent._sensor_button_last_press = mock_metric
+
+        reading = {"metric": "button", "button": {"pressType": "short"}}
+        mt_collector._process_button_reading(test_device, reading)
+
+        mock_metric.labels.assert_not_called()
+
+    def test_process_button_reading_empty_button_data_skipped(
+        self, mt_collector, test_device
+    ) -> None:
+        """No `button` key at all in the reading is a no-op, not an error."""
+        mock_metric = MagicMock()
+        mt_collector.parent._sensor_button_last_press = mock_metric
+
+        reading = {"ts": "2024-01-01T00:00:00Z", "metric": "button"}
+        mt_collector._process_button_reading(test_device, reading)
+
+        mock_metric.labels.assert_not_called()
+
+    async def test_collect_batch_button_metric_end_to_end(self, collector, metrics) -> None:
+        """collect_batch routes a button reading through to the real registered gauge."""
+        device_map = {
+            "Q2XB-XXXX": {
+                "serial": "Q2XB-XXXX",
+                "name": "Button1",
+                "model": "MT20",
+                "networkId": "N_123",
+                "orgId": "123456",
+                "orgName": "Test Org",
+            }
+        }
+        sensor_readings = [
+            {
+                "serial": "Q2XB-XXXX",
+                "network": {"id": "N_123", "name": "Test Network"},
+                "readings": [
+                    {
+                        "ts": "2024-01-01T00:00:00Z",
+                        "metric": "button",
+                        "button": {"pressType": "short"},
+                    }
+                ],
+            }
+        ]
+
+        collector.mt_collector.collect_batch(sensor_readings, device_map)
+
+        metrics.assert_gauge_value(
+            "meraki_mt_button_last_press_timestamp_seconds",
+            1704067200.0,
+            org_id="123456",
+            network_id="N_123",
+            serial="Q2XB-XXXX",
+            model="MT20",
+            device_type="MT",
+            press_type="short",
+        )

@@ -6,8 +6,21 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
+from meraki.exceptions import APIError
+
 from ...core.constants.metrics_constants import MXMetricName
-from ...core.domain_models import ApplianceFirewallRules, ApplianceSecurityEvent
+from ...core.domain_models import (
+    ApplianceContentFiltering,
+    ApplianceFirewallRules,
+    ApplianceOneToManyNatRules,
+    ApplianceOneToOneNatRules,
+    AppliancePortForwardingRules,
+    ApplianceSecurityEvent,
+    ApplianceSecurityIntrusionSettings,
+    ApplianceSecurityMalwareSettings,
+    ApplianceStaticRoute,
+    ApplianceVlan,
+)
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -54,6 +67,17 @@ class MXFirewallCollector(SubCollectorMixin):
         # SLOW-tier cadence can be enforced even though collect_for_network is
         # dispatched every MEDIUM-tier cycle by DeviceCollector (see F-085).
         self._last_firewall_collection: dict[str, float] = {}
+        # Phase 4 (#285/#288/#289): per-network throttles for the three NEW
+        # config-drift endpoint groups, mirroring _last_firewall_collection above.
+        # Each is a genuinely independent per-network fan-out (collect_for_network
+        # is invoked once per appliance network per MEDIUM-tier cycle), so a
+        # group-global _should_run_group/_mark_group_ran gate would collect only
+        # the first network dispatched and skip every other network in the org
+        # for the rest of the cycle -- exactly the bug _last_firewall_collection
+        # already avoids for the firewall-rules group above.
+        self._last_security_config_collection: dict[str, float] = {}
+        self._last_nat_config_collection: dict[str, float] = {}
+        self._last_vlan_config_collection: dict[str, float] = {}
         self._initialize_metrics()
 
     def _should_collect_firewall_rules(self, network_id: str) -> bool:
@@ -75,6 +99,42 @@ class MXFirewallCollector(SubCollectorMixin):
     def _mark_firewall_rules_collected(self, network_id: str) -> None:
         """Record that firewall rules were just collected for this network."""
         self._last_firewall_collection[network_id] = time.time()
+
+    def _should_collect_security_config(self, network_id: str) -> bool:
+        """Return whether the mx_security_config group is due for this network (#285)."""
+        interval = float(self.parent._group_interval(EndpointGroupName.MX_SECURITY_CONFIG))
+        if interval <= 0:
+            return True
+        last = self._last_security_config_collection.get(network_id, 0.0)
+        return (time.time() - last) >= interval
+
+    def _mark_security_config_collected(self, network_id: str) -> None:
+        """Record that security config was just collected for this network."""
+        self._last_security_config_collection[network_id] = time.time()
+
+    def _should_collect_nat_config(self, network_id: str) -> bool:
+        """Return whether the mx_nat_config group is due for this network (#288)."""
+        interval = float(self.parent._group_interval(EndpointGroupName.MX_NAT_CONFIG))
+        if interval <= 0:
+            return True
+        last = self._last_nat_config_collection.get(network_id, 0.0)
+        return (time.time() - last) >= interval
+
+    def _mark_nat_config_collected(self, network_id: str) -> None:
+        """Record that NAT config was just collected for this network."""
+        self._last_nat_config_collection[network_id] = time.time()
+
+    def _should_collect_vlan_config(self, network_id: str) -> bool:
+        """Return whether the mx_vlan_config group is due for this network (#289)."""
+        interval = float(self.parent._group_interval(EndpointGroupName.MX_VLAN_CONFIG))
+        if interval <= 0:
+            return True
+        last = self._last_vlan_config_collection.get(network_id, 0.0)
+        return (time.time() - last) >= interval
+
+    def _mark_vlan_config_collected(self, network_id: str) -> None:
+        """Record that VLAN/static-route config was just collected for this network."""
+        self._last_vlan_config_collection[network_id] = time.time()
 
     def _initialize_metrics(self) -> None:
         """Initialize firewall-related Prometheus gauge metrics."""
@@ -102,6 +162,78 @@ class MXFirewallCollector(SubCollectorMixin):
                 LabelName.ORG_ID,
                 LabelName.EVENT_TYPE,
             ],
+        )
+
+        # Phase 4 (#285): content filtering + malware + IDS/IPS config drift.
+        network_labels = [LabelName.ORG_ID, LabelName.NETWORK_ID]
+        self._content_filtering_blocked_categories = self.parent._create_gauge(
+            MXMetricName.MX_CONTENT_FILTERING_BLOCKED_CATEGORIES,
+            "Number of blocked URL categories configured for content filtering",
+            labelnames=network_labels,
+        )
+        self._content_filtering_blocked_url_patterns = self.parent._create_gauge(
+            MXMetricName.MX_CONTENT_FILTERING_BLOCKED_URL_PATTERNS,
+            "Number of blocked URL patterns configured for content filtering",
+            labelnames=network_labels,
+        )
+        self._content_filtering_allowed_url_patterns = self.parent._create_gauge(
+            MXMetricName.MX_CONTENT_FILTERING_ALLOWED_URL_PATTERNS,
+            "Number of allowed URL patterns configured for content filtering",
+            labelnames=network_labels,
+        )
+        self._malware_protection_enabled = self.parent._create_gauge(
+            MXMetricName.MX_MALWARE_PROTECTION_ENABLED,
+            "Advanced Malware Protection enablement (1=enabled, 0=disabled)",
+            labelnames=network_labels,
+        )
+        self._malware_allowed_urls = self.parent._create_gauge(
+            MXMetricName.MX_MALWARE_ALLOWED_URLS,
+            "Number of URLs excluded from Advanced Malware Protection scanning",
+            labelnames=network_labels,
+        )
+        self._malware_allowed_files = self.parent._create_gauge(
+            MXMetricName.MX_MALWARE_ALLOWED_FILES,
+            "Number of files excluded from Advanced Malware Protection scanning",
+            labelnames=network_labels,
+        )
+        self._ids_mode = self.parent._create_gauge(
+            MXMetricName.MX_IDS_MODE,
+            "IDS/IPS mode one-hot indicator (1=active mode for this network)",
+            labelnames=[*network_labels, LabelName.MODE],
+        )
+        self._ids_ruleset = self.parent._create_gauge(
+            MXMetricName.MX_IDS_RULESET,
+            "IDS/IPS ruleset one-hot indicator (1=active ruleset for this network)",
+            labelnames=[*network_labels, LabelName.RULESET],
+        )
+
+        # Phase 4 (#288): port-forwarding / NAT rule counts.
+        self._port_forwarding_rules = self.parent._create_gauge(
+            MXMetricName.MX_PORT_FORWARDING_RULES,
+            "Number of port forwarding rules configured for a network",
+            labelnames=network_labels,
+        )
+        self._nat_rules = self.parent._create_gauge(
+            MXMetricName.MX_NAT_RULES,
+            "Number of NAT rules configured for a network by type",
+            labelnames=[*network_labels, LabelName.NAT_TYPE],
+        )
+
+        # Phase 4 (#289): VLAN + static-route counts.
+        self._vlans_total = self.parent._create_gauge(
+            MXMetricName.MX_VLANS,
+            "Number of VLANs configured for a network",
+            labelnames=network_labels,
+        )
+        self._static_routes_total = self.parent._create_gauge(
+            MXMetricName.MX_STATIC_ROUTES,
+            "Total number of static routes configured for a network",
+            labelnames=network_labels,
+        )
+        self._static_routes_enabled = self.parent._create_gauge(
+            MXMetricName.MX_STATIC_ROUTES_ENABLED,
+            "Number of enabled static routes configured for a network",
+            labelnames=network_labels,
         )
 
     @log_api_call("getNetworkApplianceFirewallL3FirewallRules")
@@ -135,12 +267,120 @@ class MXFirewallCollector(SubCollectorMixin):
             Human-readable network name.
 
         """
-        if not self._should_collect_firewall_rules(network_id):
+        if self._should_collect_firewall_rules(network_id):
+            base_labels = {
+                LabelName.ORG_ID: org_id,
+                LabelName.NETWORK_ID: network_id,
+            }
+            ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_FIREWALL_CONFIG)
+
+            # L3 rules. Wrap in validate_response_format so an SDK exhausted-retry
+            # error shape (a dict with an "errors" key) raises instead of silently
+            # yielding empty rules and emitting a false-zero rule count (F-034).
+            l3_response = await asyncio.to_thread(
+                self.api.appliance.getNetworkApplianceFirewallL3FirewallRules,
+                network_id,
+            )
+            l3_data = validate_response_format(
+                l3_response,
+                expected_type=dict,
+                operation="getNetworkApplianceFirewallL3FirewallRules",
+            )
+            l3_rules = ApplianceFirewallRules.model_validate(l3_data).rules
+
+            # The last rule is always the built-in default rule; exclude it from the count
+            user_l3_rules = [r for r in l3_rules if (r.comment or "") != "Default rule"]
+
+            self.parent._set_metric(
+                self._firewall_rules_total,
+                {**base_labels, LabelName.RULE_TYPE: "L3"},
+                float(len(user_l3_rules)),
+                ttl_seconds=ttl_seconds,
+            )
+
+            # Default policy: determined from the last rule's policy field
+            if l3_rules:
+                default_rule = l3_rules[-1]
+                default_policy = default_rule.policy or "deny"
+                self.parent._set_metric(
+                    self._firewall_default_policy,
+                    base_labels,
+                    1.0 if default_policy == "allow" else 0.0,
+                    ttl_seconds=ttl_seconds,
+                )
+
+            # L7 rules (same error-shape normalization as L3)
+            self._track_api_call("getNetworkApplianceFirewallL7FirewallRules")
+            l7_response = await asyncio.to_thread(
+                self.api.appliance.getNetworkApplianceFirewallL7FirewallRules,
+                network_id,
+            )
+            l7_data = validate_response_format(
+                l7_response,
+                expected_type=dict,
+                operation="getNetworkApplianceFirewallL7FirewallRules",
+            )
+            l7_rules = ApplianceFirewallRules.model_validate(l7_data).rules
+
+            self.parent._set_metric(
+                self._firewall_rules_total,
+                {**base_labels, LabelName.RULE_TYPE: "L7"},
+                float(len(l7_rules)),
+                ttl_seconds=ttl_seconds,
+            )
+
+            self._mark_firewall_rules_collected(network_id)
+
+            logger.debug(
+                "Collected firewall rules",
+                org_id=org_id,
+                network_id=network_id,
+                l3_user_rules=len(user_l3_rules),
+                l7_rules=len(l7_rules),
+            )
+        else:
             logger.debug(
                 "Skipping firewall rules collection (SLOW-tier cadence not yet elapsed)",
                 org_id=org_id,
                 network_id=network_id,
                 interval_seconds=self.settings.update_intervals.slow,
+            )
+
+        # Phase 4 (#285/#288/#289): each of these is independently gated/decorated
+        # (own per-network throttle + own error boundary) so a failure in one
+        # config-drift domain never blocks the others for this network/cycle.
+        await self.collect_security_config(org_id, network_id)
+        await self.collect_nat_config(org_id, network_id)
+        await self.collect_vlan_config(org_id, network_id)
+
+    @log_api_call("getNetworkApplianceContentFiltering")
+    @with_error_handling(
+        operation="Collect MX security config (content filtering, malware, IDS/IPS)",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def collect_security_config(self, org_id: str, network_id: str) -> None:
+        """Collect content-filtering, malware, and IDS/IPS config drift (#285).
+
+        Fetches three per-network config endpoints: content filtering, Advanced
+        Malware Protection (AMP), and IDS/IPS (intrusion). Malware/intrusion
+        return HTTP 400/404 when the network's org lacks an Advanced Security
+        license -- that condition is caught locally and debug-logged, not raised,
+        so a missing license on one sub-call never blocks the others.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        network_id : str
+            Network ID for the appliance network.
+
+        """
+        if not self._should_collect_security_config(network_id):
+            logger.debug(
+                "Skipping security config collection (mx_security_config cadence not yet elapsed)",
+                org_id=org_id,
+                network_id=network_id,
             )
             return
 
@@ -148,72 +388,299 @@ class MXFirewallCollector(SubCollectorMixin):
             LabelName.ORG_ID: org_id,
             LabelName.NETWORK_ID: network_id,
         }
-        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_FIREWALL_CONFIG)
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_SECURITY_CONFIG)
 
-        # L3 rules. Wrap in validate_response_format so an SDK exhausted-retry
-        # error shape (a dict with an "errors" key) raises instead of silently
-        # yielding empty rules and emitting a false-zero rule count (F-034).
-        l3_response = await asyncio.to_thread(
-            self.api.appliance.getNetworkApplianceFirewallL3FirewallRules,
+        # Content filtering (no license gate; always available on MX appliances).
+        cf_response = await asyncio.to_thread(
+            self.api.appliance.getNetworkApplianceContentFiltering,
             network_id,
         )
-        l3_data = validate_response_format(
-            l3_response,
+        cf_data = validate_response_format(
+            cf_response,
             expected_type=dict,
-            operation="getNetworkApplianceFirewallL3FirewallRules",
+            operation="getNetworkApplianceContentFiltering",
         )
-        l3_rules = ApplianceFirewallRules.model_validate(l3_data).rules
-
-        # The last rule is always the built-in default rule; exclude it from the count
-        user_l3_rules = [r for r in l3_rules if (r.comment or "") != "Default rule"]
-
+        content_filtering = ApplianceContentFiltering.model_validate(cf_data)
         self.parent._set_metric(
-            self._firewall_rules_total,
-            {**base_labels, LabelName.RULE_TYPE: "L3"},
-            float(len(user_l3_rules)),
+            self._content_filtering_blocked_categories,
+            base_labels,
+            float(len(content_filtering.blockedUrlCategories)),
+            ttl_seconds=ttl_seconds,
+        )
+        self.parent._set_metric(
+            self._content_filtering_blocked_url_patterns,
+            base_labels,
+            float(len(content_filtering.blockedUrlPatterns)),
+            ttl_seconds=ttl_seconds,
+        )
+        self.parent._set_metric(
+            self._content_filtering_allowed_url_patterns,
+            base_labels,
+            float(len(content_filtering.allowedUrlPatterns)),
             ttl_seconds=ttl_seconds,
         )
 
-        # Default policy: determined from the last rule's policy field
-        if l3_rules:
-            default_rule = l3_rules[-1]
-            default_policy = default_rule.policy or "deny"
+        # Malware protection -- 400/404 without an Advanced Security license.
+        try:
+            self._track_api_call("getNetworkApplianceSecurityMalware")
+            malware_response = await asyncio.to_thread(
+                self.api.appliance.getNetworkApplianceSecurityMalware,
+                network_id,
+            )
+            malware_data = validate_response_format(
+                malware_response,
+                expected_type=dict,
+                operation="getNetworkApplianceSecurityMalware",
+            )
+            malware = ApplianceSecurityMalwareSettings.model_validate(malware_data)
             self.parent._set_metric(
-                self._firewall_default_policy,
+                self._malware_protection_enabled,
                 base_labels,
-                1.0 if default_policy == "allow" else 0.0,
+                1.0 if malware.mode == "enabled" else 0.0,
                 ttl_seconds=ttl_seconds,
             )
+            self.parent._set_metric(
+                self._malware_allowed_urls,
+                base_labels,
+                float(len(malware.allowedUrls)),
+                ttl_seconds=ttl_seconds,
+            )
+            self.parent._set_metric(
+                self._malware_allowed_files,
+                base_labels,
+                float(len(malware.allowedFiles)),
+                ttl_seconds=ttl_seconds,
+            )
+        except APIError as e:
+            if e.status in {400, 404}:
+                logger.debug(
+                    "Malware protection not available (no Advanced Security license)",
+                    org_id=org_id,
+                    network_id=network_id,
+                    status=e.status,
+                )
+            else:
+                raise
 
-        # L7 rules (same error-shape normalization as L3)
-        self._track_api_call("getNetworkApplianceFirewallL7FirewallRules")
-        l7_response = await asyncio.to_thread(
-            self.api.appliance.getNetworkApplianceFirewallL7FirewallRules,
+        # IDS/IPS (intrusion) -- 400/404 without an Advanced Security license.
+        try:
+            self._track_api_call("getNetworkApplianceSecurityIntrusion")
+            intrusion_response = await asyncio.to_thread(
+                self.api.appliance.getNetworkApplianceSecurityIntrusion,
+                network_id,
+            )
+            intrusion_data = validate_response_format(
+                intrusion_response,
+                expected_type=dict,
+                operation="getNetworkApplianceSecurityIntrusion",
+            )
+            intrusion = ApplianceSecurityIntrusionSettings.model_validate(intrusion_data)
+            if intrusion.mode:
+                self.parent._set_metric(
+                    self._ids_mode,
+                    {**base_labels, LabelName.MODE: intrusion.mode},
+                    1.0,
+                    ttl_seconds=ttl_seconds,
+                )
+            if intrusion.idsRulesets:
+                self.parent._set_metric(
+                    self._ids_ruleset,
+                    {**base_labels, LabelName.RULESET: intrusion.idsRulesets},
+                    1.0,
+                    ttl_seconds=ttl_seconds,
+                )
+        except APIError as e:
+            if e.status in {400, 404}:
+                logger.debug(
+                    "IDS/IPS not available (no Advanced Security license)",
+                    org_id=org_id,
+                    network_id=network_id,
+                    status=e.status,
+                )
+            else:
+                raise
+
+        self._mark_security_config_collected(network_id)
+
+    @log_api_call("getNetworkApplianceFirewallPortForwardingRules")
+    @with_error_handling(
+        operation="Collect MX port-forwarding/NAT config",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def collect_nat_config(self, org_id: str, network_id: str) -> None:
+        """Collect port-forwarding and NAT rule counts for a network (#288).
+
+        Empty rule arrays are a normal, expected response (no port-forwarding
+        or NAT rules configured) and are emitted as a count of 0, not skipped.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        network_id : str
+            Network ID for the appliance network.
+
+        """
+        if not self._should_collect_nat_config(network_id):
+            logger.debug(
+                "Skipping NAT config collection (mx_nat_config cadence not yet elapsed)",
+                org_id=org_id,
+                network_id=network_id,
+            )
+            return
+
+        base_labels = {
+            LabelName.ORG_ID: org_id,
+            LabelName.NETWORK_ID: network_id,
+        }
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_NAT_CONFIG)
+
+        pf_response = await asyncio.to_thread(
+            self.api.appliance.getNetworkApplianceFirewallPortForwardingRules,
             network_id,
         )
-        l7_data = validate_response_format(
-            l7_response,
+        pf_data = validate_response_format(
+            pf_response,
             expected_type=dict,
-            operation="getNetworkApplianceFirewallL7FirewallRules",
+            operation="getNetworkApplianceFirewallPortForwardingRules",
         )
-        l7_rules = ApplianceFirewallRules.model_validate(l7_data).rules
-
+        port_forwarding = AppliancePortForwardingRules.model_validate(pf_data)
         self.parent._set_metric(
-            self._firewall_rules_total,
-            {**base_labels, LabelName.RULE_TYPE: "L7"},
-            float(len(l7_rules)),
+            self._port_forwarding_rules,
+            base_labels,
+            float(len(port_forwarding.rules)),
             ttl_seconds=ttl_seconds,
         )
 
-        self._mark_firewall_rules_collected(network_id)
-
-        logger.debug(
-            "Collected firewall rules",
-            org_id=org_id,
-            network_id=network_id,
-            l3_user_rules=len(user_l3_rules),
-            l7_rules=len(l7_rules),
+        self._track_api_call("getNetworkApplianceFirewallOneToOneNatRules")
+        one_to_one_response = await asyncio.to_thread(
+            self.api.appliance.getNetworkApplianceFirewallOneToOneNatRules,
+            network_id,
         )
+        one_to_one_data = validate_response_format(
+            one_to_one_response,
+            expected_type=dict,
+            operation="getNetworkApplianceFirewallOneToOneNatRules",
+        )
+        one_to_one = ApplianceOneToOneNatRules.model_validate(one_to_one_data)
+        self.parent._set_metric(
+            self._nat_rules,
+            {**base_labels, LabelName.NAT_TYPE: "1:1"},
+            float(len(one_to_one.rules)),
+            ttl_seconds=ttl_seconds,
+        )
+
+        self._track_api_call("getNetworkApplianceFirewallOneToManyNatRules")
+        one_to_many_response = await asyncio.to_thread(
+            self.api.appliance.getNetworkApplianceFirewallOneToManyNatRules,
+            network_id,
+        )
+        one_to_many_data = validate_response_format(
+            one_to_many_response,
+            expected_type=dict,
+            operation="getNetworkApplianceFirewallOneToManyNatRules",
+        )
+        one_to_many = ApplianceOneToManyNatRules.model_validate(one_to_many_data)
+        self.parent._set_metric(
+            self._nat_rules,
+            {**base_labels, LabelName.NAT_TYPE: "1:many"},
+            float(len(one_to_many.rules)),
+            ttl_seconds=ttl_seconds,
+        )
+
+        self._mark_nat_config_collected(network_id)
+
+    @log_api_call("getNetworkApplianceVlans")
+    @with_error_handling(
+        operation="Collect MX VLAN/static-route config",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def collect_vlan_config(self, org_id: str, network_id: str) -> None:
+        """Collect VLAN and static-route counts for a network (#289).
+
+        ``getNetworkApplianceVlans`` returns HTTP 400 when VLANs are not
+        enabled for the network (single-LAN mode) -- that is caught locally
+        and debug-logged, not raised, so the static-route counts below are
+        still collected. Only aggregate counts are emitted, never per-VLAN or
+        per-route series (unbounded cardinality).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        network_id : str
+            Network ID for the appliance network.
+
+        """
+        if not self._should_collect_vlan_config(network_id):
+            logger.debug(
+                "Skipping VLAN config collection (mx_vlan_config cadence not yet elapsed)",
+                org_id=org_id,
+                network_id=network_id,
+            )
+            return
+
+        base_labels = {
+            LabelName.ORG_ID: org_id,
+            LabelName.NETWORK_ID: network_id,
+        }
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_VLAN_CONFIG)
+
+        try:
+            vlans_response = await asyncio.to_thread(
+                self.api.appliance.getNetworkApplianceVlans,
+                network_id,
+            )
+            vlans_data = validate_response_format(
+                vlans_response,
+                expected_type=list,
+                operation="getNetworkApplianceVlans",
+            )
+            vlans = [ApplianceVlan.model_validate(v) for v in vlans_data]
+            self.parent._set_metric(
+                self._vlans_total,
+                base_labels,
+                float(len(vlans)),
+                ttl_seconds=ttl_seconds,
+            )
+        except APIError as e:
+            if e.status in {400, 404}:
+                logger.debug(
+                    "VLANs not enabled for this network (single-LAN mode)",
+                    org_id=org_id,
+                    network_id=network_id,
+                    status=e.status,
+                )
+            else:
+                raise
+
+        self._track_api_call("getNetworkApplianceStaticRoutes")
+        routes_response = await asyncio.to_thread(
+            self.api.appliance.getNetworkApplianceStaticRoutes,
+            network_id,
+        )
+        routes_data = validate_response_format(
+            routes_response,
+            expected_type=list,
+            operation="getNetworkApplianceStaticRoutes",
+        )
+        routes = [ApplianceStaticRoute.model_validate(r) for r in routes_data]
+        self.parent._set_metric(
+            self._static_routes_total,
+            base_labels,
+            float(len(routes)),
+            ttl_seconds=ttl_seconds,
+        )
+        self.parent._set_metric(
+            self._static_routes_enabled,
+            base_labels,
+            float(sum(1 for r in routes if r.enabled)),
+            ttl_seconds=ttl_seconds,
+        )
+
+        self._mark_vlan_config_collected(network_id)
 
     @log_api_call("getOrganizationApplianceSecurityEvents")
     @with_error_handling(

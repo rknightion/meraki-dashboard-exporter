@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from ...core.constants import MGMetricName
 from ...core.domain_models import CellularGatewayUplinkStatus
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -19,6 +21,250 @@ if TYPE_CHECKING:
     from ..device import DeviceCollector
 
 logger = get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# #304 — Cellular band config + serving cell (Phase 4, spec-only)
+#
+# ⚠ No MG hardware is available to confirm the live response shape for either
+# endpoint below; the OpenAPI spec is known to be wrong for some Meraki
+# endpoints (see evidence/live-api-verification.md). These models and the
+# parsing helpers that follow are deliberately lenient/defensive about the
+# exact nesting so an unexpected shape degrades to "no metric emitted" rather
+# than raising. MUST be re-verified against a live response in Phase 6.
+# ---------------------------------------------------------------------------
+
+
+class MGCellularBandsDevice(BaseModel):
+    """Per-device cellular band-configuration row.
+
+    Source: ``getOrganizationDevicesCellularUplinksBandsByDevice``. The
+    ``bands`` sub-structure is kept as a loosely-typed ``dict`` rather than
+    modeled field-by-field (its nesting is unverified) and parsed defensively
+    by ``_count_bands_by_slot`` in the collector.
+    """
+
+    __meraki_op__ = "getOrganizationDevicesCellularUplinksBandsByDevice"
+
+    serial: str = ""
+    model: str | None = None
+    network: dict[str, Any] | None = None
+    networkId: str | None = None
+    bands: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow")
+
+    def resolved_network_id(self) -> str | None:
+        """Resolve the network ID.
+
+        Tries a flat ``networkId`` field first, then falls back to a nested
+        ``network.id`` (both shapes are plausible; unverified).
+        """
+        if self.networkId:
+            return self.networkId
+        if isinstance(self.network, dict):
+            nid = self.network.get("id")
+            if isinstance(nid, str):
+                return nid
+        return None
+
+
+class MGCellularTowersDevice(BaseModel):
+    """Per-device serving-cell-tower row.
+
+    Source: ``getOrganizationDevicesCellularUplinksTowersByDevice``. ``towers``
+    entries are kept as loosely-typed dicts and picked over defensively by
+    ``_extract_serving_cell`` since the exact field names (``cellId`` vs
+    ``id`` vs ``servingCellId``, ``tac`` vs ``trackingAreaCode``) are
+    unverified.
+    """
+
+    __meraki_op__ = "getOrganizationDevicesCellularUplinksTowersByDevice"
+
+    serial: str = ""
+    model: str | None = None
+    network: dict[str, Any] | None = None
+    networkId: str | None = None
+    towers: list[dict[str, Any]] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+    def resolved_network_id(self) -> str | None:
+        """Resolve the network ID.
+
+        Tries a flat ``networkId`` field first, then falls back to a nested
+        ``network.id`` (both shapes are plausible; unverified).
+        """
+        if self.networkId:
+            return self.networkId
+        if isinstance(self.network, dict):
+            nid = self.network.get("id")
+            if isinstance(nid, str):
+                return nid
+        return None
+
+
+# Bounded label vocabularies (frozen spec, #618 Phase 4 seam) - anything
+# outside these sets is dropped/normalized rather than emitted verbatim, so a
+# malformed or attacker-influenced API response can never grow cardinality.
+_KNOWN_SLOTS = frozenset({"sim1", "sim2", "sim3"})
+_KNOWN_STATUSES = frozenset({"enabled", "masked", "supported"})
+
+# Recognized radio-access-technology spellings, normalized to the frozen
+# CONNECTION_TYPE label vocabulary. Anything unrecognized collapses to "other".
+_RAT_ALIASES: dict[str, str] = {
+    "lte": "lte",
+    "4g": "lte",
+    "5gnsa": "5gNsa",
+    "5gsa": "5gSa",
+    "5g": "5gNsa",  # ambiguous bare "5G" - most common early NSA deployment
+}
+
+
+def _normalize_connection_type(value: Any) -> str:
+    """Map a raw RAT string to the bounded CONNECTION_TYPE label vocabulary.
+
+    Parameters
+    ----------
+    value : Any
+        Raw radio-access-technology value from the API (e.g. "LTE", "5G-NSA").
+
+    Returns
+    -------
+    str
+        One of "lte", "5gNsa", "5gSa", or "other" for anything unrecognized
+        (including missing/non-string values) - never the raw input, so an
+        unexpected string can't grow label cardinality.
+
+    """
+    if not isinstance(value, str) or not value:
+        return "other"
+    normalized = value.strip().lower().replace("-", "").replace("_", "").replace(" ", "")
+    return _RAT_ALIASES.get(normalized, "other")
+
+
+def _looks_like_status_bucket(candidate: dict[str, Any]) -> bool:
+    """Heuristic check for whether ``candidate``'s keys look like status names.
+
+    Used to disambiguate whether a per-slot dict is already keyed by status
+    (``{"enabled": [...], "masked": [...]}``, no RAT breakdown) versus keyed
+    by RAT with a nested status dict (``{"lte": {"enabled": [...]}}``).
+    """
+    return any(key in _KNOWN_STATUSES for key in candidate)
+
+
+def _count_bands_by_slot(bands: dict[str, Any]) -> dict[tuple[str, str, str], int]:
+    """Count cellular bands per (slot, connection_type, status).
+
+    Handles two plausible response shapes defensively (the live shape is
+    unverified - #304 is spec-only, no MG hardware available):
+
+    1. RAT-nested: ``{"sim1": {"lte": {"enabled": [...], "masked": [...]}}}``
+    2. Flat list of entries: ``{"sim1": [{"connectionType"/"type": ...,
+       "status": ...}, ...]}``
+
+    A bare status-keyed dict with no RAT breakdown (``{"sim1": {"enabled":
+    [...]}}``) is also handled, bucketed under connection_type "other".
+    Unrecognized slot keys, status values, and malformed entries are silently
+    skipped rather than raising - this must never crash the collection loop
+    over an unexpected shape.
+
+    Parameters
+    ----------
+    bands : dict[str, Any]
+        The raw ``bands`` sub-object from a single device's row.
+
+    Returns
+    -------
+    dict[tuple[str, str, str], int]
+        Mapping of (slot, connection_type, status) -> band count.
+
+    """
+    counts: dict[tuple[str, str, str], int] = {}
+    if not isinstance(bands, dict):
+        return counts
+
+    for slot, slot_data in bands.items():
+        if slot not in _KNOWN_SLOTS:
+            continue
+
+        if isinstance(slot_data, dict):
+            if _looks_like_status_bucket(slot_data):
+                for status, band_list in slot_data.items():
+                    if status not in _KNOWN_STATUSES or not isinstance(band_list, list):
+                        continue
+                    key = (slot, "other", status)
+                    counts[key] = counts.get(key, 0) + len(band_list)
+            else:
+                for rat, status_buckets in slot_data.items():
+                    if not isinstance(status_buckets, dict):
+                        continue
+                    connection_type = _normalize_connection_type(rat)
+                    for status, band_list in status_buckets.items():
+                        if status not in _KNOWN_STATUSES or not isinstance(band_list, list):
+                            continue
+                        key = (slot, connection_type, status)
+                        counts[key] = counts.get(key, 0) + len(band_list)
+        elif isinstance(slot_data, list):
+            for entry in slot_data:
+                if not isinstance(entry, dict):
+                    continue
+                status = entry.get("status")
+                if status not in _KNOWN_STATUSES:
+                    continue
+                rat = entry.get("connectionType") or entry.get("type") or entry.get("rat")
+                connection_type = _normalize_connection_type(rat)
+                key = (slot, connection_type, status)
+                counts[key] = counts.get(key, 0) + 1
+
+    return counts
+
+
+def _extract_serving_cell(towers: list[dict[str, Any]]) -> tuple[str, str] | None:
+    """Pick the current serving cell (cell_id, tac) from a towers list.
+
+    Defensive across plausible key names (``cellId``/``id``/``servingCellId``
+    for the cell ID; ``tac``/``trackingAreaCode`` for the tracking area code)
+    since the response shape is unverified (#304 is spec-only). Prefers an
+    entry explicitly flagged ``serving``/``isServing`` if present, else the
+    first entry carrying a usable ID.
+
+    Parameters
+    ----------
+    towers : list[dict[str, Any]]
+        Raw ``towers`` entries for one device.
+
+    Returns
+    -------
+    tuple[str, str] | None
+        ``(cell_id, tac)`` if a usable ID was found, else ``None`` (no
+        metric should be emitted).
+
+    """
+
+    def _pick(entry: dict[str, Any]) -> tuple[str, str] | None:
+        cell_id = (
+            entry.get("cellId") or entry.get("id") or entry.get("servingCellId") or entry.get("cid")
+        )
+        if cell_id is None:
+            return None
+        tac = entry.get("tac") or entry.get("trackingAreaCode") or ""
+        return str(cell_id), str(tac)
+
+    for entry in towers:
+        if isinstance(entry, dict) and (
+            entry.get("serving") is True or entry.get("isServing") is True
+        ):
+            picked = _pick(entry)
+            if picked is not None:
+                return picked
+
+    for entry in towers:
+        if isinstance(entry, dict):
+            picked = _pick(entry)
+            if picked is not None:
+                return picked
+
+    return None
 
 
 def _parse_float(value: Any) -> float | None:
@@ -104,6 +350,36 @@ class MGCollector(BaseDeviceCollector):
             labelnames=signal_labelnames,
         )
 
+        # #304 (Phase 4): cellular band configuration + serving cell.
+        self._mg_cellular_bands = self.parent._create_gauge(
+            MGMetricName.MG_CELLULAR_BANDS,
+            "Count of cellular bands in a given state, per SIM slot and radio access technology",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.SERIAL,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+                LabelName.SLOT,
+                LabelName.CONNECTION_TYPE,
+                LabelName.STATUS,
+            ],
+        )
+
+        self._mg_serving_cell_info = self.parent._create_gauge(
+            MGMetricName.MG_SERVING_CELL_INFO,
+            "MG cellular gateway current serving cell tower info (1 = present)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.SERIAL,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+                LabelName.CELL_ID,
+                LabelName.TAC,
+            ],
+        )
+
     async def collect(self, device: dict[str, Any]) -> None:
         """Collect MG-specific metrics.
 
@@ -121,13 +397,37 @@ class MGCollector(BaseDeviceCollector):
         """
         # Uplink statuses are collected separately via collect_uplink_statuses()
 
+    async def collect_uplink_statuses(
+        self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
+    ) -> None:
+        """Collect all MG organization-wide metrics for one organization.
+
+        This is the single entry point ``DeviceCollector._collect_mg_specific_metrics``
+        invokes, so it fans out to every independently-gated MG org-wide concern:
+        uplink status/signal (#617) and cellular band configuration + serving
+        cell info (#304, Phase 4). Each concern is gated by its own scheduler
+        group so a stretched interval on one never blocks the other.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        device_lookup : dict[str, dict[str, Any]]
+            Device lookup table keyed by serial.
+
+        """
+        await self._collect_uplink_status_details(org_id, org_name, device_lookup)
+        await self._collect_cellular_config(org_id, org_name, device_lookup)
+
     @log_api_call("getOrganizationCellularGatewayUplinkStatuses")
     @with_error_handling(
         operation="Collect MG uplink statuses",
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def collect_uplink_statuses(
+    async def _collect_uplink_status_details(
         self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
     ) -> None:
         """Collect cellular uplink statuses for all MG gateways in an organization.
@@ -282,5 +582,224 @@ class MGCollector(BaseDeviceCollector):
             org_id=org_id,
             gateway_count=len(uplink_statuses),
             uplink_count=uplink_count,
+            skipped_count=skipped,
+        )
+
+    async def _collect_cellular_config(
+        self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
+    ) -> None:
+        """Collect cellular band configuration + serving cell info (#304).
+
+        Two org-wide bulk calls, gated together under a single scheduler group
+        (``EndpointGroupName.MG_CELLULAR_CONFIG``, ``cost_fn=2.0`` in
+        ``device.py``) since both are low-volatility config-like diagnostics
+        for the same feature area.
+
+        ⚠ Spec-only (#304): no MG hardware is available to confirm the live
+        response shape against the OpenAPI spec, which is known to be wrong
+        for some endpoints (see ``evidence/live-api-verification.md``).
+        Parsing is deliberately defensive/lenient - verify field names against
+        a live response in Phase 6 before trusting this as final.
+
+        Update tier: MEDIUM (300s heartbeat), scheduler-stretched to a 900s
+        floor - band/serving-cell config changes far less often than
+        up/down uplink status.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        device_lookup : dict[str, dict[str, Any]]
+            Device lookup table keyed by serial.
+
+        """
+        if not self.parent._should_run_group(EndpointGroupName.MG_CELLULAR_CONFIG):
+            return
+
+        await self._fetch_and_emit_cellular_bands(org_id, org_name, device_lookup)
+        await self._fetch_and_emit_serving_cells(org_id, org_name, device_lookup)
+
+        # Both underlying calls are attempted whenever this group is due
+        # (cost_fn=2.0 in device.py accounts for both together); mark the
+        # group ran regardless of either sub-fetch's individual outcome -
+        # each already absorbs its own errors via @with_error_handling so a
+        # single failed call doesn't block the other or leave the group
+        # perpetually "not yet run".
+        self.parent._mark_group_ran(EndpointGroupName.MG_CELLULAR_CONFIG)
+
+    @log_api_call("getOrganizationDevicesCellularUplinksBandsByDevice")
+    @with_error_handling(
+        operation="Collect MG cellular band configuration",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _fetch_and_emit_cellular_bands(
+        self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
+    ) -> None:
+        """Fetch + emit per-(slot, connection_type, status) band counts (#304).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        device_lookup : dict[str, dict[str, Any]]
+            Device lookup table keyed by serial.
+
+        """
+        raw = await asyncio.to_thread(
+            self.api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice,
+            org_id,
+            total_pages="all",
+        )
+
+        rows = validate_response_format(
+            raw,
+            expected_type=list,
+            operation="getOrganizationDevicesCellularUplinksBandsByDevice",
+        )
+
+        if not rows:
+            return
+
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MG_CELLULAR_CONFIG)
+        allowed_network_ids = (
+            await self.parent.inventory.get_allowed_network_ids(org_id)
+            if self.parent.inventory is not None
+            else None
+        )
+
+        skipped = 0
+        emitted = 0
+
+        for row in rows:
+            band_row = MGCellularBandsDevice.model_validate(row)
+            serial = band_row.serial
+            device_info = device_lookup.get(serial, {})
+            network_id = band_row.resolved_network_id() or device_info.get("network_id", "")
+
+            if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                skipped += 1
+                continue
+
+            model = band_row.model if band_row.model is not None else device_info.get("model", "")
+            device_data = {"serial": serial, "model": model, "networkId": network_id}
+
+            for (slot, connection_type, status), count in _count_bands_by_slot(
+                band_row.bands
+            ).items():
+                labels = create_device_labels(
+                    device_data,
+                    org_id=org_id,
+                    org_name=org_name,
+                    slot=slot,
+                    connection_type=connection_type,
+                    status=status,
+                )
+                self.parent._set_metric(
+                    self._mg_cellular_bands,
+                    labels,
+                    count,
+                    MGMetricName.MG_CELLULAR_BANDS.value,
+                    ttl_seconds=ttl_seconds,
+                )
+                emitted += 1
+
+        logger.debug(
+            "Collected MG cellular band configuration",
+            org_id=org_id,
+            device_count=len(rows),
+            series_emitted=emitted,
+            skipped_count=skipped,
+        )
+
+    @log_api_call("getOrganizationDevicesCellularUplinksTowersByDevice")
+    @with_error_handling(
+        operation="Collect MG serving cell info",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _fetch_and_emit_serving_cells(
+        self, org_id: str, org_name: str, device_lookup: dict[str, dict[str, Any]]
+    ) -> None:
+        """Fetch + emit the current serving cell tower per MG device (#304).
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+        device_lookup : dict[str, dict[str, Any]]
+            Device lookup table keyed by serial.
+
+        """
+        raw = await asyncio.to_thread(
+            self.api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice,
+            org_id,
+            total_pages="all",
+        )
+
+        rows = validate_response_format(
+            raw,
+            expected_type=list,
+            operation="getOrganizationDevicesCellularUplinksTowersByDevice",
+        )
+
+        if not rows:
+            return
+
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MG_CELLULAR_CONFIG)
+        allowed_network_ids = (
+            await self.parent.inventory.get_allowed_network_ids(org_id)
+            if self.parent.inventory is not None
+            else None
+        )
+
+        skipped = 0
+        emitted = 0
+
+        for row in rows:
+            tower_row = MGCellularTowersDevice.model_validate(row)
+            serial = tower_row.serial
+            device_info = device_lookup.get(serial, {})
+            network_id = tower_row.resolved_network_id() or device_info.get("network_id", "")
+
+            if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                skipped += 1
+                continue
+
+            serving_cell = _extract_serving_cell(tower_row.towers)
+            if serving_cell is None:
+                continue
+
+            cell_id, tac = serving_cell
+            model = tower_row.model if tower_row.model is not None else device_info.get("model", "")
+            device_data = {"serial": serial, "model": model, "networkId": network_id}
+
+            labels = create_device_labels(
+                device_data,
+                org_id=org_id,
+                org_name=org_name,
+                cell_id=cell_id,
+                tac=tac,
+            )
+            self.parent._set_metric(
+                self._mg_serving_cell_info,
+                labels,
+                1,
+                MGMetricName.MG_SERVING_CELL_INFO.value,
+                ttl_seconds=ttl_seconds,
+            )
+            emitted += 1
+
+        logger.debug(
+            "Collected MG serving cell info",
+            org_id=org_id,
+            device_count=len(rows),
+            series_emitted=emitted,
             skipped_count=skipped,
         )

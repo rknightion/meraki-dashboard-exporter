@@ -578,6 +578,15 @@ class MTCollector(BaseDeviceCollector):
                 "name", device.get("networkName", device["networkId"])
             )
 
+            # MT20/MT30 button presses (#303): handled separately from the
+            # generic per-metric loop below because it needs an extra
+            # press_type label + the reading's own `ts` (not a metric_data
+            # value) - the standard SensorMeasurement/_METRIC_ATTR_BY_TYPE path
+            # only carries a bare device-labeled value.
+            for reading in sensor_data.get("readings", []):
+                if reading.get("metric") == SensorMetricType.BUTTON:
+                    self._process_button_reading(device, reading, ttl_seconds=ttl_seconds)
+
             # Try to parse to domain model for validation
             try:
                 measurements = []
@@ -713,6 +722,68 @@ class MTCollector(BaseDeviceCollector):
         SensorMetricType.DOWNSTREAM_POWER: "_sensor_downstream_power",
         "remoteLockoutSwitch": "_sensor_remote_lockout",
     }
+
+    def _process_button_reading(
+        self,
+        device: dict[str, Any],
+        reading: dict[str, Any],
+        ttl_seconds: float | None = None,
+    ) -> None:
+        """Process an MT20/MT30 button-press reading (#303).
+
+        Rides the existing ``getOrganizationSensorReadingsLatest`` fetch (no
+        new API call). Emits the epoch-seconds timestamp of the reading as the
+        last-observed press per ``press_type`` (short/long). Because this is
+        polling-based, individual presses between polling cycles are not
+        guaranteed to be captured - see the HELP string on
+        ``MT_BUTTON_LAST_PRESS_TIMESTAMP_SECONDS``; the webhook
+        ``sensorAlert`` event is the reliable path for capturing every press.
+
+        ⚠ Phase-6 LIVE VERIFICATION: the response shape (``button.pressType``,
+        reading-level ``ts``) has not been confirmed against a live MT20/MT30 -
+        none exist in the homelab. Absent rows for orgs without one of these
+        models is the documented normal case.
+
+        Parameters
+        ----------
+        device : dict[str, Any]
+            Device data with org/network info.
+        reading : dict[str, Any]
+            A single raw reading entry (one ``metric``/``ts`` pair).
+        ttl_seconds : float | None
+            Fully-resolved per-series TTL for the ``mt_sensor_readings`` group
+            (#617 §1f). ``None`` ⇒ tier-derived TTL.
+
+        """
+        metric_data = reading.get(SensorMetricType.BUTTON)
+        if not isinstance(metric_data, dict) or not metric_data:
+            return
+
+        press_type = metric_data.get(SensorDataField.PRESS_TYPE)
+        if press_type not in {"short", "long"}:
+            logger.debug(
+                "Unexpected or missing MT button pressType",
+                serial=device.get("serial", ""),
+                press_type=press_type,
+            )
+            return
+
+        ts = reading.get("ts")
+        epoch = self._parse_iso_timestamp(ts) if isinstance(ts, str) else None
+        if epoch is None:
+            return
+
+        org_id = device.get("orgId", "")
+        org_name = device.get("orgName", org_id)
+        labels = create_device_labels(
+            device, org_id=org_id, org_name=org_name, press_type=press_type
+        )
+        self._set_metric_value(
+            "_sensor_button_last_press",
+            labels,
+            epoch,
+            ttl_seconds=ttl_seconds,
+        )
 
     def _process_validated_metric(
         self,

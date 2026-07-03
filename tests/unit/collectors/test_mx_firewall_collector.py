@@ -64,13 +64,29 @@ class TestMXFirewallCollector:
         firewall_collector: MXFirewallCollector,
         mock_parent: MagicMock,
     ) -> None:
-        """All three firewall gauge metrics must be created during __init__."""
-        assert mock_parent._create_gauge.call_count == 3
+        """All 16 firewall/security/NAT/VLAN gauge metrics must be created during __init__."""
+        assert mock_parent._create_gauge.call_count == 16
 
         created_names = {call.args[0] for call in mock_parent._create_gauge.call_args_list}
         assert MXMetricName.MX_FIREWALL_RULES in created_names
         assert MXMetricName.MX_FIREWALL_DEFAULT_POLICY in created_names
         assert MXMetricName.MX_SECURITY_EVENTS_COUNT in created_names
+        # Phase 4 (#285): content filtering / malware / IDS/IPS
+        assert MXMetricName.MX_CONTENT_FILTERING_BLOCKED_CATEGORIES in created_names
+        assert MXMetricName.MX_CONTENT_FILTERING_BLOCKED_URL_PATTERNS in created_names
+        assert MXMetricName.MX_CONTENT_FILTERING_ALLOWED_URL_PATTERNS in created_names
+        assert MXMetricName.MX_MALWARE_PROTECTION_ENABLED in created_names
+        assert MXMetricName.MX_MALWARE_ALLOWED_URLS in created_names
+        assert MXMetricName.MX_MALWARE_ALLOWED_FILES in created_names
+        assert MXMetricName.MX_IDS_MODE in created_names
+        assert MXMetricName.MX_IDS_RULESET in created_names
+        # Phase 4 (#288): port-forwarding / NAT
+        assert MXMetricName.MX_PORT_FORWARDING_RULES in created_names
+        assert MXMetricName.MX_NAT_RULES in created_names
+        # Phase 4 (#289): VLANs / static routes
+        assert MXMetricName.MX_VLANS in created_names
+        assert MXMetricName.MX_STATIC_ROUTES in created_names
+        assert MXMetricName.MX_STATIC_ROUTES_ENABLED in created_names
 
     def test_initialisation_stores_parent_api_settings(
         self,
@@ -947,4 +963,566 @@ class TestMXFirewallCollector:
             "rules": [{"type": "host", "value": "bad.example.com"}]
         })
         assert len(l7.rules) == 1
-        assert l7.rules[0].comment is None
+
+    # ------------------------------------------------------------------
+    # #285: content filtering + malware + IDS/IPS config drift
+    # ------------------------------------------------------------------
+
+    async def test_content_filtering_counts_emitted(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Content-filtering category/pattern counts must be emitted."""
+        mock_api.appliance.getNetworkApplianceContentFiltering = MagicMock(
+            return_value={
+                "blockedUrlCategories": [{"id": "1", "name": "Gambling"}],
+                "blockedUrlPatterns": ["bad.example.com", "worse.example.com"],
+                "allowedUrlPatterns": ["good.example.com"],
+            }
+        )
+        mock_api.appliance.getNetworkApplianceSecurityMalware = MagicMock(
+            return_value={"mode": "enabled", "allowedUrls": [], "allowedFiles": []}
+        )
+        mock_api.appliance.getNetworkApplianceSecurityIntrusion = MagicMock(
+            return_value={"mode": "prevention", "idsRulesets": "balanced"}
+        )
+
+        await firewall_collector.collect_security_config("org1", "N_1")
+
+        calls = {c[0][0]: c[0][2] for c in mock_parent._set_metric.call_args_list}
+        assert calls[firewall_collector._content_filtering_blocked_categories] == 1.0
+        assert calls[firewall_collector._content_filtering_blocked_url_patterns] == 2.0
+        assert calls[firewall_collector._content_filtering_allowed_url_patterns] == 1.0
+
+    async def test_malware_enabled_sets_1(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """mode == 'enabled' must set malware_protection_enabled to 1."""
+        mock_api.appliance.getNetworkApplianceContentFiltering = MagicMock(
+            return_value={
+                "blockedUrlCategories": [],
+                "blockedUrlPatterns": [],
+                "allowedUrlPatterns": [],
+            }
+        )
+        mock_api.appliance.getNetworkApplianceSecurityMalware = MagicMock(
+            return_value={
+                "mode": "enabled",
+                "allowedUrls": [{"url": "example.com"}],
+                "allowedFiles": [{"sha256": "abc"}, {"sha256": "def"}],
+            }
+        )
+        mock_api.appliance.getNetworkApplianceSecurityIntrusion = MagicMock(
+            return_value={"mode": "disabled", "idsRulesets": None}
+        )
+
+        await firewall_collector.collect_security_config("org1", "N_1")
+
+        calls = {c[0][0]: c[0][2] for c in mock_parent._set_metric.call_args_list}
+        assert calls[firewall_collector._malware_protection_enabled] == 1.0
+        assert calls[firewall_collector._malware_allowed_urls] == 1.0
+        assert calls[firewall_collector._malware_allowed_files] == 2.0
+
+    async def test_malware_disabled_sets_0(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """mode == 'disabled' must set malware_protection_enabled to 0."""
+        mock_api.appliance.getNetworkApplianceContentFiltering = MagicMock(
+            return_value={
+                "blockedUrlCategories": [],
+                "blockedUrlPatterns": [],
+                "allowedUrlPatterns": [],
+            }
+        )
+        mock_api.appliance.getNetworkApplianceSecurityMalware = MagicMock(
+            return_value={"mode": "disabled", "allowedUrls": [], "allowedFiles": []}
+        )
+        mock_api.appliance.getNetworkApplianceSecurityIntrusion = MagicMock(
+            return_value={"mode": "disabled", "idsRulesets": None}
+        )
+
+        await firewall_collector.collect_security_config("org1", "N_1")
+
+        calls = {c[0][0]: c[0][2] for c in mock_parent._set_metric.call_args_list}
+        assert calls[firewall_collector._malware_protection_enabled] == 0.0
+
+    async def test_malware_400_is_debug_skip_not_error(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A 400/404 from the malware endpoint (no Advanced Security license) must be skipped.
+
+        Content filtering and IDS/IPS must still be collected -- one licensed-feature
+        gap must not block the others.
+        """
+        from meraki.exceptions import APIError
+
+        mock_api.appliance.getNetworkApplianceContentFiltering = MagicMock(
+            return_value={
+                "blockedUrlCategories": [],
+                "blockedUrlPatterns": [],
+                "allowedUrlPatterns": [],
+            }
+        )
+
+        response = MagicMock()
+        response.status_code = 400
+        response.reason = "Bad Request"
+        response.json.return_value = {"errors": ["Advanced Security license required"]}
+        error = APIError(
+            {"tags": ["configure"], "operation": "getNetworkApplianceSecurityMalware"},
+            response,
+        )
+        mock_api.appliance.getNetworkApplianceSecurityMalware = MagicMock(side_effect=error)
+        mock_api.appliance.getNetworkApplianceSecurityIntrusion = MagicMock(
+            return_value={"mode": "prevention", "idsRulesets": "balanced"}
+        )
+
+        # Should not raise.
+        await firewall_collector.collect_security_config("org1", "N_1")
+
+        called_gauges = {c[0][0] for c in mock_parent._set_metric.call_args_list}
+        assert firewall_collector._malware_protection_enabled not in called_gauges
+        assert firewall_collector._content_filtering_blocked_categories in called_gauges
+        assert firewall_collector._ids_mode in called_gauges
+
+    async def test_intrusion_404_is_debug_skip_not_error(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A 404 from the intrusion endpoint must be skipped, not raised."""
+        from meraki.exceptions import APIError
+
+        mock_api.appliance.getNetworkApplianceContentFiltering = MagicMock(
+            return_value={
+                "blockedUrlCategories": [],
+                "blockedUrlPatterns": [],
+                "allowedUrlPatterns": [],
+            }
+        )
+        mock_api.appliance.getNetworkApplianceSecurityMalware = MagicMock(
+            return_value={"mode": "enabled", "allowedUrls": [], "allowedFiles": []}
+        )
+
+        response = MagicMock()
+        response.status_code = 404
+        response.reason = "Not Found"
+        response.json.return_value = {"errors": ["not found"]}
+        error = APIError(
+            {"tags": ["configure"], "operation": "getNetworkApplianceSecurityIntrusion"},
+            response,
+        )
+        mock_api.appliance.getNetworkApplianceSecurityIntrusion = MagicMock(side_effect=error)
+
+        await firewall_collector.collect_security_config("org1", "N_1")
+
+        called_gauges = {c[0][0] for c in mock_parent._set_metric.call_args_list}
+        assert firewall_collector._ids_mode not in called_gauges
+        assert firewall_collector._ids_ruleset not in called_gauges
+        assert firewall_collector._malware_protection_enabled in called_gauges
+
+    async def test_ids_mode_and_ruleset_one_hot_labels(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """IDS mode/ruleset must be emitted as one-hot series with the active value as a label."""
+        mock_api.appliance.getNetworkApplianceContentFiltering = MagicMock(
+            return_value={
+                "blockedUrlCategories": [],
+                "blockedUrlPatterns": [],
+                "allowedUrlPatterns": [],
+            }
+        )
+        mock_api.appliance.getNetworkApplianceSecurityMalware = MagicMock(
+            return_value={"mode": "disabled", "allowedUrls": [], "allowedFiles": []}
+        )
+        mock_api.appliance.getNetworkApplianceSecurityIntrusion = MagicMock(
+            return_value={"mode": "prevention", "idsRulesets": "security"}
+        )
+
+        await firewall_collector.collect_security_config("org1", "N_1")
+
+        mode_call = next(
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is firewall_collector._ids_mode
+        )
+        _, labels, value = mode_call[0]
+        assert labels["mode"] == "prevention"
+        assert value == 1.0
+
+        ruleset_call = next(
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is firewall_collector._ids_ruleset
+        )
+        _, labels, value = ruleset_call[0]
+        assert labels["ruleset"] == "security"
+        assert value == 1.0
+
+    async def test_security_config_throttled_per_network(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A second call within the group interval must not hit the API again."""
+        mock_api.appliance.getNetworkApplianceContentFiltering = MagicMock(
+            return_value={
+                "blockedUrlCategories": [],
+                "blockedUrlPatterns": [],
+                "allowedUrlPatterns": [],
+            }
+        )
+        mock_api.appliance.getNetworkApplianceSecurityMalware = MagicMock(
+            return_value={"mode": "disabled", "allowedUrls": [], "allowedFiles": []}
+        )
+        mock_api.appliance.getNetworkApplianceSecurityIntrusion = MagicMock(
+            return_value={"mode": "disabled", "idsRulesets": None}
+        )
+
+        await firewall_collector.collect_security_config("org1", "N_1")
+        await firewall_collector.collect_security_config("org1", "N_1")
+
+        assert mock_api.appliance.getNetworkApplianceContentFiltering.call_count == 1
+
+    async def test_security_config_threads_group_ttl(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """_set_metric calls must carry the mx_security_config group's TTL."""
+        mock_parent._group_ttl_seconds = MagicMock(return_value=555.0)
+        mock_api.appliance.getNetworkApplianceContentFiltering = MagicMock(
+            return_value={
+                "blockedUrlCategories": [],
+                "blockedUrlPatterns": [],
+                "allowedUrlPatterns": [],
+            }
+        )
+        mock_api.appliance.getNetworkApplianceSecurityMalware = MagicMock(
+            return_value={"mode": "disabled", "allowedUrls": [], "allowedFiles": []}
+        )
+        mock_api.appliance.getNetworkApplianceSecurityIntrusion = MagicMock(
+            return_value={"mode": "disabled", "idsRulesets": None}
+        )
+
+        await firewall_collector.collect_security_config("org1", "N_1")
+
+        for call in mock_parent._set_metric.call_args_list:
+            assert call.kwargs["ttl_seconds"] == 555.0
+
+    # ------------------------------------------------------------------
+    # #288: port forwarding + NAT rule counts
+    # ------------------------------------------------------------------
+
+    async def test_nat_config_counts_emitted(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Port-forwarding and both NAT rule-type counts must be emitted."""
+        mock_api.appliance.getNetworkApplianceFirewallPortForwardingRules = MagicMock(
+            return_value={"rules": [{"name": "web"}, {"name": "ssh"}]}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallOneToOneNatRules = MagicMock(
+            return_value={"rules": [{"name": "server1"}]}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallOneToManyNatRules = MagicMock(
+            return_value={"rules": []}
+        )
+
+        await firewall_collector.collect_nat_config("org1", "N_1")
+
+        pf_call = next(
+            c
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is firewall_collector._port_forwarding_rules
+        )
+        assert pf_call[0][2] == 2.0
+
+        nat_calls = {
+            c[0][1]["nat_type"]: c[0][2]
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is firewall_collector._nat_rules
+        }
+        assert nat_calls == {"1:1": 1.0, "1:many": 0.0}
+
+    async def test_nat_config_empty_arrays_emit_zero(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Empty rule arrays are a normal response and must emit counts of 0."""
+        mock_api.appliance.getNetworkApplianceFirewallPortForwardingRules = MagicMock(
+            return_value={"rules": []}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallOneToOneNatRules = MagicMock(
+            return_value={"rules": []}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallOneToManyNatRules = MagicMock(
+            return_value={"rules": []}
+        )
+
+        await firewall_collector.collect_nat_config("org1", "N_1")
+
+        for call in mock_parent._set_metric.call_args_list:
+            assert call[0][2] == 0.0
+
+    async def test_nat_config_throttled_per_network(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A second call within the group interval must not hit the API again."""
+        mock_api.appliance.getNetworkApplianceFirewallPortForwardingRules = MagicMock(
+            return_value={"rules": []}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallOneToOneNatRules = MagicMock(
+            return_value={"rules": []}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallOneToManyNatRules = MagicMock(
+            return_value={"rules": []}
+        )
+
+        await firewall_collector.collect_nat_config("org1", "N_1")
+        await firewall_collector.collect_nat_config("org1", "N_1")
+
+        assert mock_api.appliance.getNetworkApplianceFirewallPortForwardingRules.call_count == 1
+
+    async def test_nat_config_api_error_handled_gracefully(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A genuine API exception must not propagate."""
+        mock_api.appliance.getNetworkApplianceFirewallPortForwardingRules = MagicMock(
+            side_effect=Exception("connection reset")
+        )
+
+        await firewall_collector.collect_nat_config("org1", "N_1")
+
+        mock_parent._set_metric.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # #289: VLAN + static-route counts
+    # ------------------------------------------------------------------
+
+    async def test_vlan_config_counts_emitted(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """VLAN and static-route counts (total + enabled) must be emitted."""
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(
+            return_value=[{"id": "1"}, {"id": "2"}, {"id": "3"}]
+        )
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(
+            return_value=[
+                {"id": "r1", "enabled": True},
+                {"id": "r2", "enabled": False},
+                {"id": "r3", "enabled": True},
+            ]
+        )
+
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        calls = {c[0][0]: c[0][2] for c in mock_parent._set_metric.call_args_list}
+        assert calls[firewall_collector._vlans_total] == 3.0
+        assert calls[firewall_collector._static_routes_total] == 3.0
+        assert calls[firewall_collector._static_routes_enabled] == 2.0
+
+    async def test_vlan_config_400_is_debug_skip_not_error(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A 400 from getNetworkApplianceVlans (VLANs not enabled) must be skipped.
+
+        Static routes must still be collected -- the VLAN-disabled condition must
+        not block the rest of this method.
+        """
+        from meraki.exceptions import APIError
+
+        response = MagicMock()
+        response.status_code = 400
+        response.reason = "Bad Request"
+        response.json.return_value = {"errors": ["VLANs are not enabled for this network"]}
+        error = APIError(
+            {"tags": ["configure"], "operation": "getNetworkApplianceVlans"},
+            response,
+        )
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(side_effect=error)
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(
+            return_value=[{"id": "r1", "enabled": True}]
+        )
+
+        # Should not raise.
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        called_gauges = {c[0][0] for c in mock_parent._set_metric.call_args_list}
+        assert firewall_collector._vlans_total not in called_gauges
+        assert firewall_collector._static_routes_total in called_gauges
+
+    async def test_vlan_config_no_static_routes_emits_zero(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An empty static-routes list must emit total=0 and enabled=0."""
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(return_value=[])
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(return_value=[])
+
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        calls = {c[0][0]: c[0][2] for c in mock_parent._set_metric.call_args_list}
+        assert calls[firewall_collector._vlans_total] == 0.0
+        assert calls[firewall_collector._static_routes_total] == 0.0
+        assert calls[firewall_collector._static_routes_enabled] == 0.0
+
+    async def test_vlan_config_throttled_per_network(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A second call within the group interval must not hit the API again."""
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(return_value=[])
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(return_value=[])
+
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        assert mock_api.appliance.getNetworkApplianceVlans.call_count == 1
+
+    async def test_vlan_config_api_error_handled_gracefully(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A genuine (non-400/404) API exception must not propagate."""
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(
+            side_effect=Exception("connection reset")
+        )
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(return_value=[])
+
+        await firewall_collector.collect_vlan_config("org1", "N_1")
+
+        mock_parent._set_metric.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # collect_for_network dispatches the three new config-drift domains
+    # ------------------------------------------------------------------
+
+    async def test_collect_for_network_calls_new_config_domains(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """collect_for_network must also collect security/NAT/VLAN config for the network."""
+        self._set_l3_l7_responses(mock_api)
+        mock_api.appliance.getNetworkApplianceContentFiltering = MagicMock(
+            return_value={
+                "blockedUrlCategories": [],
+                "blockedUrlPatterns": [],
+                "allowedUrlPatterns": [],
+            }
+        )
+        mock_api.appliance.getNetworkApplianceSecurityMalware = MagicMock(
+            return_value={"mode": "disabled", "allowedUrls": [], "allowedFiles": []}
+        )
+        mock_api.appliance.getNetworkApplianceSecurityIntrusion = MagicMock(
+            return_value={"mode": "disabled", "idsRulesets": None}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallPortForwardingRules = MagicMock(
+            return_value={"rules": []}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallOneToOneNatRules = MagicMock(
+            return_value={"rules": []}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallOneToManyNatRules = MagicMock(
+            return_value={"rules": []}
+        )
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(return_value=[])
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(return_value=[])
+
+        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+
+        called_gauges = {c[0][0] for c in mock_parent._set_metric.call_args_list}
+        assert firewall_collector._content_filtering_blocked_categories in called_gauges
+        assert firewall_collector._port_forwarding_rules in called_gauges
+        assert firewall_collector._vlans_total in called_gauges
+
+    async def test_collect_for_network_new_domains_run_even_when_firewall_gate_closed(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The new config-drift domains must run on their own cadence, decoupled from firewall rules.
+
+        A closed mx_firewall_config gate must not block the independently-gated
+        mx_security_config/mx_nat_config/mx_vlan_config domains.
+        """
+        self._set_l3_l7_responses(mock_api)
+        # Prime the firewall-rules throttle so it's closed on the second call.
+        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+        assert mock_api.appliance.getNetworkApplianceFirewallL3FirewallRules.call_count == 1
+
+        mock_api.appliance.getNetworkApplianceContentFiltering = MagicMock(
+            return_value={
+                "blockedUrlCategories": [{"id": "1"}],
+                "blockedUrlPatterns": [],
+                "allowedUrlPatterns": [],
+            }
+        )
+        mock_api.appliance.getNetworkApplianceSecurityMalware = MagicMock(
+            return_value={"mode": "disabled", "allowedUrls": [], "allowedFiles": []}
+        )
+        mock_api.appliance.getNetworkApplianceSecurityIntrusion = MagicMock(
+            return_value={"mode": "disabled", "idsRulesets": None}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallPortForwardingRules = MagicMock(
+            return_value={"rules": []}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallOneToOneNatRules = MagicMock(
+            return_value={"rules": []}
+        )
+        mock_api.appliance.getNetworkApplianceFirewallOneToManyNatRules = MagicMock(
+            return_value={"rules": []}
+        )
+        mock_api.appliance.getNetworkApplianceVlans = MagicMock(return_value=[])
+        mock_api.appliance.getNetworkApplianceStaticRoutes = MagicMock(return_value=[])
+
+        # Second call: firewall-rules gate is now closed, but the new domains
+        # are collected for the first time and must still run.
+        await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
+
+        # Firewall rules must NOT have been re-fetched (gate closed).
+        assert mock_api.appliance.getNetworkApplianceFirewallL3FirewallRules.call_count == 1
+        # But the new config-drift domains must have run.
+        mock_api.appliance.getNetworkApplianceContentFiltering.assert_called_once()

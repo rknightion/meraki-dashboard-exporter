@@ -1,6 +1,12 @@
 # golden metrics exposition contract: family=mg
 # fields: NAME / TYPE / HELP / LABELS (label KEY sets, values normalized out)
 
+meraki_mg_cellular_bands gauge
+  help: Count of cellular bands in a given state, per SIM slot and radio access technology
+  labels: connection_type,device_type,model,network_id,org_id,serial,slot,status
+meraki_mg_serving_cell_info gauge
+  help: MG cellular gateway current serving cell tower info (1 = present)
+  labels: cell_id,device_type,model,network_id,org_id,serial,tac
 meraki_mg_uplink_roaming gauge
   help: MG cellular gateway uplink roaming status (1 = roaming, 0 = home)
   labels: device_type,interface,model,network_id,org_id,serial

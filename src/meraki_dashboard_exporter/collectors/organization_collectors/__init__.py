@@ -6,6 +6,8 @@ from .client_overview import ClientOverviewCollector
 from .device_availability_history import DeviceAvailabilityHistoryCollector
 from .firmware import FirmwareCollector
 from .license import LicenseCollector
+from .top_usage import TopUsageCollector
+from .webhooks import WebhookLogsCollector
 
 __all__ = [
     "APIUsageCollector",
@@ -14,4 +16,6 @@ __all__ = [
     "DeviceAvailabilityHistoryCollector",
     "FirmwareCollector",
     "LicenseCollector",
+    "TopUsageCollector",
+    "WebhookLogsCollector",
 ]

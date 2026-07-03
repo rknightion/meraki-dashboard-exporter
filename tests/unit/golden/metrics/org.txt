@@ -1,6 +1,12 @@
 # golden metrics exposition contract: family=org
 # fields: NAME / TYPE / HELP / LABELS (label KEY sets, values normalized out)
 
+meraki_device_firmware_info gauge
+  help: Device firmware join metric (value 1): maps serial -> running firmware. Numeric device series join firmware via on(serial) group_left(firmware)
+  labels: device_type,firmware,model,network_id,org_id,serial
+meraki_network_firmware_up_to_date gauge
+  help: Whether every device in the network is on its latest firmware (1=all up to date / no pending upgrade, 0=at least one device has a pending or in-progress upgrade)
+  labels: network_id,org_id
 meraki_network_info gauge
   help: Network information (join metric: network_id -> network_name)
   labels: network_id,network_name,org_id
@@ -8,6 +14,15 @@ meraki_org info
   help: Organization information
   labels: api_enabled,org_id,org_name,url
   labels: org_id,org_name
+meraki_org_adaptive_policy_acls gauge
+  help: Number of adaptive policy custom ACLs in the organization
+  labels: org_id
+meraki_org_adaptive_policy_groups gauge
+  help: Number of adaptive policy groups in the organization
+  labels: org_id
+meraki_org_adaptive_policy_policies gauge
+  help: Number of adaptive policies in the organization
+  labels: org_id
 meraki_org_api_requests_by_status gauge
   help: API requests by HTTP status code in the last hour
   labels: org_id,status_code
@@ -28,6 +43,9 @@ meraki_org_application_usage_upstream_bytes gauge
   labels: category,org_id
 meraki_org_clients_count gauge
   help: Number of active clients in the organization in the last hour
+  labels: org_id
+meraki_org_config_templates gauge
+  help: Number of configuration templates defined in the organization
   labels: org_id
 meraki_org_devices gauge
   help: Number of devices in the organization
@@ -56,12 +74,24 @@ meraki_org_licenses_expiring gauge
 meraki_org_networks gauge
   help: Number of networks in the organization
   labels: org_id
+meraki_org_networks_bound_to_template gauge
+  help: Number of NetworkFilter-visible networks bound to a configuration template (counts only networks within the configured NetworkFilter, not the whole org)
+  labels: org_id
 meraki_org_packetcaptures gauge
   help: Number of packet captures in the organization
   labels: org_id
 meraki_org_packetcaptures_remaining gauge
   help: Number of remaining packet captures to process
   labels: org_id
+meraki_org_top_client_usage_total_bytes gauge
+  help: Total bytes used by each top-N client over the trailing 1-day window (labelled by client_id only per #533; join client_id -> name via meraki_client_info, which may miss clients on untracked networks)
+  labels: client_id,org_id
+meraki_org_top_manufacturer_usage_total_bytes gauge
+  help: Total bytes used by each top-N client-device manufacturer over the trailing 1-day window
+  labels: manufacturer,org_id
+meraki_org_top_ssid_usage_total_bytes gauge
+  help: Total bytes used by each top-N SSID over the trailing 1-day window
+  labels: org_id,ssid
 meraki_org_usage_downstream_bytes gauge
   help: Downstream data usage in bytes for the 1-hour window
   labels: org_id
@@ -71,3 +101,6 @@ meraki_org_usage_total_bytes gauge
 meraki_org_usage_upstream_bytes gauge
   help: Upstream data usage in bytes for the 1-hour window
   labels: org_id
+meraki_org_webhook_deliveries_count gauge
+  help: Number of Meraki webhook delivery attempts in the trailing 1-hour window by HTTP response status code (windowed count, resets each cycle; failures are status_code!~"2..")
+  labels: org_id,status_code

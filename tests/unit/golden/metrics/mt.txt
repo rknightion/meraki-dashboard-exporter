@@ -7,6 +7,9 @@ meraki_mt_apparent_power_va gauge
 meraki_mt_battery_percent gauge
   help: Battery level percentage
   labels: device_type,model,network_id,org_id,serial
+meraki_mt_button_last_press_timestamp_seconds gauge
+  help: Unix timestamp (seconds) of the last observed press via polling; individual presses between polls are not guaranteed to be captured - webhook sensorAlert events are the reliable path
+  labels: device_type,model,network_id,org_id,press_type,serial
 meraki_mt_co2_ppm gauge
   help: CO2 level in parts per million
   labels: device_type,model,network_id,org_id,serial

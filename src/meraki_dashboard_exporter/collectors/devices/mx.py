@@ -7,6 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from ...core.constants import MXMetricName
+from ...core.domain_models import ApplianceDhcpSubnet
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
@@ -48,6 +49,12 @@ class MXCollector(BaseDeviceCollector):
         # (floor 900s), mirroring the per-serial MS gates.
         self._last_performance_collection: dict[str, float] = {}
 
+        # Per-serial throttle for the NEW mx_dhcp_subnets gate (#286/#617), mirroring
+        # _last_performance_collection above for the same reason (a per-physical-MX
+        # fan-out within one MEDIUM-tier cycle needs per-serial state, not a single
+        # group-global run gate).
+        self._last_dhcp_subnets_collection: dict[str, float] = {}
+
         self._mx_uplink_info = self.parent._create_gauge(
             MXMetricName.MX_UPLINK_INFO,
             "MX appliance uplink status info (1 = present)",
@@ -72,6 +79,27 @@ class MXCollector(BaseDeviceCollector):
                 LabelName.MODEL,
                 LabelName.DEVICE_TYPE,
             ],
+        )
+
+        # Phase 4 (#286): per-MX-device DHCP subnet utilization.
+        dhcp_subnet_labelnames = [
+            LabelName.ORG_ID,
+            LabelName.NETWORK_ID,
+            LabelName.SERIAL,
+            LabelName.MODEL,
+            LabelName.DEVICE_TYPE,
+            LabelName.SUBNET,
+            LabelName.VLAN,
+        ]
+        self._dhcp_subnet_used_ips = self.parent._create_gauge(
+            MXMetricName.MX_DHCP_SUBNET_USED_IPS,
+            "Number of IPs in use within a DHCP-served subnet on this MX",
+            labelnames=dhcp_subnet_labelnames,
+        )
+        self._dhcp_subnet_free_ips = self.parent._create_gauge(
+            MXMetricName.MX_DHCP_SUBNET_FREE_IPS,
+            "Number of free IPs within a DHCP-served subnet on this MX",
+            labelnames=dhcp_subnet_labelnames,
         )
 
     def _create_gauge(self, *args: Any, **kwargs: Any) -> Any:
@@ -127,6 +155,22 @@ class MXCollector(BaseDeviceCollector):
         """Record that the perf score was just collected for this serial."""
         self._last_performance_collection[serial] = time.time()
 
+    def _should_collect_dhcp_subnets(self, serial: str) -> bool:
+        """Return whether enough time has elapsed to (re)collect this MX's DHCP subnets.
+
+        Per-serial throttle for the mx_dhcp_subnets endpoint group (#286/#617),
+        mirroring ``_should_collect_performance`` above.
+        """
+        interval = self._group_interval(EndpointGroupName.MX_DHCP_SUBNETS)
+        if interval <= 0:
+            return True
+        last = self._last_dhcp_subnets_collection.get(serial, 0.0)
+        return (time.time() - last) >= interval
+
+    def _mark_dhcp_subnets_collected(self, serial: str) -> None:
+        """Record that DHCP subnets were just collected for this serial."""
+        self._last_dhcp_subnets_collection[serial] = time.time()
+
     @property
     def inventory(self) -> Any:
         """Expose the parent DeviceCollector's inventory cache to sub-collectors."""
@@ -168,6 +212,7 @@ class MXCollector(BaseDeviceCollector):
         """
         if self._is_physical_mx_hardware(device):
             await self._collect_performance_score(device)
+            await self._collect_dhcp_subnets(device)
 
     @staticmethod
     def _is_physical_mx_hardware(device: dict[str, Any]) -> bool:
@@ -255,6 +300,73 @@ class MXCollector(BaseDeviceCollector):
                 MXMetricName.MX_PERFORMANCE_SCORE.value,
                 ttl_seconds=self._group_ttl_seconds(EndpointGroupName.MX_PERFORMANCE),
             )
+
+    @log_api_call("getDeviceApplianceDhcpSubnets")
+    @with_error_handling(
+        operation="Collect MX DHCP subnet utilization",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _collect_dhcp_subnets(self, device: dict[str, Any]) -> None:
+        """Collect per-subnet DHCP IP utilization for a single MX device (#286).
+
+        ``getDeviceApplianceDhcpSubnets`` returns an empty list when the
+        device serves no DHCP-enabled VLANs -- that is a normal, expected
+        response and results in no metrics for this device, not an error.
+
+        Parameters
+        ----------
+        device : dict[str, Any]
+            Device data.
+
+        """
+        serial = device.get("serial", "")
+
+        # mx_dhcp_subnets gate (#286/#617): throttle the per-physical-MX DHCP
+        # subnets call to the mx_dhcp_subnets group's interval (floor 900s).
+        if not self._should_collect_dhcp_subnets(serial):
+            return
+
+        resp = await asyncio.to_thread(
+            self.api.appliance.getDeviceApplianceDhcpSubnets,
+            serial,
+        )
+
+        resp = validate_response_format(
+            resp,
+            expected_type=list,
+            operation="getDeviceApplianceDhcpSubnets",
+        )
+
+        # Mark after a successful fetch (before emit) so a failed call retries on
+        # the next cycle rather than being throttled out.
+        self._mark_dhcp_subnets_collected(serial)
+
+        subnets = [ApplianceDhcpSubnet.model_validate(s) for s in resp]
+        ttl_seconds = self._group_ttl_seconds(EndpointGroupName.MX_DHCP_SUBNETS)
+
+        for subnet in subnets:
+            labels = create_device_labels(
+                device,
+                org_id=device.get("orgId", ""),
+                org_name=device.get("orgName", device.get("orgId", "")),
+                subnet=subnet.subnet or "",
+                vlan=str(subnet.vlanId) if subnet.vlanId is not None else "",
+            )
+            if subnet.usedCount is not None:
+                self.parent._set_metric(
+                    self._dhcp_subnet_used_ips,
+                    labels,
+                    float(subnet.usedCount),
+                    ttl_seconds=ttl_seconds,
+                )
+            if subnet.freeCount is not None:
+                self.parent._set_metric(
+                    self._dhcp_subnet_free_ips,
+                    labels,
+                    float(subnet.freeCount),
+                    ttl_seconds=ttl_seconds,
+                )
 
     @log_api_call("getOrganizationApplianceUplinkStatuses")
     @with_error_handling(

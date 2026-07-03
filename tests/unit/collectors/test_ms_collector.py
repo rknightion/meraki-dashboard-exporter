@@ -294,8 +294,12 @@ class TestMSCollector:
         await ms_collector.collect_stp_priorities("org123", "Org 123", device_lookup)
 
         # Verify network fetch went through inventory (filter applies),
-        # not directly to the SDK.
-        mock_parent.inventory.get_networks.assert_awaited_once_with("org123")
+        # not directly to the SDK. #292/#293/#295 now also fold their own
+        # independently-gated network fetches into this same call site (see
+        # ms.py collect_stp_priorities), so the inventory is awaited once per
+        # folded-in family rather than exactly once overall.
+        mock_parent.inventory.get_networks.assert_any_await("org123")
+        assert mock_parent.inventory.get_networks.await_count == 3
         assert mock_api.switch.getNetworkSwitchStp.call_count == 2  # Only for net1 and net2
 
         # Verify metrics were actually set on the real Gauge/registry.
@@ -1582,3 +1586,536 @@ class TestMSCollector:
             call.args[3] for call in mock_parent._set_metric.call_args_list if len(call.args) > 3
         }
         assert "meraki_ms_port_info" in tracked_metric_names
+
+    # ------------------------------------------------------------------
+    # #292/#293: rogue DHCP + Dynamic ARP Inspection coverage
+    # ------------------------------------------------------------------
+
+    async def test_collect_dhcp_security_emits_rogue_dhcp_counts(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """#292: rogue/unauthorized DHCP servers are aggregated by is_allowed only."""
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_networks = AsyncMock(
+            return_value=[{"id": "net1", "name": "Network 1", "productTypes": ["switch"]}]
+        )
+        mock_api.switch.getNetworkSwitchDhcpV4ServersSeen = MagicMock(
+            return_value=[
+                {"mac": "00:11:22:33:44:55", "isAllowed": True},
+                {"mac": "aa:bb:cc:dd:ee:ff", "isAllowed": False},
+                {"mac": "11:22:33:44:55:66", "isAllowed": False},
+            ]
+        )
+        mock_api.switch.getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice = MagicMock(
+            return_value=[]
+        )
+
+        await ms_collector.collect_dhcp_security("org123", "Org One")
+
+        mock_api.switch.getNetworkSwitchDhcpV4ServersSeen.assert_called_once_with(
+            "net1", total_pages="all"
+        )
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_dhcp_servers_seen_count",
+                {"org_id": "org123", "network_id": "net1", "is_allowed": "true"},
+            )
+            == 1.0
+        )
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_dhcp_servers_seen_count",
+                {"org_id": "org123", "network_id": "net1", "is_allowed": "false"},
+            )
+            == 2.0
+        )
+
+    async def test_collect_dhcp_security_resets_to_zero_when_none_seen(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """#292: an empty response is normal and must emit explicit zeros, not skip."""
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_networks = AsyncMock(
+            return_value=[{"id": "net1", "name": "Network 1", "productTypes": ["switch"]}]
+        )
+        mock_api.switch.getNetworkSwitchDhcpV4ServersSeen = MagicMock(return_value=[])
+        mock_api.switch.getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice = MagicMock(
+            return_value=[]
+        )
+
+        await ms_collector.collect_dhcp_security("org123", "Org One")
+
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_dhcp_servers_seen_count",
+                {"org_id": "org123", "network_id": "net1", "is_allowed": "true"},
+            )
+            == 0.0
+        )
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_dhcp_servers_seen_count",
+                {"org_id": "org123", "network_id": "net1", "is_allowed": "false"},
+            )
+            == 0.0
+        )
+
+    async def test_collect_dhcp_security_emits_dai_coverage(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """#293: DAI coverage rows carry serial only (no model/device_type)."""
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_networks = AsyncMock(
+            return_value=[{"id": "net1", "name": "Network 1", "productTypes": ["switch"]}]
+        )
+        mock_api.switch.getNetworkSwitchDhcpV4ServersSeen = MagicMock(return_value=[])
+        mock_api.switch.getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-0001",
+                    "supportsInspection": True,
+                    "hasTrustedPort": False,
+                }
+            ]
+        )
+
+        await ms_collector.collect_dhcp_security("org123", "Org One")
+
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_dai_supported",
+                {"org_id": "org123", "network_id": "net1", "serial": "Q2XX-0001"},
+            )
+            == 1.0
+        )
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_dai_trusted_port_configured",
+                {"org_id": "org123", "network_id": "net1", "serial": "Q2XX-0001"},
+            )
+            == 0.0
+        )
+
+    async def test_collect_dhcp_security_skips_row_missing_serial(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """#293: a DAI row without a serial is skipped rather than emitted with an empty label."""
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_networks = AsyncMock(
+            return_value=[{"id": "net1", "name": "Network 1", "productTypes": ["switch"]}]
+        )
+        mock_api.switch.getNetworkSwitchDhcpV4ServersSeen = MagicMock(return_value=[])
+        mock_api.switch.getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice = MagicMock(
+            return_value=[{"supportsInspection": True}]
+        )
+
+        await ms_collector.collect_dhcp_security("org123", "Org One")
+
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_dai_supported",
+                {"org_id": "org123", "network_id": "net1", "serial": ""},
+            )
+            is None
+        )
+
+    async def test_collect_dhcp_security_gated_by_scheduler(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A not-due MS_DHCP_SECURITY gate skips both fetches entirely."""
+        from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+
+        mock_parent._should_run_group = MagicMock(
+            side_effect=lambda group: group != EndpointGroupName.MS_DHCP_SECURITY
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_networks = AsyncMock(return_value=[])
+
+        await ms_collector.collect_dhcp_security("org123", "Org One")
+
+        mock_api.switch.getNetworkSwitchDhcpV4ServersSeen.assert_not_called()
+        mock_parent.inventory.get_networks.assert_not_awaited()
+
+    async def test_collect_dhcp_security_validates_response_format(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """New fetcher must normalize the SDK exhausted-retry error shape."""
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_networks = AsyncMock(
+            return_value=[{"id": "net1", "name": "Network 1", "productTypes": ["switch"]}]
+        )
+        # Deliberately NOT a rate-limit-pattern message (tests/CLAUDE.md): that
+        # triggers real ~70s retry sleeps and blows past the pytest-timeout.
+        mock_api.switch.getNetworkSwitchDhcpV4ServersSeen = MagicMock(
+            return_value={"errors": ["invalid network id"]}
+        )
+        mock_api.switch.getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice = MagicMock(
+            return_value=[]
+        )
+
+        # continue_on_error swallows the raised DataValidationError internally
+        # (inner try/except around the per-network task); no exception should
+        # escape and no rogue-DHCP metric should be set for that network.
+        await ms_collector.collect_dhcp_security("org123", "Org One")
+
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_dhcp_servers_seen_count",
+                {"org_id": "org123", "network_id": "net1", "is_allowed": "true"},
+            )
+            is None
+        )
+
+    # ------------------------------------------------------------------
+    # #295: link aggregation (LACP) membership
+    # ------------------------------------------------------------------
+
+    async def test_collect_link_aggregations_emits_group_count_and_members(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """#295: emits per-network LAG count plus one member series per switch port."""
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_networks = AsyncMock(
+            return_value=[{"id": "net1", "name": "Network 1", "productTypes": ["switch"]}]
+        )
+        mock_api.switch.getNetworkSwitchLinkAggregations = MagicMock(
+            return_value=[
+                {
+                    "id": "lag1",
+                    "switchPorts": [
+                        {"serial": "Q2XX-0001", "portId": "1"},
+                        {"serial": "Q2XX-0001", "portId": "2"},
+                    ],
+                }
+            ]
+        )
+
+        await ms_collector.collect_link_aggregations("org123", "Org One")
+
+        mock_api.switch.getNetworkSwitchLinkAggregations.assert_called_once_with("net1")
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_link_aggregations",
+                {"org_id": "org123", "network_id": "net1"},
+            )
+            == 1.0
+        )
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_link_aggregation_member",
+                {
+                    "org_id": "org123",
+                    "network_id": "net1",
+                    "lag_id": "lag1",
+                    "serial": "Q2XX-0001",
+                    "port_id": "1",
+                },
+            )
+            == 1.0
+        )
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_link_aggregation_member",
+                {
+                    "org_id": "org123",
+                    "network_id": "net1",
+                    "lag_id": "lag1",
+                    "serial": "Q2XX-0001",
+                    "port_id": "2",
+                },
+            )
+            == 1.0
+        )
+
+    async def test_collect_link_aggregations_empty_network_emits_zero_group_count(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """#295: [] (no LAGs) is normal - still emit the group-count gauge as 0."""
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_networks = AsyncMock(
+            return_value=[{"id": "net1", "name": "Network 1", "productTypes": ["switch"]}]
+        )
+        mock_api.switch.getNetworkSwitchLinkAggregations = MagicMock(return_value=[])
+
+        await ms_collector.collect_link_aggregations("org123", "Org One")
+
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_link_aggregations",
+                {"org_id": "org123", "network_id": "net1"},
+            )
+            == 0.0
+        )
+
+    async def test_collect_link_aggregations_gated_by_scheduler(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A not-due MS_LINK_AGGREGATIONS gate skips the fetch entirely."""
+        from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+
+        mock_parent._should_run_group = MagicMock(
+            side_effect=lambda group: group != EndpointGroupName.MS_LINK_AGGREGATIONS
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_networks = AsyncMock(return_value=[])
+
+        await ms_collector.collect_link_aggregations("org123", "Org One")
+
+        mock_api.switch.getNetworkSwitchLinkAggregations.assert_not_called()
+        mock_parent.inventory.get_networks.assert_not_awaited()
+
+    # ------------------------------------------------------------------
+    # #294: org-wide PoE draw (snapshot from history)
+    # ------------------------------------------------------------------
+
+    async def test_collect_power_history_emits_latest_datapoint_draw_field(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """#294: only the most-recent history datapoint's ``draw`` field is emitted."""
+        mock_api.switch.getOrganizationSummarySwitchPowerHistory = MagicMock(
+            return_value=[
+                {"startTs": "2026-01-01T00:00:00Z", "endTs": "2026-01-01T00:20:00Z", "draw": 100.0},
+                {"startTs": "2026-01-01T00:20:00Z", "endTs": "2026-01-01T00:40:00Z", "draw": 150.0},
+            ]
+        )
+
+        await ms_collector.collect_power_history("org123", "Org One")
+
+        mock_api.switch.getOrganizationSummarySwitchPowerHistory.assert_called_once_with("org123")
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_org_poe_draw_watts",
+                {"org_id": "org123"},
+            )
+            == 150.0
+        )
+
+    async def test_collect_power_history_falls_back_to_usage_field(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """⚠ verify field name: falls back to ``usage`` if ``draw`` is absent."""
+        mock_api.switch.getOrganizationSummarySwitchPowerHistory = MagicMock(
+            return_value=[
+                {"startTs": "t0", "endTs": "t1", "usage": 42.0},
+            ]
+        )
+
+        await ms_collector.collect_power_history("org123", "Org One")
+
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_org_poe_draw_watts",
+                {"org_id": "org123"},
+            )
+            == 42.0
+        )
+
+    async def test_collect_power_history_empty_response_is_debug_skip(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An empty history response is a debug-log skip, not an error, and still marks the group."""
+        mock_api.switch.getOrganizationSummarySwitchPowerHistory = MagicMock(return_value=[])
+
+        await ms_collector.collect_power_history("org123", "Org One")
+
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_org_poe_draw_watts",
+                {"org_id": "org123"},
+            )
+            is None
+        )
+        mock_parent._mark_group_ran.assert_called_once()
+
+    async def test_collect_power_history_gated_by_scheduler(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A not-due MS_POWER_SUMMARY gate skips the fetch entirely."""
+        from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+
+        mock_parent._should_run_group = MagicMock(
+            side_effect=lambda group: group != EndpointGroupName.MS_POWER_SUMMARY
+        )
+
+        await ms_collector.collect_power_history("org123", "Org One")
+
+        mock_api.switch.getOrganizationSummarySwitchPowerHistory.assert_not_called()
+
+    async def test_collect_power_history_validates_response_format(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """New fetcher must normalize the SDK exhausted-retry error shape."""
+        # Deliberately NOT a rate-limit-pattern message (tests/CLAUDE.md): that
+        # triggers real ~70s retry sleeps via with_error_handling and blows
+        # past the pytest-timeout. A generic non-retryable error message
+        # exercises the same validate_response_format -> DataValidationError
+        # path without the retry loop.
+        mock_api.switch.getOrganizationSummarySwitchPowerHistory = MagicMock(
+            return_value={"errors": ["invalid organization id"]}
+        )
+
+        # with_error_handling(continue_on_error=True) swallows the raised
+        # DataValidationError; no exception should escape and no metric is set.
+        await ms_collector.collect_power_history("org123", "Org One")
+
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_org_poe_draw_watts",
+                {"org_id": "org123"},
+            )
+            is None
+        )
+
+    # ------------------------------------------------------------------
+    # #296: CDP/LLDP neighbor presence (no new API call)
+    # ------------------------------------------------------------------
+
+    async def test_collect_emits_neighbor_present_for_cdp_and_lldp(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """#296: cdp/lldp presence on a port emits the per-protocol gauge."""
+        device = {
+            "serial": "Q123-456-789",
+            "name": "Test Switch",
+            "model": "MS250-48",
+            "networkId": "net1",
+            "networkName": "Test Network",
+            "orgId": "org1",
+            "orgName": "Org One",
+        }
+        mock_api.switch.getDeviceSwitchPortsStatuses = MagicMock(
+            return_value=[
+                {
+                    "portId": "1",
+                    "status": "Connected",
+                    "cdp": {"deviceId": "abc", "systemName": "core-switch"},
+                    "lldp": {"systemName": "core-switch"},
+                },
+                {
+                    "portId": "2",
+                    "status": "Connected",
+                },
+            ]
+        )
+
+        await ms_collector.collect(device)
+
+        base_labels = {
+            "org_id": "org1",
+            "network_id": "net1",
+            "serial": "Q123-456-789",
+            "model": "MS250-48",
+            "device_type": "MS",
+        }
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_port_neighbor_present",
+                {**base_labels, "port_id": "1", "type": "cdp"},
+            )
+            == 1.0
+        )
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_port_neighbor_present",
+                {**base_labels, "port_id": "1", "type": "lldp"},
+            )
+            == 1.0
+        )
+        # Port 2 has no cdp/lldp data at all - no series emitted (mirrors
+        # MS_PORT_ERROR_ACTIVE: absence, not an explicit 0).
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_port_neighbor_present",
+                {**base_labels, "port_id": "2", "type": "cdp"},
+            )
+            is None
+        )
+
+    async def test_collect_port_statuses_by_switch_emits_neighbor_present(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """The org-wide port-status path also reuses cdp/lldp (same payload shape)."""
+        mock_api.switch.getOrganizationSwitchPortsStatusesBySwitch = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2XX-0001",
+                    "model": "MS250-48",
+                    "network": {"id": "net1", "name": "Net 1"},
+                    "ports": [
+                        {
+                            "portId": "1",
+                            "status": "Connected",
+                            "cdp": {"deviceId": "abc"},
+                        }
+                    ],
+                }
+            ]
+        )
+        devices = [{"serial": "Q2XX-0001", "networkId": "net1", "name": "sw1"}]
+
+        result = await ms_collector.collect_port_statuses_by_switch("org1", "Org", devices)
+
+        assert result is True
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_port_neighbor_present",
+                {
+                    "org_id": "org1",
+                    "network_id": "net1",
+                    "serial": "Q2XX-0001",
+                    "model": "MS250-48",
+                    "device_type": "MS",
+                    "port_id": "1",
+                    "type": "cdp",
+                },
+            )
+            == 1.0
+        )

@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.async_utils import ManagedTaskGroup
+from ...core.constants.device_constants import ProductType
 from ...core.constants.metrics_constants import MXMetricName
-from ...core.domain_models import ApplianceVpnStats
+from ...core.domain_models import ApplianceVpnSiteToSite, ApplianceVpnStats
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -93,6 +95,23 @@ class MXVpnCollector(SubCollectorMixin):
             labelnames=vpn_stats_labelnames,
         )
 
+        # Phase 4 (#287): site-to-site VPN topology config drift.
+        self._vpn_site_to_site_mode = self.parent._create_gauge(
+            MXMetricName.MX_VPN_SITE_TO_SITE_MODE,
+            "Site-to-site VPN mode one-hot indicator (1=active mode for this network)",
+            labelnames=[LabelName.ORG_ID, LabelName.NETWORK_ID, LabelName.MODE],
+        )
+        self._vpn_hubs = self.parent._create_gauge(
+            MXMetricName.MX_VPN_HUBS,
+            "Number of configured VPN hubs for a network (spoke mode)",
+            labelnames=[LabelName.ORG_ID, LabelName.NETWORK_ID],
+        )
+        self._vpn_subnets_advertised = self.parent._create_gauge(
+            MXMetricName.MX_VPN_SUBNETS_ADVERTISED,
+            "Number of local subnets advertised to the site-to-site VPN",
+            labelnames=[LabelName.ORG_ID, LabelName.NETWORK_ID],
+        )
+
     @log_api_call("getOrganizationApplianceVpnStatuses")
     @with_error_handling(
         operation="Collect VPN health metrics",
@@ -118,83 +137,195 @@ class MXVpnCollector(SubCollectorMixin):
         # same group gate; the run-marker is set only by collect_vpn_stats (the
         # second call each cycle per DeviceCollector._collect_mx_specific_metrics)
         # so marking here would not throttle the pair out mid-cycle.
-        if not self.parent._should_run_group(EndpointGroupName.MX_VPN):
-            return
-
-        vpn_statuses = await asyncio.to_thread(
-            self.api.appliance.getOrganizationApplianceVpnStatuses,
-            org_id,
-            total_pages="all",
-        )
-
-        vpn_statuses = validate_response_format(
-            vpn_statuses,
-            expected_type=list,
-            operation="getOrganizationApplianceVpnStatuses",
-        )
-
-        # Resolve allowed network IDs for filter enforcement on org-wide responses.
-        allowed_network_ids = (
-            await self.parent.inventory.get_allowed_network_ids(org_id)
-            if self.parent.inventory is not None
-            else None
-        )
-        skipped = 0
-        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_VPN)
-
-        for status in vpn_statuses:
-            network_id = status.get("networkId", "")
-
-            if allowed_network_ids is not None and network_id not in allowed_network_ids:
-                skipped += 1
-                continue
-
-            # Combine Meraki and third-party VPN peers
-            meraki_peers: list[dict[str, Any]] = status.get("merakiVpnPeers", [])
-            third_party_peers: list[dict[str, Any]] = status.get("thirdPartyVpnPeers", [])
-            all_peers = meraki_peers + third_party_peers
-
-            # Total peer count for this network
-            self.parent._set_metric(
-                self._vpn_peers_total,
-                {
-                    LabelName.ORG_ID: org_id,
-                    LabelName.NETWORK_ID: network_id,
-                },
-                float(len(all_peers)),
-                ttl_seconds=ttl_seconds,
+        if self.parent._should_run_group(EndpointGroupName.MX_VPN):
+            vpn_statuses = await asyncio.to_thread(
+                self.api.appliance.getOrganizationApplianceVpnStatuses,
+                org_id,
+                total_pages="all",
             )
 
-            for peer in all_peers:
-                # Determine peer identifier and type
-                if "networkId" in peer:
-                    peer_network_id = peer["networkId"]
-                    peer_type = "meraki"
-                else:
-                    # Third-party peers are identified by their public IP
-                    peer_network_id = peer.get("publicIp", "unknown")
-                    peer_type = "third_party"
+            vpn_statuses = validate_response_format(
+                vpn_statuses,
+                expected_type=list,
+                operation="getOrganizationApplianceVpnStatuses",
+            )
 
-                reachability = peer.get("reachability", "")
-                peer_labels = {
-                    LabelName.ORG_ID: org_id,
-                    LabelName.NETWORK_ID: network_id,
-                    LabelName.PEER_NETWORK_ID: peer_network_id,
-                    LabelName.PEER_TYPE: peer_type,
-                }
+            # Resolve allowed network IDs for filter enforcement on org-wide responses.
+            allowed_network_ids = (
+                await self.parent.inventory.get_allowed_network_ids(org_id)
+                if self.parent.inventory is not None
+                else None
+            )
+            skipped = 0
+            ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_VPN)
 
+            for status in vpn_statuses:
+                network_id = status.get("networkId", "")
+
+                if allowed_network_ids is not None and network_id not in allowed_network_ids:
+                    skipped += 1
+                    continue
+
+                # Combine Meraki and third-party VPN peers
+                meraki_peers: list[dict[str, Any]] = status.get("merakiVpnPeers", [])
+                third_party_peers: list[dict[str, Any]] = status.get("thirdPartyVpnPeers", [])
+                all_peers = meraki_peers + third_party_peers
+
+                # Total peer count for this network
                 self.parent._set_metric(
-                    self._vpn_peer_status,
-                    peer_labels,
-                    1.0 if reachability == "reachable" else 0.0,
+                    self._vpn_peers_total,
+                    {
+                        LabelName.ORG_ID: org_id,
+                        LabelName.NETWORK_ID: network_id,
+                    },
+                    float(len(all_peers)),
                     ttl_seconds=ttl_seconds,
                 )
 
+                for peer in all_peers:
+                    # Determine peer identifier and type
+                    if "networkId" in peer:
+                        peer_network_id = peer["networkId"]
+                        peer_type = "meraki"
+                    else:
+                        # Third-party peers are identified by their public IP
+                        peer_network_id = peer.get("publicIp", "unknown")
+                        peer_type = "third_party"
+
+                    reachability = peer.get("reachability", "")
+                    peer_labels = {
+                        LabelName.ORG_ID: org_id,
+                        LabelName.NETWORK_ID: network_id,
+                        LabelName.PEER_NETWORK_ID: peer_network_id,
+                        LabelName.PEER_TYPE: peer_type,
+                    }
+
+                    self.parent._set_metric(
+                        self._vpn_peer_status,
+                        peer_labels,
+                        1.0 if reachability == "reachable" else 0.0,
+                        ttl_seconds=ttl_seconds,
+                    )
+
+            logger.debug(
+                "Collected VPN statuses",
+                org_id=org_id,
+                network_count=len(vpn_statuses),
+                skipped_count=skipped,
+            )
+
+        # Phase 4 (#287): site-to-site VPN topology, on its own mx_vpn_config
+        # cadence (independently gated -- must not be entangled with mx_vpn's
+        # cadence above).
+        await self.collect_site_to_site_topology(org_id, org_name)
+
+    @log_api_call("getNetworkApplianceVpnSiteToSiteVpn")
+    @with_error_handling(
+        operation="Collect MX site-to-site VPN topology",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def collect_site_to_site_topology(self, org_id: str, org_name: str) -> None:
+        """Collect site-to-site VPN topology config drift for every appliance network (#287).
+
+        Fetches ``getNetworkApplianceVpnSiteToSiteVpn`` per appliance network
+        (mode/hubs/advertised-subnets). ``mode: "none"`` is a normal, expected
+        response (VPN not configured for that network) and is still emitted as
+        a one-hot series, not skipped.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        org_name : str
+            Organization name.
+
+        """
+        if not self.parent._should_run_group(EndpointGroupName.MX_VPN_CONFIG):
+            return
+
+        if self.parent.inventory is None:
+            return
+
+        networks = await self.parent.inventory.get_networks(org_id)
+        appliance_networks = [
+            n for n in networks if ProductType.APPLIANCE in n.get("productTypes", [])
+        ]
+
+        async with ManagedTaskGroup(
+            name="mx_vpn_site_to_site_networks",
+            max_concurrency=self.settings.api.concurrency_limit,
+        ) as group:
+            for network in appliance_networks:
+                network_id = network.get("id", "")
+                if not network_id:
+                    continue
+                await group.create_task(
+                    self._collect_site_to_site_for_network(org_id, network_id),
+                    name=f"vpn_site_to_site_{network_id}",
+                )
+
+        # Mark ran after the per-network fan-out completes (#617), mirroring
+        # MRFirewallCollector.collect_ssid_firewall's gate-once/mark-once pattern.
+        self.parent._mark_group_ran(EndpointGroupName.MX_VPN_CONFIG)
+
         logger.debug(
-            "Collected VPN statuses",
+            "Collected VPN site-to-site topology",
             org_id=org_id,
-            network_count=len(vpn_statuses),
-            skipped_count=skipped,
+            network_count=len(appliance_networks),
+        )
+
+    @log_api_call("getNetworkApplianceVpnSiteToSiteVpn")
+    @with_error_handling(
+        operation="Collect MX site-to-site VPN topology for network",
+        continue_on_error=True,
+        error_category=ErrorCategory.API_CLIENT_ERROR,
+    )
+    async def _collect_site_to_site_for_network(self, org_id: str, network_id: str) -> None:
+        """Collect site-to-site VPN topology for a single appliance network.
+
+        Parameters
+        ----------
+        org_id : str
+            Organization ID.
+        network_id : str
+            Network ID for the appliance network.
+
+        """
+        response = await asyncio.to_thread(
+            self.api.appliance.getNetworkApplianceVpnSiteToSiteVpn,
+            network_id,
+        )
+        data = validate_response_format(
+            response,
+            expected_type=dict,
+            operation="getNetworkApplianceVpnSiteToSiteVpn",
+        )
+        topology = ApplianceVpnSiteToSite.model_validate(data)
+
+        ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_VPN_CONFIG)
+        base_labels = {
+            LabelName.ORG_ID: org_id,
+            LabelName.NETWORK_ID: network_id,
+        }
+
+        self.parent._set_metric(
+            self._vpn_site_to_site_mode,
+            {**base_labels, LabelName.MODE: topology.mode},
+            1.0,
+            ttl_seconds=ttl_seconds,
+        )
+        self.parent._set_metric(
+            self._vpn_hubs,
+            base_labels,
+            float(len(topology.hubs)),
+            ttl_seconds=ttl_seconds,
+        )
+        self.parent._set_metric(
+            self._vpn_subnets_advertised,
+            base_labels,
+            float(sum(1 for s in topology.subnets if s.useVpn)),
+            ttl_seconds=ttl_seconds,
         )
 
     @log_api_call("getOrganizationApplianceVpnStats")
