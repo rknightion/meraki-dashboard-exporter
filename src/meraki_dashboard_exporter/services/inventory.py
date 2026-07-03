@@ -66,7 +66,6 @@ class OrganizationInventory:
 
     # Longer TTL for slow-changing configuration data
     TTL_LICENSE = 1800  # 30 minutes - license data rarely changes
-    TTL_CONFIG = 3600  # 60 minutes - org config/security settings rarely change
 
     def __init__(
         self,
@@ -109,7 +108,6 @@ class OrganizationInventory:
         self._device_availabilities: dict[str, list[dict[str, Any]]] = {}
         self._licenses_overview: dict[str, dict[str, Any]] = {}
         self._licenses: dict[str, list[dict[str, Any]]] = {}
-        self._login_security: dict[str, dict[str, Any]] = {}
 
         # Cache timestamps
         self._org_timestamp: float = 0.0
@@ -118,7 +116,6 @@ class OrganizationInventory:
         self._availability_timestamps: dict[str, float] = {}
         self._license_timestamps: dict[str, float] = {}
         self._license_list_timestamps: dict[str, float] = {}
-        self._security_timestamps: dict[str, float] = {}
 
         # Lock for thread-safe cache updates
         self._lock = asyncio.Lock()
@@ -780,14 +777,12 @@ class OrganizationInventory:
                 self._device_availabilities.clear()
                 self._licenses_overview.clear()
                 self._licenses.clear()
-                self._login_security.clear()
                 self._org_timestamp = 0.0
                 self._network_timestamps.clear()
                 self._device_timestamps.clear()
                 self._availability_timestamps.clear()
                 self._license_timestamps.clear()
                 self._license_list_timestamps.clear()
-                self._security_timestamps.clear()
                 logger.info("Invalidated all inventory cache")
             else:
                 # Invalidate specific org
@@ -801,8 +796,6 @@ class OrganizationInventory:
                     del self._licenses_overview[org_id]
                 if org_id in self._licenses:
                     del self._licenses[org_id]
-                if org_id in self._login_security:
-                    del self._login_security[org_id]
                 if org_id in self._network_timestamps:
                     del self._network_timestamps[org_id]
                 if org_id in self._device_timestamps:
@@ -813,8 +806,6 @@ class OrganizationInventory:
                     del self._license_timestamps[org_id]
                 if org_id in self._license_list_timestamps:
                     del self._license_list_timestamps[org_id]
-                if org_id in self._security_timestamps:
-                    del self._security_timestamps[org_id]
                 logger.info("Invalidated inventory cache for organization", org_id=org_id)
 
     def get_cache_stats(self) -> dict[str, Any]:
@@ -840,7 +831,6 @@ class OrganizationInventory:
             "cached_availabilities": len(self._device_availabilities),
             "cached_licenses": len(self._licenses_overview),
             "cached_license_lists": len(self._licenses),
-            "cached_security": len(self._login_security),
         }
 
     def set_ttl_for_tier(self, tier: UpdateTier) -> None:
@@ -865,6 +855,34 @@ class OrganizationInventory:
             ttl_seconds=self._ttl,
         )
 
+    @staticmethod
+    def _log_startup_auth_error(exc: Exception) -> bool:
+        """Emit a concise WARNING for a 401 during startup cache warming.
+
+        A Meraki SDK 401 (`APIError` with ``.status == 401``) otherwise reaches
+        ``logger.exception`` and dumps a ~2KB frame-locals traceback that buries
+        the actionable message. For a 401 we log one plain-English WARNING and
+        relegate the full traceback to DEBUG (#589). The auth-outcome latch is
+        already recorded upstream in ``_make_api_call``.
+
+        Parameters
+        ----------
+        exc : Exception
+            The exception raised during warming.
+
+        Returns
+        -------
+        bool
+            True if this was a 401 and has been logged; False otherwise (caller
+            should fall back to its normal ``logger.exception`` handling).
+
+        """
+        if isinstance(exc, APIError) and exc.status == 401:
+            logger.warning("Meraki API key rejected (401) - check MERAKI_EXPORTER_MERAKI__API_KEY")
+            logger.debug("401 rejection during cache warming", exc_info=True)
+            return True
+        return False
+
     async def warm_cache(self, org_ids: list[str] | None = None) -> None:
         """Pre-populate cache for all or specified organizations.
 
@@ -881,8 +899,9 @@ class OrganizationInventory:
         """
         try:
             orgs = await self.get_organizations()
-        except Exception:
-            logger.exception("Failed to fetch organizations during cache warming")
+        except Exception as exc:
+            if not self._log_startup_auth_error(exc):
+                logger.exception("Failed to fetch organizations during cache warming")
             return
 
         target_orgs = [o for o in orgs if org_ids is None or o.get("id") in org_ids]
@@ -895,11 +914,12 @@ class OrganizationInventory:
                 await self.get_networks(org_id)
                 await self.get_devices(org_id)
                 logger.info("Warmed cache for organization", org_id=org_id)
-            except Exception:
-                logger.exception(
-                    "Failed to warm cache for organization",
-                    org_id=org_id,
-                )
+            except Exception as exc:
+                if not self._log_startup_auth_error(exc):
+                    logger.exception(
+                        "Failed to warm cache for organization",
+                        org_id=org_id,
+                    )
 
     async def get_networks_with_device_types(
         self,
@@ -1155,89 +1175,3 @@ class OrganizationInventory:
                     org_id=org_id,
                 )
                 return None
-
-    async def get_login_security(
-        self,
-        org_id: str,
-        force_refresh: bool = False,
-    ) -> dict[str, Any]:
-        """Get organization login security settings with caching.
-
-        Uses a longer TTL (60 minutes) since security settings rarely change.
-
-        Parameters
-        ----------
-        org_id : str
-            Organization ID.
-        force_refresh : bool
-            If True, bypass cache and fetch fresh data.
-
-        Returns
-        -------
-        dict[str, Any]
-            Login security settings for the organization.
-
-        """
-        current_time = time.time()
-
-        # Check cache validity (using longer TTL for config data)
-        cache_timestamp = self._security_timestamps.get(org_id, 0.0)
-        if (
-            not force_refresh
-            and org_id in self._login_security
-            and not self._is_expired(cache_timestamp, self.TTL_CONFIG)
-        ):
-            self._cache_hits += 1
-            logger.debug(
-                "Cache hit for login security",
-                org_id=org_id,
-                cache_age_seconds=current_time - cache_timestamp,
-            )
-            return self._login_security[org_id]
-
-        # Cache miss - fetch from API
-        self._cache_misses += 1
-        logger.debug("Cache miss for login security, fetching from API", org_id=org_id)
-
-        async with self._lock:
-            # Double-check after acquiring lock
-            cache_timestamp = self._security_timestamps.get(org_id, 0.0)
-            if (
-                not force_refresh
-                and org_id in self._login_security
-                and not self._is_expired(cache_timestamp, self.TTL_CONFIG)
-            ):
-                return self._login_security[org_id]
-
-            # Fetch from API
-            try:
-                await self._acquire_rate_limit(org_id, "getOrganizationLoginSecurity")
-                security_result = await self._make_api_call(
-                    "getOrganizationLoginSecurity",
-                    self.api.organizations.getOrganizationLoginSecurity,
-                    org_id,
-                )
-                security_result = validate_response_format(
-                    security_result,
-                    expected_type=dict,
-                    operation="getOrganizationLoginSecurity",
-                )
-                security = cast(dict[str, Any], security_result)
-
-                # Update cache
-                self._login_security[org_id] = security
-                self._security_timestamps[org_id] = current_time
-
-                logger.info(
-                    "Updated login security cache",
-                    org_id=org_id,
-                )
-
-                return security
-            except Exception:
-                # Return empty dict on error, don't cache errors
-                logger.debug(
-                    "Failed to fetch login security",
-                    org_id=org_id,
-                )
-                return {}

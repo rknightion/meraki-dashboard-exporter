@@ -165,6 +165,13 @@ class AsyncMerakiClient:
             retry_4xx_error=False,  # Don't retry 4xx errors
             caller="merakidashboardexporter rknightion",
             validate_kwargs=self.settings.api.validate_kwargs,
+            # #586: first-class proxy + custom-CA support. Both are forwarded
+            # verbatim; the SDK guards each with a truthiness check
+            # (``if self._requests_proxy:`` / ``if self._certificate_path:``),
+            # so a None/empty value is ignored and the underlying ``requests``
+            # session still honours the HTTPS_PROXY/NO_PROXY env-var fallback.
+            requests_proxy=self.settings.api.requests_proxy,
+            certificate_path=self.settings.api.certificate_path,
         )
 
     @property

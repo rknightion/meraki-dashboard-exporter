@@ -437,6 +437,73 @@ class TestMakeApiCallAuthLatch:
         assert AsyncMerakiClient.get_auth_ok() is True
 
 
+class TestWarmCacheAuthError:
+    """warm_cache logs a concise 401 warning, not a frame-locals blob (#589)."""
+
+    async def test_401_on_get_organizations_logs_concise_warning(
+        self, mock_api, mock_settings, monkeypatch
+    ) -> None:
+        """A 401 fetching organizations produces one WARNING + DEBUG traceback, no blob."""
+        from meraki_dashboard_exporter.services import inventory as inv_mod
+
+        mock_logger = MagicMock()
+        monkeypatch.setattr(inv_mod, "logger", mock_logger)
+
+        mock_api.organizations.getOrganizations.side_effect = _make_api_error(401)
+        service = OrganizationInventory(mock_api, mock_settings)
+
+        await service.warm_cache()
+
+        # logger.exception would dump the 2KB frame-locals blob - must NOT be used.
+        mock_logger.exception.assert_not_called()
+        assert mock_logger.warning.call_count == 1
+        warning_msg = mock_logger.warning.call_args.args[0]
+        assert "401" in warning_msg
+        assert "MERAKI_EXPORTER_MERAKI__API_KEY" in warning_msg
+        # Full traceback is emitted only at DEBUG (exc_info=True).
+        assert any(call.kwargs.get("exc_info") for call in mock_logger.debug.call_args_list)
+
+    async def test_401_on_per_org_warm_logs_concise_warning(
+        self, mock_api, mock_settings, monkeypatch
+    ) -> None:
+        """A 401 while warming a specific org also gets the concise treatment."""
+        from meraki_dashboard_exporter.services import inventory as inv_mod
+
+        mock_logger = MagicMock()
+        monkeypatch.setattr(inv_mod, "logger", mock_logger)
+
+        orgs = OrganizationFactory.create_many(1)
+        mock_api.organizations.getOrganizations.return_value = orgs
+        mock_api.organizations.getOrganizationNetworks.side_effect = _make_api_error(401)
+        service = OrganizationInventory(mock_api, mock_settings)
+
+        await service.warm_cache()
+
+        mock_logger.exception.assert_not_called()
+        assert mock_logger.warning.call_count == 1
+        warning_msg = mock_logger.warning.call_args.args[0]
+        assert "401" in warning_msg
+        assert "MERAKI_EXPORTER_MERAKI__API_KEY" in warning_msg
+        assert any(call.kwargs.get("exc_info") for call in mock_logger.debug.call_args_list)
+
+    async def test_non_401_error_still_uses_exception_log(
+        self, mock_api, mock_settings, monkeypatch
+    ) -> None:
+        """A non-401 failure keeps the existing logger.exception behavior."""
+        from meraki_dashboard_exporter.services import inventory as inv_mod
+
+        mock_logger = MagicMock()
+        monkeypatch.setattr(inv_mod, "logger", mock_logger)
+
+        mock_api.organizations.getOrganizations.side_effect = _make_api_error(500)
+        service = OrganizationInventory(mock_api, mock_settings)
+
+        await service.warm_cache()
+
+        mock_logger.exception.assert_called_once()
+        mock_logger.warning.assert_not_called()
+
+
 class TestOrganizationInventoryMetrics:
     """Test metrics tracking in inventory service."""
 
@@ -736,18 +803,6 @@ class TestOrganizationInventoryValidation:
         result = await inventory_service.get_licenses("ORG")
         assert result is None
         assert "ORG" not in inventory_service._licenses
-
-    async def test_get_login_security_swallows_validation_error(
-        self, mock_api, inventory_service
-    ) -> None:
-        """Best-effort endpoint catches validation errors and returns empty dict."""
-        mock_api.organizations.getOrganizationLoginSecurity.return_value = {
-            "errors": ["unsupported"]
-        }
-
-        result = await inventory_service.get_login_security("ORG")
-        assert result == {}
-        assert "ORG" not in inventory_service._login_security
 
 
 class TestOrganizationInventoryAllowedIds:

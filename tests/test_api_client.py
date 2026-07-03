@@ -29,6 +29,9 @@ def mock_settings() -> Settings:
     settings.api.action_batch_retry_wait = 10
     settings.api.rate_limit_retry_wait = 5
     settings.api.validate_kwargs = False
+    # #586: proxy + custom-CA settings default to None (unset -> env-var fallback).
+    settings.api.requests_proxy = None
+    settings.api.certificate_path = None
 
     return settings
 
@@ -103,6 +106,8 @@ class TestAsyncMerakiClientInitialization:
             retry_4xx_error=False,
             caller="merakidashboardexporter rknightion",
             validate_kwargs=False,
+            requests_proxy=None,
+            certificate_path=None,
         )
 
     @patch("meraki_dashboard_exporter.api.client.meraki.DashboardAPI")
@@ -123,6 +128,51 @@ class TestAsyncMerakiClientInitialization:
 
         assert api1 == api2
         assert mock_dashboard_class.call_count == 1
+
+
+class TestProxyAndCustomCA:
+    """#586: first-class proxy + custom-CA support wired through to the SDK."""
+
+    @patch("meraki_dashboard_exporter.api.client.meraki.DashboardAPI")
+    def test_proxy_and_ca_passed_to_sdk(
+        self,
+        mock_dashboard_class: Mock,
+        mock_settings: Settings,
+        mock_dashboard_api: Mock,
+    ) -> None:
+        """When configured, requests_proxy/certificate_path reach DashboardAPI."""
+        mock_dashboard_class.return_value = mock_dashboard_api
+        mock_settings.api.requests_proxy = "http://proxy.corp.example:3128"
+        mock_settings.api.certificate_path = "/etc/ssl/corp-ca.pem"
+
+        client = AsyncMerakiClient(mock_settings)
+        _ = client.api
+
+        _, kwargs = mock_dashboard_class.call_args
+        assert kwargs["requests_proxy"] == "http://proxy.corp.example:3128"
+        assert kwargs["certificate_path"] == "/etc/ssl/corp-ca.pem"
+
+    @patch("meraki_dashboard_exporter.api.client.meraki.DashboardAPI")
+    def test_proxy_and_ca_default_none_preserves_env_fallback(
+        self,
+        mock_dashboard_class: Mock,
+        mock_settings: Settings,
+        mock_dashboard_api: Mock,
+    ) -> None:
+        """Unset (None) proxy/CA are forwarded as None so the SDK ignores them.
+
+        The Meraki SDK guards both with a truthiness check
+        (``if self._requests_proxy:``), so a None/empty value leaves the
+        underlying ``requests`` session to honour ``HTTPS_PROXY``/``NO_PROXY``.
+        """
+        mock_dashboard_class.return_value = mock_dashboard_api
+
+        client = AsyncMerakiClient(mock_settings)
+        _ = client.api
+
+        _, kwargs = mock_dashboard_class.call_args
+        assert kwargs["requests_proxy"] is None
+        assert kwargs["certificate_path"] is None
 
 
 class TestClientLifecycle:

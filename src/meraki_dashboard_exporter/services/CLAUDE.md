@@ -20,7 +20,7 @@ Supporting services for the Meraki Dashboard Exporter - shared inventory caching
 <paved_path>
 ## INVENTORY CACHE CONTRACT
 
-TTLs (constants on `OrganizationInventory`, seconds): `TTL_FAST=300`, `TTL_MEDIUM=900` (default, set via `set_ttl_for_tier(tier)`), `TTL_SLOW=1800`, `TTL_AVAILABILITY=120` (device availabilities are more dynamic so they get their own shorter TTL regardless of the general `_ttl`), `TTL_LICENSE=1800`, `TTL_CONFIG=3600` (login security). All TTLs get ±10% jitter in `_is_expired()` to avoid thundering-herd refreshes.
+TTLs (constants on `OrganizationInventory`, seconds): `TTL_FAST=300`, `TTL_MEDIUM=900` (default, set via `set_ttl_for_tier(tier)`), `TTL_SLOW=1800`, `TTL_AVAILABILITY=120` (device availabilities are more dynamic so they get their own shorter TTL regardless of the general `_ttl`), `TTL_LICENSE=1800`. All TTLs get ±10% jitter in `_is_expired()` to avoid thundering-herd refreshes.
 
 ```python
 # Standard read path — filter applied automatically
