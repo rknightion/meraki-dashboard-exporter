@@ -80,6 +80,23 @@ class TestAlertsCollectorOrgHealthGating(BaseCollectorTest):
         await collector._collect_org_alerts("ANY", "Any Org")
         assert api_call.call_count == 1
 
+    async def test_assurance_alerts_fetch_requests_max_per_page(self, collector):
+        """#548: the assurance-alerts fetch must request the endpoint's max perPage.
+
+        The documented maximum is 300 (spec: "Acceptable range is 4 - 300. Default
+        is 30."), so requesting it instead of the SDK default 30 minimizes the
+        number of pages fetched per cycle.
+        """
+        api_call = MagicMock(return_value=[])
+        collector.api.organizations.getOrganizationAssuranceAlerts = api_call
+
+        await collector._collect_org_alerts("ANY", "Any Org")
+
+        api_call.assert_called_once()
+        _, kwargs = api_call.call_args
+        assert kwargs.get("perPage") == 300
+        assert kwargs.get("total_pages") == "all"
+
 
 class TestAlertsCollector(BaseCollectorTest):
     """Test AlertsCollector functionality."""

@@ -352,6 +352,9 @@ class AlertsCollector(MetricCollector):
                 self.api.organizations.getOrganizationAssuranceAlerts,
                 org_id,
                 total_pages="all",
+                # Endpoint max is 300 (SDK default is 30) -- requesting the max
+                # cuts page count ~10x per cycle at scale (#548).
+                perPage=300,
             )
             alerts = validate_response_format(
                 alerts, expected_type=list, operation="getOrganizationAssuranceAlerts"

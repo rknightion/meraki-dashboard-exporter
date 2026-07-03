@@ -1,8 +1,12 @@
-"""Tests for BaseDeviceCollector.collect_memory_metrics pagination (F-007).
+"""Tests for BaseDeviceCollector.collect_memory_metrics pagination (F-007, #548).
 
 The org-wide ``getOrganizationDevicesSystemMemoryUsageHistoryByInterval`` fetch
 must pass ``total_pages="all"`` — otherwise the SDK's default ``perPage`` (10)
 silently truncates memory metrics to the first 10 devices per organization.
+
+It must also request ``perPage=20`` — the documented endpoint maximum (spec:
+"Acceptable range is 3 - 20. Default is 10.") — so each page carries as many
+devices as possible, minimizing the number of pages fetched per cycle (#548).
 """
 
 from __future__ import annotations
@@ -57,4 +61,8 @@ class TestCollectMemoryMetricsPagination:
         _, kwargs = fetch.call_args
         assert kwargs.get("total_pages") == "all", (
             "memory fetch must pass total_pages='all' to avoid the default perPage=10 truncation"
+        )
+        assert kwargs.get("perPage") == 20, (
+            "memory fetch must request perPage=20 (the endpoint maximum) to minimize "
+            "page count per cycle (#548)"
         )

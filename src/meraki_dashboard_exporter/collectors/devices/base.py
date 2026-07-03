@@ -109,6 +109,9 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
                     timespan=300,
                     interval=300,
                     total_pages="all",
+                    # Endpoint max is 20 (SDK default is 10) -- requesting the max
+                    # halves the page count per cycle at scale (#548).
+                    perPage=20,
                 )
 
             memory_data = validate_response_format(
