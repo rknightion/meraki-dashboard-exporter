@@ -17,7 +17,6 @@ from ...core.constants import (
     ProductType,
     SensorDataField,
     SensorMetricType,
-    UpdateTier,
 )
 from ...core.domain_models import SensorGatewayConnection, SensorMeasurement
 from ...core.error_handling import ErrorCategory, NothingCollectedError, validate_response_format
@@ -40,7 +39,6 @@ class MTCollector(BaseDeviceCollector):
     """
 
     # Sensor data updates frequently
-    update_tier: UpdateTier = UpdateTier.FAST
 
     # Shared rate limiter. None for sub-collectors (the @log_api_call decorator
     # falls back to self.parent.rate_limiter); set directly by as_standalone (#270).
@@ -183,9 +181,11 @@ class MTCollector(BaseDeviceCollector):
                 else:
                     current_org_name = await self._get_org_name(organization_id)
 
-                await self._collect_org_sensors(organization_id, current_org_name)
+                await self._collect_org_sensors(organization_id, current_org_name, due=due)
                 succeeded += 1
-                await self._collect_org_gateway_connections(organization_id, current_org_name)
+                await self._collect_org_gateway_connections(
+                    organization_id, current_org_name, due=due
+                )
             except Exception:
                 logger.exception(
                     "Failed to collect sensors for organization",
@@ -330,7 +330,9 @@ class MTCollector(BaseDeviceCollector):
             ),
         )
 
-    async def _collect_org_sensors(self, org_id: str, org_name: str | None = None) -> None:
+    async def _collect_org_sensors(
+        self, org_id: str, org_name: str | None = None, *, due: bool = True
+    ) -> None:
         """Collect sensor metrics for an organization.
 
         Parameters
@@ -339,6 +341,12 @@ class MTCollector(BaseDeviceCollector):
             Organization ID.
         org_name : str | None
             Organization name.
+        due : bool
+            Whether the ``MT_SENSOR_READINGS`` group is due this cycle. Computed
+            once by the caller (``collect_sensor_metrics``) and threaded in — the
+            gate must not be re-evaluated here because ``_should_run_group``
+            mutates the scheduler's attempt clock, so a second call would look
+            like a failed retry and suppress the fetch on cold start.
 
         """
         try:
@@ -347,9 +355,7 @@ class MTCollector(BaseDeviceCollector):
                 return
 
             # #617 gate: skip the sensor-readings fetch when the group is not due.
-            if self.parent is not None and not self.parent._should_run_group(
-                EndpointGroupName.MT_SENSOR_READINGS
-            ):
+            if not due:
                 return
 
             inventory = self.parent.inventory if self.parent is not None else None
@@ -441,7 +447,7 @@ class MTCollector(BaseDeviceCollector):
         )
 
     async def _collect_org_gateway_connections(
-        self, org_id: str, org_name: str | None = None
+        self, org_id: str, org_name: str | None = None, *, due: bool = True
     ) -> None:
         """Collect sensor-to-gateway connectivity for an organization.
 
@@ -451,6 +457,10 @@ class MTCollector(BaseDeviceCollector):
             Organization ID.
         org_name : str | None
             Organization name.
+        due : bool
+            Whether the ``MT_SENSOR_READINGS`` group is due this cycle, computed
+            once by the caller and threaded in (the gate must not be re-evaluated
+            here — ``_should_run_group`` mutates the scheduler attempt clock).
 
         """
         try:
@@ -459,9 +469,9 @@ class MTCollector(BaseDeviceCollector):
                 return
 
             # #617 gate: sensor-to-gateway connections share the readings group.
-            if self.parent is not None and not self.parent._should_run_group(
-                EndpointGroupName.MT_SENSOR_READINGS
-            ):
+            # ``due`` is threaded in from the caller — do not re-evaluate the gate
+            # here (``_should_run_group`` mutates the scheduler attempt clock).
+            if not due:
                 return
 
             with LogContext(org_id=org_id):

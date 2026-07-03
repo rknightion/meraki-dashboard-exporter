@@ -20,7 +20,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from meraki_dashboard_exporter.collectors.network_health import NetworkHealthCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import NetworkFactory, OrganizationFactory
@@ -28,7 +27,6 @@ from tests.helpers.factories import NetworkFactory, OrganizationFactory
 
 class _NHGateBase(BaseCollectorTest):
     collector_class = NetworkHealthCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _make(self, mock_api_builder, settings, isolated_registry, inventory, sched):
         org = OrganizationFactory.create(org_id="org1")

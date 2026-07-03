@@ -10,7 +10,6 @@ from meraki_dashboard_exporter.collectors.organization import OrganizationCollec
 from meraki_dashboard_exporter.core.constants import (
     NetworkMetricName,
     OrgMetricName,
-    UpdateTier,
 )
 from meraki_dashboard_exporter.core.error_handling import NothingCollectedError
 from tests.helpers.base import BaseCollectorTest
@@ -24,7 +23,6 @@ class TestOrganizationCollector(BaseCollectorTest):
     """Test OrganizationCollector functionality."""
 
     collector_class = OrganizationCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_device_count_gauges_participate_in_expiration(
         self, mock_api, settings, isolated_registry, inventory

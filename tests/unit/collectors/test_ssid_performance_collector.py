@@ -8,7 +8,6 @@ from meraki_dashboard_exporter.collectors.network_health import NetworkHealthCol
 from meraki_dashboard_exporter.collectors.network_health_collectors.ssid_performance import (
     SSIDPerformanceCollector,
 )
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import NetworkFactory, OrganizationFactory
 
@@ -17,7 +16,6 @@ class TestSSIDPerformanceCollector(BaseCollectorTest):
     """Tests for SSIDPerformanceCollector via NetworkHealthCollector."""
 
     collector_class = NetworkHealthCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _update_all_subcollector_apis(
         self, collector: NetworkHealthCollector, api: MagicMock

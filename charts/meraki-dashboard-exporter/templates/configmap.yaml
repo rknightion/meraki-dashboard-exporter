@@ -36,15 +36,6 @@ data:
   {{- if hasKey . "apiConcurrencyLimit" }}
   MERAKI_EXPORTER_API__CONCURRENCY_LIMIT: {{ .apiConcurrencyLimit | quote }}
   {{- end }}
-  {{- if hasKey . "apiConcurrencyLimitFast" }}
-  MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_FAST: {{ .apiConcurrencyLimitFast | quote }}
-  {{- end }}
-  {{- if hasKey . "apiConcurrencyLimitMedium" }}
-  MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_MEDIUM: {{ .apiConcurrencyLimitMedium | quote }}
-  {{- end }}
-  {{- if hasKey . "apiConcurrencyLimitSlow" }}
-  MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_SLOW: {{ .apiConcurrencyLimitSlow | quote }}
-  {{- end }}
   {{- if hasKey . "apiBatchSize" }}
   MERAKI_EXPORTER_API__BATCH_SIZE: {{ .apiBatchSize | quote }}
   {{- end }}
@@ -128,15 +119,6 @@ data:
   {{- end }}
   {{- if hasKey . "apiPerFetchDeadlineSeconds" }}
   MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS: {{ .apiPerFetchDeadlineSeconds | quote }}
-  {{- end }}
-  {{- if hasKey . "updateIntervalFast" }}
-  MERAKI_EXPORTER_UPDATE_INTERVALS__FAST: {{ .updateIntervalFast | quote }}
-  {{- end }}
-  {{- if hasKey . "updateIntervalMedium" }}
-  MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM: {{ .updateIntervalMedium | quote }}
-  {{- end }}
-  {{- if hasKey . "updateIntervalSlow" }}
-  MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW: {{ .updateIntervalSlow | quote }}
   {{- end }}
   {{- if hasKey . "serverHost" }}
   MERAKI_EXPORTER_SERVER__HOST: {{ .serverHost | quote }}
@@ -243,6 +225,9 @@ data:
   {{- if hasKey . "collectorTimeout" }}
   MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT: {{ .collectorTimeout | quote }}
   {{- end }}
+  {{- if hasKey . "collectorsMaxConcurrentCollectors" }}
+  MERAKI_EXPORTER_COLLECTORS__MAX_CONCURRENT_COLLECTORS: {{ .collectorsMaxConcurrentCollectors | quote }}
+  {{- end }}
   {{- if hasKey . "collectorsCollectApSignalQuality" }}
   MERAKI_EXPORTER_COLLECTORS__COLLECT_AP_SIGNAL_QUALITY: {{ .collectorsCollectApSignalQuality | quote }}
   {{- end }}
@@ -326,6 +311,9 @@ data:
   {{- end }}
   {{- if hasKey . "schedulerResolveIntervalSeconds" }}
   MERAKI_EXPORTER_SCHEDULER__RESOLVE_INTERVAL_SECONDS: {{ .schedulerResolveIntervalSeconds | quote }}
+  {{- end }}
+  {{- if hasKey . "schedulerFailureRetrySeconds" }}
+  MERAKI_EXPORTER_SCHEDULER__FAILURE_RETRY_SECONDS: {{ .schedulerFailureRetrySeconds | quote }}
   {{- end }}
   {{- if hasKey . "schedulerAimdEnabled" }}
   MERAKI_EXPORTER_SCHEDULER__AIMD_ENABLED: {{ .schedulerAimdEnabled | quote }}

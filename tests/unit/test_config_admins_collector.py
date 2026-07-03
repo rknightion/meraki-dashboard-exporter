@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from meraki_dashboard_exporter.collectors.config import ConfigCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import OrganizationFactory
 
@@ -36,7 +35,6 @@ class TestConfigCollectorAdmins(BaseCollectorTest):
     """Test ConfigCollector._collect_admins behavior."""
 
     collector_class = ConfigCollector
-    update_tier = UpdateTier.SLOW
 
     async def test_admins_grouped_by_auth_method_and_account_status(
         self, collector, mock_api_builder, metrics

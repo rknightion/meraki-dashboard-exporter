@@ -8,13 +8,13 @@ description: How to add new metric collectors
 Collectors gather metrics from the Meraki API. New collectors live in `src/meraki_dashboard_exporter/collectors/`. Always consult the relevant `CLAUDE.md` in the target directory before making changes.
 
 ## Collector hierarchy and registration
-- **Main collectors** are auto-registered with `@register_collector(UpdateTier.X)` and scheduled by `CollectorManager`.
+- **Main collectors** are auto-registered with the no-arg `@register_collector` decorator and each runs its own group-clocked loop, scheduled by `CollectorManager`/`ExporterApp._collector_loop`. There is no update-tier argument to the decorator — cadence is derived per collector from the endpoint groups it declares (see [Scheduler Architecture](observability/scheduler.md)).
 - **Registration is import-driven**: add your module to the import list in `src/meraki_dashboard_exporter/collectors/manager.py` so the decorator executes.
 - **Sub-collectors** are instantiated by a parent coordinator (manual registration in the parent `__init__`).
 
 ## Basic steps
 1. Create a new module under `collectors/` and add it to the import list in `collectors/manager.py`.
-2. Define a class inheriting from `MetricCollector` (or the relevant base) and decorate it with `@register_collector(UpdateTier.X)`.
+2. Define a class inheriting from `MetricCollector` (or the relevant base) and decorate it with `@register_collector`. Declare its endpoint group(s) (name, priority, `floor_seconds`, `cost_fn`) via `get_endpoint_groups()` so the scheduler knows how to pace it.
 3. Define metrics in `_initialize_metrics()` using `_create_gauge/_create_counter/_create_histogram/_create_info` and MetricName/LabelName enums.
 4. Implement `_collect_impl()` with proper error handling (`with_error_handling`) and response validation (`validate_response_format` or Pydantic models). `validate_response_format` also normalises the Meraki SDK 3.x exhausted-retry error envelope, so prefer it for any new fetcher.
 5. Use shared services:
@@ -25,7 +25,7 @@ Collectors gather metrics from the Meraki API. New collectors live in `src/merak
 7. Regenerate docs with `scripts/generate-docs.sh` (or the individual generators).
 
 ```python
-@register_collector(UpdateTier.MEDIUM)
+@register_collector
 class MyCollector(MetricCollector):
     def _initialize_metrics(self) -> None:
         self._example_metric = self._create_gauge(

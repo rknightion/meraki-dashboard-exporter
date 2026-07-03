@@ -38,7 +38,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ..core.async_utils import ManagedTaskGroup
 from ..core.collector import MetricCollector
-from ..core.constants import InsightMetricName, UpdateTier
+from ..core.constants import InsightMetricName
 from ..core.error_handling import (
     ErrorCategory,
     validate_response_format,
@@ -130,7 +130,7 @@ class InsightHealthBucket(BaseModel):
         )
 
 
-@register_collector(UpdateTier.SLOW)
+@register_collector
 class InsightCollector(MetricCollector):
     """Collector for Meraki Insight application-health metrics (#613).
 
@@ -148,7 +148,6 @@ class InsightCollector(MetricCollector):
             priority=4,
             floor_seconds=3600,
             cost_fn=lambda shape: 1.0,
-            tier=UpdateTier.SLOW,
             enabled_fn=lambda shape: shape.appliance_network_count > 0,
         ),
         EndpointGroup(
@@ -159,7 +158,6 @@ class InsightCollector(MetricCollector):
             # per-(network × application) fan-out as 10 apps per appliance
             # network (same estimate convention as MR_SSID_FIREWALL).
             cost_fn=lambda shape: 10.0 * shape.appliance_network_count,
-            tier=UpdateTier.SLOW,
             enabled_fn=lambda shape: shape.appliance_network_count > 0,
         ),
     )

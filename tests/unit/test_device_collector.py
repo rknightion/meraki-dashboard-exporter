@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.error_handling import CollectorError, NothingCollectedError
 from meraki_dashboard_exporter.core.metric_expiration import MetricExpirationManager
 from meraki_dashboard_exporter.core.org_health import (
@@ -45,7 +44,6 @@ class TestDeviceCollectorOrgHealthGating(BaseCollectorTest):
     """
 
     collector_class = DeviceCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_backed_off_org_is_skipped(
         self, mock_api_builder, settings, isolated_registry, inventory
@@ -122,7 +120,6 @@ class TestDeviceCollector(BaseCollectorTest):
     """Test DeviceCollector functionality."""
 
     collector_class = DeviceCollector
-    update_tier = UpdateTier.MEDIUM
 
     def test_memory_metric_help_states_window(self, collector, metrics):
         """MET-09: device memory used/free HELP must state the 5-min data window.
@@ -873,7 +870,6 @@ class TestDeviceCollectorNothingCollected(BaseCollectorTest):
     """
 
     collector_class = DeviceCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_org_fetch_failure_raises(self, collector, mock_api_builder):
         """A hard failure fetching organizations must raise, not swallow."""
@@ -965,7 +961,6 @@ class TestDeviceCollectorOrgHealthReporting(BaseCollectorTest):
     """
 
     collector_class = DeviceCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_successful_org_records_device_success(self, collector):
         """A healthy per-org cycle records a SOURCE_DEVICE success."""
@@ -1046,7 +1041,6 @@ class TestWebhookDeviceStateApplier(BaseCollectorTest):
     """
 
     collector_class = DeviceCollector
-    update_tier = UpdateTier.MEDIUM
 
     SERIAL = "Q2AA-BBBB-CCCC"
 

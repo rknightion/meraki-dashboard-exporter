@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 from prometheus_client import REGISTRY
 from prometheus_client.registry import CollectorRegistry
 
-from ..core.constants import UpdateTier
 from ..core.constants.metrics_constants import NetworkMetricName
 from ..core.org_health import OrgHealth
 
@@ -28,7 +27,7 @@ if TYPE_CHECKING:
 
 def _compute_staleness(
     last_success_time: float | None,
-    tier_interval: int,
+    cadence_seconds: float,
     now: float | None = None,
 ) -> str:
     """Compute staleness category based on time since last success.
@@ -37,8 +36,9 @@ def _compute_staleness(
     ----------
     last_success_time : float | None
         Unix timestamp of last successful collection, or None if never succeeded.
-    tier_interval : int
-        The collection interval for this tier in seconds.
+    cadence_seconds : float
+        The collector's effective cadence (smallest solved group interval) in
+        seconds.
     now : float | None
         Current time as unix timestamp. Defaults to time.time().
 
@@ -53,9 +53,9 @@ def _compute_staleness(
     if now is None:
         now = time.time()
     age = now - last_success_time
-    if age <= tier_interval:
+    if age <= cadence_seconds:
         return "ok"
-    if age <= tier_interval * 2:
+    if age <= cadence_seconds * 2:
         return "warning"
     return "stale"
 
@@ -93,7 +93,7 @@ class CollectorStatus:
     """Status of a single collector."""
 
     name: str
-    tier: str
+    cadence_seconds: float
     total_runs: int
     total_successes: int
     total_failures: int
@@ -359,42 +359,35 @@ class StatusService:
         """Build and return a point-in-time health snapshot of the exporter."""
         now = time.time()
 
-        tier_intervals = {
-            UpdateTier.FAST: self._settings.update_intervals.fast,
-            UpdateTier.MEDIUM: self._settings.update_intervals.medium,
-            UpdateTier.SLOW: self._settings.update_intervals.slow,
-        }
-
-        # Build collector statuses
+        # Build collector statuses (per-collector cadence; no tiers, #631)
         collectors: list[CollectorStatus] = []
-        for tier, collector_list in self._manager.collectors.items():
-            interval = tier_intervals[tier]
-            for collector in collector_list:
-                if not collector.is_active:
-                    continue
-                name = collector.__class__.__name__
-                health = self._manager.collector_health.get(name, {})
-                total_runs = health.get("total_runs", 0)
-                total_successes = health.get("total_successes", 0)
-                total_failures = health.get("total_failures", 0)
-                success_rate = (total_successes / total_runs * 100) if total_runs > 0 else 0.0
-                last_success_time = health.get("last_success_time")
+        for collector in self._manager.collectors:
+            if not collector.is_active:
+                continue
+            name = collector.__class__.__name__
+            cadence = collector.collector_cadence_seconds()
+            health = self._manager.collector_health.get(name, {})
+            total_runs = health.get("total_runs", 0)
+            total_successes = health.get("total_successes", 0)
+            total_failures = health.get("total_failures", 0)
+            success_rate = (total_successes / total_runs * 100) if total_runs > 0 else 0.0
+            last_success_time = health.get("last_success_time")
 
-                collectors.append(
-                    CollectorStatus(
-                        name=name,
-                        tier=tier.value.upper(),
-                        total_runs=total_runs,
-                        total_successes=total_successes,
-                        total_failures=total_failures,
-                        success_rate=round(success_rate, 1),
-                        failure_streak=health.get("failure_streak", 0),
-                        last_success_time=last_success_time,
-                        last_success_ago=_format_time_ago(last_success_time, now),
-                        is_running=self._manager.is_collector_running(name),
-                        staleness=_compute_staleness(last_success_time, interval, now),
-                    )
+            collectors.append(
+                CollectorStatus(
+                    name=name,
+                    cadence_seconds=round(cadence, 1),
+                    total_runs=total_runs,
+                    total_successes=total_successes,
+                    total_failures=total_failures,
+                    success_rate=round(success_rate, 1),
+                    failure_streak=health.get("failure_streak", 0),
+                    last_success_time=last_success_time,
+                    last_success_ago=_format_time_ago(last_success_time, now),
+                    is_running=self._manager.is_collector_running(name),
+                    staleness=_compute_staleness(last_success_time, cadence, now),
                 )
+            )
 
         # Build API health
         rate_limiter = self._manager.rate_limiter

@@ -19,7 +19,6 @@ from prometheus_client import Gauge
 
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.collectors.devices.mg import MGCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import (
@@ -93,10 +92,6 @@ class TestDeviceEndpointGroups:
         """Each group is declared exactly once (register_groups forbids dups)."""
         names = [g.name for g in DeviceCollector.endpoint_groups]
         assert len(names) == len(set(names)) == len(_EXPECTED_DEVICE_GROUPS)
-
-    def test_all_groups_are_medium_tier(self) -> None:
-        """Every DeviceCollector group is serviced by the MEDIUM heartbeat."""
-        assert all(g.tier is UpdateTier.MEDIUM for g in DeviceCollector.endpoint_groups)
 
     def test_setting_pins_match_spec(self) -> None:
         """Only ms_port_usage / ms_packet_stats carry a legacy setting_pin."""
@@ -185,7 +180,6 @@ class TestDeviceAvailabilityGate(BaseCollectorTest):
     """device_availability fetch-site gate (device.py, task B)."""
 
     collector_class = DeviceCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _build(self, mock_api_builder, settings, isolated_registry, inventory, scheduler):
         org = OrganizationFactory.create(org_id="org1")

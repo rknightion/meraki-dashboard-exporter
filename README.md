@@ -34,7 +34,7 @@ A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry 
 
 ### Deployment
 - Docker support with health checks and multi-stage builds
-- Configurable collection intervals (fast/medium/slow tiers)
+- Adaptive, budget-aware collection scheduling (per-endpoint-group solved intervals, no fixed tiers)
 - Environment-based configuration with validation
 - Regional API endpoint support
 
@@ -169,10 +169,10 @@ See [docs/observability/otel.md](docs/observability/otel.md) for detailed OpenTe
 
 The exporter can receive webhook events from Meraki Dashboard. Webhooks accelerate **device-down**
 detection only: a `device_down`/`gateway_down` event fast-flips `meraki_device_up=0` ahead of the
-next poll. Device recovery/UP and every other metric remain polled on the MEDIUM tier (default
-300s) — there is no whole-device "back online" webhook event to drive a fast recovery path. See
-[docs/data-freshness.md](docs/data-freshness.md) for the full per-tier staleness picture and
-recommended alert `for:` durations.
+next poll. Device recovery/UP and every other metric remain polled at `DeviceCollector`'s own
+solved cadence (~300s by default) — there is no whole-device "back online" webhook event to drive
+a fast recovery path. See [docs/data-freshness.md](docs/data-freshness.md) for the full staleness
+picture and recommended alert `for:` durations.
 
 ### Enabling Webhooks
 
@@ -229,10 +229,22 @@ All configuration is done via environment variables. See `.env.example` for all 
 - `MERAKI_EXPORTER_SERVER__API_TOKEN`: Optional bearer token guarding the two state-changing control POSTs (`/api/collectors/trigger`, `/api/clients/clear-dns-cache`). When unset (default) those POSTs are unauthenticated and all GET endpoints (`/metrics`, `/status`, `/health`, ...) are always unauthenticated — bind the exporter to a trusted network. See [security.md](docs/security.md#endpoint-authentication).
 - Beta / early-access API: the exporter never calls Meraki's beta endpoints and has no opt-in flag (they are unversioned and would undermine the v1 stability promise). It instead surfaces the risk — `meraki_org_has_beta_api` (`1`/`0` per org) plus a WARN log fire when an org is on the beta Dashboard spec, which can silently break assumed-stable collection. Alert on `meraki_org_has_beta_api == 1`. See [security.md](docs/security.md#beta--early-access-api-surface).
 
-### Update Intervals
-- `MERAKI_EXPORTER_UPDATE_INTERVALS__FAST`: Fast tier interval in seconds (default: 60, range: 30-300)
-- `MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM`: Medium tier interval in seconds (default: 300, range: 300-1800)
-- `MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW`: Slow tier interval in seconds (default: 900, range: 600-3600)
+### Adaptive Scheduler
+
+There is no fixed FAST/MEDIUM/SLOW tier system. Every API fetch is grouped into an endpoint
+group with its own volatility floor, and an adaptive, budget-aware scheduler solves each
+group's actual polling interval from organization size and the configured API budget,
+automatically stretching lower-priority groups when demand would exceed it. See
+[Scheduler Architecture](docs/observability/scheduler.md) for the full mechanism.
+
+- `MERAKI_EXPORTER_SCHEDULER__MODE`: `adaptive` (default) or `fixed` (floors/pins only, no stretching)
+- `MERAKI_EXPORTER_SCHEDULER__TARGET_UTILIZATION`: Fraction of the effective budget the solver plans to (default: 0.7)
+- `MERAKI_EXPORTER_SCHEDULER__MAX_STRETCH_FACTOR`: Per-group interval cap as a multiple of its floor (default: 4.0)
+- `MERAKI_EXPORTER_SCHEDULER__MAX_INTERVAL_SECONDS`: Absolute per-group interval cap (default: 3600)
+- `MERAKI_EXPORTER_SCHEDULER__RESOLVE_INTERVAL_SECONDS`: How often the solver recomputes from org shape (default: 900)
+- `MERAKI_EXPORTER_SCHEDULER__FAILURE_RETRY_SECONDS`: Minimum spacing between retries of a failing group (default: 300)
+- `MERAKI_EXPORTER_SCHEDULER__GROUP_INTERVAL_OVERRIDES`: Per-group interval pins as a JSON object, e.g. `{"nh_connection_stats": 900}`
+- `MERAKI_EXPORTER_COLLECTORS__MAX_CONCURRENT_COLLECTORS`: Max collectors whose group-clocked loops may run concurrently (default: 5)
 
 ### Network Filter
 
@@ -299,9 +311,9 @@ Metric-name, label, and unit compatibility is governed by the [Metric Stability 
 
 ## Performance
 
-- **Bounded concurrency**: ManagedTaskGroup keeps parallel collectors/orgs within `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT`
-- **Tiered scheduling**: FAST/MEDIUM/SLOW tiers align with data volatility (60s/300s/900s by default)
-- **Inventory-routed lookups**: Collectors fetch network/device data through the shared `OrganizationInventory` cache (per-tier TTLs) to suppress duplicate API calls
+- **Bounded concurrency**: ManagedTaskGroup keeps parallel collectors/orgs within `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT`; `MERAKI_EXPORTER_COLLECTORS__MAX_CONCURRENT_COLLECTORS` separately bounds how many collectors' own loops run concurrently
+- **Adaptive scheduling**: each collector runs its own group-clocked loop; the scheduler solves per-endpoint-group intervals from data volatility floors (~60s/300s/900s+ typical) and the API budget, stretching lower-priority groups automatically under pressure — see [docs/observability/scheduler.md](docs/observability/scheduler.md)
+- **Inventory-routed lookups**: Collectors fetch network/device data through the shared `OrganizationInventory` cache to suppress duplicate API calls
 - **Batch controls**: Tunable batch sizes and delays (`MERAKI_EXPORTER_API__*BATCH_SIZE`, `MERAKI_EXPORTER_API__BATCH_DELAY`)
 - **Adaptive smoothing**: Per-collector batch smoothing spreads work across the interval, capped at 30% of `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` so a single collector cannot starve the run budget
 - **Metric lifecycle**: Automatic expiration cleans up stale series when devices disappear or go offline

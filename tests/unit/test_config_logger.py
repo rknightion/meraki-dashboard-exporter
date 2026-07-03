@@ -184,19 +184,29 @@ class TestLogStartupSummary:
         log_startup_summary(test_settings, discovery_summary=discovery)
 
     def test_with_scheduling(self, test_settings: Settings) -> None:
-        """Test startup summary with scheduling diagnostics."""
+        """Test startup summary with scheduling diagnostics (per-collector cadences)."""
         scheduling = {
-            "tiers": {
-                "fast": {"interval": 60, "jitter_window": 6.0},
-                "medium": {"interval": 300, "jitter_window": 10.0},
-                "slow": {"interval": 900, "jitter_window": 10.0},
-            },
-            "collector_offsets": [
-                {"collector": "DeviceCollector", "tier": "medium", "offset_seconds": 0.0},
+            "collectors": [
+                {
+                    "collector": "DeviceCollector",
+                    "cadence_seconds": 300.0,
+                    "phase_offset_seconds": 12.0,
+                },
+                {
+                    "collector": "MTSensorCollector",
+                    "cadence_seconds": 60.0,
+                    "phase_offset_seconds": 3.0,
+                },
             ],
-            "endpoint_intervals": {
-                "ms_port_usage_interval": 300,
-                "ms_packet_stats_interval": 300,
+            "scheduler": {
+                "mode": "adaptive",
+                "groups": [
+                    {
+                        "name": "nh_connection_stats",
+                        "interval_seconds": 1800.0,
+                        "stretch_factor": 2.0,
+                    },
+                ],
             },
         }
         log_startup_summary(test_settings, scheduling=scheduling)

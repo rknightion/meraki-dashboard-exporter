@@ -133,7 +133,10 @@ class TestAsyncMerakiClientInitialization:
             api_key="test-api-key",
             base_url="https://api.meraki.com/api/v1",
             output_log=False,
-            suppress_logging=False,
+            # #633: the SDK's own logger is suppressed so the exporter's
+            # @log_api_call is the single owner of API-call logging (benign 4xx
+            # like the mesh 404 are logged once, at debug, not double-logged).
+            suppress_logging=True,
             inherit_logging_config=True,
             single_request_timeout=30,
             maximum_retries=3,

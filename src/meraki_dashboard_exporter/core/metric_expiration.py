@@ -10,13 +10,13 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 import structlog
 from prometheus_client import Counter, Gauge
 
 from .cardinality import CardinalityConfig
-from .constants import UpdateTier
 from .constants.metrics_constants import CollectorMetricName
 from .metrics import LabelName
 
@@ -29,13 +29,14 @@ logger = structlog.get_logger(__name__)
 class _TrackedSeries(NamedTuple):
     """Per-series tracking record stored in ``_metric_timestamps``.
 
-    ``ttl_seconds`` (when not ``None``) is a fully-resolved TTL that overrides
-    the tier-derived TTL — set by scheduler-gated fetch sites so a series polled
-    slower than ``tier_interval × multiplier`` does not flap (#617 §1f / #541).
+    ``ttl_seconds`` (when not ``None``) is a fully-resolved TTL set by
+    scheduler-gated fetch sites so a series polled slower than its solved
+    interval does not flap (#617 §1f / #541). When ``None``, the collector's
+    cadence-derived fallback TTL applies (see ``set_ttl_resolver``).
     """
 
     ts: float
-    tier: UpdateTier | None
+    collector: str
     ttl_seconds: float | None
 
 
@@ -46,10 +47,11 @@ class MetricExpirationManager:
     updated within the TTL period. This prevents unbounded memory growth
     from ephemeral devices or network changes.
 
-    The TTL is based on the collection interval with a configurable multiplier:
-    - FAST tier (60s): TTL = 120s (2x multiplier)
-    - MEDIUM tier (300s): TTL = 600s (2x multiplier)
-    - SLOW tier (900s): TTL = 1800s (2x multiplier)
+    Each gated fetch site threads an explicit ``ttl_seconds`` (its solved group
+    interval × ``metric_ttl_multiplier``). For any straggler series without one,
+    a fallback TTL is derived from the owning collector's current cadence via a
+    resolver installed by the ``CollectorManager`` (#631), falling back to a
+    fixed default when no resolver is set.
 
     Examples
     --------
@@ -81,9 +83,13 @@ class MetricExpirationManager:
         self.settings = settings
         self._ttl_multiplier = settings.monitoring.metric_ttl_multiplier
 
-        # Track last update time, tier, and optional per-series TTL per metric
+        # Optional resolver: collector_name -> fallback TTL seconds for series
+        # without an explicit ttl_seconds. Installed by CollectorManager (#631).
+        self._ttl_resolver: Callable[[str], float | None] | None = None
+
+        # Track last update time, owning collector, and optional per-series TTL.
         # Key: (collector_name, metric_name, frozen_labels)
-        # Value: _TrackedSeries(ts, tier, ttl_seconds)
+        # Value: _TrackedSeries(ts, collector, ttl_seconds)
         self._metric_timestamps: dict[tuple[str, str, str], _TrackedSeries] = {}
 
         # Track the actual Gauge object and its label values per metric series so
@@ -104,7 +110,7 @@ class MetricExpirationManager:
         self._expired_metrics_total = Counter(
             CollectorMetricName.EXPIRED_METRICS_TOTAL.value,
             "Total number of metrics expired due to TTL",
-            labelnames=[LabelName.COLLECTOR.value, LabelName.TIER.value],
+            labelnames=[LabelName.COLLECTOR.value],
         )
 
         self._tracked_metrics = Gauge(
@@ -126,12 +132,20 @@ class MetricExpirationManager:
             ttl_multiplier=self._ttl_multiplier,
         )
 
+    def set_ttl_resolver(self, resolver: Callable[[str], float | None]) -> None:
+        """Install the fallback-TTL resolver (collector_name -> seconds or None).
+
+        Called by ``CollectorManager`` once collectors exist; the resolver
+        returns the owning collector's cadence-derived fallback TTL, evaluated
+        lazily at cleanup time so it tracks the solver's current intervals (#631).
+        """
+        self._ttl_resolver = resolver
+
     def track_metric_update(
         self,
         collector_name: str,
         metric_name: str,
         label_values: dict[str, str],
-        tier: UpdateTier | None = None,
         metric: Gauge | None = None,
         ttl_seconds: float | None = None,
     ) -> None:
@@ -145,32 +159,28 @@ class MetricExpirationManager:
             Full name of the metric (e.g., "meraki_device_up").
         label_values : dict[str, str]
             Label key-value pairs that uniquely identify this metric series.
-        tier : UpdateTier | None
-            The update tier for this metric, used to calculate the TTL.
-            If None, the default TTL (MEDIUM) is used.
         metric : Gauge | None
             The Gauge object owning this series. When provided, the actual
             Prometheus series is removed (via ``Gauge.remove``) once the entry
             expires or is shed for cardinality. When ``None``, only tracking
             bookkeeping is kept (backward compatible).
         ttl_seconds : float | None
-            Fully-resolved per-series TTL in seconds. When provided it overrides
-            the tier-derived TTL for this series (#617 §1f) — used by
-            scheduler-gated fetch sites so a series polled slower than
-            ``tier_interval × multiplier`` does not flap. When ``None`` the
-            tier-derived TTL applies (zero behaviour change).
+            Fully-resolved per-series TTL in seconds set by scheduler-gated fetch
+            sites so a series polled slower than its solved interval does not flap
+            (#617 §1f). When ``None`` the collector's cadence-derived fallback TTL
+            applies (via the installed resolver, else a fixed default).
 
         """
         # Create a frozen representation of labels for dict key
         frozen_labels = self._freeze_labels(label_values)
         key = (collector_name, metric_name, frozen_labels)
 
-        # Update timestamp, tier, and per-series TTL
+        # Update timestamp, owning collector, and per-series TTL
         current_time = time.time()
         if key not in self._metric_timestamps:
             self._metric_counts[collector_name] += 1
 
-        self._metric_timestamps[key] = _TrackedSeries(current_time, tier, ttl_seconds)
+        self._metric_timestamps[key] = _TrackedSeries(current_time, collector_name, ttl_seconds)
 
         # Remember the actual series so it can be removed from the registry on expiry.
         if metric is not None:
@@ -219,28 +229,20 @@ class MetricExpirationManager:
         """
         return "|".join(f"{k}={v}" for k, v in sorted(labels.items()))
 
-    def _get_ttl_for_tier(self, tier: UpdateTier) -> float:
-        """Get TTL in seconds for a specific tier.
+    def _fallback_ttl(self, collector_name: str) -> float:
+        """Fallback TTL for a series with no explicit ttl_seconds.
 
-        Parameters
-        ----------
-        tier : UpdateTier
-            The update tier.
-
-        Returns
-        -------
-        float
-            TTL in seconds (interval * multiplier).
-
+        Prefers the installed resolver (owning collector's current cadence ×
+        multiplier); falls back to ``resolve_interval_seconds × multiplier`` when
+        no resolver is set or it declines (#631).
         """
-        if tier == UpdateTier.FAST:
-            interval = self.settings.update_intervals.fast
-        elif tier == UpdateTier.MEDIUM:
-            interval = self.settings.update_intervals.medium
-        else:  # SLOW
-            interval = self.settings.update_intervals.slow
-
-        return float(interval * self._ttl_multiplier)
+        if self._ttl_resolver is not None:
+            resolved = self._ttl_resolver(collector_name)
+            if resolved is not None:
+                return float(resolved)
+        scheduler_settings = getattr(self.settings, "scheduler", None)
+        interval = float(getattr(scheduler_settings, "resolve_interval_seconds", 900))
+        return interval * self._ttl_multiplier
 
     async def start(self) -> None:
         """Start the background cleanup task."""
@@ -293,31 +295,29 @@ class MetricExpirationManager:
         expired_count = 0
         expired_by_collector: defaultdict[str, int] = defaultdict(int)
 
-        # Default TTL for metrics without tier info (use MEDIUM)
-        default_ttl = self._get_ttl_for_tier(UpdateTier.MEDIUM)
+        # Cache per-collector fallback TTLs so the resolver runs once per collector.
+        fallback_cache: dict[str, float] = {}
 
         # Find expired metrics
         expired_keys = []
-        expired_by_collector_tier: defaultdict[tuple[str, str], int] = defaultdict(int)
         for key, entry in self._metric_timestamps.items():
-            collector_name, metric_name, _ = key
-            tier = entry.tier
+            collector_name, _metric_name, _ = key
             age = current_time - entry.ts
 
-            # A per-series ttl_seconds (scheduler-gated sites) wins over the
-            # tier-derived TTL; else fall back to tier TTL (or MEDIUM default).
+            # A per-series ttl_seconds (scheduler-gated sites) wins; else fall
+            # back to the owning collector's cadence-derived TTL (#631).
             if entry.ttl_seconds is not None:
                 ttl = entry.ttl_seconds
-            elif tier is not None:
-                ttl = self._get_ttl_for_tier(tier)
             else:
-                ttl = default_ttl
+                cached = fallback_cache.get(collector_name)
+                if cached is None:
+                    cached = self._fallback_ttl(collector_name)
+                    fallback_cache[collector_name] = cached
+                ttl = cached
             if age > ttl:
                 expired_keys.append(key)
                 expired_count += 1
                 expired_by_collector[collector_name] += 1
-                tier_label = tier.value if tier is not None else "unknown"
-                expired_by_collector_tier[(collector_name, tier_label)] += 1
 
         # Remove expired metrics from the registry and from tracking
         for key in expired_keys:
@@ -327,10 +327,9 @@ class MetricExpirationManager:
             self._metric_counts[collector_name] -= 1
 
         # Update metrics
-        for (collector_name, tier_label), count in expired_by_collector_tier.items():
+        for collector_name, count in expired_by_collector.items():
             self._expired_metrics_total.labels(
                 collector=collector_name,
-                tier=tier_label,
             ).inc(count)
 
         # Update tracked metrics gauge

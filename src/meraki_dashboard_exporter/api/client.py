@@ -180,7 +180,16 @@ class AsyncMerakiClient:
             api_key=self.settings.meraki.api_key.get_secret_value(),
             base_url=self.settings.meraki.api_base_url,
             output_log=False,
-            suppress_logging=False,
+            # #633: the exporter's own decorators (@log_api_call /
+            # @with_error_handling) are the single authoritative logging layer -
+            # they categorize every API error (benign 404 -> debug, real ->
+            # error) with structured context. The SDK's RestSession logs every
+            # non-retried 4xx at ERROR independently, double-logging benign
+            # "no data for this entity" 404s (e.g. mesh statuses on a network
+            # with no repeaters). Since retries are owned by the exporter
+            # (wait_on_rate_limit=False, retry_4xx_error=False), the SDK's
+            # console logging is pure duplication - suppress it fleet-wide.
+            suppress_logging=True,
             inherit_logging_config=True,
             single_request_timeout=self.settings.api.timeout,
             maximum_retries=self.settings.api.max_retries,

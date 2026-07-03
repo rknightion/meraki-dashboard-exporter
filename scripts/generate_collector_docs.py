@@ -3,7 +3,7 @@
 
 This script scans the codebase to find all collector definitions and generates
 a markdown document describing their purpose, metrics, API endpoints used,
-update tiers, and relationships.
+and relationships.
 """
 
 from __future__ import annotations
@@ -11,12 +11,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 from typing import Any
-
-TIER_MAP = {
-    "UpdateTier.FAST": "FAST",
-    "UpdateTier.MEDIUM": "MEDIUM",
-    "UpdateTier.SLOW": "SLOW",
-}
 
 COLLECTOR_NOTES = {
     "ClientsCollector": "Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true",
@@ -56,7 +50,6 @@ class CollectorVisitor(ast.NodeVisitor):
             "docstring": ast.get_docstring(node),
             "base_classes": [],
             "decorators": [],
-            "update_tier": None,
             "metrics": [],
             "api_calls": [],
             "sub_collectors": [],
@@ -85,8 +78,6 @@ class CollectorVisitor(ast.NodeVisitor):
                 self.current_class_info["decorators"].append(decorator_info)
                 # Check for register_collector decorator
                 if decorator_info["name"] == "register_collector":
-                    if decorator_info.get("args"):
-                        self.current_class_info["update_tier"] = decorator_info["args"][0]
                     self.current_class_info["registered"] = True
 
         # Only process classes that look like collectors
@@ -305,23 +296,17 @@ def scan_for_collectors(root_path: Path, repo_root: Path) -> list[dict[str, Any]
     return all_collectors
 
 
-def resolve_update_tiers(collectors: list[dict[str, Any]]) -> None:
-    """Resolve UpdateTier references to actual values."""
-    for collector in collectors:
-        if collector["update_tier"] and collector["update_tier"] in TIER_MAP:
-            collector["resolved_tier"] = TIER_MAP[collector["update_tier"]]
-        else:
-            collector["resolved_tier"] = collector["update_tier"] or "Managed by parent"
-
-
 def generate_markdown(collectors: list[dict[str, Any]]) -> str:
     """Generate concise markdown documentation for collectors."""
     lines = ["# Collector Reference", ""]
     lines.append("This page summarizes the collectors that ship with the exporter.")
     lines.append("")
     lines.append(
-        "Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_INTERVALS__*`."
-        " See the Metrics Overview for tier definitions."
+        "Each collector owns one or more scheduler endpoint groups and runs its own"
+        " group-clocked loop; the adaptive scheduler solves a per-group interval (floored"
+        " at that group's volatility floor) from the configured request budget, so cadence"
+        " is derived rather than assigned from a fixed tier. See the"
+        " [Scheduler Architecture](../observability/scheduler.md) page for details."
     )
     lines.append("")
 
@@ -333,8 +318,8 @@ def generate_markdown(collectors: list[dict[str, Any]]) -> str:
 
     lines.append("## Main Collectors (auto-registered)")
     lines.append("")
-    lines.append("| Collector | Tier | Purpose | Metrics | Notes |")
-    lines.append("|-----------|------|---------|---------|-------|")
+    lines.append("| Collector | Purpose | Metrics | Notes |")
+    lines.append("|-----------|---------|---------|-------|")
     for collector in sorted(registered_collectors, key=lambda c: c["name"]):
         description = (
             collector.get("docstring", "").split("\n")[0]
@@ -343,10 +328,7 @@ def generate_markdown(collectors: list[dict[str, Any]]) -> str:
         )
         metrics_count = len(collector.get("metrics", []))
         notes = COLLECTOR_NOTES.get(collector["name"], "")
-        lines.append(
-            f"| `{collector['name']}` | {collector.get('resolved_tier', 'Managed by parent')} | "
-            f"{description} | {metrics_count} | {notes} |"
-        )
+        lines.append(f"| `{collector['name']}` | {description} | {metrics_count} | {notes} |")
     lines.append("")
 
     lines.append("## Coordinator Relationships")
@@ -420,10 +402,6 @@ def main() -> None:
     print("Scanning for collectors...")
     collectors = scan_for_collectors(src_path, repo_root)
     print(f"Found {len(collectors)} collector definitions")
-
-    # Resolve update tier references
-    print("Resolving update tiers...")
-    resolve_update_tiers(collectors)
 
     # Generate markdown
     print("Generating documentation...")

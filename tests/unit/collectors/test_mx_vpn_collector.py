@@ -174,13 +174,14 @@ class TestMXVpnCollector:
 
         The mx_vpn group spans both VpnStatuses and VpnStats; only collect_vpn_stats
         (the second call each cycle) sets the run marker, so collect() must never mark.
+        The gate is now evaluated once in the coordinator and threaded in as
+        ``due`` (#631) rather than re-read here.
         """
-        mock_parent._should_run_group = MagicMock(return_value=False)
         mock_api.appliance.getOrganizationApplianceVpnStatuses = MagicMock(
             return_value=[{"networkId": "N_1", "merakiVpnPeers": [], "thirdPartyVpnPeers": []}]
         )
 
-        await vpn_collector.collect("org1", "Test Org")
+        await vpn_collector.collect("org1", "Test Org", due=False)
 
         mock_api.appliance.getOrganizationApplianceVpnStatuses.assert_not_called()
         mock_parent._set_metric.assert_not_called()
@@ -651,13 +652,15 @@ class TestMXVpnStatsCollector:
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """A closed mx_vpn gate skips VpnStats and does not mark (#617)."""
-        mock_parent._should_run_group = MagicMock(return_value=False)
+        """A closed mx_vpn gate skips VpnStats and does not mark (#617).
+
+        ``due`` is threaded from the coordinator (#631) rather than re-read here.
+        """
         mock_api.appliance.getOrganizationApplianceVpnStats = MagicMock(
             return_value=[{"networkId": "N_1", "merakiVpnPeers": []}]
         )
 
-        await vpn_collector.collect_vpn_stats("org1", "Test Org")
+        await vpn_collector.collect_vpn_stats("org1", "Test Org", due=False)
 
         mock_api.appliance.getOrganizationApplianceVpnStats.assert_not_called()
         mock_parent._mark_group_ran.assert_not_called()

@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
-from meraki_dashboard_exporter.core.constants import MSMetricName, UpdateTier
+from meraki_dashboard_exporter.core.constants import MSMetricName
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 from tests.helpers.base import BaseCollectorTest
 
@@ -67,7 +67,6 @@ class _MSMXGateBase(BaseCollectorTest):
     """Shared helpers for MS/MX gate tests driven via a real DeviceCollector."""
 
     collector_class = DeviceCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _device_collector(
         self, mock_api, settings, isolated_registry, inventory, scheduler

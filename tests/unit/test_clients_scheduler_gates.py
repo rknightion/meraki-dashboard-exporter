@@ -19,7 +19,6 @@ import time
 from unittest.mock import MagicMock, patch
 
 from meraki_dashboard_exporter.collectors.clients import ClientsCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName, OrgShape
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import ClientFactory, NetworkFactory, OrganizationFactory
@@ -63,10 +62,6 @@ class TestClientsEndpointGroups:
         declared = {g.name for g in ClientsCollector.endpoint_groups}
         assert declared == _EXPECTED_CLIENT_GROUPS
 
-    def test_all_medium_tier(self) -> None:
-        """All three client groups are MEDIUM-tier."""
-        assert all(g.tier is UpdateTier.MEDIUM for g in ClientsCollector.endpoint_groups)
-
     def test_priorities_and_floors(self) -> None:
         """Priorities and floors match the §2 table."""
         by_name = {g.name: g for g in ClientsCollector.endpoint_groups}
@@ -105,7 +100,6 @@ class TestClientsGetEndpointGroups(BaseCollectorTest):
     """get_endpoint_groups() drops all groups when clients are disabled."""
 
     collector_class = ClientsCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _make(self, settings, isolated_registry, inventory, *, enabled: bool) -> ClientsCollector:
         """Construct a ClientsCollector with clients enabled/disabled."""
@@ -134,7 +128,6 @@ class TestClientsListGate(BaseCollectorTest):
     """clients_list fetch-site gate (#617 §2 clients_list)."""
 
     collector_class = ClientsCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _build(self, mock_api_builder, settings, isolated_registry, inventory, sched):
         """Build an enabled ClientsCollector with one network + client."""
@@ -204,7 +197,6 @@ class TestClientsAppUsageIntervalSource(BaseCollectorTest):
     """app_usage per-network gate reads its interval from _group_interval."""
 
     collector_class = ClientsCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _build(self, mock_api_builder, settings, isolated_registry, inventory, app_interval):
         """Build an enabled ClientsCollector whose scheduler pins the app-usage interval."""
@@ -272,7 +264,6 @@ class TestClientsSignalQualityIntervalSource(BaseCollectorTest):
     """signal_quality per-network gate reads its interval from _group_interval."""
 
     collector_class = ClientsCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _build(self, mock_api_builder, settings, isolated_registry, inventory, sq_interval):
         """Build an enabled ClientsCollector whose scheduler pins the signal-quality interval."""

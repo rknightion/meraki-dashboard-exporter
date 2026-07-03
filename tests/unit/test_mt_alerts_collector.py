@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from meraki_dashboard_exporter.collectors.mt_alerts import MTSensorAlertsCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.error_handling import NothingCollectedError
 from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
@@ -37,7 +36,6 @@ class TestMTSensorAlertsCollectorOrgHealthGating(BaseCollectorTest):
     """
 
     collector_class = MTSensorAlertsCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_backed_off_org_is_skipped(
         self, mock_api, settings, isolated_registry, inventory
@@ -87,11 +85,6 @@ class TestMTSensorAlertsCollector(BaseCollectorTest):
     """Test MTSensorAlertsCollector functionality."""
 
     collector_class = MTSensorAlertsCollector
-    update_tier = UpdateTier.MEDIUM
-
-    def test_collector_is_medium_tier(self) -> None:
-        """The collector is decorated @register_collector(UpdateTier.MEDIUM)."""
-        assert MTSensorAlertsCollector.update_tier == UpdateTier.MEDIUM
 
     def test_gauge_registered_with_full_label_set(self, collector, metrics) -> None:
         """The gauge exists under the frozen metric name with the documented label set."""
@@ -297,7 +290,6 @@ class TestMTSensorAlertsCollectorNothingCollected(BaseCollectorTest):
     """
 
     collector_class = MTSensorAlertsCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_org_fetch_failure_raises(self, collector) -> None:
         """A failure fetching networks for the only org must propagate.
@@ -399,7 +391,6 @@ class TestMTAlertProfiles(BaseCollectorTest):
     """#302: configured sensor alert profile count per network."""
 
     collector_class = MTSensorAlertsCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_collect_network_alert_profiles_emits_count(self, collector, metrics) -> None:
         """A non-empty profiles list emits its length."""
@@ -478,7 +469,6 @@ class TestMTRelatedDeviceInfo(BaseCollectorTest):
     """#308: MT sensor <-> related-device relationship join carrier."""
 
     collector_class = MTSensorAlertsCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_collect_network_relationships_emits_one_series_per_link(
         self, collector, metrics
@@ -608,7 +598,6 @@ class TestMTSensorAlertsCollectorGroupIndependence(BaseCollectorTest):
     """#302/#308: each new group's due-ness gates independently of MT_SENSOR_ALERTS."""
 
     collector_class = MTSensorAlertsCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_collect_org_sensor_alerts_defaults_only_run_alerts(self, collector) -> None:
         """The legacy 2-arg call shape (org_id, org_name) runs only the alerting-count fetch.

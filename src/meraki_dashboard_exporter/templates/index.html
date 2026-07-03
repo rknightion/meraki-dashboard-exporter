@@ -236,7 +236,7 @@
             font-size: 0.9rem;
         }
 
-        .tier-badge {
+        .cadence-badge {
             margin-left: 8px;
             padding: 2px 6px;
             background-color: rgba(0, 0, 0, 0.1);
@@ -391,9 +391,9 @@
             <div class="card">
                 <h3>🔧 Configuration</h3>
                 <p><strong>Version:</strong> {{ version }}</p>
-                <p><strong>Update Intervals:</strong><br>
-                   Fast: {{ fast_interval }}s | Medium: {{ medium_interval }}s | Slow: {{ slow_interval }}s
-                </p>
+                <p><strong>Scheduling:</strong> adaptive per-collector cadence &mdash;
+                   see <a href="/status" style="color: #1976d2;">status</a> or the polling
+                   diagnostics below for each collector's solved interval.</p>
                 {% if org_id %}
                 <p><strong>Organization ID:</strong> {{ org_id }}</p>
                 {% endif %}
@@ -466,43 +466,21 @@
             <!-- Per-endpoint intervals retired into the adaptive-scheduler section (#617);
                  the summary above and the /status Scheduler section carry per-group intervals. -->
 
-            <h4 style="margin-top: 20px;">Tier Schedule</h4>
-            <table class="collector-table">
-                <thead>
-                    <tr>
-                        <th>Tier</th>
-                        <th>Interval (s)</th>
-                        <th>Jitter Window (s)</th>
-                        <th>Smoothing Window (s)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for tier, info in scheduling.tiers.items() %}
-                    <tr>
-                        <td>{{ tier | upper }}</td>
-                        <td>{{ info.interval }}</td>
-                        <td>{{ info.jitter_window }}</td>
-                        <td>{{ info.smoothing_window }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-
-            <h4 style="margin-top: 20px;">Collector Offsets</h4>
+            <h4 style="margin-top: 20px;">Collector Cadences</h4>
             <table class="collector-table">
                 <thead>
                     <tr>
                         <th>Collector</th>
-                        <th>Tier</th>
-                        <th>Start Offset (s)</th>
+                        <th>Cadence (s)</th>
+                        <th>Phase Offset (s)</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for entry in scheduling.collector_offsets %}
+                    {% for entry in scheduling.collectors %}
                     <tr>
                         <td>{{ entry.collector }}</td>
-                        <td><span class="tier-badge">{{ entry.tier | upper }}</span></td>
-                        <td>{{ entry.offset_seconds }}</td>
+                        <td>{{ entry.cadence_seconds }}</td>
+                        <td>{{ entry.phase_offset_seconds }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -560,7 +538,7 @@
                     <thead>
                         <tr>
                             <th>Collector</th>
-                            <th>Tier</th>
+                            <th>Cadence</th>
                             <th>Success Rate</th>
                             <th>Last Success</th>
                             <th>Failure Streak</th>
@@ -572,7 +550,7 @@
                         {% for collector in collectors %}
                         <tr>
                             <td>{{ collector.name }}</td>
-                            <td><span class="tier-badge">{{ collector.tier }}</span></td>
+                            <td><span class="cadence-badge">{{ collector.cadence }}</span></td>
                             <td>
                                 {% if collector.success_rate | float >= 95.0 %}
                                 <span class="health-good">{{ collector.success_rate }}%</span>
@@ -615,7 +593,7 @@
                 <div class="skipped-collectors">
                     <h4>⚠️ Skipped Collectors ({{ skipped_collectors | length }})</h4>
                     {% for skipped in skipped_collectors %}
-                    <p><strong>{{ skipped.name }}</strong> ({{ skipped.tier }}): {{ skipped.reason }}</p>
+                    <p><strong>{{ skipped.name }}</strong>: {{ skipped.reason }}</p>
                     {% endfor %}
                 </div>
                 {% endif %}

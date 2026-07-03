@@ -8,15 +8,12 @@ import pytest
 from prometheus_client import Counter, Gauge, Histogram
 
 from meraki_dashboard_exporter.core.collector import MetricCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import OrganizationFactory
 
 
 class DummyCollectorImpl(MetricCollector):
     """Test implementation of MetricCollector."""
-
-    update_tier = UpdateTier.MEDIUM
 
     def _initialize_metrics(self) -> None:
         """Initialize test metrics."""
@@ -47,8 +44,6 @@ class DummyCollectorImpl(MetricCollector):
 class ErrorCollectorImpl(MetricCollector):
     """Test collector that always raises an error."""
 
-    update_tier = UpdateTier.MEDIUM
-
     def _initialize_metrics(self) -> None:
         pass
 
@@ -60,7 +55,6 @@ class TestMetricCollector(BaseCollectorTest):
     """Test the base MetricCollector functionality."""
 
     collector_class = DummyCollectorImpl
-    update_tier = UpdateTier.MEDIUM
 
     def test_duration_histogram_uses_configured_buckets(self, isolated_registry, settings):
         """MonitoringSettings.histogram_buckets is wired to the duration histogram (F-008)."""
@@ -82,7 +76,6 @@ class TestMetricCollector(BaseCollectorTest):
         """Test that collector initializes properly."""
         assert collector.api is not None
         assert collector.settings is not None
-        assert collector.update_tier == UpdateTier.MEDIUM
 
         # Check that metrics were created
         assert hasattr(collector, "_test_gauge")
@@ -233,9 +226,6 @@ class TestMetricCollector(BaseCollectorTest):
         # The collector should have the correct class name
         assert collector.__class__.__name__ == "DummyCollectorImpl"
 
-        # The update tier should be set correctly
-        assert collector.update_tier == UpdateTier.MEDIUM
-
 
 class TestEndpointGroupPlumbing(BaseCollectorTest):
     """Base scheduler/endpoint-group plumbing (#617 §1c).
@@ -245,7 +235,6 @@ class TestEndpointGroupPlumbing(BaseCollectorTest):
     """
 
     collector_class = DummyCollectorImpl
-    update_tier = UpdateTier.MEDIUM
 
     def _make(self, isolated_registry, settings, scheduler=None):
         return DummyCollectorImpl(
@@ -310,7 +299,6 @@ class TestSetMetricTTLPassthrough(BaseCollectorTest):
     """_set_metric / _set_metric_value forward ttl_seconds to the tracker (#617 §1f)."""
 
     collector_class = DummyCollectorImpl
-    update_tier = UpdateTier.MEDIUM
 
     def _make(self, isolated_registry, settings):
         return DummyCollectorImpl(

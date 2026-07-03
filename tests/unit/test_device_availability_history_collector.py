@@ -69,6 +69,9 @@ class TestDeviceAvailabilityHistoryCollector:
             def _group_ttl_seconds(self, group: object) -> float | None:
                 return None
 
+            def _group_interval(self, group: object) -> float:
+                return 300.0
+
             def _track_api_call(self, method_name: str) -> None:
                 self._api_calls[method_name] = self._api_calls.get(method_name, 0) + 1
 
@@ -327,21 +330,10 @@ class TestDeviceAvailabilityHistoryCollector:
         assert call_args[1]["total_pages"] == "all"
         assert result == []
 
-    async def test_fetch_timespan_follows_configured_medium_interval(
-        self, mock_api_builder, isolated_registry
+    async def test_fetch_timespan_follows_configured_group_interval(
+        self, mock_api_builder, settings
     ):
-        """F-057: the timespan must track settings.update_intervals.medium, not a constant."""
-        from pydantic import SecretStr
-
-        from meraki_dashboard_exporter.core.config import Settings
-        from meraki_dashboard_exporter.core.config_models import MerakiSettings, UpdateIntervals
-
-        settings = Settings(
-            meraki=MerakiSettings(
-                api_key=SecretStr("6bec40cf957de430a6f1f2baa056b367d6172e1e"), org_id="test-org-id"
-            ),
-            update_intervals=UpdateIntervals(fast=60, medium=900, slow=1800),
-        )
+        """F-057: the timespan must track the group's solved interval, not a constant."""
 
         class MockParentCollector:
             def __init__(self) -> None:
@@ -358,6 +350,9 @@ class TestDeviceAvailabilityHistoryCollector:
 
             def _group_ttl_seconds(self, group: object) -> float | None:
                 return None
+
+            def _group_interval(self, group: object) -> float:
+                return 900.0
 
             def _track_api_call(self, method_name: str) -> None:
                 self._api_calls[method_name] = self._api_calls.get(method_name, 0) + 1

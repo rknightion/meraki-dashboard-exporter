@@ -574,6 +574,10 @@ class CollectorMetricName(StrEnum):
     API_RATE_LIMITER_TOKENS = "meraki_exporter_api_rate_limiter_tokens"
     COLLECTOR_START_OFFSET_SECONDS = "meraki_exporter_collector_start_offset_seconds"
     COLLECTION_SMOOTHING_WINDOW_SECONDS = "meraki_exporter_collection_smoothing_window_seconds"
+    # Per-collector effective cadence = min solved interval of its enabled gated
+    # groups. Staleness alerts read `time() - success_timestamp > 3 x cadence`
+    # (#631, replaces the removed per-tier interval).
+    COLLECTOR_CADENCE_SECONDS = "meraki_exporter_collector_cadence_seconds"
 
     # Per-org health metrics
     EXPORTER_ORG_COLLECTION_STATUS = "meraki_exporter_org_collection_status"

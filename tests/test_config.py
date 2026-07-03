@@ -15,7 +15,6 @@ def test_settings_with_valid_api_key(monkeypatch):
 
     settings = Settings()
     assert settings.meraki.api_key.get_secret_value() == "a" * 40
-    assert settings.update_intervals.fast == 60  # fast_update_interval is the default
     assert settings.server.host == "0.0.0.0"
     assert settings.server.port == 9099
 
@@ -45,18 +44,25 @@ def test_settings_with_custom_values(monkeypatch):
     """Test settings with custom values."""
     monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
     monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__ORG_ID", "123456")
-    monkeypatch.setenv("MERAKI_EXPORTER_UPDATE_INTERVALS__FAST", "60")
-    monkeypatch.setenv("MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM", "300")
-    monkeypatch.setenv("MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW", "900")
     monkeypatch.setenv("MERAKI_EXPORTER_LOGGING__LEVEL", "DEBUG")
 
     settings = Settings()
     assert settings.meraki.org_id == "123456"
-
-    assert settings.update_intervals.fast == 60
-    assert settings.update_intervals.medium == 300
-    assert settings.update_intervals.slow == 900
     assert settings.logging.level == "DEBUG"
+
+
+def test_detiered_scheduler_and_collector_defaults(monkeypatch):
+    """Post-#631 knobs replacing the removed update-interval/per-tier surface.
+
+    The FAST/MEDIUM/SLOW per-tier update-interval model and per-tier concurrency
+    limits are gone; the remaining cadence/concurrency knobs are the scheduler
+    failure-retry backoff and the collector concurrency cap.
+    """
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "a" * 40)
+
+    settings = Settings()
+    assert settings.scheduler.failure_retry_seconds == 300
+    assert settings.collectors.max_concurrent_collectors == 5
 
 
 def test_network_filter_env_parsing(monkeypatch):

@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..core.async_utils import ManagedTaskGroup
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
-from ..core.constants import MTMetricName, ProductType, UpdateTier
+from ..core.constants import MTMetricName, ProductType
 from ..core.domain_models import SensorAlertsOverviewByMetric
 from ..core.error_handling import (
     ErrorCategory,
@@ -97,7 +97,7 @@ class SensorRelationshipEntry(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-@register_collector(UpdateTier.MEDIUM)
+@register_collector
 class MTSensorAlertsCollector(MetricCollector):
     """Collector for network-wide currently-alerting MT sensor counts."""
 
@@ -115,21 +115,18 @@ class MTSensorAlertsCollector(MetricCollector):
             priority=2,
             floor_seconds=300,
             cost_fn=lambda shape: shape.sensor_network_count,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MT_ALERT_PROFILES,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda shape: float(shape.sensor_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MT_RELATIONSHIPS,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda shape: float(shape.sensor_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
     )
 

@@ -12,15 +12,22 @@ tags:
 
 The Meraki Dashboard Exporter provides comprehensive metrics across all aspects of your Meraki infrastructure. The metric collection system and available metrics are covered below.
 
-## Collection Tiers
+## Adaptive Collection Scheduling
 
-The exporter uses a three-tier system to optimize API usage and provide timely data (intervals are configurable via `MERAKI_EXPORTER_UPDATE_INTERVALS__*` in the [Configuration](../config.md) reference):
+There is no fixed FAST/MEDIUM/SLOW tier system. Every API fetch is declared as an **endpoint
+group** with its own volatility floor, and an adaptive, budget-aware scheduler
+(`scheduler.mode=adaptive`, the default) solves each group's actual polling interval from
+organization size and the configured Meraki API request budget, stretching lower-priority
+groups automatically when demand would otherwise exceed the budget. Each collector runs its
+own group-clocked loop off its groups' solved intervals rather than sharing a global tick. See
+[Scheduler Architecture](../observability/scheduler.md) for the full mechanism and
+[Data Freshness](../data-freshness.md) for how to read live per-collector cadence.
 
 ```mermaid
 graph TD
-    A[Meraki API] --> B[Fast Tier]
-    A --> C[Medium Tier]
-    A --> D[Slow Tier]
+    A[Meraki API] --> B[~60s floor]
+    A --> C[~300s floor]
+    A --> D[~900s+ floor]
 
     B --> E[Sensor Metrics<br/>Temperature, Humidity, etc.]
     C --> F[Device Metrics<br/>Status, Performance]
@@ -32,20 +39,24 @@ graph TD
     style D fill:#69db7c,stroke:#51cf66
 ```
 
-### Fast Tier
+### ~60s floor
 - **Purpose**: Real-time environmental monitoring
 - **Metrics**: MT sensor readings (temperature, humidity, door status, etc.)
 - **Use Case**: Critical environmental alerts, real-time dashboards
 
-### Medium Tier
+### ~300s floor
 - **Purpose**: Standard operational metrics
 - **Metrics**: Device status, network health, client counts, traffic statistics
 - **Aligned**: With Meraki's 5-minute data aggregation windows
 
-### Slow Tier
+### ~900s+ floor
 - **Purpose**: Configuration and slowly changing data
 - **Metrics**: Security settings, configuration changes
 - **Use Case**: Compliance monitoring, configuration drift detection
+
+These floor values are the natural volatility windows each group is never polled faster than —
+the *actual* effective interval for a given deployment can be longer if the scheduler has
+stretched a group to fit the API budget (see [Scheduler Architecture](../observability/scheduler.md)).
 
 ## Metric Naming Convention
 
@@ -110,7 +121,6 @@ All metrics include relevant labels for filtering and grouping:
 | `model` | Device model | `MS120-8LP` |
 | `device_type` | Device type | `ms` |
 | `collector` | Collector name (infrastructure metrics) | `DeviceCollector` |
-| `tier` | Collection tier | `medium` |
 
 ## Metrics vs. OTel data logs: the cardinality boundary
 

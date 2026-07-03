@@ -40,14 +40,15 @@ class MXFirewallCollector(SubCollectorMixin):
     """Collector for MX firewall rules and security policy metrics.
 
     Collects L3 and L7 firewall rule counts per network, plus the default
-    policy setting for each appliance network. Intended to run at the SLOW
-    cadence (900s) as firewall configuration changes infrequently, but
-    ``collect_for_network`` is actually dispatched every MEDIUM-tier (300s)
-    cycle by ``DeviceCollector._collect_mx_specific_metrics`` — there is no
-    separate SLOW-tier scheduling loop for this fan-out. The SLOW cadence is
-    therefore self-enforced inside ``collect_for_network`` via
-    ``_should_collect_firewall_rules``/``_mark_firewall_rules_collected``,
-    keyed on ``settings.update_intervals.slow`` (see F-085).
+    policy setting for each appliance network. Firewall configuration changes
+    infrequently, so this fan-out targets the ``mx_firewall_config`` group's
+    solved interval (900s floor), but ``collect_for_network`` is actually
+    dispatched every ``DeviceCollector`` cycle by
+    ``_collect_mx_specific_metrics`` — there is no separate scheduling loop for
+    this fan-out. That cadence is therefore self-enforced inside
+    ``collect_for_network`` via
+    ``_should_collect_firewall_rules``/``_mark_firewall_rules_collected``, keyed
+    on the ``mx_firewall_config`` group's solved interval (see F-085).
     """
 
     def __init__(self, parent: Any) -> None:
@@ -64,8 +65,8 @@ class MXFirewallCollector(SubCollectorMixin):
         self.api: DashboardAPI = parent.api
         self.settings: Settings = parent.settings
         # Tracks the last time firewall rules were collected per network_id so the
-        # SLOW-tier cadence can be enforced even though collect_for_network is
-        # dispatched every MEDIUM-tier cycle by DeviceCollector (see F-085).
+        # mx_firewall_config cadence can be enforced even though collect_for_network
+        # is dispatched every DeviceCollector cycle (see F-085).
         self._last_firewall_collection: dict[str, float] = {}
         # Phase 4 (#285/#288/#289): per-network throttles for the three NEW
         # config-drift endpoint groups, mirroring _last_firewall_collection above.
@@ -86,9 +87,9 @@ class MXFirewallCollector(SubCollectorMixin):
         Mirrors the ``_should_collect_port_usage``/``_mark_port_usage_collected``
         throttle pattern in ``ms.py``. The interval is read from the
         ``mx_firewall_config`` endpoint group's solved interval (#617, floor
-        900s) rather than ``settings.update_intervals.slow`` directly, so the
-        adaptive scheduler can stretch it; this collector is invoked every
-        MEDIUM-tier (300s) cycle by ``DeviceCollector._collect_mx_specific_metrics``.
+        900s), so the adaptive scheduler can stretch it; this collector is
+        invoked every ``DeviceCollector`` cycle by
+        ``_collect_mx_specific_metrics``.
         """
         interval = float(self.parent._group_interval(EndpointGroupName.MX_FIREWALL_CONFIG))
         if interval <= 0:
@@ -340,10 +341,12 @@ class MXFirewallCollector(SubCollectorMixin):
             )
         else:
             logger.debug(
-                "Skipping firewall rules collection (SLOW-tier cadence not yet elapsed)",
+                "Skipping firewall rules collection (group interval not yet elapsed)",
                 org_id=org_id,
                 network_id=network_id,
-                interval_seconds=self.settings.update_intervals.slow,
+                interval_seconds=self.parent._group_interval(
+                    EndpointGroupName.MX_FIREWALL_CONFIG
+                ),
             )
 
         # Phase 4 (#285/#288/#289): each of these is independently gated/decorated
@@ -695,9 +698,10 @@ class MXFirewallCollector(SubCollectorMixin):
         in a single call per organization and aggregates the count of events by ``eventType``
         (e.g. "IDS Alert", "File Scanned") over the current collection window.
 
-        The ``timespan`` is bounded to the MEDIUM update-tier interval
-        (``settings.update_intervals.medium``, default 300s) because this method is invoked once
-        per MEDIUM-tier collection cycle from ``DeviceCollector._collect_mx_specific_metrics``.
+        The ``timespan`` is bounded to the ``mx_security_events`` group's solved
+        interval (``parent._group_interval(EndpointGroupName.MX_SECURITY_EVENTS)``, 300s floor)
+        because this method is invoked once per ``DeviceCollector`` cycle from
+        ``_collect_mx_specific_metrics``.
         Bounding the timespan to the poll interval means each cycle's counts reflect only events
         detected since the previous cycle, avoiding double-counting events across cycles.
 
@@ -713,7 +717,9 @@ class MXFirewallCollector(SubCollectorMixin):
         if not self.parent._should_run_group(EndpointGroupName.MX_SECURITY_EVENTS):
             return
 
-        timespan = self.settings.update_intervals.medium
+        # Fetch the window since the last poll: the group's solved interval
+        # (covers the whole cadence even when the solver stretches it, #631).
+        timespan = int(self.parent._group_interval(EndpointGroupName.MX_SECURITY_EVENTS))
 
         events_response = await asyncio.to_thread(
             self.api.appliance.getOrganizationApplianceSecurityEvents,

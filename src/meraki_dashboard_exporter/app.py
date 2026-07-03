@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
-import random
 import time
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
@@ -29,7 +28,6 @@ from .core.build_info import register_build_info
 from .core.cardinality import CardinalityMonitor, setup_cardinality_endpoint
 from .core.config import Settings
 from .core.config_logger import log_startup_summary
-from .core.constants import UpdateTier
 from .core.constants.metrics_constants import CollectorMetricName
 from .core.discovery import DiscoveryService, resolve_org_id
 from .core.logging import get_logger, setup_logging
@@ -46,7 +44,7 @@ from .core.webhook_handler import (
 from .services.status import StatusService, build_effective_config
 
 if TYPE_CHECKING:
-    pass
+    from .core.collector import MetricCollector
 
 logger = get_logger(__name__)
 
@@ -212,7 +210,7 @@ class ExporterApp:
 
         self._background_tasks: set[asyncio.Task[Any]] = set()
         self._shutdown_event = asyncio.Event()
-        self._tier_tasks: dict[str, asyncio.Task[Any]] = {}
+        self._collector_tasks: dict[str, asyncio.Task[Any]] = {}
         self._start_time = time.time()
         self._discovery_summary: dict[str, Any] | None = None
 
@@ -275,48 +273,19 @@ class ExporterApp:
         logger.info("Shutdown requested, stopping collection...")
         self._shutdown_event.set()
 
-    def _fastest_enabled_tier_interval_seconds(self) -> float:
-        """Return the update interval of the fastest tier with an enabled collector.
-
-        Checks tiers in FAST, MEDIUM, SLOW order and returns the interval of the
-        first one that has at least one instantiated collector (see
-        ``CollectorManager.collectors``). Falls back to the SLOW interval if,
-        pathologically, no tier has any collectors (e.g. before startup wires
-        collectors, or every collector disabled).
-
-        This is deliberately a single, isolated helper (rather than inlining the
-        loop into ``_liveness_threshold_seconds``). It anticipated the #617
-        adaptive scheduler swapping in a "fastest computed group cadence" - but
-        under the frozen gate model that swap is a no-op: endpoint groups never
-        run faster than their owning tier's heartbeat, and a fully-gated
-        collector run still completes a successful heartbeat cycle, so the
-        collector success cadence (what liveness watches) remains exactly the
-        tier interval. The tier derivation below therefore already IS the
-        computed fastest cadence, in both ``adaptive`` and ``fixed`` scheduler
-        modes; the threshold stays correct without reading the scheduler.
-        ``EndpointScheduler.fastest_effective_interval_seconds()`` exists for
-        diagnostics only, not for this liveness threshold (#596/#617).
-        """
-        manager = self.collector_manager
-        for tier in (UpdateTier.FAST, UpdateTier.MEDIUM, UpdateTier.SLOW):
-            if manager.collectors.get(tier):
-                return float(manager.get_tier_interval(tier))
-        return float(manager.get_tier_interval(UpdateTier.SLOW))
-
     def _liveness_threshold_seconds(self) -> float:
         """Return the dead-man staleness threshold in seconds (F-043).
 
         Uses ``monitoring.liveness_max_stale_seconds`` when set (>0), otherwise
-        auto-derives the threshold as three times the **fastest enabled tier's**
-        interval (RES-08) - so a stalled fast loop trips liveness promptly while
-        slower tiers don't cause false positives. This keeps the wedge-to-restart
-        window close to the metric TTL (``metric_ttl_multiplier`` x interval)
-        instead of the much longer fixed SLOW-tier-derived window used previously.
+        auto-derives the threshold as three times the **fastest solved
+        endpoint-group interval** (RES-08 / #631) - so a stalled fast poll trips
+        liveness promptly while slower groups don't cause false positives. Read
+        fresh each check so AIMD stretching widens the threshold automatically.
         """
         configured = self.settings.monitoring.liveness_max_stale_seconds
         if configured > 0:
             return float(configured)
-        return self._fastest_enabled_tier_interval_seconds() * 3.0
+        return self.collector_manager.scheduler.fastest_effective_interval_seconds() * 3.0
 
     def _liveness_check(self) -> tuple[bool, str]:
         """Evaluate the dead-man liveness switch (F-043).
@@ -567,29 +536,23 @@ class ExporterApp:
             # Emit one-time startup summary after discovery + initial collection
             self._log_startup_summary()
 
-            # Start tiered collection tasks with an initial delay
-            for tier in UpdateTier:
-                interval = self.collector_manager.get_tier_interval(tier)
-                jitter_window = min(10.0, interval * 0.1)
-                jitter = random.uniform(0.0, jitter_window)
-                initial_delay = (interval + jitter) if initial_collection_completed else jitter
-                logger.debug(
-                    "Creating tiered collection task",
-                    tier=tier,
-                    interval=interval,
-                    initial_delay_seconds=round(initial_delay, 2),
-                )
+            # Start one group-clocked collection loop per collector (#631). Each
+            # loop wakes at its collector's earliest-due endpoint group, so every
+            # group runs at exactly its solved interval.
+            for collector in self.collector_manager.collectors:
                 task = asyncio.create_task(
-                    self._tiered_collection_loop(tier, initial_delay=initial_delay)
+                    self._collector_loop(
+                        collector, initial_run_completed=initial_collection_completed
+                    )
                 )
-                self._tier_tasks[tier] = task
+                self._collector_tasks[collector.__class__.__name__] = task
                 self._background_tasks.add(task)
                 task.add_done_callback(self._background_tasks.discard)
 
             logger.info(
-                "Started all tiered collection loops",
-                task_count=len(self._tier_tasks),
-                tiers=list(self._tier_tasks.keys()),
+                "Started per-collector group-clocked loops",
+                task_count=len(self._collector_tasks),
+                collectors=list(self._collector_tasks.keys()),
             )
 
             # Start the adaptive scheduler resolve loop (#617). Same background-
@@ -611,100 +574,85 @@ class ExporterApp:
             logger.exception("Failed during startup collections")
             # Don't crash the server if initial collection fails
 
-    async def _tiered_collection_loop(
+    async def _interruptible_sleep(self, seconds: float) -> None:
+        """Sleep in 1s increments, waking early on shutdown."""
+        remaining = float(seconds)
+        while remaining > 0 and not self._shutdown_event.is_set():
+            wait_time = min(1.0, remaining)
+            await asyncio.sleep(wait_time)
+            remaining -= wait_time
+
+    async def _collector_loop(
         self,
-        tier: UpdateTier,
-        initial_delay: float = 0.0,
+        collector: MetricCollector,
+        *,
+        initial_run_completed: bool,
     ) -> None:
-        """Background task for periodic metric collection for a specific tier.
+        """Group-clocked collection loop for a single collector (#631).
+
+        Each iteration runs the collector once (its gates open exactly for the
+        groups that are due), then sleeps until the earliest-due of its enabled
+        endpoint groups, capped at one scheduler resolve period so re-solves /
+        AIMD / re-enabled groups are picked up promptly. Spurious early wakes are
+        cheap no-ops (the gates say "not due" and the loop sleeps again).
 
         Parameters
         ----------
-        tier : UpdateTier
-            The update tier to run collection for.
-        initial_delay : float
-            Initial delay in seconds before the first collection run.
+        collector : MetricCollector
+            The collector this loop drives.
+        initial_run_completed : bool
+            When True (the initial sequential collection already ran), the first
+            steady-state wake is delayed by the collector's deterministic phase
+            offset so collectors don't all fire together; skipped otherwise so
+            readiness after a cold start / restart stays fast (#591).
 
         """
-        interval = self.collector_manager.get_tier_interval(tier)
-
-        logger.debug(
-            "Starting tiered collection loop",
-            tier=tier,
-            interval=interval,
-        )
+        manager = self.collector_manager
+        scheduler = manager.scheduler
+        name = collector.__class__.__name__
+        resolve_cap = float(self.settings.scheduler.resolve_interval_seconds)
 
         try:
-            if initial_delay > 0:
-                logger.debug(
-                    "Delaying initial collection",
-                    tier=tier,
-                    delay_seconds=round(initial_delay, 2),
-                )
-                remaining_delay = float(initial_delay)
-                while remaining_delay > 0 and not self._shutdown_event.is_set():
-                    wait_time = min(1.0, remaining_delay)
-                    await asyncio.sleep(wait_time)
-                    remaining_delay -= wait_time
+            if initial_run_completed:
+                await self._interruptible_sleep(collector.phase_offset_seconds())
 
             while not self._shutdown_event.is_set():
-                # Run collection
                 try:
-                    cycle_start = time.monotonic()
-                    logger.debug(
-                        "Starting metric collection",
-                        tier=tier,
-                        interval=interval,
-                    )
-                    await self.collector_manager.collect_tier(tier)
-                    logger.debug(
-                        "Metric collection completed",
-                        tier=tier,
-                        next_run_in=interval,
-                    )
+                    await manager.run_collector_once(collector)
                 except asyncio.CancelledError:
-                    logger.info("Collection loop cancelled", tier=tier)
+                    logger.info("Collector loop cancelled", collector=name)
                     raise
                 except Exception:
-                    # collect_tier (via CollectorManager) already swallows per-org/per-collector
-                    # failures at its own boundary so sibling tiers keep running; honest health
-                    # signals are surfaced via /ready (503) + failure_streak (see #509). A
-                    # collect_tier exception reaching here is unexpected, so log it and keep the
-                    # loop alive rather than pretend to guard against a failure count that never
-                    # actually accumulates.
-                    logger.exception(
-                        "Error during metric collection",
-                        tier=tier,
-                    )
+                    # run_collector_once already swallows per-collector failures at
+                    # its own boundary (honest health via /ready + failure_streak);
+                    # anything reaching here is unexpected — log and keep looping.
+                    logger.exception("Error during collector run", collector=name)
 
-                # Wait for next collection
-                elapsed = time.monotonic() - cycle_start
-                wait_seconds = max(0.0, float(interval) - elapsed)
-                logger.debug(
-                    "Waiting for next collection",
-                    tier=tier,
-                    wait_seconds=round(wait_seconds, 2),
-                    elapsed_seconds=round(elapsed, 2),
-                )
-
-                # Wait in small increments for responsiveness
-                remaining_time = wait_seconds
-                while remaining_time > 0 and not self._shutdown_event.is_set():
-                    wait_time = min(1.0, remaining_time)
-                    await asyncio.sleep(wait_time)
-                    remaining_time -= wait_time
+                # Sleep until this collector's earliest-due group, capped at one
+                # resolve period. None (no schedulable groups) => just re-check.
+                group_names = [g.name for g in collector.get_endpoint_groups()]
+                due_in = scheduler.seconds_until_due(group_names)
+                wait_seconds = resolve_cap if due_in is None else min(due_in, resolve_cap)
+                # Floor at 1s so a just-past due time can't spin the loop.
+                await self._interruptible_sleep(max(1.0, wait_seconds))
 
         except asyncio.CancelledError:
-            logger.info("Collection task cancelled, exiting cleanly", tier=tier)
+            logger.info("Collector loop cancelled, exiting cleanly", collector=name)
             raise
 
     async def _wait_for_first_collection(self) -> None:
-        """Wait for all collectors to complete their first run."""
+        """Fallback timer that enables cardinality analysis if the initial run stalls.
+
+        ``collect_initial`` normally sets ``_first_collection_complete`` when it
+        finishes; this only fires if that never happened. A fixed 1800s timeout
+        (the de-tiered replacement for the old SLOW-interval-derived wait, #631)
+        bounds how long cardinality analysis stays disabled after a wedged start.
+        """
         if self._first_collection_complete:
             return
-        # Wait for the slowest tier (SLOW) to complete once
-        slow_interval = self.collector_manager.get_tier_interval(UpdateTier.SLOW)
-        await asyncio.sleep(slow_interval + 5)  # Add 5 seconds buffer
+        await asyncio.sleep(1800.0)
+        if self._first_collection_complete:
+            return
         self.cardinality_monitor.mark_first_run_complete()
         self._first_collection_complete = True
         logger.info("First collection cycle complete, cardinality analysis enabled")
@@ -735,9 +683,9 @@ class ExporterApp:
         )
 
         try:
-            # Initial delay to let collectors run
-            medium_interval = self.collector_manager.get_tier_interval(UpdateTier.MEDIUM)
-            await asyncio.sleep(medium_interval + post_collection_delay)
+            # Initial delay to let collectors run (fixed 330s: ~one medium-cadence
+            # cycle + the post-collection settle window, de-tiered #631).
+            await asyncio.sleep(300.0 + post_collection_delay)
 
             while not self._shutdown_event.is_set():
                 try:
@@ -798,6 +746,8 @@ class ExporterApp:
         async def _do_resolve() -> None:
             shape = await inventory.get_org_shape(org_id)
             scheduler.resolve(shape)
+            # Refresh per-collector cadence gauges to reflect the new intervals.
+            self.collector_manager._emit_cadence_gauges()
 
         logger.debug(
             "Starting scheduler resolve loop",
@@ -937,45 +887,42 @@ class ExporterApp:
 
             # Get collector information with health status
             collectors = []
-            for tier, collector_list in exporter.collector_manager.collectors.items():
-                for collector in collector_list:
-                    # Only show active collectors
-                    if collector.is_active:
-                        collector_name = collector.__class__.__name__
-                        health = exporter.collector_manager.collector_health.get(collector_name, {})
+            for collector in exporter.collector_manager.collectors:
+                # Only show active collectors
+                if collector.is_active:
+                    collector_name = collector.__class__.__name__
+                    health = exporter.collector_manager.collector_health.get(collector_name, {})
 
-                        # Calculate success rate
-                        total_runs = health.get("total_runs", 0)
-                        total_successes = health.get("total_successes", 0)
-                        success_rate = (
-                            (total_successes / total_runs * 100) if total_runs > 0 else 0.0
-                        )
+                    # Calculate success rate
+                    total_runs = health.get("total_runs", 0)
+                    total_successes = health.get("total_successes", 0)
+                    success_rate = (total_successes / total_runs * 100) if total_runs > 0 else 0.0
 
-                        # Calculate last success age
-                        last_success_time = health.get("last_success_time")
-                        if last_success_time:
-                            last_success_age = int(time.time() - last_success_time)
-                            if last_success_age < 60:
-                                last_success_str = f"{last_success_age}s ago"
-                            elif last_success_age < 3600:
-                                last_success_str = f"{last_success_age // 60}m ago"
-                            else:
-                                last_success_str = f"{last_success_age // 3600}h ago"
+                    # Calculate last success age
+                    last_success_time = health.get("last_success_time")
+                    if last_success_time:
+                        last_success_age = int(time.time() - last_success_time)
+                        if last_success_age < 60:
+                            last_success_str = f"{last_success_age}s ago"
+                        elif last_success_age < 3600:
+                            last_success_str = f"{last_success_age // 60}m ago"
                         else:
-                            last_success_str = "Never"
+                            last_success_str = f"{last_success_age // 3600}h ago"
+                    else:
+                        last_success_str = "Never"
 
-                        collectors.append({
-                            "name": collector_name.replace("Collector", ""),
-                            "key": collector_name,
-                            "tier": tier.value.upper(),
-                            "failure_streak": health.get("failure_streak", 0),
-                            "success_rate": f"{success_rate:.1f}",
-                            "last_success": last_success_str,
-                            "total_runs": total_runs,
-                            "is_running": exporter.collector_manager.is_collector_running(
-                                collector_name
-                            ),
-                        })
+                    collectors.append({
+                        "name": collector_name.replace("Collector", ""),
+                        "key": collector_name,
+                        "cadence": f"{collector.collector_cadence_seconds():.0f}s",
+                        "failure_streak": health.get("failure_streak", 0),
+                        "success_rate": f"{success_rate:.1f}",
+                        "last_success": last_success_str,
+                        "total_runs": total_runs,
+                        "is_running": exporter.collector_manager.is_collector_running(
+                            collector_name
+                        ),
+                    })
 
             # Get skipped collectors
             skipped_collectors = exporter.collector_manager.skipped_collectors
@@ -999,9 +946,6 @@ class ExporterApp:
                 "timeseries_count": metrics_stats["timeseries_count"],
                 "collectors": collectors,
                 "skipped_collectors": skipped_collectors,
-                "fast_interval": exporter.settings.update_intervals.fast,
-                "medium_interval": exporter.settings.update_intervals.medium,
-                "slow_interval": exporter.settings.update_intervals.slow,
                 "org_id": exporter.settings.meraki.org_id,
                 "scheduling": scheduling,
             }
@@ -1031,9 +975,10 @@ class ExporterApp:
         async def readiness() -> JSONResponse:
             """Readiness probe - returns 200 when initial collection is complete.
 
-            Returns 503 until both FAST and MEDIUM collection tiers have completed
-            their first cycle. SLOW tier is excluded to avoid blocking Kubernetes
-            readiness probes for up to 900s.
+            Returns 503 until every collector owning an enabled priority-<=3
+            endpoint group has completed a successful run (#631). Config-only
+            collectors (all priority-4 groups) are excluded so readiness probes
+            aren't blocked waiting on slow config data.
             """
             exporter = app.state.exporter
             manager = exporter.collector_manager
@@ -1081,11 +1026,12 @@ class ExporterApp:
             # Get client store and DNS resolver from collector
             client_store = None
             dns_resolver = None
-            for collector in exporter.collector_manager.collectors[UpdateTier.MEDIUM]:
-                if collector.__class__.__name__ == "ClientsCollector" and collector.is_active:
-                    client_store = getattr(collector, "client_store", None)
-                    dns_resolver = getattr(collector, "dns_resolver", None)
-                    break
+            clients_collector = exporter.collector_manager.get_collector_by_class_name(
+                "ClientsCollector"
+            )
+            if clients_collector is not None and clients_collector.is_active:
+                client_store = getattr(clients_collector, "client_store", None)
+                dns_resolver = getattr(clients_collector, "dns_resolver", None)
 
             if not client_store:
                 return HTMLResponse(
@@ -1167,10 +1113,11 @@ class ExporterApp:
 
             # Get DNS resolver from collector
             dns_resolver = None
-            for collector in exporter.collector_manager.collectors[UpdateTier.MEDIUM]:
-                if collector.__class__.__name__ == "ClientsCollector" and collector.is_active:
-                    dns_resolver = getattr(collector, "dns_resolver", None)
-                    break
+            clients_collector = exporter.collector_manager.get_collector_by_class_name(
+                "ClientsCollector"
+            )
+            if clients_collector is not None and clients_collector.is_active:
+                dns_resolver = getattr(clients_collector, "dns_resolver", None)
 
             if not dns_resolver:
                 return {"status": "error", "message": "DNS resolver not found"}
@@ -1190,14 +1137,13 @@ class ExporterApp:
             # Optional bearer-token guard (F-167)
             exporter._check_api_token(request)
 
-            result = exporter.collector_manager.get_collector_by_name(payload.collector)
-            if result is None:
+            collector = exporter.collector_manager.get_collector_by_name(payload.collector)
+            if collector is None:
                 return {
                     "status": "error",
                     "message": f"Collector '{payload.collector}' not found",
                 }
 
-            collector, tier = result
             collector_name = collector.__class__.__name__
             if not collector.is_active:
                 return {
@@ -1211,8 +1157,10 @@ class ExporterApp:
                     "message": f"Collector '{collector_name}' is already running",
                 }
 
+            # force=True so a manual trigger fetches every group regardless of its
+            # gate (otherwise in-window groups would silently no-op) — #631.
             task = asyncio.create_task(
-                exporter.collector_manager.run_collector_once(collector, tier),
+                exporter.collector_manager.run_collector_once(collector, force=True),
                 name=f"manual_{collector_name}",
             )
             exporter._background_tasks.add(task)
@@ -1342,8 +1290,15 @@ class ExporterApp:
 _app_instance: FastAPI | None = None
 
 
-def create_app() -> FastAPI:
-    """Create the FastAPI application with default settings.
+def create_app(settings: Settings | None = None) -> FastAPI:
+    """Create the FastAPI application.
+
+    Parameters
+    ----------
+    settings : Settings | None
+        Pre-built settings to reuse (threaded from ``main()`` so ``Settings()``
+        is constructed exactly once on a normal server start, #635). When
+        ``None`` a fresh ``Settings()`` is built.
 
     Returns
     -------
@@ -1353,7 +1308,7 @@ def create_app() -> FastAPI:
     """
     global _app_instance
     if _app_instance is None:
-        exporter = ExporterApp()
+        exporter = ExporterApp(settings=settings)
         _app_instance = exporter.create_app()
     assert _app_instance is not None  # Type checker hint
     return _app_instance

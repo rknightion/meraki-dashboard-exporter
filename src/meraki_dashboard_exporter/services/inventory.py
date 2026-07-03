@@ -37,11 +37,10 @@ class OrganizationInventory:
     """Shared inventory cache for organizations, networks, and devices.
 
     Reduces API calls by caching inventory data with TTL-based invalidation.
-    The general cache TTL is fixed at ``TTL_MEDIUM`` (900s) regardless of
-    which collector tier is reading it -- there is no per-tier TTL wiring
-    (a prior ``set_ttl_for_tier`` method had zero callers and was removed;
-    see issue #275). Device availability data has its own shorter,
-    always-applied ``TTL_AVAILABILITY`` (120s) since it is more dynamic.
+    The general cache TTL is fixed at ``TTL_MEDIUM`` (900s) for every reader --
+    there is no per-collector TTL wiring (a prior ``set_ttl_for_tier`` method had
+    zero callers and was removed; see #275). Device availability data has its own
+    shorter, always-applied ``TTL_AVAILABILITY`` (120s) since it is more dynamic.
 
     Examples
     --------
@@ -57,10 +56,8 @@ class OrganizationInventory:
 
     """
 
-    # TTL values in seconds based on update tier
-    TTL_FAST = 300  # 5 minutes
+    # General inventory cache TTL in seconds (the single, tier-independent TTL).
     TTL_MEDIUM = 900  # 15 minutes
-    TTL_SLOW = 1800  # 30 minutes
 
     # Shorter TTL for availability data (more dynamic than inventory)
     TTL_AVAILABILITY = 120  # 2 minutes

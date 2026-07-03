@@ -228,8 +228,9 @@ alert against the [#509](https://github.com/rknightion/meraki-dashboard-exporter
 signals before treating it as critical:
 
 - `up{job="meraki-dashboard-exporter"}` / `/health` - process liveness (unaffected either way).
-- `/ready` and its backing readiness gate - only trips for a **total** cycle failure in a FAST or
-  MEDIUM tier collector (SLOW tier is excluded from readiness by design).
+- `/ready` and its backing readiness gate - only trips for a **total** cycle failure in a
+  collector owning an enabled priority-<=3 endpoint group (config-only, priority-4 collectors
+  like `ConfigCollector` are excluded from readiness by design).
 - `meraki_exporter_org_collection_status{org_id="..."}` - per-organization gauge, `0` only when
   *every* sub-collection failed for that org this cycle (see `OrganizationCollector`/`OrgHealthTracker`
   in `core/org_health.py`).
@@ -319,7 +320,7 @@ With `log_format=json` instead:
 {container="meraki-dashboard-exporter"} |~ "rate limit|429" | logfmt
 ```
 
-**Slow collections (utilization warnings, logged when a collector uses >80% of its tier interval):**
+**Slow collections (utilization warnings, logged when a collector uses >80% of its cadence):**
 ```logql
 {container="meraki-dashboard-exporter"} |= "Collector utilization high" | logfmt | duration > 60
 ```

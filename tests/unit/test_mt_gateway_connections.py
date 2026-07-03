@@ -9,7 +9,6 @@ import pytest
 
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.collectors.mt_sensor import MTSensorCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.error_handling import RetryableAPIError
 from tests.helpers.base import BaseCollectorTest
 
@@ -18,7 +17,6 @@ class TestMTGatewayConnections(BaseCollectorTest):
     """Test MTCollector's getOrganizationSensorGatewaysConnectionsLatest handling."""
 
     collector_class = MTSensorCollector  # We'll test through the main sensor collector
-    update_tier = UpdateTier.FAST
 
     @pytest.fixture
     def device_collector(self, mock_api, settings, isolated_registry):
@@ -275,7 +273,6 @@ class TestMTSensorGatewayGauges(BaseCollectorTest):
     """Verify the two new gauges are registered under the frozen metric names/labels."""
 
     collector_class = MTSensorCollector
-    update_tier = UpdateTier.FAST
 
     def test_gateway_rssi_gauge_registered_with_full_label_set(self, collector, metrics) -> None:
         """The rssi gauge exists under its frozen name with the full documented label set."""

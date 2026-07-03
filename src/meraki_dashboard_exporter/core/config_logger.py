@@ -39,10 +39,9 @@ _SAFE_KEY_SUBSTRINGS: frozenset[str] = frozenset({
     "smoothing",
     "window",
     "interval",
-    "fast",
-    "medium",
-    "slow",
-    "tier",
+    "cadence",
+    "version",  # build metadata, consumed via os.environ (#634)
+    "commit",  # build metadata, consumed via os.environ (#634)
     "level",
     "format",
     "enabled",
@@ -258,16 +257,11 @@ def log_startup_summary(
         log_method("  OpenTelemetry", status="DISABLED")
 
     log_method(
-        "  Update Intervals",
-        fast=f"{settings.update_intervals.fast}s",
-        medium=f"{settings.update_intervals.medium}s",
-        slow=f"{settings.update_intervals.slow}s",
-    )
-    log_method(
-        "  Tier Jitter Window",
-        fast=f"{min(10.0, settings.update_intervals.fast * 0.1):.1f}s",
-        medium=f"{min(10.0, settings.update_intervals.medium * 0.1):.1f}s",
-        slow=f"{min(10.0, settings.update_intervals.slow * 0.1):.1f}s",
+        "  Scheduler",
+        mode=settings.scheduler.mode,
+        target_utilization=settings.scheduler.target_utilization,
+        resolve_interval=f"{settings.scheduler.resolve_interval_seconds}s",
+        failure_retry=f"{settings.scheduler.failure_retry_seconds}s",
     )
 
     log_method("  Server", host=settings.server.host, port=settings.server.port)
@@ -275,26 +269,34 @@ def log_startup_summary(
     if scheduling:
         log_method("-" * 80)
         log_method("Scheduling Diagnostics:")
-        tier_schedule = scheduling.get("tiers")
-        if tier_schedule:
-            log_method("  Tier Schedule", value=tier_schedule)
 
-        offsets = scheduling.get("collector_offsets", [])
-        if offsets:
-            formatted_offsets = [
-                f"{entry['collector']}:{entry['tier']}@{entry['offset_seconds']}s"
-                for entry in offsets
+        collector_cadences = scheduling.get("collectors", [])
+        if collector_cadences:
+            formatted = [
+                f"{entry['collector']}@{entry['cadence_seconds']}s"
+                f"(+{entry['phase_offset_seconds']}s)"
+                for entry in collector_cadences
             ]
-            truncated_offsets, offsets_truncated = _truncate_list(formatted_offsets)
+            truncated, was_truncated = _truncate_list(formatted)
             log_method(
-                "  Collector Offsets",
-                value=truncated_offsets,
-                truncated=offsets_truncated,
+                "  Collector Cadences",
+                value=truncated,
+                truncated=was_truncated,
             )
 
-        endpoint_intervals = scheduling.get("endpoint_intervals")
-        if endpoint_intervals:
-            log_method("  Endpoint Intervals", value=endpoint_intervals)
+        scheduler_diag = scheduling.get("scheduler", {})
+        stretched = [
+            f"{g['name']} {g['interval_seconds']:.0f}s ({g['stretch_factor']:.2f}x)"
+            for g in scheduler_diag.get("groups", [])
+            if (g.get("stretch_factor") or 1.0) > 1.0
+        ]
+        if stretched:
+            truncated_groups, groups_truncated = _truncate_list(stretched)
+            log_method(
+                "  Stretched Groups",
+                value=truncated_groups,
+                truncated=groups_truncated,
+            )
 
     if settings.meraki.org_id:
         log_method("  Organization Filter", org_id=settings.meraki.org_id)

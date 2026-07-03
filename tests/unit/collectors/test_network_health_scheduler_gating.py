@@ -15,7 +15,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from meraki_dashboard_exporter.collectors.network_health import NetworkHealthCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName, OrgShape
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import NetworkFactory, OrganizationFactory
@@ -93,7 +92,7 @@ class TestEndpointGroupDeclarations:
         assert set(groups) == _ALL_NH_GROUPS
 
     def test_floors_and_priorities(self) -> None:
-        """Floors fold #541 windows; every NH group is priority 3, MEDIUM, unpinned."""
+        """Floors fold #541 windows; every NH group is priority 3, unpinned."""
         groups = {g.name: g for g in NetworkHealthCollector.endpoint_groups}
         expected_floor = {
             EndpointGroupName.NH_CHANNEL_UTILIZATION: 300,
@@ -108,7 +107,6 @@ class TestEndpointGroupDeclarations:
         for name, floor in expected_floor.items():
             assert groups[name].floor_seconds == floor, name
             assert groups[name].priority == 3, name
-            assert groups[name].tier is UpdateTier.MEDIUM, name
             assert groups[name].setting_pin is None, name
 
     def test_cost_functions(self) -> None:
@@ -131,7 +129,6 @@ class TestNetworkHealthGating(BaseCollectorTest):
     """Per-group gating in the org collection path."""
 
     collector_class = NetworkHealthCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _build(self, settings, isolated_registry, inventory, mock_api_builder, scheduler):
         """Construct a NetworkHealthCollector wired to the fake scheduler."""
@@ -276,7 +273,6 @@ class TestTtlThreading(BaseCollectorTest):
     """ttl_seconds from the group is forwarded to _set_metric on every write."""
 
     collector_class = NetworkHealthCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_bundle_subcollectors_thread_ttl(
         self, settings, isolated_registry, inventory, mock_api_builder

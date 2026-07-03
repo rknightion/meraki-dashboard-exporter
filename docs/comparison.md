@@ -30,19 +30,18 @@ collectors run it via `asyncio.to_thread()` and fan out per-device/per-network w
 than firing an unbounded `asyncio.gather()`. This keeps a single collection cycle from
 saturating the Meraki API's per-organization rate limit even against large estates.
 
-**Tiered collection, not one fixed interval.** Metrics are grouped into three update tiers
-by how fast the underlying data actually changes: `FAST` (60s — sensor readings, real-time
-counters), `MEDIUM` (300s — device and org metrics, network health), and `SLOW` (900s —
-configuration and security settings). Each tier runs on its own loop, so a dashboard's
-sensor panel refreshes every minute without re-fetching device inventory every minute too.
-
-**An adaptive, budget-aware endpoint scheduler.** On top of the fixed tiers, an optional
-scheduler (tracked as issue #617, `core/scheduler.py`) can stretch collection intervals for
-individual endpoint groups when their combined request demand would exceed the configured
-API budget (`requests_per_second × shared_fraction`, optionally adjusted by the live
-AIMD-controlled rate limiter), rather than either over-running the rate limit or dropping
-data outright. Fixed-interval behavior remains available and is the default; the adaptive
-mode is opt-in for operators managing many orgs against a shared API budget.
+**An adaptive, budget-aware endpoint scheduler, not one fixed interval.** Every API fetch is
+declared as an endpoint group with its own volatility floor (`core/scheduler.py`) — sensor
+readings floor around 60s, device/org/network-health groups around 300s, configuration and
+security settings much higher — and each collector runs its own group-clocked loop off those
+floors, so a dashboard's sensor panel refreshes every minute without re-fetching device
+inventory every minute too. On top of the floors, the scheduler (`scheduler.mode=adaptive`,
+the **default**, not an opt-in) automatically stretches individual groups' intervals when their
+combined request demand would exceed the configured API budget (`requests_per_second ×
+shared_fraction`, adjusted live by AIMD feedback from the rate limiter), rather than either
+over-running the rate limit or dropping data outright. A `fixed` mode (floors/pins only, no
+stretching, no AIMD) exists as a debugging/transition fallback, not the recommended default.
+See [Scheduler Architecture](observability/scheduler.md) for the full mechanism.
 
 **Network filtering enforced at a single choke point.** Every collector that needs a list of
 networks goes through `OrganizationInventory.get_networks(org_id)`, which is the sole place

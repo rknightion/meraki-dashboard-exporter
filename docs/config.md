@@ -55,10 +55,7 @@ Configuration for Meraki API interactions
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_API__MAX_RETRIES` | `int` | `3` | Maximum number of retries for API requests (min: 0, max: 10) |
 | `MERAKI_EXPORTER_API__TIMEOUT` | `int` | `30` | Per-request API timeout in seconds (SDK single_request_timeout). Note this applies to EACH page request, so a total_pages='all' bulk fetch may make many such requests; the overall fetch is additionally bounded by per_fetch_deadline_seconds. Reviewed for large-org bulk fetches (#556): kept at 30s (raise only if large-org page latencies are observed to exceed it). (min: 10, max: 300) |
-| `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT` | `int` | `5` | Maximum concurrent API requests (global fallback) (min: 1, max: 20) |
-| `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_FAST` | `int` | `5` | Maximum concurrent API requests for FAST tier collectors (min: 1, max: 20) |
-| `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_MEDIUM` | `int` | `3` | Maximum concurrent API requests for MEDIUM tier collectors (min: 1, max: 20) |
-| `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_SLOW` | `int` | `2` | Maximum concurrent API requests for SLOW tier collectors (min: 1, max: 20) |
+| `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT` | `int` | `5` | Maximum concurrent API requests within a collector's fan-out (min: 1, max: 20) |
 | `MERAKI_EXPORTER_API__BATCH_SIZE` | `int` | `20` | Default batch size for API operations (min: 1, max: 100) |
 | `MERAKI_EXPORTER_API__DEVICE_BATCH_SIZE` | `int` | `20` | Batch size for device operations (min: 1, max: 100) |
 | `MERAKI_EXPORTER_API__NETWORK_BATCH_SIZE` | `int` | `30` | Batch size for network operations (min: 1, max: 100) |
@@ -85,20 +82,8 @@ Configuration for Meraki API interactions
 | `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_INTERVAL` | `int` | `600` | Minimum seconds between per-client wireless signal-quality refreshes (min: 0, max: 3600) |
 | `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_MAX_CLIENTS` | `int` | `200` | Maximum wireless clients queried for signal quality per network per cycle (0 disables the cap). Bounds the sequential per-client API fan-out. (min: 0, max: 5000) |
 | `MERAKI_EXPORTER_API__RETRY_AFTER_MAX_SECONDS` | `int` | `60` | Upper bound (seconds) honoured for a server-sent Retry-After header when backing off a throttled (429/503) request. Caps pathological Retry-After values so a single throttled request cannot stall a collection cycle indefinitely. (min: 1, max: 3600) |
-| `MERAKI_EXPORTER_API__EXECUTOR_WORKERS` | `int` | `10` | Size of the thread pool used to run the synchronous Meraki SDK off the event loop (the asyncio.to_thread executor). Bounds the number of concurrent blocking SDK calls independently of the per-tier API concurrency limits. (min: 1, max: 100) |
+| `MERAKI_EXPORTER_API__EXECUTOR_WORKERS` | `int` | `10` | Size of the thread pool used to run the synchronous Meraki SDK off the event loop (the asyncio.to_thread executor). Bounds the number of concurrent blocking SDK calls independently of the per-collector API concurrency limit. (min: 1, max: 100) |
 | `MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS` | `int` | `120` | Wall-clock deadline (seconds) for a single logical fetch, including all paginated page requests made under total_pages='all'. Sits between the SDK per-request timeout (see 'timeout') and the per-collector timeout so a slow bulk fetch fails fast instead of consuming the whole collector budget. (min: 1, max: 600) |
-
-## Update Intervals
-
-Control how often different types of metrics are collected
-
-| Environment Variable | Type | Default | Description |
-|---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_UPDATE_INTERVALS__FAST` | `int` | `60` | Interval for fast-moving data (sensors) in seconds (min: 30, max: 300) |
-| `MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM` | `int` | `300` | Interval for medium-moving data (device metrics) in seconds (min: 300, max: 1800) |
-| `MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW` | `int` | `900` | Interval for slow-moving data (configuration) in seconds (min: 600, max: 3600) |
-
-`MEDIUM` must be greater than or equal to `FAST`, `SLOW` must be greater than or equal to `MEDIUM`, and `MEDIUM` must be a multiple of `FAST`.
 
 ## Server Settings
 
@@ -165,7 +150,7 @@ Internal monitoring and alerting configuration
 | `MERAKI_EXPORTER_MONITORING__LICENSE_EXPIRATION_WARNING_DAYS` | `int` | `30` | Days before license expiration to start warning (min: 7, max: 90) |
 | `MERAKI_EXPORTER_MONITORING__METRIC_TTL_MULTIPLIER` | `float` | `2.0` | Multiplier for metric TTL (collection_interval * multiplier) (min: 1.0, max: 10.0) |
 | `MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR` | `int` | `10000` | Maximum number of tracked label sets per collector before shedding oldest (min: 100, max: 1000000) |
-| `MERAKI_EXPORTER_MONITORING__LIVENESS_MAX_STALE_SECONDS` | `int` | `0` | Dead-man switch threshold. /health returns 503 once no collector has completed a successful run within this many seconds, so Kubernetes/Docker restart a wedged exporter instead of leaving it serving stale metrics. 0 (default) auto-derives the threshold from the fastest *enabled* tier's interval (3 x that interval), so a stalled fast loop trips liveness promptly without slower tiers causing false positives. Set a large value to effectively disable. (min: 0, max: 86400) |
+| `MERAKI_EXPORTER_MONITORING__LIVENESS_MAX_STALE_SECONDS` | `int` | `0` | Dead-man switch threshold. /health returns 503 once no collector has completed a successful run within this many seconds, so Kubernetes/Docker restart a wedged exporter instead of leaving it serving stale metrics. 0 (default) auto-derives the threshold as 3x the fastest solved endpoint-group interval, so a stalled fast poll trips liveness promptly while slower groups never cause false positives (the threshold widens automatically as the scheduler stretches intervals). Set a large value to effectively disable. (min: 0, max: 86400) |
 
 ## Collector Settings
 
@@ -176,6 +161,7 @@ Enable/disable specific metric collectors
 | `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set[str]` | `["alerts", "clients", "config", "device", "insight", "mtsensor", "mtsensoralerts", "networkhealth", "organization"]` | Enabled collector names |
 | `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` | `set[str]` | `[]` | Explicitly disabled collectors (overrides enabled) |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` | `int` | `240` | Timeout for individual collector runs in seconds (min: 30, max: 600) |
+| `MERAKI_EXPORTER_COLLECTORS__MAX_CONCURRENT_COLLECTORS` | `int` | `5` | Maximum number of collectors whose group-clocked loops may be executing a run concurrently (single global semaphore; replaces the old per-tier concurrency knobs). (min: 1, max: 50) |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECT_AP_SIGNAL_QUALITY` | `bool` | `True` | Collect per-AP wireless signal quality (RSSI/SNR). Costs ONE API call per selected AP per cycle (hourly cadence; no bulk endpoint exists). Scope the fan-out with ap_signal_quality_tags, or disable entirely. |
 | `MERAKI_EXPORTER_COLLECTORS__AP_SIGNAL_QUALITY_TAGS` | `list[str]` | `[]` | Meraki device tags scoping AP signal-quality collection. Empty = all APs; non-empty = only APs carrying at least one of these tags (CSV or JSON array). |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECT_INSIGHT` | `bool` | `False` | Enable the Meraki Insight collector (license-gated WAN/application health). Off by default; degrades to a debug-level skip when the org lacks Insight. |
@@ -219,6 +205,7 @@ Adaptive budget-aware endpoint scheduler (AIMD, stretch, resolve cadence)
 | `MERAKI_EXPORTER_SCHEDULER__MAX_STRETCH_FACTOR` | `float` | `4.0` | Per-group interval cap as a multiple of its volatility floor. (min: 1.0, max: 16.0) |
 | `MERAKI_EXPORTER_SCHEDULER__MAX_INTERVAL_SECONDS` | `int` | `3600` | Absolute per-group interval cap. (min: 300, max: 86400) |
 | `MERAKI_EXPORTER_SCHEDULER__RESOLVE_INTERVAL_SECONDS` | `int` | `900` | How often the solver recomputes from org shape (matches inventory TTL). (min: 60, max: 86400) |
+| `MERAKI_EXPORTER_SCHEDULER__FAILURE_RETRY_SECONDS` | `int` | `300` | After a group's fetch fails (its gate is left open), wait at least this long before re-attempting it, instead of hot-looping. Reproduces the old ~300s failed-fetch retry cadence for every group regardless of floor. (min: 30, max: 3600) |
 | `MERAKI_EXPORTER_SCHEDULER__AIMD_ENABLED` | `bool` | `True` | 429/Retry-After budget feedback (adaptive mode only). |
 | `MERAKI_EXPORTER_SCHEDULER__AIMD_BACKOFF_MULTIPLIER` | `float` | `0.5` |  (min: 0.1, max: 0.9) |
 | `MERAKI_EXPORTER_SCHEDULER__AIMD_RECOVERY_RPS_PER_MINUTE` | `float` | `0.1` |  (min: 0.01, max: 5.0) |

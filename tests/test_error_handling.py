@@ -215,8 +215,6 @@ class TestWithErrorHandlingDecorator:
         """Test context extraction from collector instance."""
 
         class MockCollector:
-            update_tier = MagicMock(value="MEDIUM")
-
             @with_error_handling(operation="Collect metrics", continue_on_error=True)
             async def collect(self) -> str:
                 return "collected"

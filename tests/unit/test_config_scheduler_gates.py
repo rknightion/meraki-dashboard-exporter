@@ -12,7 +12,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from meraki_dashboard_exporter.collectors.config import ConfigCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName, OrgShape
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import OrganizationFactory
@@ -48,10 +47,9 @@ class TestConfigEndpointGroups:
         declared = {g.name for g in ConfigCollector.endpoint_groups}
         assert declared == {EndpointGroupName.CONFIG_ORG}
 
-    def test_tier_priority_floor(self) -> None:
-        """The config_org group is SLOW-tier, pri4, floor 900, no pin."""
+    def test_priority_floor(self) -> None:
+        """The config_org group is pri4, floor 900, no pin."""
         g = ConfigCollector.endpoint_groups[0]
-        assert g.tier is UpdateTier.SLOW
         assert g.priority == 4
         assert g.floor_seconds == 900
         assert g.setting_pin is None
@@ -67,7 +65,6 @@ class TestConfigOrgGate(BaseCollectorTest):
     """config_org cycle gate (#617 §2 config_org)."""
 
     collector_class = ConfigCollector
-    update_tier = UpdateTier.SLOW
 
     def _build(self, mock_api_builder, settings, isolated_registry, inventory, sched):
         """Build a ConfigCollector with empty config responses and a mock scheduler."""

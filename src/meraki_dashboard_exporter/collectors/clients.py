@@ -12,7 +12,7 @@ from ..core.api_helpers import create_api_helper
 from ..core.api_models import NetworkClient
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
-from ..core.constants import ClientMetricName, UpdateTier
+from ..core.constants import ClientMetricName
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.error_handling import (
     ErrorCategory,
@@ -35,7 +35,7 @@ logger = structlog.get_logger(__name__)
 _SIGNAL_QUALITY_CLIENT_CAP = 200
 
 
-@register_collector(UpdateTier.MEDIUM)
+@register_collector
 class ClientsCollector(MetricCollector):
     """Collector for client-level metrics across all networks."""
 
@@ -51,14 +51,12 @@ class ClientsCollector(MetricCollector):
             priority=3,
             floor_seconds=300,
             cost_fn=lambda shape: float(shape.network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.CLIENTS_APP_USAGE,
             priority=4,
             floor_seconds=600,
             cost_fn=lambda shape: float(shape.network_count),
-            tier=UpdateTier.MEDIUM,
             setting_pin="client_app_usage_interval",
         ),
         EndpointGroup(
@@ -66,7 +64,6 @@ class ClientsCollector(MetricCollector):
             priority=4,
             floor_seconds=600,
             cost_fn=lambda shape: float(shape.wireless_network_count * _SIGNAL_QUALITY_CLIENT_CAP),
-            tier=UpdateTier.MEDIUM,
             setting_pin="client_signal_quality_interval",
         ),
     )

@@ -172,8 +172,7 @@ class TestStartupWiresResolveLoop:
         """After startup a running _scheduler_resolve_loop task is tracked."""
         exporter = ExporterApp(test_settings)
         exporter.collector_manager.collect_initial = AsyncMock()  # type: ignore[method-assign]
-        exporter.collector_manager.get_tier_interval = lambda tier: 60  # type: ignore[assignment]
-        exporter._tiered_collection_loop = AsyncMock()  # type: ignore[method-assign]
+        exporter._collector_loop = AsyncMock()  # type: ignore[method-assign]
         exporter._wait_for_first_collection = AsyncMock()  # type: ignore[method-assign]
 
         started = asyncio.Event()
@@ -207,11 +206,11 @@ class TestStartupWiresResolveLoop:
 class TestLivenessThresholdUnchangedByScheduler:
     """#596: scheduler mode must not perturb the liveness threshold (#617)."""
 
-    def test_threshold_is_3x_fastest_tier_in_adaptive_mode(self, test_settings: Settings) -> None:
-        """Adaptive mode (default): threshold == 3 × fastest enabled tier."""
+    def test_threshold_is_3x_fastest_group_in_adaptive_mode(self, test_settings: Settings) -> None:
+        """Adaptive mode (default): threshold == 3 × fastest solved group interval."""
         exporter = ExporterApp(test_settings)
         assert exporter.settings.scheduler.mode == "adaptive"
-        fastest = exporter._fastest_enabled_tier_interval_seconds()
+        fastest = exporter.collector_manager.scheduler.fastest_effective_interval_seconds()
         assert exporter._liveness_threshold_seconds() == fastest * 3.0
 
     def test_threshold_invariant_across_scheduler_mode(self, test_settings: Settings) -> None:

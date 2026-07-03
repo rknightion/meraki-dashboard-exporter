@@ -46,13 +46,13 @@ def _make_snapshot() -> StatusSnapshot:
         system=SystemStatus(
             version="1.0.0",
             uptime="1h 30m",
-            readiness={"ready": True, "collectors": {"fast": True, "medium": True, "slow": True}},
+            readiness={"ready": True, "collectors": {"DeviceCollector": True}},
             org_health=[],
         ),
         collectors=[
             CollectorStatus(
                 name="DeviceCollector",
-                tier="FAST",
+                cadence_seconds=60.0,
                 total_runs=10,
                 total_successes=9,
                 total_failures=1,

@@ -99,8 +99,11 @@ class DataRatesCollector(BaseNetworkHealthCollector):
                 # (downloadKbps/uploadKbps) in kilobytes-per-second, not kilobits,
                 # per the OpenAPI spec (F-065) -- convert x1000 to bytes/second
                 # (#531 D5/APIDEV-03; NOT /8, this is not a bit conversion).
-                download_bytes_per_second = latest_data.get("downloadKbps", 0) * 1000
-                upload_bytes_per_second = latest_data.get("uploadKbps", 0) * 1000
+                # On a quiet network the latest bucket has the keys PRESENT but
+                # null, so `.get(k, 0)` returns None -> coalesce to 0 to avoid a
+                # TypeError on the multiply (#632). An all-null bucket emits 0.
+                download_bytes_per_second = (latest_data.get("downloadKbps") or 0) * 1000
+                upload_bytes_per_second = (latest_data.get("uploadKbps") or 0) * 1000
 
                 # Create network labels using helper
                 labels = create_network_labels(

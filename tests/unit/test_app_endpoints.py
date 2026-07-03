@@ -12,7 +12,25 @@ from pydantic import SecretStr
 from meraki_dashboard_exporter.app import ExporterApp
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
-from meraki_dashboard_exporter.core.constants import UpdateTier
+
+# Scheduling diagnostics shape returned by CollectorManager.get_scheduling_diagnostics
+# after the #631 de-tiering: a flat per-collector cadence list plus the adaptive
+# scheduler sub-dict (no tiers / collector_offsets / endpoint_intervals).
+_SCHEDULING_DIAGNOSTICS: dict = {
+    "collectors": [
+        {"collector": "DeviceCollector", "cadence_seconds": 300.0, "phase_offset_seconds": 0.0},
+    ],
+    "smoothing": {
+        "enabled": True,
+        "window_ratio": 0.3,
+        "min_batch_delay": 0.1,
+        "max_batch_delay": 2.0,
+        "window_cap_seconds": 230.0,
+    },
+    "collector_timeout_seconds": 240,
+    "rate_limiter": {"enabled": True, "rps": 10, "burst": 5, "share_fraction": 0.5},
+    "scheduler": {},
+}
 
 
 @pytest.fixture
@@ -45,7 +63,7 @@ def mock_collector() -> MagicMock:
     collector = MagicMock()
     collector.__class__ = type("DeviceCollector", (), {})
     collector.is_active = True
-    collector.update_tier = UpdateTier.MEDIUM
+    collector.collector_cadence_seconds = MagicMock(return_value=300.0)
     return collector
 
 
@@ -55,11 +73,7 @@ def exporter_with_mock_manager(
 ) -> tuple[ExporterApp, MagicMock]:
     """Create an ExporterApp with a mock CollectorManager."""
     mock_manager = MagicMock()
-    mock_manager.collectors = {
-        UpdateTier.FAST: [],
-        UpdateTier.MEDIUM: [mock_collector],
-        UpdateTier.SLOW: [],
-    }
+    mock_manager.collectors = [mock_collector]
     mock_manager.collector_health = {
         "DeviceCollector": {
             "total_runs": 10,
@@ -70,36 +84,7 @@ def exporter_with_mock_manager(
     }
     mock_manager.skipped_collectors = []
     mock_manager.is_collector_running.return_value = False
-    mock_manager.get_scheduling_diagnostics.return_value = {
-        "tiers": {
-            "fast": {"interval": 60, "jitter_window": 6.0, "smoothing_window": 5.0},
-            "medium": {"interval": 300, "jitter_window": 10.0, "smoothing_window": 25.0},
-            "slow": {"interval": 900, "jitter_window": 10.0, "smoothing_window": 75.0},
-        },
-        "collector_offsets": [
-            {"collector": "DeviceCollector", "tier": "medium", "offset_seconds": 0.0},
-        ],
-        "smoothing": {
-            "enabled": True,
-            "window_ratio": 0.3,
-            "min_batch_delay": 0.1,
-            "max_batch_delay": 2.0,
-            "window_cap_seconds": 230.0,
-        },
-        "collector_timeout_seconds": 240,
-        "rate_limiter": {
-            "enabled": True,
-            "rps": 10,
-            "burst": 5,
-            "share_fraction": 0.5,
-        },
-        "endpoint_intervals": {
-            "ms_port_usage_interval": 300,
-            "ms_packet_stats_interval": 300,
-            "client_app_usage_interval": 300,
-            "ms_port_status_org_endpoint": True,
-        },
-    }
+    mock_manager.get_scheduling_diagnostics.return_value = _SCHEDULING_DIAGNOSTICS
     exporter.collector_manager = mock_manager
     return exporter, mock_manager
 
@@ -160,11 +145,7 @@ class TestRootEndpoint:
     ) -> None:
         """Test root renders with no active collectors."""
         exporter, mock_manager = exporter_with_mock_manager
-        mock_manager.collectors = {
-            UpdateTier.FAST: [],
-            UpdateTier.MEDIUM: [],
-            UpdateTier.SLOW: [],
-        }
+        mock_manager.collectors = []
         fastapi_app = exporter.create_app()
         client = TestClient(fastapi_app, raise_server_exceptions=True)
 
@@ -177,7 +158,7 @@ class TestRootEndpoint:
         """Test root renders skipped collectors section."""
         exporter, mock_manager = exporter_with_mock_manager
         mock_manager.skipped_collectors = [
-            {"name": "AlertsCollector", "tier": "FAST", "reason": "disabled in config"},
+            {"name": "AlertsCollector", "reason": "disabled in config"},
         ]
         fastapi_app = exporter.create_app()
         client = TestClient(fastapi_app, raise_server_exceptions=True)
@@ -194,7 +175,8 @@ class TestRootEndpoint:
         inactive_collector = MagicMock()
         inactive_collector.__class__.__name__ = "InactiveCollector"
         inactive_collector.is_active = False
-        mock_manager.collectors[UpdateTier.MEDIUM].append(inactive_collector)
+        inactive_collector.collector_cadence_seconds = MagicMock(return_value=300.0)
+        mock_manager.collectors.append(inactive_collector)
         fastapi_app = exporter.create_app()
         client = TestClient(fastapi_app, raise_server_exceptions=True)
 
@@ -266,16 +248,11 @@ class TestRootEndpoint:
         test_settings.meraki.org_id = ""
         exporter = ExporterApp(test_settings)
         mock_manager = MagicMock()
-        mock_manager.collectors = {
-            UpdateTier.FAST: [],
-            UpdateTier.MEDIUM: [],
-            UpdateTier.SLOW: [],
-        }
+        mock_manager.collectors = []
         mock_manager.collector_health = {}
         mock_manager.skipped_collectors = []
         mock_manager.get_scheduling_diagnostics.return_value = {
-            "tiers": {},
-            "collector_offsets": [],
+            "collectors": [],
             "smoothing": {
                 "enabled": False,
                 "window_ratio": 0.0,
@@ -285,12 +262,7 @@ class TestRootEndpoint:
             },
             "collector_timeout_seconds": 240,
             "rate_limiter": {"enabled": False, "rps": 0, "burst": 0, "share_fraction": 0.0},
-            "endpoint_intervals": {
-                "ms_port_usage_interval": 300,
-                "ms_packet_stats_interval": 300,
-                "client_app_usage_interval": 300,
-                "ms_port_status_org_endpoint": False,
-            },
+            "scheduler": {},
         }
         exporter.collector_manager = mock_manager
         fastapi_app = exporter.create_app()
@@ -345,7 +317,7 @@ class TestHealthEndpoint:
         client, mock_manager = app_and_manager_health
         mock_manager.has_attempted_collection.return_value = True
         mock_manager.get_last_success_time.return_value = time.time() - 5
-        mock_manager.get_tier_interval.return_value = 900
+        mock_manager.scheduler.fastest_effective_interval_seconds.return_value = 900
 
         response = client.get("/health")
         assert response.status_code == 200
@@ -359,7 +331,7 @@ class TestHealthEndpoint:
         mock_manager.has_attempted_collection.return_value = True
         # Last success far beyond the derived threshold (3 * 900 = 2700s).
         mock_manager.get_last_success_time.return_value = time.time() - 100_000
-        mock_manager.get_tier_interval.return_value = 900
+        mock_manager.scheduler.fastest_effective_interval_seconds.return_value = 900
 
         response = client.get("/health")
         assert response.status_code == 503
@@ -376,7 +348,7 @@ class TestHealthEndpoint:
         exporter._start_time = time.time() - 100_000
         mock_manager.has_attempted_collection.return_value = True
         mock_manager.get_last_success_time.return_value = None
-        mock_manager.get_tier_interval.return_value = 900
+        mock_manager.scheduler.fastest_effective_interval_seconds.return_value = 900
 
         response = client.get("/health")
         assert response.status_code == 503
@@ -396,87 +368,56 @@ class TestHealthEndpoint:
         assert response.status_code == 503
 
 
-class TestLivenessThresholdFastestTier:
-    """The auto-derived liveness threshold tracks the fastest *enabled* tier (#596)."""
+class TestLivenessThresholdFastestGroup:
+    """The auto-derived liveness threshold is 3x the fastest solved group interval (#631)."""
 
-    def test_derives_from_fast_tier_when_fast_collectors_enabled(
+    def test_derives_from_fastest_effective_interval(
         self, app_and_manager_health: tuple[TestClient, MagicMock]
     ) -> None:
-        """With a FAST-tier collector enabled, the threshold is 3x the FAST interval."""
+        """The threshold is 3x the scheduler's fastest effective interval."""
         _client, mock_manager = app_and_manager_health
         exporter = mock_manager._exporter_ref
-        mock_manager.collectors = {
-            UpdateTier.FAST: [MagicMock()],
-            UpdateTier.MEDIUM: [MagicMock()],
-            UpdateTier.SLOW: [MagicMock()],
-        }
-        mock_manager.get_tier_interval.side_effect = {
-            UpdateTier.FAST: 60,
-            UpdateTier.MEDIUM: 300,
-            UpdateTier.SLOW: 900,
-        }.get
+        mock_manager.scheduler.fastest_effective_interval_seconds.return_value = 60
 
         assert exporter._liveness_threshold_seconds() == pytest.approx(60 * 3.0)
 
-    def test_derives_from_slow_tier_when_only_slow_enabled(
+    def test_slower_fastest_interval_gives_larger_threshold(
         self, app_and_manager_health: tuple[TestClient, MagicMock]
     ) -> None:
-        """With only a SLOW-tier collector enabled, falls back to the old behavior."""
+        """When the fastest group is slow (900s), the threshold widens to 3x it."""
         _client, mock_manager = app_and_manager_health
         exporter = mock_manager._exporter_ref
-        mock_manager.collectors = {
-            UpdateTier.FAST: [],
-            UpdateTier.MEDIUM: [],
-            UpdateTier.SLOW: [MagicMock()],
-        }
-        mock_manager.get_tier_interval.side_effect = {
-            UpdateTier.FAST: 60,
-            UpdateTier.MEDIUM: 300,
-            UpdateTier.SLOW: 900,
-        }.get
+        mock_manager.scheduler.fastest_effective_interval_seconds.return_value = 900
 
         assert exporter._liveness_threshold_seconds() == pytest.approx(900 * 3.0)
 
-    def test_changing_fast_interval_moves_the_threshold(
+    def test_shrinking_fastest_interval_shrinks_threshold(
         self, app_and_manager_health: tuple[TestClient, MagicMock]
     ) -> None:
-        """Shrinking the FAST interval shrinks the derived threshold accordingly."""
+        """A faster solved interval shrinks the derived threshold accordingly."""
         _client, mock_manager = app_and_manager_health
         exporter = mock_manager._exporter_ref
-        mock_manager.collectors = {
-            UpdateTier.FAST: [MagicMock()],
-            UpdateTier.MEDIUM: [],
-            UpdateTier.SLOW: [],
-        }
 
-        mock_manager.get_tier_interval.side_effect = {UpdateTier.FAST: 60}.get
+        mock_manager.scheduler.fastest_effective_interval_seconds.return_value = 60
         original_threshold = exporter._liveness_threshold_seconds()
 
-        mock_manager.get_tier_interval.side_effect = {UpdateTier.FAST: 30}.get
+        mock_manager.scheduler.fastest_effective_interval_seconds.return_value = 30
         faster_threshold = exporter._liveness_threshold_seconds()
 
         assert original_threshold == pytest.approx(60 * 3.0)
         assert faster_threshold == pytest.approx(30 * 3.0)
         assert faster_threshold < original_threshold
 
-    def test_medium_tier_used_when_fast_disabled(
+    def test_explicit_threshold_overrides_derivation(
         self, app_and_manager_health: tuple[TestClient, MagicMock]
     ) -> None:
-        """MEDIUM is picked when FAST has no enabled collectors."""
+        """A configured liveness_max_stale_seconds wins over the derived value."""
         _client, mock_manager = app_and_manager_health
         exporter = mock_manager._exporter_ref
-        mock_manager.collectors = {
-            UpdateTier.FAST: [],
-            UpdateTier.MEDIUM: [MagicMock()],
-            UpdateTier.SLOW: [MagicMock()],
-        }
-        mock_manager.get_tier_interval.side_effect = {
-            UpdateTier.FAST: 60,
-            UpdateTier.MEDIUM: 300,
-            UpdateTier.SLOW: 900,
-        }.get
+        exporter.settings.monitoring.liveness_max_stale_seconds = 123
+        mock_manager.scheduler.fastest_effective_interval_seconds.return_value = 60
 
-        assert exporter._liveness_threshold_seconds() == pytest.approx(300 * 3.0)
+        assert exporter._liveness_threshold_seconds() == pytest.approx(123)
 
 
 # ---------------------------------------------------------------------------
@@ -516,33 +457,11 @@ class TestTriggerCollectorEndpoint:
         """Create a fresh TestClient with mock manager for trigger tests."""
         exporter = ExporterApp(test_settings)
         mock_manager = MagicMock()
-        mock_manager.collectors = {
-            UpdateTier.FAST: [],
-            UpdateTier.MEDIUM: [],
-            UpdateTier.SLOW: [],
-        }
+        mock_manager.collectors = []
         mock_manager.collector_health = {}
         mock_manager.skipped_collectors = []
         mock_manager.is_collector_running.return_value = False
-        mock_manager.get_scheduling_diagnostics.return_value = {
-            "tiers": {},
-            "collector_offsets": [],
-            "smoothing": {
-                "enabled": False,
-                "window_ratio": 0.0,
-                "min_batch_delay": 0.0,
-                "max_batch_delay": 0.0,
-                "window_cap_seconds": 0.0,
-            },
-            "collector_timeout_seconds": 240,
-            "rate_limiter": {"enabled": False, "rps": 0, "burst": 0, "share_fraction": 0.0},
-            "endpoint_intervals": {
-                "ms_port_usage_interval": 300,
-                "ms_packet_stats_interval": 300,
-                "client_app_usage_interval": 300,
-                "ms_port_status_org_endpoint": False,
-            },
-        }
+        mock_manager.get_scheduling_diagnostics.return_value = _SCHEDULING_DIAGNOSTICS
         exporter.collector_manager = mock_manager
         fastapi_app = exporter.create_app()
         client = TestClient(fastapi_app, raise_server_exceptions=False)
@@ -572,7 +491,7 @@ class TestTriggerCollectorEndpoint:
         disabled_collector = MagicMock()
         disabled_collector.__class__.__name__ = "DisabledCollector"
         disabled_collector.is_active = False
-        mock_manager.get_collector_by_name.return_value = (disabled_collector, UpdateTier.MEDIUM)
+        mock_manager.get_collector_by_name.return_value = disabled_collector
 
         response = client.post(
             "/api/collectors/trigger",
@@ -591,7 +510,7 @@ class TestTriggerCollectorEndpoint:
         running_collector = MagicMock()
         running_collector.__class__.__name__ = "DeviceCollector"
         running_collector.is_active = True
-        mock_manager.get_collector_by_name.return_value = (running_collector, UpdateTier.MEDIUM)
+        mock_manager.get_collector_by_name.return_value = running_collector
         mock_manager.is_collector_running.return_value = True
 
         response = client.post(
@@ -619,7 +538,7 @@ class TestTriggerCollectorEndpoint:
         active_collector = MagicMock()
         active_collector.__class__.__name__ = "DeviceCollector"
         active_collector.is_active = True
-        mock_manager.get_collector_by_name.return_value = (active_collector, UpdateTier.MEDIUM)
+        mock_manager.get_collector_by_name.return_value = active_collector
         mock_manager.is_collector_running.return_value = False
 
         mock_task = MagicMock()
@@ -679,12 +598,8 @@ class TestClientsEndpoint:
         """Test /clients returns 500 when ClientsCollector is not found."""
         exporter, mock_manager = exporter_with_mock_manager
         exporter.settings.clients.enabled = True
-        # No ClientsCollector in the collector list
-        mock_manager.collectors = {
-            UpdateTier.FAST: [],
-            UpdateTier.MEDIUM: [],
-            UpdateTier.SLOW: [],
-        }
+        # No ClientsCollector present -> lookup returns None
+        mock_manager.get_collector_by_class_name.return_value = None
         fastapi_app = exporter.create_app()
         client = TestClient(fastapi_app, raise_server_exceptions=True)
 
@@ -722,12 +637,8 @@ class TestClearDnsCacheEndpoint:
         """Test clear-dns-cache returns error when no DNS resolver found."""
         exporter, mock_manager = exporter_with_mock_manager
         exporter.settings.clients.enabled = True
-        # No ClientsCollector -> no dns resolver
-        mock_manager.collectors = {
-            UpdateTier.FAST: [],
-            UpdateTier.MEDIUM: [],
-            UpdateTier.SLOW: [],
-        }
+        # No ClientsCollector -> lookup returns None -> no dns resolver
+        mock_manager.get_collector_by_class_name.return_value = None
         fastapi_app = exporter.create_app()
         client = TestClient(fastapi_app, raise_server_exceptions=True)
 
@@ -751,11 +662,7 @@ class TestClearDnsCacheEndpoint:
         mock_clients_collector.is_active = True
         mock_clients_collector.dns_resolver = mock_dns_resolver
 
-        mock_manager.collectors = {
-            UpdateTier.FAST: [],
-            UpdateTier.MEDIUM: [mock_clients_collector],
-            UpdateTier.SLOW: [],
-        }
+        mock_manager.get_collector_by_class_name.return_value = mock_clients_collector
         fastapi_app = exporter.create_app()
         client = TestClient(fastapi_app, raise_server_exceptions=True)
 
@@ -919,19 +826,8 @@ class TestGetVersionFallback:
             assert len(version) > 0
 
 
-class TestUpdateIntervalValidation:
-    """Tests for UpdateIntervals model validator."""
-
-    def test_medium_not_multiple_of_fast_raises(self) -> None:
-        """Test that medium not a multiple of fast raises ValueError."""
-        from pydantic import ValidationError as PydanticValidationError
-
-        from meraki_dashboard_exporter.core.config_models import UpdateIntervals
-
-        # fast=70 is within [30, 300], medium=300 is within [300, 1800]
-        # but 300 % 70 = 20 != 0, so the model_validator should raise
-        with pytest.raises(PydanticValidationError, match="should be a multiple of fast"):
-            UpdateIntervals(fast=70, medium=300, slow=900)
+# NOTE: TestUpdateIntervalValidation was removed with the #631 de-tiering — the
+# UpdateIntervals config model (fast/medium/slow multiples) no longer exists.
 
 
 # ---------------------------------------------------------------------------
@@ -951,11 +847,7 @@ class TestApiTokenGuard:
         if token is not None:
             exporter.settings.server.api_token = SecretStr(token)
         mock_manager = MagicMock()
-        mock_manager.collectors = {
-            UpdateTier.FAST: [],
-            UpdateTier.MEDIUM: [],
-            UpdateTier.SLOW: [],
-        }
+        mock_manager.collectors = []
         mock_manager.is_collector_running.return_value = False
         exporter.collector_manager = mock_manager
         fastapi_app = exporter.create_app()
@@ -1040,8 +932,11 @@ class TestStartupDiscoveryOffCriticalPath:
             return {"orgs": 1}
 
         exporter.collector_manager.collect_initial = AsyncMock()  # type: ignore[method-assign]
-        exporter.collector_manager.get_tier_interval = lambda tier: 60  # type: ignore[assignment]
-        exporter._tiered_collection_loop = AsyncMock()  # type: ignore[method-assign]
+        # #631: _startup_collections now spawns one group-clocked loop per
+        # collector plus the scheduler resolve loop — stub them so the test
+        # exercises only discovery + initial collection ordering.
+        exporter._collector_loop = AsyncMock()  # type: ignore[method-assign]
+        exporter._scheduler_resolve_loop = AsyncMock()  # type: ignore[method-assign]
         exporter._wait_for_first_collection = AsyncMock()  # type: ignore[method-assign]
 
         with patch(
@@ -1070,7 +965,8 @@ class TestStartupDiscoveryOffCriticalPath:
             return {"orgs": 1}
 
         exporter.collector_manager.collect_initial = AsyncMock()  # type: ignore[method-assign]
-        exporter._tiered_collection_loop = AsyncMock()  # type: ignore[method-assign]
+        exporter._collector_loop = AsyncMock()  # type: ignore[method-assign]
+        exporter._scheduler_resolve_loop = AsyncMock()  # type: ignore[method-assign]
         exporter._wait_for_first_collection = AsyncMock()  # type: ignore[method-assign]
         exporter._cardinality_monitor_loop = AsyncMock()  # type: ignore[method-assign]
         exporter.expiration_manager.start = AsyncMock()  # type: ignore[method-assign]

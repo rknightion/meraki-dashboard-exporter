@@ -20,7 +20,6 @@ from unittest.mock import AsyncMock
 import pytest
 
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 from tests.helpers.base import BaseCollectorTest
 
@@ -67,7 +66,6 @@ class _MSGatingBase(BaseCollectorTest):
     """Shared helpers for MS lane gating tests driven via a real DeviceCollector."""
 
     collector_class = DeviceCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _device_collector(
         self, mock_api, settings, isolated_registry, inventory, scheduler

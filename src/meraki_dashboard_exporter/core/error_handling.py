@@ -222,8 +222,6 @@ def with_error_handling(
                 collector_instance = args[0]
                 if hasattr(collector_instance, "__class__"):
                     context["collector"] = collector_instance.__class__.__name__
-                if hasattr(collector_instance, "update_tier"):
-                    context["tier"] = collector_instance.update_tier.value
 
             async def _run_attempts() -> T | None:
                 """Run all fetch attempts (and their backoff waits) for one logical fetch."""

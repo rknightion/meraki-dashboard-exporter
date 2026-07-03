@@ -109,25 +109,7 @@ class APISettings(BaseModel):
         5,
         ge=1,
         le=20,
-        description="Maximum concurrent API requests (global fallback)",
-    )
-    concurrency_limit_fast: int = Field(
-        5,
-        ge=1,
-        le=20,
-        description="Maximum concurrent API requests for FAST tier collectors",
-    )
-    concurrency_limit_medium: int = Field(
-        3,
-        ge=1,
-        le=20,
-        description="Maximum concurrent API requests for MEDIUM tier collectors",
-    )
-    concurrency_limit_slow: int = Field(
-        2,
-        ge=1,
-        le=20,
-        description="Maximum concurrent API requests for SLOW tier collectors",
+        description="Maximum concurrent API requests within a collector's fan-out",
     )
     batch_size: int = Field(
         20,  # Increased from 10 for better throughput
@@ -302,8 +284,8 @@ class APISettings(BaseModel):
         description=(
             "Size of the thread pool used to run the synchronous Meraki SDK off the "
             "event loop (the asyncio.to_thread executor). Bounds the number of "
-            "concurrent blocking SDK calls independently of the per-tier API "
-            "concurrency limits."
+            "concurrent blocking SDK calls independently of the per-collector API "
+            "concurrency limit."
         ),
     )
     per_fetch_deadline_seconds: int = Field(
@@ -317,43 +299,6 @@ class APISettings(BaseModel):
             "bulk fetch fails fast instead of consuming the whole collector budget."
         ),
     )
-
-
-class UpdateIntervals(BaseModel):
-    """Update interval configuration with validation."""
-
-    fast: int = Field(
-        60,
-        ge=30,
-        le=300,
-        description="Interval for fast-moving data (sensors) in seconds",
-    )
-    medium: int = Field(
-        300,
-        ge=300,
-        le=1800,
-        description="Interval for medium-moving data (device metrics) in seconds",
-    )
-    slow: int = Field(
-        900,
-        ge=600,
-        le=3600,
-        description="Interval for slow-moving data (configuration) in seconds",
-    )
-
-    @model_validator(mode="after")
-    def validate_intervals(self) -> UpdateIntervals:
-        """Ensure intervals are properly ordered."""
-        if self.medium < self.fast:
-            raise ValueError("Medium interval must be >= fast interval")
-        if self.slow < self.medium:
-            raise ValueError("Slow interval must be >= medium interval")
-        # Ensure medium interval is a multiple of fast interval for better alignment
-        if self.medium % self.fast != 0:
-            raise ValueError(
-                f"Medium interval ({self.medium}s) should be a multiple of fast interval ({self.fast}s)"
-            )
-        return self
 
 
 class MonitoringSettings(BaseModel):
@@ -395,9 +340,10 @@ class MonitoringSettings(BaseModel):
             "Dead-man switch threshold. /health returns 503 once no collector has "
             "completed a successful run within this many seconds, so Kubernetes/Docker "
             "restart a wedged exporter instead of leaving it serving stale metrics. "
-            "0 (default) auto-derives the threshold from the fastest *enabled* tier's "
-            "interval (3 x that interval), so a stalled fast loop trips liveness "
-            "promptly without slower tiers causing false positives. Set a large value "
+            "0 (default) auto-derives the threshold as 3x the fastest solved "
+            "endpoint-group interval, so a stalled fast poll trips liveness promptly "
+            "while slower groups never cause false positives (the threshold widens "
+            "automatically as the scheduler stretches intervals). Set a large value "
             "to effectively disable."
         ),
     )
@@ -480,12 +426,12 @@ class SchedulerSettings(BaseModel):
 
     Env prefix ``MERAKI_EXPORTER_SCHEDULER__*``. Only the config surface; the
     solver/AIMD behaviour that consumes these settings lives in
-    ``core/scheduler.py`` and the manager/fetch sites. ``UPDATE_INTERVALS__*``
-    remain heartbeat cadences and act as the per-tier lower bound on every
-    group interval; the four existing gate settings on :class:`APISettings`
-    (``ms_port_usage_interval``, ``ms_packet_stats_interval``,
-    ``client_app_usage_interval``, ``client_signal_quality_interval``) survive
-    as operator ``setting_pin``s, detected via ``settings.api.model_fields_set``.
+    ``core/scheduler.py`` and the manager/fetch sites. Each endpoint group runs
+    at its own solved interval (floored at its volatility floor); the four
+    existing gate settings on :class:`APISettings` (``ms_port_usage_interval``,
+    ``ms_packet_stats_interval``, ``client_app_usage_interval``,
+    ``client_signal_quality_interval``) survive as operator ``setting_pin``s,
+    detected via ``settings.api.model_fields_set``.
     """
 
     mode: Literal["adaptive", "fixed"] = Field(
@@ -518,6 +464,16 @@ class SchedulerSettings(BaseModel):
         ge=60,
         le=86400,
         description="How often the solver recomputes from org shape (matches inventory TTL).",
+    )
+    failure_retry_seconds: int = Field(
+        300,
+        ge=30,
+        le=3600,
+        description=(
+            "After a group's fetch fails (its gate is left open), wait at least this "
+            "long before re-attempting it, instead of hot-looping. Reproduces the old "
+            "~300s failed-fetch retry cadence for every group regardless of floor."
+        ),
     )
     aimd_enabled: bool = Field(
         True,
@@ -893,6 +849,16 @@ class CollectorSettings(BaseModel):
         ge=30,
         le=600,
         description="Timeout for individual collector runs in seconds",
+    )
+    max_concurrent_collectors: int = Field(
+        5,
+        ge=1,
+        le=50,
+        description=(
+            "Maximum number of collectors whose group-clocked loops may be executing a "
+            "run concurrently (single global semaphore; replaces the old per-tier "
+            "concurrency knobs)."
+        ),
     )
     collect_ap_signal_quality: bool = Field(
         True,
@@ -1277,6 +1243,43 @@ def known_env_var_names(
     return names
 
 
+# Prefixed env vars that are consumed directly via os.environ rather than the
+# pydantic Settings schema (build metadata baked into the Docker image), so they
+# are legitimate and must not be flagged as typos or redacted (#634).
+KNOWN_NON_SCHEMA_ENV_VARS: frozenset[str] = frozenset(
+    {"MERAKI_EXPORTER_VERSION", "MERAKI_EXPORTER_COMMIT"}
+)
+
+# Env vars removed at v1 (the de-tiering, #631). pydantic-settings silently
+# ignores them, so an operator still setting one gets no effect and no clue.
+# Each maps to the surviving replacement the startup warning points at.
+REMOVED_ENV_VARS: dict[str, str] = {
+    "MERAKI_EXPORTER_UPDATE_INTERVALS__FAST": "MERAKI_EXPORTER_SCHEDULER__GROUP_INTERVAL_OVERRIDES",
+    "MERAKI_EXPORTER_UPDATE_INTERVALS__MEDIUM": "MERAKI_EXPORTER_SCHEDULER__GROUP_INTERVAL_OVERRIDES",
+    "MERAKI_EXPORTER_UPDATE_INTERVALS__SLOW": "MERAKI_EXPORTER_SCHEDULER__GROUP_INTERVAL_OVERRIDES",
+    "MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_FAST": "MERAKI_EXPORTER_COLLECTORS__MAX_CONCURRENT_COLLECTORS",
+    "MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_MEDIUM": "MERAKI_EXPORTER_COLLECTORS__MAX_CONCURRENT_COLLECTORS",
+    "MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_SLOW": "MERAKI_EXPORTER_COLLECTORS__MAX_CONCURRENT_COLLECTORS",
+}
+
+
+def find_removed_env_vars(
+    environ: Mapping[str, str],
+) -> list[tuple[str, str]]:
+    """Return ``(original_key, replacement_hint)`` for each set, now-removed env var.
+
+    Removed at v1 by the de-tiering (#631); pydantic-settings silently ignores
+    them. The caller emits an explicit startup WARNING naming each and pointing
+    at the surviving knob. Values are never returned.
+    """
+    found: list[tuple[str, str]] = []
+    for key in environ:
+        replacement = REMOVED_ENV_VARS.get(key.upper())
+        if replacement is not None:
+            found.append((key, replacement))
+    return sorted(found)
+
+
 def find_unrecognized_env_vars(
     environ: Mapping[str, str],
     model_cls: type[BaseModel],
@@ -1291,7 +1294,10 @@ def find_unrecognized_env_vars(
     This diffs the observed prefixed environment against the known field set and
     returns the offending original key names (values are never returned) so the
     caller can emit a startup WARN (#515). A ``<KNOWN>_FILE`` variant (the
-    file-based secret convention, #587) is treated as recognised.
+    file-based secret convention, #587) is treated as recognised, as are the
+    directly-consumed build-metadata vars (#634) and the vars removed at v1
+    (#631, reported separately with migration guidance by
+    :func:`find_removed_env_vars`).
     """
     known = known_env_var_names(model_cls, prefix=prefix, delimiter=delimiter)
     upper_prefix = prefix.upper()
@@ -1301,6 +1307,12 @@ def find_unrecognized_env_vars(
         if not upper.startswith(upper_prefix):
             continue
         if upper in known:
+            continue
+        # Non-schema build metadata consumed directly via os.environ (#634).
+        if upper in KNOWN_NON_SCHEMA_ENV_VARS:
+            continue
+        # Removed at v1 — reported with migration guidance elsewhere (#631).
+        if upper in REMOVED_ENV_VARS:
             continue
         # Accept the file-based secret convention: MERAKI_EXPORTER_..._FILE
         if upper.endswith("_FILE") and upper[: -len("_FILE")] in known:

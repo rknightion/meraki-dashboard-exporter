@@ -9,7 +9,6 @@ import pytest
 from prometheus_client import CollectorRegistry
 
 from meraki_dashboard_exporter.core.config import Settings
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.services.inventory import OrganizationInventory
 
 from .metrics import MetricAssertions, MetricSnapshot
@@ -24,13 +23,11 @@ class BaseCollectorTest:
 
     Subclasses should set:
     - collector_class: The collector class to test
-    - update_tier: Expected update tier
 
     Examples
     --------
     class TestDeviceCollector(BaseCollectorTest):
         collector_class = DeviceCollector
-        update_tier = UpdateTier.MEDIUM
 
         def test_collect_devices(self, collector, mock_api_builder):
             # Test implementation
@@ -39,7 +36,6 @@ class BaseCollectorTest:
     """
 
     collector_class: type[MetricCollector] | None = None
-    update_tier: UpdateTier | None = None
 
     @pytest.fixture(autouse=True)
     def setup_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -142,14 +138,12 @@ class BaseCollectorTest:
             "meraki_exporter_collector_duration_seconds",
             1,
             collector=collector_name,
-            tier=(self.update_tier.value if self.update_tier else "medium"),
         )
 
         # Should have set last success timestamp
         last_success = metrics.get_metric_value(
             "meraki_exporter_collector_success_timestamp_seconds",
             collector=collector_name,
-            tier=(self.update_tier.value if self.update_tier else "medium"),
         )
         assert last_success is not None
         assert last_success > 0
@@ -178,7 +172,6 @@ class BaseCollectorTest:
         metrics.assert_counter_incremented(
             "meraki_exporter_collector_errors",
             collector=collector_name,
-            tier=(self.update_tier.value if self.update_tier else "medium"),
             error_type=error_type,
         )
 
@@ -205,7 +198,6 @@ class BaseCollectorTest:
             "meraki_exporter_collector_api_calls",
             count,
             collector=collector_name,
-            tier=(self.update_tier.value if self.update_tier else "medium"),
             endpoint=endpoint,
         )
 

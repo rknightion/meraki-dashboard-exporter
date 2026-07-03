@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
-from ..core.constants import OrgMetricName, UpdateTier
+from ..core.constants import OrgMetricName
 from ..core.domain_models import ConfigurationChange
 from ..core.error_handling import (
     CollectorError,
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-@register_collector(UpdateTier.SLOW)
+@register_collector
 class ConfigCollector(MetricCollector):
     """Collector for configuration and security settings."""
 
@@ -44,7 +44,6 @@ class ConfigCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda shape: 4.0,
-            tier=UpdateTier.SLOW,
         ),
     )
 

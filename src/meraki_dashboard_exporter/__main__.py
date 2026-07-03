@@ -34,12 +34,7 @@ def _print_redacted_summary(settings: Settings) -> None:
         f"  Log Level:          {settings.logging.level}",
         f"  API Timeout:        {settings.api.timeout}s",
         f"  API Max Retries:    {settings.api.max_retries}",
-        (
-            "  Update Intervals:   "
-            f"fast={settings.update_intervals.fast}s "
-            f"medium={settings.update_intervals.medium}s "
-            f"slow={settings.update_intervals.slow}s"
-        ),
+        f"  Scheduler Mode:     {settings.scheduler.mode}",
         f"  OpenTelemetry:      {'ENABLED' if settings.otel.enabled else 'DISABLED'}",
         (
             "  Enabled Collectors: "
@@ -182,8 +177,9 @@ def main() -> None:
     # Import the app creation function directly
     from .app import create_app
 
-    # Create the app instance
-    app = create_app()
+    # Reuse the already-built settings so Settings() is constructed exactly once
+    # on a normal server start (#635) — avoids duplicated startup validators.
+    app = create_app(settings=settings)
 
     # Run uvicorn directly with proper signal handling
     uvicorn.run(

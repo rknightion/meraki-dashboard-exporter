@@ -2,18 +2,18 @@
 
 This module owns the pure interval solver and the ``EndpointScheduler``
 runtime that gates endpoint-group fetches against the shared Meraki API
-budget. Tier loops remain heartbeats; the scheduler only stretches group
-intervals (never shrinks below the heartbeat) to fit estimated steady-state
-demand inside ``budget × target_utilization``.
+budget. Each endpoint group runs at its own solved interval, floored at its
+volatility floor; the scheduler only stretches group intervals (never below the
+floor) to fit estimated steady-state demand inside ``budget × target_utilization``.
 
-Frozen seam per the #617 BUILD SPEC §1a — names/signatures are compiled
-against by sibling lanes (collector.py gate helpers, manager.py wiring,
-inventory OrgShape computation, rate-limiter AIMD feedback).
+Frozen seam per #617/#631 — names/signatures are compiled against by sibling
+modules (collector.py gate helpers, manager.py wiring, inventory OrgShape
+computation, rate-limiter AIMD feedback, the per-collector group-clocked loops
+in app.py which read ``seconds_until_due``).
 
 Settings are read dynamically (``settings.scheduler.*``, ``settings.api.*``,
-``settings.update_intervals.*``, ``settings.monitoring.*``) rather than
-importing ``config_models`` — this avoids an import cycle and lets tests
-supply a plain namespace.
+``settings.monitoring.*``) rather than importing ``config_models`` — this avoids
+an import cycle and lets tests supply a plain namespace.
 """
 
 from __future__ import annotations
@@ -26,7 +26,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 from prometheus_client import Gauge
 
-from .constants import UpdateTier
 from .constants.metrics_constants import CollectorMetricName
 from .logging import get_logger
 from .metrics import LabelName
@@ -47,6 +46,7 @@ _DEFAULTS: dict[str, Any] = {
     "max_stretch_factor": 4.0,
     "max_interval_seconds": 3600,
     "resolve_interval_seconds": 900,
+    "failure_retry_seconds": 300,
     "aimd_enabled": True,
     "aimd_backoff_multiplier": 0.5,
     "aimd_recovery_rps_per_minute": 0.1,
@@ -55,7 +55,7 @@ _DEFAULTS: dict[str, Any] = {
 }
 
 # Fraction of the solved interval that must elapse before a group re-runs.
-# 10% tolerance so heartbeat jitter/smoothing can't cause skip-a-beat aliasing.
+# 10% tolerance so wake-time jitter/smoothing can't cause skip-a-beat aliasing.
 _GATE_TOLERANCE = 0.9
 
 # Multiplicative step applied to the chosen group's interval per stretch round.
@@ -213,7 +213,6 @@ class EndpointGroup:
     priority: int  # 1=up-ness/alerts, 2=sensor, 3=perf/health, 4=config/inventory
     floor_seconds: float  # natural data window; never poll faster
     cost_fn: Callable[[OrgShape], float]  # estimated API calls per ONE execution
-    tier: UpdateTier  # servicing heartbeat == owning collector's registered tier
     gated: bool = True  # False = demand-accounting only; should_run always True
     setting_pin: str | None = None  # legacy APISettings field that pins this group
     enabled_fn: Callable[[OrgShape], bool] | None = (
@@ -225,7 +224,7 @@ class SolvedInterval(NamedTuple):
     """Solver output for one endpoint group."""
 
     interval_seconds: float
-    stretch_factor: float  # interval / max(floor, tier_heartbeat)
+    stretch_factor: float  # interval / floor
     cost_per_cycle: float
     demand_rps: float  # cost_per_cycle / interval_seconds
     pinned: bool
@@ -236,20 +235,20 @@ def solve_intervals(
     shape: OrgShape,
     budget_rps: float,
     target_utilization: float,
-    tier_intervals: dict[UpdateTier, int],
     overrides: dict[str, int],
     max_stretch_factor: float,
     max_interval_seconds: float,
 ) -> dict[EndpointGroupName, SolvedInterval]:
     """Pure, deterministic interval solver (no I/O, no clock).
 
-    Frozen algorithm (#617 BUILD SPEC §1a):
+    Frozen algorithm (#617/#631):
 
-    1. ``interval[g] = max(floor, tier heartbeat)`` — tiers remain heartbeats;
-       the solver only stretches.
-    2. Apply ``overrides`` (operator pins): set exactly, clamped to >= the tier
-       heartbeat; a pin below the floor is honoured with a WARNING log. Pinned
-       groups are excluded from stretching.
+    1. ``interval[g] = floor`` — every group starts at its volatility floor
+       (there is no tier heartbeat any more; each group runs at its own solved
+       interval).
+    2. Apply ``overrides`` (operator pins): set exactly; a pin below the group's
+       floor is honoured with a WARNING log. Pinned groups are excluded from
+       stretching.
     3. ``demand = Σ cost_fn(shape) / interval`` over ALL groups (including
        ``gated=False`` overhead groups).
     4. While ``demand > budget_rps × target_utilization``: stretch the
@@ -269,10 +268,9 @@ def solve_intervals(
     pinned: dict[EndpointGroupName, bool] = {}
     costs: dict[EndpointGroupName, float] = {}
 
-    # Step 1: floors vs tier heartbeats.
+    # Step 1: every group starts at its volatility floor.
     for g in group_list:
-        heartbeat = float(tier_intervals[g.tier])
-        b = max(float(g.floor_seconds), heartbeat)
+        b = float(g.floor_seconds)
         base[g.name] = b
         intervals[g.name] = b
         pinned[g.name] = False
@@ -284,16 +282,7 @@ def solve_intervals(
         raw = overrides.get(str(g.name))
         if raw is None:
             continue
-        heartbeat = float(tier_intervals[g.tier])
         value = float(raw)
-        if value < heartbeat:
-            logger.warning(
-                "Endpoint group pin below tier heartbeat; clamping to heartbeat",
-                group=str(g.name),
-                pin_seconds=value,
-                heartbeat_seconds=heartbeat,
-            )
-            value = heartbeat
         if value < g.floor_seconds:
             logger.warning(
                 "Endpoint group pinned below its volatility floor; honouring pin",
@@ -367,8 +356,8 @@ class EndpointScheduler:
         Parameters
         ----------
         settings : Settings
-            Application settings (``scheduler``/``api``/``update_intervals``/
-            ``monitoring`` sections read dynamically).
+            Application settings (``scheduler``/``api``/``monitoring`` sections
+            read dynamically).
         rate_limiter : OrgRateLimiter
             Shared client-side limiter; provides the AIMD-adjusted effective
             budget via ``effective_rate_per_second()``.
@@ -379,6 +368,11 @@ class EndpointScheduler:
         self._groups: dict[EndpointGroupName, EndpointGroup] = {}
         self._solved: dict[EndpointGroupName, SolvedInterval] = {}
         self._last_ran: dict[EndpointGroupName, float] = {}
+        # Monotonic timestamp of the last should_run()==True (attempt), whether
+        # or not it then succeeded. Drives failure-retry spacing (#631): when the
+        # most recent attempt failed (last_attempt > last_ran, or never ran), the
+        # next attempt is spaced by failure_retry_seconds to avoid a hot loop.
+        self._last_attempt: dict[EndpointGroupName, float] = {}
         self._last_shape: OrgShape | None = None
         self._last_resolve_ts: float | None = None
         self._budget_used_at_last_solve: float | None = None
@@ -394,14 +388,6 @@ class EndpointScheduler:
         if section is None:
             return default
         return getattr(section, name, default)
-
-    def _tier_intervals(self) -> dict[UpdateTier, int]:
-        ui = getattr(self._settings, "update_intervals", None)
-        return {
-            UpdateTier.FAST: int(getattr(ui, "fast", 60)),
-            UpdateTier.MEDIUM: int(getattr(ui, "medium", 300)),
-            UpdateTier.SLOW: int(getattr(ui, "slow", 900)),
-        }
 
     def configured_budget_rps(self) -> float:
         """Configured API budget: requests_per_second × shared_fraction."""
@@ -473,7 +459,6 @@ class EndpointScheduler:
             shape,
             solve_budget,
             target_utilization,
-            self._tier_intervals(),
             self._collect_overrides(),
             float(self._sched("max_stretch_factor")),
             float(self._sched("max_interval_seconds")),
@@ -523,20 +508,41 @@ class EndpointScheduler:
     # -- gates -----------------------------------------------------------------
 
     def interval_for(self, group: EndpointGroupName) -> float:
-        """Current interval for a group; pre-resolve = max(floor, heartbeat)."""
+        """Current interval for a group; pre-resolve = the group's floor."""
         solved = self._solved.get(group)
         if solved is not None:
             return solved.interval_seconds
         declared = self._groups.get(group)
         if declared is None:
             raise KeyError(f"unknown endpoint group: {group}")
-        heartbeat = float(self._tier_intervals()[declared.tier])
-        return max(float(declared.floor_seconds), heartbeat)
+        # Pre-resolve the interval is simply the group's volatility floor.
+        return float(declared.floor_seconds)
+
+    def _failure_retry_seconds(self) -> float:
+        return float(self._sched("failure_retry_seconds"))
+
+    @staticmethod
+    def _last_attempt_failed(last_ran: float | None, last_attempt: float | None) -> bool:
+        """True when the most recent attempt did not produce a success.
+
+        ``should_run`` records ``last_attempt`` at the START of a cycle and
+        ``mark_ran`` records ``last_ran`` at the END of a successful fetch, so a
+        successful cycle always leaves ``last_ran > last_attempt`` while a failed
+        one leaves ``last_attempt > last_ran`` (or never a success at all).
+        """
+        if last_attempt is None:
+            return False
+        return last_ran is None or last_attempt > last_ran
 
     def should_run(self, group: EndpointGroupName, now: float | None = None) -> bool:
-        """True when the group is due (never ran, or interval×0.9 elapsed).
+        """True when the group is due; records the attempt when it returns True.
 
-        Ungated and unregistered groups always run (fail-open).
+        Due when ``interval×0.9`` has elapsed since the last SUCCESS (or the
+        group never succeeded). If the most recent attempt FAILED (open gate),
+        retries are additionally spaced by ``failure_retry_seconds`` so a
+        persistently-failing group cannot hot-loop (#631). The normal successful
+        cadence is never delayed by ``failure_retry_seconds``. Ungated and
+        unregistered groups always run (fail-open).
         """
         declared = self._groups.get(group)
         if declared is None or not declared.gated:
@@ -549,16 +555,85 @@ class EndpointScheduler:
             and not declared.enabled_fn(self._last_shape)
         ):
             return False
-        last_ran = self._last_ran.get(group)
-        if last_ran is None:
-            return True
         if now is None:
             now = time.monotonic()
-        return (now - last_ran) >= self.interval_for(group) * _GATE_TOLERANCE
+        last_ran = self._last_ran.get(group)
+        last_attempt = self._last_attempt.get(group)
+        # Base due-ness: interval since last success (never-ran ⇒ always due).
+        if last_ran is not None and (now - last_ran) < self.interval_for(group) * _GATE_TOLERANCE:
+            return False
+        # If the last attempt failed, space retries so failures don't hot-loop.
+        if self._last_attempt_failed(last_ran, last_attempt):
+            assert last_attempt is not None
+            if (now - last_attempt) < self._failure_retry_seconds():
+                return False
+        self._last_attempt[group] = now
+        return True
+
+    def next_due(self, group: EndpointGroupName, now: float | None = None) -> float:
+        """Absolute monotonic time the group next becomes due (fail-open ⇒ now).
+
+        ``next_due = last_ran + interval×0.9``, floored at
+        ``last_attempt + failure_retry_seconds`` when the last attempt failed.
+        Never-succeeded groups are due now (subject to the failure-retry floor).
+        """
+        if now is None:
+            now = time.monotonic()
+        declared = self._groups.get(group)
+        if declared is None or not declared.gated:
+            return now
+        last_ran = self._last_ran.get(group)
+        last_attempt = self._last_attempt.get(group)
+        base = now if last_ran is None else last_ran + self.interval_for(group) * _GATE_TOLERANCE
+        if self._last_attempt_failed(last_ran, last_attempt):
+            assert last_attempt is not None
+            base = max(base, last_attempt + self._failure_retry_seconds())
+        return base
+
+    def seconds_until_due(
+        self, groups: Iterable[EndpointGroupName], now: float | None = None
+    ) -> float | None:
+        """Seconds until the earliest gated, enabled group in ``groups`` is due.
+
+        Skips disabled (#623) and ungated groups. Returns ``None`` when none of
+        the given groups is schedulable (the collector's loop then just sleeps a
+        resolve period and re-checks). Clamped at 0 for already-due groups.
+        """
+        if now is None:
+            now = time.monotonic()
+        best: float | None = None
+        for group in groups:
+            declared = self._groups.get(group)
+            if declared is None or not declared.gated:
+                continue
+            if (
+                declared.enabled_fn is not None
+                and self._last_shape is not None
+                and not declared.enabled_fn(self._last_shape)
+            ):
+                continue
+            due = self.next_due(group, now)
+            best = due if best is None else min(best, due)
+        if best is None:
+            return None
+        return max(0.0, best - now)
 
     def mark_ran(self, group: EndpointGroupName, now: float | None = None) -> None:
         """Record a successful fetch (call only after success; failures retry)."""
         self._last_ran[group] = time.monotonic() if now is None else now
+
+    def is_enabled(self, group: EndpointGroupName) -> bool:
+        """True when the group is registered and enabled against the last shape.
+
+        Fail-open pre-resolve (no shape yet) and for groups with no
+        ``enabled_fn``; unregistered groups are ``False``.
+        """
+        declared = self._groups.get(group)
+        if declared is None:
+            return False
+        if declared.enabled_fn is None or self._last_shape is None:
+            return True
+        return bool(declared.enabled_fn(self._last_shape))
 
     def ttl_seconds_for(self, group: EndpointGroupName) -> float:
         """Metric TTL for the group: interval × monitoring.metric_ttl_multiplier."""
@@ -567,10 +642,14 @@ class EndpointScheduler:
         return self.interval_for(group) * multiplier
 
     def fastest_effective_interval_seconds(self) -> float:
-        """Fastest current group interval (diagnostics; falls back to FAST tier)."""
+        """Fastest current group interval across all registered groups.
+
+        Load-bearing for liveness (3× this). Falls back to
+        ``resolve_interval_seconds`` when no groups are registered.
+        """
         if self._groups:
             return min(self.interval_for(name) for name in self._groups)
-        return float(min(self._tier_intervals().values()))
+        return float(self._sched("resolve_interval_seconds"))
 
     # -- AIMD hysteresis ---------------------------------------------------------
 
@@ -600,7 +679,6 @@ class EndpointScheduler:
             groups.append({
                 "name": str(name),
                 "priority": declared.priority,
-                "tier": str(declared.tier),
                 "floor_seconds": float(declared.floor_seconds),
                 "interval_seconds": self.interval_for(name),
                 "stretch_factor": solved.stretch_factor if solved else 1.0,
@@ -663,9 +741,9 @@ class EndpointScheduler:
         )
         cls._stretch_gauge = Gauge(
             CollectorMetricName.SCHEDULER_STRETCH_FACTOR.value,
-            "Solved interval divided by the group's natural cadence "
-            "(max(floor, tier heartbeat)); 1.0 = unstretched (computed schedule "
-            "output, refreshed on each solver resolve)",
+            "Solved interval divided by the group's volatility floor; "
+            "1.0 = unstretched (computed schedule output, refreshed on each "
+            "solver resolve)",
             labelnames=[LabelName.GROUP.value],
         )
         cls._metrics_initialized = True

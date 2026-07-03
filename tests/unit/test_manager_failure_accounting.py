@@ -4,8 +4,8 @@ Encodes the acceptance criteria for "collected nothing is a collection
 failure": a coordinator that raises out of ``_collect_impl()`` (including the
 new ``NothingCollectedError``) must NOT be recorded as a success by
 ``CollectorManager`` -- ``failure_streak``/``total_failures`` advance,
-``total_successes``/``last_success_time`` do not, the tier is not marked
-initially-complete, ``is_ready`` stays False, and the
+``total_successes``/``last_success_time`` do not, the collector is not marked
+as having succeeded, ``is_ready`` stays False, and the
 ``meraki_exporter_collector_success_timestamp_seconds`` series for that
 collector must never appear in the registry.
 """
@@ -23,7 +23,6 @@ from meraki_dashboard_exporter.collectors.manager import CollectorManager
 from meraki_dashboard_exporter.core.collector import MetricCollector
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.constants.metrics_constants import CollectorMetricName
 from meraki_dashboard_exporter.core.error_handling import NothingCollectedError
 
@@ -71,8 +70,6 @@ def isolated_registry(monkeypatch: pytest.MonkeyPatch) -> CollectorRegistry:
 class _StubCollector(MetricCollector):
     """A real MetricCollector whose _collect_impl can be toggled fail/succeed."""
 
-    update_tier = UpdateTier.FAST
-
     def __init__(self, *args: object, **kwargs: object) -> None:
         self.should_fail = True
         super().__init__(*args, **kwargs)  # type: ignore[arg-type]
@@ -100,7 +97,7 @@ def _bare_manager(settings: Settings) -> CollectorManager:
 def _register_stub(
     manager: CollectorManager, collector: _StubCollector, name: str = "StubCollector"
 ) -> None:
-    manager.collectors[UpdateTier.FAST] = [collector]  # type: ignore[list-item]
+    manager.collectors = [collector]
     manager.collector_health[name] = {
         "last_success_time": None,
         "failure_streak": 0,
@@ -125,15 +122,15 @@ class TestManagerFailureAccounting:
         name = collector.__class__.__name__
         _register_stub(manager, collector, name)
 
-        await manager.collect_tier(UpdateTier.FAST)
-        await manager.collect_tier(UpdateTier.FAST)
+        await manager.run_collector_once(collector)
+        await manager.run_collector_once(collector)
 
         health = manager.collector_health[name]
         assert health["failure_streak"] == 2
         assert health["total_failures"] == 2
         assert health["total_successes"] == 0
         assert health["last_success_time"] is None
-        assert manager._tier_initial_complete["fast"] is False
+        assert name not in manager._collector_succeeded
         assert manager.is_ready is False
 
         # The success-timestamp series must never have appeared in the registry.
@@ -148,12 +145,12 @@ class TestManagerFailureAccounting:
 
         # Swap to a succeeding _collect_impl and run once more: recovers cleanly.
         collector.should_fail = False
-        await manager.collect_tier(UpdateTier.FAST)
+        await manager.run_collector_once(collector)
 
         assert health["failure_streak"] == 0
         assert health["total_successes"] == 1
         assert health["last_success_time"] is not None
-        assert manager._tier_initial_complete["fast"] is True
+        assert name in manager._collector_succeeded
 
         samples_after = [
             sample

@@ -6,7 +6,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 
 <critical_notes>
 - **Navigate to subdirectories** for detailed context - each has its own `CLAUDE.md`
-- **Follow update tiers**: FAST (60s), MEDIUM (300s), SLOW (900s) based on data volatility
+- **No fixed update tiers**: an adaptive scheduler (`core/scheduler.py`) solves each endpoint group's polling interval from its own volatility floor and the API budget; see `core/CLAUDE.md` and `docs/observability/scheduler.md`
 - **Security**: Never log or expose API keys, use read-only when possible
 - **Memory**: Be mindful of API rate limits and implement proper error handling
 - **Use parallel tasks/agents** when suitable use the parallel tasks and agents available to you
@@ -41,7 +41,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 
 ### Collector Organization
 - **Core Infrastructure**: Logging, config, metrics, error handling -> `src/meraki_dashboard_exporter/core/CLAUDE.md`
-- **Collector Pattern**: Auto-registration, update tiers, base classes -> `src/meraki_dashboard_exporter/collectors/CLAUDE.md`
+- **Collector Pattern**: Auto-registration, endpoint groups/scheduler, base classes -> `src/meraki_dashboard_exporter/collectors/CLAUDE.md`
 - **Device-Specific**: MR, MS, MX, MT, MG, MV collectors -> `src/meraki_dashboard_exporter/collectors/devices/CLAUDE.md` (MR's own subpackage has a further nested `devices/mr/CLAUDE.md`)
 - **Network Health**: Bluetooth, connection stats, data rates, RF health, SSID performance -> `src/meraki_dashboard_exporter/collectors/network_health_collectors/CLAUDE.md`
 - **Organization-Level**: API usage, licensing, client overview -> `src/meraki_dashboard_exporter/collectors/organization_collectors/CLAUDE.md`
@@ -54,7 +54,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **Label enums**: Use `LabelName` enum from `core/metrics.py`
 - **Domain models**: Pydantic validation for all API responses
 - **Error handling**: Decorators from `core/error_handling.py`; wrap fetchers with `validate_response_format` to normalize the SDK exhausted-retry error shape
-- **Update tiers**: FAST (60s), MEDIUM (300s), SLOW (900s) based on volatility (default per-collector timeout: 240s)
+- **Adaptive scheduling, not fixed tiers**: each collector declares one or more endpoint groups (name, priority, `floor_seconds`, `cost_fn`); the scheduler (`core/scheduler.py`) solves each group's actual interval from org shape and the API budget, stretching lower-priority groups when demand exceeds it (default per-collector timeout: 240s)
 - **Parallel collection**: Use `ManagedTaskGroup` for bounded concurrency
 - **Inventory caching (mandatory for networks)**: All network fetches go through `OrganizationInventory.get_networks(org_id)`; this is the single enforcement point for the configured `NetworkFilter` (`core/network_filter.py`, `NetworkFilterSettings` in `core/config_models.py`).
 - **Meraki SDK 3.3.0** (`pyproject.toml`, exact pin — Renovate bumps it, so check `pyproject.toml` rather than trusting this number): `validate_kwargs` setting (`core/config_models.py` `APISettings.validate_kwargs`); recommended for dev/CI, off by default in production.
@@ -139,8 +139,9 @@ is a self-contained spec. Point an agent at one issue and follow this exact work
   `core.error_handling.validate_response_format`, emit via `parent._set_metric()` for expiration.
 - **Networks:** fetch only via `OrganizationInventory.get_networks(org_id)` (NetworkFilter enforcement).
 - **Concurrency:** `ManagedTaskGroup` / `process_in_batches_with_errors` — never raw `asyncio.gather`.
-- **Tier:** pick FAST/MEDIUM/SLOW by volatility and justify it; prefer org-wide bulk endpoints over
-  per-device/per-network loops to protect the rate-limit budget.
+- **Endpoint group:** declare a `floor_seconds` (natural volatility window) and a `priority`
+  (1=up-ness/alerts, 2=sensor, 3=perf/health, 4=config/inventory) and justify both; prefer
+  org-wide bulk endpoints over per-device/per-network loops to protect the rate-limit budget.
 - **Cardinality:** never label by client MAC, raw SSID/BSSID, per-request rows, or other unbounded/
   attacker-influenced values — aggregate to bounded label sets.
 

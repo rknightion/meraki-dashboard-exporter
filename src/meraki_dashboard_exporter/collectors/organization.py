@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 from ..core.api_helpers import create_api_helper
 from ..core.async_utils import ManagedTaskGroup
 from ..core.collector import MetricCollector
-from ..core.constants import DeviceMetricName, NetworkMetricName, OrgMetricName, UpdateTier
+from ..core.constants import DeviceMetricName, NetworkMetricName, OrgMetricName
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.error_handling import (
     CollectorError,
@@ -54,7 +54,7 @@ logger = get_logger(__name__)
 _APPLICATION_USAGE_MAX_QUANTITY = 50
 
 
-@register_collector(UpdateTier.MEDIUM)
+@register_collector
 class OrganizationCollector(MetricCollector):
     """Collector for organization-level metrics."""
 
@@ -66,63 +66,54 @@ class OrganizationCollector(MetricCollector):
             priority=1,
             floor_seconds=120,
             cost_fn=lambda shape: pages(shape.device_count, 500),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_AVAILABILITY_HISTORY,
             priority=2,
             floor_seconds=300,
             cost_fn=lambda shape: 1,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_API_USAGE,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda shape: 2,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_CLIENT_OVERVIEW,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda shape: 1,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_DEVICE_MODEL_OVERVIEW,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda shape: 1,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_PACKET_CAPTURES,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda shape: 1,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_APP_USAGE,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda shape: 1,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_FIRMWARE,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda shape: 1,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_LICENSES,
             priority=4,
             floor_seconds=1800,
             cost_fn=lambda shape: 2,
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4 (#618) — single/fixed org calls, so cost_fns are org-wide
         # constants rather than shape-derived.
@@ -131,35 +122,30 @@ class OrganizationCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda shape: 1.0,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_ADAPTIVE_POLICY,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda shape: 1.0,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_TOP_USAGE,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda shape: 3.0,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_WEBHOOK_LOGS,
             priority=4,
             floor_seconds=300,
             cost_fn=lambda shape: 1.0,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_FIRMWARE_COMPLIANCE,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda shape: 1.0,
-            tier=UpdateTier.MEDIUM,
         ),
     )
 

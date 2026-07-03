@@ -33,7 +33,6 @@ class TestMSCollector:
         parent.settings.api.ms_packet_stats_interval = 0
         parent.settings.api.ms_port_usage_interval = 0
         parent.settings.api.concurrency_limit = 5
-        parent.settings.update_intervals.slow = 900
         parent.rate_limiter = None
 
         # Mock the _create_gauge method to return actual Gauge objects
@@ -60,7 +59,7 @@ class TestMSCollector:
             mapping = {
                 EndpointGroupName.MS_PORT_USAGE: parent.settings.api.ms_port_usage_interval,
                 EndpointGroupName.MS_PACKET_STATS: parent.settings.api.ms_packet_stats_interval,
-                EndpointGroupName.MS_STP: parent.settings.update_intervals.slow,
+                EndpointGroupName.MS_STP: 900,
             }
             return mapping.get(group, 300.0)
 

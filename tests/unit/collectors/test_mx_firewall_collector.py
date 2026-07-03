@@ -36,15 +36,13 @@ class TestMXFirewallCollector:
         parent = MagicMock()
         parent.api = mock_api
         parent.settings = MagicMock()
-        parent.settings.update_intervals.medium = 300
-        parent.settings.update_intervals.slow = 900
         parent.rate_limiter = None
         # No inventory means no NetworkFilter — collector emits all rows.
         parent.inventory = None
         parent._create_gauge = MagicMock(side_effect=_make_gauge)
-        # #617: the firewall-config throttle now reads its interval from the
-        # mx_firewall_config endpoint group (via the parent's _group_interval),
-        # not settings.update_intervals.slow directly. Default to the 900s floor.
+        # #617: the firewall-config throttle reads its interval from the
+        # mx_firewall_config endpoint group via the parent's _group_interval.
+        # Default to the 900s floor.
         parent._group_interval = MagicMock(return_value=900)
         parent._group_ttl_seconds = MagicMock(return_value=None)
         parent._should_run_group = MagicMock(return_value=True)
@@ -644,20 +642,23 @@ class TestMXFirewallCollector:
         # Only the single in-filter event should be counted.
         assert calls == {"IDS Alert": 1.0}
 
-    async def test_security_events_uses_medium_interval_as_timespan(
+    async def test_security_events_uses_group_interval_as_timespan(
         self,
         firewall_collector: MXFirewallCollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """timespan must be bounded to settings.update_intervals.medium."""
-        mock_parent.settings.update_intervals.medium = 300
+        """timespan must be bounded to the solved MX_SECURITY_EVENTS group interval (#631)."""
+        from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
+
+        mock_parent._group_interval = MagicMock(return_value=450)
         mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(return_value=[])
 
         await firewall_collector.collect_org_security_events("org1", "Test Org")
 
+        mock_parent._group_interval.assert_any_call(EndpointGroupName.MX_SECURITY_EVENTS)
         _, kwargs = mock_api.appliance.getOrganizationApplianceSecurityEvents.call_args
-        assert kwargs["timespan"] == 300
+        assert kwargs["timespan"] == 450
         assert kwargs["total_pages"] == "all"
 
     async def test_security_events_empty_response_sets_nothing(
@@ -827,13 +828,12 @@ class TestMXFirewallCollector:
         assert calls == {"unknown": 1.0}
 
     # ------------------------------------------------------------------
-    # SLOW-tier throttle gating (F-085)
+    # Firewall-config throttle gating (F-085)
     #
-    # collect_for_network is dispatched every MEDIUM-tier (300s) cycle by
-    # DeviceCollector._collect_mx_specific_metrics, but the class docstring
-    # promises SLOW-tier (900s) cadence for near-static firewall config.
-    # These tests assert the self-enforced gate keyed on
-    # settings.update_intervals.slow.
+    # collect_for_network is dispatched on every DeviceCollector poll cycle
+    # (300s), but the class docstring promises a slower 900s cadence for
+    # near-static firewall config. These tests assert the self-enforced gate
+    # keyed on the mx_firewall_config endpoint group's solved interval.
     # ------------------------------------------------------------------
 
     def _set_l3_l7_responses(self, mock_api: MagicMock) -> None:
@@ -844,21 +844,20 @@ class TestMXFirewallCollector:
             return_value={"rules": []}
         )
 
-    async def test_firewall_rules_skipped_within_slow_interval(
+    async def test_firewall_rules_skipped_within_config_interval(
         self,
         firewall_collector: MXFirewallCollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """A second call on the very next (MEDIUM-tier) cycle must not hit the API again."""
-        mock_parent.settings.update_intervals.slow = 900
+        """A second call on the very next poll cycle must not hit the API again."""
         self._set_l3_l7_responses(mock_api)
 
         await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
         assert mock_api.appliance.getNetworkApplianceFirewallL3FirewallRules.call_count == 1
         assert mock_api.appliance.getNetworkApplianceFirewallL7FirewallRules.call_count == 1
 
-        # Simulate the very next MEDIUM-tier dispatch (well within the SLOW interval).
+        # Simulate the very next poll dispatch (well within the config interval).
         await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
         assert mock_api.appliance.getNetworkApplianceFirewallL3FirewallRules.call_count == 1
         assert mock_api.appliance.getNetworkApplianceFirewallL7FirewallRules.call_count == 1
@@ -870,7 +869,6 @@ class TestMXFirewallCollector:
         mock_parent: MagicMock,
     ) -> None:
         """A gated (skipped) call must not touch _set_metric at all."""
-        mock_parent.settings.update_intervals.slow = 900
         self._set_l3_l7_responses(mock_api)
 
         await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
@@ -879,14 +877,13 @@ class TestMXFirewallCollector:
         await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
         mock_parent._set_metric.assert_not_called()
 
-    async def test_firewall_rules_collected_again_after_slow_interval_elapses(
+    async def test_firewall_rules_collected_again_after_config_interval_elapses(
         self,
         firewall_collector: MXFirewallCollector,
         mock_api: MagicMock,
         mock_parent: MagicMock,
     ) -> None:
-        """Once the SLOW interval has elapsed, the next MEDIUM-tier call must hit the API again."""
-        mock_parent.settings.update_intervals.slow = 900
+        """Once the config interval has elapsed, the next call must hit the API again."""
         self._set_l3_l7_responses(mock_api)
 
         with patch(
@@ -896,7 +893,7 @@ class TestMXFirewallCollector:
             await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
         assert mock_api.appliance.getNetworkApplianceFirewallL3FirewallRules.call_count == 1
 
-        # Still short of the 900s SLOW interval.
+        # Still short of the 900s config interval.
         with patch(
             "meraki_dashboard_exporter.collectors.devices.mx_firewall.time.time",
             return_value=1_000.0 + 300,
@@ -904,7 +901,7 @@ class TestMXFirewallCollector:
             await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
         assert mock_api.appliance.getNetworkApplianceFirewallL3FirewallRules.call_count == 1
 
-        # Now past the SLOW interval (3 MEDIUM cycles later) — must collect again.
+        # Now past the config interval — must collect again.
         with patch(
             "meraki_dashboard_exporter.collectors.devices.mx_firewall.time.time",
             return_value=1_000.0 + 901,
@@ -919,7 +916,6 @@ class TestMXFirewallCollector:
         mock_parent: MagicMock,
     ) -> None:
         """Gating state must be tracked per network_id, not globally."""
-        mock_parent.settings.update_intervals.slow = 900
         self._set_l3_l7_responses(mock_api)
 
         await firewall_collector.collect_for_network("org1", "Test Org", "N_1", "Office")
@@ -934,7 +930,6 @@ class TestMXFirewallCollector:
         mock_parent: MagicMock,
     ) -> None:
         """A non-positive group interval must disable gating (always collect)."""
-        mock_parent.settings.update_intervals.slow = 0
         mock_parent._group_interval = MagicMock(return_value=0)
         self._set_l3_l7_responses(mock_api)
 

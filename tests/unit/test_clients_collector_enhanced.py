@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from meraki_dashboard_exporter.collectors.clients import ClientsCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import ClientFactory, NetworkFactory, OrganizationFactory
 
@@ -16,7 +15,6 @@ class TestClientsCollectorEnhanced(BaseCollectorTest):
     """Enhanced test coverage for ClientsCollector functionality."""
 
     collector_class = ClientsCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _update_collector_api(self, collector: ClientsCollector, api: MagicMock) -> None:
         """Update both collector API and API helper."""

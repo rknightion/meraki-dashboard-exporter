@@ -26,7 +26,6 @@ from pydantic import SecretStr
 from meraki_dashboard_exporter.collectors.manager import CollectorManager
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.scheduler import (
     EndpointGroup,
     EndpointGroupName,
@@ -96,6 +95,8 @@ def _fake_collector(name: str, groups: tuple[EndpointGroup, ...]) -> Any:
         {
             "get_endpoint_groups": lambda self: groups,
             "scheduler": None,
+            "collector_cadence_seconds": lambda self: 60.0,
+            "phase_offset_seconds": lambda self: 0.0,
         },
     )
     return cls()
@@ -109,7 +110,6 @@ def _group(
         priority=priority,
         floor_seconds=floor,
         cost_fn=lambda shape: 1.0,
-        tier=UpdateTier.MEDIUM,
         gated=gated,
     )
 
@@ -135,7 +135,7 @@ class TestSchedulerConstruction:
     def test_scheduler_injected_into_every_collector(self) -> None:
         """Every successfully-initialized collector receives the shared scheduler."""
         manager = _real_manager(_settings())
-        all_collectors = [c for tier in manager.collectors.values() for c in tier]
+        all_collectors = list(manager.collectors)
         assert all_collectors, "expected real collectors to be initialized"
         for collector in all_collectors:
             assert collector.scheduler is manager.scheduler
@@ -160,7 +160,7 @@ class TestRegisterEndpointGroups:
         manager = _bare_manager(_settings())
         g1 = _group(EndpointGroupName.CONFIG_ORG, priority=4, floor=900)
         g2 = _group(EndpointGroupName.MX_UPLINK_STATUS, priority=1, floor=300)
-        manager.collectors[UpdateTier.MEDIUM] = [_fake_collector("FooCollector", (g1, g2))]
+        manager.collectors = [_fake_collector("FooCollector", (g1, g2))]
 
         manager._register_endpoint_groups()
 
@@ -233,7 +233,7 @@ class TestCollectInitialResolve:
         # A priority-3 collector (should be named) and a priority-1 collector (not).
         g_low = _group(EndpointGroupName.MS_PORT_STATUS, priority=3, floor=300)
         g_high = _group(EndpointGroupName.MX_UPLINK_STATUS, priority=1, floor=300)
-        manager.collectors[UpdateTier.MEDIUM] = [
+        manager.collectors = [
             _fake_collector("MSCollector", (g_low,)),
             _fake_collector("MXCollector", (g_high,)),
         ]
@@ -259,7 +259,7 @@ class TestCollectInitialResolve:
     def test_priority_shed_collectors_selects_priority_3_and_4(self) -> None:
         """Only collectors owning gated priority-3/4 groups are shed candidates."""
         manager = _bare_manager(_settings())
-        manager.collectors[UpdateTier.MEDIUM] = [
+        manager.collectors = [
             _fake_collector("MSCollector", (_group(EndpointGroupName.MS_PORT_STATUS, 3, 300),)),
             _fake_collector("ConfigCollector", (_group(EndpointGroupName.CONFIG_ORG, 4, 900),)),
             _fake_collector("MXCollector", (_group(EndpointGroupName.MX_UPLINK_STATUS, 1, 300),)),
@@ -269,7 +269,7 @@ class TestCollectInitialResolve:
     def test_priority_shed_ignores_ungated_groups(self) -> None:
         """Ungated (demand-accounting-only) groups never nominate their collector."""
         manager = _bare_manager(_settings())
-        manager.collectors[UpdateTier.MEDIUM] = [
+        manager.collectors = [
             _fake_collector(
                 "InvCollector",
                 (_group(EndpointGroupName.INVENTORY_WARM, 4, 900, gated=False),),

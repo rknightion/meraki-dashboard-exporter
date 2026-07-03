@@ -250,35 +250,70 @@ class TestMetricsIntegration:
         # Run initial collection
         await manager.collect_initial()
 
-        # Verify API calls were made for MEDIUM tier collectors
+        # Verify API calls were made across the collectors that ran.
         mock_api_client.api.organizations.getOrganizationLicenses.assert_called()
         mock_api_client.api.organizations.getOrganizationDevices.assert_called()
         mock_api_client.api.organizations.getOrganizationAssuranceAlerts.assert_called()
+        # NOTE: the MT sensor-readings assertion lives in its own cold-start test
+        # below (test_mt_sensor_readings_fetched_on_cold_start).
 
-        # collect_initial() iterates FAST, MEDIUM, and SLOW tiers, so the FAST-tier
-        # MTSensorCollector has already run and hit the shared API client directly
-        # (#249: it used to construct its own throwaway AsyncMerakiClient and silently
-        # swallow the resulting network error, so this call was never actually observed).
-        # #553: the serials param is dropped -- the org-wide endpoint returns
-        # readings for every sensor without it.
+    @pytest.mark.asyncio
+    async def test_mt_sensor_readings_fetched_on_cold_start(
+        self, mock_api_client, mock_settings, monkeypatch
+    ):
+        """A cold-start MTSensorCollector run must hit the org-wide readings endpoint.
+
+        #553: the serials param is dropped -- the org-wide endpoint returns readings
+        for every sensor without it.
+
+        #631 guard: ``collect_sensor_metrics`` evaluates the MT_SENSOR_READINGS gate
+        exactly ONCE (``parent._should_run_group`` mutates the scheduler attempt
+        clock) and threads the resulting ``due`` flag into ``_collect_org_sensors`` /
+        ``_collect_org_gateway_connections`` instead of re-gating at each fetch site.
+        A regression to a second ``should_run`` call would trip ``_last_attempt_failed``
+        (no prior success) and suppress the fetch via ``failure_retry_seconds``, so the
+        org-wide readings endpoint would never be called on a cold start.
+        """
+        isolated_registry = CollectorRegistry()
+        monkeypatch.setattr("meraki_dashboard_exporter.core.collector.REGISTRY", isolated_registry)
+
+        mock_api_client.api.organizations.getOrganization = MagicMock(
+            return_value={"id": "123456", "name": "Test Organization"}
+        )
+        mock_api_client.api.organizations.getOrganizationNetworks = MagicMock(
+            return_value=[{"id": "N_123", "name": "Test Network", "productTypes": ["sensor"]}]
+        )
+        mock_api_client.api.organizations.getOrganizationDevices = MagicMock(
+            return_value=[
+                {
+                    "serial": "Q2MT-XXXX",
+                    "name": "Sensor1",
+                    "model": "MT10",
+                    "networkId": "N_123",
+                    "productType": "sensor",
+                }
+            ]
+        )
+        mock_api_client.api.sensor.getOrganizationSensorReadingsLatest = MagicMock(return_value=[])
+
+        manager = CollectorManager(client=mock_api_client, settings=mock_settings)
+        sensor = manager.get_collector_by_class_name("MTSensorCollector")
+        assert sensor is not None
+
+        await manager.run_collector_once(sensor)
+
         mock_api_client.api.sensor.getOrganizationSensorReadingsLatest.assert_called_once_with(
             "123456", total_pages="all"
         )
 
-        # Collect the FAST tier again immediately. Under the #617 adaptive
-        # scheduler the mt_sensor_readings group has a 60s volatility floor, so a
-        # second cycle within that window is intentionally gated (coalesced) and
-        # does NOT re-hit the API — the call count stays at 1. In production the
-        # FAST loop waits its heartbeat between cycles, so the gate opens normally.
-        from meraki_dashboard_exporter.core.constants import UpdateTier
-
-        await manager.collect_tier(UpdateTier.FAST)
-
-        assert mock_api_client.api.sensor.getOrganizationSensorReadingsLatest.call_count == 1
-
     @pytest.mark.asyncio
-    async def test_tiered_collection(self, mock_api_client, mock_settings, monkeypatch):
-        """Test that different tiers collect at appropriate intervals."""
+    async def test_per_collector_isolation(self, mock_api_client, mock_settings, monkeypatch):
+        """Running one collector hits only its own endpoints (#631 de-tiering).
+
+        Tiers are gone; each collector runs independently. Running the sensor
+        collector must not touch the organization license endpoint, and vice
+        versa.
+        """
         # Use isolated registry
         isolated_registry = CollectorRegistry()
         monkeypatch.setattr("meraki_dashboard_exporter.core.collector.REGISTRY", isolated_registry)
@@ -314,25 +349,26 @@ class TestMetricsIntegration:
         # Create collector manager
         manager = CollectorManager(client=mock_api_client, settings=mock_settings)
 
-        # Collect FAST tier
-        from meraki_dashboard_exporter.core.constants import UpdateTier
+        # Run only the sensor collector (force so the scheduler gate opens).
+        sensor = manager.get_collector_by_class_name("MTSensorCollector")
+        assert sensor is not None
+        await manager.run_collector_once(sensor, force=True)
 
-        await manager.collect_tier(UpdateTier.FAST)
-
-        # Sensor collector calls getOrganizationDevices with productTypes=["sensor"]
-        # Verify at least one call was made (sensor collector will call it)
+        # Sensor collector calls getOrganizationDevices; verify it ran.
         mock_api_client.api.organizations.getOrganizationDevices.assert_called()
 
-        # License API should NOT be called for FAST tier
+        # License API belongs to the organization collector, not the sensor one.
         mock_api_client.api.organizations.getOrganizationLicenses.assert_not_called()
 
         # Reset mocks
         mock_api_client.api.organizations.getOrganizationDevices.reset_mock()
 
-        # Collect MEDIUM tier
-        await manager.collect_tier(UpdateTier.MEDIUM)
+        # Now run the organization collector.
+        org = manager.get_collector_by_class_name("OrganizationCollector")
+        assert org is not None
+        await manager.run_collector_once(org, force=True)
 
-        # Organization APIs should be called for MEDIUM tier
+        # Organization APIs should be called by the organization collector.
         mock_api_client.api.organizations.getOrganizationLicenses.assert_called()
 
     @pytest.mark.asyncio
@@ -378,10 +414,10 @@ class TestMetricsIntegration:
         # Create collector manager
         manager = CollectorManager(client=mock_api_client, settings=mock_settings)
 
-        # Run collection - should not raise exception
-        from meraki_dashboard_exporter.core.constants import UpdateTier
-
-        await manager.collect_tier(UpdateTier.MEDIUM)
+        # Run one initial collection of every collector - should not raise even
+        # though the device collector fails (#631: collect_initial replaces the
+        # per-tier collection entry point).
+        await manager.collect_initial()
 
         # Verify other collectors were still called despite device collector failure
         mock_api_client.api.organizations.getOrganizationLicenses.assert_called()

@@ -99,7 +99,6 @@ class LabelName(StrEnum):
 
     # Collector infrastructure labels
     COLLECTOR = "collector"  # Collector name
-    TIER = "tier"  # Collection tier (fast/medium/slow)
     GROUP = "group"  # Adaptive-scheduler endpoint group (#617); bounded, ~40 static values
 
     # API client labels (Phase 2.1)

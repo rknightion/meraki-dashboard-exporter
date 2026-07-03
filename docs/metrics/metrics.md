@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 341
-- **Gauges:** 312
+- **Total metrics:** 342
+- **Gauges:** 313
 - **Counters:** 25
 - **Histograms:** 3
 - **Info metrics:** 1
@@ -479,10 +479,11 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_exporter_collection_errors_total` | counter | `collector`, `tier`, `error_type` | Total number of collection errors by collector and phase |  |
-| `meraki_exporter_collection_utilization_ratio` | gauge | `collector`, `tier` | Fraction of the tier interval consumed by actual collection (0=instant, 1=full interval) |  |
-| `meraki_exporter_collections_active` | gauge | `collector`, `tier` | Number of parallel organization collections currently active |  |
-| `meraki_exporter_collector_failure_streak` | gauge | `collector`, `tier` | Consecutive failures for each collector since last success |  |
+| `meraki_exporter_collection_errors_total` | counter | `collector`, `error_type` | Total number of collection errors by collector and phase |  |
+| `meraki_exporter_collection_utilization_ratio` | gauge | `collector` | Fraction of the collector's cadence consumed by actual collection (0=instant, 1=full cadence) |  |
+| `meraki_exporter_collections_active` | gauge | `collector` | Number of parallel organization collections currently active |  |
+| `meraki_exporter_collector_cadence_seconds` | gauge | `collector` | Effective cadence of a collector (smallest solved interval of its enabled endpoint groups) |  |
+| `meraki_exporter_collector_failure_streak` | gauge | `collector` | Consecutive failures for each collector since last success |  |
 
 ### DataLogEmitter
 
@@ -500,7 +501,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_exporter_scheduler_effective_budget_rps` | gauge | — | AIMD-adjusted effective API budget in requests/second (computed schedule input, lowered after 429 throttling and recovered additively) |  |
 | `meraki_exporter_scheduler_estimated_demand_rps` | gauge | `group` | Estimated steady-state API demand per endpoint group in requests/second (computed schedule output, refreshed on each solver resolve; not a measured rate) |  |
 | `meraki_exporter_scheduler_interval_seconds` | gauge | `group` | Solved collection interval per endpoint group in seconds (computed schedule output, refreshed on each solver resolve) |  |
-| `meraki_exporter_scheduler_stretch_factor` | gauge | `group` | Solved interval divided by the group's natural cadence (max(floor, tier heartbeat)); 1.0 = unstretched (computed schedule output, refreshed on each solver resolve) |  |
+| `meraki_exporter_scheduler_stretch_factor` | gauge | `group` | Solved interval divided by the group's volatility floor; 1.0 = unstretched (computed schedule output, refreshed on each solver resolve) |  |
 
 ### ExporterApp
 
@@ -513,19 +514,19 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_exporter_collection_smoothing_window_seconds` | gauge | `collector`, `tier` | Configured smoothing window for collector runs |  |
-| `meraki_exporter_collector_api_calls_total` | counter | `collector`, `tier`, `endpoint` | Total number of API calls made by collectors |  |
-| `meraki_exporter_collector_duration_seconds` | histogram | `collector`, `tier` | Time spent collecting metrics |  |
-| `meraki_exporter_collector_errors_total` | counter | `collector`, `tier`, `error_type` | Total number of collector errors |  |
-| `meraki_exporter_collector_start_offset_seconds` | gauge | `collector`, `tier` | Configured collector start offset within smoothing window |  |
-| `meraki_exporter_collector_success_timestamp_seconds` | gauge | `collector`, `tier` | Unix timestamp of last successful collection |  |
+| `meraki_exporter_collection_smoothing_window_seconds` | gauge | `collector` | Configured smoothing window for collector runs |  |
+| `meraki_exporter_collector_api_calls_total` | counter | `collector`, `endpoint` | Total number of API calls made by collectors |  |
+| `meraki_exporter_collector_duration_seconds` | histogram | `collector` | Time spent collecting metrics |  |
+| `meraki_exporter_collector_errors_total` | counter | `collector`, `error_type` | Total number of collector errors |  |
+| `meraki_exporter_collector_start_offset_seconds` | gauge | `collector` | Configured collector start offset within smoothing window |  |
+| `meraki_exporter_collector_success_timestamp_seconds` | gauge | `collector` | Unix timestamp of last successful collection |  |
 
 ### MetricExpirationManager
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
 | `meraki_exporter_cardinality_limit_reached_total` | counter | `metric` | Number of times a metric family exceeded its cardinality budget (cardinality.max_series_per_family). With action=warn (default) series are kept; with action=drop the oldest series in the family are shed. |  |
-| `meraki_exporter_collection_errors_expired_total` | counter | `collector`, `tier` | Total number of metrics expired due to TTL |  |
+| `meraki_exporter_collection_errors_expired_total` | counter | `collector` | Total number of metrics expired due to TTL |  |
 | `meraki_exporter_expiration_tracked_metrics` | gauge | `collector` | Number of metrics currently tracked for expiration |  |
 
 ### OTelMetricsBridge

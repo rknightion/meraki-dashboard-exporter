@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
-from ..core.constants import AlertMetricName, UpdateTier
+from ..core.constants import AlertMetricName
 from ..core.error_handling import (
     ErrorCategory,
     NothingCollectedError,
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-@register_collector(UpdateTier.MEDIUM)
+@register_collector
 class AlertsCollector(MetricCollector):
     """Collector for Meraki assurance alerts."""
 
@@ -48,14 +48,12 @@ class AlertsCollector(MetricCollector):
             priority=1,
             floor_seconds=300,
             cost_fn=lambda shape: 1.0,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.ALERTS_SENSOR_OVERVIEW,
             priority=2,
             floor_seconds=300,
             cost_fn=lambda shape: float(shape.sensor_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
     )
 

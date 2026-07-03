@@ -38,13 +38,14 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 
 ### Collector Infrastructure
 - `collector.py` - `MetricCollector` abstract base class with `_initialize_metrics()` and `_collect_impl()`
-- `registry.py` - `@register_collector(tier)` decorator for auto-registration
+- `registry.py` - `@register_collector` (no-arg) decorator for auto-registration; there is no tier argument — the scheduler derives cadence per collector from the endpoint groups it declares (`get_endpoint_groups()` on `collector.py`)
 - `async_utils.py` - `ManagedTaskGroup` for bounded concurrency, plus `with_timeout()`, `managed_resource()`, `AsyncRetry`, `chunked_async_iter()` (note: `batch_with_concurrency_limit()` lives in `error_handling.py`, not here)
 - `batch_processing.py` - Batch operation helpers
 
 ### API Helpers
 - `api_helpers.py` - `APIHelper` class (`create_api_helper(collector)` factory) wrapping common per-collector API call patterns. `get_organization_networks()` prefers `self.collector.inventory.get_networks(org_id)` but falls back to `_fetch_networks_direct()` (a direct `getOrganizationNetworks` call that manually reapplies `NetworkFilter`) when `inventory` is `None` — a third sanctioned bypass site alongside `discovery.py` and `collectors/alerts.py`, reachable from production via `collectors/organization.py` and `collectors/clients.py`.
-- `rate_limiter.py` - `OrgRateLimiter`: per-organization client-side token-bucket rate limiting
+- `rate_limiter.py` - `OrgRateLimiter`: per-organization client-side token-bucket rate limiting. AIMD feedback (`record_throttle_event`) multiplicatively decreases the *effective* budget on a real 429/`Retry-After`, floored at 0.5 rps and cooled down to at most one halving per 30s; `effective_rate_per_second()` feeds directly into the scheduler's next resolve.
+- `scheduler.py` - `EndpointScheduler` + the pure `solve_intervals` solver (#617/#631): every API fetch is declared as an `EndpointGroup` (name, priority 1-4, `floor_seconds`, `cost_fn`, optional `gated`/`setting_pin`/`enabled_fn`) on the owning collector; the solver starts every group at its floor and only stretches unpinned, gated groups (lowest-priority, least-stretched first) when total demand exceeds `budget_rps × target_utilization`. `should_run`/`next_due`/`seconds_until_due` gate and pace each collector's own loop (`app.py::ExporterApp._collector_loop`); `mark_ran` only on success. See `docs/observability/scheduler.md` for the full mechanism.
 - `type_definitions.py` - Shared `TypedDict`s (e.g. `DeviceStatusInfo`, `PortStatusData`, `AlertData`) and type aliases (`OrganizationId`, `NetworkId`, etc.) for common API dict shapes. (The `CollectorProtocol` lives in `collector.py`, not here.)
 
 ### Observability
@@ -62,7 +63,7 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 - `metrics_constants.py` - Domain-specific metric enums: `OrgMetricName`, `DeviceMetricName`, `NetworkMetricName`, `MSMetricName`, `MRMetricName`, `MXMetricName`, `MVMetricName`, `MTMetricName`, `MGMetricName`, `AlertMetricName`, `ConfigMetricName`, `NetworkHealthMetricName`, `ClientMetricName`, `CollectorMetricName`, `WebhookMetricName`. Two prefix families: `meraki_*` for Meraki network/device data, `meraki_exporter_*` for the exporter's own instrumentation (`CollectorMetricName`). `ConfigMetricName` is currently an empty enum (`pass`) - config-change metrics live under `OrgMetricName`; don't assume it needs populating.
 - `api_constants.py` - `APIField` (common response field-name enum), `APITimespan`, `LicenseState`, `PortState`, `RFBand`
 - `config_constants.py` - `APIConfig`/`RegionalURLs`/`MerakiAPIConfig` dataclasses and derived `MERAKI_API_BASE_URL*` constants (legacy; prefer `Settings`/`APISettings` in `config.py`/`config_models.py` for runtime config)
-- `device_constants.py` - `DeviceType`, `DeviceStatus`, `ProductType`, `UpdateTier` enums
+- `device_constants.py` - `DeviceType`, `DeviceStatus`, `ProductType` enums (no `UpdateTier` — removed with the tier system, #631; see `core/scheduler.py::EndpointGroupName`/`EndpointGroup` for the replacement per-group model)
 - `sensor_constants.py` - `SensorMetricType`, `SensorDataField` enums
 - All exported together via `constants/__init__.py`'s `__all__`; new enum members go in the domain file, not a new top-level file - see "ADDING NEW METRICS" below.
 </file_map>
@@ -112,7 +113,7 @@ async def _fetch_devices(self, org_id: str) -> list[Device] | None:
 from ..core.config import Settings
 
 # Settings is instantiated once and passed to collectors
-# Access: settings.meraki.api_key, settings.api.timeout, settings.update_intervals, etc.
+# Access: settings.meraki.api_key, settings.api.timeout, settings.scheduler, etc.
 ```
 
 ## LOGGING PATTERN

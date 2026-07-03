@@ -118,7 +118,7 @@ class MXVpnCollector(SubCollectorMixin):
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def collect(self, org_id: str, org_name: str) -> None:
+    async def collect(self, org_id: str, org_name: str, *, due: bool = True) -> None:
         """Collect VPN peer status metrics for an organization.
 
         Fetches the VPN peer status for every network in the organization and
@@ -130,14 +130,20 @@ class MXVpnCollector(SubCollectorMixin):
             Organization ID.
         org_name : str
             Organization name.
+        due : bool
+            Whether the ``MX_VPN`` group is due this cycle. Computed once by the
+            coordinator (``DeviceCollector``) and threaded into both this call
+            and :meth:`collect_vpn_stats` — the gate must not be re-evaluated
+            here because ``_should_run_group`` mutates the scheduler attempt
+            clock, which would suppress the second call mid-cycle (#631).
 
         """
         # mx_vpn gate (#617): the mx_vpn group covers BOTH this VpnStatuses call
         # and collect_vpn_stats' VpnStats call (cost 2/cycle). Both consult the
-        # same group gate; the run-marker is set only by collect_vpn_stats (the
+        # same ``due`` flag; the run-marker is set only by collect_vpn_stats (the
         # second call each cycle per DeviceCollector._collect_mx_specific_metrics)
         # so marking here would not throttle the pair out mid-cycle.
-        if self.parent._should_run_group(EndpointGroupName.MX_VPN):
+        if due:
             vpn_statuses = await asyncio.to_thread(
                 self.api.appliance.getOrganizationApplianceVpnStatuses,
                 org_id,
@@ -334,7 +340,7 @@ class MXVpnCollector(SubCollectorMixin):
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
     )
-    async def collect_vpn_stats(self, org_id: str, org_name: str) -> None:
+    async def collect_vpn_stats(self, org_id: str, org_name: str, *, due: bool = True) -> None:
         """Collect historical VPN usage and latency stats for an organization.
 
         Complements :meth:`collect`'s point-in-time VPN peer status with historical
@@ -351,6 +357,10 @@ class MXVpnCollector(SubCollectorMixin):
             Organization ID.
         org_name : str
             Organization name.
+        due : bool
+            Whether the ``MX_VPN`` group is due this cycle, computed once by the
+            coordinator and threaded in (do not re-call ``_should_run_group`` —
+            it mutates the scheduler attempt clock).
 
         """
         # timespan (issue #527): the OpenAPI spec's default for this endpoint is 1 day
@@ -366,10 +376,11 @@ class MXVpnCollector(SubCollectorMixin):
         # default so the data stays reasonably fresh.
         #
         # mx_vpn gate (#617): second of the two mx_vpn-group calls per cycle (see
-        # collect()). Consult the same group gate and set the run-marker here,
-        # after this call succeeds, so the VpnStatuses/VpnStats pair runs together
-        # once per solved interval.
-        if not self.parent._should_run_group(EndpointGroupName.MX_VPN):
+        # collect()). Uses the ``due`` flag threaded from the coordinator (do not
+        # re-call _should_run_group — it mutates the attempt clock) and sets the
+        # run-marker here, after this call succeeds, so the VpnStatuses/VpnStats
+        # pair runs together once per solved interval.
+        if not due:
             return
 
         resp = await asyncio.to_thread(

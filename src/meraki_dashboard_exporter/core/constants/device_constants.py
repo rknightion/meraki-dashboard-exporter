@@ -9,7 +9,6 @@ from typing import Literal
 DeviceTypeStr = Literal["MS", "MR", "MV", "MT", "MX", "MG"]
 DeviceStatusStr = Literal["online", "offline", "alerting", "dormant"]
 ProductTypeStr = Literal["switch", "wireless", "camera", "sensor", "appliance", "cellularGateway"]
-UpdateTierStr = Literal["fast", "medium", "slow"]
 
 
 class DeviceType(StrEnum):
@@ -41,11 +40,3 @@ class ProductType(StrEnum):
     SENSOR = "sensor"
     APPLIANCE = "appliance"
     CELLULAR_GATEWAY = "cellularGateway"
-
-
-class UpdateTier(StrEnum):
-    """Update tier for metrics collection."""
-
-    FAST = "fast"  # Sensor data, real-time metrics (60s)
-    MEDIUM = "medium"  # Device metrics, org metrics, network health (300s)
-    SLOW = "slow"  # Configuration data, security settings (900s)

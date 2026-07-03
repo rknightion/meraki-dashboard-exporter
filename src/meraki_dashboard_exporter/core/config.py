@@ -20,8 +20,8 @@ from .config_models import (
     OTelSettings,
     SchedulerSettings,
     ServerSettings,
-    UpdateIntervals,
     WebhookSettings,
+    find_removed_env_vars,
     find_unrecognized_env_vars,
 )
 from .config_sources import FileSecretsSettingsSource
@@ -57,10 +57,6 @@ class Settings(BaseSettings):
     api: APISettings = Field(
         default_factory=APISettings,
         description="API-related settings",
-    )
-    update_intervals: UpdateIntervals = Field(
-        default_factory=UpdateIntervals,
-        description="Update interval settings",
     )
     server: ServerSettings = Field(
         default_factory=ServerSettings,
@@ -147,6 +143,16 @@ class Settings(BaseSettings):
                 "(check for a typo; value not logged)",
                 env_var=key,
             )
+        # Removed-at-v1 vars are reported separately with migration guidance so
+        # an operator still setting the old tier knobs learns the replacement
+        # instead of a generic "typo" warning (#631).
+        for key, replacement in find_removed_env_vars(os.environ):
+            logger.warning(
+                "Ignoring removed MERAKI_EXPORTER_* environment variable (the "
+                "FAST/MEDIUM/SLOW tier model was removed at v1; value not logged)",
+                env_var=key,
+                use_instead=replacement,
+            )
         return self
 
     def get_collector_config(self, collector_name: str) -> dict[str, Any]:
@@ -184,7 +190,7 @@ class Settings(BaseSettings):
             },
             "logging": self.logging.model_dump(),
             "api": self.api.model_dump(),
-            "update_intervals": self.update_intervals.model_dump(),
+            "scheduler": self.scheduler.model_dump(),
             "server": self.server.model_dump(),
             "otel": {
                 "enabled": self.otel.enabled,

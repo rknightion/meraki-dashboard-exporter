@@ -8,7 +8,6 @@ import pytest
 from structlog.testing import capture_logs
 
 from meraki_dashboard_exporter.collectors.clients import ClientsCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
 from meraki_dashboard_exporter.services.inventory import OrganizationInventory
 from tests.helpers.base import BaseCollectorTest
@@ -19,7 +18,6 @@ class TestClientsCollectorOrgHealthGating(BaseCollectorTest):
     """F-169: ClientsCollector honours the shared OrgHealthTracker per-org gate."""
 
     collector_class = ClientsCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _build_collector(self, mock_api_builder, settings, isolated_registry, tracker):
         """Build a clients-enabled collector over a two-org mock API."""
@@ -83,7 +81,6 @@ class TestClientsCollector(BaseCollectorTest):
     """Test ClientsCollector functionality."""
 
     collector_class = ClientsCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _update_collector_api(self, collector: ClientsCollector, api: MagicMock) -> None:
         """Update both collector API and API helper."""
@@ -1174,7 +1171,6 @@ class TestClientsCollectorMemoryAndDNSMetrics(BaseCollectorTest):
     """#543 store eviction wiring + #319 DNS resolver metrics."""
 
     collector_class = ClientsCollector
-    update_tier = UpdateTier.MEDIUM
 
     @pytest.fixture
     def settings_with_clients_enabled(self, settings):

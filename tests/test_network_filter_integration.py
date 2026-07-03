@@ -61,7 +61,6 @@ async def test_ms_stp_uses_parent_inventory() -> None:
     # (fresh instance, never collected) so the network-fetch path runs. The
     # interval now comes from the scheduler's MS_STP group (#617, floor 900s).
     collector.settings = MagicMock()
-    collector.settings.update_intervals.slow = 900
     parent._group_interval = MagicMock(return_value=900.0)
     parent._group_ttl_seconds = MagicMock(return_value=None)
     collector._last_stp_collection = 0.0

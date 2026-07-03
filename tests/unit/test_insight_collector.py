@@ -11,7 +11,6 @@ from meraki_dashboard_exporter.collectors.insight import (
     InsightCollector,
 )
 from meraki_dashboard_exporter.core.config import Settings
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.error_handling import (
     DataValidationError,
     validate_response_format,
@@ -76,11 +75,6 @@ class TestInsightCollectorRegistration(BaseCollectorTest):
     """Registration / tier / config-gating of endpoint groups."""
 
     collector_class = InsightCollector
-    update_tier = UpdateTier.SLOW
-
-    def test_collector_is_slow_tier(self) -> None:
-        """The collector is registered on the SLOW tier."""
-        assert InsightCollector.update_tier == UpdateTier.SLOW
 
     def test_short_name_is_insight(self) -> None:
         """The manager short-name resolves to 'insight'."""
@@ -137,7 +131,6 @@ class TestInsightCollectorBehaviour(BaseCollectorTest):
     """End-to-end collection behaviour with a mocked Insight API."""
 
     collector_class = InsightCollector
-    update_tier = UpdateTier.SLOW
 
     def _build(
         self,

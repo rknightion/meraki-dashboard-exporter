@@ -13,7 +13,6 @@ from ..core.constants import (
     DeviceMetricName,
     DeviceStatus,
     DeviceType,
-    UpdateTier,
 )
 from ..core.error_handling import (
     CollectorError,
@@ -58,7 +57,7 @@ from ..core.org_health import SOURCE_DEVICE
 logger = get_logger(__name__)
 
 
-@register_collector(UpdateTier.MEDIUM)
+@register_collector
 class DeviceCollector(MetricCollector):
     """Collector for device-level metrics."""
 
@@ -72,77 +71,66 @@ class DeviceCollector(MetricCollector):
             priority=1,
             floor_seconds=120,
             cost_fn=lambda s: pages(s.device_count, 500),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.DEVICE_MEMORY,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.device_count, 20),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_WIRELESS_CLIENTS,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.ap_count, 1000),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_CONNECTION_STATS,
             priority=3,
             floor_seconds=1800,
             cost_fn=lambda s: float(s.wireless_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_ETHERNET_STATUS,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.ap_count, 1000),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_PACKET_LOSS,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: 2 * pages(s.ap_count, 1000),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_CPU_LOAD,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.ap_count, 20),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_SSID_STATUS,
             priority=2,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.ap_count, 500),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_SSID_USAGE,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 1.0,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MS_PORT_STATUS,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.switch_count, 20),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MS_PORT_USAGE,
             priority=3,
             floor_seconds=600,
             cost_fn=lambda s: pages(s.switch_count, 50) + pages(s.switch_count, 20),
-            tier=UpdateTier.MEDIUM,
             setting_pin="ms_port_usage_interval",
         ),
         EndpointGroup(
@@ -150,7 +138,6 @@ class DeviceCollector(MetricCollector):
             priority=3,
             floor_seconds=600,
             cost_fn=lambda s: float(s.switch_count),
-            tier=UpdateTier.MEDIUM,
             setting_pin="ms_packet_stats_interval",
         ),
         EndpointGroup(
@@ -158,7 +145,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=3600,
             cost_fn=lambda s: 1.0,
-            tier=UpdateTier.MEDIUM,
             enabled_fn=lambda s: s.switch_count > 0,
         ),
         EndpointGroup(
@@ -166,91 +152,78 @@ class DeviceCollector(MetricCollector):
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.switch_count, 1000),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MS_STACKS,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: float(s.switch_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MS_STP,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: float(s.switch_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_UPLINK_STATUS,
             priority=1,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.appliance_count, 1000),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_UPLINK_HEALTH,
             priority=1,
             floor_seconds=300,
             cost_fn=lambda s: 1.0,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_UPLINK_USAGE,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: 1.0,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_PERFORMANCE,
             priority=3,
             floor_seconds=900,
             cost_fn=lambda s: float(s.physical_mx_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_HA,
             priority=2,
             floor_seconds=300,
             cost_fn=lambda s: 1.0,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_VPN,
             priority=2,
             floor_seconds=300,
             cost_fn=lambda s: 2.0,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_SECURITY_EVENTS,
             priority=2,
             floor_seconds=300,
             cost_fn=lambda s: 1.0,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_FIREWALL_CONFIG,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 2 * s.appliance_network_count,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MV_ANALYTICS,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 3 * s.camera_count,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MG_UPLINK_STATUS,
             priority=1,
             floor_seconds=300,
             cost_fn=lambda s: 1.0,
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4 (#285): content-filtering + malware + intrusion, 3 calls/appliance network
         EndpointGroup(
@@ -258,7 +231,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 3 * s.appliance_network_count,
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4 (#286): per-MX-device DHCP subnets, 1 call/physical MX
         EndpointGroup(
@@ -266,7 +238,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: float(s.physical_mx_count),
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4 (#287): site-to-site VPN, 1 call/appliance network
         EndpointGroup(
@@ -274,7 +245,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: float(s.appliance_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4 (#288): port-forwarding + 1:1 + 1:many NAT, 3 calls/appliance network
         EndpointGroup(
@@ -282,7 +252,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 3 * s.appliance_network_count,
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4 (#289): VLANs + static routes, 2 calls/appliance network
         EndpointGroup(
@@ -290,7 +259,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 2 * s.appliance_network_count,
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4 (#290): L3+L7 firewall rules per enabled SSID (2 calls/SSID). OrgShape
         # has no SSID count; estimate ~4 enabled SSIDs/network -> 2*4*wireless_network_count.
@@ -300,7 +268,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 8 * s.wireless_network_count,
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4 (#291): single org-wide bulk RF-profile assignments (paginated over APs)
         EndpointGroup(
@@ -308,7 +275,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: pages(s.ap_count, 1000),
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4 (#292+#293): rogue-DHCP + DAI, 2 calls/switch network
         EndpointGroup(
@@ -316,7 +282,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 2 * s.switch_network_count,
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4 (#294): 1 org-wide PoE power-history call
         EndpointGroup(
@@ -324,7 +289,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 1.0,
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4 (#295): 1 call/switch network
         EndpointGroup(
@@ -332,7 +296,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: float(s.switch_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4 (#304): 2 org-wide bulk calls (bands + towers)
         EndpointGroup(
@@ -340,7 +303,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 2.0,
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4 (#305): 1 call/MV device
         EndpointGroup(
@@ -348,7 +310,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: float(s.camera_count),
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4 (#306): 1 org-wide onboarding-status call
         EndpointGroup(
@@ -356,7 +317,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 1.0,
-            tier=UpdateTier.MEDIUM,
         ),
         # Phase 4B (#324): per-AP signal quality; 1 call per selected AP, hourly cadence.
         EndpointGroup(
@@ -364,7 +324,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=3600,
             cost_fn=lambda s: float(s.signal_quality_ap_count),
-            tier=UpdateTier.MEDIUM,
             enabled_fn=lambda s: s.signal_quality_ap_count > 0,
         ),
         # Phase 4B (#325): current power mode; org-wide paginated (perPage max 20).
@@ -373,7 +332,6 @@ class DeviceCollector(MetricCollector):
             priority=3,
             floor_seconds=900,
             cost_fn=lambda s: pages(s.ap_count, 20),
-            tier=UpdateTier.MEDIUM,
             enabled_fn=lambda s: s.ap_count > 0,
         ),
         # Phase 4B (#326): Catalyst AP wireless-controller association; org-wide paginated.
@@ -382,7 +340,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=3600,
             cost_fn=lambda s: pages(s.catalyst_ap_count, 1000),
-            tier=UpdateTier.MEDIUM,
             enabled_fn=lambda s: s.catalyst_ap_count > 0,
         ),
         # Phase 4B (#327): eSIM inventory; 1 org-wide call.
@@ -391,7 +348,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=3600,
             cost_fn=lambda s: 1.0,
-            tier=UpdateTier.MEDIUM,
             enabled_fn=lambda s: s.cellular_count > 0,
         ),
         # Phase 4B (#328): HA role from org-wide uplinks/statuses (MX/MG/Z rows).
@@ -400,7 +356,6 @@ class DeviceCollector(MetricCollector):
             priority=3,
             floor_seconds=900,
             cost_fn=lambda s: pages(s.appliance_count + s.cellular_count, 1000),
-            tier=UpdateTier.MEDIUM,
             enabled_fn=lambda s: s.cellular_count > 0,
         ),
         # Phase 4B (#330): org-wide uplink-status overview aggregate; 1 call.
@@ -409,7 +364,6 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 1.0,
-            tier=UpdateTier.MEDIUM,
             enabled_fn=lambda s: s.appliance_count > 0,
         ),
     )
@@ -1404,16 +1358,25 @@ class DeviceCollector(MetricCollector):
                 logger.exception("Failed to collect MX HA redundancy")
                 self._track_error(ErrorCategory.UNKNOWN)
 
+            # The mx_vpn group covers BOTH the VpnStatuses call (collect) and the
+            # VpnStats call (collect_vpn_stats). Evaluate the gate ONCE here and
+            # thread the result into both — ``_should_run_group`` mutates the
+            # scheduler's attempt clock, so a second call would read as a failed
+            # retry and suppress the pair mid-cycle (#631).
+            mx_vpn_due = self._should_run_group(EndpointGroupName.MX_VPN)
+
             # Collect VPN health metrics (point-in-time statuses)
             try:
-                await self.mx_collector.vpn_collector.collect(org_id, org_name)
+                await self.mx_collector.vpn_collector.collect(org_id, org_name, due=mx_vpn_due)
             except Exception:
                 logger.exception("Failed to collect MX VPN metrics")
                 self._track_error(ErrorCategory.UNKNOWN)
 
             # Collect VPN history stats (usage volume + per-peer-pair latency)
             try:
-                await self.mx_collector.vpn_collector.collect_vpn_stats(org_id, org_name)
+                await self.mx_collector.vpn_collector.collect_vpn_stats(
+                    org_id, org_name, due=mx_vpn_due
+                )
             except Exception:
                 logger.exception("Failed to collect MX VPN stats")
                 self._track_error(ErrorCategory.UNKNOWN)

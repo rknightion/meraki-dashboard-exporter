@@ -42,7 +42,6 @@ SECTION_TITLES: dict[str, str] = {
     "meraki": "MERAKI API (required key + org/region)",
     "logging": "LOGGING",
     "api": "MERAKI API TUNING (retries, batching, concurrency, rate limiting)",
-    "update_intervals": "COLLECTOR UPDATE INTERVALS (per tier, seconds)",
     "server": "HTTP SERVER",
     "webhooks": "WEBHOOK RECEIVER",
     "otel": "OPENTELEMETRY (traces + data logs + OTLP metrics bridge)",

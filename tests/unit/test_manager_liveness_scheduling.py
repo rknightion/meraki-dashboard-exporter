@@ -1,15 +1,25 @@
-"""Tests for CollectorManager scheduling clamp, readiness success-gating, and liveness helpers.
+"""Tests for CollectorManager readiness success-gating and liveness helpers.
 
-Covers bug-bash findings:
-- F-018: smoothing offsets must not stretch a tier's cadence past its interval.
-- F-105: /ready (tier readiness) must reflect real collection success, not mere attempts.
-- F-043: manager exposes last-success / attempted signals for the liveness dead-man switch.
+Covers bug-bash findings, re-expressed against the de-tiered (#631) manager:
+- F-105: readiness must reflect real collection success, not mere attempts — a
+  collector owning an enabled priority-<=3 gated group is only "ready" once it
+  has actually completed a successful run.
+- F-043: manager exposes last-success / attempted signals for the liveness
+  dead-man switch.
+
+The per-tier smoothing/offset clamp tests (old F-018, #591) were deleted with the
+tier model: `collect_tier`, `get_tier_interval`, `_get_smoothing_window`,
+`_get_collector_offset`, `_run_collector_with_delay`, `_tier_initial_complete`,
+and `collector_offsets` no longer exist. The equivalent per-collector phase
+offset now lives on `MetricCollector.phase_offset_seconds()`.
 """
 
 from __future__ import annotations
 
+import asyncio
 import time
-from unittest.mock import patch
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import SecretStr
@@ -17,7 +27,7 @@ from pydantic import SecretStr
 from meraki_dashboard_exporter.collectors.manager import CollectorManager
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
-from meraki_dashboard_exporter.core.constants import UpdateTier
+from meraki_dashboard_exporter.core.scheduler import EndpointGroup, EndpointGroupName
 
 
 def _settings(**overrides: object) -> Settings:
@@ -34,8 +44,6 @@ def _settings(**overrides: object) -> Settings:
 
 def _bare_manager(settings: Settings) -> CollectorManager:
     """Build a CollectorManager with real metrics but no real collectors."""
-    from unittest.mock import MagicMock
-
     mock_client = MagicMock()
     mock_client.api = MagicMock()
     with (
@@ -45,204 +53,83 @@ def _bare_manager(settings: Settings) -> CollectorManager:
         return CollectorManager(client=mock_client, settings=settings)
 
 
-class _SucceedingCollector:
-    is_active = True
-
-    async def collect(self) -> None:
-        return None
-
-
-class _FailingCollector:
-    is_active = True
-
-    async def collect(self) -> None:
-        raise RuntimeError("boom")
+def _group(name: EndpointGroupName, priority: int, floor: float) -> EndpointGroup:
+    return EndpointGroup(
+        name=name,
+        priority=priority,
+        floor_seconds=floor,
+        cost_fn=lambda shape: 1.0,
+    )
 
 
-# ---------------------------------------------------------------------------
-# F-018 - smoothing offsets must not stretch tier cadence past the interval
-# ---------------------------------------------------------------------------
+def _readiness_collector(name: str, *, succeeds: bool, group: EndpointGroup) -> Any:
+    """Build a collector stub that owns ``group`` and succeeds/fails on collect."""
+
+    async def collect(self: Any) -> None:
+        if not succeeds:
+            raise RuntimeError("boom")
+
+    cls = type(
+        name,
+        (),
+        {
+            "is_active": True,
+            "get_endpoint_groups": lambda self: (group,),
+            "collect": collect,
+            "collector_cadence_seconds": lambda self: 60.0,
+            "phase_offset_seconds": lambda self: 0.0,
+        },
+    )
+    return cls()
 
 
-class TestSmoothingOffsetClamp:
-    """The maximum smoothing offset must stay strictly within the tier interval."""
-
-    def test_smoothing_window_never_exceeds_half_interval_default(self) -> None:
-        """With default settings the smoothing window stays within half the interval."""
-        settings = _settings()  # defaults: smoothing_enabled True, window_ratio 0.8
-        manager = _bare_manager(settings)
-
-        for tier in UpdateTier:
-            interval = manager.get_tier_interval(tier)
-            window = manager._get_smoothing_window(tier)
-            assert window <= interval * 0.5 + 1e-9, (
-                f"{tier}: window {window} exceeds half interval {interval}"
-            )
-            assert window < interval
-
-    def test_smoothing_window_capped_with_ratio_one(self) -> None:
-        """Even at the maximum window ratio the offset stays bounded within the interval."""
-        settings = _settings(smoothing_window_ratio=1.0)
-        manager = _bare_manager(settings)
-
-        for tier in UpdateTier:
-            interval = manager.get_tier_interval(tier)
-            window = manager._get_smoothing_window(tier)
-            assert window <= interval * 0.5 + 1e-9
-            assert window < interval
-
-    def test_collector_offset_within_interval(self) -> None:
-        """Every collector's derived offset stays within half the tier interval."""
-        settings = _settings(smoothing_window_ratio=1.0)
-        manager = _bare_manager(settings)
-
-        for tier in UpdateTier:
-            interval = manager.get_tier_interval(tier)
-            for name in ("DeviceCollector", "NetworkHealthCollector", "OrganizationCollector"):
-                offset = manager._get_collector_offset(name, tier)
-                assert 0.0 <= offset <= interval * 0.5 + 1e-9
-                assert offset < interval
+def _register(manager: CollectorManager, collector: Any, group: EndpointGroup) -> str:
+    """Wire a fake collector into the manager + scheduler; return its name."""
+    name = collector.__class__.__name__
+    manager.scheduler.register_groups([group])
+    manager.collectors = [collector]
+    manager.collector_health[name] = {
+        "last_success_time": None,
+        "failure_streak": 0,
+        "total_runs": 0,
+        "total_successes": 0,
+        "total_failures": 0,
+    }
+    manager._collector_locks[name] = asyncio.Lock()
+    return name
 
 
 # ---------------------------------------------------------------------------
-# #591 - initial collection must skip the smoothing offset delay
-# ---------------------------------------------------------------------------
-
-
-class TestInitialCollectionSkipsSmoothing:
-    """The first collection cycle of each tier must run without the smoothing offset.
-
-    The deterministic per-collector offset adds up to 0.5x the tier interval of
-    latency on every startup/rolling restart, delaying /ready. Smoothing must
-    apply only from the 2nd cycle onward; steady-state cadence is unchanged.
-    """
-
-    def _prepare(self, manager: CollectorManager, collector: object) -> str:
-        import asyncio
-
-        name = collector.__class__.__name__
-        manager.collectors[UpdateTier.FAST] = [collector]  # type: ignore[list-item]
-        manager.collector_health[name] = {
-            "last_success_time": None,
-            "failure_streak": 0,
-            "total_runs": 0,
-            "total_successes": 0,
-            "total_failures": 0,
-        }
-        manager._collector_locks[name] = asyncio.Lock()
-        return name
-
-    async def test_first_cycle_skips_offset(self) -> None:
-        """On the very first cycle the offset passed to each collector is 0."""
-        settings = _settings(smoothing_enabled=True)
-        manager = _bare_manager(settings)
-        collector = _SucceedingCollector()
-        name = self._prepare(manager, collector)
-
-        # Sanity: this collector has a non-zero configured smoothing offset.
-        assert manager._get_collector_offset(name, UpdateTier.FAST) > 0
-        assert manager._tier_initial_complete["fast"] is False
-
-        captured: list[float] = []
-
-        async def _capture(coll, tier, timeout, offset, window):  # type: ignore[no-untyped-def]
-            captured.append(offset)
-
-        with patch.object(manager, "_run_collector_with_delay", side_effect=_capture):
-            await manager.collect_tier(UpdateTier.FAST)
-
-        assert captured == [0.0]
-        assert manager.collector_offsets[(name, "fast")] == 0.0
-
-    async def test_subsequent_cycle_applies_offset(self) -> None:
-        """Once the tier's initial cycle is complete, the real offset is applied."""
-        settings = _settings(smoothing_enabled=True)
-        manager = _bare_manager(settings)
-        collector = _SucceedingCollector()
-        name = self._prepare(manager, collector)
-
-        # Simulate the initial cycle already having completed.
-        manager._tier_initial_complete["fast"] = True
-        expected = manager._get_collector_offset(name, UpdateTier.FAST)
-        assert expected > 0
-
-        captured: list[float] = []
-
-        async def _capture(coll, tier, timeout, offset, window):  # type: ignore[no-untyped-def]
-            captured.append(offset)
-
-        with patch.object(manager, "_run_collector_with_delay", side_effect=_capture):
-            await manager.collect_tier(UpdateTier.FAST)
-
-        assert captured == [expected]
-        assert manager.collector_offsets[(name, "fast")] == expected
-
-
-# ---------------------------------------------------------------------------
-# F-105 - tier readiness reflects real success, not just an attempted cycle
+# F-105 — readiness reflects real success, not just an attempted run
 # ---------------------------------------------------------------------------
 
 
 class TestReadinessSuccessGating:
-    """collect_tier must only mark a tier ready once a collector actually succeeds."""
+    """run_collector_once only records first-success for a collector that succeeds."""
 
-    async def test_all_collectors_fail_tier_not_ready(self) -> None:
-        """A tier where every collector fails is not marked ready (F-105)."""
-        import asyncio
+    async def test_failing_collector_not_ready(self) -> None:
+        """A collector whose only run fails is not marked ready (F-105)."""
+        manager = _bare_manager(_settings())
+        group = _group(EndpointGroupName.MS_PORT_STATUS, priority=3, floor=300)
+        collector = _readiness_collector("MSCollector", succeeds=False, group=group)
+        name = _register(manager, collector, group)
 
-        settings = _settings(smoothing_enabled=False)
-        manager = _bare_manager(settings)
+        await manager.run_collector_once(collector)
 
-        collector = _FailingCollector()
-        name = collector.__class__.__name__
-        manager.collectors[UpdateTier.FAST] = [collector]  # type: ignore[list-item]
-        manager.collector_health[name] = {
-            "last_success_time": None,
-            "failure_streak": 0,
-            "total_runs": 0,
-            "total_successes": 0,
-            "total_failures": 0,
-        }
-        manager._collector_locks[name] = asyncio.Lock()
+        assert name not in manager._collector_succeeded
+        assert manager.get_readiness_status()["collectors"][name] is False
 
-        await manager.collect_tier(UpdateTier.FAST)
+    async def test_successful_collector_marks_ready(self) -> None:
+        """A collector that completes a successful run is marked ready."""
+        manager = _bare_manager(_settings())
+        group = _group(EndpointGroupName.MS_PORT_STATUS, priority=3, floor=300)
+        collector = _readiness_collector("MSCollector", succeeds=True, group=group)
+        name = _register(manager, collector, group)
 
-        assert manager._tier_initial_complete["fast"] is False
-        assert manager.get_readiness_status()["collectors"]["fast"] is False
+        await manager.run_collector_once(collector)
 
-    async def test_successful_collector_marks_tier_ready(self) -> None:
-        """A tier with a succeeding collector is marked ready."""
-        import asyncio
-
-        settings = _settings(smoothing_enabled=False)
-        manager = _bare_manager(settings)
-
-        collector = _SucceedingCollector()
-        name = collector.__class__.__name__
-        manager.collectors[UpdateTier.FAST] = [collector]  # type: ignore[list-item]
-        manager.collector_health[name] = {
-            "last_success_time": None,
-            "failure_streak": 0,
-            "total_runs": 0,
-            "total_successes": 0,
-            "total_failures": 0,
-        }
-        manager._collector_locks[name] = asyncio.Lock()
-
-        await manager.collect_tier(UpdateTier.FAST)
-
-        assert manager._tier_initial_complete["fast"] is True
-        assert manager.get_readiness_status()["collectors"]["fast"] is True
-
-    async def test_empty_tier_still_marks_ready(self) -> None:
-        """A tier with no collectors is trivially ready."""
-        settings = _settings(smoothing_enabled=False)
-        manager = _bare_manager(settings)
-
-        manager.collectors[UpdateTier.FAST] = []
-        await manager.collect_tier(UpdateTier.FAST)
-
-        assert manager._tier_initial_complete["fast"] is True
+        assert name in manager._collector_succeeded
+        assert manager.get_readiness_status()["collectors"][name] is True
 
 
 # ---------------------------------------------------------------------------

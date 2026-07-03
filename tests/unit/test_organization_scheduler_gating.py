@@ -1,6 +1,6 @@
 """Tests for #617 scheduler gating on the OrganizationCollector lane.
 
-Covers the fourteen org endpoint-group declarations (names/priority/floor/tier/
+Covers the fourteen org endpoint-group declarations (names/priority/floor/
 cost) and the fetch-site gates on the coordinator-direct methods and the five org
 sub-collectors (should_run gate, mark_ran on success, ttl_seconds threading).
 """
@@ -9,10 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from meraki_dashboard_exporter.collectors.organization import OrganizationCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.scheduler import (
     EndpointGroupName,
     OrgShape,
@@ -104,13 +101,12 @@ class TestOrgEndpointGroupDeclarations:
         groups = {g.name: g for g in OrganizationCollector.endpoint_groups}
         assert set(groups) == set(_EXPECTED)
 
-    def test_priority_floor_and_tier(self) -> None:
-        """Each group carries the expected priority, floor, tier, gated flag."""
+    def test_priority_floor_and_gating(self) -> None:
+        """Each group carries the expected priority, floor, gated flag."""
         groups = {g.name: g for g in OrganizationCollector.endpoint_groups}
         for name, (priority, floor) in _EXPECTED.items():
             assert groups[name].priority == priority, name
             assert groups[name].floor_seconds == floor, name
-            assert groups[name].tier == UpdateTier.MEDIUM, name
             assert groups[name].gated is True, name
             assert groups[name].setting_pin is None, name
 
@@ -133,7 +129,6 @@ class TestOrgCoordinatorGates(BaseCollectorTest):
     """Gate behaviour for coordinator-direct org fetch sites."""
 
     collector_class = OrganizationCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _collector(self, mock_api, settings, isolated_registry, inventory, scheduler):
         """Construct an OrganizationCollector wired to a fake scheduler."""
@@ -221,7 +216,6 @@ class TestOrgSubCollectorGates(BaseCollectorTest):
     """Gate behaviour for the five org sub-collectors via the coordinator."""
 
     collector_class = OrganizationCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _collector(self, mock_api, settings, isolated_registry, inventory, scheduler):
         """Construct an OrganizationCollector wired to a fake scheduler."""
@@ -297,10 +291,3 @@ class TestOrgSubCollectorGates(BaseCollectorTest):
         result = await collector.firmware_collector.collect("org-1", "Org")
         assert result is True
         assert EndpointGroupName.ORG_FIRMWARE in sched.marked
-
-
-@pytest.mark.parametrize("group", list(_EXPECTED))
-def test_every_group_is_medium_tier(group: EndpointGroupName) -> None:
-    """Every org endpoint group services the MEDIUM heartbeat."""
-    groups = {g.name: g for g in OrganizationCollector.endpoint_groups}
-    assert groups[group].tier == UpdateTier.MEDIUM

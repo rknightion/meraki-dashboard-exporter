@@ -6,11 +6,8 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
-from opentelemetry import trace
 from prometheus_client import Counter, Gauge
 
-from ..core.async_utils import ManagedTaskGroup
-from ..core.constants import UpdateTier
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
@@ -30,15 +27,6 @@ if TYPE_CHECKING:
     from ..core.scheduler import OrgShape
 
 logger = get_logger(__name__)
-
-# Upper bound on a collector's smoothing start-offset as a fraction of its tier
-# interval (F-018). The tier's effective cadence is ~max(offset_i + duration_i),
-# so an offset approaching the full interval would stretch the whole tier's
-# period past its configured interval. Capping the max offset at half the
-# interval guarantees smoothing offsets alone can never push cadence beyond the
-# interval - only a collector that itself runs >50% of the interval can, which
-# is a utilization problem surfaced separately by the utilization metric.
-_SMOOTHING_MAX_INTERVAL_FRACTION = 0.5
 
 # Collectors that consult the shared OrgHealthTracker to skip per-org collection
 # for organizations currently in exponential backoff (F-169). Three of them also
@@ -60,7 +48,7 @@ _ORG_HEALTH_TRACKER_COLLECTORS = frozenset({
 
 
 class CollectorManager:
-    """Manages and coordinates metric collectors with tiered update intervals.
+    """Manages and coordinates metric collectors on per-collector, group-clocked loops.
 
     Parameters
     ----------
@@ -93,11 +81,14 @@ class CollectorManager:
         # after collectors are instantiated (see _register_endpoint_groups).
         self.scheduler = EndpointScheduler(settings, self.rate_limiter)
 
-        self.collectors: dict[UpdateTier, list[MetricCollector]] = {
-            UpdateTier.FAST: [],
-            UpdateTier.MEDIUM: [],
-            UpdateTier.SLOW: [],
-        }
+        # Flat list of all instantiated top-level collectors. Each runs its own
+        # endpoint-group-clocked loop (#631); there is no tier grouping.
+        self.collectors: list[MetricCollector] = []
+
+        # Bound concurrent collector runs across all the per-collector loops.
+        self._collector_semaphore = asyncio.Semaphore(
+            self.settings.collectors.max_concurrent_collectors
+        )
 
         # Initialize shared inventory service for caching org/network/device data.
         # Pass a NetworkFilter so excluded networks are dropped at the read path.
@@ -119,22 +110,18 @@ class CollectorManager:
         # Track skipped/disabled collectors for visibility
         self.skipped_collectors: list[dict[str, str]] = []
 
-        # Track collector offsets for diagnostics
-        self.collector_offsets: dict[tuple[str, str], float] = {}
         self._collector_index: dict[str, MetricCollector] = {}
-        self._collector_tiers: dict[str, UpdateTier] = {}
         self._collector_locks: dict[str, asyncio.Lock] = {}
 
-        # Track whether each tier has completed its first collection cycle
-        self._tier_initial_complete: dict[str, bool] = {
-            "fast": False,
-            "medium": False,
-            "slow": False,
-        }
+        # Names of collectors that have completed at least one SUCCESSFUL run.
+        # Drives readiness (every collector owning an enabled priority-<=3 group
+        # must appear here) — the de-tiered replacement for tier-complete flags.
+        self._collector_succeeded: set[str] = set()
 
         self._initialize_metrics()
         self._initialize_collectors()
         self._register_endpoint_groups()
+        self._install_ttl_resolver()
         self._validate_collector_configuration()
 
     def _initialize_metrics(self) -> None:
@@ -145,7 +132,6 @@ class CollectorManager:
             "Number of parallel organization collections currently active",
             labelnames=[
                 LabelName.COLLECTOR.value,
-                LabelName.TIER.value,
             ],
         )
 
@@ -155,8 +141,19 @@ class CollectorManager:
             "Total number of collection errors by collector and phase",
             labelnames=[
                 LabelName.COLLECTOR.value,
-                LabelName.TIER.value,
                 LabelName.ERROR_TYPE.value,
+            ],
+        )
+
+        # Per-collector effective cadence (min solved interval of its enabled
+        # gated groups) — the de-tiered replacement for the per-tier interval;
+        # staleness alerts read `time() - success_timestamp > 3 x cadence` (#631).
+        self._collector_cadence = Gauge(
+            CollectorMetricName.COLLECTOR_CADENCE_SECONDS.value,
+            "Effective cadence of a collector (smallest solved interval of its "
+            "enabled endpoint groups)",
+            labelnames=[
+                LabelName.COLLECTOR.value,
             ],
         )
 
@@ -172,75 +169,44 @@ class CollectorManager:
             "Consecutive failures for each collector since last success",
             labelnames=[
                 LabelName.COLLECTOR.value,
-                LabelName.TIER.value,
             ],
         )
 
-        # Gauge for collection utilization ratio (actual_duration / tier_interval)
+        # Gauge for collection utilization ratio (actual_duration / collector cadence)
         self._collection_utilization = Gauge(
             CollectorMetricName.EXPORTER_COLLECTION_UTILIZATION_RATIO.value,
-            "Fraction of the tier interval consumed by actual collection (0=instant, 1=full interval)",
+            "Fraction of the collector's cadence consumed by actual collection "
+            "(0=instant, 1=full cadence)",
             labelnames=[
                 LabelName.COLLECTOR.value,
-                LabelName.TIER.value,
             ],
         )
 
-    def _get_tier_interval(self, tier: UpdateTier) -> int:
-        if tier == UpdateTier.FAST:
-            return self.settings.update_intervals.fast
-        if tier == UpdateTier.MEDIUM:
-            return self.settings.update_intervals.medium
-        return self.settings.update_intervals.slow
+    def _install_ttl_resolver(self) -> None:
+        """Wire the expiration manager's fallback-TTL resolver to collector cadence.
 
-    def _get_tier_concurrency(self, tier: UpdateTier) -> int:
-        """Get the concurrency limit for a specific update tier.
-
-        Parameters
-        ----------
-        tier : UpdateTier
-            The update tier.
-
-        Returns
-        -------
-        int
-            The maximum concurrent tasks allowed for this tier.
-
+        Series without an explicit ``ttl_seconds`` fall back to the owning
+        collector's current cadence × ``metric_ttl_multiplier`` (#631), evaluated
+        lazily at cleanup so it tracks the solver's live intervals.
         """
-        if tier == UpdateTier.FAST:
-            return self.settings.api.concurrency_limit_fast
-        elif tier == UpdateTier.MEDIUM:
-            return self.settings.api.concurrency_limit_medium
-        elif tier == UpdateTier.SLOW:
-            return self.settings.api.concurrency_limit_slow
-        return self.settings.api.concurrency_limit  # fallback
+        if self.expiration_manager is None:
+            return
+        multiplier = float(self.settings.monitoring.metric_ttl_multiplier)
 
-    def _get_smoothing_window(self, tier: UpdateTier) -> float:
-        if not self.settings.api.smoothing_enabled:
-            return 0.0
-        interval = self._get_tier_interval(tier)
-        window = max(0.0, float(interval) * self.settings.api.smoothing_window_ratio)
-        # Cap 1 (F-018): keep the max offset within a bounded fraction of the tier
-        # interval so smoothing offsets can never stretch the tier cadence past
-        # its configured interval.
-        window = min(window, float(interval) * _SMOOTHING_MAX_INTERVAL_FRACTION)
-        # Cap 2: keep the offset within the per-collector timeout budget.
-        timeout_budget = float(self.settings.collectors.collector_timeout) - 10.0
-        if timeout_budget > 0:
-            window = min(window, timeout_budget)
-        return max(0.0, window)
+        def _resolver(collector_name: str) -> float | None:
+            collector = self.get_collector_by_class_name(collector_name)
+            if collector is None:
+                return None
+            return collector.collector_cadence_seconds() * multiplier
 
-    def _get_collector_offset(self, collector_name: str, tier: UpdateTier) -> float:
-        import hashlib
+        self.expiration_manager.set_ttl_resolver(_resolver)
 
-        window = self._get_smoothing_window(tier)
-        if window <= 0:
-            return 0.0
-        key = f"{collector_name}:{tier.value}"
-        digest = hashlib.sha256(key.encode("utf-8")).digest()
-        raw = int.from_bytes(digest[:4], "big")
-        ratio = raw / 0xFFFFFFFF
-        return ratio * window
+    def _emit_cadence_gauges(self) -> None:
+        """Publish each collector's effective cadence gauge (post-resolve)."""
+        for collector in self.collectors:
+            self._collector_cadence.labels(
+                collector=collector.__class__.__name__,
+            ).set(collector.collector_cadence_seconds())
 
     def _initialize_collectors(self) -> None:
         """Initialize all enabled collectors."""
@@ -258,95 +224,81 @@ class CollectorManager:
             organization,
         )
 
-        # Get all registered collectors
+        # Get all registered collectors (flat list, no tiers)
         registered_collectors = get_registered_collectors()
 
         # Get active collector names for filtering
         active_collector_names = self.settings.collectors.active_collectors
 
-        # Initialize collectors for each tier
-        for tier, collector_classes in registered_collectors.items():
-            for collector_class in collector_classes:
-                collector_name = collector_class.__name__
-                collector_short_name = collector_name.replace("Collector", "").lower()
+        for collector_class in registered_collectors:
+            collector_name = collector_class.__name__
+            collector_short_name = collector_name.replace("Collector", "").lower()
 
-                # Check if collector is in active list
-                if collector_short_name not in active_collector_names:
-                    logger.info(
-                        "Skipping collector (not in active list)",
-                        collector=collector_name,
-                        tier=tier.value,
-                    )
-                    # Track skipped collectors
-                    self.skipped_collectors.append({
-                        "name": collector_name,
-                        "tier": tier.value,
-                        "reason": "not in active_collectors list",
-                    })
-                    continue
+            # Check if collector is in active list
+            if collector_short_name not in active_collector_names:
+                logger.info(
+                    "Skipping collector (not in active list)",
+                    collector=collector_name,
+                )
+                # Track skipped collectors
+                self.skipped_collectors.append({
+                    "name": collector_name,
+                    "reason": "not in active_collectors list",
+                })
+                continue
 
-                try:
-                    # Create instance of the collector with inventory service and expiration manager
-                    # Pass the shared org_health_tracker to every collector that gates
-                    # per-org collection on it for graceful degradation (F-169).
-                    extra_kwargs: dict[str, Any] = {}
-                    if collector_name in _ORG_HEALTH_TRACKER_COLLECTORS:
-                        extra_kwargs["org_health_tracker"] = self.org_health_tracker
-                    collector_instance = collector_class(
-                        api=self.client.api,
-                        settings=self.settings,
-                        inventory=self.inventory,
-                        expiration_manager=self.expiration_manager,
-                        rate_limiter=self.rate_limiter,
-                        scheduler=self.scheduler,
-                        data_log_emitter=self.data_log_emitter,
-                        **extra_kwargs,
-                    )
-                    self.collectors[tier].append(collector_instance)
-                    self._register_collector_metadata(collector_instance, tier)
+            try:
+                # Create instance of the collector with inventory service and expiration manager
+                # Pass the shared org_health_tracker to every collector that gates
+                # per-org collection on it for graceful degradation (F-169).
+                extra_kwargs: dict[str, Any] = {}
+                if collector_name in _ORG_HEALTH_TRACKER_COLLECTORS:
+                    extra_kwargs["org_health_tracker"] = self.org_health_tracker
+                collector_instance = collector_class(
+                    api=self.client.api,
+                    settings=self.settings,
+                    inventory=self.inventory,
+                    expiration_manager=self.expiration_manager,
+                    rate_limiter=self.rate_limiter,
+                    scheduler=self.scheduler,
+                    data_log_emitter=self.data_log_emitter,
+                    **extra_kwargs,
+                )
+                self.collectors.append(collector_instance)
+                self._register_collector_metadata(collector_instance)
 
-                    # Initialize health tracking for this collector
-                    self.collector_health[collector_name] = {
-                        "last_success_time": None,
-                        "failure_streak": 0,
-                        "total_runs": 0,
-                        "total_successes": 0,
-                        "total_failures": 0,
-                    }
+                # Initialize health tracking for this collector
+                self.collector_health[collector_name] = {
+                    "last_success_time": None,
+                    "failure_streak": 0,
+                    "total_runs": 0,
+                    "total_successes": 0,
+                    "total_failures": 0,
+                }
 
-                    logger.info(
-                        "Initialized collector with inventory cache",
-                        collector=collector_name,
-                        tier=tier.value,
-                    )
-                except Exception as e:
-                    logger.error(
-                        "Failed to initialize collector",
-                        collector=collector_name,
-                        tier=tier.value,
-                        error=str(e),
-                        error_type=type(e).__name__,
-                    )
-                    # Track as skipped due to initialization failure
-                    self.skipped_collectors.append({
-                        "name": collector_name,
-                        "tier": tier.value,
-                        "reason": f"initialization failed: {type(e).__name__}",
-                    })
-                    # Continue with other collectors even if one fails to initialize
+                logger.info(
+                    "Initialized collector with inventory cache",
+                    collector=collector_name,
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to initialize collector",
+                    collector=collector_name,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+                # Track as skipped due to initialization failure
+                self.skipped_collectors.append({
+                    "name": collector_name,
+                    "reason": f"initialization failed: {type(e).__name__}",
+                })
+                # Continue with other collectors even if one fails to initialize
 
     def _register_endpoint_groups(self) -> None:
-        """Register every collector's endpoint groups with the scheduler (#617).
-
-        Funnels ``get_endpoint_groups()`` from all instantiated collectors (across
-        every tier) into ``scheduler.register_groups``. Groups are empty until the
-        fetch-site gating lands (Wave 2), so this is a no-op at that point and
-        ``resolve()`` degrades to leaving intervals at their tier heartbeats.
-        """
+        """Register every collector's endpoint groups with the scheduler (#617)."""
         self.scheduler.register_groups(
             group
-            for tier_collectors in self.collectors.values()
-            for collector in tier_collectors
+            for collector in self.collectors
             for group in collector.get_endpoint_groups()
         )
 
@@ -357,33 +309,26 @@ class CollectorManager:
     def _register_collector_metadata(
         self,
         collector: MetricCollector,
-        tier: UpdateTier,
     ) -> None:
         collector_name = collector.__class__.__name__
         short_name = collector_name.replace("Collector", "")
         for key in {collector_name, short_name}:
             normalized = self._normalize_collector_name(key)
             self._collector_index[normalized] = collector
-        self._collector_tiers[collector_name] = tier
         if collector_name not in self._collector_locks:
             self._collector_locks[collector_name] = asyncio.Lock()
 
-    def get_collector_by_name(self, name: str) -> tuple[MetricCollector, UpdateTier] | None:
-        """Look up a collector and its tier by name."""
+    def get_collector_by_name(self, name: str) -> MetricCollector | None:
+        """Look up a collector by (normalized) name."""
         normalized = self._normalize_collector_name(name)
-        collector = self._collector_index.get(normalized)
-        if collector is None:
-            return None
-        collector_name = collector.__class__.__name__
-        tier = self._collector_tiers.get(collector_name, collector.update_tier)
-        return collector, tier
+        return self._collector_index.get(normalized)
 
     def get_collector_by_class_name(self, name: str) -> MetricCollector | None:
         """Return the instantiated collector whose class name is ``name`` (#614).
 
-        Scans every tier's collector instances. Returns ``None`` when no enabled
-        collector has that class name — e.g. the collector was disabled via
-        ``active_collectors`` — so callers degrade gracefully.
+        Returns ``None`` when no enabled collector has that class name — e.g. the
+        collector was disabled via ``active_collectors`` — so callers degrade
+        gracefully.
 
         Parameters
         ----------
@@ -396,10 +341,9 @@ class CollectorManager:
             The matching collector instance, or ``None`` if absent/disabled.
 
         """
-        for tier_collectors in self.collectors.values():
-            for collector in tier_collectors:
-                if collector.__class__.__name__ == name:
-                    return collector
+        for collector in self.collectors:
+            if collector.__class__.__name__ == name:
+                return collector
         return None
 
     def is_collector_running(self, collector_name: str) -> bool:
@@ -409,10 +353,17 @@ class CollectorManager:
             return False
         return lock.locked()
 
-    async def run_collector_once(self, collector: MetricCollector, tier: UpdateTier) -> None:
-        """Run a single collector once with the configured timeout."""
+    async def run_collector_once(
+        self, collector: MetricCollector, *, force: bool = False
+    ) -> None:
+        """Run a single collector once with the configured timeout.
+
+        When ``force`` is True every endpoint group is fetched regardless of its
+        gate (used by the manual-trigger endpoint so a trigger actually refetches
+        rather than silently no-opping in-window groups, #631).
+        """
         timeout = self.settings.collectors.collector_timeout
-        await self._run_collector_with_timeout(collector, tier, timeout)
+        await self._run_collector_with_timeout(collector, timeout, force=force)
 
     def _validate_collector_configuration(self) -> None:
         """Validate collector configuration and warn about invalid names.
@@ -422,10 +373,9 @@ class CollectorManager:
         """
         # Get all known collector names (short form)
         all_known_collectors = set()
-        for tier_collectors in self.collectors.values():
-            for collector in tier_collectors:
-                collector_short_name = collector.__class__.__name__.replace("Collector", "").lower()
-                all_known_collectors.add(collector_short_name)
+        for collector in self.collectors:
+            collector_short_name = collector.__class__.__name__.replace("Collector", "").lower()
+            all_known_collectors.add(collector_short_name)
 
         # Also add skipped collectors to known list
         for skipped in self.skipped_collectors:
@@ -445,7 +395,7 @@ class CollectorManager:
             )
 
         # Log summary of collector configuration
-        active_count = sum(len(tier_collectors) for tier_collectors in self.collectors.values())
+        active_count = len(self.collectors)
         logger.info(
             "Collector configuration summary",
             active_collectors=active_count,
@@ -453,19 +403,33 @@ class CollectorManager:
             configured_names=sorted(configured_collectors),
         )
 
+    def _readiness_collectors(self) -> list[MetricCollector]:
+        """Collectors that gate readiness: those owning an enabled priority-<=3 group.
+
+        Config-style collectors (all priority-4 groups, e.g. ConfigCollector) are
+        excluded — exactly as the SLOW tier used to be — so readiness probes are
+        never blocked waiting on slow config data (#631, preserving F-105).
+        """
+        result: list[MetricCollector] = []
+        for collector in self.collectors:
+            if any(
+                group.priority <= 3 and group.gated and self.scheduler.is_enabled(group.name)
+                for group in collector.get_endpoint_groups()
+            ):
+                result.append(collector)
+        return result
+
     @property
     def is_ready(self) -> bool:
-        """Whether FAST+MEDIUM tiers completed their first collection.
+        """Whether every readiness-gating collector has succeeded at least once.
 
         AND at least one Meraki API request has returned HTTP 200 (#509
-        hardening). SLOW tier is excluded (readiness probes must not block
-        up to 900s).
+        hardening). A collector cycle that produced no success withholds
+        readiness (F-105).
         """
-        return (
-            self._tier_initial_complete["fast"]
-            and self._tier_initial_complete["medium"]
-            and self._has_api_success()
-        )
+        gating = self._readiness_collectors()
+        all_succeeded = all(c.__class__.__name__ in self._collector_succeeded for c in gating)
+        return bool(gating) and all_succeeded and self._has_api_success()
 
     def _has_api_success(self) -> bool:
         """Whether at least one Meraki API request returned HTTP 200 (#509)."""
@@ -473,22 +437,24 @@ class CollectorManager:
         return isinstance(count, int) and count > 0
 
     def get_readiness_status(self) -> dict[str, Any]:
-        """Return readiness status for each tier and overall readiness.
+        """Return overall readiness plus per-collector first-success state.
 
         Returns
         -------
         dict[str, Any]
             Dictionary with "ready" bool, "api_success" bool, and "collectors"
-            dict per tier.
+            mapping each readiness-gating collector name to whether it has
+            succeeded at least once.
 
         """
         return {
             "ready": self.is_ready,
             "api_success": self._has_api_success(),
             "collectors": {
-                "fast": self._tier_initial_complete["fast"],
-                "medium": self._tier_initial_complete["medium"],
-                "slow": self._tier_initial_complete["slow"],
+                collector.__class__.__name__: (
+                    collector.__class__.__name__ in self._collector_succeeded
+                )
+                for collector in self._readiness_collectors()
             },
         }
 
@@ -523,8 +489,28 @@ class CollectorManager:
         """
         return any(health.get("total_runs", 0) > 0 for health in self.collector_health.values())
 
+    def _ordered_collectors(self) -> list[MetricCollector]:
+        """Collectors ordered by best (lowest) group priority, then class name.
+
+        Priority-1 (up-ness/alerts) collectors run first so the freshest signals
+        land earliest; a collector with no groups sorts last. Deterministic.
+        """
+
+        def sort_key(collector: MetricCollector) -> tuple[int, str]:
+            groups = collector.get_endpoint_groups()
+            best = min((g.priority for g in groups), default=99)
+            return (best, collector.__class__.__name__)
+
+        return sorted(self.collectors, key=sort_key)
+
     async def collect_initial(self) -> None:
-        """Run initial collection from all tiers sequentially to avoid API overload."""
+        """Run one initial collection of every collector, sequentially.
+
+        Ordered by best group priority (up-ness first) then name, to bound
+        startup API load while landing the freshest signals earliest. Every gate
+        is open on a cold start (never-attempted groups are due), so this
+        refetches everything once.
+        """
         # Warm the cache before the first collection cycle so collectors get cache hits
         try:
             logger.info("Warming inventory cache before initial collection")
@@ -544,18 +530,21 @@ class CollectorManager:
         if self.settings.network_filter.is_active:
             await self._validate_network_filter()
 
-        # Collect tier by tier to reduce API load during startup
-        for tier in [UpdateTier.FAST, UpdateTier.MEDIUM, UpdateTier.SLOW]:
+        # Collect one collector at a time (priority order) to bound startup load.
+        for collector in self._ordered_collectors():
             try:
-                await self.collect_tier(tier)
-                # Small delay between tiers to avoid connection pool exhaustion
+                await self.run_collector_once(collector)
+                # Small delay between collectors to avoid connection pool exhaustion
                 await asyncio.sleep(1)
             except Exception:
                 logger.exception(
-                    "Failed to collect tier during initial collection",
-                    tier=tier,
+                    "Failed to collect during initial collection",
+                    collector=collector.__class__.__name__,
                 )
-                # Continue with next tier even if this one fails
+                # Continue with the next collector even if this one fails
+
+        # Publish the per-collector cadence gauges now that a schedule exists.
+        self._emit_cadence_gauges()
 
     async def _resolve_and_log_schedule(self) -> None:
         """Compute the org shape and resolve endpoint-group intervals (#617).
@@ -580,6 +569,7 @@ class CollectorManager:
         except Exception:
             logger.exception("Scheduler resolve failed during initial collection")
             return
+        self._emit_cadence_gauges()
         self._log_schedule_summary(shape)
 
     def _log_schedule_summary(self, shape: OrgShape) -> None:
@@ -625,13 +615,12 @@ class CollectorManager:
         demand cannot be squeezed under the budget by stretching alone.
         """
         names: set[str] = set()
-        for tier_collectors in self.collectors.values():
-            for collector in tier_collectors:
-                if any(
-                    group.priority >= 3 and group.gated for group in collector.get_endpoint_groups()
-                ):
-                    short = collector.__class__.__name__.replace("Collector", "").lower()
-                    names.add(short)
+        for collector in self.collectors:
+            if any(
+                group.priority >= 3 and group.gated for group in collector.get_endpoint_groups()
+            ):
+                short = collector.__class__.__name__.replace("Collector", "").lower()
+                names.add(short)
         return sorted(names)
 
     async def _validate_network_filter(self) -> None:
@@ -669,144 +658,30 @@ class CollectorManager:
             )
         logger.info("Network filter active", resolved_total=total_resolved)
 
-    @trace_method("collect.tier")
-    async def collect_tier(self, tier: UpdateTier) -> None:
-        """Run all collectors for a specific tier in parallel with bounded concurrency.
-
-        Uses ManagedTaskGroup to run multiple collectors concurrently while
-        respecting the configured concurrency limit. This provides significant
-        performance improvements for multi-organization deployments.
-
-        Parameters
-        ----------
-        tier : UpdateTier
-            The update tier to collect.
-
-        """
-        # Add tier to current span context for visibility
-        current_span = trace.get_current_span()
-        if current_span.is_recording():
-            current_span.set_attribute("tier", tier.value)
-
-        tier_collectors = self.collectors.get(tier, [])
-        if not tier_collectors:
-            logger.debug(
-                "No collectors for tier",
-                tier=tier,
-            )
-            # No collectors to run — mark tier as complete immediately
-            tier_key = tier.value
-            if not self._tier_initial_complete.get(tier_key, False):
-                self._tier_initial_complete[tier_key] = True
-            return
-
-        tier_concurrency = self._get_tier_concurrency(tier)
-        logger.info(
-            "Starting parallel collection for tier",
-            tier=tier,
-            collector_count=len(tier_collectors),
-            concurrency_limit=tier_concurrency,
-        )
-
-        # Use collector_timeout from settings (default: 240s)
-        timeout = self.settings.collectors.collector_timeout
-
-        smoothing_window = self._get_smoothing_window(tier)
-
-        # Skip the deterministic smoothing offset on the tier's FIRST collection
-        # cycle (#591). The offset delays each collector up to 0.5x the tier
-        # interval, which on every startup/rolling restart adds that latency to
-        # /ready (FAST+MEDIUM gated). Applying smoothing only once the tier has
-        # completed its initial cycle keeps steady-state cadence smoothing
-        # unchanged while making readiness fast after a restart.
-        apply_smoothing = self._tier_initial_complete.get(tier.value, False)
-
-        # Run collectors in parallel with bounded concurrency
-        async with ManagedTaskGroup(
-            name=f"tier_{tier.value}",
-            max_concurrency=tier_concurrency,
-        ) as group:
-            for collector in tier_collectors:
-                collector_name = collector.__class__.__name__
-                offset = (
-                    self._get_collector_offset(collector_name, tier) if apply_smoothing else 0.0
-                )
-                self.collector_offsets[(collector_name, tier.value)] = offset
-                await group.create_task(
-                    self._run_collector_with_delay(
-                        collector, tier, timeout, offset, smoothing_window
-                    ),
-                    name=collector_name,
-                )
-
-        logger.info(
-            "Completed collection for tier",
-            tier=tier,
-            collector_count=len(tier_collectors),
-        )
-
-        # Mark this tier's first collection complete only once at least one
-        # collector in the tier has actually SUCCEEDED (F-105). Marking it
-        # complete after a cycle where every collector failed (e.g. a bad or
-        # revoked API key) would flip /ready to 200 while the exporter has no
-        # real data, defeating the readiness gate the Helm chart documents.
-        tier_key = tier.value
-        if not self._tier_initial_complete.get(tier_key, False):
-            tier_had_success = any(
-                self.collector_health.get(c.__class__.__name__, {}).get("total_successes", 0) > 0
-                for c in tier_collectors
-            )
-            if tier_had_success:
-                self._tier_initial_complete[tier_key] = True
-                logger.info(
-                    "Tier initial collection complete",
-                    tier=tier_key,
-                    is_ready=self.is_ready,
-                )
-            else:
-                logger.warning(
-                    "Tier collection cycle completed but no collector succeeded; "
-                    "readiness withheld",
-                    tier=tier_key,
-                )
-
-    async def _run_collector_with_delay(
-        self,
-        collector: MetricCollector,
-        tier: UpdateTier,
-        timeout: int,
-        offset_seconds: float,
-        window_seconds: float,
-    ) -> None:
-        if offset_seconds > 0:
-            logger.debug(
-                "Delaying collector start for smoothing",
-                collector=collector.__class__.__name__,
-                tier=tier.value,
-                offset_seconds=round(offset_seconds, 2),
-                window_seconds=round(window_seconds, 2),
-            )
-            await asyncio.sleep(offset_seconds)
-        await self._run_collector_with_timeout(collector, tier, timeout)
-
+    @trace_method("collect.collector")
     async def _run_collector_with_timeout(
         self,
         collector: MetricCollector,
-        tier: UpdateTier,
         timeout: int,
+        *,
+        force: bool = False,
     ) -> None:
-        """Run a single collector with timeout and error handling.
+        """Run a single collector once with timeout, concurrency bound, and health tracking.
 
-        Tracks active collections, errors, and health status via metrics.
+        Bounded by the global ``max_concurrent_collectors`` semaphore so the many
+        per-collector loops never overwhelm the API together. When ``force`` is
+        True the collector fetches every group regardless of its gate (manual
+        trigger). Tracks active collections, errors, cadence-utilization, and
+        health; records first-success for readiness.
 
         Parameters
         ----------
         collector : MetricCollector
             The collector to run.
-        tier : UpdateTier
-            The update tier.
         timeout : int
             Timeout in seconds.
+        force : bool
+            Force every endpoint group to fetch this run (bypass gates).
 
         """
         collector_name = collector.__class__.__name__
@@ -819,21 +694,15 @@ class CollectorManager:
             logger.warning(
                 "Collector already running, skipping",
                 collector=collector_name,
-                tier=tier.value,
             )
             return
 
-        async with collector_lock:
-            logger.debug(
-                "Starting collector",
-                collector=collector_name,
-                tier=tier,
-            )
+        async with self._collector_semaphore, collector_lock:
+            logger.debug("Starting collector", collector=collector_name)
 
             # Track active collection
             self._parallel_collections_active.labels(
                 collector=collector_name,
-                tier=tier.value,
             ).inc()
 
             # Track run
@@ -842,68 +711,56 @@ class CollectorManager:
 
             success = False
             start_time = time.time()
+            if force:
+                collector._force_run = True
             try:
                 async with asyncio.timeout(timeout):
                     await collector.collect()
-                logger.debug(
-                    "Collector completed successfully",
-                    collector=collector_name,
-                    tier=tier,
-                )
+                logger.debug("Collector completed successfully", collector=collector_name)
                 success = True
             except TimeoutError:
                 logger.error(
                     "Collector timeout",
                     collector=collector_name,
-                    tier=tier,
                     timeout_seconds=timeout,
                 )
-                # Track timeout error
                 self._collection_errors.labels(
                     collector=collector_name,
-                    tier=tier.value,
                     error_type="TimeoutError",
                 ).inc()
                 # Error logged, but don't raise to allow other collectors to continue
             except asyncio.CancelledError:
-                logger.info(
-                    "Collector task cancelled",
-                    collector=collector_name,
-                    tier=tier.value,
-                )
+                logger.info("Collector task cancelled", collector=collector_name)
                 raise
             except Exception as e:
                 logger.error(
                     "Collector failed",
                     collector=collector_name,
-                    tier=tier,
                     error=str(e),
                     error_type=type(e).__name__,
                 )
-                # Track collection error
                 self._collection_errors.labels(
                     collector=collector_name,
-                    tier=tier.value,
                     error_type=type(e).__name__,
                 ).inc()
                 # Error logged, but don't raise to allow other collectors to continue
             finally:
-                # Calculate and record collection utilization ratio
+                if force:
+                    collector._force_run = False
+                # Record utilization as a fraction of the collector's cadence.
                 actual_duration = time.time() - start_time
-                tier_interval = self._get_tier_interval(tier)
-                utilization = actual_duration / tier_interval
+                cadence = max(1.0, collector.collector_cadence_seconds())
+                utilization = actual_duration / cadence
                 self._collection_utilization.labels(
                     collector=collector_name,
-                    tier=tier.value,
                 ).set(utilization)
                 if utilization > 0.8:
                     logger.warning(
                         "Collector utilization high - may not keep up",
                         collector=collector_name,
-                        tier=tier.value,
                         utilization=round(utilization, 2),
                         duration=round(actual_duration, 1),
-                        interval=tier_interval,
+                        cadence=round(cadence, 1),
                     )
 
                 # Update health tracking
@@ -912,6 +769,8 @@ class CollectorManager:
                         self.collector_health[collector_name]["last_success_time"] = time.time()
                         self.collector_health[collector_name]["failure_streak"] = 0
                         self.collector_health[collector_name]["total_successes"] += 1
+                        # Record first-success for readiness (#631).
+                        self._collector_succeeded.add(collector_name)
                     else:
                         self.collector_health[collector_name]["failure_streak"] += 1
                         self.collector_health[collector_name]["total_failures"] += 1
@@ -920,68 +779,34 @@ class CollectorManager:
                     # query time from meraki_exporter_collector_success_timestamp_seconds.
                     self._collector_failure_streak.labels(
                         collector=collector_name,
-                        tier=tier.value,
                     ).set(self.collector_health[collector_name]["failure_streak"])
 
                 # Decrement active collection counter
                 self._parallel_collections_active.labels(
                     collector=collector_name,
-                    tier=tier.value,
                 ).dec()
 
-    def get_tier_interval(self, tier: UpdateTier) -> int:
-        """Get the update interval for a tier.
-
-        Parameters
-        ----------
-        tier : UpdateTier
-            The update tier.
-
-        Returns
-        -------
-        int
-            The interval in seconds.
-
-        """
-        if tier == UpdateTier.FAST:
-            return self.settings.update_intervals.fast
-        elif tier == UpdateTier.MEDIUM:
-            return self.settings.update_intervals.medium
-        else:  # SLOW
-            return self.settings.update_intervals.slow
-
     def get_scheduling_diagnostics(self) -> dict[str, Any]:
-        """Return scheduling diagnostics for UI/logging."""
-        tier_info: dict[str, dict[str, Any]] = {}
+        """Return scheduling diagnostics for UI/logging.
+
+        Per-tier info is gone (#631): scheduling is now per endpoint group
+        (solved intervals + next-due under ``scheduler``) with a per-collector
+        cadence + phase-offset summary.
+        """
         timeout_seconds = self.settings.collectors.collector_timeout
         smoothing_cap = max(0.0, float(timeout_seconds) - 10.0)
-        for tier in UpdateTier:
-            interval = self.get_tier_interval(tier)
-            jitter_window = min(10.0, interval * 0.1)
-            smoothing_window = self._get_smoothing_window(tier)
-            tier_info[tier.value] = {
-                "interval": interval,
-                "jitter_window": round(jitter_window, 2),
-                "smoothing_window": round(smoothing_window, 2),
-            }
 
-        collector_offsets: list[dict[str, Any]] = []
-        for tier, collectors in self.collectors.items():
-            for collector in collectors:
-                collector_name = collector.__class__.__name__
-                offset = self._get_collector_offset(collector_name, tier)
-                collector_offsets.append({
-                    "collector": collector_name,
-                    "tier": tier.value,
-                    "offset_seconds": round(offset, 2),
-                })
+        collectors: list[dict[str, Any]] = []
+        for collector in self.collectors:
+            collector_name = collector.__class__.__name__
+            collectors.append({
+                "collector": collector_name,
+                "cadence_seconds": round(collector.collector_cadence_seconds(), 2),
+                "phase_offset_seconds": round(collector.phase_offset_seconds(), 2),
+            })
 
         return {
-            "tiers": tier_info,
-            "collector_offsets": sorted(
-                collector_offsets,
-                key=lambda item: (item["tier"], item["offset_seconds"]),
-            ),
+            "collectors": sorted(collectors, key=lambda item: item["collector"]),
             "smoothing": {
                 "enabled": self.settings.api.smoothing_enabled,
                 "window_ratio": self.settings.api.smoothing_window_ratio,
@@ -996,9 +821,7 @@ class CollectorManager:
                 "burst": self.settings.api.rate_limit_burst,
                 "share_fraction": self.settings.api.rate_limit_shared_fraction,
             },
-            # The legacy per-setting "endpoint_intervals" block is retired into the
-            # scheduler diagnostics (#617): the same operator pins now surface as
-            # per-group solved intervals under scheduler["groups"].
+            # Operator pins surface as per-group solved intervals under scheduler["groups"].
             "scheduler": self.scheduler.diagnostics(),
         }
 
@@ -1011,11 +834,9 @@ class CollectorManager:
             The collector to register.
 
         """
-        tier = collector.update_tier
-        self.collectors[tier].append(collector)
-        self._register_collector_metadata(collector, tier)
+        self.collectors.append(collector)
+        self._register_collector_metadata(collector)
         logger.info(
             "Registered collector",
             collector=collector.__class__.__name__,
-            tier=tier,
         )

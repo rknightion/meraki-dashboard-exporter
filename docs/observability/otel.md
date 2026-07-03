@@ -181,10 +181,13 @@ only when `include_identifiers=true`.
 Data logs are **per-entity, not per-metric-series** — a network with 10,000 active clients at a
 5-minute cadence produces roughly 10,000 log records per interval per enabled event. This is
 appropriate for a log/trace backend with volume-based retention (Loki, Elastic, any OTLP log
-sink) but is a materially different cost profile from Prometheus scraping. Built-in producers
-default to the SLOW update tier specifically to bound this; enabling more events or lowering the
-effective cadence multiplies volume linearly. Size your backend's ingest/retention accordingly
-before enabling this in a large environment.
+sink) but is a materially different cost profile from Prometheus scraping. Built-in producers run
+on their host collector's own endpoint-group cadence (see [Scheduler
+Architecture](scheduler.md)) — e.g. the MR per-client packet-loss/signal-quality producers ride
+the `mr_ssid_usage` group (900s floor) and the webhook-delivery producer rides `org_webhook_logs`
+(300s floor) — specifically to bound this; enabling more events or a shorter effective cadence
+multiplies volume linearly. Size your backend's ingest/retention accordingly before enabling this
+in a large environment.
 
 ### Self-observability
 

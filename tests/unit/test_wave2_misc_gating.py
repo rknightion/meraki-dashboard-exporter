@@ -20,7 +20,6 @@ from prometheus_client import Gauge
 from meraki_dashboard_exporter.collectors.devices.mg import MGCollector
 from meraki_dashboard_exporter.collectors.mt_alerts import MTSensorAlertsCollector
 from meraki_dashboard_exporter.collectors.mt_sensor import MTSensorCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName, OrgShape, pages
 from tests.helpers.base import BaseCollectorTest
 
@@ -84,7 +83,6 @@ class TestMTSensorAlertsGating(BaseCollectorTest):
     """Gate + declaration for the ``mt_sensor_alerts`` group."""
 
     collector_class = MTSensorAlertsCollector
-    update_tier = UpdateTier.MEDIUM
 
     def test_declares_mt_sensor_alerts_group(self) -> None:
         """The collector declares three groups: alerts + #302 profiles + #308 relationships.
@@ -100,7 +98,6 @@ class TestMTSensorAlertsGating(BaseCollectorTest):
         alerts = by_name[EndpointGroupName.MT_SENSOR_ALERTS]
         assert alerts.priority == 2
         assert alerts.floor_seconds == 300
-        assert alerts.tier == UpdateTier.MEDIUM
         assert alerts.gated is True
         assert alerts.setting_pin is None
         assert alerts.cost_fn(_make_shape(sensor_network_count=7)) == 7
@@ -108,13 +105,11 @@ class TestMTSensorAlertsGating(BaseCollectorTest):
         profiles = by_name[EndpointGroupName.MT_ALERT_PROFILES]
         assert profiles.priority == 4
         assert profiles.floor_seconds == 900
-        assert profiles.tier == UpdateTier.MEDIUM
         assert profiles.cost_fn(_make_shape(sensor_network_count=7)) == 7
 
         relationships = by_name[EndpointGroupName.MT_RELATIONSHIPS]
         assert relationships.priority == 4
         assert relationships.floor_seconds == 900
-        assert relationships.tier == UpdateTier.MEDIUM
         assert relationships.cost_fn(_make_shape(sensor_network_count=7)) == 7
 
     async def test_gate_skips_fetch_when_not_due(self, collector) -> None:
@@ -173,40 +168,45 @@ class TestMTSensorReadingsGating(BaseCollectorTest):
     """Gate + declaration for the ``mt_sensor_readings`` group."""
 
     collector_class = MTSensorCollector
-    update_tier = UpdateTier.FAST
 
     def test_declares_mt_sensor_readings_group(self) -> None:
-        """The collector declares one FAST group matching the §2 row."""
+        """The collector declares one group matching the §2 row."""
         groups = MTSensorCollector.endpoint_groups
         assert len(groups) == 1
         group = groups[0]
         assert group.name == EndpointGroupName.MT_SENSOR_READINGS
         assert group.priority == 2
         assert group.floor_seconds == 60
-        assert group.tier == UpdateTier.FAST
         shape = _make_shape(sensor_count=250)
         assert group.cost_fn(shape) == 2 + pages(250, 100) - 1
 
     async def test_sensor_readings_gate_skips_when_not_due(self, collector) -> None:
-        """A not-due heartbeat skips the sensor-readings fetch entirely."""
-        collector.scheduler = _FakeScheduler(due=False)
+        """A not-due heartbeat skips the sensor-readings fetch entirely.
+
+        The group gate is now evaluated once in ``collect_sensor_metrics`` and
+        threaded down as ``due`` (#631) — ``_should_run_group`` mutates the
+        scheduler attempt clock, so it must not be re-called at each fetch site.
+        """
         mt = collector.mt_collector
         mt._fetch_sensor_readings = AsyncMock(return_value=[])
         mt._fetch_sensor_devices = AsyncMock(return_value=[])
         collector.inventory = None
 
-        await mt._collect_org_sensors("O1", "Org1")
+        await mt._collect_org_sensors("O1", "Org1", due=False)
 
         mt._fetch_sensor_readings.assert_not_awaited()
         mt._fetch_sensor_devices.assert_not_awaited()
 
     async def test_gateway_connections_gate_skips_when_not_due(self, collector) -> None:
-        """A not-due heartbeat skips the gateway-connections fetch."""
-        collector.scheduler = _FakeScheduler(due=False)
+        """A not-due heartbeat skips the gateway-connections fetch.
+
+        ``due`` is threaded from ``collect_sensor_metrics`` (#631) rather than
+        re-evaluated here.
+        """
         mt = collector.mt_collector
         mt._fetch_gateway_connections = AsyncMock(return_value=[])
 
-        await mt._collect_org_gateway_connections("O1", "Org1")
+        await mt._collect_org_gateway_connections("O1", "Org1", due=False)
 
         mt._fetch_gateway_connections.assert_not_awaited()
 
@@ -242,6 +242,30 @@ class TestMTSensorReadingsGating(BaseCollectorTest):
         await mt.collect_sensor_metrics(org_id="O1", org_name="Org1")
 
         assert fake.marked == [EndpointGroupName.MT_SENSOR_READINGS]
+
+    async def test_collect_sensor_metrics_gates_group_exactly_once(self, collector) -> None:
+        """The readings gate is evaluated ONCE per cycle and threaded down (#631).
+
+        Regression guard for the cold-start double-gate bug: ``should_run`` mutates
+        the scheduler attempt clock, so ``collect_sensor_metrics`` must call
+        ``_should_run_group`` a single time and pass the resulting ``due`` flag into
+        the two fetch helpers rather than each re-evaluating the gate.
+        """
+        collector.scheduler = _FakeScheduler(due=True)
+        mt = collector.mt_collector
+        spy = MagicMock(wraps=mt.parent._should_run_group)
+        mt.parent._should_run_group = spy
+        sensors = AsyncMock()
+        gateway = AsyncMock()
+        mt._collect_org_sensors = sensors
+        mt._collect_org_gateway_connections = gateway
+
+        await mt.collect_sensor_metrics(org_id="O1", org_name="Org1")
+
+        assert spy.call_count == 1
+        # The single computed ``due`` is threaded into both fetch helpers.
+        assert sensors.await_args.kwargs["due"] is True
+        assert gateway.await_args.kwargs["due"] is True
 
     async def test_collect_sensor_metrics_does_not_mark_when_not_due(self, collector) -> None:
         """A not-due cycle never marks the group ran."""

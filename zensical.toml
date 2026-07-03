@@ -24,7 +24,8 @@ nav = [
     ] },
   { Observability = [
       { OpenTelemetry = "observability/otel.md" },
-      { Tracing = "observability/tracing.md" }
+      { Tracing = "observability/tracing.md" },
+      { Scheduler = "observability/scheduler.md" }
     ] },
   { "Integration & Dashboards" = "integration-dashboards.md" },
   { FAQ = "faq.md" },

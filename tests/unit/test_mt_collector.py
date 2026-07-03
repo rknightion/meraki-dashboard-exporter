@@ -9,7 +9,6 @@ import pytest
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.collectors.devices.mt import MTCollector
 from meraki_dashboard_exporter.collectors.mt_sensor import MTSensorCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.domain_models import SensorMeasurement
 from meraki_dashboard_exporter.core.error_handling import NothingCollectedError, RetryableAPIError
 from tests.helpers.base import BaseCollectorTest
@@ -20,7 +19,6 @@ class TestMTCollector(BaseCollectorTest):
     """Test MTCollector functionality."""
 
     collector_class = MTSensorCollector  # We'll test through the main sensor collector
-    update_tier = UpdateTier.FAST
 
     @pytest.fixture
     def device_collector(self, mock_api, settings, isolated_registry):
@@ -558,7 +556,9 @@ class TestMTCollector(BaseCollectorTest):
         await mt_collector.collect_sensor_metrics(org_id="org1", org_name="Provided Org")
 
         mt_collector._get_org_name.assert_not_called()
-        mt_collector._collect_org_sensors.assert_awaited_once_with("org1", "Provided Org")
+        mt_collector._collect_org_sensors.assert_awaited_once_with(
+            "org1", "Provided Org", due=True
+        )
 
     async def test_collect_sensor_metrics_uses_inventory_org_list(self, mt_collector):
         """F-092: org list comes from the inventory cache, not getOrganizations, when available."""
@@ -574,7 +574,7 @@ class TestMTCollector(BaseCollectorTest):
 
         mock_inventory.get_organizations.assert_awaited()
         mt_collector._fetch_organizations.assert_not_called()
-        mt_collector._collect_org_sensors.assert_awaited_once_with("orgA", "A")
+        mt_collector._collect_org_sensors.assert_awaited_once_with("orgA", "A", due=True)
 
     async def test_get_org_name_prefers_inventory_cache(self, mt_collector):
         """F-092: org name is resolved from the inventory cache, not a per-cycle getOrganization."""
@@ -595,7 +595,6 @@ class TestMTSensorFailureAccounting(BaseCollectorTest):
     """#509: MTSensorCollector must raise when a cycle collects nothing."""
 
     collector_class = MTSensorCollector
-    update_tier = UpdateTier.FAST
 
     async def test_all_orgs_failed_raises_nothing_collected(
         self, mock_api_builder, settings, isolated_registry, inventory
@@ -720,7 +719,6 @@ class TestMTExpirationTracking(BaseCollectorTest):
     """F-088 / F-021: MT metrics must route through parent._set_metric expiration tracking."""
 
     collector_class = MTSensorCollector
-    update_tier = UpdateTier.FAST
 
     def test_no_local_set_metric_value_override(self) -> None:
         """F-088: MTCollector must not shadow SubCollectorMixin's delegating _set_metric_value."""
@@ -799,7 +797,6 @@ class TestMTButtonPresses(BaseCollectorTest):
     """#303: MT20/MT30 button presses ride the existing sensor readings fetch."""
 
     collector_class = MTSensorCollector
-    update_tier = UpdateTier.FAST
 
     @pytest.fixture
     def device_collector(self, mock_api, settings, isolated_registry):

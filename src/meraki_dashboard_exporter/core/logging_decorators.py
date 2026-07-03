@@ -91,7 +91,12 @@ def log_api_call(
 
             except Exception as e:
                 duration = time.time() - start_time
-                log_method = logger.warning if _is_rate_limit_error(e) else logger.error
+                if _is_rate_limit_error(e):
+                    log_method = logger.warning
+                elif _is_benign_not_available_error(e):
+                    log_method = logger.debug
+                else:
+                    log_method = logger.error
                 log_method(
                     f"API call failed: {operation}",
                     operation=operation,
@@ -134,7 +139,12 @@ def log_api_call(
 
             except Exception as e:
                 duration = time.time() - start_time
-                log_method = logger.warning if _is_rate_limit_error(e) else logger.error
+                if _is_rate_limit_error(e):
+                    log_method = logger.warning
+                elif _is_benign_not_available_error(e):
+                    log_method = logger.debug
+                else:
+                    log_method = logger.error
                 log_method(
                     f"API call failed: {operation}",
                     operation=operation,
@@ -479,6 +489,17 @@ def _is_rate_limit_error(error: Exception) -> bool:
         return True
     error_str = str(error).lower()
     return any(pattern in error_str for pattern in _RATE_LIMIT_PATTERNS)
+
+
+def _is_benign_not_available_error(error: Exception) -> bool:
+    """Whether an error is a benign 404 "endpoint not available for this entity".
+
+    Many Meraki endpoints 404 for entities that simply lack the feature (e.g.
+    ``getNetworkWirelessMeshStatuses`` on a network with no repeaters, #633).
+    These are the expected steady state, not failures, so the decorator logs
+    them at debug — mirroring ``@with_error_handling``'s 404 special-case.
+    """
+    return getattr(error, "status", None) == 404
 
 
 # Additional helper for batch operations

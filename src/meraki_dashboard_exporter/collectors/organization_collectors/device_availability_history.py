@@ -40,11 +40,12 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
     async def _fetch_availability_change_history(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch organization device availability change history.
 
-        The fetch window is tied to the configured MEDIUM update interval
-        (``settings.update_intervals.medium``, operator-configurable 300-1800s)
-        rather than a hardcoded value, so it always matches the actual
-        collection cadence: each poll counts only availability changes that
-        occurred since (approximately) the previous run.
+        The fetch window is tied to the live solved interval of this collector's
+        own ``org_availability_history`` endpoint group
+        (``parent._group_interval(EndpointGroupName.ORG_AVAILABILITY_HISTORY)``,
+        300s floor) rather than a hardcoded value, so it always matches the
+        actual collection cadence: each poll counts only availability changes
+        that occurred since (approximately) the previous run.
 
         Parameters
         ----------
@@ -60,7 +61,7 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
         response = await asyncio.to_thread(
             self.api.organizations.getOrganizationDevicesAvailabilitiesChangeHistory,
             org_id,
-            timespan=self.settings.update_intervals.medium,
+            timespan=int(self.parent._group_interval(EndpointGroupName.ORG_AVAILABILITY_HISTORY)),
             total_pages="all",
         )
         return cast(

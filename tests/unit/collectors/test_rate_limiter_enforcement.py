@@ -141,7 +141,6 @@ async def test_ms_stp_fetch_acquires_per_network() -> None:
     parent.api = MagicMock()
     parent.settings = MagicMock()
     parent.settings.api.concurrency_limit = 5
-    parent.settings.update_intervals.slow = 900
     parent.rate_limiter = _limiter()
     parent.inventory = MagicMock()
     parent.inventory.get_networks = AsyncMock(

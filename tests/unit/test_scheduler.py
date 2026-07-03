@@ -8,7 +8,6 @@ from typing import Any
 
 import pytest
 
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.scheduler import (
     EndpointGroup,
     EndpointGroupName,
@@ -164,8 +163,6 @@ LARGE_SHAPE = _make_shape(
     cameras=100,
 )
 
-TIER_INTERVALS = {UpdateTier.FAST: 60, UpdateTier.MEDIUM: 300, UpdateTier.SLOW: 900}
-
 
 def _representative_groups() -> list[EndpointGroup]:
     """Build a cross-priority, cross-tier slice of the §2 table (cost model included)."""
@@ -175,56 +172,48 @@ def _representative_groups() -> list[EndpointGroup]:
             priority=2,
             floor_seconds=60,
             cost_fn=lambda s: 2 + pages(s.sensor_count, 100) - 1,
-            tier=UpdateTier.FAST,
         ),
         EndpointGroup(
             name=EndpointGroupName.DEVICE_AVAILABILITY,
             priority=1,
             floor_seconds=120,
             cost_fn=lambda s: float(pages(s.device_count, 500)),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.DEVICE_MEMORY,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: float(pages(s.device_count, 20)),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_CHANNEL_UTILIZATION,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: float(s.wireless_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_DATA_RATES,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: float(s.wireless_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_BLUETOOTH,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: float(s.wireless_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_PERFORMANCE,
             priority=3,
             floor_seconds=900,
             cost_fn=lambda s: float(s.physical_mx_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MS_PORT_USAGE,
             priority=3,
             floor_seconds=600,
             cost_fn=lambda s: float(pages(s.switch_count, 50) + pages(s.switch_count, 20)),
-            tier=UpdateTier.MEDIUM,
             setting_pin="ms_port_usage_interval",
         ),
         EndpointGroup(
@@ -232,28 +221,24 @@ def _representative_groups() -> list[EndpointGroup]:
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: float(s.switch_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_FIREWALL_CONFIG,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 2.0 * s.appliance_network_count,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_FIRMWARE,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 1.0,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.CONFIG_ORG,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 3.0,
-            tier=UpdateTier.SLOW,
         ),
         EndpointGroup(
             name=EndpointGroupName.INVENTORY_WARM,
@@ -265,7 +250,6 @@ def _representative_groups() -> list[EndpointGroup]:
                 + pages(s.device_count, 1000)
                 + (900 / 120) * pages(s.device_count, 500)
             ),
-            tier=UpdateTier.SLOW,
             gated=False,
         ),
     ]
@@ -291,7 +275,6 @@ def _make_settings(
     )
     return SimpleNamespace(
         api=api,
-        update_intervals=SimpleNamespace(fast=60, medium=300, slow=900),
         monitoring=SimpleNamespace(metric_ttl_multiplier=ttl_multiplier),
         scheduler=SimpleNamespace(
             mode=mode,
@@ -396,21 +379,20 @@ class TestSolveIntervals:
             shape,
             budget,
             target,
-            TIER_INTERVALS,
             overrides or {},
             max_stretch,
             max_interval,
         )
 
     def test_small_shape_fits_budget_without_stretching(self) -> None:
-        """SMALL shape demand fits: every interval stays at max(floor, heartbeat)."""
+        """SMALL shape demand fits: every interval stays at its volatility floor."""
         solved = self.solve(SMALL_SHAPE)
         groups = {g.name: g for g in _representative_groups()}
         total_demand = sum(s.demand_rps for s in solved.values())
         assert total_demand <= 8.0 * 0.7
         for name, s in solved.items():
             g = groups[name]
-            base = max(g.floor_seconds, TIER_INTERVALS[g.tier])
+            base = float(g.floor_seconds)
             assert s.interval_seconds == base
             assert s.stretch_factor == 1.0
             assert not s.pinned
@@ -419,10 +401,10 @@ class TestSolveIntervals:
         """SolvedInterval carries cost_per_cycle and demand_rps = cost/interval."""
         solved = self.solve(SMALL_SHAPE)
         avail = solved[EndpointGroupName.DEVICE_AVAILABILITY]
-        # pages(100, 500) == 1 call/cycle at the MEDIUM heartbeat 300s
+        # pages(100, 500) == 1 call/cycle at the 120s floor (no heartbeat any more).
         assert avail.cost_per_cycle == 1.0
-        assert avail.interval_seconds == 300.0
-        assert avail.demand_rps == pytest.approx(1.0 / 300.0)
+        assert avail.interval_seconds == 120.0
+        assert avail.demand_rps == pytest.approx(1.0 / 120.0)
 
     def test_large_shape_stretches_to_fit_budget(self) -> None:
         """LARGE shape overshoots the budget; solver stretches until demand fits."""
@@ -470,7 +452,7 @@ class TestSolveIntervals:
             if not g.gated:
                 continue
             cap = min(g.floor_seconds * 4.0, 3600.0)
-            base = max(g.floor_seconds, TIER_INTERVALS[g.tier])
+            base = float(g.floor_seconds)
             if base < cap:
                 assert solved[name].interval_seconds == pytest.approx(cap)
             else:
@@ -492,24 +474,16 @@ class TestSolveIntervals:
         assert s.pinned
         assert s.interval_seconds == 400.0  # below the 900s floor, honoured
 
-    def test_pin_below_heartbeat_clamped_to_heartbeat(self) -> None:
-        """A pin faster than the tier heartbeat is clamped up to the heartbeat."""
-        solved = self.solve(SMALL_SHAPE, overrides={"nh_data_rates": 30})
-        s = solved[EndpointGroupName.NH_DATA_RATES]
-        assert s.pinned
-        assert s.interval_seconds == 300.0  # MEDIUM heartbeat
-
-    def test_interval_never_below_tier_heartbeat(self) -> None:
-        """A floor faster than the heartbeat is lifted to the heartbeat."""
+    def test_interval_starts_at_floor(self) -> None:
+        """With headroom, a group's interval is exactly its volatility floor."""
         group = EndpointGroup(
             name=EndpointGroupName.MG_UPLINK_STATUS,
             priority=1,
             floor_seconds=60,
             cost_fn=lambda s: 1.0,
-            tier=UpdateTier.MEDIUM,
         )
         solved = self.solve(SMALL_SHAPE, groups=[group])
-        assert solved[EndpointGroupName.MG_UPLINK_STATUS].interval_seconds == 300.0
+        assert solved[EndpointGroupName.MG_UPLINK_STATUS].interval_seconds == 60.0
 
     def test_stretch_respects_max_interval_cap(self) -> None:
         """cap = min(floor x max_stretch, max_interval): the absolute cap wins here."""
@@ -518,7 +492,6 @@ class TestSolveIntervals:
             priority=3,
             floor_seconds=3600,
             cost_fn=lambda s: 10_000.0,
-            tier=UpdateTier.MEDIUM,
         )
         solved = self.solve(SMALL_SHAPE, groups=[group], budget=0.001)
         assert solved[EndpointGroupName.NH_AIR_MARSHAL].interval_seconds == 3600.0
@@ -530,7 +503,6 @@ class TestSolveIntervals:
             priority=4,
             floor_seconds=300,
             cost_fn=lambda s: 300.0,  # 1 rps at floor
-            tier=UpdateTier.MEDIUM,
         )
         # target = 0.9 * 0.8 = 0.72 rps -> one 1.5x stretch (300 -> 450 = 0.667 rps) fits
         solved = self.solve(SMALL_SHAPE, groups=[group], budget=0.9, target=0.8)
@@ -568,12 +540,12 @@ class TestEndpointSchedulerRegistration:
 class TestEndpointSchedulerResolve:
     """resolve() semantics: solving, modes, pins, gauges."""
 
-    def test_pre_resolve_interval_is_floor_or_heartbeat(self) -> None:
-        """Before the first resolve, interval_for = max(floor, tier heartbeat)."""
+    def test_pre_resolve_interval_is_floor(self) -> None:
+        """Before the first resolve, interval_for = the group's volatility floor."""
         sched = _make_scheduler()
         assert sched.interval_for(EndpointGroupName.MT_SENSOR_READINGS) == 60.0
         assert sched.interval_for(EndpointGroupName.MX_PERFORMANCE) == 900.0
-        assert sched.interval_for(EndpointGroupName.DEVICE_AVAILABILITY) == 300.0
+        assert sched.interval_for(EndpointGroupName.DEVICE_AVAILABILITY) == 120.0
 
     def test_resolve_small_keeps_floors(self) -> None:
         """SMALL shape resolve keeps floors and reports under-budget."""
@@ -719,15 +691,15 @@ class TestTtlAndFastest:
             assert ttl == pytest.approx(sched.interval_for(g.name) * 2.0)
 
     def test_fastest_effective_interval(self) -> None:
-        """Fastest interval across groups (FAST-tier MT readings at 60s here)."""
+        """Fastest interval across groups (MT readings floor 60s here)."""
         sched = _make_scheduler()
         sched.resolve(SMALL_SHAPE)
         assert sched.fastest_effective_interval_seconds() == 60.0
 
     def test_fastest_effective_interval_no_groups(self) -> None:
-        """With no groups registered, fall back to the fastest tier heartbeat."""
+        """With no groups registered, fall back to resolve_interval_seconds."""
         sched = _make_scheduler(groups=[])
-        assert sched.fastest_effective_interval_seconds() == 60.0
+        assert sched.fastest_effective_interval_seconds() == 900.0
 
 
 class TestNeedsResolve:
@@ -800,7 +772,6 @@ class TestDiagnostics:
         for key in (
             "name",
             "priority",
-            "tier",
             "floor_seconds",
             "interval_seconds",
             "stretch_factor",
@@ -846,7 +817,6 @@ class TestOrgShape:
             LARGE_SHAPE,
             8.0,
             0.7,
-            TIER_INTERVALS,
             {},
             4.0,
             3600.0,
@@ -871,7 +841,6 @@ class TestEnabledFnGating:
             priority=2,
             floor_seconds=60,
             cost_fn=lambda s: 5.0,
-            tier=UpdateTier.FAST,
             enabled_fn=lambda s: s.sensor_count > 0,
         )
 
@@ -879,19 +848,19 @@ class TestEnabledFnGating:
         """A disabled group contributes zero cost/demand and stays at base interval."""
         g = self._sensor_group()
         solved = solve_intervals(
-            [g], _make_shape(sensors=0), 8.0, 0.7, TIER_INTERVALS, {}, 4.0, 3600.0
+            [g], _make_shape(sensors=0), 8.0, 0.7, {}, 4.0, 3600.0
         )
         s = solved[g.name]
         assert s.cost_per_cycle == 0.0
         assert s.demand_rps == 0.0
-        assert s.interval_seconds == 60.0  # max(floor=60, FAST heartbeat=60)
+        assert s.interval_seconds == 60.0  # floor=60
         assert s.stretch_factor == 1.0
 
     def test_enabled_group_normal_cost(self) -> None:
         """The same group with sensors present contributes its cost_fn demand."""
         g = self._sensor_group()
         solved = solve_intervals(
-            [g], _make_shape(sensors=10), 8.0, 0.7, TIER_INTERVALS, {}, 4.0, 3600.0
+            [g], _make_shape(sensors=10), 8.0, 0.7, {}, 4.0, 3600.0
         )
         assert solved[g.name].cost_per_cycle == 5.0
 
@@ -903,14 +872,12 @@ class TestEnabledFnGating:
             priority=4,
             floor_seconds=300,
             cost_fn=lambda s: 100.0,
-            tier=UpdateTier.MEDIUM,
         )
         solved = solve_intervals(
             [g_disabled, g_hungry],
             _make_shape(sensors=0),
             0.1,
             0.7,
-            TIER_INTERVALS,
             {},
             4.0,
             3600.0,
@@ -968,7 +935,6 @@ class TestEnabledFnGating:
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: 1.0,
-            tier=UpdateTier.MEDIUM,
         )
         sched = _make_scheduler(groups=[g])
         sched.resolve(_make_shape(sensors=0))

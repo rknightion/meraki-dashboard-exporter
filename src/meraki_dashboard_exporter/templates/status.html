@@ -55,15 +55,15 @@
         }
         .readiness-ready { background-color: #e8f5e9; color: #2e7d32; }
         .readiness-not-ready { background-color: #fff3e0; color: #e65100; }
-        .tier-pill {
+        .status-pill {
             display: inline-block;
             padding: 2px 10px;
             border-radius: 12px;
             font-size: 0.8rem;
             font-weight: 600;
         }
-        .tier-complete { background-color: #c8e6c9; color: #2e7d32; }
-        .tier-pending { background-color: #ffe0b2; color: #e65100; }
+        .status-complete { background-color: #c8e6c9; color: #2e7d32; }
+        .status-pending { background-color: #ffe0b2; color: #e65100; }
 
         .card {
             background-color: var(--card-bg);
@@ -131,9 +131,9 @@
 
         <div class="readiness-banner {{ 'readiness-ready' if system.readiness.ready else 'readiness-not-ready' }}">
             <span>{{ 'Ready' if system.readiness.ready else 'Not Ready' }}</span>
-            <span class="tier-pill {{ 'tier-complete' if system.readiness.collectors.fast else 'tier-pending' }}">FAST {{ 'done' if system.readiness.collectors.fast else 'pending' }}</span>
-            <span class="tier-pill {{ 'tier-complete' if system.readiness.collectors.medium else 'tier-pending' }}">MEDIUM {{ 'done' if system.readiness.collectors.medium else 'pending' }}</span>
-            <span class="tier-pill {{ 'tier-complete' if system.readiness.collectors.slow else 'tier-pending' }}">SLOW {{ 'done' if system.readiness.collectors.slow else 'pending' }}</span>
+            {% for name, done in system.readiness.collectors.items() %}
+            <span class="status-pill {{ 'status-complete' if done else 'status-pending' }}">{{ name.replace('Collector', '') }} {{ 'done' if done else 'pending' }}</span>
+            {% endfor %}
         </div>
 
         <div class="card">
@@ -142,7 +142,7 @@
                 <thead>
                     <tr>
                         <th>Name</th>
-                        <th>Tier</th>
+                        <th>Cadence</th>
                         <th>Runs</th>
                         <th>Success Rate</th>
                         <th>Failure Streak</th>
@@ -155,7 +155,7 @@
                     {% for c in collectors %}
                     <tr class="{{ 'row-stale' if c.staleness == 'stale' or c.failure_streak >= 3 else 'row-warning' if c.staleness == 'warning' else 'row-ok' }}">
                         <td>{{ c.name }}</td>
-                        <td>{{ c.tier }}</td>
+                        <td>{{ "%.0f"|format(c.cadence_seconds) }}s</td>
                         <td>{{ c.total_runs }}</td>
                         <td>{{ "%.1f"|format(c.success_rate) }}%</td>
                         <td>{{ c.failure_streak }}</td>
@@ -266,7 +266,6 @@
                     <tr>
                         <th>Group</th>
                         <th>Priority</th>
-                        <th>Tier</th>
                         <th>Floor (s)</th>
                         <th>Interval (s)</th>
                         <th>Stretch</th>
@@ -280,7 +279,6 @@
                     <tr class="{{ 'row-warning' if g.stretch_factor and g.stretch_factor > 1.0 else 'row-ok' }}">
                         <td>{{ g.name }}</td>
                         <td>{{ g.priority }}</td>
-                        <td>{{ g.tier | upper }}</td>
                         <td>{{ "%.0f"|format(g.floor_seconds) }}</td>
                         <td>{{ "%.0f"|format(g.interval_seconds) }}</td>
                         <td>{{ "%.2f"|format(g.stretch_factor) }}x</td>

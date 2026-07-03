@@ -37,7 +37,7 @@ prometheus.remote_write "default" {
 The [docker-compose.yml](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/docker-compose.yml) ships only the exporter container; integrate the scrape job above into your existing Prometheus/Grafana stack.
 
 !!! tip "Scrape interval"
-    Align your Prometheus scrape interval with the exporter’s update tiers to avoid unnecessary load (see [Metrics Overview](metrics/overview.md)).
+    Align your Prometheus scrape interval with the exporter's adaptive collector cadence to avoid unnecessary load — see [Metrics Overview](metrics/overview.md) and [Scheduler Architecture](observability/scheduler.md).
 
 ## Dashboards
 Pre-built Grafana dashboards live in the [dashboards directory](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/dashboards). Import them to get instant visibility into your organisation. Bundled dashboards include:

@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock
 import pytest
 
 from meraki_dashboard_exporter.collectors.config import ConfigCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.error_handling import NothingCollectedError
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import OrganizationFactory
@@ -23,7 +22,6 @@ class TestConfigCollectorConcurrency(BaseCollectorTest):
     """F-016: per-org config collection must be bounded, not unbounded gather."""
 
     collector_class = ConfigCollector
-    update_tier = UpdateTier.SLOW
 
     async def test_org_collection_is_concurrency_bounded(
         self, collector, mock_api_builder, metrics
@@ -109,7 +107,6 @@ class TestConfigCollectorResponseValidation(BaseCollectorTest):
     """F-034: error-shaped dict responses must raise, not emit false zeros."""
 
     collector_class = ConfigCollector
-    update_tier = UpdateTier.SLOW
 
     async def test_login_security_error_shape_does_not_emit_zeros(
         self, collector, mock_api_builder, metrics
@@ -269,7 +266,6 @@ class TestConfigCollectorNothingCollected(BaseCollectorTest):
     """#509: total collection failure must raise instead of being swallowed."""
 
     collector_class = ConfigCollector
-    update_tier = UpdateTier.SLOW
 
     async def test_org_fetch_failure_raises(self, collector, mock_api_builder, metrics):
         """Org fetch itself failing must propagate out of _collect_impl (#509)."""
@@ -344,7 +340,6 @@ class TestConfigCollectorStrongPasswordsRemoved(BaseCollectorTest):
     """
 
     collector_class = ConfigCollector
-    update_tier = UpdateTier.SLOW
 
     def test_collector_has_no_strong_passwords_gauge(self, collector):
         """The collector no longer creates the strong-passwords gauge attribute."""
@@ -378,7 +373,6 @@ class TestConfigCollectorSingleOrgFetch(BaseCollectorTest):
     """#519: the single-org getOrganization fallback normalizes the SDK error shape."""
 
     collector_class = ConfigCollector
-    update_tier = UpdateTier.SLOW
 
     async def test_single_org_error_shape_handled_gracefully(
         self, collector, mock_api_builder, metrics

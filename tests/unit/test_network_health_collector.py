@@ -7,7 +7,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from meraki_dashboard_exporter.collectors.network_health import NetworkHealthCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.error_handling import NothingCollectedError
 from meraki_dashboard_exporter.core.org_health import (
     SOURCE_NETWORK_HEALTH,
@@ -41,7 +40,6 @@ class TestNetworkHealthCollectorOrgHealthGating(BaseCollectorTest):
     """F-169: NetworkHealthCollector honours the shared OrgHealthTracker per-org gate."""
 
     collector_class = NetworkHealthCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_backed_off_org_is_skipped(
         self, mock_api_builder, settings, isolated_registry, inventory
@@ -95,7 +93,6 @@ class TestNetworkHealthCollector(BaseCollectorTest):
     """Test NetworkHealthCollector functionality."""
 
     collector_class = NetworkHealthCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_channel_utilization_fetchers_validate_error_shape(
         self, collector, mock_api_builder
@@ -817,17 +814,11 @@ class TestNetworkHealthCollector(BaseCollectorTest):
         # Should skip None values without error
         collector._set_metric_value("_network_utilization_2_4ghz", labels, None)
 
-    def test_update_tier(self, collector):
-        """Test that network health collector has correct update tier."""
-        assert collector.update_tier == UpdateTier.MEDIUM
-        assert self.update_tier == UpdateTier.MEDIUM
-
 
 class TestNetworkHealthCollectorFailureAccounting(BaseCollectorTest):
     """#509: total collection failure must raise instead of being swallowed."""
 
     collector_class = NetworkHealthCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_org_fetch_failure_raises(self, collector, mock_api_builder):
         """A total org-fetch failure must propagate out of collect()."""
@@ -908,7 +899,6 @@ class TestNetworkHealthCollectorBluetooth(BaseCollectorTest):
     """Test NetworkHealthCollector functionality (continued)."""
 
     collector_class = NetworkHealthCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_collect_bluetooth_clients(self, collector, mock_api_builder, metrics):
         """Test collection of Bluetooth client metrics."""
@@ -969,7 +959,6 @@ class TestNetworkHealthCollectorOrgHealthReporting(BaseCollectorTest):
     """
 
     collector_class = NetworkHealthCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_successful_org_records_network_health_success(self, collector):
         """A healthy per-org cycle records a SOURCE_NETWORK_HEALTH success."""

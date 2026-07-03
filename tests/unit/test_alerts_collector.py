@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 from meraki_dashboard_exporter.collectors import alerts as alerts_module
 from meraki_dashboard_exporter.collectors.alerts import AlertsCollector
 from meraki_dashboard_exporter.core.batch_processing import process_in_batches_with_errors
-from meraki_dashboard_exporter.core.constants import AlertMetricName, UpdateTier
+from meraki_dashboard_exporter.core.constants import AlertMetricName
 from meraki_dashboard_exporter.core.error_handling import NothingCollectedError
 from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
 from tests.helpers.base import BaseCollectorTest
@@ -36,7 +36,6 @@ class TestAlertsCollectorOrgHealthGating(BaseCollectorTest):
     """
 
     collector_class = AlertsCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_backed_off_org_is_skipped(
         self, mock_api_builder, settings, isolated_registry, inventory
@@ -102,7 +101,6 @@ class TestAlertsCollector(BaseCollectorTest):
     """Test AlertsCollector functionality."""
 
     collector_class = AlertsCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_collect_with_no_alerts(self, collector, mock_api_builder, metrics):
         """Test collection when no alerts are present."""
@@ -474,11 +472,6 @@ class TestAlertsCollector(BaseCollectorTest):
         # Run collection - the org-fetch failure must propagate.
         exc = await self.run_collector(collector, expect_success=False)
         assert isinstance(exc, Exception)
-
-    def test_update_tier(self, collector):
-        """Test that alerts collector has correct update tier."""
-        assert collector.update_tier == UpdateTier.MEDIUM
-        assert self.update_tier == UpdateTier.MEDIUM
 
     async def test_collect_sensor_alerts(self, collector, mock_api_builder, metrics):
         """Test collection of sensor alert metrics."""
@@ -1161,12 +1154,17 @@ class TestAlertsCollector(BaseCollectorTest):
             device_type="MR",
         )
 
-        # Fast-forward past the MEDIUM-tier TTL (2x the 300s interval) and reap.
+        # Fast-forward past the fallback TTL and reap. Without a scheduler the
+        # alerts series carry no explicit ttl_seconds, so the collector-cadence
+        # fallback applies: resolve_interval_seconds x metric_ttl_multiplier (#631).
         import time as _time
 
+        fallback_ttl = (
+            settings.scheduler.resolve_interval_seconds * settings.monitoring.metric_ttl_multiplier
+        )
         original_time = _time.time
         try:
-            _time.time = lambda: original_time() + 700
+            _time.time = lambda: original_time() + fallback_ttl + 100
             await manager._cleanup_expired_metrics()
         finally:
             _time.time = original_time
@@ -1192,7 +1190,6 @@ class TestAlertsCollectorNothingCollected(BaseCollectorTest):
     """
 
     collector_class = AlertsCollector
-    update_tier = UpdateTier.MEDIUM
 
     async def test_org_fetch_failure_raises(self, collector, mock_api_builder):
         """A failure fetching the org list itself must propagate."""

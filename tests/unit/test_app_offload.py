@@ -96,10 +96,8 @@ class TestCardinalityLoopOffload:
 
     async def test_loop_offloads_analyze_cardinality(self, exporter: ExporterApp) -> None:
         """One loop iteration calls analyze_cardinality via the serving executor."""
-        # Keep the loop's initial delay tiny and let it run exactly one analysis
-        # before shutdown.
-        exporter.collector_manager.get_tier_interval = lambda tier: 0  # type: ignore[assignment]
-
+        # The loop's fixed initial delay is bypassed by patching asyncio.sleep
+        # below, so one analysis runs before the fake_analyze trips shutdown.
         analyzed = asyncio.Event()
 
         def fake_analyze(*args, **kwargs):  # type: ignore[no-untyped-def]

@@ -11,7 +11,6 @@ from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, Info
 from prometheus_client.core import REGISTRY
 
 from ..core.cardinality import CardinalityConfig, normalize_metric_name
-from ..core.constants import UpdateTier
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.error_handling import ErrorCategory
 from ..core.exemplars import add_exemplar
@@ -44,13 +43,14 @@ class MetricCollector(ABC):
 
     """
 
-    # Default update tier - subclasses should override this
-    update_tier: UpdateTier = UpdateTier.MEDIUM
-
     # Endpoint groups this collector owns for adaptive scheduling (#617 §1c).
     # Coordinators override this in Wave 2 (sub-collector groups are declared on
     # their coordinator — one file = one owner); the base declares none.
     endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = ()
+
+    # Set True for the duration of a forced run (manual trigger) so every group's
+    # gate opens regardless of its schedule (#631); the manager toggles it.
+    _force_run: bool = False
 
     # Class-level performance metrics shared by all collectors
     _collector_duration: Histogram | None = None
@@ -168,7 +168,6 @@ class MetricCollector(ABC):
         with tracer.start_as_current_span(f"collect.{collector_name}") as span:
             # Set initial span attributes
             span.set_attribute("collector.name", collector_name)
-            span.set_attribute("collector.tier", self.update_tier.value)
             span.set_attribute("collector.active", self.is_active)
             span.set_attribute("collector.smoothing_enabled", self.settings.api.smoothing_enabled)
 
@@ -188,7 +187,6 @@ class MetricCollector(ABC):
                     # Record the metric value
                     MetricCollector._collector_duration.labels(
                         collector=collector_name,
-                        tier=self.update_tier.value,
                     ).observe(duration)
 
                     # Also try to add exemplar to link metric to trace
@@ -198,7 +196,6 @@ class MetricCollector(ABC):
                         value=duration,
                         labels={
                             "collector": collector_name,
-                            "tier": self.update_tier.value,
                         },
                     )
                 else:
@@ -207,7 +204,6 @@ class MetricCollector(ABC):
                 if MetricCollector._collector_last_success is not None:
                     MetricCollector._collector_last_success.labels(
                         collector=collector_name,
-                        tier=self.update_tier.value,
                     ).set(time.time())
                 else:
                     logger.warning("Collector last success metric not initialized")
@@ -215,7 +211,6 @@ class MetricCollector(ABC):
                 logger.debug(
                     "Collector completed successfully",
                     collector=collector_name,
-                    tier=self.update_tier.value,
                     duration=f"{duration:.2f}s",
                 )
 
@@ -233,7 +228,6 @@ class MetricCollector(ABC):
                     # Record the error
                     MetricCollector._collector_errors.labels(
                         collector=collector_name,
-                        tier=self.update_tier.value,
                         error_type=type(e).__name__,
                     ).inc()
 
@@ -244,7 +238,6 @@ class MetricCollector(ABC):
                         value=1,
                         labels={
                             "collector": collector_name,
-                            "tier": self.update_tier.value,
                             "error_type": type(e).__name__,
                         },
                     )
@@ -254,7 +247,6 @@ class MetricCollector(ABC):
                 logger.error(
                     "Collector failed",
                     collector=collector_name,
-                    tier=self.update_tier.value,
                     duration=f"{duration:.2f}s",
                     error=str(e),
                     error_type=type(e).__name__,
@@ -439,7 +431,6 @@ class MetricCollector(ABC):
         logger.debug(
             "API call tracked",
             collector=self.__class__.__name__,
-            tier=self.update_tier.value,
             endpoint=endpoint,
         )
 
@@ -448,7 +439,6 @@ class MetricCollector(ABC):
             # Record the API call
             MetricCollector._collector_api_calls.labels(
                 collector=self.__class__.__name__,
-                tier=self.update_tier.value,
                 endpoint=endpoint,
             ).inc()
 
@@ -459,7 +449,6 @@ class MetricCollector(ABC):
                 value=1,
                 labels={
                     "collector": self.__class__.__name__,
-                    "tier": self.update_tier.value,
                     "endpoint": endpoint,
                 },
             )
@@ -479,7 +468,6 @@ class MetricCollector(ABC):
             # Record the error
             MetricCollector._collector_errors.labels(
                 collector=self.__class__.__name__,
-                tier=self.update_tier.value,
                 error_type=category.value,
             ).inc()
 
@@ -490,7 +478,6 @@ class MetricCollector(ABC):
                 value=1,
                 labels={
                     "collector": self.__class__.__name__,
-                    "tier": self.update_tier.value,
                     "error_type": category.value,
                 },
             )
@@ -553,6 +540,8 @@ class MetricCollector(ABC):
             True when the group should run now.
 
         """
+        if getattr(self, "_force_run", False):
+            return True
         if self.scheduler is None:
             return True
         return self.scheduler.should_run(group)
@@ -609,33 +598,58 @@ class MetricCollector(ABC):
         Returns
         -------
         float | None
-            Fully-resolved TTL in seconds, or None (tier-derived TTL applies).
+            Fully-resolved TTL in seconds, or None (the collector-cadence fallback TTL applies).
 
         """
         if self.scheduler is None:
             return None
         return self.scheduler.ttl_seconds_for(group)
 
-    def _get_tier_interval(self) -> int:
-        """Return the configured interval for this collector's tier."""
-        if self.update_tier == UpdateTier.FAST:
-            return self.settings.update_intervals.fast
-        if self.update_tier == UpdateTier.MEDIUM:
-            return self.settings.update_intervals.medium
-        return self.settings.update_intervals.slow
+    def collector_cadence_seconds(self) -> float:
+        """Return this collector's effective cadence in seconds.
 
-    def _get_smoothing_window(self) -> float:
-        """Get the smoothing window duration in seconds for this collector.
+        The cadence is the smallest solved interval among its enabled, gated
+        endpoint groups (how often its loop wakes to fetch something).
+        Falls back to ``scheduler.resolve_interval_seconds`` when the collector
+        has no scheduler or no enabled gated groups. Load-bearing: it drives the
+        fan-out smoothing window, the metric-TTL fallback, the utilization gauge
+        denominator, and ``meraki_exporter_collector_cadence_seconds`` (#631).
+        """
+        if self.scheduler is not None:
+            intervals = [
+                self.scheduler.interval_for(g.name)
+                for g in self.get_endpoint_groups()
+                if g.gated and self.scheduler.is_enabled(g.name)
+            ]
+            if intervals:
+                return float(min(intervals))
+        scheduler_settings = getattr(self.settings, "scheduler", None)
+        return float(getattr(scheduler_settings, "resolve_interval_seconds", 900))
 
-        The window is capped at 30% of the collector timeout budget so that
-        multiple sequential phases (each drawing an initial_delay from this
-        window) don't cumulatively exhaust the timeout.  The manager-level
-        smoothing handles inter-collector spreading with the full budget.
+    def phase_offset_seconds(self) -> float:
+        """One-time deterministic phase offset for this collector's FIRST wake.
+
+        De-synchronises collectors so their first steady-state polls don't all
+        fire together; steady state then self-schedules off each group's clock.
+        Bounded by ``min(0.5 × cadence, 120s)`` (#631). Deterministic per
+        collector class (sha256), so a restart lands on the same phase.
         """
         if not self.settings.api.smoothing_enabled:
             return 0.0
-        interval = self._get_tier_interval()
-        window = max(0.0, float(interval) * self.settings.api.smoothing_window_ratio)
+        window = min(0.5 * self.collector_cadence_seconds(), 120.0)
+        return self._offset_within(self.__class__.__name__, window)
+
+    def _get_smoothing_window(self) -> float:
+        """Smoothing window (seconds) for spreading a collector's per-item fan-out.
+
+        Based on the collector's cadence, capped at 30% of the collector timeout
+        budget so that multiple sequential phases (each drawing an initial_delay
+        from this window) don't cumulatively exhaust the timeout.
+        """
+        if not self.settings.api.smoothing_enabled:
+            return 0.0
+        cadence = self.collector_cadence_seconds()
+        window = max(0.0, cadence * self.settings.api.smoothing_window_ratio)
 
         # Cap at 30% of timeout budget.  Collectors have multiple sequential
         # phases that each add an initial_delay from this window; without the
@@ -646,17 +660,20 @@ class MetricCollector(ABC):
 
         return max(0.0, window)
 
-    def _get_smoothing_offset(self, key: str) -> float:
-        """Compute a stable offset within the smoothing window for a given key."""
+    @staticmethod
+    def _offset_within(key: str, window: float) -> float:
+        """Stable sha256-derived offset in ``[0, window)`` for a given key."""
         import hashlib
 
-        window = self._get_smoothing_window()
         if window <= 0:
             return 0.0
         digest = hashlib.sha256(key.encode("utf-8")).digest()
-        raw = int.from_bytes(digest[:4], "big")
-        ratio = raw / 0xFFFFFFFF
+        ratio = int.from_bytes(digest[:4], "big") / 0xFFFFFFFF
         return ratio * window
+
+    def _get_smoothing_offset(self, key: str) -> float:
+        """Compute a stable offset within the fan-out smoothing window for a key."""
+        return self._offset_within(key, self._get_smoothing_window())
 
     def _record_smoothing_metrics(self) -> None:
         """Record smoothing window and base offset metrics for this collector."""
@@ -664,18 +681,16 @@ class MetricCollector(ABC):
             return
 
         window = self._get_smoothing_window()
-        offset = self._get_smoothing_offset(f"{self.__class__.__name__}:{self.update_tier.value}")
+        offset = self._get_smoothing_offset(self.__class__.__name__)
 
         if self._collector_smoothing_window is not None:
             self._collector_smoothing_window.labels(
                 collector=self.__class__.__name__,
-                tier=self.update_tier.value,
             ).set(window)
 
         if self._collector_start_offset is not None:
             self._collector_start_offset.labels(
                 collector=self.__class__.__name__,
-                tier=self.update_tier.value,
             ).set(offset)
 
     def _set_metric_value(
@@ -701,7 +716,7 @@ class MetricCollector(ABC):
         ttl_seconds : float | None
             Fully-resolved per-series TTL forwarded to ``_set_metric`` (#617
             §1f). Sub-collectors pass this via ``SubCollectorMixin``. ``None``
-            (default) ⇒ the tier-derived TTL applies.
+            (default) ⇒ the the collector-cadence fallback TTL applies.
 
         """
         # Skip if value is None - this happens when API returns null values
@@ -793,7 +808,7 @@ class MetricCollector(ABC):
             Fully-resolved per-series TTL forwarded to the expiration manager
             (#617 §1f). Scheduler-gated fetch sites pass
             ``self._group_ttl_seconds(GROUP)`` so a slow-polled series does not
-            flap. ``None`` (default) ⇒ the tier-derived TTL applies.
+            flap. ``None`` (default) ⇒ the the collector-cadence fallback TTL applies.
 
         Examples
         --------
@@ -825,7 +840,6 @@ class MetricCollector(ABC):
                     collector_name=self.__class__.__name__,
                     metric_name=metric_name,
                     label_values=labels,
-                    tier=self.update_tier,
                     metric=metric,
                     ttl_seconds=ttl_seconds,
                 )
@@ -874,7 +888,7 @@ class MetricCollector(ABC):
             duration_metric = Histogram(
                 CollectorMetricName.COLLECTOR_DURATION_SECONDS.value,
                 "Time spent collecting metrics",
-                labelnames=["collector", "tier"],
+                labelnames=["collector"],
                 buckets=tuple(buckets) if buckets else cls._DEFAULT_DURATION_BUCKETS,
                 registry=REGISTRY,
             )
@@ -883,7 +897,7 @@ class MetricCollector(ABC):
             errors_metric = Counter(
                 CollectorMetricName.COLLECTOR_ERRORS_TOTAL.value,
                 "Total number of collector errors",
-                labelnames=["collector", "tier", "error_type"],
+                labelnames=["collector", "error_type"],
                 registry=REGISTRY,
             )
             cls._collector_errors = errors_metric
@@ -891,7 +905,7 @@ class MetricCollector(ABC):
             success_metric = Gauge(
                 CollectorMetricName.COLLECTOR_SUCCESS_TIMESTAMP_SECONDS.value,
                 "Unix timestamp of last successful collection",
-                labelnames=["collector", "tier"],
+                labelnames=["collector"],
                 registry=REGISTRY,
             )
             cls._collector_last_success = success_metric
@@ -899,7 +913,7 @@ class MetricCollector(ABC):
             api_calls_metric = Counter(
                 CollectorMetricName.COLLECTOR_API_CALLS_TOTAL.value,
                 "Total number of API calls made by collectors",
-                labelnames=["collector", "tier", "endpoint"],
+                labelnames=["collector", "endpoint"],
                 registry=REGISTRY,
             )
             cls._collector_api_calls = api_calls_metric
@@ -907,26 +921,25 @@ class MetricCollector(ABC):
             cls._collector_smoothing_window = Gauge(
                 CollectorMetricName.COLLECTION_SMOOTHING_WINDOW_SECONDS.value,
                 "Configured smoothing window for collector runs",
-                labelnames=[LabelName.COLLECTOR.value, LabelName.TIER.value],
+                labelnames=[LabelName.COLLECTOR.value],
                 registry=REGISTRY,
             )
 
             cls._collector_start_offset = Gauge(
                 CollectorMetricName.COLLECTOR_START_OFFSET_SECONDS.value,
                 "Configured collector start offset within smoothing window",
-                labelnames=[LabelName.COLLECTOR.value, LabelName.TIER.value],
+                labelnames=[LabelName.COLLECTOR.value],
                 registry=REGISTRY,
             )
 
             logger.info("Successfully initialized collector performance metrics")
 
-            # Do NOT pre-initialize per-collector/tier gauge series to 0 (F-025).
-            # Each collector runs in exactly one tier, so pre-seeding a hardcoded
-            # 6-collectors x 3-tiers grid left 12 phantom success_timestamp series
+            # Do NOT pre-initialize per-collector gauge series to 0 (F-025).
+            # Pre-seeding a hardcoded grid left phantom success_timestamp series
             # stuck at 0 forever — read as perpetually stale by
-            # `time() - <timestamp>` staleness alerting. The real series are created
-            # on first collection (success path) and by _record_smoothing_metrics
-            # for the actual collector/tier that runs.
+            # `time() - <timestamp>` staleness alerting. The real series are
+            # created on first collection (success path) and by
+            # _record_smoothing_metrics for the actual collector that runs.
 
             cls._metrics_initialized = True
 

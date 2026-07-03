@@ -26,27 +26,21 @@ spec:
               5 minutes. No Meraki metrics are being refreshed at all while this
               fires.
 
-        - alert: MerakiExporterFastCollectorStale
-          expr: time() - meraki_exporter_collector_success_timestamp_seconds{tier="fast"} > 180
-          for: 3m
+        - alert: MerakiExporterCollectorStale
+          # Each collector runs at its own solved cadence (no tiers, #631); a
+          # collector is stale once it hasn't succeeded within 3x that cadence.
+          expr: >-
+            (time() - meraki_exporter_collector_success_timestamp_seconds)
+            > on(collector) (3 * meraki_exporter_collector_cadence_seconds)
+          for: 5m
           labels:
             severity: warning
           annotations:
-            summary: "FAST-tier collector ({{ "{{ $labels.collector }}" }}) has not succeeded recently"
+            summary: "Collector ({{ "{{ $labels.collector }}" }}) has not succeeded within 3x its cadence"
             description: >-
-              {{ "{{ $labels.collector }}" }} (tier=fast) has had no successful collection
-              in over 3 minutes. MT sensor readings are stale.
-
-        - alert: MerakiExporterMediumCollectorStale
-          expr: time() - meraki_exporter_collector_success_timestamp_seconds{tier="medium"} > 900
-          for: 15m
-          labels:
-            severity: warning
-          annotations:
-            summary: "MEDIUM-tier collector ({{ "{{ $labels.collector }}" }}) has not succeeded recently"
-            description: >-
-              {{ "{{ $labels.collector }}" }} (tier=medium) has had no successful
-              collection in over 15 minutes. Device/network/org metrics are stale.
+              {{ "{{ $labels.collector }}" }} has had no successful collection in over
+              3x its effective cadence (meraki_exporter_collector_cadence_seconds).
+              Its metrics are stale.
 
         - alert: MerakiExporterCollectorFailureStreak
           expr: meraki_exporter_collector_failure_streak >= 3
@@ -56,8 +50,8 @@ spec:
           annotations:
             summary: "{{ "{{ $labels.collector }}" }} has failed 3+ times in a row"
             description: >-
-              Collector {{ "{{ $labels.collector }}" }} (tier={{ "{{ $labels.tier }}" }}) has
-              accumulated {{ "{{ $value }}" }} consecutive failures.
+              Collector {{ "{{ $labels.collector }}" }} has accumulated
+              {{ "{{ $value }}" }} consecutive failures.
     {{- end }}
 
     {{- if .Values.prometheusRule.rules.rateLimiting }}
@@ -103,15 +97,15 @@ spec:
               minutes - all metrics for this org are stale.
 
         - alert: MerakiCollectorErrorsHigh
-          expr: sum by (collector, tier) (increase(meraki_exporter_collector_errors_total[15m])) > 5
+          expr: sum by (collector) (increase(meraki_exporter_collector_errors_total[15m])) > 5
           for: 15m
           labels:
             severity: warning
           annotations:
             summary: "{{ "{{ $labels.collector }}" }} is generating repeated errors"
             description: >-
-              Collector {{ "{{ $labels.collector }}" }} (tier={{ "{{ $labels.tier }}" }}) logged
-              more than 5 errors in the last 15 minutes.
+              Collector {{ "{{ $labels.collector }}" }} logged more than 5 errors
+              in the last 15 minutes.
 
         - alert: MerakiCardinalityLimitReached
           expr: increase(meraki_exporter_cardinality_limit_reached_total[15m]) > 0

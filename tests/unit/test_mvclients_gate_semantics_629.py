@@ -27,7 +27,6 @@ from prometheus_client import Gauge
 
 from meraki_dashboard_exporter.collectors.clients import ClientsCollector
 from meraki_dashboard_exporter.collectors.devices.mv import MVCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import (
@@ -57,7 +56,6 @@ class TestMVGateSemantics:
         parent = MagicMock()
         parent.api = mock_api
         parent.settings = MagicMock()
-        parent.settings.update_intervals.slow = 900
         parent.rate_limiter = None
         parent.inventory = None
         parent._group_interval = MagicMock(return_value=900.0)
@@ -222,7 +220,6 @@ class TestClientsListGateSemantics(BaseCollectorTest):
     """clients_list is marked ran only when >=1 network fetch succeeds."""
 
     collector_class = ClientsCollector
-    update_tier = UpdateTier.MEDIUM
 
     @staticmethod
     def _sched() -> MagicMock:

@@ -2,24 +2,24 @@
 
 This page summarizes the collectors that ship with the exporter.
 
-Collectors run on FAST/MEDIUM/SLOW tiers configured via `MERAKI_EXPORTER_UPDATE_INTERVALS__*`. See the Metrics Overview for tier definitions.
+Each collector owns one or more scheduler endpoint groups and runs its own group-clocked loop; the adaptive scheduler solves a per-group interval (floored at that group's volatility floor) from the configured request budget, so cadence is derived rather than assigned from a fixed tier. See the [Scheduler Architecture](../observability/scheduler.md) page for details.
 
 **Total collector classes:** 49
 **Auto-registered collectors:** 9
 
 ## Main Collectors (auto-registered)
 
-| Collector | Tier | Purpose | Metrics | Notes |
-|-----------|------|---------|---------|-------|
-| `AlertsCollector` | MEDIUM | Collector for Meraki assurance alerts. | 5 |  |
-| `ClientsCollector` | MEDIUM | Collector for client-level metrics across all networks. | 25 | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `ConfigCollector` | SLOW | Collector for configuration and security settings. | 17 |  |
-| `DeviceCollector` | MEDIUM | Collector for device-level metrics. | 6 |  |
-| `InsightCollector` | SLOW | Collector for Meraki Insight application-health metrics (#613). | 10 |  |
-| `MTSensorAlertsCollector` | MEDIUM | Collector for network-wide currently-alerting MT sensor counts. | 3 |  |
-| `MTSensorCollector` | FAST | Collector for fast-moving sensor metrics (MT devices). | 24 |  |
-| `NetworkHealthCollector` | MEDIUM | Collector for medium-moving network health metrics. | 9 |  |
-| `OrganizationCollector` | MEDIUM | Collector for organization-level metrics. | 38 |  |
+| Collector | Purpose | Metrics | Notes |
+|-----------|---------|---------|-------|
+| `AlertsCollector` | Collector for Meraki assurance alerts. | 5 |  |
+| `ClientsCollector` | Collector for client-level metrics across all networks. | 25 | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `ConfigCollector` | Collector for configuration and security settings. | 17 |  |
+| `DeviceCollector` | Collector for device-level metrics. | 6 |  |
+| `InsightCollector` | Collector for Meraki Insight application-health metrics (#613). | 10 |  |
+| `MTSensorAlertsCollector` | Collector for network-wide currently-alerting MT sensor counts. | 3 |  |
+| `MTSensorCollector` | Collector for fast-moving sensor metrics (MT devices). | 24 |  |
+| `NetworkHealthCollector` | Collector for medium-moving network health metrics. | 9 |  |
+| `OrganizationCollector` | Collector for organization-level metrics. | 38 |  |
 
 ## Coordinator Relationships
 

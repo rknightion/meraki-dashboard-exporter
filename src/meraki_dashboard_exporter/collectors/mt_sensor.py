@@ -9,7 +9,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from ..core.collector import MetricCollector
-from ..core.constants import MTMetricName, UpdateTier
+from ..core.constants import MTMetricName
 from ..core.logging import get_logger
 from ..core.logging_helpers import log_metric_collection_summary
 from ..core.metrics import LabelName
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-@register_collector(UpdateTier.FAST)
+@register_collector
 class MTSensorCollector(MetricCollector):
     """Collector for fast-moving sensor metrics (MT devices)."""
 
@@ -42,7 +42,6 @@ class MTSensorCollector(MetricCollector):
             priority=2,
             floor_seconds=60,
             cost_fn=lambda shape: 2 + pages(shape.sensor_count, 100) - 1,
-            tier=UpdateTier.FAST,
             enabled_fn=lambda shape: shape.sensor_count > 0,
         ),
     )

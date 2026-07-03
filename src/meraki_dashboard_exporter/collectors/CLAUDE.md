@@ -1,10 +1,10 @@
 <system_context>
-Meraki Dashboard Exporter Collectors - All metric collection logic organized by domain (devices, networks, organizations). Implements the collector pattern with automatic registration and tiered update scheduling.
+Meraki Dashboard Exporter Collectors - All metric collection logic organized by domain (devices, networks, organizations). Implements the collector pattern with automatic registration and adaptive, endpoint-group-clocked scheduling (there is no fixed FAST/MEDIUM/SLOW tier system, #631).
 </system_context>
 
 <critical_notes>
-- **Follow update tiers**: FAST (60s), MEDIUM (300s), SLOW (900s) based on data volatility (default per-collector timeout: 240s, configurable via `CollectorSettings.collector_timeout`, range 30-600s)
-- **Main collectors**: Use `@register_collector(tier)` decorator (`core/registry.py`) for auto-registration; real base class lives in `core/collector.py::MetricCollector`, not in this directory
+- **No fixed update tiers**: each collector declares one or more endpoint groups (`get_endpoint_groups()`: name, priority 1-4, `floor_seconds`, `cost_fn`) and runs its own group-clocked loop; the scheduler (`core/scheduler.py`) solves each group's actual interval from org shape and the API budget (default per-collector timeout: 240s, configurable via `CollectorSettings.collector_timeout`, range 30-600s). See `core/CLAUDE.md` and `docs/observability/scheduler.md`.
+- **Main collectors**: Use the no-arg `@register_collector` decorator (`core/registry.py`) for auto-registration; real base class lives in `core/collector.py::MetricCollector`, not in this directory
 - **Sub-collectors**: Manual registration in parent coordinator's `__init__` (never decorated)
 - **Inherit from appropriate base**: `MetricCollector` (main), `BaseDeviceCollector`/`BaseNetworkHealthCollector`/`BaseOrganizationCollector` (sub, each mixing in `SubCollectorMixin`)
 - **Implement required methods**: `_initialize_metrics()`, `_collect_impl()` — both abstract on `MetricCollector`; never override `collect()` itself, it wraps `_collect_impl()` with tracing + duration/error/success metrics
@@ -21,19 +21,19 @@ Meraki Dashboard Exporter Collectors - All metric collection logic organized by 
 
 ### Coordinator Files
 - `manager.py` - `CollectorManager`: discovers, instantiates, and schedules all collectors (see REGISTRATION & DISCOVERY below)
-- `device.py` - `DeviceCollector` coordinator (MEDIUM tier) fanning out to per-device-type sub-collectors (MG/MR/MS/MS-stack/MT/MV/MX) via `ManagedTaskGroup`, bounded by `settings.api.concurrency_limit`
-- `network_health.py` - `NetworkHealthCollector` coordinator (MEDIUM tier) fanning out to `network_health_collectors/` (bluetooth, connection_stats, data_rates, rf_health, ssid_performance) via `ManagedTaskGroup`
-- `organization.py` - `OrganizationCollector` coordinator (MEDIUM tier) fanning out to `organization_collectors/` (`APIUsageCollector`, `ClientOverviewCollector`, `LicenseCollector`) via `ManagedTaskGroup`; the only collector that also receives an `org_health_tracker` kwarg from the manager
-- `config.py` - `ConfigCollector` for configuration/security settings (SLOW tier)
+- `device.py` - `DeviceCollector` coordinator (mostly ~300s-floor groups) fanning out to per-device-type sub-collectors (MG/MR/MS/MS-stack/MT/MV/MX) via `ManagedTaskGroup`, bounded by `settings.api.concurrency_limit`
+- `network_health.py` - `NetworkHealthCollector` coordinator (~300s-floor groups) fanning out to `network_health_collectors/` (bluetooth, connection_stats, data_rates, rf_health, ssid_performance) via `ManagedTaskGroup`
+- `organization.py` - `OrganizationCollector` coordinator (mostly ~300s-floor groups) fanning out to `organization_collectors/` (`APIUsageCollector`, `ClientOverviewCollector`, `LicenseCollector`) via `ManagedTaskGroup`; the only collector that also receives an `org_health_tracker` kwarg from the manager
+- `config.py` - `ConfigCollector` for configuration/security settings (~900s-floor groups)
 
 ### Shared Infrastructure
 - `subcollector_mixin.py` - `SubCollectorMixin` providing common sub-collector delegation patterns (`_set_metric_value`, `_track_api_call`, `update_api`); mixed into `devices/base.py::BaseDeviceCollector`, `network_health_collectors/base.py::BaseNetworkHealthCollector`, `organization_collectors/base.py::BaseOrganizationCollector`, and standalone sub-collectors (`devices/mx_firewall.py`, `devices/mx_vpn.py`, `devices/ms_stack.py`)
 
 ### Standalone Collectors
-- `alerts.py` - `AlertsCollector` (MEDIUM tier) - alert/event collection
-- `clients.py` - `ClientsCollector` (MEDIUM tier) - client device tracking
-- `mt_sensor.py` - `MTSensorCollector` (FAST tier) - standalone sensor data collection
-- `mt_alerts.py` - `MTSensorAlertsCollector` (MEDIUM tier) - MT sensor alert collection
+- `alerts.py` - `AlertsCollector` (~300s-floor groups) - alert/event collection
+- `clients.py` - `ClientsCollector` (~300s-floor groups) - client device tracking
+- `mt_sensor.py` - `MTSensorCollector` (~60s-floor group) - standalone sensor data collection
+- `mt_alerts.py` - `MTSensorAlertsCollector` (~300s-floor group) - MT sensor alert collection
 - `webhook_metrics.py` - **removed (issue #530)**: `WebhookMetricsCollector` was dead code (never instantiated/wired anywhere; its `network_id`-labeled counter was also a cardinality risk). The live webhook receiver's metrics (`meraki_webhook_events_received_total`, `_processed_total`, `_failed_total`, `_processing_duration_seconds`, `_validation_failures_total`) are owned entirely by `core/webhook_handler.py::WebhookHandler` and are unaffected — those remain Stable per `docs/stability.md`.
 </file_map>
 
@@ -44,18 +44,28 @@ Meraki Dashboard Exporter Collectors - All metric collection logic organized by 
 ```python
 from ..core.registry import register_collector
 from ..core.collector import MetricCollector
-from ..core.constants.device_constants import UpdateTier
 
 
-@register_collector(UpdateTier.MEDIUM)
+@register_collector
 class MyCollector(MetricCollector):
     def _initialize_metrics(self) -> None: ...
 
     async def _collect_impl(self) -> None: ...
+
+    def get_endpoint_groups(self) -> tuple[EndpointGroup, ...]:
+        return (
+            EndpointGroup(
+                name=EndpointGroupName.MY_GROUP,
+                priority=3,
+                floor_seconds=300,
+                cost_fn=lambda shape: 1.0,
+            ),
+        )
 ```
 `register_collector()` (`core/registry.py`) just appends the class to a module-level
-`_COLLECTOR_REGISTRY: dict[UpdateTier, list[type[MetricCollector]]]` at import time — it does
-not instantiate anything.
+`_COLLECTOR_REGISTRY: list[type[MetricCollector]]` at import time — it does not instantiate
+anything or take a tier argument. `get_endpoint_groups()` is what tells the scheduler how to
+pace the collector (see `core/scheduler.py::EndpointGroup`/`EndpointGroupName`).
 
 ### Sub-collector (Manual registration in parent coordinator)
 Sub-collectors are instantiated in their parent coordinator's `__init__` (e.g. `DeviceCollector.__init__`
@@ -68,8 +78,8 @@ They never use `@register_collector`.
    mt_sensor, network_health, organization`) purely to execute their `@register_collector`
    decorators — this is what triggers step 2. Sub-collector modules never need this since they
    aren't decorated.
-2. **Read the registry**: calls `core/registry.py::get_registered_collectors()` to get the
-   tier -> class mapping built in step 1.
+2. **Read the registry**: calls `core/registry.py::get_registered_collectors()` to get the flat
+   list of registered classes built in step 1 (registration order, no tier grouping).
 3. **Filter by name**: each class's short name (`ClassName.replace("Collector", "").lower()`, e.g.
    `NetworkHealthCollector` -> `networkhealth`) is checked against
    `settings.collectors.active_collectors` (`CollectorSettings.enabled_collectors -
@@ -84,16 +94,24 @@ They never use `@register_collector`.
    (does not fail) if a configured name in `active_collectors` matches no registered collector
    (typo detection).
 
-## UPDATE TIER SELECTION
-- **FAST (60s)**: Real-time status, critical alerts, sensor readings
-- **MEDIUM (300s)**: Device metrics, performance data, client counts
-- **SLOW (900s)**: License usage, organization summaries, configuration
+## ENDPOINT GROUP FLOOR SELECTION
+Pick `floor_seconds` by the data's natural volatility, and `priority` (1=up-ness/alerts,
+2=sensor, 3=perf/health, 4=config/inventory) by how important it is to protect from stretching
+when the org is over budget:
+- **~60s floor**: Real-time status, critical alerts, sensor readings
+- **~300s floor**: Device metrics, performance data, client counts
+- **~900s+ floor**: License usage, organization summaries, configuration
+
+These are conventions, not enforced constants — see `core/scheduler.py::EndpointGroupName` for
+every declared group and its actual floor/priority, and `docs/observability/scheduler.md` for how
+the solver stretches groups above their floor under budget pressure.
 
 ## CONCURRENCY WITHIN A COORDINATOR
 `device.py`, `network_health.py`, and `organization.py` each fan out per-organization (and, for
-`device.py`, per-device-type) work through `core/async_utils.py::ManagedTaskGroup`, bounded by the
-relevant `settings.api.concurrency_limit*` setting — never spawn raw unbounded `asyncio.gather`/tasks
-in a coordinator's `_collect_impl()`.
+`device.py`, per-device-type) work through `core/async_utils.py::ManagedTaskGroup`, bounded by
+`settings.api.concurrency_limit` — never spawn raw unbounded `asyncio.gather`/tasks in a
+coordinator's `_collect_impl()`. Separately, `settings.collectors.max_concurrent_collectors`
+(default 5) bounds how many collectors' own group-clocked loops may be mid-run at once, globally.
 
 ## METRIC OWNERSHIP
 - **Device-specific metrics**: Owned by respective device collectors (MR, MS, etc.)
@@ -105,7 +123,7 @@ in a coordinator's `_collect_impl()`.
 <workflow>
 ## ADDING NEW COLLECTOR
 1. **Choose inheritance**: `MetricCollector` (main) or domain-specific base class (sub)
-2. **Select update tier**: Based on data volatility and importance
+2. **Declare endpoint group(s)**: `floor_seconds` based on data volatility, `priority` based on importance
 3. **Define metrics** in `_initialize_metrics()` using domain-specific enums
 4. **Implement collection** in `_collect_impl()` with error handling
 5. **Register collector**: Auto via `@register_collector` or manual in coordinator

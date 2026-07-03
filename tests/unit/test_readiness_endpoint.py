@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -56,7 +57,7 @@ class TestReadinessEndpointNotReady:
         client, mock_manager = app_and_manager
         mock_manager.get_readiness_status.return_value = {
             "ready": False,
-            "collectors": {"fast": False, "medium": False, "slow": False},
+            "collectors": {"DeviceCollector": False, "NetworkHealthCollector": False},
         }
 
         response = client.get("/ready")
@@ -65,14 +66,14 @@ class TestReadinessEndpointNotReady:
         body = response.json()
         assert body["ready"] is False
 
-    def test_ready_returns_503_when_only_fast_complete(
+    def test_ready_returns_503_when_some_collectors_incomplete(
         self, app_and_manager: tuple[TestClient, MagicMock]
     ) -> None:
-        """Test that /ready returns 503 when only FAST tier has completed."""
+        """Test that /ready returns 503 when only some gating collectors have succeeded."""
         client, mock_manager = app_and_manager
         mock_manager.get_readiness_status.return_value = {
             "ready": False,
-            "collectors": {"fast": True, "medium": False, "slow": False},
+            "collectors": {"DeviceCollector": True, "NetworkHealthCollector": False},
         }
 
         response = client.get("/ready")
@@ -80,39 +81,21 @@ class TestReadinessEndpointNotReady:
         assert response.status_code == 503
         body = response.json()
         assert body["ready"] is False
-        assert body["collectors"]["fast"] is True
-        assert body["collectors"]["medium"] is False
-
-    def test_ready_returns_503_when_only_medium_complete(
-        self, app_and_manager: tuple[TestClient, MagicMock]
-    ) -> None:
-        """Test that /ready returns 503 when only MEDIUM tier has completed."""
-        client, mock_manager = app_and_manager
-        mock_manager.get_readiness_status.return_value = {
-            "ready": False,
-            "collectors": {"fast": False, "medium": True, "slow": False},
-        }
-
-        response = client.get("/ready")
-
-        assert response.status_code == 503
-        body = response.json()
-        assert body["ready"] is False
-        assert body["collectors"]["fast"] is False
-        assert body["collectors"]["medium"] is True
+        assert body["collectors"]["DeviceCollector"] is True
+        assert body["collectors"]["NetworkHealthCollector"] is False
 
 
 class TestReadinessEndpointReady:
     """Tests for /ready returning 200 after required collection completes."""
 
-    def test_ready_returns_200_after_fast_and_medium_complete(
+    def test_ready_returns_200_when_all_gating_collectors_complete(
         self, app_and_manager: tuple[TestClient, MagicMock]
     ) -> None:
-        """Test that /ready returns 200 after both FAST and MEDIUM tiers complete."""
+        """Test that /ready returns 200 once every gating collector has succeeded."""
         client, mock_manager = app_and_manager
         mock_manager.get_readiness_status.return_value = {
             "ready": True,
-            "collectors": {"fast": True, "medium": True, "slow": False},
+            "collectors": {"DeviceCollector": True, "NetworkHealthCollector": True},
         }
 
         response = client.get("/ready")
@@ -120,25 +103,8 @@ class TestReadinessEndpointReady:
         assert response.status_code == 200
         body = response.json()
         assert body["ready"] is True
-        assert body["collectors"]["fast"] is True
-        assert body["collectors"]["medium"] is True
-
-    def test_ready_returns_200_when_all_tiers_complete(
-        self, app_and_manager: tuple[TestClient, MagicMock]
-    ) -> None:
-        """Test that /ready returns 200 when all tiers have completed."""
-        client, mock_manager = app_and_manager
-        mock_manager.get_readiness_status.return_value = {
-            "ready": True,
-            "collectors": {"fast": True, "medium": True, "slow": True},
-        }
-
-        response = client.get("/ready")
-
-        assert response.status_code == 200
-        body = response.json()
-        assert body["ready"] is True
-        assert body["collectors"]["slow"] is True
+        assert body["collectors"]["DeviceCollector"] is True
+        assert body["collectors"]["NetworkHealthCollector"] is True
 
 
 class TestReadinessStatusFormat:
@@ -151,7 +117,7 @@ class TestReadinessStatusFormat:
         client, mock_manager = app_and_manager
         mock_manager.get_readiness_status.return_value = {
             "ready": False,
-            "collectors": {"fast": False, "medium": False, "slow": False},
+            "collectors": {"DeviceCollector": False},
         }
 
         response = client.get("/ready")
@@ -159,163 +125,109 @@ class TestReadinessStatusFormat:
 
         assert "ready" in body
         assert "collectors" in body
-        assert "fast" in body["collectors"]
-        assert "medium" in body["collectors"]
-        assert "slow" in body["collectors"]
+        assert "DeviceCollector" in body["collectors"]
 
     def test_readiness_status_booleans(self, app_and_manager: tuple[TestClient, MagicMock]) -> None:
         """Test that readiness status values are booleans."""
         client, mock_manager = app_and_manager
         mock_manager.get_readiness_status.return_value = {
             "ready": True,
-            "collectors": {"fast": True, "medium": True, "slow": False},
+            "collectors": {"DeviceCollector": True, "NetworkHealthCollector": False},
         }
 
         response = client.get("/ready")
         body = response.json()
 
         assert isinstance(body["ready"], bool)
-        assert isinstance(body["collectors"]["fast"], bool)
-        assert isinstance(body["collectors"]["medium"], bool)
-        assert isinstance(body["collectors"]["slow"], bool)
+        assert isinstance(body["collectors"]["DeviceCollector"], bool)
+        assert isinstance(body["collectors"]["NetworkHealthCollector"], bool)
+
+
+def _gating_collector(name: str):  # type: ignore[no-untyped-def]
+    """Build a minimal collector owning one enabled, gated priority-1 group."""
+    group = SimpleNamespace(priority=1, gated=True, name="grp")
+    cls = type(name, (), {"get_endpoint_groups": lambda self: (group,)})
+    return cls()
 
 
 class TestCollectorManagerReadiness:
-    """Unit tests for CollectorManager readiness tracking logic."""
+    """Unit tests for CollectorManager readiness tracking logic (#631)."""
+
+    def _make_manager(self, test_settings: Settings, *, api_requests: int) -> MagicMock:
+        from unittest.mock import patch
+
+        from meraki_dashboard_exporter.collectors.manager import CollectorManager
+
+        mock_client = MagicMock()
+        mock_client.api = MagicMock()
+        mock_client.get_successful_api_requests.return_value = api_requests
+
+        with patch.object(CollectorManager, "_initialize_metrics"):
+            with patch.object(CollectorManager, "_initialize_collectors"):
+                with patch.object(CollectorManager, "_validate_collector_configuration"):
+                    manager = CollectorManager(client=mock_client, settings=test_settings)
+        # Every gated group reports enabled so the readiness set is driven purely
+        # by first-success bookkeeping in these unit tests.
+        manager.scheduler.is_enabled = lambda name: True  # type: ignore[assignment]
+        return manager
 
     def test_initial_state_not_ready(self, test_settings: Settings) -> None:
-        """Test that a fresh CollectorManager is not ready."""
-        from unittest.mock import patch
-
-        from meraki_dashboard_exporter.collectors.manager import CollectorManager
-
-        mock_client = MagicMock()
-        mock_client.api = MagicMock()
-        mock_client.get_successful_api_requests.return_value = 0
-
-        # Patch out all the metric registrations to avoid Prometheus duplicate errors
-        with patch.object(CollectorManager, "_initialize_metrics"):
-            with patch.object(CollectorManager, "_initialize_collectors"):
-                with patch.object(CollectorManager, "_validate_collector_configuration"):
-                    manager = CollectorManager(client=mock_client, settings=test_settings)
+        """Test that a fresh CollectorManager is not ready and nothing has succeeded."""
+        manager = self._make_manager(test_settings, api_requests=0)
 
         assert manager.is_ready is False
-        assert manager._tier_initial_complete == {
-            "fast": False,
-            "medium": False,
-            "slow": False,
-        }
+        assert manager._collector_succeeded == set()
 
     def test_get_readiness_status_initial(self, test_settings: Settings) -> None:
-        """Test that get_readiness_status returns correct initial state."""
-        from unittest.mock import patch
-
-        from meraki_dashboard_exporter.collectors.manager import CollectorManager
-
-        mock_client = MagicMock()
-        mock_client.api = MagicMock()
-        mock_client.get_successful_api_requests.return_value = 0
-
-        with patch.object(CollectorManager, "_initialize_metrics"):
-            with patch.object(CollectorManager, "_initialize_collectors"):
-                with patch.object(CollectorManager, "_validate_collector_configuration"):
-                    manager = CollectorManager(client=mock_client, settings=test_settings)
+        """Test that get_readiness_status returns correct initial state (no collectors)."""
+        manager = self._make_manager(test_settings, api_requests=0)
 
         status = manager.get_readiness_status()
         assert status == {
             "ready": False,
             "api_success": False,
-            "collectors": {"fast": False, "medium": False, "slow": False},
+            "collectors": {},
         }
 
-    def test_is_ready_requires_both_fast_and_medium(self, test_settings: Settings) -> None:
-        """Test that is_ready requires both fast and medium tiers, not just one."""
-        from unittest.mock import patch
+    def test_not_ready_until_every_gating_collector_succeeds(
+        self, test_settings: Settings
+    ) -> None:
+        """is_ready requires every priority-<=3 gating collector to have succeeded."""
+        manager = self._make_manager(test_settings, api_requests=5)
+        manager.collectors = [_gating_collector("DeviceCollector"), _gating_collector("AlertsCollector")]
 
-        from meraki_dashboard_exporter.collectors.manager import CollectorManager
-
-        mock_client = MagicMock()
-        mock_client.api = MagicMock()
-        mock_client.get_successful_api_requests.return_value = 5
-
-        with patch.object(CollectorManager, "_initialize_metrics"):
-            with patch.object(CollectorManager, "_initialize_collectors"):
-                with patch.object(CollectorManager, "_validate_collector_configuration"):
-                    manager = CollectorManager(client=mock_client, settings=test_settings)
-
-        # Only fast complete: not ready
-        manager._tier_initial_complete["fast"] = True
+        # Nothing has succeeded yet.
         assert manager.is_ready is False
 
-        # Both fast and medium complete: ready
-        manager._tier_initial_complete["medium"] = True
-        assert manager.is_ready is True
+        # Only one of the two gating collectors succeeded: still not ready.
+        manager._collector_succeeded.add("DeviceCollector")
+        assert manager.is_ready is False
 
-    def test_is_ready_does_not_require_slow(self, test_settings: Settings) -> None:
-        """Test that is_ready does not require SLOW tier to complete."""
-        from unittest.mock import patch
-
-        from meraki_dashboard_exporter.collectors.manager import CollectorManager
-
-        mock_client = MagicMock()
-        mock_client.api = MagicMock()
-        mock_client.get_successful_api_requests.return_value = 5
-
-        with patch.object(CollectorManager, "_initialize_metrics"):
-            with patch.object(CollectorManager, "_initialize_collectors"):
-                with patch.object(CollectorManager, "_validate_collector_configuration"):
-                    manager = CollectorManager(client=mock_client, settings=test_settings)
-
-        manager._tier_initial_complete["fast"] = True
-        manager._tier_initial_complete["medium"] = True
-        # slow is still False
-
+        # Both gating collectors have now succeeded: ready.
+        manager._collector_succeeded.add("AlertsCollector")
         assert manager.is_ready is True
 
     def test_is_ready_requires_api_success(self, test_settings: Settings) -> None:
         """Test that is_ready is gated on >=1 HTTP-200 API request (#509)."""
-        from unittest.mock import patch
+        manager = self._make_manager(test_settings, api_requests=0)
+        manager.collectors = [_gating_collector("DeviceCollector")]
+        manager._collector_succeeded.add("DeviceCollector")
 
-        from meraki_dashboard_exporter.collectors.manager import CollectorManager
-
-        mock_client = MagicMock()
-        mock_client.api = MagicMock()
-
-        with patch.object(CollectorManager, "_initialize_metrics"):
-            with patch.object(CollectorManager, "_initialize_collectors"):
-                with patch.object(CollectorManager, "_validate_collector_configuration"):
-                    manager = CollectorManager(client=mock_client, settings=test_settings)
-
-        manager._tier_initial_complete["fast"] = True
-        manager._tier_initial_complete["medium"] = True
-
-        mock_client.get_successful_api_requests.return_value = 0
+        manager.client.get_successful_api_requests.return_value = 0
         assert manager.is_ready is False
 
-        mock_client.get_successful_api_requests.return_value = 5
+        manager.client.get_successful_api_requests.return_value = 5
         assert manager.is_ready is True
 
     def test_get_readiness_status_when_ready(self, test_settings: Settings) -> None:
-        """Test get_readiness_status when both required tiers are complete."""
-        from unittest.mock import patch
-
-        from meraki_dashboard_exporter.collectors.manager import CollectorManager
-
-        mock_client = MagicMock()
-        mock_client.api = MagicMock()
-        mock_client.get_successful_api_requests.return_value = 5
-
-        with patch.object(CollectorManager, "_initialize_metrics"):
-            with patch.object(CollectorManager, "_initialize_collectors"):
-                with patch.object(CollectorManager, "_validate_collector_configuration"):
-                    manager = CollectorManager(client=mock_client, settings=test_settings)
-
-        manager._tier_initial_complete["fast"] = True
-        manager._tier_initial_complete["medium"] = True
+        """Test get_readiness_status maps each gating collector to its success state."""
+        manager = self._make_manager(test_settings, api_requests=5)
+        manager.collectors = [_gating_collector("DeviceCollector")]
+        manager._collector_succeeded.add("DeviceCollector")
 
         status = manager.get_readiness_status()
         assert status == {
             "ready": True,
             "api_success": True,
-            "collectors": {"fast": True, "medium": True, "slow": False},
+            "collectors": {"DeviceCollector": True},
         }

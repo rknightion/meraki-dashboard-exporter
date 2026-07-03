@@ -1683,7 +1683,8 @@ class MSCollector(BaseDeviceCollector):
     ) -> None:
         """Collect STP priorities for all switches in an organization.
 
-        Interval-gated to the SLOW cadence (``settings.update_intervals.slow``)
+        Interval-gated to the ``ms_stp`` group's solved interval
+        (``parent._group_interval(EndpointGroupName.MS_STP)``, 900s floor)
         and fans out per-network fetches concurrently via ``ManagedTaskGroup``
         (bounded by ``settings.api.concurrency_limit``) instead of a sequential
         loop (see F-037).

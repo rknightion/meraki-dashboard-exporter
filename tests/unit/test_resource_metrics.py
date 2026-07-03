@@ -145,10 +145,10 @@ class TestResourceMetricsLifespanWiring:
     async def test_shutdown_cancels_resource_metrics_task(self, test_settings: Settings) -> None:
         """Exiting the lifespan cancels the tracked resource-metrics task cleanly."""
         exporter = ExporterApp(test_settings)
-        exporter.collector_manager.collect_initial = AsyncMock()  # type: ignore[method-assign]
-        exporter.collector_manager.get_tier_interval = lambda tier: 60  # type: ignore[assignment]
-        exporter._tiered_collection_loop = AsyncMock()  # type: ignore[method-assign]
-        exporter._wait_for_first_collection = AsyncMock()  # type: ignore[method-assign]
+        # Stub out the collection-startup fan-out (#631: per-collector loops +
+        # scheduler resolve loop) so this test exercises only the resource-metrics
+        # task lifecycle without spinning up real collector loops.
+        exporter._startup_collections = AsyncMock()  # type: ignore[method-assign]
         exporter._cardinality_monitor_loop = AsyncMock()  # type: ignore[method-assign]
         exporter.expiration_manager.start = AsyncMock()  # type: ignore[method-assign]
         exporter.expiration_manager.stop = AsyncMock()  # type: ignore[method-assign]

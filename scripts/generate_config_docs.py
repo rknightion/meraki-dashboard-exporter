@@ -253,12 +253,6 @@ def generate_configuration_docs() -> str:
             "Configuration for Meraki API interactions",
         ),
         (
-            "Update Intervals",
-            config_models.UpdateIntervals,
-            "MERAKI_EXPORTER_UPDATE_INTERVALS",
-            "Control how often different types of metrics are collected",
-        ),
-        (
             "Server Settings",
             config_models.ServerSettings,
             "MERAKI_EXPORTER_SERVER",
@@ -315,10 +309,6 @@ def generate_configuration_docs() -> str:
     ]
 
     section_notes = {
-        "Update Intervals": (
-            "`MEDIUM` must be greater than or equal to `FAST`, `SLOW` must be greater than or equal "
-            "to `MEDIUM`, and `MEDIUM` must be a multiple of `FAST`."
-        ),
         "Webhook Settings": ("Webhooks are received on `POST /api/webhooks/meraki` when enabled."),
         "Network Filter Settings": (
             "All fields default to empty, which leaves the filter inactive (every network in every "

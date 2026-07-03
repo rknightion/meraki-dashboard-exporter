@@ -40,7 +40,6 @@ from .device_constants import (
     DeviceStatus,
     DeviceType,
     ProductType,
-    UpdateTier,
 )
 from .metrics_constants import (
     AlertMetricName,
@@ -68,7 +67,6 @@ __all__ = [
     "DeviceType",
     "DeviceStatus",
     "ProductType",
-    "UpdateTier",
     # Metric constants (domain-specific)
     "OrgMetricName",
     "NetworkMetricName",

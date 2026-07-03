@@ -1,11 +1,11 @@
 """Tests for the production collection scheduler in app.py (F-162, F-044).
 
-Covers the previously-untested scheduler surface:
+Covers the per-collector, group-clocked scheduler surface (#631):
 
-* ``_startup_collections`` sequencing and background-task bookkeeping.
-* ``_tiered_collection_loop`` happy path and its behavior when
-  ``collect_tier`` raises (logged and swallowed, no failure-count kill
-  switch - see #528).
+* ``_collector_loop`` happy path and its behavior when ``run_collector_once``
+  raises (logged and swallowed, no failure-count kill switch — see #528).
+* ``_startup_collections`` sequencing and background-task bookkeeping (one
+  ``_collector_loop`` task per collector, tracked in ``_collector_tasks``).
 * ``_wait_for_first_collection`` gating.
 * F-044: the ``_wait_for_first_collection`` task is tracked in
   ``_background_tasks`` and therefore cancelled on lifespan shutdown.
@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import AsyncExitStack
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -24,7 +25,6 @@ from pydantic import SecretStr
 from meraki_dashboard_exporter.app import ExporterApp
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
-from meraki_dashboard_exporter.core.constants import UpdateTier
 
 
 @pytest.fixture
@@ -38,81 +38,98 @@ def test_settings() -> Settings:
     )
 
 
+def _fake_collector(name: str = "FakeCollector", phase_offset: float = 0.0) -> Any:
+    """Build a minimal collector stub for the per-collector loop."""
+    cls = type(
+        name,
+        (),
+        {
+            "get_endpoint_groups": lambda self: (),
+            "phase_offset_seconds": lambda self: phase_offset,
+        },
+    )
+    return cls()
+
+
 # ---------------------------------------------------------------------------
-# _tiered_collection_loop
+# _collector_loop
 # ---------------------------------------------------------------------------
 
 
-class TestTieredCollectionLoop:
-    """Tests for ExporterApp._tiered_collection_loop()."""
+class TestCollectorLoop:
+    """Tests for ExporterApp._collector_loop()."""
 
-    async def test_loop_collects_then_exits_on_shutdown(self, test_settings: Settings) -> None:
-        """The loop calls collect_tier and exits cleanly when shutdown is set."""
+    async def test_loop_runs_then_exits_on_shutdown(self, test_settings: Settings) -> None:
+        """The loop runs the collector and exits cleanly when shutdown is set."""
         exporter = ExporterApp(test_settings)
-        exporter.collector_manager.get_tier_interval = lambda tier: 0  # type: ignore[assignment]
+        exporter._interruptible_sleep = AsyncMock()  # type: ignore[method-assign]
+        collector = _fake_collector()
 
         calls = 0
 
-        async def collect(tier: UpdateTier) -> None:
+        async def run_once(coll: Any, *, force: bool = False) -> None:
             nonlocal calls
             calls += 1
             # Stop after the second successful cycle.
             if calls >= 2:
                 exporter._shutdown_event.set()
 
-        exporter.collector_manager.collect_tier = collect  # type: ignore[method-assign]
+        exporter.collector_manager.run_collector_once = run_once  # type: ignore[method-assign]
 
         await asyncio.wait_for(
-            exporter._tiered_collection_loop(UpdateTier.FAST, initial_delay=0.0),
+            exporter._collector_loop(collector, initial_run_completed=False),
             timeout=5.0,
         )
         assert calls >= 1
 
-    async def test_collect_tier_failure_is_logged_and_loop_continues(
+    async def test_run_failure_is_logged_and_loop_continues(
         self, test_settings: Settings
     ) -> None:
-        """A collect_tier exception is swallowed (logged) and the loop keeps running (#528).
+        """A run_collector_once exception is swallowed (logged); the loop keeps running (#528).
 
-        The dead 10-consecutive-failure kill switch was removed: collect_tier already
-        swallows per-org/per-collector failures at its own boundary (#509), so an
-        exception reaching this loop is unexpected and never actually accumulated a
-        streak. Honest health signals live in /ready + failure_streak instead.
+        run_collector_once already swallows per-org/per-collector failures at its own
+        boundary (#509), so an exception reaching this loop is unexpected and never
+        accumulates a streak. Honest health signals live in /ready + failure_streak.
         """
         exporter = ExporterApp(test_settings)
-        exporter.collector_manager.get_tier_interval = lambda tier: 0  # type: ignore[assignment]
+        exporter._interruptible_sleep = AsyncMock()  # type: ignore[method-assign]
+        collector = _fake_collector()
 
         calls = 0
 
-        async def collect(tier: UpdateTier) -> None:
+        async def run_once(coll: Any, *, force: bool = False) -> None:
             nonlocal calls
             calls += 1
             if calls >= 3:
                 exporter._shutdown_event.set()
             raise RuntimeError("boom")
 
-        exporter.collector_manager.collect_tier = collect  # type: ignore[method-assign]
+        exporter.collector_manager.run_collector_once = run_once  # type: ignore[method-assign]
 
-        # Should NOT raise even though every call fails - there is no failure-count
+        # Should NOT raise even though every run fails - there is no failure-count
         # threshold left to trip.
         await asyncio.wait_for(
-            exporter._tiered_collection_loop(UpdateTier.FAST, initial_delay=0.0),
+            exporter._collector_loop(collector, initial_run_completed=False),
             timeout=5.0,
         )
         assert calls >= 3
         assert exporter._shutdown_event.is_set()
 
-    async def test_initial_delay_is_interruptible(self, test_settings: Settings) -> None:
-        """A shutdown during the initial delay exits before any collection."""
+    async def test_shutdown_before_first_run_skips_collection(
+        self, test_settings: Settings
+    ) -> None:
+        """A shutdown set before entry (with a phase offset) exits before any run."""
         exporter = ExporterApp(test_settings)
-        exporter.collector_manager.get_tier_interval = lambda tier: 60  # type: ignore[assignment]
-        exporter.collector_manager.collect_tier = AsyncMock()  # type: ignore[method-assign]
+        collector = _fake_collector(phase_offset=100.0)
+        run_mock = AsyncMock()
+        exporter.collector_manager.run_collector_once = run_mock  # type: ignore[method-assign]
         exporter._shutdown_event.set()
 
         await asyncio.wait_for(
-            exporter._tiered_collection_loop(UpdateTier.SLOW, initial_delay=100.0),
+            exporter._collector_loop(collector, initial_run_completed=True),
             timeout=5.0,
         )
-        exporter.collector_manager.collect_tier.assert_not_awaited()
+        run_mock.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -134,16 +151,15 @@ class TestWaitForFirstCollection:
         sleep_mock.assert_not_awaited()
 
     async def test_waits_then_marks_complete(self, test_settings: Settings) -> None:
-        """Otherwise it waits one slow interval (+buffer) then marks complete."""
+        """Otherwise it waits the fixed 1800s fallback then marks complete (#631)."""
         exporter = ExporterApp(test_settings)
         exporter._first_collection_complete = False
-        exporter.collector_manager.get_tier_interval = lambda tier: 900  # type: ignore[assignment]
         exporter.cardinality_monitor.mark_first_run_complete = MagicMock()  # type: ignore[method-assign]
 
         with patch("asyncio.sleep", AsyncMock()) as sleep_mock:
             await exporter._wait_for_first_collection()
 
-        sleep_mock.assert_awaited_once_with(905)  # 900 + 5s buffer
+        sleep_mock.assert_awaited_once_with(1800.0)
         assert exporter._first_collection_complete is True
         exporter.cardinality_monitor.mark_first_run_complete.assert_called_once()
 
@@ -156,8 +172,7 @@ class TestWaitForFirstCollection:
 def _stub_startup(exporter: ExporterApp) -> None:
     """Stub the heavy pieces so _startup_collections runs fast."""
     exporter.collector_manager.collect_initial = AsyncMock()  # type: ignore[method-assign]
-    exporter.collector_manager.get_tier_interval = lambda tier: 60  # type: ignore[assignment]
-    exporter._tiered_collection_loop = AsyncMock()  # type: ignore[method-assign]
+    exporter._collector_loop = AsyncMock()  # type: ignore[method-assign]
     # #617: the adaptive scheduler resolve loop is a long-running background
     # task; stub it here so startup-sequencing tests don't spin the real loop
     # (which would poll inventory/API forever and never drain).
@@ -183,8 +198,9 @@ class TestStartupCollections:
 
         exporter.collector_manager.collect_initial.assert_awaited_once()
         assert exporter._first_collection_complete is True
-        # One tier task per UpdateTier member.
-        assert len(exporter._tier_tasks) == len(list(UpdateTier))
+        # One group-clocked loop task per instantiated collector.
+        assert exporter._collector_tasks
+        assert len(exporter._collector_tasks) == len(exporter.collector_manager.collectors)
 
     async def test_wait_task_is_tracked_in_background_tasks(self, test_settings: Settings) -> None:
         """F-044: the _wait_for_first_collection task is tracked, not discarded."""

@@ -8,7 +8,6 @@ import pytest
 
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.collectors.devices.ms import MSCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from tests.helpers.base import BaseCollectorTest
 
 
@@ -16,7 +15,6 @@ class TestDeviceCollectorCacheEviction(BaseCollectorTest):
     """Test DeviceCollector._evict_stale_cache_entries."""
 
     collector_class = DeviceCollector
-    update_tier = UpdateTier.MEDIUM
 
     def test_evict_stale_cache_entries_removes_stale_keys(self, collector: DeviceCollector) -> None:
         """Stale keys (not in active set) are removed from _packet_metrics_cache."""

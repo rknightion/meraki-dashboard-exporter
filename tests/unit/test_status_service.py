@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from meraki_dashboard_exporter.api.client import AsyncMerakiClient
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.org_health import SOURCE_ORGANIZATION, OrgHealth
 from meraki_dashboard_exporter.services.status import (
     ApiHealthStatus,
@@ -31,14 +30,14 @@ class TestStatusSnapshot:
                 uptime="3h 42m",
                 readiness={
                     "ready": True,
-                    "collectors": {"fast": True, "medium": True, "slow": True},
+                    "collectors": {"DeviceCollector": True},
                 },
                 org_health=[],
             ),
             collectors=[
                 CollectorStatus(
                     name="DeviceCollector",
-                    tier="FAST",
+                    cadence_seconds=60.0,
                     total_runs=10,
                     total_successes=9,
                     total_failures=1,
@@ -140,10 +139,6 @@ class TestStatusService:
         mock_client = MagicMock()
         mock_settings = MagicMock()
 
-        mock_settings.update_intervals.fast = 60
-        mock_settings.update_intervals.medium = 300
-        mock_settings.update_intervals.slow = 900
-
         # Scheduling diagnostics without a "scheduler" key => snapshot.scheduler
         # stays None (the pre-resolve / fixed-mode default). #617.
         mock_manager.get_scheduling_diagnostics.return_value = {}
@@ -164,12 +159,9 @@ class TestStatusService:
         mock_collector = MagicMock()
         mock_collector.__class__ = type("DeviceCollector", (), {})
         mock_collector.is_active = True
+        mock_collector.collector_cadence_seconds = MagicMock(return_value=60.0)
 
-        mock_manager.collectors = {
-            UpdateTier.FAST: [mock_collector],
-            UpdateTier.MEDIUM: [],
-            UpdateTier.SLOW: [],
-        }
+        mock_manager.collectors = [mock_collector]
         mock_manager.collector_health = {
             "DeviceCollector": {
                 "total_runs": 10,
@@ -182,7 +174,7 @@ class TestStatusService:
         mock_manager.is_collector_running.return_value = False
         mock_manager.get_readiness_status.return_value = {
             "ready": True,
-            "collectors": {"fast": True, "medium": True, "slow": True},
+            "collectors": {"DeviceCollector": True},
         }
         mock_manager.org_health_tracker._orgs = {}
         mock_manager.rate_limiter._tokens = {"123": 5.0}
@@ -204,7 +196,7 @@ class TestStatusService:
         assert snapshot.timestamp is not None
         assert len(snapshot.collectors) == 1
         assert snapshot.collectors[0].name == "DeviceCollector"
-        assert snapshot.collectors[0].tier == "FAST"
+        assert snapshot.collectors[0].cadence_seconds == 60.0
         assert snapshot.collectors[0].success_rate == 90.0
         assert snapshot.collectors[0].staleness == "ok"
         assert snapshot.collectors[0].last_success_ago == "50s ago"
@@ -222,12 +214,9 @@ class TestStatusService:
         mock_collector = MagicMock()
         mock_collector.__class__ = type("AlertCollector", (), {})
         mock_collector.is_active = True
+        mock_collector.collector_cadence_seconds = MagicMock(return_value=60.0)
 
-        mock_manager.collectors = {
-            UpdateTier.FAST: [mock_collector],
-            UpdateTier.MEDIUM: [],
-            UpdateTier.SLOW: [],
-        }
+        mock_manager.collectors = [mock_collector]
         mock_manager.collector_health = {
             "AlertCollector": {
                 "total_runs": 0,
@@ -240,7 +229,7 @@ class TestStatusService:
         mock_manager.is_collector_running.return_value = False
         mock_manager.get_readiness_status.return_value = {
             "ready": False,
-            "collectors": {"fast": False, "medium": False, "slow": False},
+            "collectors": {"AlertCollector": False},
         }
         mock_manager.org_health_tracker._orgs = {}
         mock_manager.rate_limiter._tokens = {}
@@ -264,11 +253,11 @@ class TestStatusService:
         """Orgs in backoff appear with correct remaining seconds."""
         service, mock_manager, mock_expiration, mock_client, _ = self._make_service()
 
-        mock_manager.collectors = {UpdateTier.FAST: [], UpdateTier.MEDIUM: [], UpdateTier.SLOW: []}
+        mock_manager.collectors = []
         mock_manager.collector_health = {}
         mock_manager.get_readiness_status.return_value = {
             "ready": True,
-            "collectors": {"fast": True, "medium": True, "slow": True},
+            "collectors": {},
         }
         mock_manager.org_health_tracker._orgs = {
             "org1": OrgHealth(
@@ -305,11 +294,11 @@ class TestStatusService:
     def test_get_snapshot_scheduler_none_when_absent(self) -> None:
         """No 'scheduler' key in diagnostics => snapshot.scheduler is None (#617)."""
         service, mock_manager, mock_expiration, mock_client, _ = self._make_service()
-        mock_manager.collectors = {UpdateTier.FAST: [], UpdateTier.MEDIUM: [], UpdateTier.SLOW: []}
+        mock_manager.collectors = []
         mock_manager.collector_health = {}
         mock_manager.get_readiness_status.return_value = {
             "ready": True,
-            "collectors": {"fast": True, "medium": True, "slow": True},
+            "collectors": {},
         }
         mock_manager.org_health_tracker._orgs = {}
         mock_manager.rate_limiter._tokens = {}
@@ -329,11 +318,11 @@ class TestStatusService:
     def test_get_snapshot_carries_scheduler_diagnostics(self) -> None:
         """The manager's diagnostics['scheduler'] flows onto the snapshot (#617)."""
         service, mock_manager, mock_expiration, mock_client, _ = self._make_service()
-        mock_manager.collectors = {UpdateTier.FAST: [], UpdateTier.MEDIUM: [], UpdateTier.SLOW: []}
+        mock_manager.collectors = []
         mock_manager.collector_health = {}
         mock_manager.get_readiness_status.return_value = {
             "ready": True,
-            "collectors": {"fast": True, "medium": True, "slow": True},
+            "collectors": {},
         }
         mock_manager.org_health_tracker._orgs = {}
         mock_manager.rate_limiter._tokens = {}
@@ -363,16 +352,12 @@ class TestApiHealthAuthenticated:
         mock_client = MagicMock()
         mock_settings = MagicMock()
 
-        mock_settings.update_intervals.fast = 60
-        mock_settings.update_intervals.medium = 300
-        mock_settings.update_intervals.slow = 900
-
-        mock_manager.collectors = {UpdateTier.FAST: [], UpdateTier.MEDIUM: [], UpdateTier.SLOW: []}
+        mock_manager.collectors = []
         mock_manager.collector_health = {}
         mock_manager.get_readiness_status.return_value = {
             "ready": False,
             "api_success": False,
-            "collectors": {"fast": False, "medium": False, "slow": False},
+            "collectors": {},
         }
         mock_manager.org_health_tracker._orgs = {}
         mock_manager.rate_limiter._tokens = {}

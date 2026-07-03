@@ -46,9 +46,8 @@ class TestMVCollector:
         parent = MagicMock()
         parent.api = mock_api
         parent.settings = MagicMock()
-        # Legacy setting; the mv_analytics gate now reads its interval from the
-        # scheduler (parent._group_interval), NOT from update_intervals.slow.
-        parent.settings.update_intervals.slow = 900
+        # The mv_analytics gate reads its interval from the scheduler
+        # (parent._group_interval), not from any settings attribute.
         parent.rate_limiter = None
         parent.inventory = None
 
@@ -606,7 +605,7 @@ class TestMVCollector:
         """The gate cadence comes from _group_interval(MV_ANALYTICS), not settings.slow."""
         self._set_all_responses(mock_api)
         # A tiny scheduler interval means the very next cycle is already due,
-        # even though the legacy settings.update_intervals.slow is still 900.
+        # regardless of the group's normal (900s) floor.
         mock_parent._group_interval.return_value = 1.0
 
         with patch(

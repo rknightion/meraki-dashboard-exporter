@@ -17,7 +17,7 @@ Start here for a quick overall picture, before diving into a specific symptom be
 
 ```bash
 curl -s http://<host>:9099/health   # liveness: process is not wedged
-curl -s http://<host>:9099/ready    # readiness: FAST + MEDIUM tiers have completed once
+curl -s http://<host>:9099/ready    # readiness: every priority<=3 collector has completed once
 curl -s http://<host>:9099/status   # self-health dashboard: auth, backoff, staleness, rate limits
 curl -s http://<host>:9099/config   # redacted effective configuration (#312)
 ```
@@ -89,9 +89,9 @@ whether another org in scope still resolved networks.
 1. `/health` - if this returns 503, the liveness dead-man switch has tripped (no collector has
    succeeded within the configured staleness threshold); check logs for the `"Liveness dead-man
    switch tripped"` line and its `reason` field.
-2. `/ready` - if this returns 503, the FAST and MEDIUM tiers have not completed a first cycle yet
-   (see the readiness-gating section below) - this is expected for the first ~60-300s after
-   startup, not necessarily a problem.
+2. `/ready` - if this returns 503, not every collector owning an enabled priority-<=3 endpoint
+   group has completed a first successful run yet (see the readiness-gating section below) -
+   this is expected for the first ~60-300s after startup, not necessarily a problem.
 3. `/status` - check `collectors[].total_runs` and `collectors[].total_failures` per collector,
    and `api_health.authenticated`.
 4. Confirm the scrape target is hitting `/metrics` (not `/` or `/status`) and that no reverse proxy
@@ -100,21 +100,25 @@ whether another org in scope still resolved networks.
 **Fix:** almost always one of - not enough time has passed since startup (wait for `/ready`), the
 401/403 case above, or every organization is currently backed off (see below).
 
-## Readiness gating: `/ready` only waits on FAST + MEDIUM
+## Readiness gating: `/ready` excludes config-only (priority-4) collectors
 
-**Symptom:** `/ready` returns 200 well before SLOW-tier metrics (e.g. licensing, firmware) appear
-in `/metrics`, or a Kubernetes rollout proceeds past the readiness gate while SLOW-tier data is
-still empty.
+**Symptom:** `/ready` returns 200 well before configuration/inventory metrics (e.g. licensing,
+firmware) appear in `/metrics`, or a Kubernetes rollout proceeds past the readiness gate while
+that slower-cadence data is still empty.
 
 **This is expected behaviour, not a bug.** Per `app.py`'s `/ready` handler:
 
-> Returns 503 until both FAST and MEDIUM collection tiers have completed their first cycle. SLOW
-> tier is excluded to avoid blocking Kubernetes readiness probes for up to 900s.
+> Returns 503 until every collector owning an enabled priority-<=3 endpoint group has completed a
+> successful run. Config-only collectors (all priority-4 groups, e.g. `ConfigCollector`) are
+> excluded so readiness probes aren't blocked waiting on their slower-cadence data.
 
-Update tiers are FAST=60s, MEDIUM=300s, SLOW=900s. If you need to confirm SLOW-tier data has
-landed too, don't rely on `/ready` for that - instead poll `/status` and check the SLOW-tier
-collectors' `total_runs > 0` and `last_success_time`, or just allow up to 900s after startup before
-expecting SLOW-tier series in `/metrics`.
+Endpoint-group priority (1 = up-ness/alerts, 2 = sensor, 3 = performance/health, 4 =
+config/inventory) is unrelated to a fixed schedule — group cadence is solved per-deployment by
+the adaptive scheduler (see [Scheduler Architecture](observability/scheduler.md)). If you need to
+confirm a priority-4 collector's data has landed too, don't rely on `/ready` for that - instead
+poll `/status` and check that collector's `total_runs > 0` and `last_success_time`, or check its
+`meraki_exporter_collector_cadence_seconds` and allow roughly that long after startup before
+expecting its series in `/metrics`.
 
 ## Per-org backoff (repeated collection skips for one organization)
 
@@ -150,7 +154,7 @@ immediate retry, use `POST /api/collectors/trigger` to trigger a collector run o
 ## 429 storms (rate limiting)
 
 **Symptom:** logs show repeated rate-limit waits or throttle events; collection slows down or some
-tiers stop completing within their interval.
+endpoint groups stop completing within their solved interval.
 
 **Check:**
 

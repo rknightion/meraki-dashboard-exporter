@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from ..core.async_utils import ManagedTaskGroup
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
-from ..core.constants import NetworkHealthMetricName, NetworkMetricName, ProductType, UpdateTier
+from ..core.constants import NetworkHealthMetricName, NetworkMetricName, ProductType
 from ..core.error_handling import ErrorCategory, NothingCollectedError, with_error_handling
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_batch_operation
@@ -56,7 +56,7 @@ _BUNDLE_GROUPS: tuple[EndpointGroupName, ...] = (
 )
 
 
-@register_collector(UpdateTier.MEDIUM)
+@register_collector
 class NetworkHealthCollector(MetricCollector):
     """Collector for medium-moving network health metrics."""
 
@@ -71,49 +71,42 @@ class NetworkHealthCollector(MetricCollector):
             priority=3,
             floor_seconds=300,
             cost_fn=lambda shape: 2 * pages(shape.ap_count, 1000),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_CONNECTION_STATS,
             priority=3,
             floor_seconds=1800,
             cost_fn=lambda shape: float(shape.wireless_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_DATA_RATES,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda shape: float(shape.wireless_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_BLUETOOTH,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda shape: float(shape.wireless_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_FAILED_CONNECTIONS,
             priority=3,
             floor_seconds=3600,
             cost_fn=lambda shape: float(shape.wireless_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_LATENCY_STATS,
             priority=3,
             floor_seconds=3600,
             cost_fn=lambda shape: 2.0 * shape.wireless_network_count,
-            tier=UpdateTier.MEDIUM,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_AIR_MARSHAL,
             priority=3,
             floor_seconds=3600,
             cost_fn=lambda shape: float(shape.wireless_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
         # Wireless mesh link health (#307, Phase 4/#618). Repeater topology
         # changes rarely; floored the same as the other 1h-windowed groups.
@@ -122,7 +115,6 @@ class NetworkHealthCollector(MetricCollector):
             priority=3,
             floor_seconds=3600,
             cost_fn=lambda shape: float(shape.wireless_network_count),
-            tier=UpdateTier.MEDIUM,
         ),
     )
 

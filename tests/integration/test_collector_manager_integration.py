@@ -8,7 +8,6 @@ import pytest
 
 from meraki_dashboard_exporter.collectors.manager import CollectorManager
 from meraki_dashboard_exporter.core.config import Settings
-from meraki_dashboard_exporter.core.constants import UpdateTier
 
 
 @pytest.fixture
@@ -44,35 +43,20 @@ class TestCollectorManagerIntegration:
         # Create manager - this should auto-register all collectors
         manager = CollectorManager(mock_client, mock_settings)
 
-        # Check that collectors were initialized for each tier
-        assert len(manager.collectors[UpdateTier.FAST]) > 0
-        assert len(manager.collectors[UpdateTier.MEDIUM]) > 0
-        assert len(manager.collectors[UpdateTier.SLOW]) > 0
+        # Collectors are now a flat list (tiers removed, #631).
+        assert len(manager.collectors) > 0
 
-        # Verify specific collectors are present
-        collector_names = {
-            UpdateTier.FAST: ["MTSensorCollector"],
-            UpdateTier.MEDIUM: [
-                "OrganizationCollector",
-                "DeviceCollector",
-                "NetworkHealthCollector",
-                "AlertsCollector",
-            ],
-            UpdateTier.SLOW: ["ConfigCollector"],
-        }
-
-        for tier, expected_names in collector_names.items():
-            actual_names = [c.__class__.__name__ for c in manager.collectors[tier]]
-            for name in expected_names:
-                assert name in actual_names, f"{name} not found in {tier} tier"
-
-    def test_manager_get_tier_interval(self, mock_client, mock_settings):
-        """Test getting tier intervals."""
-        manager = CollectorManager(mock_client, mock_settings)
-
-        assert manager.get_tier_interval(UpdateTier.FAST) == 60
-        assert manager.get_tier_interval(UpdateTier.MEDIUM) == 300
-        assert manager.get_tier_interval(UpdateTier.SLOW) == 900
+        # Verify specific collectors are present regardless of cadence.
+        actual_names = {c.__class__.__name__ for c in manager.collectors}
+        for name in (
+            "MTSensorCollector",
+            "OrganizationCollector",
+            "DeviceCollector",
+            "NetworkHealthCollector",
+            "AlertsCollector",
+            "ConfigCollector",
+        ):
+            assert name in actual_names, f"{name} not found in collectors"
 
     def test_manager_register_additional_collector(self, mock_client, mock_settings):
         """Test registering an additional collector after initialization."""
@@ -80,12 +64,10 @@ class TestCollectorManagerIntegration:
 
         # Create manager
         manager = CollectorManager(mock_client, mock_settings)
-        initial_count = len(manager.collectors[UpdateTier.MEDIUM])
+        initial_count = len(manager.collectors)
 
         # Create and register a new collector
         class TestCollector(MetricCollector):
-            update_tier = UpdateTier.MEDIUM
-
             def _initialize_metrics(self) -> None:
                 pass
 
@@ -95,6 +77,6 @@ class TestCollectorManagerIntegration:
         test_collector = TestCollector(mock_client.api, mock_settings)
         manager.register_collector(test_collector)
 
-        # Verify it was added
-        assert len(manager.collectors[UpdateTier.MEDIUM]) == initial_count + 1
-        assert test_collector in manager.collectors[UpdateTier.MEDIUM]
+        # Verify it was added to the flat collector list.
+        assert len(manager.collectors) == initial_count + 1
+        assert test_collector in manager.collectors

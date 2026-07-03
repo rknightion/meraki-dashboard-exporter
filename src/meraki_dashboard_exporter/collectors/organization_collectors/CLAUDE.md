@@ -16,8 +16,10 @@ Organization-level collectors for Meraki Dashboard Exporter - Handles metrics th
   metric has a sub-collector file in this directory.
 - **Inherit from `BaseOrganizationCollector`** (`base.py`) for the shared `parent`/`api`/`settings`
   wiring, plus `self.inventory = getattr(parent, "inventory", None)`.
-- **MEDIUM update tier**: `OrganizationCollector` is `@register_collector(UpdateTier.MEDIUM)`
-  (300s interval) — it is not SLOW/900s.
+- **No fixed tier**: `OrganizationCollector` is `@register_collector` (no-arg); its endpoint groups
+  mostly floor at 300s (see `core/scheduler.py::EndpointGroupName` for the full list and
+  `../../organization.py` for each group's declared `floor_seconds`/`priority`), stretched further
+  by the adaptive scheduler under budget pressure.
 - **Manual registration**: the 5 sub-collectors are instantiated in
   `OrganizationCollector.__init__` (`api_usage_collector`, `license_collector`,
   `client_overview_collector`, `firmware_collector`, `device_availability_history_collector`) and
@@ -59,8 +61,10 @@ Organization-level collectors for Meraki Dashboard Exporter - Handles metrics th
 - `device_availability_history.py` - `DeviceAvailabilityHistoryCollector`: windowed device
   availability *change* counts (not point-in-time status — that's the coordinator's
   `_collect_device_availability_metrics`), via `getOrganizationDevicesAvailabilitiesChangeHistory`
-  with a timespan tied to the configured MEDIUM interval (`settings.update_intervals.medium`, 300s
-  by default) rather than a hardcoded 300s
+  with a timespan tied to the live solved interval of its own `org_availability_history` endpoint
+  group (`self.parent._group_interval(EndpointGroupName.ORG_AVAILABILITY_HISTORY)`, 300s floor,
+  operator-visible via `meraki_exporter_scheduler_interval_seconds{group="org_availability_history"}`)
+  rather than a hardcoded 300s
 </file_map>
 
 <paved_path>

@@ -15,7 +15,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from meraki_dashboard_exporter.collectors.alerts import AlertsCollector
-from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.scheduler import EndpointGroupName, OrgShape
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import DeviceFactory, NetworkFactory, OrganizationFactory
@@ -58,10 +57,6 @@ class TestAlertsEndpointGroups:
         declared = {g.name for g in AlertsCollector.endpoint_groups}
         assert declared == _EXPECTED_ALERTS_GROUPS
 
-    def test_all_medium_tier(self) -> None:
-        """Both alerts groups are serviced by the MEDIUM heartbeat."""
-        assert all(g.tier is UpdateTier.MEDIUM for g in AlertsCollector.endpoint_groups)
-
     def test_priorities_and_floors(self) -> None:
         """Priorities and volatility floors match the spec table."""
         by_name = {g.name: g for g in AlertsCollector.endpoint_groups}
@@ -92,7 +87,6 @@ class TestAlertsAssuranceGate(BaseCollectorTest):
     """assurance fetch-site gate (#617 §2 alerts_assurance)."""
 
     collector_class = AlertsCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _build(self, mock_api_builder, settings, isolated_registry, inventory, sched):
         """Build an AlertsCollector with a mocked scheduler and empty assurance data."""
@@ -157,7 +151,6 @@ class TestAlertsSensorGate(BaseCollectorTest):
     """sensor-overview fetch-site gate (#617 §2 alerts_sensor_overview)."""
 
     collector_class = AlertsCollector
-    update_tier = UpdateTier.MEDIUM
 
     def _build(self, mock_api_builder, settings, isolated_registry, inventory, sched):
         """Build an AlertsCollector wired with a sensor network and mocked scheduler."""
