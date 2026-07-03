@@ -57,6 +57,20 @@ _EXPECTED_DEVICE_GROUPS = {
     EndpointGroupName.MX_FIREWALL_CONFIG,
     EndpointGroupName.MV_ANALYTICS,
     EndpointGroupName.MG_UPLINK_STATUS,
+    # Phase 4 (#285-#306)
+    EndpointGroupName.MX_SECURITY_CONFIG,
+    EndpointGroupName.MX_DHCP_SUBNETS,
+    EndpointGroupName.MX_VPN_CONFIG,
+    EndpointGroupName.MX_NAT_CONFIG,
+    EndpointGroupName.MX_VLAN_CONFIG,
+    EndpointGroupName.MR_SSID_FIREWALL,
+    EndpointGroupName.MR_RF_PROFILES,
+    EndpointGroupName.MS_DHCP_SECURITY,
+    EndpointGroupName.MS_POWER_SUMMARY,
+    EndpointGroupName.MS_LINK_AGGREGATIONS,
+    EndpointGroupName.MG_CELLULAR_CONFIG,
+    EndpointGroupName.MV_SENSE_CONFIG,
+    EndpointGroupName.MV_ONBOARDING,
 }
 
 

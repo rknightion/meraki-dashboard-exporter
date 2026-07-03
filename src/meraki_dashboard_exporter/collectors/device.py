@@ -251,6 +251,112 @@ class DeviceCollector(MetricCollector):
             cost_fn=lambda s: 1.0,
             tier=UpdateTier.MEDIUM,
         ),
+        # Phase 4 (#285): content-filtering + malware + intrusion, 3 calls/appliance network
+        EndpointGroup(
+            name=EndpointGroupName.MX_SECURITY_CONFIG,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: 3 * s.appliance_network_count,
+            tier=UpdateTier.MEDIUM,
+        ),
+        # Phase 4 (#286): per-MX-device DHCP subnets, 1 call/physical MX
+        EndpointGroup(
+            name=EndpointGroupName.MX_DHCP_SUBNETS,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: float(s.physical_mx_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+        # Phase 4 (#287): site-to-site VPN, 1 call/appliance network
+        EndpointGroup(
+            name=EndpointGroupName.MX_VPN_CONFIG,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: float(s.appliance_network_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+        # Phase 4 (#288): port-forwarding + 1:1 + 1:many NAT, 3 calls/appliance network
+        EndpointGroup(
+            name=EndpointGroupName.MX_NAT_CONFIG,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: 3 * s.appliance_network_count,
+            tier=UpdateTier.MEDIUM,
+        ),
+        # Phase 4 (#289): VLANs + static routes, 2 calls/appliance network
+        EndpointGroup(
+            name=EndpointGroupName.MX_VLAN_CONFIG,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: 2 * s.appliance_network_count,
+            tier=UpdateTier.MEDIUM,
+        ),
+        # Phase 4 (#290): L3+L7 firewall rules per enabled SSID (2 calls/SSID). OrgShape
+        # has no SSID count; estimate ~4 enabled SSIDs/network -> 2*4*wireless_network_count.
+        # This is an estimate refined at runtime by the enabled-only filter.
+        EndpointGroup(
+            name=EndpointGroupName.MR_SSID_FIREWALL,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: 8 * s.wireless_network_count,
+            tier=UpdateTier.MEDIUM,
+        ),
+        # Phase 4 (#291): single org-wide bulk RF-profile assignments (paginated over APs)
+        EndpointGroup(
+            name=EndpointGroupName.MR_RF_PROFILES,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: pages(s.ap_count, 1000),
+            tier=UpdateTier.MEDIUM,
+        ),
+        # Phase 4 (#292+#293): rogue-DHCP + DAI, 2 calls/switch network
+        EndpointGroup(
+            name=EndpointGroupName.MS_DHCP_SECURITY,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: 2 * s.switch_network_count,
+            tier=UpdateTier.MEDIUM,
+        ),
+        # Phase 4 (#294): 1 org-wide PoE power-history call
+        EndpointGroup(
+            name=EndpointGroupName.MS_POWER_SUMMARY,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: 1.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+        # Phase 4 (#295): 1 call/switch network
+        EndpointGroup(
+            name=EndpointGroupName.MS_LINK_AGGREGATIONS,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: float(s.switch_network_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+        # Phase 4 (#304): 2 org-wide bulk calls (bands + towers)
+        EndpointGroup(
+            name=EndpointGroupName.MG_CELLULAR_CONFIG,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: 2.0,
+            tier=UpdateTier.MEDIUM,
+        ),
+        # Phase 4 (#305): 1 call/MV device
+        EndpointGroup(
+            name=EndpointGroupName.MV_SENSE_CONFIG,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: float(s.camera_count),
+            tier=UpdateTier.MEDIUM,
+        ),
+        # Phase 4 (#306): 1 org-wide onboarding-status call
+        EndpointGroup(
+            name=EndpointGroupName.MV_ONBOARDING,
+            priority=4,
+            floor_seconds=900,
+            cost_fn=lambda s: 1.0,
+            tier=UpdateTier.MEDIUM,
+        ),
     )
 
     @property
