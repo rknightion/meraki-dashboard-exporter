@@ -8,6 +8,7 @@ types, defaults, and validation constraints.
 
 from __future__ import annotations
 
+import importlib.machinery
 import importlib.util
 import json
 import sys
@@ -37,7 +38,25 @@ def load_config_models(repo_root: Path) -> Any:
     if not module_path.exists():
         raise FileNotFoundError(f"Config models not found at {module_path}")
 
-    spec = importlib.util.spec_from_file_location("config_models", module_path)
+    # config_models.py has module-level relative imports (`.constants.config_constants`,
+    # `.logging`). Register lightweight stub parent packages (with a real __path__ so
+    # submodule lookups find the actual source files) so those relative imports resolve
+    # WITHOUT executing the heavy top-level package __init__ (which imports __main__/uvicorn).
+    src_root = repo_root / "src"
+    for name, path in (
+        ("meraki_dashboard_exporter", src_root / "meraki_dashboard_exporter"),
+        ("meraki_dashboard_exporter.core", src_root / "meraki_dashboard_exporter" / "core"),
+    ):
+        if name not in sys.modules:
+            stub = importlib.util.module_from_spec(
+                importlib.machinery.ModuleSpec(name, None, is_package=True)
+            )
+            stub.__path__ = [str(path)]  # type: ignore[attr-defined]
+            sys.modules[name] = stub
+
+    spec = importlib.util.spec_from_file_location(
+        "meraki_dashboard_exporter.core.config_models", module_path
+    )
     if not spec or not spec.loader:
         raise ImportError("Unable to load config_models module spec")
 

@@ -35,7 +35,7 @@ Core Meraki API configuration
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_MERAKI__API_KEY` | `SecretStr` | `_(required)_` | Meraki Dashboard API key |
-| `MERAKI_EXPORTER_MERAKI__ORG_ID` | `str | None` | `_(none)_` | Meraki organization ID (optional, will fetch all orgs if not set) |
+| `MERAKI_EXPORTER_MERAKI__ORG_ID` | `str | None` | `_(none)_` | Meraki organization ID. For v1 the single-organization contract applies (one poller instance = one organization): when the API key sees exactly one org it is auto-selected and org_id may be omitted; when the key sees several orgs, set org_id explicitly (startup fails fast on an ambiguous multi-org key). See discovery.py/app startup. |
 | `MERAKI_EXPORTER_MERAKI__API_BASE_URL` | `str` | `https://api.meraki.com/api/v1` | Meraki API base URL (use regional endpoints if needed) |
 
 ## Logging Settings
@@ -44,7 +44,8 @@ Logging configuration
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_LOGGING__LEVEL` | `str` | `INFO` | Logging level (pattern: ^(DEBUG\|INFO\|WARNING\|ERROR\|CRITICAL)$) |
+| `MERAKI_EXPORTER_LOGGING__LEVEL` | `str` | `INFO` | Logging level (case-insensitive; normalised to upper-case) |
+| `MERAKI_EXPORTER_LOGGING__LOG_FORMAT` | `str` | `logfmt` | Structured-log renderer: 'logfmt' (default) or 'json'. |
 
 ## API Settings
 
@@ -66,6 +67,8 @@ Configuration for Meraki API interactions
 | `MERAKI_EXPORTER_API__RATE_LIMIT_RETRY_WAIT` | `int` | `5` | Wait time in seconds when rate limited (min: 1, max: 60) |
 | `MERAKI_EXPORTER_API__ACTION_BATCH_RETRY_WAIT` | `int` | `10` | Wait time for action batch retries (min: 1, max: 60) |
 | `MERAKI_EXPORTER_API__VALIDATE_KWARGS` | `bool` | `False` | When True, the Meraki SDK logs warnings if API methods are called with unrecognized kwargs. Recommended for dev/CI; off by default in production. |
+| `MERAKI_EXPORTER_API__REQUESTS_PROXY` | `str | None` | `_(none)_` | HTTPS proxy URL for Meraki API requests (SDK requests_proxy); when unset the requests HTTPS_PROXY/NO_PROXY env vars still apply. |
+| `MERAKI_EXPORTER_API__CERTIFICATE_PATH` | `str | None` | `_(none)_` | Path to a custom CA bundle for verifying the Meraki API TLS cert (SDK certificate_path); mount into read-only containers as a volume. |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_ENABLED` | `bool` | `True` | Enable client-side rate limiting to smooth API calls |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_REQUESTS_PER_SECOND` | `float` | `10.0` | Target requests per second per organization (min: 1.0, max: 50.0) |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_BURST` | `int` | `20` | Token bucket burst capacity per organization (min: 1, max: 100) |
@@ -103,6 +106,7 @@ HTTP server configuration for the metrics endpoint
 | `MERAKI_EXPORTER_SERVER__HOST` | `str` | `0.0.0.0` | Host to bind the exporter to |
 | `MERAKI_EXPORTER_SERVER__PORT` | `int` | `9099` | Port to bind the exporter to (min: 1, max: 65535) |
 | `MERAKI_EXPORTER_SERVER__API_TOKEN` | `SecretStr | None` | `_(none)_` | Optional bearer token required for state-changing POST control endpoints (/api/collectors/trigger, /api/clients/clear-dns-cache). When unset (default) these endpoints are unauthenticated - bind the exporter to a trusted interface. When set, requests must present 'Authorization: Bearer <token>'. |
+| `MERAKI_EXPORTER_SERVER__UI_ENABLED` | `bool` | `True` | When false, sensitive GET UI/status endpoints return 404 (metrics/health/ready stay open). |
 
 ## Webhook Settings
 
@@ -113,6 +117,7 @@ Webhook receiver configuration
 | `MERAKI_EXPORTER_WEBHOOKS__ENABLED` | `bool` | `False` | Enable webhook receiver endpoint |
 | `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET` | `SecretStr | None` | `_(none)_` | Shared secret for webhook validation (recommended) |
 | `MERAKI_EXPORTER_WEBHOOKS__REQUIRE_SECRET` | `bool` | `True` | Require shared secret validation (disable for testing only) |
+| `MERAKI_EXPORTER_WEBHOOKS__ALLOW_INSECURE` | `bool` | `False` | Explicit opt-in to run the webhook receiver enabled without require_secret; startup refuses the insecure combo unless this is true. |
 | `MERAKI_EXPORTER_WEBHOOKS__MAX_PAYLOAD_SIZE` | `int` | `1048576` | Maximum webhook payload size in bytes (min: 1024, max: 10485760) |
 
 Webhooks are received on `POST /api/webhooks/meraki` when enabled.

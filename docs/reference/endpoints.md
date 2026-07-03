@@ -15,6 +15,7 @@ This page lists HTTP endpoints exposed by the exporter.
 | `GET` | `/cardinality/export/json` | Export cardinality data as JSON. | Cardinality data appears after the first full collection cycle. |
 | `GET` | `/cardinality/label-values/{metric_name}` | Get label value distribution for a specific metric. | Cardinality data appears after the first full collection cycle. |
 | `GET` | `/clients` | Client data visualization endpoint. | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `GET` | `/config` | Redacted effective-configuration view (#312). |  |
 | `GET` | `/health` | Liveness endpoint with a dead-man switch (F-043). |  |
 | `GET` | `/metrics` | Prometheus metrics endpoint. |  |
 | `GET` | `/ready` | Readiness probe - returns 200 when initial collection is complete. |  |

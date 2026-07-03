@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 248
-- **Gauges:** 228
+- **Total metrics:** 247
+- **Gauges:** 227
 - **Counters:** 16
 - **Histograms:** 3
 - **Info metrics:** 1
@@ -78,7 +78,6 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_org_login_security_minimum_password_length` | gauge | `org_id` | Minimum password length required |  |
 | `meraki_org_login_security_password_expiration_enabled` | gauge | `org_id` | Whether password expiration is enforced (1=enabled, 0=disabled) |  |
 | `meraki_org_login_security_password_expiration_seconds` | gauge | `org_id` | Seconds before password expires (0 if not set) |  |
-| `meraki_org_login_security_strong_passwords_enabled` | gauge | `org_id` | Whether strong passwords are enforced (1=enabled, 0=disabled) |  |
 | `meraki_org_login_security_two_factor_enabled` | gauge | `org_id` | Whether two-factor authentication is enforced (1=enabled, 0=disabled) |  |
 
 ### DeviceCollector
