@@ -97,7 +97,9 @@ class APIHelper:
             logger.debug("Fetching all organizations directly (no inventory cache)")
             self.collector._track_api_call("getOrganizations")
             await self._acquire_rate_limit(None, "getOrganizations")
-            orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
+            orgs = await asyncio.to_thread(
+                self.api.organizations.getOrganizations, total_pages="all"
+            )
             # Normalize the SDK exhausted-retry error shape ({"errors": [...]}).
             orgs = validate_response_format(orgs, expected_type=list, operation="getOrganizations")
             logger.debug("Successfully fetched organizations", count=len(orgs))

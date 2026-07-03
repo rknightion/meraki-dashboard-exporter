@@ -64,7 +64,7 @@ class TestAPIHelper:
 
         assert result == mock_orgs
         mock_collector._track_api_call.assert_called_once_with("getOrganizations")
-        mock_collector.api.organizations.getOrganizations.assert_called_once()
+        mock_collector.api.organizations.getOrganizations.assert_called_once_with(total_pages="all")
 
     async def test_get_organizations_configured_org(self, api_helper, mock_collector):
         """Test fetching single configured organization."""

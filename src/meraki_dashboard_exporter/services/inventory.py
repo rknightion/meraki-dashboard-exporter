@@ -18,7 +18,6 @@ from meraki.exceptions import APIError
 from prometheus_client import Counter, Gauge
 
 from ..api.client import AsyncMerakiClient
-from ..core.constants import UpdateTier
 from ..core.constants.metrics_constants import CollectorMetricName, NetworkMetricName
 from ..core.error_handling import validate_response_format
 from ..core.network_filter import NetworkFilter
@@ -37,10 +36,11 @@ class OrganizationInventory:
     """Shared inventory cache for organizations, networks, and devices.
 
     Reduces API calls by caching inventory data with TTL-based invalidation.
-    Different TTLs are used based on data volatility:
-    - FAST tier: 5 minutes
-    - MEDIUM tier: 15 minutes
-    - SLOW tier: 30 minutes
+    The general cache TTL is fixed at ``TTL_MEDIUM`` (900s) regardless of
+    which collector tier is reading it -- there is no per-tier TTL wiring
+    (a prior ``set_ttl_for_tier`` method had zero callers and was removed;
+    see issue #275). Device availability data has its own shorter,
+    always-applied ``TTL_AVAILABILITY`` (120s) since it is more dynamic.
 
     Examples
     --------
@@ -384,6 +384,7 @@ class OrganizationInventory:
                 orgs_result = await self._make_api_call(
                     "getOrganizations",
                     self.api.organizations.getOrganizations,
+                    total_pages="all",
                 )
                 orgs_result = validate_response_format(
                     orgs_result, expected_type=list, operation="getOrganizations"
@@ -832,28 +833,6 @@ class OrganizationInventory:
             "cached_licenses": len(self._licenses_overview),
             "cached_license_lists": len(self._licenses),
         }
-
-    def set_ttl_for_tier(self, tier: UpdateTier) -> None:
-        """Set cache TTL based on update tier.
-
-        Parameters
-        ----------
-        tier : UpdateTier
-            The update tier to base TTL on.
-
-        """
-        if tier == UpdateTier.FAST:
-            self._ttl = self.TTL_FAST
-        elif tier == UpdateTier.MEDIUM:
-            self._ttl = self.TTL_MEDIUM
-        else:  # SLOW
-            self._ttl = self.TTL_SLOW
-
-        logger.info(
-            "Updated inventory cache TTL",
-            tier=tier.value,
-            ttl_seconds=self._ttl,
-        )
 
     @staticmethod
     def _log_startup_auth_error(exc: Exception) -> bool:

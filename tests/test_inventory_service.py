@@ -63,7 +63,7 @@ class TestOrganizationInventoryBasics:
         result = await inventory_service.get_organizations()
 
         assert len(result) == 3
-        mock_api.organizations.getOrganizations.assert_called_once()
+        mock_api.organizations.getOrganizations.assert_called_once_with(total_pages="all")
 
     async def test_get_organizations_caching(self, mock_api, mock_settings, inventory_service):
         """Test that organizations are cached."""
@@ -81,6 +81,14 @@ class TestOrganizationInventoryBasics:
         assert result1 == result2
         # API should not be called again
         assert mock_api.organizations.getOrganizations.call_count == 1
+
+    def test_set_ttl_for_tier_removed(self, inventory_service):
+        """Dead code (#275): set_ttl_for_tier had zero callers and was deleted.
+
+        The cache TTL is fixed at TTL_MEDIUM (900s) for all tiers; do not
+        reintroduce tier-based TTL wiring without a caller.
+        """
+        assert not hasattr(inventory_service, "set_ttl_for_tier")
 
     async def test_get_networks(self, mock_api, inventory_service):
         """Test getting networks for an organization."""
