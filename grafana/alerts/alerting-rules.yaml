@@ -1,0 +1,264 @@
+# Meraki Dashboard Exporter — Grafana Cloud / Mimir ruler alerting rules
+#
+# WHAT THIS IS
+# The Helm chart (`charts/meraki-dashboard-exporter/templates/prometheusrule.yaml`) is the
+# SINGLE SOURCE OF TRUTH for alert *logic* — it ships a Kubernetes `PrometheusRule` CR consumed
+# by the Prometheus Operator for in-cluster deployments. This file is a de-templated, concrete
+# mirror of the exact same 15 alerts for environments that are NOT running the Prometheus
+# Operator: Grafana Cloud's hosted Mimir ruler, or Grafana-managed alerting backed by a Mimir/
+# Cortex data source. If you change an alert's logic, thresholds, or annotations, change BOTH
+# files — this one does not auto-sync from the chart.
+#
+# JOB LABEL — READ THIS FIRST
+# The Helm chart's `up{job="{{ .Values.prometheusRule.job }}"}` alert defaults `job` to
+# `meraki-dashboard-exporter` (a ServiceMonitor-scoped label, see `values.yaml`). This exported
+# copy targets the actual Grafana Cloud remote-write setup verified live on 2026-07-03: metrics
+# land under `job="meraki_dashboard"` (shards differentiated by `instance` =
+# `meraki_dashboard` / `meraki_dashboard_devnet`, and by `org_id` on device/org-scoped series).
+# CRITICALLY, the same metric names are ALSO written a second and third time by the exporter's
+# own OTLP self-observability pipeline under `job="meraki-dashboard-exporter"` and
+# `job="meraki-dashboard-exporter-devnet"` (verified live — every metric checked below has all
+# three job values). Every expr in this file therefore filters `job="meraki_dashboard"`
+# explicitly; DO NOT remove that filter or these rules will double/triple-count and the
+# `on(collector)` joins below will start throwing "duplicate series" errors. If you deploy this
+# against a different scrape/remote-write topology, change the job filter to match yours.
+#
+# LOAD / DEPLOY
+# Grafana Cloud Mimir ruler (mimirtool), scoped to a namespace of your choosing:
+#   mimirtool rules load grafana/alerts/alerting-rules.yaml --address <mimir-url> \
+#     --id <tenant-id> --key <api-key>
+# Or via gcx (see the brief for the exact subcommand verified working / not working at author
+# time — `gcx alert rules`/`gcx alert groups` only manages Grafana-managed alert *rules* one at a
+# time from a manifest, not Mimir-ruler rule-group YAML like this file; mimirtool is the correct
+# tool for pushing a whole rule-group file like this one).
+# Or via the Grafana UI: Alerting > Alert rules > import, pointing at a Mimir/Cortex data source
+# provisioned as the rule evaluator.
+#
+# VERIFICATION NOTES (2026-07-03, live against Grafana Cloud, gcx context m7kni)
+# All metric names below were checked live with `gcx metrics query`. No renames were found versus
+# the chart — every metric name in the chart's `prometheusrule.yaml` still exists post-v1-rename.
+# Three alerts currently have ZERO live series for their trigger metric (not a naming problem —
+# the source code defines and increments/sets these; the triggering condition has simply never
+# occurred in the camden soak): MerakiCardinalityLimitReached (cardinality budget never hit),
+# MerakiWirelessConnectionFailuresHigh (no failed wireless connections recorded), and
+# MerakiMTWaterDetected (no water event). Treat those three as syntax-verified but NOT
+# behaviourally exercised against real firing data.
+# One correctness fix was required versus a literal copy of the chart's `on(collector)` join in
+# MerakiExporterCollectorStale: with two shards under the same `job` label (this soak topology),
+# an `on(collector)` join alone throws a Prometheus 422 "duplicate series" error, because both
+# shards emit a same-named `collector` series. Fixed by joining `on(collector, instance)` instead
+# — verified live (422 without the fix, clean "no data" with it). If you only ever run a single
+# exporter instance per job (the chart's own topology), `on(collector)` alone is fine; this fix is
+# only needed for multi-shard/multi-instance-per-job setups like this one.
+
+groups:
+  - name: meraki-exporter-self-health
+    rules:
+      - alert: MerakiExporterDown
+        expr: up{job="meraki_dashboard"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Meraki exporter target is down"
+          description: >-
+            Prometheus has not been able to scrape {{ $labels.instance }} for
+            5 minutes. No Meraki metrics are being refreshed at all while this
+            fires.
+
+      - alert: MerakiExporterCollectorStale
+        # Each collector runs at its own solved cadence (no tiers, #631); a collector is stale
+        # once it hasn't succeeded within 3x that cadence. Joined on (collector, instance) rather
+        # than the chart's bare (collector) — see the file header note on why.
+        expr: >-
+          (time() - meraki_exporter_collector_success_timestamp_seconds{job="meraki_dashboard"})
+          > on(collector, instance) (3 * meraki_exporter_collector_cadence_seconds{job="meraki_dashboard"})
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Collector ({{ $labels.collector }}) has not succeeded within 3x its cadence"
+          description: >-
+            {{ $labels.collector }} has had no successful collection in over
+            3x its effective cadence (meraki_exporter_collector_cadence_seconds).
+            Its metrics are stale.
+
+      - alert: MerakiExporterCollectorFailureStreak
+        expr: meraki_exporter_collector_failure_streak{job="meraki_dashboard"} >= 3
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.collector }} has failed 3+ times in a row"
+          description: >-
+            Collector {{ $labels.collector }} has accumulated
+            {{ $value }} consecutive failures.
+
+  - name: meraki-exporter-rate-limiting
+    rules:
+      - alert: MerakiAPIRateLimiterThrottlingHigh
+        expr: sum(rate(meraki_exporter_api_rate_limiter_throttled_total{job="meraki_dashboard"}[15m])) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Meraki API client-side rate limiter is throttling heavily"
+          description: >-
+            The exporter's own client-side rate limiter has been waiting on
+            more than 0.5 requests/sec on average over the last 15 minutes -
+            the org-wide request budget is undersized for the current fleet.
+
+      - alert: MerakiSchedulerThrottleBackoffStorm
+        expr: increase(meraki_exporter_scheduler_throttle_backoffs_total{job="meraki_dashboard"}[15m]) > 3
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Meraki API is repeatedly returning 429s (adaptive scheduler backing off)"
+          description: >-
+            The adaptive budget scheduler has halved its effective request
+            rate more than 3 times in 15 minutes - the Meraki Dashboard API is
+            rate-limiting this org harder than the configured budget allows.
+
+  - name: meraki-exporter-collection-health
+    rules:
+      - alert: MerakiOrgCollectionBackedOff
+        expr: meraki_exporter_org_collection_status{job="meraki_dashboard"} == 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Organization {{ $labels.org_id }} collection is in backoff"
+          description: >-
+            Org {{ $labels.org_id }} has been failing/backed-off for over 15
+            minutes - all metrics for this org are stale.
+
+      - alert: MerakiCollectorErrorsHigh
+        expr: sum by (collector) (increase(meraki_exporter_collector_errors_total{job="meraki_dashboard"}[15m])) > 5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.collector }} is generating repeated errors"
+          description: >-
+            Collector {{ $labels.collector }} logged more than 5 errors
+            in the last 15 minutes.
+
+      - alert: MerakiCardinalityLimitReached
+        # NO LIVE DATA at verification time (2026-07-03) — cardinality.max_series_per_family has
+        # never been hit in the camden soak. Metric name confirmed correct against source
+        # (core/metric_expiration.py); syntax-verified only, not exercised against a real firing.
+        expr: increase(meraki_exporter_cardinality_limit_reached_total{job="meraki_dashboard"}[15m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Metric family {{ $labels.metric }} has exceeded its cardinality budget"
+          description: >-
+            {{ $labels.metric }} exceeded cardinality.max_series_per_family in
+            the last 15 minutes. With action=drop this means older series for
+            this family are being actively shed from the registry.
+
+  - name: meraki-exporter-device-availability
+    rules:
+      # The chart renders exactly ONE of these two (toggled by .Values.prometheusRule.webhooksEnabled)
+      # since they're mutually-exclusive detection paths for the same condition. This static YAML
+      # ships both — disable/delete whichever doesn't match your deployment's webhook config
+      # before loading, or leave both active and treat MerakiDeviceDown's 15m "for" as a backstop
+      # (it will simply confirm 10 minutes after the fast-path already fired if webhooks are on).
+      - alert: MerakiDeviceDownFastPath
+        # Enable this variant only if MERAKI_EXPORTER_WEBHOOKS__ENABLED is true (webhook-driven
+        # near-real-time down detection).
+        expr: meraki_device_up{job="meraki_dashboard"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Device {{ $labels.serial }} is offline (webhook fast path)"
+          description: >-
+            {{ $labels.model }} ({{ $labels.serial }}) in network
+            {{ $labels.network_id }} has been reported offline for over 5
+            minutes. Recovery is still poll-paced (up to ~15m) - there is no
+            whole-device "back online" webhook type.
+
+      - alert: MerakiDeviceDown
+        # Enable this variant when webhooks are disabled (pure poll-path detection).
+        expr: meraki_device_up{job="meraki_dashboard"} == 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Device {{ $labels.serial }} is offline"
+          description: >-
+            {{ $labels.model }} ({{ $labels.serial }}) in network
+            {{ $labels.network_id }} has been reported offline for over 15
+            minutes (poll-path detection, webhooks disabled).
+
+  - name: meraki-exporter-network-health
+    rules:
+      - alert: MerakiWirelessConnectionFailuresHigh
+        # NO LIVE DATA at verification time (2026-07-03) — zero failed wireless connections
+        # recorded in the camden soak. Metric name confirmed correct against source
+        # (collectors/network_health.py NetworkHealthMetricName.MR_SSID_FAILED_CONNECTIONS_COUNT);
+        # syntax-verified only.
+        expr: sum by (network_id) (meraki_mr_ssid_failed_connections_count{job="meraki_dashboard"}) > 20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High wireless connection failure count in network {{ $labels.network_id }}"
+          description: >-
+            More than 20 failed wireless connection attempts recorded in
+            network {{ $labels.network_id }} over the last hourly window.
+
+  - name: meraki-exporter-product-signals
+    rules:
+      - alert: MerakiOrgLicensesExpiringSoon
+        expr: meraki_org_licenses_expiring{job="meraki_dashboard"} > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Licenses expiring within 30 days in org {{ $labels.org_id }}"
+          description: >-
+            {{ $value }} {{ $labels.license_type }} license(s) in org
+            {{ $labels.org_id }} are within their 30-day expiry window.
+
+      - alert: MerakiMTWaterDetected
+        # NO LIVE DATA at verification time (2026-07-03) — no water event in the camden soak.
+        # Metric name confirmed correct against source
+        # (core/constants/metrics_constants.py MT_WATER_DETECTED); syntax-verified only.
+        expr: meraki_mt_water_detected{job="meraki_dashboard"} == 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Water detected by sensor {{ $labels.serial }}"
+          description: >-
+            MT water sensor {{ $labels.serial }} ({{ $labels.model }}) in
+            network {{ $labels.network_id }} has reported water detection for
+            over 2 minutes.
+
+      - alert: MerakiMTSensorAlertingActive
+        expr: meraki_mt_alerting_sensors_count{job="meraki_dashboard"} > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.metric }} sensors are alerting in network {{ $labels.network_id }}"
+          description: >-
+            {{ $value }} sensor(s) are currently outside their configured
+            {{ $labels.metric }} threshold in network {{ $labels.network_id }}
+            (per Meraki's own sensor alert profiles).
+
+      - alert: MerakiOrgHasBetaAPIRiskFlag
+        expr: meraki_org_has_beta_api{job="meraki_dashboard"} == 1
+        for: 15m
+        labels:
+          severity: info
+        annotations:
+          summary: "Org {{ $labels.org_id }} has opted into the Meraki beta API spec"
+          description: >-
+            Org {{ $labels.org_id }} has an active has_beta_api Early Access
+            opt-in. Beta API responses can change shape without notice -
+            treat this exporter's data for that org as higher-risk of drift.

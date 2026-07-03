@@ -1,0 +1,1408 @@
+{
+  "apiVersion": "dashboard.grafana.app/v2alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "annotations": {
+      "grafana.app/folder": "meraki-exporter"
+    },
+    "name": "meraki-self-observability"
+  },
+  "spec": {
+    "annotations": [],
+    "cursorSync": "Off",
+    "description": "Exporter's own health: collectors, adaptive scheduler, API rate limiting.",
+    "editable": true,
+    "elements": {
+      "panel-1": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "histogram_quantile(0.95, sum by (le, collector) (rate(meraki_exporter_collector_duration_seconds_bucket{job=\"meraki_dashboard\", instance=~\"$instance\"}[$__rate_interval])))",
+                        "legendFormat": "{{collector}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 1,
+          "links": [],
+          "title": "Collector run duration p95 (s)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "s"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-10": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_exporter_api_rate_limiter_tokens{job=\"meraki_dashboard\", instance=~\"$instance\"}",
+                        "legendFormat": "{{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 10,
+          "links": [],
+          "title": "Rate limiter tokens",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-11": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum (rate(meraki_exporter_api_rate_limiter_throttled_total{job=\"meraki_dashboard\", instance=~\"$instance\"}[$__rate_interval]))",
+                        "legendFormat": "throttles",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 11,
+          "links": [],
+          "title": "Throttle events (/s)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-12": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "histogram_quantile(0.95, sum by (le) (rate(meraki_exporter_api_rate_limiter_wait_seconds_bucket{job=\"meraki_dashboard\", instance=~\"$instance\"}[$__rate_interval])))",
+                        "legendFormat": "wait p95",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 12,
+          "links": [],
+          "title": "Rate limiter wait p95 (s)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "s"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (collector) (rate(meraki_exporter_collector_errors_total{job=\"meraki_dashboard\", instance=~\"$instance\"}[$__rate_interval]))",
+                        "legendFormat": "{{collector}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 2,
+          "links": [],
+          "title": "Collector error rate (/s)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-20": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "tempo",
+                      "uid": "grafanacloud-traces"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "tempo",
+                      "spec": {
+                        "limit": 20,
+                        "query": "{ resource.service.name =~ \"meraki-dashboard-exporter.*\" \u0026\u0026 name =~ \"collect\\\\..*Collector\" } | rate() by (name)",
+                        "queryType": "traceql",
+                        "tableType": "traces"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Per-collector span rate. Error-rate must target the child collect.\u003cName\u003e spans, not the root (#647).",
+          "id": 20,
+          "links": [],
+          "title": "Collector span rate (/s)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-21": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "tempo",
+                      "uid": "grafanacloud-traces"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "tempo",
+                      "spec": {
+                        "limit": 20,
+                        "query": "{ resource.service.name =~ \"meraki-dashboard-exporter.*\" \u0026\u0026 status = error }",
+                        "queryType": "traceql",
+                        "tableType": "traces"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Collector spans with error status + exception events. Pivot to Loki via trace_id.",
+          "id": 21,
+          "links": [],
+          "title": "Recent error spans",
+          "vizConfig": {
+            "kind": "table",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-22": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "grafanacloud-logs"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (detected_level) (count_over_time({service_name=~\"meraki-dashboard-exporter.*\"} [$__interval]))",
+                        "legendFormat": "{{detected_level}}",
+                        "maxLines": 200,
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Loki auto detected_level (zero parse stage).",
+          "id": 22,
+          "links": [],
+          "title": "Log volume by level",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-23": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "grafanacloud-logs"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "topk(10, sum by (event) (count_over_time({service_name=~\"meraki-dashboard-exporter.*\"} | logfmt [$__interval])))",
+                        "legendFormat": "{{event}}",
+                        "maxLines": 200,
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Noisiest structlog events (logfmt-parsed).",
+          "id": 23,
+          "links": [],
+          "title": "Top events",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-24": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "grafanacloud-logs"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "{service_name=~\"meraki-dashboard-exporter.*\"} | logfmt | level=~\"error|warning\"",
+                        "legendFormat": "",
+                        "maxLines": 200,
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "level uses structlog spelling 'warning' (Loki detected_level normalizes to 'warn').",
+          "id": 24,
+          "links": [],
+          "title": "Recent errors/warnings",
+          "vizConfig": {
+            "kind": "logs",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_exporter_collector_cadence_seconds{job=\"meraki_dashboard\", instance=~\"$instance\"}",
+                        "legendFormat": "{{collector}} · {{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 3,
+          "links": [],
+          "title": "Collector cadence (s)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "s"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_exporter_collector_failure_streak{job=\"meraki_dashboard\", instance=~\"$instance\"}",
+                        "legendFormat": "{{collector}} · {{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 4,
+          "links": [],
+          "title": "Collector failure streak",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_exporter_scheduler_budget_rps{job=\"meraki_dashboard\", instance=~\"$instance\"}",
+                        "legendFormat": "{{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 5,
+          "links": [],
+          "title": "Scheduler budget (rps)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "reqps"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_exporter_scheduler_budget_utilization_ratio{job=\"meraki_dashboard\", instance=~\"$instance\"}",
+                        "legendFormat": "{{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 6,
+          "links": [],
+          "title": "Budget utilization ratio",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "percentunit"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_exporter_collection_utilization_ratio{job=\"meraki_dashboard\", instance=~\"$instance\"}",
+                        "legendFormat": "{{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 7,
+          "links": [],
+          "title": "Collection utilization ratio",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "percentunit"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_exporter_collector_start_offset_seconds{job=\"meraki_dashboard\", instance=~\"$instance\"}",
+                        "legendFormat": "{{collector}} · {{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 8,
+          "links": [],
+          "title": "Collector start offset (s)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "s"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (status_code) (rate(meraki_exporter_api_requests_total{job=\"meraki_dashboard\", instance=~\"$instance\"}[$__rate_interval]))",
+                        "legendFormat": "{{status_code}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 9,
+          "links": [],
+          "title": "API request rate by status",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "reqps"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      }
+    },
+    "layout": {
+      "kind": "TabsLayout",
+      "spec": {
+        "tabs": [
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-1"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-2"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-3"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-4"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 8
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Collectors"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-5"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-6"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-7"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-8"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 8
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Scheduler"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-9"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-10"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-11"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-12"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 8
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "API \u0026 Rate Limiting"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-20"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-21"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 0
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Traces"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-22"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-23"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-24"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 8
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Logs"
+            }
+          }
+        ]
+      }
+    },
+    "links": [],
+    "liveNow": false,
+    "preload": false,
+    "tags": [
+      "meraki",
+      "gcx",
+      "self-observability"
+    ],
+    "timeSettings": {
+      "autoRefresh": "60s",
+      "autoRefreshIntervals": [
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "1h"
+      ],
+      "fiscalYearStartMonth": 0,
+      "from": "now-6h",
+      "hideTimepicker": false,
+      "timezone": "browser",
+      "to": "now"
+    },
+    "title": "Meraki – Exporter Self-Observability",
+    "variables": [
+      {
+        "kind": "DatasourceVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": "grafanacloud-prom",
+            "value": "grafanacloud-prom"
+          },
+          "hide": "dontHide",
+          "includeAll": false,
+          "label": "Data Source",
+          "multi": false,
+          "name": "datasource",
+          "options": [],
+          "pluginId": "prometheus",
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false
+        }
+      },
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": [
+              "All"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "definition": "label_values(meraki_exporter_collections_active{job=\"meraki_dashboard\"}, instance)",
+          "hide": "dontHide",
+          "includeAll": true,
+          "label": "Instance",
+          "multi": true,
+          "name": "instance",
+          "options": [],
+          "query": {
+            "kind": "prometheus",
+            "spec": {
+              "qryType": 1,
+              "query": "label_values(meraki_exporter_collections_active{job=\"meraki_dashboard\"}, instance)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            }
+          },
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,2973 @@
+{
+  "apiVersion": "dashboard.grafana.app/v2alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "annotations": {
+      "grafana.app/folder": "meraki-exporter"
+    },
+    "name": "meraki-organization"
+  },
+  "spec": {
+    "annotations": [],
+    "cursorSync": "Off",
+    "description": "Organization-level health, API usage, licensing, and assurance alerts.",
+    "editable": true,
+    "elements": {
+      "panel-1": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "count(meraki_org_info{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "instant": true,
+                        "legendFormat": "Organizations"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 1,
+          "links": [],
+          "title": "Total Organizations",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "none"
+                },
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value_and_name",
+                "wideLayout": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-10": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_org_configuration_changes_count{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
+                        "legendFormat": "org {{org_id}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 10,
+          "links": [],
+          "title": "Configuration Changes",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-11": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "topk(10, sum by (category) (meraki_org_application_usage_total_bytes{job=\"meraki_dashboard\", org_id=~\"$organization\"}))",
+                        "instant": true,
+                        "legendFormat": "{{category}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 11,
+          "links": [],
+          "title": "Application Usage by Category",
+          "vizConfig": {
+            "kind": "bargauge",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "unit": "bytes"
+                },
+                "overrides": null
+              },
+              "options": {
+                "displayMode": "basic",
+                "namePlacement": "auto",
+                "orientation": "horizontal",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showUnfilled": true,
+                "sizing": "auto",
+                "valueMode": "text"
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-12": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (category) (meraki_org_application_usage_percent{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "instant": true,
+                        "legendFormat": "{{category}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 12,
+          "links": [],
+          "title": "Application Usage Share",
+          "vizConfig": {
+            "kind": "piechart",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    }
+                  },
+                  "unit": "percent"
+                },
+                "overrides": null
+              },
+              "options": {
+                "displayLabels": [
+                  "name",
+                  "percent"
+                ],
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "values": [
+                    "value",
+                    "percent"
+                  ]
+                },
+                "pieType": "donut",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_org_networks{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "instant": true,
+                        "legendFormat": "Networks"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 2,
+          "links": [],
+          "title": "Total Networks",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "none"
+                },
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value_and_name",
+                "wideLayout": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-20": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_org_api_requests_count{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
+                        "legendFormat": "org {{org_id}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Rolling-window request count gauge from the API — NOT a counter, rendered as-is (same F-152 windowed-gauge principle). Legend uses org_id (see panel 9 for why the org_info join is avoided on range queries).",
+          "id": 20,
+          "links": [],
+          "title": "API Request Count",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-21": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "topk(10, sum by (status_code) (meraki_org_api_requests_by_status{job=\"meraki_dashboard\", org_id=~\"$organization\"}))",
+                        "instant": true,
+                        "legendFormat": "{{status_code}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 21,
+          "links": [],
+          "title": "API Requests by Status Code",
+          "vizConfig": {
+            "kind": "bargauge",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {
+                "displayMode": "basic",
+                "namePlacement": "auto",
+                "orientation": "horizontal",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showUnfilled": true,
+                "sizing": "auto",
+                "valueMode": "text"
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-22": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_org_api_requests_by_status{job=\"meraki_dashboard\", org_id=~\"$organization\", status_code=~\"4..|5..\"})",
+                        "instant": true,
+                        "legendFormat": "Errors"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 22,
+          "links": [],
+          "title": "API Errors (4xx/5xx)",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 10
+                      },
+                      {
+                        "color": "red",
+                        "value": 50
+                      }
+                    ]
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value_and_name",
+                "wideLayout": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-23": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (status) (meraki_org_licenses{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "instant": true,
+                        "legendFormat": "{{status}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Status label values discovered live (fixes F-155: co-term shows OK/expired-style; per-device shows active/expired/expiring/recentlyQueued/unused/unusedActive — no grace_period value exists)",
+          "id": 23,
+          "links": [],
+          "title": "License Status Distribution",
+          "vizConfig": {
+            "kind": "piechart",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    }
+                  },
+                  "unit": "none"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "OK"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "green",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "active"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "green",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "expired"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "red",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "expiring"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "orange",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "options": {
+                "displayLabels": [
+                  "name",
+                  "percent"
+                ],
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "values": [
+                    "value",
+                    "percent"
+                  ]
+                },
+                "pieType": "donut",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-24": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (license_type) (meraki_org_licenses{job=\"meraki_dashboard\", org_id=~\"$organization\", status=~\"OK|active|unusedActive\"})",
+                        "instant": true,
+                        "legendFormat": "{{license_type}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 24,
+          "links": [],
+          "title": "Licenses by Type",
+          "vizConfig": {
+            "kind": "bargauge",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "unit": "none"
+                },
+                "overrides": null
+              },
+              "options": {
+                "displayMode": "basic",
+                "namePlacement": "auto",
+                "orientation": "horizontal",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showUnfilled": true,
+                "sizing": "auto",
+                "valueMode": "text"
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-25": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_org_licenses_expiring{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "instant": true,
+                        "legendFormat": "Expiring Soon"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 25,
+          "links": [],
+          "title": "Licenses Expiring (30 days)",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 5
+                      },
+                      {
+                        "color": "red",
+                        "value": 20
+                      }
+                    ]
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value_and_name",
+                "wideLayout": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-26": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (org_name, license_type, status) (meraki_org_licenses{job=\"meraki_dashboard\", org_id=~\"$organization\"} * on(org_id) group_left(org_name) meraki_org_info{job=\"meraki_dashboard\"})",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": ""
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 26,
+          "links": [],
+          "title": "License Summary by Organization and Type",
+          "vizConfig": {
+            "kind": "table",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "inspect": false
+                  },
+                  "unit": "none"
+                },
+                "overrides": null
+              },
+              "options": {
+                "cellHeight": "sm",
+                "footer": {
+                  "countRows": false,
+                  "fields": "",
+                  "reducer": [
+                    "sum"
+                  ],
+                  "show": false
+                },
+                "showHeader": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-27": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_org_packetcaptures{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "instant": true,
+                        "legendFormat": "Total"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_org_packetcaptures_remaining{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "instant": true,
+                        "legendFormat": "Remaining"
+                      }
+                    },
+                    "refId": "B"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 27,
+          "links": [],
+          "title": "Packet Captures (Total / Remaining)",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value_and_name",
+                "wideLayout": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_org_devices{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "instant": true,
+                        "legendFormat": "Devices"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 3,
+          "links": [],
+          "title": "Total Devices",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "none"
+                },
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value_and_name",
+                "wideLayout": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-30": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_alerts_active{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "instant": true,
+                        "legendFormat": "Total Active Alerts"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 30,
+          "links": [],
+          "title": "Total Active Alerts",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 1
+                      },
+                      {
+                        "color": "red",
+                        "value": 10
+                      }
+                    ]
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value_and_name",
+                "wideLayout": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-31": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_alerts_active{job=\"meraki_dashboard\", org_id=~\"$organization\", severity=\"critical\"})",
+                        "instant": true,
+                        "legendFormat": "Critical"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 31,
+          "links": [],
+          "title": "Critical Alerts",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "red",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value_and_name",
+                "wideLayout": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-32": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_alerts_active{job=\"meraki_dashboard\", org_id=~\"$organization\", severity=\"warning\"})",
+                        "instant": true,
+                        "legendFormat": "Warning"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 32,
+          "links": [],
+          "title": "Warning Alerts",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value_and_name",
+                "wideLayout": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-33": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_alerts_active{job=\"meraki_dashboard\", org_id=~\"$organization\", severity=\"informational\"})",
+                        "instant": true,
+                        "legendFormat": "Informational"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 33,
+          "links": [],
+          "title": "Informational Alerts",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "blue",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value_and_name",
+                "wideLayout": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-34": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (severity) (meraki_alerts_by_severity{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "instant": true,
+                        "legendFormat": "{{severity}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 34,
+          "links": [],
+          "title": "Alerts by Severity",
+          "vizConfig": {
+            "kind": "piechart",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    }
+                  },
+                  "unit": "none"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "critical"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "red",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "warning"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "yellow",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "informational"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "blue",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "options": {
+                "displayLabels": [
+                  "name",
+                  "percent"
+                ],
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "values": [
+                    "value",
+                    "percent"
+                  ]
+                },
+                "pieType": "donut",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-35": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (category_type) (meraki_alerts_active{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "instant": true,
+                        "legendFormat": "{{category_type}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 35,
+          "links": [],
+          "title": "Alerts by Category",
+          "vizConfig": {
+            "kind": "piechart",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    }
+                  },
+                  "unit": "none"
+                },
+                "overrides": null
+              },
+              "options": {
+                "displayLabels": [
+                  "name",
+                  "percent"
+                ],
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "values": [
+                    "value",
+                    "percent"
+                  ]
+                },
+                "pieType": "donut",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-36": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (device_type) (meraki_alerts_active{job=\"meraki_dashboard\", org_id=~\"$organization\", device_type!=\"\"})",
+                        "instant": true,
+                        "legendFormat": "{{device_type}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 36,
+          "links": [],
+          "title": "Alerts by Device Type",
+          "vizConfig": {
+            "kind": "piechart",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    }
+                  },
+                  "unit": "none"
+                },
+                "overrides": null
+              },
+              "options": {
+                "displayLabels": [
+                  "name",
+                  "percent"
+                ],
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "values": [
+                    "value",
+                    "percent"
+                  ]
+                },
+                "pieType": "donut",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-37": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "topk(10, sum by (network_id) (meraki_alerts_by_network{job=\"meraki_dashboard\", org_id=~\"$organization\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"})",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": ""
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "bargauge rendered a degenerate single-item bar with a single network in scope; table is more reliable at any cardinality",
+          "id": 37,
+          "links": [],
+          "title": "Top 10 Networks by Alert Count",
+          "vizConfig": {
+            "kind": "table",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "inspect": false
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {
+                "cellHeight": "sm",
+                "footer": {
+                  "countRows": false,
+                  "fields": "",
+                  "reducer": [
+                    "sum"
+                  ],
+                  "show": false
+                },
+                "showHeader": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-38": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_alerts_active{job=\"meraki_dashboard\", org_id=~\"$organization\"} * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": ""
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Filters org_id with =~ regex, never exact = (fixes F-154: exact match breaks multi-select/All)",
+          "id": 38,
+          "links": [],
+          "title": "Active Alert Details",
+          "vizConfig": {
+            "kind": "table",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "inspect": false
+                  },
+                  "unit": "none"
+                },
+                "overrides": null
+              },
+              "options": {
+                "cellHeight": "sm",
+                "footer": {
+                  "countRows": false,
+                  "fields": "",
+                  "reducer": [
+                    "sum"
+                  ],
+                  "show": false
+                },
+                "showHeader": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_org_clients_count{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "instant": true,
+                        "legendFormat": "Active Clients"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 4,
+          "links": [],
+          "title": "Active Clients",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "none"
+                },
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value_and_name",
+                "wideLayout": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_org_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": ""
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "org_id -\u003e org_name join source (fixes F-150: real series is meraki_org_info, not meraki_org)",
+          "id": 5,
+          "links": [],
+          "title": "Organizations",
+          "vizConfig": {
+            "kind": "table",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "inspect": false
+                  },
+                  "unit": "none"
+                },
+                "overrides": null
+              },
+              "options": {
+                "cellHeight": "sm",
+                "footer": {
+                  "countRows": false,
+                  "fields": "",
+                  "reducer": [
+                    "sum"
+                  ],
+                  "show": false
+                },
+                "showHeader": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (device_type) (meraki_org_devices{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "instant": true,
+                        "legendFormat": "{{device_type}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 6,
+          "links": [],
+          "title": "Devices by Type",
+          "vizConfig": {
+            "kind": "piechart",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    }
+                  },
+                  "unit": "none"
+                },
+                "overrides": null
+              },
+              "options": {
+                "displayLabels": [
+                  "name",
+                  "percent"
+                ],
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "values": [
+                    "value",
+                    "percent"
+                  ]
+                },
+                "pieType": "donut",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "topk(10, sum by (model) (meraki_org_devices_by_model{job=\"meraki_dashboard\", org_id=~\"$organization\"}))",
+                        "instant": true,
+                        "legendFormat": "{{model}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 7,
+          "links": [],
+          "title": "Top 10 Device Models",
+          "vizConfig": {
+            "kind": "bargauge",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "unit": "none"
+                },
+                "overrides": null
+              },
+              "options": {
+                "displayMode": "basic",
+                "namePlacement": "auto",
+                "orientation": "horizontal",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showUnfilled": true,
+                "sizing": "auto",
+                "valueMode": "text"
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (status) (meraki_org_devices_availability{job=\"meraki_dashboard\", org_id=~\"$organization\"})",
+                        "instant": true,
+                        "legendFormat": "{{status}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 8,
+          "links": [],
+          "title": "Device Availability Status",
+          "vizConfig": {
+            "kind": "piechart",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    }
+                  },
+                  "unit": "none"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "online"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "green",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "offline"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "red",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "dormant"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "yellow",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "options": {
+                "displayLabels": [
+                  "name",
+                  "percent"
+                ],
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "right",
+                  "showLegend": true,
+                  "values": [
+                    "value",
+                    "percent"
+                  ]
+                },
+                "pieType": "donut",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_org_usage_upstream_bytes{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
+                        "legendFormat": "org {{org_id}} - Upstream",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_org_usage_downstream_bytes{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
+                        "legendFormat": "org {{org_id}} - Downstream",
+                        "range": true
+                      }
+                    },
+                    "refId": "B"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_org_usage_total_bytes{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
+                        "legendFormat": "org {{org_id}} - Total",
+                        "range": true
+                      }
+                    },
+                    "refId": "C"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "1-hour-window gauge from the Meraki API (fixes F-152: rendered as-is, NOT wrapped in rate()/increase()). Legend uses org_id, not a meraki_org_info join — the join is stable for instant queries (see the Organizations table) but returns empty results for range/timeseries queries wider than ~2h, likely because meraki_org_info is emitted on a slower collector cadence than the range query's evaluation step and a same-step join miss on one org drops the whole vector.",
+          "id": 9,
+          "links": [],
+          "title": "Organization Bandwidth Usage",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "bytes"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      }
+    },
+    "layout": {
+      "kind": "TabsLayout",
+      "spec": {
+        "tabs": [
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-1"
+                        },
+                        "height": 4,
+                        "width": 6,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-2"
+                        },
+                        "height": 4,
+                        "width": 6,
+                        "x": 6,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-3"
+                        },
+                        "height": 4,
+                        "width": 6,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-4"
+                        },
+                        "height": 4,
+                        "width": 6,
+                        "x": 18,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-5"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 4
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-6"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 4
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-7"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 12
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-8"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 12
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-9"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 20
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-10"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 20
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-11"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 28
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-12"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 28
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Overview"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-20"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-21"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-22"
+                        },
+                        "height": 4,
+                        "width": 6,
+                        "x": 0,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-25"
+                        },
+                        "height": 4,
+                        "width": 6,
+                        "x": 6,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-23"
+                        },
+                        "height": 8,
+                        "width": 8,
+                        "x": 0,
+                        "y": 12
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-24"
+                        },
+                        "height": 8,
+                        "width": 8,
+                        "x": 8,
+                        "y": 12
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-27"
+                        },
+                        "height": 8,
+                        "width": 8,
+                        "x": 16,
+                        "y": 12
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-26"
+                        },
+                        "height": 8,
+                        "width": 24,
+                        "x": 0,
+                        "y": 20
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "API \u0026 Licensing"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-30"
+                        },
+                        "height": 4,
+                        "width": 6,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-31"
+                        },
+                        "height": 4,
+                        "width": 6,
+                        "x": 6,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-32"
+                        },
+                        "height": 4,
+                        "width": 6,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-33"
+                        },
+                        "height": 4,
+                        "width": 6,
+                        "x": 18,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-34"
+                        },
+                        "height": 8,
+                        "width": 8,
+                        "x": 0,
+                        "y": 4
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-35"
+                        },
+                        "height": 8,
+                        "width": 8,
+                        "x": 8,
+                        "y": 4
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-36"
+                        },
+                        "height": 8,
+                        "width": 8,
+                        "x": 16,
+                        "y": 4
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-37"
+                        },
+                        "height": 8,
+                        "width": 24,
+                        "x": 0,
+                        "y": 12
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-38"
+                        },
+                        "height": 10,
+                        "width": 24,
+                        "x": 0,
+                        "y": 20
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Alerts"
+            }
+          }
+        ]
+      }
+    },
+    "links": [],
+    "liveNow": false,
+    "preload": false,
+    "tags": [
+      "meraki",
+      "gcx",
+      "organization"
+    ],
+    "timeSettings": {
+      "autoRefresh": "60s",
+      "autoRefreshIntervals": [
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "1h"
+      ],
+      "fiscalYearStartMonth": 0,
+      "from": "now-6h",
+      "hideTimepicker": false,
+      "timezone": "browser",
+      "to": "now"
+    },
+    "title": "Meraki – Organization",
+    "variables": [
+      {
+        "kind": "DatasourceVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": "grafanacloud-prom",
+            "value": "grafanacloud-prom"
+          },
+          "hide": "dontHide",
+          "includeAll": false,
+          "label": "Data Source",
+          "multi": false,
+          "name": "datasource",
+          "options": [],
+          "pluginId": "prometheus",
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false
+        }
+      },
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": [
+              "All"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "definition": "label_values(meraki_org_info{job=\"meraki_dashboard\"}, org_id)",
+          "hide": "dontHide",
+          "includeAll": true,
+          "label": "Organization",
+          "multi": true,
+          "name": "organization",
+          "options": [],
+          "query": {
+            "kind": "prometheus",
+            "spec": {
+              "qryType": 1,
+              "query": "label_values(meraki_org_info{job=\"meraki_dashboard\"}, org_id)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            }
+          },
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      }
+    ]
+  }
+}

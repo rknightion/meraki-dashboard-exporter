@@ -40,21 +40,16 @@ The [docker-compose.yml](https://github.com/rknightion/meraki-dashboard-exporter
     Align your Prometheus scrape interval with the exporter's adaptive collector cadence to avoid unnecessary load — see [Metrics Overview](metrics/overview.md) and [Scheduler Architecture](observability/scheduler.md).
 
 ## Dashboards
-Pre-built Grafana dashboards live in the [dashboards directory](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/dashboards). Import them to get instant visibility into your organisation. Bundled dashboards include:
+Pre-built Grafana dashboards (Grafana **v2 schema**, tabbed) live in the [`grafana/dashboards` directory](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/grafana/dashboards). Import them in the Grafana UI, or deploy them with the [`gcx`](https://github.com/grafana/grafana-com-cli) CLI. The set is six consolidated, multi-tab dashboards:
 
-- `organization-overview.json` – org-wide rollup
-- `network-overview.json` – network inventory and status
-- `network-health-performance.json` – network health, RF, and performance
-- `mr-access-points.json` – MR (wireless) APs
-- `ms-switches.json` – MS switches
-- `mx-security-appliances.json` – MX appliances and uplinks
-- `mt-sensors.json` – MT environmental sensors
-- `mv-security-cameras.json` – MV cameras
-- `mg-cellular-gateways.json` – MG cellular gateways
-- `client-overview.json` – client tracking
-- `assurance-alerts.json` – alerts and assurance
-- `api-usage-licensing.json` – API usage and licensing
-- `exporter-monitoring.json` – self-monitoring of the exporter
+- `self-observability.json` – the exporter's own health: collectors, adaptive scheduler, API rate limiting, plus traces and logs tabs
+- `meraki-devices.json` – all device types as tabs (MR / MS / MX / MT / MV); a tab auto-hides when the selected org has no such devices
+- `meraki-organization.json` – org rollup, API usage & licensing, alerts
+- `meraki-network-health.json` – connection stats, RF, data rates, SSID performance, Bluetooth
+- `meraki-clients.json` – client tracking (counts, usage, DNS resolution health)
+- `meraki-client-telemetry.json` – per-client data-log telemetry (signal quality / packet loss / webhook delivery)
+
+Each dashboard uses an `org_id` template variable, so one dashboard serves every organisation you monitor, and all panels target the standard Prometheus scrape path (native metric names).
 
 ## Alerting
 Use PromQL rules with metrics such as `meraki_device_up` or `meraki_exporter_collection_errors_total` to trigger alerts.
@@ -73,6 +68,11 @@ set `prometheusRule.enabled: true` (requires the Prometheus Operator CRDs) to
 have the chart render the same rule set directly — see the `prometheusRule.*`
 values (namespace override, additional labels, per-group toggles, and a
 `webhooksEnabled` switch that picks the matching device-down alert variant).
+
+For **Grafana Cloud / Mimir ruler** (no Prometheus Operator), the same 15 alerts plus a set
+of derived recording rules are provided as ready-to-load rule-group YAML in
+[`grafana/alerts/`](https://github.com/rknightion/meraki-dashboard-exporter/tree/main/grafana/alerts)
+(`alerting-rules.yaml`, `recording-rules.yaml`) — load with `mimirtool rules load`.
 
 For more metrics see the [Metrics Reference](metrics/metrics.md).
 Configuration options are documented in the [Configuration](config.md) guide.

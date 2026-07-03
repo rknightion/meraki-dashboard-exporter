@@ -27,7 +27,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - `src/meraki_dashboard_exporter/api/` - API client wrapper - See `src/meraki_dashboard_exporter/api/CLAUDE.md`
 - `tests/` - Test suite and patterns - See `tests/CLAUDE.md`
 - `pyproject.toml` - Project dependencies and configuration
-- `dashboards/` - Grafana dashboard JSON exports (hand-maintained, no generator; FROZEN until the dedicated rebuild task) - See `dashboards/CLAUDE.md`
+- `grafana/` - Grafana **v2-schema** dashboards (`grafana/dashboards/`, 6 consolidated tabbed dashboards) + alerting/recording rules (`grafana/alerts/`). Authored via the `gcx` CLI and deployed to Grafana (folder "Meraki Dashboard Exporter"); rules deploy via `gcx`/Mimir ruler. This replaced the old classic-schema `dashboards/*.json` (removed 2026-07 after the rebuild). See `grafana/CLAUDE.md`.
 - `docs/` - Zensical documentation site (NOT MkDocs, despite Make target names) - See `docs/CLAUDE.md`
 - `scripts/` - Code generation and documentation scripts - See `scripts/CLAUDE.md`
 - `charts/meraki-dashboard-exporter/` - Helm chart - See `charts/meraki-dashboard-exporter/CLAUDE.md`
@@ -103,7 +103,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **NEVER bypass inventory service** - use cached data when available
 - **NEVER call `getOrganizationNetworks` directly from a collector** - go through `OrganizationInventory.get_networks(org_id)` so `NetworkFilter` is enforced. Only `core/discovery.py::DiscoveryService` (audit logging, unfiltered), `collectors/alerts.py::AlertsCollector._fetch_networks_direct`, and `core/api_helpers.py::APIHelper._fetch_networks_direct` (both inventory-unavailable fallbacks that reapply `NetworkFilter` manually) are permitted to bypass.
 - **NEVER forget metric tracking** - use `parent._set_metric()` for automatic expiration
-- **NEVER edit `dashboards/*.json` as part of a code fix**, and NEVER defer/park a code fix because it "might break a dashboard" — dashboards are frozen until their dedicated rebuild task (see `dashboards/CLAUDE.md`)
+- **Grafana dashboards + alert/recording rules live in `grafana/`** (v2 schema, authored via `gcx`). They are no longer frozen — the dedicated rebuild landed 2026-07. When a metric/label name changes, update the affected `grafana/dashboards/*.json` queries and re-verify against a live scrape (see `grafana/CLAUDE.md`).
 - **NEVER add a new client-keyed (or otherwise unbounded per-entity) labelled Prometheus metric** — metrics carry bounded, fleet-shaped aggregates (org/network/device serial/SSID number/port/band, or top-N bounded by construction); a new per-client/per-entity signal (client ID/MAC, per-delivery row, anything that fans out per-request) routes to the OTel data-log emitter (`core/otel_data_logs.py`, see `docs/observability/otel.md#data-logs-vs-metrics-the-boundary-rule`) instead. The existing opt-in `collectors/clients.py` ID-only numeric series + `meraki_client_info` join (#533) is grandfathered and unaffected by this rule.
 </fatal_implications>
 

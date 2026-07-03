@@ -1,0 +1,1491 @@
+{
+  "apiVersion": "dashboard.grafana.app/v2alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "annotations": {
+      "grafana.app/folder": "meraki-exporter"
+    },
+    "name": "meraki-clients"
+  },
+  "spec": {
+    "annotations": [],
+    "cursorSync": "Off",
+    "description": "Bounded, fleet-shaped client metrics from the scrape path: counts, SSID/VLAN distribution, usage aggregates, and exporter DNS/client-store health.",
+    "editable": true,
+    "elements": {
+      "panel-1": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_client_status{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"} == 1)",
+                        "legendFormat": "Online",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Count of clients currently reporting online status.",
+          "id": 1,
+          "links": [],
+          "title": "Clients Online",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "auto"
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-10": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "topk(10, meraki_client_usage_total_bytes{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "legendFormat": "{{client_id}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Top-N (bounded) client IDs by total bytes transferred in the last hour.",
+          "id": 10,
+          "links": [],
+          "title": "Top 10 Clients by Usage",
+          "vizConfig": {
+            "kind": "bargauge",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes"
+                },
+                "overrides": null
+              },
+              "options": {
+                "displayMode": "gradient",
+                "orientation": "horizontal",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-11": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "topk(10, sum by (type) (meraki_client_application_usage_total_bytes{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}))",
+                        "legendFormat": "{{type}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Top-N (bounded) application categories by total bytes transferred in the last hour.",
+          "id": 11,
+          "links": [],
+          "title": "Application Usage Breakdown (Top 10)",
+          "vizConfig": {
+            "kind": "piechart",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes"
+                },
+                "overrides": null
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "right",
+                  "values": [
+                    "value",
+                    "percent"
+                  ]
+                },
+                "pieType": "donut",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-12": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_exporter_client_dns_cache_hit_ratio{job=\"meraki_dashboard\"}",
+                        "legendFormat": "{{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Ratio of reverse-DNS lookups served from cache, cumulative over process lifetime (process-wide; not org/network filterable).",
+          "id": 12,
+          "links": [],
+          "title": "DNS Cache Hit Ratio",
+          "vizConfig": {
+            "kind": "gauge",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "max": 1,
+                  "min": 0,
+                  "unit": "percentunit"
+                },
+                "overrides": null
+              },
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-13": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (instance) (rate(meraki_exporter_client_dns_lookups_successful_total{job=\"meraki_dashboard\"}[$__rate_interval]))",
+                        "legendFormat": "successful {{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (instance) (rate(meraki_exporter_client_dns_lookups_failed_total{job=\"meraki_dashboard\"}[$__rate_interval]))",
+                        "legendFormat": "failed {{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "B"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (instance) (rate(meraki_exporter_client_dns_lookups_cached_total{job=\"meraki_dashboard\"}[$__rate_interval]))",
+                        "legendFormat": "cached {{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "C"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Reverse-DNS lookup rate by outcome (process-wide; not org/network filterable).",
+          "id": 13,
+          "links": [],
+          "title": "DNS Lookups Rate",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-14": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "rate(meraki_exporter_client_dns_resolution_seconds_total{job=\"meraki_dashboard\"}[$__rate_interval]) / clamp_min(rate(meraki_exporter_client_dns_lookups_total{job=\"meraki_dashboard\"}[$__rate_interval]) - rate(meraki_exporter_client_dns_lookups_cached_total{job=\"meraki_dashboard\"}[$__rate_interval]), 1)",
+                        "legendFormat": "{{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Average reverse-DNS resolution latency, excluding cache hits (process-wide).",
+          "id": 14,
+          "links": [],
+          "title": "DNS Resolution Latency (avg)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "s"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-15": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_exporter_client_dns_cache_total{job=\"meraki_dashboard\"}",
+                        "legendFormat": "total {{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_exporter_client_dns_cache_valid{job=\"meraki_dashboard\"}",
+                        "legendFormat": "valid {{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "B"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_exporter_client_dns_cache_expired{job=\"meraki_dashboard\"}",
+                        "legendFormat": "expired {{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "C"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Reverse-DNS cache entry counts (process-wide).",
+          "id": 15,
+          "links": [],
+          "title": "DNS Cache Size",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-16": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_exporter_client_store_total{job=\"meraki_dashboard\"}",
+                        "legendFormat": "clients {{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_exporter_client_store_networks{job=\"meraki_dashboard\"}",
+                        "legendFormat": "networks {{instance}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "B"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Client store size: total cached clients and networks with clients (process-wide).",
+          "id": 16,
+          "links": [],
+          "title": "Client Store Size",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "count(meraki_client_status{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"} == 0)",
+                        "legendFormat": "Offline",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Count of clients currently reporting offline status.",
+          "id": 2,
+          "links": [],
+          "title": "Clients Offline",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "auto"
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_exporter_clients_over_cap{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "legendFormat": "Over cap",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Clients excluded from metric emission because the per-network/global client cap was reached (should be 0).",
+          "id": 3,
+          "links": [],
+          "title": "Clients Excluded (Over Cap)",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "auto"
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (network_id) (meraki_client_status{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"} == 1)",
+                        "legendFormat": "{{network_id}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Online client count per network over time.",
+          "id": 4,
+          "links": [],
+          "title": "Clients Online Per Network",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_clients_per_ssid_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "legendFormat": "{{ssid}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Client count per SSID, over the last hour (per exporter poll window).",
+          "id": 5,
+          "links": [],
+          "title": "Clients Per SSID",
+          "vizConfig": {
+            "kind": "bargauge",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": null
+              },
+              "options": {
+                "displayMode": "gradient",
+                "orientation": "horizontal",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_clients_per_vlan_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "legendFormat": "{{vlan}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Client count per VLAN, over the last hour.",
+          "id": 6,
+          "links": [],
+          "title": "Clients Per VLAN",
+          "vizConfig": {
+            "kind": "bargauge",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": null
+              },
+              "options": {
+                "displayMode": "gradient",
+                "orientation": "horizontal",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_client_info{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": ""
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "organize",
+                  "spec": {
+                    "disabled": false,
+                    "id": "organize",
+                    "options": {
+                      "excludeByName": {
+                        "Time": true,
+                        "Value": true,
+                        "__name__": true,
+                        "env": true,
+                        "instance": true,
+                        "job": true
+                      },
+                      "indexByName": {},
+                      "renameByName": {}
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "description": "Grandfathered ID-only client join metric: client_id -\u003e mac/description/hostname/ssid/network.",
+          "id": 7,
+          "links": [],
+          "title": "Client Identity (meraki_client_info join)",
+          "vizConfig": {
+            "kind": "table",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (network_id) (meraki_client_usage_total_bytes{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "legendFormat": "{{network_id}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Total bytes transferred by clients in the last hour, summed per network (windowed gauge, not a rate).",
+          "id": 8,
+          "links": [],
+          "title": "Client Usage Total Per Network",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "bytes"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_client_usage_sent_bytes{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "legendFormat": "Sent",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_client_usage_recv_bytes{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "legendFormat": "Received",
+                        "range": true
+                      }
+                    },
+                    "refId": "B"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Aggregate sent/received bytes across selected clients in the last hour.",
+          "id": 9,
+          "links": [],
+          "title": "Client Usage Sent vs Received",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "bytes"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      }
+    },
+    "layout": {
+      "kind": "TabsLayout",
+      "spec": {
+        "tabs": [
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-1"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-2"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-3"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-4"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-5"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 16
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-6"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 16
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-7"
+                        },
+                        "height": 8,
+                        "width": 24,
+                        "x": 0,
+                        "y": 24
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Overview"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-8"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-9"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-10"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-11"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 8
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Usage"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-12"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-13"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-14"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-15"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-16"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 16
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "DNS"
+            }
+          }
+        ]
+      }
+    },
+    "links": [],
+    "liveNow": false,
+    "preload": false,
+    "tags": [
+      "meraki",
+      "gcx",
+      "clients"
+    ],
+    "timeSettings": {
+      "autoRefresh": "60s",
+      "autoRefreshIntervals": [
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "1h"
+      ],
+      "fiscalYearStartMonth": 0,
+      "from": "now-6h",
+      "hideTimepicker": false,
+      "timezone": "browser",
+      "to": "now"
+    },
+    "title": "Meraki – Clients",
+    "variables": [
+      {
+        "kind": "DatasourceVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": "grafanacloud-prom",
+            "value": "grafanacloud-prom"
+          },
+          "hide": "dontHide",
+          "includeAll": false,
+          "label": "Data Source",
+          "multi": false,
+          "name": "datasource",
+          "options": [],
+          "pluginId": "prometheus",
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false
+        }
+      },
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": [
+              "All"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "definition": "label_values(meraki_device_up{job=\"meraki_dashboard\"}, org_id)",
+          "hide": "dontHide",
+          "includeAll": true,
+          "label": "Organization",
+          "multi": true,
+          "name": "organization",
+          "options": [],
+          "query": {
+            "kind": "prometheus",
+            "spec": {
+              "qryType": 1,
+              "query": "label_values(meraki_device_up{job=\"meraki_dashboard\"}, org_id)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            }
+          },
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      },
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": [
+              "All"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "definition": "label_values(meraki_client_status{job=\"meraki_dashboard\", org_id=~\"$organization\"}, network_id)",
+          "hide": "dontHide",
+          "includeAll": true,
+          "label": "Network",
+          "multi": true,
+          "name": "network",
+          "options": [],
+          "query": {
+            "kind": "prometheus",
+            "spec": {
+              "qryType": 1,
+              "query": "label_values(meraki_client_status{job=\"meraki_dashboard\", org_id=~\"$organization\"}, network_id)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            }
+          },
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      }
+    ]
+  }
+}

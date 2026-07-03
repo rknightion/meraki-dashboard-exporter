@@ -1,0 +1,1640 @@
+{
+  "apiVersion": "dashboard.grafana.app/v2alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "annotations": {
+      "grafana.app/folder": "meraki-exporter"
+    },
+    "name": "meraki-network-health"
+  },
+  "spec": {
+    "annotations": [],
+    "cursorSync": "Off",
+    "description": "Wireless network health: connection stats, RF/channel utilization, data rates, SSID client distribution, Bluetooth detection.",
+    "editable": true,
+    "elements": {
+      "panel-1": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_network_wireless_connection_stats_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "legendFormat": "{{network_name}} - {{stat_type}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "F-152 fix: meraki_network_wireless_connection_stats_count is a 30-minute-window gauge (assoc/auth/dhcp/dns/success) — rendered directly, NOT wrapped in rate()/increase().",
+          "id": 1,
+          "links": [],
+          "title": "Wireless connection funnel (30-min window)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-10": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_network_wireless_download_bytes_per_second{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "legendFormat": "{{network_name}} - download",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_network_wireless_upload_bytes_per_second{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "legendFormat": "{{network_name}} - upload",
+                        "range": true
+                      }
+                    },
+                    "refId": "B"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Already a bytes/second rate emitted by the exporter — no rate()/increase() needed.",
+          "id": 10,
+          "links": [],
+          "title": "Wireless throughput",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "Bps"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-11": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_mr_packets_lost_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"} / clamp_min(meraki_mr_packets_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}, 1)) * 100",
+                        "legendFormat": "{{serial}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "meraki_mr_packets_{count,lost_count} are 5-minute-window gauges — ratio computed directly from the two gauges, no rate().",
+          "id": 11,
+          "links": [],
+          "title": "Packet loss — per AP (5-min window, %)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "percent"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-12": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "((meraki_mr_network_packets_lost_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"} / clamp_min(meraki_mr_network_packets_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}, 1)) * 100) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "legendFormat": "{{network_name}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "meraki_mr_network_packets_{count,lost_count} are 5-minute-window gauges.",
+          "id": 12,
+          "links": [],
+          "title": "Packet loss — network-wide (5-min window, %)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "percent"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-13": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_clients_per_ssid_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "legendFormat": "{{network_name}} - {{ssid}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "meraki_clients_per_ssid_count, 1-hour-window gauge (includes the synthetic 'Wired' pseudo-SSID Meraki reports for AP-attached wired clients).",
+          "id": 13,
+          "links": [],
+          "title": "Clients per SSID",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-14": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_clients_per_ssid_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "legendFormat": "Total clients",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 14,
+          "links": [],
+          "title": "Total clients across SSIDs",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "auto"
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-15": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_clients_per_ssid_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "instant": true,
+                        "legendFormat": "{{network_name}} - {{ssid}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 15,
+          "links": [],
+          "title": "Clients per SSID (table)",
+          "vizConfig": {
+            "kind": "table",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {
+                "cellHeight": "sm",
+                "showHeader": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-16": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_mr_air_marshal_ssids_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "legendFormat": "{{network_name}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Count of foreign SSIDs seen by Air Marshal — security-adjacent SSID signal.",
+          "id": 16,
+          "links": [],
+          "title": "Rogue/neighboring SSIDs detected (Air Marshal)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-17": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_network_bluetooth_clients_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "legendFormat": "{{network_name}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "meraki_network_bluetooth_clients_count, 5-minute-window gauge.",
+          "id": 17,
+          "links": [],
+          "title": "Bluetooth clients detected",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-18": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum(meraki_network_bluetooth_clients_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"})",
+                        "legendFormat": "Total BLE clients",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 18,
+          "links": [],
+          "title": "Total BLE clients (current)",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "auto"
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-19": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_network_bluetooth_clients_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "instant": true,
+                        "legendFormat": "{{network_name}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 19,
+          "links": [],
+          "title": "Bluetooth clients by network (table)",
+          "vizConfig": {
+            "kind": "table",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {
+                "cellHeight": "sm",
+                "showHeader": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-2": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(sum(meraki_network_wireless_connection_stats_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"success\"}) / clamp_min(sum(meraki_network_wireless_connection_stats_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", stat_type=\"assoc\"}), 1)) * 100",
+                        "legendFormat": "Success rate",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "success / assoc * 100, from the same 30-min-window gauge, no rate().",
+          "id": 2,
+          "links": [],
+          "title": "Connection success rate (%)",
+          "vizConfig": {
+            "kind": "stat",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent"
+                },
+                "overrides": null
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "auto"
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-3": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_network_wireless_connection_stats_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "instant": true,
+                        "legendFormat": "{{network_name}} - {{stat_type}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Same windowed-gauge family as a table, one row per network/stat_type.",
+          "id": 3,
+          "links": [],
+          "title": "Connection funnel by network (table)",
+          "vizConfig": {
+            "kind": "table",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": null
+              },
+              "options": {
+                "cellHeight": "sm",
+                "showHeader": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-4": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_ap_channel_utilization_2_4ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "legendFormat": "{{network_name}} - {{serial}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Per-AP, 10-min bucket gauge.",
+          "id": 4,
+          "links": [],
+          "title": "AP channel utilization — 2.4GHz (total)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "percent"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-5": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_ap_channel_utilization_5ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "legendFormat": "{{network_name}} - {{serial}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Per-AP, 10-min bucket gauge.",
+          "id": 5,
+          "links": [],
+          "title": "AP channel utilization — 5GHz (total)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "percent"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-6": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_network_channel_utilization_2_4ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "legendFormat": "{{network_name}} - 2.4GHz",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_network_channel_utilization_5ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "legendFormat": "{{network_name}} - 5GHz",
+                        "range": true
+                      }
+                    },
+                    "refId": "B"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Network-wide 10-min bucket average, 2.4GHz vs 5GHz (utilization_type=total; this metric also carries wifi/non_wifi breakdowns like its per-AP sibling).",
+          "id": 6,
+          "links": [],
+          "title": "Network-wide avg channel utilization",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "percent"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-7": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "(meraki_ap_channel_utilization_6ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "legendFormat": "{{network_name}} - {{serial}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "6GHz radio family exists in the exporter (added #271) but NEITHER live org currently has a 6GHz-capable AP reporting — expect No data until a 6E/7 AP is deployed.",
+          "id": 7,
+          "links": [],
+          "title": "6GHz channel utilization (AP)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "percent"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-8": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_ap_channel_utilization_2_4ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"wifi\"}",
+                        "legendFormat": "WiFi - {{serial}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_ap_channel_utilization_2_4ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"non_wifi\"}",
+                        "legendFormat": "Non-WiFi - {{serial}}",
+                        "range": true
+                      }
+                    },
+                    "refId": "B"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Interference breakdown per AP.",
+          "id": 8,
+          "links": [],
+          "title": "2.4GHz utilization: WiFi vs non-WiFi",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "percent"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-9": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "prometheus",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "meraki_mr_rf_profile_info{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}",
+                        "instant": true,
+                        "legendFormat": "{{network_id}} - {{serial}} - {{rf_profile_name}}"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Config info: which RF profile each AP is using.",
+          "id": 9,
+          "links": [],
+          "title": "RF profile assignment (table)",
+          "vizConfig": {
+            "kind": "table",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": null
+              },
+              "options": {
+                "cellHeight": "sm",
+                "showHeader": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      }
+    },
+    "layout": {
+      "kind": "TabsLayout",
+      "spec": {
+        "tabs": [
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-1"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-2"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-3"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 8
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Connection Stats"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-4"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-5"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-6"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-7"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-8"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 16
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-9"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 16
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "RF"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-10"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-11"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-12"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 8
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Data Rates"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-13"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-14"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-15"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-16"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 8
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "SSID"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-17"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-18"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-19"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 8
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Bluetooth"
+            }
+          }
+        ]
+      }
+    },
+    "links": [],
+    "liveNow": false,
+    "preload": false,
+    "tags": [
+      "meraki",
+      "gcx",
+      "network-health"
+    ],
+    "timeSettings": {
+      "autoRefresh": "60s",
+      "autoRefreshIntervals": [
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "1h"
+      ],
+      "fiscalYearStartMonth": 0,
+      "from": "now-6h",
+      "hideTimepicker": false,
+      "timezone": "browser",
+      "to": "now"
+    },
+    "title": "Meraki – Network Health",
+    "variables": [
+      {
+        "kind": "DatasourceVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": "grafanacloud-prom",
+            "value": "grafanacloud-prom"
+          },
+          "hide": "dontHide",
+          "includeAll": false,
+          "label": "Data Source",
+          "multi": false,
+          "name": "datasource",
+          "options": [],
+          "pluginId": "prometheus",
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false
+        }
+      },
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": [
+              "All"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "definition": "label_values(meraki_org_info{job=\"meraki_dashboard\"}, org_id)",
+          "hide": "dontHide",
+          "includeAll": true,
+          "label": "Organization",
+          "multi": true,
+          "name": "organization",
+          "options": [],
+          "query": {
+            "kind": "prometheus",
+            "spec": {
+              "qryType": 1,
+              "query": "label_values(meraki_org_info{job=\"meraki_dashboard\"}, org_id)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            }
+          },
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      },
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": [
+              "All"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "definition": "label_values(meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}, network_id)",
+          "hide": "dontHide",
+          "includeAll": true,
+          "label": "Network",
+          "multi": true,
+          "name": "network",
+          "options": [],
+          "query": {
+            "kind": "prometheus",
+            "spec": {
+              "qryType": 1,
+              "query": "label_values(meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}, network_id)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            }
+          },
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      }
+    ]
+  }
+}

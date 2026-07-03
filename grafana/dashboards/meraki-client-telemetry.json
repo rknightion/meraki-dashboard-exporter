@@ -1,0 +1,1022 @@
+{
+  "apiVersion": "dashboard.grafana.app/v2alpha1",
+  "kind": "Dashboard",
+  "metadata": {
+    "annotations": {
+      "grafana.app/folder": "meraki-exporter"
+    },
+    "name": "meraki-client-telemetry"
+  },
+  "spec": {
+    "annotations": [],
+    "cursorSync": "Off",
+    "description": "Per-client high-cardinality telemetry (signal quality, packet loss, webhook delivery) carried by the OTLP data-log channel (#622), NOT Prometheus metrics. Webhook Delivery is LIVE; Signal Quality/Packet Loss show No data pending #637 (signal_quality emission bug) - see the banner panel.",
+    "editable": true,
+    "elements": {
+      "panel-banner": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 0,
+          "links": [],
+          "title": "\u26a0 Signal Quality / Packet Loss: No data (Webhook Delivery: LIVE)",
+          "vizConfig": {
+            "kind": "text",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": null
+              },
+              "options": {
+                "content": "### Client data-log dashboard (#622) \u2014 live-verified 2026-07-03\n\n- **Webhook Delivery: LIVE** \u2705 \u2014 `meraki.org.webhook.delivery` records flow end-to-end into Loki today (OTLP data-log \u2192 collector \u2192 Loki). This tab shows real data.\n- **Signal Quality / Packet Loss: No data (pending #637)** \u2014 `meraki.wireless.client.signal_quality` + `meraki.wireless.client.packet_loss` emit zero records: signal_quality emission is coupled to the `packetLoss/byClient` response (**#637**). These two tabs light up once #637 lands (attribute names best-effort until then).\n- **#638 (OTLP-logs\u2192Loki path) is RESOLVED** \u2014 proven by webhook.delivery arriving.\n\n> Loki query form: OTel attributes are **structured metadata**, so filter as `{service_name=~\"...\"} | event_name=`\u2026`` (pipeline filter), NOT inside `{}`.",
+                "mode": "markdown"
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-pl-logs": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "{service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.wireless.client.packet_loss`",
+                        "maxLines": 200,
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Raw per-client packet-loss data-log lines for debugging/verifying the parser assumption once records start flowing.\n\nSchema note: OTel attributes land as Loki structured metadata (dot -> underscore, e.g. event.name -> event_name), filtered via a pipeline label filter after the selector - no logfmt/json parser stage - e.g. `{service_name=~\"...\"} | event_name=\"meraki.org.webhook.delivery\"`. LIVE-VERIFIED for meraki.org.webhook.delivery (flowing today); the equivalent field names for the two wireless-client events are ASSUMED by the same dot->underscore convention since zero records exist yet (blocked on #637) - re-verify once #637 lands.",
+          "id": 7,
+          "links": [],
+          "title": "Raw packet-loss records (debug)",
+          "vizConfig": {
+            "kind": "logs",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": null
+              },
+              "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "prettifyLogMessage": false,
+                "showCommonLabels": false,
+                "showLabels": false,
+                "showTime": true,
+                "sortOrder": "Descending",
+                "wrapLogMessage": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-pl-percent": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "avg_over_time({service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.wireless.client.packet_loss` | unwrap downstream_loss_percent [$__interval])",
+                        "legendFormat": "downstream",
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "avg_over_time({service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.wireless.client.packet_loss` | unwrap upstream_loss_percent [$__interval])",
+                        "legendFormat": "upstream",
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "B"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "avg_over_time({service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.wireless.client.packet_loss` | unwrap total_loss_percent [$__interval])",
+                        "legendFormat": "total",
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "C"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Per-client packet-loss percentages (attributes downstream.loss_percent / upstream.loss_percent / total.loss_percent), averaged across clients per sample interval.\n\nSchema note: OTel attributes land as Loki structured metadata (dot -> underscore, e.g. event.name -> event_name), filtered via a pipeline label filter after the selector - no logfmt/json parser stage - e.g. `{service_name=~\"...\"} | event_name=\"meraki.org.webhook.delivery\"`. LIVE-VERIFIED for meraki.org.webhook.delivery (flowing today); the equivalent field names for the two wireless-client events are ASSUMED by the same dot->underscore convention since zero records exist yet (blocked on #637) - re-verify once #637 lands.",
+          "id": 5,
+          "links": [],
+          "title": "Packet loss % - down/up/total (avg across clients)",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "percent"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-pl-worst": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "topk(10, avg by (client_id) (avg_over_time({service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.wireless.client.packet_loss` | unwrap total_loss_percent [$__range])))",
+                        "legendFormat": "{{client_id}}",
+                        "queryType": "instant"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Bounded top-N: the 10 clients with the highest average total packet loss % over the selected range.\n\nSchema note: OTel attributes land as Loki structured metadata (dot -> underscore, e.g. event.name -> event_name), filtered via a pipeline label filter after the selector - no logfmt/json parser stage - e.g. `{service_name=~\"...\"} | event_name=\"meraki.org.webhook.delivery\"`. LIVE-VERIFIED for meraki.org.webhook.delivery (flowing today); the equivalent field names for the two wireless-client events are ASSUMED by the same dot->underscore convention since zero records exist yet (blocked on #637) - re-verify once #637 lands.",
+          "id": 6,
+          "links": [],
+          "title": "Top 10 clients by total packet loss % (topk)",
+          "vizConfig": {
+            "kind": "table",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    }
+                  }
+                },
+                "overrides": null
+              },
+              "options": {
+                "cellHeight": "sm",
+                "showHeader": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-sq-logs": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "{service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.wireless.client.signal_quality`",
+                        "maxLines": 200,
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Raw per-client signal-quality data-log lines for debugging/verifying the parser assumption once records start flowing.\n\nSchema note: OTel attributes land as Loki structured metadata (dot -> underscore, e.g. event.name -> event_name), filtered via a pipeline label filter after the selector - no logfmt/json parser stage - e.g. `{service_name=~\"...\"} | event_name=\"meraki.org.webhook.delivery\"`. LIVE-VERIFIED for meraki.org.webhook.delivery (flowing today); the equivalent field names for the two wireless-client events are ASSUMED by the same dot->underscore convention since zero records exist yet (blocked on #637) - re-verify once #637 lands.",
+          "id": 4,
+          "links": [],
+          "title": "Raw signal-quality records (debug)",
+          "vizConfig": {
+            "kind": "logs",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": null
+              },
+              "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "prettifyLogMessage": false,
+                "showCommonLabels": false,
+                "showLabels": false,
+                "showTime": true,
+                "sortOrder": "Descending",
+                "wrapLogMessage": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-sq-rssi": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "quantile_over_time(0.5, {service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.wireless.client.signal_quality` | unwrap signal_rssi_dbm [$__interval])",
+                        "legendFormat": "p50",
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "quantile_over_time(0.9, {service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.wireless.client.signal_quality` | unwrap signal_rssi_dbm [$__interval])",
+                        "legendFormat": "p90",
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "B"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "avg_over_time({service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.wireless.client.signal_quality` | unwrap signal_rssi_dbm [$__interval])",
+                        "legendFormat": "avg",
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "C"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Signal strength distribution from per-client signal_quality data-logs (event.name=meraki.wireless.client.signal_quality, attribute signal.rssi_dbm).\n\nSchema note: OTel attributes land as Loki structured metadata (dot -> underscore, e.g. event.name -> event_name), filtered via a pipeline label filter after the selector - no logfmt/json parser stage - e.g. `{service_name=~\"...\"} | event_name=\"meraki.org.webhook.delivery\"`. LIVE-VERIFIED for meraki.org.webhook.delivery (flowing today); the equivalent field names for the two wireless-client events are ASSUMED by the same dot->underscore convention since zero records exist yet (blocked on #637) - re-verify once #637 lands.",
+          "id": 1,
+          "links": [],
+          "title": "RSSI (dBm) - percentiles across clients",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "dBm"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-sq-snr": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "quantile_over_time(0.5, {service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.wireless.client.signal_quality` | unwrap signal_snr_db [$__interval])",
+                        "legendFormat": "p50",
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "quantile_over_time(0.9, {service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.wireless.client.signal_quality` | unwrap signal_snr_db [$__interval])",
+                        "legendFormat": "p90",
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "B"
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "avg_over_time({service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.wireless.client.signal_quality` | unwrap signal_snr_db [$__interval])",
+                        "legendFormat": "avg",
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "C"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Signal-to-noise ratio distribution from per-client signal_quality data-logs (attribute signal.snr_db).\n\nSchema note: OTel attributes land as Loki structured metadata (dot -> underscore, e.g. event.name -> event_name), filtered via a pipeline label filter after the selector - no logfmt/json parser stage - e.g. `{service_name=~\"...\"} | event_name=\"meraki.org.webhook.delivery\"`. LIVE-VERIFIED for meraki.org.webhook.delivery (flowing today); the equivalent field names for the two wireless-client events are ASSUMED by the same dot->underscore convention since zero records exist yet (blocked on #637) - re-verify once #637 lands.",
+          "id": 2,
+          "links": [],
+          "title": "SNR (dB) - percentiles across clients",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "dB"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-sq-worst": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "bottomk(10, avg by (client_id) (avg_over_time({service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.wireless.client.signal_quality` | unwrap signal_rssi_dbm [$__range])))",
+                        "legendFormat": "{{client_id}}",
+                        "queryType": "instant"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Bounded top-N (not per-client unbounded): the 10 clients with the lowest average RSSI over the selected range.\n\nSchema note: OTel attributes land as Loki structured metadata (dot -> underscore, e.g. event.name -> event_name), filtered via a pipeline label filter after the selector - no logfmt/json parser stage - e.g. `{service_name=~\"...\"} | event_name=\"meraki.org.webhook.delivery\"`. LIVE-VERIFIED for meraki.org.webhook.delivery (flowing today); the equivalent field names for the two wireless-client events are ASSUMED by the same dot->underscore convention since zero records exist yet (blocked on #637) - re-verify once #637 lands.",
+          "id": 3,
+          "links": [],
+          "title": "Top 10 clients by weakest RSSI (bottomk)",
+          "vizConfig": {
+            "kind": "table",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    }
+                  }
+                },
+                "overrides": null
+              },
+              "options": {
+                "cellHeight": "sm",
+                "showHeader": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-wh-alert-type": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "topk(10, sum by (webhook_alert_type) (count_over_time({service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.org.webhook.delivery` [$__range])))",
+                        "legendFormat": "{{webhook_alert_type}}",
+                        "queryType": "instant"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Bounded top-N: the 10 most frequent alert types among webhook delivery attempts (attribute webhook.alert_type; absent when the source alert had none).\n\nSchema note: OTel attributes land as Loki structured metadata (dot -> underscore, e.g. event.name -> event_name), filtered via a pipeline label filter after the selector - no logfmt/json parser stage - e.g. `{service_name=~\"...\"} | event_name=\"meraki.org.webhook.delivery\"`. LIVE-VERIFIED for meraki.org.webhook.delivery (flowing today); the equivalent field names for the two wireless-client events are ASSUMED by the same dot->underscore convention since zero records exist yet (blocked on #637) - re-verify once #637 lands.",
+          "id": 9,
+          "links": [],
+          "title": "Delivery attempts by alert type (top 10)",
+          "vizConfig": {
+            "kind": "table",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    }
+                  }
+                },
+                "overrides": null
+              },
+              "options": {
+                "cellHeight": "sm",
+                "showHeader": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-wh-logs": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "{service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.org.webhook.delivery`",
+                        "maxLines": 200,
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Raw webhook delivery-attempt data-log lines (host-only url.host, no full URL/payload - matches the aggregate metric's cardinality rule) for debugging once records start flowing.\n\nSchema note: OTel attributes land as Loki structured metadata (dot -> underscore, e.g. event.name -> event_name), filtered via a pipeline label filter after the selector - no logfmt/json parser stage - e.g. `{service_name=~\"...\"} | event_name=\"meraki.org.webhook.delivery\"`. LIVE-VERIFIED for meraki.org.webhook.delivery (flowing today); the equivalent field names for the two wireless-client events are ASSUMED by the same dot->underscore convention since zero records exist yet (blocked on #637) - re-verify once #637 lands.",
+          "id": 10,
+          "links": [],
+          "title": "Raw webhook-delivery records (debug)",
+          "vizConfig": {
+            "kind": "logs",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": null
+              },
+              "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "prettifyLogMessage": false,
+                "showCommonLabels": false,
+                "showLabels": false,
+                "showTime": true,
+                "sortOrder": "Descending",
+                "wrapLogMessage": true
+              },
+              "pluginVersion": ""
+            }
+          }
+        }
+      },
+      "panel-wh-rate": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${datasource}"
+                    },
+                    "hidden": false,
+                    "query": {
+                      "kind": "loki",
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "sum by (status_code) (count_over_time({service_name=~\"meraki-dashboard-exporter.*\"} | event_name=`meraki.org.webhook.delivery` [$__interval]))",
+                        "legendFormat": "{{status_code}}",
+                        "queryType": "range"
+                      }
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Per-delivery-attempt data-log records (event.name=meraki.org.webhook.delivery), grouped by the bounded status_code attribute - complements the aggregate meraki_org_webhook_deliveries_count metric.\n\nSchema note: OTel attributes land as Loki structured metadata (dot -> underscore, e.g. event.name -> event_name), filtered via a pipeline label filter after the selector - no logfmt/json parser stage - e.g. `{service_name=~\"...\"} | event_name=\"meraki.org.webhook.delivery\"`. LIVE-VERIFIED for meraki.org.webhook.delivery (flowing today); the equivalent field names for the two wireless-client events are ASSUMED by the same dot->underscore convention since zero records exist yet (blocked on #637) - re-verify once #637 lands.",
+          "id": 8,
+          "links": [],
+          "title": "Webhook delivery attempts/s by status code",
+          "vizConfig": {
+            "kind": "timeseries",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 12,
+                    "lineWidth": 1,
+                    "showPoints": "never"
+                  },
+                  "unit": "reqps"
+                },
+                "overrides": null
+              },
+              "options": {},
+              "pluginVersion": ""
+            }
+          }
+        }
+      }
+    },
+    "layout": {
+      "kind": "TabsLayout",
+      "spec": {
+        "tabs": [
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-banner"
+                        },
+                        "height": 8,
+                        "width": 24,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-sq-rssi"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-sq-snr"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-sq-worst"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 16
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-sq-logs"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 16
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Signal Quality"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-banner"
+                        },
+                        "height": 8,
+                        "width": 24,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-pl-percent"
+                        },
+                        "height": 8,
+                        "width": 24,
+                        "x": 0,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-pl-worst"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 16
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-pl-logs"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 16
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Packet Loss"
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
+              "layout": {
+                "kind": "GridLayout",
+                "spec": {
+                  "items": [
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-banner"
+                        },
+                        "height": 8,
+                        "width": 24,
+                        "x": 0,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-wh-rate"
+                        },
+                        "height": 8,
+                        "width": 24,
+                        "x": 0,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-wh-alert-type"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 16
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-wh-logs"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 16
+                      }
+                    }
+                  ]
+                }
+              },
+              "title": "Webhook Delivery"
+            }
+          }
+        ]
+      }
+    },
+    "links": [],
+    "liveNow": false,
+    "preload": false,
+    "tags": [
+      "meraki",
+      "gcx",
+      "client-telemetry",
+      "data-logs"
+    ],
+    "timeSettings": {
+      "autoRefresh": "60s",
+      "autoRefreshIntervals": [
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "1h"
+      ],
+      "fiscalYearStartMonth": 0,
+      "from": "now-6h",
+      "hideTimepicker": false,
+      "timezone": "browser",
+      "to": "now"
+    },
+    "title": "Meraki \u2013 Client Telemetry (data-logs)",
+    "variables": [
+      {
+        "kind": "DatasourceVariable",
+        "spec": {
+          "allowCustomValue": true,
+          "current": {
+            "text": "grafanacloud-robknight-logs",
+            "value": "grafanacloud-logs"
+          },
+          "hide": "dontHide",
+          "includeAll": false,
+          "label": "Data Source",
+          "multi": false,
+          "name": "datasource",
+          "options": [],
+          "pluginId": "loki",
+          "refresh": "onDashboardLoad",
+          "regex": "",
+          "skipUrlSync": false
+        }
+      }
+    ]
+  }
+}

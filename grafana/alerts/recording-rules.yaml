@@ -1,0 +1,108 @@
+# Meraki Dashboard Exporter — Grafana Cloud / Mimir ruler recording rules
+#
+# WHAT THIS IS
+# These are NEW derived series, not present anywhere in the Helm chart (the chart only ships
+# alerting rules — see `charts/meraki-dashboard-exporter/templates/prometheusrule.yaml` and the
+# sibling `alerting-rules.yaml` in this folder, which mirrors those). Recording rules pre-compute
+# expressions that are either expensive to run ad hoc (rate/histogram_quantile over cardinality-
+# heavy series) or express something not obvious from the raw metric names alone (a ratio, a
+# per-collector rate). Dashboards and alerts can both query the `meraki:...` names below instead
+# of re-deriving them.
+#
+# JOB LABEL — same caveat as alerting-rules.yaml in this folder: this Grafana Cloud instance
+# writes every exporter metric under THREE distinct job labels (`meraki_dashboard` from the real
+# Prometheus scrape, plus `meraki-dashboard-exporter` / `meraki-dashboard-exporter-devnet` from
+# the exporter's own OTLP self-observability duplicate stream — verified live 2026-07-03). Every
+# expr below filters `job="meraki_dashboard"` to record from the scrape path only; adjust if your
+# topology differs.
+#
+# LOAD / DEPLOY
+# Grafana Cloud Mimir ruler (mimirtool), scoped to a namespace of your choosing:
+#   mimirtool rules load grafana/alerts/recording-rules.yaml --address <mimir-url> \
+#     --id <tenant-id> --key <api-key>
+# Recording rules are a Mimir-ruler / Prometheus-Operator concept — there is no Grafana-managed-
+# alerting equivalent, so `gcx alert rules`/`gcx alert groups` cannot push this file; mimirtool
+# (or the Prometheus Operator `PrometheusRule` CR pattern, if this project ever ships one for
+# recording rules) is the only path. Not deployed as part of this task — see the brief.
+#
+# VERIFICATION NOTES (2026-07-03, live against Grafana Cloud, gcx context m7kni)
+# Every expr below was run live via `gcx metrics query` before being committed here and returned
+# real, sane values (see the brief for sample output) — nothing here is speculative.
+
+groups:
+  - name: meraki-exporter-derived-fleet
+    rules:
+      # Fleet online ratio per org — turns a flat list of meraki_device_up{...}==0/1 series into
+      # one number per org you can put on a stat panel or gate an alert threshold on, instead of
+      # eyeballing a wall of per-device gauges. Verified live: org 1019781 (Knight/homelab) =
+      # 0.947, org 669910444571368738 (DevNet) = 0 at capture time — DevNet reading 0 reflects the
+      # DevNet shard's live device state at verification time, not a query problem; re-check
+      # before wiring an alert threshold off this rule.
+      - record: meraki:device_up:ratio
+        expr: >-
+          sum by (org_id) (meraki_device_up{job="meraki_dashboard"})
+          / count by (org_id) (meraki_device_up{job="meraki_dashboard"})
+
+      # Per-collector error rate — smooths meraki_exporter_collector_errors_total (a Counter) into
+      # a rate so it's plottable directly and comparable across collectors with different
+      # cadences, without every dashboard panel re-typing the same rate() wrapper.
+      - record: meraki:collector_errors:rate5m
+        expr: sum by (collector) (rate(meraki_exporter_collector_errors_total{job="meraki_dashboard"}[5m]))
+
+      # API request rate by HTTP status code — the fastest signal for "the Meraki API started
+      # rejecting us" (429s, 400s) independent of the rate-limiter/scheduler internals covered by
+      # the MerakiAPIRateLimiterThrottlingHigh / MerakiSchedulerThrottleBackoffStorm alerts.
+      - record: meraki:api_requests:rate5m
+        expr: sum by (status_code) (rate(meraki_exporter_api_requests_total{job="meraki_dashboard"}[5m]))
+
+      # Adaptive scheduler budget utilization, passed through as a stable named series rather than
+      # every consumer hardcoding the raw meraki_exporter_scheduler_budget_utilization_ratio name
+      # (already a 0-1 ratio gauge at the source — this is a pure rename/passthrough so
+      # utilization has one canonical query surface alongside the other meraki: recording rules).
+      - record: meraki:scheduler:budget_utilization
+        expr: avg by (instance) (meraki_exporter_scheduler_budget_utilization_ratio{job="meraki_dashboard"})
+
+      # p95 collector duration — histogram_quantile over a _bucket series is exactly the kind of
+      # expensive-per-panel expression recording rules exist for; also useful as a future alert
+      # input ("CollectorSlow") without re-deriving the quantile at alert-eval time.
+      - record: meraki:collector_duration_seconds:p95
+        expr: >-
+          histogram_quantile(0.95, sum by (collector, le)
+            (rate(meraki_exporter_collector_duration_seconds_bucket{job="meraki_dashboard"}[5m])))
+
+  # ---------------------------------------------------------------------------------------------
+  # PLACEHOLDER — client-telemetry data-log → metric recording rules
+  # ---------------------------------------------------------------------------------------------
+  # DO NOT ACTIVATE YET. The OTel structured data-log channel (core/otel_data_logs.py) emits
+  # per-client events like `meraki.wireless.client.signal_quality` and
+  # `meraki.wireless.client.packet_loss` intended to land in Loki so LogQL-based recording rules
+  # (Mimir/Loki ruler `source: logs`) could turn them into aggregate metrics (e.g. p50/p95 signal
+  # quality per SSID) without violating the project's no-per-client-Prometheus-metric rule (see
+  # the repo CLAUDE.md fatal_implications — per-client cardinality routes to data-logs, not
+  # metrics, by design).
+  #
+  # Verified live 2026-07-03 that this pipeline is CURRENTLY BROKEN, not just "not yet built":
+  # `MRClientLogsCollector` is failing every run with
+  # `getOrganizationWirelessDevicesPacketLossByClient - 401 Unauthorized, {'errors': ['Invalid API
+  # key']}` (per repo memory: "data-logs #637 broken"). No `meraki.wireless.client.*` log lines
+  # were found in Loki at verification time — only the collector's own error-log events. Writing
+  # LogQL recording rules against a stream that doesn't exist yet would be unverifiable and
+  # actively misleading, so none are included here.
+  #
+  # ACTIVATE ONCE #637/#638 LAND: confirm the log stream first —
+  #   gcx logs query '{service_name="meraki-dashboard-exporter"} | json | event_name=~"meraki.wireless.client.*"' --since 1h -o raw
+  # — then add a `source: logs` rule group here, e.g.:
+  #
+  # - name: meraki-exporter-client-telemetry-PLACEHOLDER
+  #   rules:
+  #     - record: meraki:client_signal_quality:p50
+  #       expr: >-
+  #         quantile_over_time(0.5,
+  #           {service_name="meraki-dashboard-exporter"}
+  #             | json
+  #             | event_name="meraki.wireless.client.signal_quality"
+  #             | unwrap snr [5m]
+  #         )
+  #
+  # (exact LogQL fields TBD against the real event schema once the pipeline is fixed and emitting
+  # — do not copy the shape above verbatim without re-verifying field names live).
