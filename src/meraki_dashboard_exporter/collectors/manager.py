@@ -6,6 +6,7 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
+from opentelemetry import trace
 from prometheus_client import Counter, Gauge
 
 from ..core.constants.metrics_constants import CollectorMetricName
@@ -654,6 +655,23 @@ class CollectorManager:
             )
         logger.info("Network filter active", resolved_total=total_resolved)
 
+    @staticmethod
+    def _mark_span_error(exc: BaseException) -> None:
+        """Mark the current (``collect.collector``) span ERROR and record ``exc``.
+
+        Used by the swallow-and-continue error paths so the root span reflects a
+        real collector failure (#647) even though the exception is not re-raised.
+
+        Parameters
+        ----------
+        exc : BaseException
+            The exception (or ``TimeoutError``) that the collector run raised.
+
+        """
+        span = trace.get_current_span()
+        span.set_status(trace.Status(trace.StatusCode.ERROR, str(exc)))
+        span.record_exception(exc)
+
     @trace_method("collect.collector")
     async def _run_collector_with_timeout(
         self,
@@ -681,6 +699,10 @@ class CollectorManager:
 
         """
         collector_name = collector.__class__.__name__
+        # #646: label the shared "collect.collector" root span so it is
+        # identifiable (and groupable) without descending into the child
+        # collect.<Collector> span -- all collectors share this literal name.
+        trace.get_current_span().set_attribute("collector.name", collector_name)
         collector_lock = self._collector_locks.get(collector_name)
         if collector_lock is None:
             collector_lock = asyncio.Lock()
@@ -714,7 +736,7 @@ class CollectorManager:
                     await collector.collect()
                 logger.debug("Collector completed successfully", collector=collector_name)
                 success = True
-            except TimeoutError:
+            except TimeoutError as e:
                 logger.error(
                     "Collector timeout",
                     collector=collector_name,
@@ -724,6 +746,10 @@ class CollectorManager:
                     collector=collector_name,
                     error_type="TimeoutError",
                 ).inc()
+                # #647: reflect the failure on the collect.collector root span so
+                # root-level error panels/rates fire. We swallow (don't re-raise)
+                # so other collectors continue, but the span must not read OK.
+                self._mark_span_error(e)
                 # Error logged, but don't raise to allow other collectors to continue
             except asyncio.CancelledError:
                 logger.info("Collector task cancelled", collector=collector_name)
@@ -739,6 +765,9 @@ class CollectorManager:
                     collector=collector_name,
                     error_type=type(e).__name__,
                 ).inc()
+                # #647: mark the root span ERROR even though we swallow the
+                # exception to let other collectors continue.
+                self._mark_span_error(e)
                 # Error logged, but don't raise to allow other collectors to continue
             finally:
                 if force:

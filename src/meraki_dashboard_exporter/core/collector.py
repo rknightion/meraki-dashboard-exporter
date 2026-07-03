@@ -171,6 +171,17 @@ class MetricCollector(ABC):
             span.set_attribute("collector.active", self.is_active)
             span.set_attribute("collector.smoothing_enabled", self.settings.api.smoothing_enabled)
 
+            # #648: attach the owning scheduler endpoint group(s) so self-o11y
+            # traces can correlate observed API latency/cardinality back to the
+            # scheduler's own budget/interval decisions without inferring it from
+            # the HTTP URL path.
+            groups = self.get_endpoint_groups()
+            if groups:
+                span.set_attribute(
+                    "scheduler.endpoint_groups",
+                    ",".join(g.name.value for g in groups),
+                )
+
             try:
                 self._record_smoothing_metrics()
                 await self._collect_impl()

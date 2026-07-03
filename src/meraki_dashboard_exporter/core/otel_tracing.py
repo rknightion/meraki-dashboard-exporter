@@ -421,6 +421,7 @@ def _extract_span_attributes(
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     static_attributes: dict[str, Any] | None,
+    func: Callable[..., Any] | None = None,
 ) -> None:
     """Extract and set span attributes from function arguments.
 
@@ -434,6 +435,11 @@ def _extract_span_attributes(
         Keyword arguments to the function.
     static_attributes : dict | None
         Static attributes to always set.
+    func : Callable | None
+        The decorated function. When provided, positional args are bound to
+        their parameter names via ``inspect.signature`` so ``org_id`` etc. are
+        auto-extracted even when passed positionally (#645) -- every real call
+        site passes them positionally, so kwargs-only extraction never fired.
 
     """
     # Add class name if this is a method call
@@ -445,15 +451,48 @@ def _extract_span_attributes(
         for key, value in static_attributes.items():
             span.set_attribute(key, value)
 
-    # Auto-extract common kwargs as span attributes
+    # Build the full parameter map: keyword args, plus positional args bound to
+    # their parameter names (so positionally-passed org_id/network_id/... are
+    # seen, #645). bind_partial never raises on missing/extra args; if binding
+    # fails for any reason we fall back to kwargs-only.
+    params: dict[str, Any] = dict(kwargs)
+    if func is not None:
+        try:
+            bound = inspect.signature(func).bind_partial(*args, **kwargs)
+            params.update(bound.arguments)
+        except TypeError:
+            pass
+
+    # Auto-extract common args as span attributes
     for attr_name in _AUTO_EXTRACT_ATTRS:
-        if attr_name in kwargs:
-            value = kwargs[attr_name]
+        if attr_name in params:
+            value = params[attr_name]
             if value is not None:
                 # Convert to dot notation for OpenTelemetry convention
                 # e.g., org_id -> org.id, network_name -> network.name
                 otel_attr_name = attr_name.replace("_", ".")
                 span.set_attribute(otel_attr_name, str(value))
+
+
+def _set_ok_unless_error(span: Any) -> None:
+    """Mark the span OK unless its body already set an ERROR status (#647).
+
+    ``CollectorManager._run_collector_with_timeout`` deliberately swallows a
+    collector's exception (so the other collectors keep running) but marks its
+    own ``collect.collector`` span ERROR first. Because that method then returns
+    normally, the wrapper would otherwise overwrite ERROR back to OK -- so
+    root-level error panels read zero during real failures. Skip the OK set when
+    the span is already ERROR.
+
+    Parameters
+    ----------
+    span : Any
+        The active span for the wrapped call.
+
+    """
+    if span.is_recording() and span.status.status_code is trace.StatusCode.ERROR:
+        return
+    span.set_status(trace.Status(trace.StatusCode.OK))
 
 
 # Type variables for preserving function signatures
@@ -511,10 +550,10 @@ def trace_method(
                 with tracer.start_as_current_span(span_name) as span:
                     try:
                         # Extract and set span attributes
-                        _extract_span_attributes(span, args, kwargs, attributes)
+                        _extract_span_attributes(span, args, kwargs, attributes, func)
 
                         result = await func(*args, **kwargs)
-                        span.set_status(trace.Status(trace.StatusCode.OK))
+                        _set_ok_unless_error(span)
                         return result
                     except Exception as e:
                         span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
@@ -533,10 +572,10 @@ def trace_method(
                 with tracer.start_as_current_span(span_name) as span:
                     try:
                         # Extract and set span attributes
-                        _extract_span_attributes(span, args, kwargs, attributes)
+                        _extract_span_attributes(span, args, kwargs, attributes, func)
 
                         result = func(*args, **kwargs)
-                        span.set_status(trace.Status(trace.StatusCode.OK))
+                        _set_ok_unless_error(span)
                         return result
                     except Exception as e:
                         span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
