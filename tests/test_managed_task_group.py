@@ -614,6 +614,103 @@ class TestFailureAccounting:
         assert group._cancelled_count == 1
 
 
+class TestManagedTaskGroupRaiseOnAllFailed:
+    """Test opt-in raise_on_all_failed propagation (#510).
+
+    The DEFAULT behavior (log-only, never re-raise) MUST stay unchanged; dozens
+    of existing callers and all #509 coordinators depend on it. Only when a
+    caller opts in via ``raise_on_all_failed=True`` does ``__aexit__`` raise when
+    ALL tasks failed.
+    """
+
+    async def test_default_all_failed_does_not_raise(self) -> None:
+        """DEFAULT: all-failed must still swallow+log, never re-raise."""
+
+        async def failing_task() -> None:
+            raise ValueError("boom")
+
+        # Must NOT raise (default flag is False).
+        async with ManagedTaskGroup("test") as group:
+            await group.create_task(failing_task())
+            await group.create_task(failing_task())
+
+        assert group.failed_count == 2
+        assert group.succeeded_count == 0
+
+    async def test_flag_all_failed_raises(self) -> None:
+        """With the flag, all-failed raises an ExceptionGroup of child errors."""
+
+        async def failing_task() -> None:
+            raise ValueError("boom")
+
+        group = ManagedTaskGroup("test", raise_on_all_failed=True)
+        with pytest.raises(ExceptionGroup) as exc_info:
+            async with group:
+                await group.create_task(failing_task())
+                await group.create_task(failing_task())
+                await group.create_task(failing_task())
+
+        assert group.failed_count == 3
+        assert group.succeeded_count == 0
+        # All three child exceptions are preserved in the group.
+        assert len(exc_info.value.exceptions) == 3
+        assert all(isinstance(e, ValueError) for e in exc_info.value.exceptions)
+
+    async def test_flag_partial_failure_does_not_raise(self) -> None:
+        """With the flag, a partial failure (>=1 success) must NOT raise."""
+
+        async def failing_task() -> None:
+            await asyncio.sleep(0.01)
+            raise ValueError("boom")
+
+        async def success_task() -> None:
+            await asyncio.sleep(0.01)
+
+        # Must NOT raise - at least one task succeeded.
+        async with ManagedTaskGroup("test", raise_on_all_failed=True) as group:
+            await group.create_task(failing_task())
+            await group.create_task(success_task())
+
+        assert group.failed_count == 1
+        assert group.succeeded_count == 1
+
+    async def test_flag_all_succeed_does_not_raise(self) -> None:
+        """With the flag, all-success must NOT raise."""
+
+        async def success_task() -> None:
+            await asyncio.sleep(0.01)
+
+        async with ManagedTaskGroup("test", raise_on_all_failed=True) as group:
+            await group.create_task(success_task())
+            await group.create_task(success_task())
+
+        assert group.failed_count == 0
+        assert group.succeeded_count == 2
+
+    async def test_flag_empty_group_does_not_raise(self) -> None:
+        """With the flag, a group with no tasks must NOT raise."""
+
+        async with ManagedTaskGroup("test", raise_on_all_failed=True) as group:
+            pass
+
+        assert group.failed_count == 0
+        assert group.succeeded_count == 0
+
+    async def test_flag_body_exception_propagates_unmasked(self) -> None:
+        """A body exception propagates as-is; the flag must not mask it."""
+
+        async def long_task() -> None:
+            await asyncio.sleep(1)
+
+        # The body's ValueError must propagate - not be replaced by an
+        # ExceptionGroup - even with the flag set.
+        with pytest.raises(ValueError, match="body error"):
+            async with ManagedTaskGroup("test", raise_on_all_failed=True) as group:
+                await group.create_task(long_task())
+                await asyncio.sleep(0.01)
+                raise ValueError("body error")
+
+
 class TestManagedTaskGroupRealWorldScenarios:
     """Test real-world usage scenarios."""
 

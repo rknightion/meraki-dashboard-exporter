@@ -95,6 +95,7 @@ class ManagedTaskGroup:
         self,
         name: str = "task_group",
         max_concurrency: int | None = None,
+        raise_on_all_failed: bool = False,
     ) -> None:
         """Initialize the task group.
 
@@ -105,12 +106,22 @@ class ManagedTaskGroup:
         max_concurrency : int | None
             Maximum number of concurrent tasks. If None, unlimited concurrency.
             Used for bounded pipeline execution and backpressure management.
+        raise_on_all_failed : bool
+            Opt-in failure propagation. When ``False`` (the default, unchanged
+            historic behavior) task failures are only logged and never re-raised
+            from ``__aexit__`` — many callers and the #509 coordinators rely on
+            this. When ``True``, and the context body itself did not raise,
+            ``__aexit__`` raises an :class:`ExceptionGroup` of the child
+            exceptions if *all* tasks failed (``failed_count > 0`` and
+            ``succeeded_count == 0``). A partial failure (at least one success)
+            still does not raise.
 
         """
         self.name = name
         self.tasks: set[Task[Any]] = set()
         self._closed = False
         self.max_concurrency = max_concurrency
+        self._raise_on_all_failed = raise_on_all_failed
         self._semaphore: Semaphore | None = (
             asyncio.Semaphore(max_concurrency) if max_concurrency else None
         )
@@ -184,6 +195,24 @@ class ManagedTaskGroup:
                 error_type=type(task_exc).__name__,
             )
 
+        # Opt-in propagation (#510): if the caller requested it AND the context
+        # body itself did not raise AND every non-cancelled task failed, prepare
+        # to re-raise the child exceptions after span cleanup. The default
+        # (raise_on_all_failed=False) never sets this, preserving the historic
+        # log-only behavior that existing callers and the #509 coordinators rely
+        # on. A partial failure (succeeded_count > 0) never propagates.
+        all_failed_error: BaseException | None = None
+        if (
+            self._raise_on_all_failed
+            and exc_type is None
+            and self._task_exceptions
+            and self.succeeded_count == 0
+        ):
+            all_failed_error = BaseExceptionGroup(
+                f"All {self.failed_count} tasks failed in group {self.name}",
+                list(self._task_exceptions),
+            )
+
         # End the tracing span with proper status
         if self._span is not None:
             # Set span attributes with final statistics
@@ -196,6 +225,9 @@ class ManagedTaskGroup:
                 )
                 if exc_val:
                     self._span.record_exception(exc_val)
+            elif all_failed_error is not None:
+                self._span.set_status(trace.Status(trace.StatusCode.ERROR, str(all_failed_error)))
+                self._span.record_exception(all_failed_error)
             else:
                 self._span.set_status(trace.Status(trace.StatusCode.OK))
 
@@ -205,6 +237,11 @@ class ManagedTaskGroup:
 
             # End the span
             self._span.end()
+
+        # Raise the all-failed group last, after the span is cleaned up, so an
+        # opted-in caller observes the failure while nothing is leaked.
+        if all_failed_error is not None:
+            raise all_failed_error
 
     async def create_task(
         self,
