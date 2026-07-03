@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 249
-- **Gauges:** 227
+- **Total metrics:** 251
+- **Gauges:** 229
 - **Counters:** 18
 - **Histograms:** 3
 - **Info metrics:** 1
@@ -376,6 +376,13 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_exporter_collection_utilization_ratio` | gauge | `collector`, `tier` | Fraction of the tier interval consumed by actual collection (0=instant, 1=full interval) |  |
 | `meraki_exporter_collections_active` | gauge | `collector`, `tier` | Number of parallel organization collections currently active |  |
 | `meraki_exporter_collector_failure_streak` | gauge | `collector`, `tier` | Consecutive failures for each collector since last success |  |
+
+### ExporterApp
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_exporter_cpu_usage_percent` | gauge | — | CPU utilization percent of the exporter process itself, sampled periodically (#277). |  |
+| `meraki_exporter_memory_usage_bytes` | gauge | — | Resident memory (RSS) used by the exporter process itself, in bytes (#277). |  |
 
 ### MetricCollector
 
