@@ -6,8 +6,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 ## Summary
 
 - **Total metrics:** 249
-- **Gauges:** 228
-- **Counters:** 17
+- **Gauges:** 227
+- **Counters:** 18
 - **Histograms:** 3
 - **Info metrics:** 1
 
@@ -392,7 +392,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_exporter_cardinality_limit_reached` | gauge | `collector` | 1 if cardinality shedding is active for this collector, 0 otherwise |  |
+| `meraki_exporter_cardinality_limit_reached_total` | counter | `metric` | Number of times a metric family exceeded its cardinality budget (cardinality.max_series_per_family). With action=warn (default) series are kept; with action=drop the oldest series in the family are shed. |  |
 | `meraki_exporter_collection_errors_expired_total` | counter | `collector`, `tier` | Total number of metrics expired due to TTL |  |
 | `meraki_exporter_expiration_tracked_metrics` | gauge | `collector` | Number of metrics currently tracked for expiration |  |
 

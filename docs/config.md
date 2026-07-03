@@ -54,7 +54,7 @@ Configuration for Meraki API interactions
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_API__MAX_RETRIES` | `int` | `3` | Maximum number of retries for API requests (min: 0, max: 10) |
-| `MERAKI_EXPORTER_API__TIMEOUT` | `int` | `30` | API request timeout in seconds (min: 10, max: 300) |
+| `MERAKI_EXPORTER_API__TIMEOUT` | `int` | `30` | Per-request API timeout in seconds (SDK single_request_timeout). Note this applies to EACH page request, so a total_pages='all' bulk fetch may make many such requests; the overall fetch is additionally bounded by per_fetch_deadline_seconds. Reviewed for large-org bulk fetches (#556): kept at 30s (raise only if large-org page latencies are observed to exceed it). (min: 10, max: 300) |
 | `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT` | `int` | `5` | Maximum concurrent API requests (global fallback) (min: 1, max: 20) |
 | `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_FAST` | `int` | `5` | Maximum concurrent API requests for FAST tier collectors (min: 1, max: 20) |
 | `MERAKI_EXPORTER_API__CONCURRENCY_LIMIT_MEDIUM` | `int` | `3` | Maximum concurrent API requests for MEDIUM tier collectors (min: 1, max: 20) |
@@ -72,7 +72,7 @@ Configuration for Meraki API interactions
 | `MERAKI_EXPORTER_API__RATE_LIMIT_ENABLED` | `bool` | `True` | Enable client-side rate limiting to smooth API calls |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_REQUESTS_PER_SECOND` | `float` | `10.0` | Target requests per second per organization (min: 1.0, max: 50.0) |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_BURST` | `int` | `20` | Token bucket burst capacity per organization (min: 1, max: 100) |
-| `MERAKI_EXPORTER_API__RATE_LIMIT_SHARED_FRACTION` | `float` | `1.0` | Fraction of org call budget reserved for this exporter (min: 0.1, max: 1.0) |
+| `MERAKI_EXPORTER_API__RATE_LIMIT_SHARED_FRACTION` | `float` | `0.8` | Fraction of the org API call budget this exporter is allowed to consume. Defaults to 0.8 so ~20% headroom is left for other consumers of the same org budget (dashboards, other tools, humans); set to 1.0 to claim the whole budget (#550). (min: 0.1, max: 1.0) |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_JITTER_RATIO` | `float` | `0.1` | Jitter ratio applied to client-side rate limiter waits (min: 0.0, max: 0.5) |
 | `MERAKI_EXPORTER_API__SMOOTHING_ENABLED` | `bool` | `True` | Spread batch work across the collection interval |
 | `MERAKI_EXPORTER_API__SMOOTHING_WINDOW_RATIO` | `float` | `0.8` | Fraction of the collection interval used for smoothing (min: 0.1, max: 1.0) |
@@ -84,6 +84,9 @@ Configuration for Meraki API interactions
 | `MERAKI_EXPORTER_API__CLIENT_APP_USAGE_INTERVAL` | `int` | `600` | Minimum seconds between client application usage refreshes (min: 0, max: 3600) |
 | `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_INTERVAL` | `int` | `600` | Minimum seconds between per-client wireless signal-quality refreshes (min: 0, max: 3600) |
 | `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_MAX_CLIENTS` | `int` | `200` | Maximum wireless clients queried for signal quality per network per cycle (0 disables the cap). Bounds the sequential per-client API fan-out. (min: 0, max: 5000) |
+| `MERAKI_EXPORTER_API__RETRY_AFTER_MAX_SECONDS` | `int` | `60` | Upper bound (seconds) honoured for a server-sent Retry-After header when backing off a throttled (429/503) request. Caps pathological Retry-After values so a single throttled request cannot stall a collection cycle indefinitely. (min: 1, max: 3600) |
+| `MERAKI_EXPORTER_API__EXECUTOR_WORKERS` | `int` | `10` | Size of the thread pool used to run the synchronous Meraki SDK off the event loop (the asyncio.to_thread executor). Bounds the number of concurrent blocking SDK calls independently of the per-tier API concurrency limits. (min: 1, max: 100) |
+| `MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS` | `int` | `120` | Wall-clock deadline (seconds) for a single logical fetch, including all paginated page requests made under total_pages='all'. Sits between the SDK per-request timeout (see 'timeout') and the per-collector timeout so a slow bulk fetch fails fast instead of consuming the whole collector budget. (min: 1, max: 600) |
 
 ## Update Intervals
 
