@@ -39,7 +39,9 @@ rollout never briefly runs two pods. Optional resources, all off by default: `in
 (webhook TLS termination, see below), `networkPolicy.enabled` (locks egress to DNS + Meraki API 443
 + the OTLP port), `serviceMonitor.enabled` (Prometheus Operator), and `autoscaling.enabled` (an HPA
 that manages the single pod; `maxReplicas` is capped at 1). Read the `resources:` sizing guidance in
-`values.yaml` before deploying at scale — the 512Mi default is sized for small orgs only.
+`values.yaml` before deploying at scale — the 512Mi default is sized for small orgs only. See the
+[Scaling Guide](scaling-guide.md) for the API-budget sizing formula, per-scale resource tiers, and
+shard-by-org / HA recipes.
 
 ### Shutdown behaviour and grace period
 
