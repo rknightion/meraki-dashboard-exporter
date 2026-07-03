@@ -31,7 +31,7 @@ workflows") — don't recreate them from memory of an earlier version of this do
   NOT blanket-applied to every job in a workflow, only to specific jobs that run
   untrusted/third-party steps. In `ci.yml` it's on `test` and `docker-build-test` but deliberately
   absent from `slow-tests` (schedule-only, not part of the `ci-success` required-check surface); it
-  is also present in `api-drift.yml`, `release-please-lock.yml`, and `scorecard.yml`. Audit mode logs egress
+  is also present in `api-drift.yml` and `release-please-lock.yml` (and, for Scorecard, inside the shared `rknightion/.github` reusable rather than the local wrapper). Audit mode logs egress
   without blocking — it is not currently a hard allowlist gate. When adding a new job that runs
   third-party actions, add `harden-runner` to that job specifically, don't assume workflow-level
   coverage.
@@ -80,8 +80,9 @@ workflows") — don't recreate them from memory of an earlier version of this do
 - `codeql.yml` / `zizmor.yml` / `actionlint.yml` / `dependency-review.yml` / `docker-security.yml` -
   thin wrappers around `rknightion/.github` shared reusables (see pinning note above); each grants
   only the specific `permissions:` its job needs, workflow-level `permissions: {}`.
-- `scorecard.yml` - OSSF Scorecard, self-contained (not a shared reusable) — the standard
-  `ossf/scorecard-action` template with `harden-runner`, uploads SARIF to code scanning.
+- `scorecard.yml` - OSSF Scorecard, thin wrapper around the `rknightion/.github` shared
+  `scorecard.yml` reusable (v1.4.0+; `push` + weekly `schedule`). Uploads SARIF to code scanning
+  and publishes to the OpenSSF API for the scorecard.dev badge. No PAT (fleet uses Rulesets).
 - `release-please-lock.yml` - regenerates `uv.lock` on the release-please PR (runs under the `RELEASE_PLEASE_TOKEN` PAT so `uv sync --locked` passes on the release PR); idempotent.
 - `trigger-docs-sync.yml` - cross-repo `repository_dispatch` on docs-path changes.
 
@@ -97,8 +98,7 @@ workflows") — don't recreate them from memory of an earlier version of this do
 ## Adding a new workflow
 1. Pin every third-party `uses:` to a full commit SHA + `# vX.Y.Z` comment (match existing style
    exactly so Renovate's `github-actions` manager picks it up).
-2. Set workflow-level `permissions: {}` (or omit only if it must default to read-all, e.g.
-   `scorecard.yml`'s documented exception) and grant narrower `permissions:` per job.
+2. Set workflow-level `permissions: {}` and grant narrower `permissions:` per job.
 3. If it should block merges, add its job name to `ci.yml`'s `ci-success` `needs:` list.
 4. If it wraps `rknightion/.github`, use the same pinned SHA as the other shared-reusable
    workflows in this repo (currently `f31690684f4292d1fe8e528618f7c8306fe27d9a # v1.3.1`) —
