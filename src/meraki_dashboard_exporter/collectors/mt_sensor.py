@@ -35,13 +35,16 @@ class MTSensorCollector(MetricCollector):
     # #617 §2 (FAST heartbeat). One group spans both org-wide fetches this
     # collector issues per cycle: the latest sensor readings and the
     # sensor-to-gateway connections. cost_fn: 1 page for gateway connections
-    # plus pages(MT, 100) for readings (perPage ⚠ Phase-6-verify).
+    # plus pages(MT, 1000) for readings. getOrganizationSensorReadingsLatest
+    # perPage is 3-1000, default 1000 (the fetcher pins perPage=1000) —
+    # live-verified 2026-07-03 (org 1019781, 16 sensors → 1 page; #630). The
+    # earlier "100" term over-estimated readings pages ~10x.
     endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = (
         EndpointGroup(
             name=EndpointGroupName.MT_SENSOR_READINGS,
             priority=2,
             floor_seconds=60,
-            cost_fn=lambda shape: 2 + pages(shape.sensor_count, 100) - 1,
+            cost_fn=lambda shape: 1 + pages(shape.sensor_count, 1000),
             enabled_fn=lambda shape: shape.sensor_count > 0,
         ),
     )

@@ -322,6 +322,11 @@ class MTCollector(BaseDeviceCollector):
             self.api.sensor.getOrganizationSensorReadingsLatest,
             org_id,
             total_pages="all",
+            # perPage 3-1000, default 1000 — pin the max explicitly so the
+            # per-cycle page count is deterministic and matches the group
+            # cost_fn's pages(sensor_count, 1000) term (live-verified 2026-07-03,
+            # org 1019781; #630).
+            perPage=1000,
         )
         return cast(
             list[dict[str, Any]],

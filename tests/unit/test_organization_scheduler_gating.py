@@ -26,7 +26,7 @@ _EXPECTED = {
     EndpointGroupName.ORG_CLIENT_OVERVIEW: (3, 300.0),
     EndpointGroupName.ORG_DEVICE_MODEL_OVERVIEW: (4, 900.0),
     EndpointGroupName.ORG_PACKET_CAPTURES: (4, 900.0),
-    EndpointGroupName.ORG_APP_USAGE: (4, 900.0),
+    EndpointGroupName.ORG_APP_USAGE: (4, 3600.0),  # #630: daily-summary window, was 900
     EndpointGroupName.ORG_FIRMWARE: (4, 900.0),
     EndpointGroupName.ORG_LICENSES: (4, 1800.0),
     # Phase 4 (#618) additions: #297/#298/#299/#300/#611.

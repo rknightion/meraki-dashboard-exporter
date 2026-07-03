@@ -442,7 +442,7 @@ class TestMTCollector(BaseCollectorTest):
         await mt_collector._collect_org_sensors("123456", "Test Org")
 
         mt_collector.api.sensor.getOrganizationSensorReadingsLatest.assert_called_once_with(
-            "123456", total_pages="all"
+            "123456", total_pages="all", perPage=1000
         )
 
     # --- #553: MT sensor readings fetch is rate-limited and drops the all-serials param ---
@@ -454,7 +454,7 @@ class TestMTCollector(BaseCollectorTest):
         await mt_collector._fetch_sensor_readings("123456")
 
         mt_collector.api.sensor.getOrganizationSensorReadingsLatest.assert_called_once_with(
-            "123456", total_pages="all"
+            "123456", total_pages="all", perPage=1000
         )
         call_kwargs = mt_collector.api.sensor.getOrganizationSensorReadingsLatest.call_args.kwargs
         assert "serials" not in call_kwargs
@@ -528,7 +528,7 @@ class TestMTCollector(BaseCollectorTest):
         # No serials param is sent -- the org-wide endpoint returns everything;
         # filtering happens locally via device_map when readings are processed.
         mt_collector.api.sensor.getOrganizationSensorReadingsLatest.assert_called_once_with(
-            "123456", total_pages="all"
+            "123456", total_pages="all", perPage=1000
         )
 
     async def test_collect_org_sensors_uses_inventory_device_cache(self, mt_collector, test_device):
@@ -556,9 +556,7 @@ class TestMTCollector(BaseCollectorTest):
         await mt_collector.collect_sensor_metrics(org_id="org1", org_name="Provided Org")
 
         mt_collector._get_org_name.assert_not_called()
-        mt_collector._collect_org_sensors.assert_awaited_once_with(
-            "org1", "Provided Org", due=True
-        )
+        mt_collector._collect_org_sensors.assert_awaited_once_with("org1", "Provided Org", due=True)
 
     async def test_collect_sensor_metrics_uses_inventory_org_list(self, mt_collector):
         """F-092: org list comes from the inventory cache, not getOrganizations, when available."""

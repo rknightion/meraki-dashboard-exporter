@@ -10,15 +10,17 @@ therefore org-scoped: the coordinator calls :meth:`collect_org` once per org,
 gated on the ``nh_channel_utilization`` endpoint group, rather than invoking a
 per-network ``collect`` in the fan-out bundle.
 
-⚠ Phase-6 LIVE VERIFICATION (do before freezing): the ``byBand`` response shape
-here is coded against the OpenAPI spec. Unverified on the wire:
-- the exact ``band`` string values (spec example shows ``"5"``; assumed
-  ``"2.4"``/``"5"``/``"6"``);
-- the ``wifi`` / ``nonWifi`` / ``total`` sub-object camelCase key names and the
-  ``percentage`` field (the legacy per-network endpoint used snake_case
-  ``non_wifi`` — the org-wide one is spec'd camelCase ``nonWifi``);
-- 6GHz handling: there is no 6GHz gauge today, so ``band == "6"`` rows are
-  currently dropped (whether to add a 6GHz series is a Phase-6 decision).
+LIVE-VERIFIED 2026-07-03 (org 1019781, MR56; #630). The ``byBand`` response
+shape is confirmed on the wire:
+- ``band`` is the numeric-GHz string: ``"2.4"`` and ``"5"`` observed live; a
+  6GHz (WiFi-6E) radio therefore reports ``"6"`` (no 6E hardware in the test
+  orgs to observe it directly, but the band-string format is now proven);
+- the ``wifi`` / ``nonWifi`` / ``total`` sub-objects are camelCase, each with a
+  ``percentage`` field — confirmed live (the org-wide endpoint is camelCase
+  ``nonWifi``, unlike the legacy per-network snake_case ``non_wifi``);
+- 6GHz handling: ``band == "6"`` rows are now EMITTED (#630) via the dedicated
+  6GHz gauges rather than dropped, so WiFi-6E deployments report channel
+  utilization on all three bands.
 """
 
 from __future__ import annotations
@@ -39,12 +41,14 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# ⚠ Phase-6: exact `band` string values on the wire.
+# `band` string values on the wire (numeric GHz). "2.4"/"5" live-verified
+# 2026-07-03 (org 1019781, MR56); "6" is the WiFi-6E value (#630).
 _BAND_2_4 = "2.4"
 _BAND_5 = "5"
+_BAND_6 = "6"
 
-# (metric utilization_type label value, API sub-object key). ⚠ Phase-6: the
-# `nonWifi` camelCase key + `percentage` field.
+# (metric utilization_type label value, API sub-object key). `nonWifi` camelCase
+# key + `percentage` field live-verified 2026-07-03 (#630).
 _UTIL_KEYS: tuple[tuple[str, str], ...] = (
     ("total", "total"),
     ("wifi", "wifi"),
@@ -146,16 +150,18 @@ class RFHealthCollector(BaseNetworkHealthCollector):
         )
 
     @staticmethod
-    def _gauge_for_band(band: str, gauge_2_4: str, gauge_5: str) -> str | None:
+    def _gauge_for_band(band: str, gauge_2_4: str, gauge_5: str, gauge_6: str) -> str | None:
         """Return the gauge attr name for a band string, or None to drop it.
 
-        6GHz (``band == "6"``) and unknown bands are dropped — there is no 6GHz
-        gauge today (⚠ Phase-6).
+        2.4/5/6 GHz all map to a dedicated gauge (#630 added 6GHz); only
+        genuinely unknown band strings are dropped.
         """
         if band == _BAND_2_4:
             return gauge_2_4
         if band == _BAND_5:
             return gauge_5
+        if band == _BAND_6:
+            return gauge_6
         return None
 
     def _emit_bands(
@@ -164,12 +170,13 @@ class RFHealthCollector(BaseNetworkHealthCollector):
         labels_base: dict[str, str],
         gauge_2_4: str,
         gauge_5: str,
+        gauge_6: str,
         ttl_seconds: float | None,
     ) -> None:
         """Emit total/wifi/non_wifi utilization for each band in a ``byBand`` list."""
         for band_entry in by_band or []:
             band = str(band_entry.get("band", ""))
-            gauge = self._gauge_for_band(band, gauge_2_4, gauge_5)
+            gauge = self._gauge_for_band(band, gauge_2_4, gauge_5, gauge_6)
             if gauge is None:
                 continue
             for util_label, api_key in _UTIL_KEYS:
@@ -180,9 +187,7 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                 labels = {**labels_base, "utilization_type": util_label}
                 self._set_metric_value(gauge, labels, pct, ttl_seconds=ttl_seconds)
 
-    async def collect_org(
-        self, org_id: str, org_name: str, networks: list[dict[str, Any]]
-    ) -> bool:
+    async def collect_org(self, org_id: str, org_name: str, networks: list[dict[str, Any]]) -> bool:
         """Collect org-wide channel utilization and emit per-AP + per-network gauges.
 
         Called once per org per cycle by the coordinator (gated on
@@ -242,6 +247,7 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                     base_labels,
                     "_ap_utilization_2_4ghz",
                     "_ap_utilization_5ghz",
+                    "_ap_utilization_6ghz",
                     ttl_seconds,
                 )
 
@@ -257,6 +263,7 @@ class RFHealthCollector(BaseNetworkHealthCollector):
                     base_labels,
                     "_network_utilization_2_4ghz",
                     "_network_utilization_5ghz",
+                    "_network_utilization_6ghz",
                     ttl_seconds,
                 )
 

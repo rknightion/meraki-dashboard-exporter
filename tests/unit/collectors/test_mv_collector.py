@@ -168,11 +168,12 @@ class TestMVCollector:
     ) -> None:
         """Test analytics zones count is emitted."""
         mock_api.camera.getDeviceCameraAnalyticsZones = self._zones(
-            # Real getDeviceCameraAnalyticsZones responses key the zone object
-            # on `id`, not `zoneId` (verified against the vendored OpenAPI
-            # spec) - see F-024.
-            {"id": "0", "label": "Entrance", "type": ["person"]},
-            {"id": "1", "label": "Lobby", "type": ["person"]},
+            # Live getDeviceCameraAnalyticsZones responses key the zone object on
+            # `zoneId` (live-verified 2026-07-03, MV12W; #630) — the earlier
+            # F-024 "keyed on id" note was wrong (the vendored spec schema is
+            # empty). The model still accepts `id` as a fallback alias.
+            {"zoneId": "0", "label": "Entrance", "type": ["person"]},
+            {"zoneId": "1", "label": "Lobby", "type": ["person"]},
         )
         mock_api.camera.getDeviceCameraAnalyticsRecent = self._recent()
         mock_api.camera.getDeviceCameraQualityAndRetention = self._quality()
@@ -207,9 +208,11 @@ class TestMVCollector:
         ``averageCount`` keyed on ``zoneId``. Labels remain id-only (#534, D2):
         zone_name joins via meraki_mv_zone_info on (serial, zone_id).
         """
+        # Zones keyed on `zoneId` (live shape, #630); the join to people-count
+        # is on this same field coming from getDeviceCameraAnalyticsRecent.
         mock_api.camera.getDeviceCameraAnalyticsZones = self._zones(
-            {"id": "0", "label": "Entrance", "type": ["person"]},
-            {"id": "1", "label": "Lobby", "type": ["person"]},
+            {"zoneId": "0", "label": "Entrance", "type": ["person"]},
+            {"zoneId": "1", "label": "Lobby", "type": ["person"]},
         )
         mock_api.camera.getDeviceCameraAnalyticsRecent = self._recent(
             {"zoneId": "0", "entrances": 9, "averageCount": 3},
@@ -254,10 +257,16 @@ class TestMVCollector:
         mock_parent: MagicMock,
         device: dict,
     ) -> None:
-        """meraki_mv_zone_info (NI-3, issue #534) emits one series per zone."""
+        """meraki_mv_zone_info (NI-3, issue #534) emits one series per zone.
+
+        Zones are keyed on the live ``zoneId`` field (#630); this is the
+        regression guard for the broken zone_name join — with the pre-#630
+        ``zone.id`` read this same payload mapped every zone to ``"None"`` and
+        the assertions below would fail.
+        """
         mock_api.camera.getDeviceCameraAnalyticsZones = self._zones(
-            {"id": "0", "label": "Entrance", "type": ["person"]},
-            {"id": "1", "label": "Lobby", "type": ["person"]},
+            {"zoneId": "0", "label": "Entrance", "type": ["person"]},
+            {"zoneId": "1", "label": "Lobby", "type": ["person"]},
         )
         mock_api.camera.getDeviceCameraAnalyticsRecent = self._recent()
         mock_api.camera.getDeviceCameraQualityAndRetention = self._quality()

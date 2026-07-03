@@ -99,8 +99,13 @@ class OrganizationCollector(MetricCollector):
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_APP_USAGE,
+            # floor: 3600 — getOrganizationSummaryTopApplicationsCategoriesByUsage
+            # is a daily-summary endpoint (min timespan 25 min, default 1 day; the
+            # fetcher passes no timespan so it gets the 1-day window). A sub-hour
+            # floor just re-reads a slowly-shifting daily aggregate. spec-verified
+            # 2026-07-03 (#630) — was 900.
             priority=4,
-            floor_seconds=900,
+            floor_seconds=3600,
             cost_fn=lambda shape: 1,
         ),
         EndpointGroup(

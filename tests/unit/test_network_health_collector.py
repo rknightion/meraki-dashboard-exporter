@@ -184,8 +184,9 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             ),
         ]
 
-        # Org-wide byDevice response (#271). ⚠ Phase-6: band string values +
-        # wifi/nonWifi/total.percentage camelCase key names.
+        # Org-wide byDevice response (#271). band string values +
+        # wifi/nonWifi/total.percentage camelCase keys live-verified 2026-07-03
+        # (#630); the "6" band exercises WiFi-6E emission (was dropped pre-#630).
         by_device = [
             {
                 "serial": "Q2KD-XXXX",
@@ -194,6 +195,7 @@ class TestNetworkHealthCollector(BaseCollectorTest):
                 "byBand": [
                     _band("2.4", total=45, wifi=30, non_wifi=15),
                     _band("5", total=25, wifi=20, non_wifi=5),
+                    _band("6", total=12, wifi=8, non_wifi=4),
                 ],
             },
             {
@@ -212,6 +214,7 @@ class TestNetworkHealthCollector(BaseCollectorTest):
                 "byBand": [
                     _band("2.4", total=50, wifi=35, non_wifi=15),
                     _band("5", total=30, wifi=25, non_wifi=5),
+                    _band("6", total=10, wifi=7, non_wifi=3),
                 ],
             }
         ]
@@ -283,6 +286,17 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             network_id=network["id"],
             utilization_type="non_wifi",
         )
+        # 6GHz (WiFi-6E) is now emitted rather than dropped (#630).
+        metrics.assert_gauge_value(
+            "meraki_ap_channel_utilization_6ghz_percent",
+            12,
+            org_id=org["id"],
+            serial="Q2KD-XXXX",
+            model="MR36",
+            device_type="MR",
+            network_id=network["id"],
+            utilization_type="total",
+        )
 
         # Per-network averages come straight from the byNetwork endpoint.
         metrics.assert_gauge_value(
@@ -298,6 +312,13 @@ class TestNetworkHealthCollector(BaseCollectorTest):
             org_id=org["id"],
             network_id=network["id"],
             utilization_type="wifi",
+        )
+        metrics.assert_gauge_value(
+            "meraki_network_channel_utilization_6ghz_percent",
+            10,
+            org_id=org["id"],
+            network_id=network["id"],
+            utilization_type="total",
         )
 
     async def test_channel_utilization_filters_out_of_scope_networks(

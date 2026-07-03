@@ -463,7 +463,9 @@ class MVCollector(BaseDeviceCollector):
             ttl_seconds=self._analytics_ttl_seconds(),
         )
 
-        zone_map = {str(zone.id): (zone.label or "") for zone in zone_models}
+        # zone.zoneId is the live wire field (#630); str() so it matches the
+        # zone_id label built from getDeviceCameraAnalyticsRecent's zoneId.
+        zone_map = {str(zone.zoneId): (zone.label or "") for zone in zone_models}
         self._emit_zone_info(device, org_id, org_name, zone_map)
         return zone_map
 

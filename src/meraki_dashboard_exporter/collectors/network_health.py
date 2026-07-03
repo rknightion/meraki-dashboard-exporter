@@ -65,6 +65,13 @@ class NetworkHealthCollector(MetricCollector):
     # (perf/health). #541 folds the windowed floors (connection-stats 1800s;
     # failed-connections / latency / air-marshal 3600s). Channel-utilization is
     # the org-wide #271 rewrite, costed as two paginated org endpoints.
+    #
+    # #630 (live-verified 2026-07-03, org 1019781): each windowed group's floor
+    # equals the timespan its fetcher passes (connection-stats 1800; failed-conn
+    # / latency / air-marshal 3600), so successive polls read non-overlapping
+    # windows — polling faster would just re-aggregate an overlapping window. The
+    # spec caps these timespans at 7 days (air-marshal 31 days), so the floors
+    # are well within legal range.
     endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = (
         EndpointGroup(
             name=EndpointGroupName.NH_CHANNEL_UTILIZATION,
@@ -188,6 +195,22 @@ class NetworkHealthCollector(MetricCollector):
             ],
         )
 
+        # 6GHz (WiFi-6E). Added #630: emitted for band == "6" rows instead of
+        # dropping them (no 6E hardware in the test orgs, but the byBand band
+        # string is the numeric GHz value, live-verified 2026-07-03).
+        self._ap_utilization_6ghz = self._create_gauge(
+            NetworkHealthMetricName.AP_CHANNEL_UTILIZATION_6GHZ_PERCENT,
+            "6GHz channel utilization percentage per AP, 10-min bucket",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.SERIAL,
+                LabelName.MODEL,
+                LabelName.DEVICE_TYPE,
+                LabelName.UTILIZATION_TYPE,
+            ],
+        )
+
         # Network-wide average utilization
         self._network_utilization_2_4ghz = self._create_gauge(
             NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_2_4GHZ_PERCENT,
@@ -202,6 +225,17 @@ class NetworkHealthCollector(MetricCollector):
         self._network_utilization_5ghz = self._create_gauge(
             NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_5GHZ_PERCENT,
             "Network-wide average 5GHz channel utilization percentage, 10-min bucket",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.UTILIZATION_TYPE,
+            ],
+        )
+
+        # 6GHz (WiFi-6E) network-wide average, paired with the per-AP gauge above (#630).
+        self._network_utilization_6ghz = self._create_gauge(
+            NetworkHealthMetricName.NETWORK_CHANNEL_UTILIZATION_6GHZ_PERCENT,
+            "Network-wide average 6GHz channel utilization percentage, 10-min bucket",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.NETWORK_ID,

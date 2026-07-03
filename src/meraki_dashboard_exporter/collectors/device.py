@@ -86,6 +86,12 @@ class DeviceCollector(MetricCollector):
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_CONNECTION_STATS,
+            # floor 1800 == the fetcher's timespan=1800 (non-overlapping windows).
+            # #331 verdict (live-verified 2026-07-03, org 1019781): KEEP — the
+            # per-device getNetworkWirelessDevicesConnectionStats returns per-serial
+            # rows (AP-level assoc/auth/dhcp/dns/success attribution) that the
+            # network-aggregate getNetworkWirelessConnectionStats (a single dict)
+            # cannot provide, so it is not redundant.
             priority=3,
             floor_seconds=1800,
             cost_fn=lambda s: float(s.wireless_network_count),
@@ -116,8 +122,13 @@ class DeviceCollector(MetricCollector):
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_SSID_USAGE,
+            # floor: 3600 — getOrganizationSummaryTopSsidsByUsage is a daily-summary
+            # endpoint (min timespan 8h, default 1 day; the fetcher passes no
+            # timespan so it gets the 1-day window). Polling faster than hourly
+            # just re-reads a window that shifts ~1%/poll. spec+live-verified
+            # 2026-07-03 (#630) — was 900.
             priority=4,
-            floor_seconds=900,
+            floor_seconds=3600,
             cost_fn=lambda s: 1.0,
         ),
         EndpointGroup(
@@ -142,6 +153,10 @@ class DeviceCollector(MetricCollector):
         ),
         EndpointGroup(
             name=EndpointGroupName.MS_PORT_OVERVIEW,
+            # getOrganizationSwitchPortsOverview timespan minimum is 12h (default
+            # 1 day); the fetcher passes timespan=43200 (the 12h minimum),
+            # spec-verified 2026-07-03 (#630). floor 3600 is the freshest cadence
+            # worth polling a 12h rolling aggregate and is priority-4 (stretches).
             priority=4,
             floor_seconds=3600,
             cost_fn=lambda s: 1.0,
@@ -185,8 +200,13 @@ class DeviceCollector(MetricCollector):
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_PERFORMANCE,
+            # floor: 1800 — getDeviceAppliancePerformance rejects timespan<1800
+            # ("'timespan' must be larger than or equal to 1800.0"), and the
+            # fetcher passes timespan=1800, so a shorter floor just re-fetches an
+            # overlapping 30-min window. live-verified 2026-07-03 (MX100,
+            # org 669910444571368738; #630) — was 900.
             priority=3,
-            floor_seconds=900,
+            floor_seconds=1800,
             cost_fn=lambda s: float(s.physical_mx_count),
         ),
         EndpointGroup(
@@ -221,6 +241,10 @@ class DeviceCollector(MetricCollector):
         ),
         EndpointGroup(
             name=EndpointGroupName.MG_UPLINK_STATUS,
+            # floor: spec-derived, not live-verifiable (no MG hardware in either
+            # test org, #630). getOrganizationCellularGatewayUplinkStatuses is a
+            # point-in-time status snapshot (no aggregation window), so 300s
+            # mirrors the other priority-1 uplink-status groups (MX_UPLINK_STATUS).
             priority=1,
             floor_seconds=300,
             cost_fn=lambda s: 1.0,

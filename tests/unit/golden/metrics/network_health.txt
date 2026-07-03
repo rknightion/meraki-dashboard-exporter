@@ -7,6 +7,9 @@ meraki_ap_channel_utilization_2_4ghz_percent gauge
 meraki_ap_channel_utilization_5ghz_percent gauge
   help: 5GHz channel utilization percentage per AP, 10-min bucket
   labels: device_type,model,network_id,org_id,serial,utilization_type
+meraki_ap_channel_utilization_6ghz_percent gauge
+  help: 6GHz channel utilization percentage per AP, 10-min bucket
+  labels: device_type,model,network_id,org_id,serial,utilization_type
 meraki_mr_air_marshal_bssids_by_threat_type_count gauge
   help: Number of Air Marshal BSSIDs observed by threat type, last hour (rogue/spoof/other; entries without a threat-type field are not counted)
   labels: network_id,org_id,threat_type
@@ -48,6 +51,9 @@ meraki_network_channel_utilization_2_4ghz_percent gauge
   labels: network_id,org_id,utilization_type
 meraki_network_channel_utilization_5ghz_percent gauge
   help: Network-wide average 5GHz channel utilization percentage, 10-min bucket
+  labels: network_id,org_id,utilization_type
+meraki_network_channel_utilization_6ghz_percent gauge
+  help: Network-wide average 6GHz channel utilization percentage, 10-min bucket
   labels: network_id,org_id,utilization_type
 meraki_network_wireless_connection_stats_count gauge
   help: Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success)

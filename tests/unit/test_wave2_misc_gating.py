@@ -178,7 +178,8 @@ class TestMTSensorReadingsGating(BaseCollectorTest):
         assert group.priority == 2
         assert group.floor_seconds == 60
         shape = _make_shape(sensor_count=250)
-        assert group.cost_fn(shape) == 2 + pages(250, 100) - 1
+        # #630: readings-latest perPage is 1000 (was assumed 100).
+        assert group.cost_fn(shape) == 1 + pages(250, 1000)
 
     async def test_sensor_readings_gate_skips_when_not_due(self, collector) -> None:
         """A not-due heartbeat skips the sensor-readings fetch entirely.

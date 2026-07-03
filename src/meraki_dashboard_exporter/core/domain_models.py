@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, computed_field, field_validator
 
 # Network Health Models
 
@@ -927,14 +927,24 @@ class CameraAnalyticsZone(BaseModel):
     """A single configured analytics zone on an MV camera.
 
     Source: ``getDeviceCameraAnalyticsZones``.
+
+    LIVE-VERIFIED 2026-07-03 (MV12W, org 669910444571368738; #630): the zone key
+    on the wire is ``zoneId`` (e.g. ``{"zoneId": "0", "label": "Full Frame"}``),
+    NOT ``id`` as the earlier spec-derived assumption held (F-024) — the vendored
+    OpenAPI schema for this endpoint is empty, so that "verified against spec"
+    note was hollow. The mismatch silently broke the ``meraki_mv_zone_info`` →
+    ``meraki_mv_people_count`` join (people-count is keyed on the ``zoneId`` from
+    ``getDeviceCameraAnalyticsRecent``, but ``id`` never populated so every zone
+    resolved to ``"None"``). ``zoneId`` is now primary; ``id`` is still accepted
+    as a fallback for forward/backward compatibility.
     """
 
     __meraki_op__ = "getDeviceCameraAnalyticsZones"
 
-    id: str | int | None = None
+    zoneId: str | int | None = Field(default=None, validation_alias=AliasChoices("zoneId", "id"))
     label: str | None = None
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
 
 
 class CameraAnalyticsLiveZoneData(BaseModel):

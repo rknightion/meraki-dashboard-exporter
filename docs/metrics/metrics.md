@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 342
-- **Gauges:** 313
+- **Total metrics:** 344
+- **Gauges:** 315
 - **Counters:** 25
 - **Histograms:** 3
 - **Info metrics:** 1
@@ -406,10 +406,12 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_ap_channel_utilization_2_4ghz_percent` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `utilization_type` | 2.4GHz channel utilization percentage per AP, 10-min bucket |  |
 | `meraki_ap_channel_utilization_5ghz_percent` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `utilization_type` | 5GHz channel utilization percentage per AP, 10-min bucket |  |
+| `meraki_ap_channel_utilization_6ghz_percent` | gauge | `org_id`, `network_id`, `serial`, `model`, `device_type`, `utilization_type` | 6GHz channel utilization percentage per AP, 10-min bucket |  |
 | `meraki_mr_ssid_failed_connections_count` | gauge | `org_id`, `network_id`, `ssid`, `failure_step` | Failed wireless connections by SSID and failure step over the last hour |  |
 | `meraki_network_bluetooth_clients_count` | gauge | `org_id`, `network_id` | Number of Bluetooth clients detected by MR devices in the last 5 minutes |  |
 | `meraki_network_channel_utilization_2_4ghz_percent` | gauge | `org_id`, `network_id`, `utilization_type` | Network-wide average 2.4GHz channel utilization percentage, 10-min bucket |  |
 | `meraki_network_channel_utilization_5ghz_percent` | gauge | `org_id`, `network_id`, `utilization_type` | Network-wide average 5GHz channel utilization percentage, 10-min bucket |  |
+| `meraki_network_channel_utilization_6ghz_percent` | gauge | `org_id`, `network_id`, `utilization_type` | Network-wide average 6GHz channel utilization percentage, 10-min bucket |  |
 | `meraki_network_wireless_connection_stats_count` | gauge | `org_id`, `network_id`, `stat_type` | Network-wide wireless connection statistics over the last 30 minutes (assoc/auth/dhcp/dns/success) |  |
 | `meraki_network_wireless_download_bytes_per_second` | gauge | `org_id`, `network_id` | Network-wide wireless download bandwidth in bytes per second, 5-min bucket |  |
 | `meraki_network_wireless_upload_bytes_per_second` | gauge | `org_id`, `network_id` | Network-wide wireless upload bandwidth in bytes per second, 5-min bucket |  |

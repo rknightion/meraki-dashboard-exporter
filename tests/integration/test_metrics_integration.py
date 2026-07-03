@@ -303,7 +303,7 @@ class TestMetricsIntegration:
         await manager.run_collector_once(sensor)
 
         mock_api_client.api.sensor.getOrganizationSensorReadingsLatest.assert_called_once_with(
-            "123456", total_pages="all"
+            "123456", total_pages="all", perPage=1000
         )
 
     @pytest.mark.asyncio
