@@ -270,3 +270,57 @@ the known, deliberate differences:
 own self-observability plane every interval. On a large fleet this is a real data-point-per-minute
 cost on a push-based backend; switch to `include=product` if you already collect exporter
 self-observability another way (e.g. you also scrape `/metrics`) and only need product data pushed.
+
+### Bridge parity vs the Prometheus scrape
+
+Aside from the table above, the OTLP bridge is a **faithful mirror** of the `/metrics` scrape: every
+`meraki_*` metric family is pushed, all data labels are preserved (including `org_id`), and sample
+values agree with what a concurrent scrape would read. Two further differences are deliberate and
+worth calling out on their own, because they are easy to trip over when writing a query that's meant
+to work identically against both paths:
+
+- **The `_created` series is omitted, not lost.** `/metrics` exposition includes a `_created`
+  timestamp sample for every counter/histogram label-set; the bridge never pushes it as its own
+  series. Instead `_translate_counter` and `_translate_histogram` consume each label-set's `_created`
+  sample as that data point's OTLP `start_time_unix_nano` (`core/otel_metrics.py` lines ~127-136 for
+  counters, ~211 for histograms), falling back to the bridge's own start time when no `_created`
+  sample exists for that label-set. So the information isn't dropped — it's relocated from a
+  standalone Prometheus series into the OTLP data point's `start_time_unix_nano` field, which is
+  exactly what that field is for.
+- **Resource identity is relocated to `target_info` and `service_*`/`deployment_environment`
+  labels.** The scrape's `job`/`instance` come from the Prometheus scrape config; the OTLP path
+  derives them from the same OTel resource used by traces and data logs (`service.name` → `job`,
+  `service.instance.id` → `instance`), and every other resource attribute — including the scrape's
+  `env` label, which maps to `deployment.environment` — lands on a synthetic `target_info` series
+  rather than as a label on every product metric. This means `job`/`instance` values can differ from
+  the scrape, and a query filtering on `env` against the scrape needs `deployment_environment` (and a
+  join through `target_info`) on the OTLP path instead. To recover the resource labels for a given
+  series, join on `instance`/`job` against `target_info` — this is the standard OTLP-to-Prometheus
+  pattern (the same join Prometheus's own OTLP receiver support and most OTLP-native backends use),
+  not something bespoke to this exporter.
+
+  This is correct-by-design — it's how the OTLP data model represents resource attributes versus
+  per-point attributes — but it is a real surprise if you expect `job`/`instance`/`env` to read
+  identically on both paths without the join.
+
+- **`le` bucket-boundary labels render as integers on the bridge path, floats on the scrape path.**
+  `_translate_histogram` builds `explicit_bounds` as Python floats (`core/otel_metrics.py`, the
+  `explicit_bounds = [float(le) for le in les if le != "+Inf"]` line), but Grafana Cloud's OTLP
+  metrics ingestion renders whole-number bucket bounds as integer `le` labels (`le="1"`, `"10"`,
+  `"60"`), whereas the native `/metrics` scrape keeps Prometheus's own float formatting
+  (`le="1.0"`, `"10.0"`). `histogram_quantile()` is unaffected either way. An EXACT `le="1.0"`
+  selector, however, will miss on the bridge path — prefer `histogram_quantile()` or a regex match
+  (`le=~"1(\.0)?"`) over an exact `le=` match if a query needs to work against both paths. This is a
+  known, accepted non-parity, not a bug: no shipped dashboard in `grafana/dashboards/` uses an exact
+  `le=` selector (verified via `grep -rn 'le=' grafana/dashboards/` — every histogram query goes
+  through `histogram_quantile()`), so this has not been an issue in practice so far.
+
+### Log level spellings: `level` vs `detected_level`
+
+A related non-parity worth knowing about when filtering logs rather than metrics: the exporter's
+structlog output emits its `level` field using Python's own spelling, `"warning"`, while Loki's
+automatic `detected_level` label normalizes that same line to `"warn"`. Both are independently
+queryable — nothing is broken — but a dashboard template variable or alert rule seeded from one
+spelling and filtered on the other will silently miss warnings. Match the spelling to the field
+you're querying: `level="warning"` (structured log field, e.g. via a JSON/logfmt parser) vs
+`detected_level="warn"` (Loki's own derived label).
