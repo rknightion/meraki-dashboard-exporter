@@ -129,6 +129,10 @@ What each endpoint exposes:
 | `/api/clients/clear-dns-cache` | POST | Clears DNS cache | No | `api_token` |
 | `/api/webhooks/meraki` | POST | Ingest surface | No | shared secret |
 
+For the full client-tracking privacy/GDPR picture — exactly which fields are PII,
+where they land (metrics WAL, the `/clients` cache, optional OTel data-logs), and
+every mitigation control — see [Data Privacy](privacy.md).
+
 **Mitigations (v1).**
 
 - **Bearer token** — set `MERAKI_EXPORTER_SERVER__API_TOKEN`. Sensitive GET UIs
@@ -168,13 +172,20 @@ network and expose only `/metrics` (via a reverse proxy where possible). Set
 `MERAKI_EXPORTER_SERVER__UI_ENABLED=false` whenever the sensitive GET UIs or
 control POSTs are reachable from any network segment you do not fully trust.
 
-### Beta API surface
+### Beta / early-access API surface
 
-A forthcoming v1 flag (`MERAKI_EXPORTER_BETA_API__ENABLED`, landing with the
-support-matrix work) opts the exporter into Meraki's **beta / early-access**
-Dashboard API endpoints. Enabling it broadens the data collected but carries
-production risk: beta endpoints are unversioned, can change response shape or be
-withdrawn without notice, and may carry different rate-limit and stability
-guarantees than the GA `/api/v1` surface. Leave it disabled (the default) for
-production deployments unless you specifically need a beta-only metric and
-accept that it may break on any Meraki-side change.
+The exporter **never calls Meraki's beta / early-access Dashboard API endpoints**
+and never enrolls an org into them — beta endpoints are unversioned and can change
+shape or be withdrawn without notice, so consuming them would undermine the v1
+stability promise. There is deliberately no flag to opt in.
+
+Instead, the exporter treats an org being on the beta spec as a **risk signal**.
+The org's Early Access opt-ins are surfaced as always-on metrics
+(`meraki_org_early_access_opt_in_info`, `meraki_org_early_access_opt_in_scoped_networks`),
+and a dedicated `meraki_org_has_beta_api` gauge (`1`/`0` per org) plus a startup/runtime
+**WARN log** fire when an org has opted into `has_beta_api`. This matters because
+`has_beta_api` flips the *whole org* to the beta Dashboard spec, which can move
+endpoints this exporter assumes are stable onto the beta surface and silently break
+collection — alert on `meraki_org_has_beta_api == 1` to catch that. The exporter only
+*reads* the opt-in state; enrolling or un-enrolling an org remains a human decision
+made via the Meraki dashboard.

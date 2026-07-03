@@ -8,7 +8,7 @@ image: assets/social-card.png
 
 !!! warning "Limited testing"
 
-    I no longer have access to a Meraki network with anything other than MT, MR & MS devices. Changes affecting other device types (MX, MG, MV) are best-effort and driven from publicly available API documentation and SDK references rather than tested against live hardware.
+    I no longer have access to a Meraki network with anything other than MT, MR & MS devices. Changes affecting other device types (MX, MG, MV) are best-effort and driven from publicly available API documentation and SDK references rather than tested against live hardware. See the [Support Matrix](support-matrix.md) for exactly what is collected per product line.
 
 A production-ready Prometheus exporter for the Cisco Meraki Dashboard API. It covers all Meraki device types, includes collector health and cardinality monitoring, and supports OpenTelemetry tracing.
 

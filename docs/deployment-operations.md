@@ -184,11 +184,14 @@ docker compose up -d
 - Check container logs with `docker compose logs meraki_dashboard_exporter`.
 - Verify the API key and network connectivity.
 - Metrics `meraki_exporter_collector_errors_total` help identify failing collectors.
-- Open `/status` for an at-a-glance view of tier health and last collection
-  durations. Network filter resolution is not shown on `/status` yet (tracked in
-  [#311](https://github.com/rknightion/meraki-dashboard-exporter/issues/311)) —
-  check the `meraki_network_filter_*` metrics instead (see
-  [Network Filter](#network-filter) below).
+- Open `/status` for an at-a-glance view of tier health, last collection
+  durations, and the effective `NetworkFilter` state (parsed rules plus
+  per-org total/resolved network counts, read from the same
+  `meraki_network_filter_*` gauges — see [Network Filter](#network-filter)
+  below).
+- See [Troubleshooting](troubleshooting.md) for a symptom-driven decision tree
+  covering auth errors, empty `/metrics`, readiness gating, per-org backoff,
+  rate-limit storms, cardinality shedding, and webhook misconfiguration.
 
 ### Alerting on partial collection failures
 
@@ -250,9 +253,11 @@ exits with an error so typos fail loudly. See `.env.example` and the
 
 ## Log Aggregation
 
-The exporter outputs structured logs in `logfmt` format only, which is ideal for Loki ingestion.
-There is currently no setting to switch to JSON output — adding a `log_format` setting is tracked in
-[#310](https://github.com/rknightion/meraki-dashboard-exporter/issues/310).
+The exporter outputs structured logs via `structlog`, rendered by
+`MERAKI_EXPORTER_LOGGING__LOG_FORMAT` — `logfmt` (the default, ideal for Loki's `| logfmt` parser
+stage) or `json` (for JSON-native pipelines such as Datadog, ELK, or CloudWatch). Both formats
+carry the same fields (`level`, `event`, `timestamp`, plus any structured kwargs the log call
+attaches); only the wire encoding differs. See [Configuration](config.md) for the setting.
 
 ### Grafana Alloy Configuration
 
@@ -295,9 +300,20 @@ loki.source.docker "meraki" {
 
 ### Example LogQL Queries
 
+These assume the default `MERAKI_EXPORTER_LOGGING__LOG_FORMAT=logfmt`, where the `| logfmt` parser
+stage extracts each structured field (e.g. `collector`, `duration`) as a label you can filter or
+group on. The line-filter (`|=`/`|~`) portion of every query below also works unchanged against
+`log_format=json` output — the raw text still contains the same substrings — but the `| logfmt`
+parser stage does not understand JSON, so swap it for `| json` if you run with
+`log_format=json`, as shown in the first example.
+
 **Collector failures:**
 ```logql
 {container="meraki-dashboard-exporter"} |= "Failed to collect" | logfmt
+```
+With `log_format=json` instead:
+```logql
+{container="meraki-dashboard-exporter"} |= "Failed to collect" | json
 ```
 
 **Rate limit events:**

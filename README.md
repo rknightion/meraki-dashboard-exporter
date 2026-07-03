@@ -4,7 +4,7 @@
 
 > [!WARNING]
 > I no longer have access to a Meraki network with anything other than MT, MR & MS devices. Changes affecting other device types (MX, MG, MV) are best-effort and driven from publicly available API documentation and SDK references rather than tested against live hardware.
-> If you are willing to work with myself to boost support for other device types or add coverage please reach out!
+> If you are willing to work with myself to boost support for other device types or add coverage please reach out! See the [Support Matrix](docs/support-matrix.md) for exactly what is collected per product line.
 
 A Prometheus exporter for Cisco Meraki Dashboard API metrics with OpenTelemetry tracing support.
 
@@ -167,7 +167,12 @@ See [docs/observability/otel.md](docs/observability/otel.md) for detailed OpenTe
 
 ## Webhook Support
 
-The exporter can receive real-time webhook events from Meraki Dashboard, providing immediate notification of alerts, configuration changes, and other events.
+The exporter can receive webhook events from Meraki Dashboard. Webhooks accelerate **device-down**
+detection only: a `device_down`/`gateway_down` event fast-flips `meraki_device_up=0` ahead of the
+next poll. Device recovery/UP and every other metric remain polled on the MEDIUM tier (default
+300s) — there is no whole-device "back online" webhook event to drive a fast recovery path. See
+[docs/data-freshness.md](docs/data-freshness.md) for the full per-tier staleness picture and
+recommended alert `for:` durations.
 
 ### Enabling Webhooks
 
@@ -222,7 +227,7 @@ All configuration is done via environment variables. See `.env.example` for all 
 - `MERAKI_EXPORTER_CLIENTS__ENABLED`: Enable client collector and DNS resolution (default: false)
 - `MERAKI_EXPORTER_WEBHOOKS__ENABLED`: Enable Meraki webhook receiver (default: false)
 - `MERAKI_EXPORTER_SERVER__API_TOKEN`: Optional bearer token guarding the two state-changing control POSTs (`/api/collectors/trigger`, `/api/clients/clear-dns-cache`). When unset (default) those POSTs are unauthenticated and all GET endpoints (`/metrics`, `/status`, `/health`, ...) are always unauthenticated — bind the exporter to a trusted network. See [security.md](docs/security.md#endpoint-authentication).
-- `MERAKI_EXPORTER_BETA_API__ENABLED` (forthcoming v1 flag): opts into Meraki's beta / early-access Dashboard API endpoints. Off by default; beta endpoints are unversioned and can change or be withdrawn without notice, so keep it disabled in production. See [security.md](docs/security.md#beta-api-surface).
+- Beta / early-access API: the exporter never calls Meraki's beta endpoints and has no opt-in flag (they are unversioned and would undermine the v1 stability promise). It instead surfaces the risk — `meraki_org_has_beta_api` (`1`/`0` per org) plus a WARN log fire when an org is on the beta Dashboard spec, which can silently break assumed-stable collection. Alert on `meraki_org_has_beta_api == 1`. See [security.md](docs/security.md#beta--early-access-api-surface).
 
 ### Update Intervals
 - `MERAKI_EXPORTER_UPDATE_INTERVALS__FAST`: Fast tier interval in seconds (default: 60, range: 30-300)

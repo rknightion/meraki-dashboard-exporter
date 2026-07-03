@@ -9,11 +9,16 @@ edit_uri = "edit/main/docs/"
 nav = [
   { Home = ["index.md"] },
   { "Getting Started" = "getting-started.md" },
+  { "Why This Exporter" = "comparison.md" },
+  { "Support Matrix" = "support-matrix.md" },
   { Configuration = "config.md" },
   { Upgrading = "upgrading.md" },
   { "Deployment & Operations" = [
       "deployment-operations.md",
       { Security = "security.md" },
+      { "Data Privacy" = "privacy.md" },
+      { "Data Freshness" = "data-freshness.md" },
+      { Troubleshooting = "troubleshooting.md" },
       { "HTTP Endpoints" = "reference/endpoints.md" },
       { "Scaling Guide" = "scaling-guide.md" }
     ] },
