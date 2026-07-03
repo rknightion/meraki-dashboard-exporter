@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hmac
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from prometheus_client import Counter, Histogram
 from pydantic import ValidationError
@@ -18,6 +18,32 @@ if TYPE_CHECKING:
     from .config import Settings
 
 logger = get_logger(__name__)
+
+
+class DeviceStateApplier(Protocol):
+    """Narrow consumer-side seam for webhook-driven device state flips (#614).
+
+    Implemented structurally by ``collectors/device.py::DeviceCollector`` so
+    this module never imports ``collectors`` (matching the
+    ``CollectorProtocol``-in-``collector.py`` precedent).
+    """
+
+    def apply_webhook_device_state(self, serial: str, up: bool) -> bool:
+        """Flip meraki_device_up for ``serial``; return False for unknown serials."""
+        ...
+
+
+# ALERT-TYPE → device-state direction (#614). Keyed on the *bound* alert type
+# (all members are in KNOWN_ALERT_TYPES, so bounding preserves them). Only
+# whole-device availability transitions belong here — per-port / uplink /
+# cellular-uplink / PSU / tunnel / role-change types are deliberately excluded
+# (they are not whole-device availability).
+DEVICE_DOWN_ALERT_TYPES: frozenset[str] = frozenset({"device_down", "gateway_down"})
+# Empty in v1: KNOWN_ALERT_TYPES contains no *verified* whole-device recovery
+# type, so UP recovery is reconciliation-only (the next MEDIUM poll restores it,
+# bounded staleness ≤ one poll cycle + Meraki lag — never worse than today).
+# The up=True path is fully wired so a verified recovery type is a one-line add.
+DEVICE_UP_ALERT_TYPES: frozenset[str] = frozenset()
 
 
 class WebhookSecurityError(RuntimeError):
@@ -173,9 +199,30 @@ class WebhookHandler:
 
     """
 
-    def __init__(self, settings: Settings) -> None:
-        """Initialize webhook handler with metrics."""
+    def __init__(
+        self,
+        settings: Settings,
+        device_state_applier: DeviceStateApplier | None = None,
+    ) -> None:
+        """Initialize webhook handler with metrics.
+
+        Parameters
+        ----------
+        settings : Settings
+            Application settings including webhook configuration.
+        device_state_applier : DeviceStateApplier | None
+            Optional fast-path applier (#614). When wired (the ``device``
+            collector is enabled) a ``device_down``/``gateway_down`` webhook for
+            a poll-known serial flips ``meraki_device_up`` ahead of the next
+            poll. ``None`` (default) = feature off; webhooks degrade to today's
+            count-only behaviour.
+
+        """
         self.settings = settings
+        self._device_state_applier = device_state_applier
+        # Guards the one-time "applier not configured" debug log (avoids per-event
+        # spam when the device collector is disabled).
+        self._applier_none_logged = False
         self._initialize_metrics()
 
         # SECURITY (SEC-03 / #561): the set of org IDs this exporter is
@@ -262,6 +309,18 @@ class WebhookHandler:
             [LabelName.VALIDATION_ERROR.value],
         )
 
+        # Webhook-driven meraki_device_up fast-path transitions (#614). Bounded by
+        # construction: direction ∈ {down, up}, result ∈ {applied, unknown_serial}
+        # (≤4 series, no payload-derived label values). Lets operators see whether
+        # fast-path flips are landing vs. bucketing to unknown_serial.
+        self.device_state_transitions = Counter(
+            WebhookMetricName.WEBHOOK_DEVICE_STATE_TRANSITIONS_TOTAL.value,
+            "Webhook-driven meraki_device_up fast-path transitions, by direction "
+            "(down/up) and result (applied = series flipped; unknown_serial = "
+            "serial not poll-known)",
+            [LabelName.DIRECTION.value, LabelName.RESULT.value],
+        )
+
     def validate_secret(self, payload_secret: str | None) -> bool:
         """Validate webhook shared secret.
 
@@ -344,6 +403,35 @@ class WebhookHandler:
                 network_id=payload.network_id,
                 device_serial=payload.device_serial,
             )
+
+            # Fast-path device-state flip (#614). A whole-device availability
+            # transition for a poll-known serial flips meraki_device_up ahead of
+            # the next MEDIUM poll (DOWN in v1; UP path wired but its set is
+            # empty). Sits AFTER validate_secret, so on the default secure path
+            # it is authenticated; the unknown-serial no-op guards the insecure
+            # path. Only poll-known serials are flippable, and only to values the
+            # poll would set. Programming errors fall through to the outer
+            # except; apply_webhook_device_state swallows metric-write errors.
+            if payload.device_serial and (
+                alert_type in DEVICE_DOWN_ALERT_TYPES or alert_type in DEVICE_UP_ALERT_TYPES
+            ):
+                up = alert_type in DEVICE_UP_ALERT_TYPES
+                if self._device_state_applier is not None:
+                    applied = self._device_state_applier.apply_webhook_device_state(
+                        payload.device_serial, up=up
+                    )
+                    self.device_state_transitions.labels(
+                        direction="up" if up else "down",
+                        result="applied" if applied else "unknown_serial",
+                    ).inc()
+                elif not self._applier_none_logged:
+                    logger.debug(
+                        "Device-state webhook received but no device-state applier "
+                        "is configured; fast-path meraki_device_up flips are "
+                        "disabled (count-only). Enable the 'device' collector to "
+                        "activate them."
+                    )
+                    self._applier_none_logged = True
 
             # Track successful processing
             self.events_processed.labels(

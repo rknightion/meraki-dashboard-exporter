@@ -503,3 +503,133 @@ class TestWebhookHandlerSecurity:
             )
         )
         assert secret not in logged, "sharedSecret value leaked into logs on validation failure"
+
+
+class _StubApplier:
+    """Records apply_webhook_device_state calls; returns a fixed verdict (#614)."""
+
+    def __init__(self, verdict: bool) -> None:
+        self._verdict = verdict
+        self.calls: list[tuple[str, bool]] = []
+
+    def apply_webhook_device_state(self, serial: str, up: bool) -> bool:
+        self.calls.append((serial, up))
+        return self._verdict
+
+
+def _device_down_payload() -> dict:
+    """A valid device_down webhook payload with a device serial."""
+    return {
+        "version": "1.0",
+        "sharedSecret": "test_secret_123",
+        "sentAt": datetime.now(UTC).isoformat(),
+        "organizationId": "123456",
+        "organizationName": "Test Organization",
+        "organizationUrl": "https://dashboard.meraki.com/o/ABC123/manage/organization/overview",
+        "networkId": "N_123",
+        "networkName": "Test Network",
+        "deviceSerial": "Q2XX-XXXX-XXXX",
+        "deviceName": "Test Device",
+        "alertType": "device_down",
+        "alertData": {},
+    }
+
+
+class TestWebhookDeviceStateFastPath:
+    """#614: process_webhook drives the device-state applier for down alerts."""
+
+    def test_device_down_flips_and_counts_applied(self, settings_with_secret: Settings) -> None:
+        """Test 1 (end-to-end): device_down for a known serial -> flip + applied."""
+        applier = _StubApplier(verdict=True)
+        handler = WebhookHandler(settings_with_secret, device_state_applier=applier)
+
+        result = handler.process_webhook(_device_down_payload())
+
+        assert result is not None
+        # Applier invoked with the payload serial and up=False (DOWN in v1).
+        assert applier.calls == [("Q2XX-XXXX-XXXX", False)]
+
+        counter = REGISTRY.get_sample_value(
+            "meraki_webhook_device_state_transitions_total",
+            {"direction": "down", "result": "applied"},
+        )
+        assert counter == 1
+
+    def test_unknown_serial_counts_unknown_serial(self, settings_with_secret: Settings) -> None:
+        """Test 4: unknown serial still counts (result=unknown_serial) + events."""
+        applier = _StubApplier(verdict=False)  # serial not poll-known
+        handler = WebhookHandler(settings_with_secret, device_state_applier=applier)
+
+        handler.process_webhook(_device_down_payload())
+
+        assert applier.calls == [("Q2XX-XXXX-XXXX", False)]
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_webhook_device_state_transitions_total",
+                {"direction": "down", "result": "unknown_serial"},
+            )
+            == 1
+        )
+        # The event is still received + processed by the existing counters.
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_webhook_events_received_total",
+                {"org_id": "123456", "alert_type": "device_down"},
+            )
+            == 1
+        )
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_webhook_events_processed_total",
+                {"org_id": "123456", "alert_type": "device_down"},
+            )
+            == 1
+        )
+
+    @pytest.mark.parametrize("alert_type", ["port_down", "cellular_down", "uplink_status_change"])
+    def test_non_device_alert_types_do_not_flip(
+        self, settings_with_secret: Settings, alert_type: str
+    ) -> None:
+        """Test 5: per-port/uplink/cellular-uplink alerts never flip device_up."""
+        applier = _StubApplier(verdict=True)
+        handler = WebhookHandler(settings_with_secret, device_state_applier=applier)
+
+        payload = _device_down_payload()
+        payload["alertType"] = alert_type
+        handler.process_webhook(payload)
+
+        assert applier.calls == []
+        # No transition counter series were created at all.
+        for result in ("applied", "unknown_serial"):
+            for direction in ("down", "up"):
+                assert (
+                    REGISTRY.get_sample_value(
+                        "meraki_webhook_device_state_transitions_total",
+                        {"direction": direction, "result": result},
+                    )
+                    is None
+                )
+
+    def test_no_applier_configured_is_count_only(self, settings_with_secret: Settings) -> None:
+        """Test 6: with no applier (device collector disabled) behave as today."""
+        handler = WebhookHandler(settings_with_secret, device_state_applier=None)
+
+        result = handler.process_webhook(_device_down_payload())
+
+        assert result is not None
+        # Event still counted; no transition counter incremented, no exception.
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_webhook_events_processed_total",
+                {"org_id": "123456", "alert_type": "device_down"},
+            )
+            == 1
+        )
+        for result_label in ("applied", "unknown_serial"):
+            assert (
+                REGISTRY.get_sample_value(
+                    "meraki_webhook_device_state_transitions_total",
+                    {"direction": "down", "result": result_label},
+                )
+                is None
+            )

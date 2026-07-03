@@ -38,6 +38,7 @@ class LabelName(StrEnum):
     STATUS = "status"
     STATE = "state"
     STATUS_CODE = "status_code"  # HTTP status code
+    RESULT = "result"  # outcome of an operation (e.g. applied/unknown_serial, #614)
 
     # Direction labels
     DIRECTION = "direction"  # rx/tx, upstream/downstream

@@ -5,9 +5,9 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 340
+- **Total metrics:** 341
 - **Gauges:** 312
-- **Counters:** 24
+- **Counters:** 25
 - **Histograms:** 3
 - **Info metrics:** 1
 
@@ -558,6 +558,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
+| `meraki_webhook_device_state_transitions_total` | counter | — | Webhook-driven meraki_device_up fast-path transitions, by direction (down/up) and result (applied = series flipped; unknown_serial = serial not poll-known) | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_events_failed_total` | counter | — | Total webhook events that failed processing | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_events_processed_total` | counter | — | Total webhook events successfully processed | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_events_received_total` | counter | — | Total webhook events received by the active WebhookHandler request pipeline (POST /api/webhooks/meraki), labeled by org_id and alert_type | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |

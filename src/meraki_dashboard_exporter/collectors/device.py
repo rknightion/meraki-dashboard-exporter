@@ -565,6 +565,12 @@ class DeviceCollector(MetricCollector):
         # Tracks which cache keys were touched during the current collection cycle
         self._active_cache_keys: set[str] = set()
 
+        # serial -> exact meraki_device_up label dict (create_device_labels output).
+        # Replaced atomically per-org each poll; read by apply_webhook_device_state
+        # so a webhook fast-path flip (#614) can only ever write a series the poll
+        # already owns (byte-identical label tuple, same collector identity/TTL).
+        self._webhook_device_labels: dict[str, dict[str, str]] = {}
+
         # Ensure all subcollectors share the current API instance
         self._subcollectors_ready = True
         self._sync_subcollector_api()
@@ -852,6 +858,12 @@ class DeviceCollector(MetricCollector):
             # Group devices by type for batch processing
             devices_by_type: dict[DeviceType, list[dict[str, Any]]] = {}
 
+            # #614: serial -> exact meraki_device_up label tuple for THIS org,
+            # rebuilt every cycle. Populated only for supported device rows (the
+            # poll never emits _device_up for unsupported types, so the webhook
+            # map must not either). Rebound atomically after the loop.
+            org_serial_labels: dict[str, dict[str, str]] = {}
+
             for device in devices:
                 device_type_str = self._get_device_type(device)
 
@@ -892,6 +904,13 @@ class DeviceCollector(MetricCollector):
                 device["orgId"] = org_id
                 device["orgName"] = org_name
 
+                # #614: record this serial's exact meraki_device_up label tuple
+                # using the SAME create_device_labels call the poll uses below,
+                # so a webhook flip is byte-identical to a poll write.
+                org_serial_labels[serial] = create_device_labels(
+                    device, org_id=org_id, org_name=org_name
+                )
+
                 # Collect common metrics
                 self._collect_common_metrics(
                     device,
@@ -905,6 +924,17 @@ class DeviceCollector(MetricCollector):
                 if device_type not in devices_by_type:
                     devices_by_type[device_type] = []
                 devices_by_type[device_type].append(device)
+
+            # #614: atomically rebind the serial->labels map for this org. Drop
+            # any prior entries owned by THIS org (pruning removed/renetworked
+            # devices) and merge in the freshly-computed set. A failed org poll
+            # (early return / raise before here) leaves prior entries intact --
+            # the poll still owns those series until TTL expiry.
+            self._webhook_device_labels = {
+                s: lbl
+                for s, lbl in self._webhook_device_labels.items()
+                if lbl[LabelName.ORG_ID.value] != org_id
+            } | org_serial_labels
 
             # Store references for device processing
             ms_devices = devices_by_type.get(DeviceType.MS, [])
@@ -1587,6 +1617,69 @@ class DeviceCollector(MetricCollector):
                 labels,
                 device["uptimeInSeconds"],
             )
+
+    def apply_webhook_device_state(self, serial: str, up: bool) -> bool:
+        """Fast-path flip of ``meraki_device_up`` from a webhook event (#614).
+
+        The webhook is a fast-path *hint*: the MEDIUM poll
+        (``_process_org_devices`` → ``device_availability`` group) remains the
+        sole source of truth and re-asserts every series each cycle, so this can
+        only *accelerate* a DOWN transition the poll would have made — never
+        create a novel/relabelled series and never win a permanent disagreement.
+
+        The flip goes through :meth:`_set_metric` on the DeviceCollector so it is
+        indistinguishable from a poll write: (a) the expiration tracking key is
+        ``(collector_name, metric_name, frozen_labels)`` with
+        ``collector_name="DeviceCollector"``, so the write *refreshes* the
+        existing tracked series rather than creating a parallel entry; (b) it
+        forwards the same ``device_availability`` group TTL the poll uses so the
+        flipped series expires/refreshes identically to a poll-written one. The
+        label tuple comes from ``self._webhook_device_labels``, populated by the
+        poll via the same ``create_device_labels`` call, so it is byte-identical
+        to the poll's own — no duplicate series can be minted.
+
+        ``meraki_device_status_info`` is deliberately NOT touched (its ``status``
+        label needs the stale-series removal dance); a transient
+        ``device_up=0`` while ``status_info{status="online"}=1`` is accepted
+        until the next poll reconverges both.
+
+        Thread-safety: no lock. ``process_webhook`` and the poll's map rebind
+        both run as synchronous code on the event loop thread (SDK calls go via
+        ``asyncio.to_thread`` but metric writes / the map rebuild do not), so
+        cooperative scheduling serializes them. The map is maintained by
+        single-assignment rebind (never in-place mutation), so even if
+        ``process_webhook`` moved off-loop a reader would see the old or new
+        dict — both valid — and ``Gauge.set`` is itself thread-safe.
+
+        Parameters
+        ----------
+        serial : str
+            Device serial from the webhook payload (attacker-influenced when
+            ``require_secret=false``; the unknown-serial no-op is the guard).
+        up : bool
+            ``True`` to mark the device up (``meraki_device_up=1``), ``False``
+            to mark it down (``0``). v1 webhooks only ever pass ``False``
+            (DOWN-only); the ``True`` path ships for a future verified recovery
+            alert type.
+
+        Returns
+        -------
+        bool
+            ``True`` if the serial is poll-known and the flip was applied;
+            ``False`` (no-op) for an unknown/never-polled serial.
+
+        """
+        labels = self._webhook_device_labels.get(serial)
+        if labels is None:
+            return False
+        self._set_metric(
+            self._device_up,
+            labels,
+            1.0 if up else 0.0,
+            DeviceMetricName.DEVICE_UP.value,
+            ttl_seconds=self._group_ttl_seconds(EndpointGroupName.DEVICE_AVAILABILITY),
+        )
+        return True
 
     async def _fetch_networks_for_poe(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch networks for POE aggregation via the shared inventory cache.

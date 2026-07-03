@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import psutil  # type: ignore[import-untyped]
 from fastapi import FastAPI, HTTPException, Response
@@ -38,7 +38,11 @@ from .core.otel_data_logs import DataLogEmitter
 from .core.otel_logging import OTELLoggingConfig
 from .core.otel_metrics import OTelMetricsBridge
 from .core.otel_tracing import TracingConfig
-from .core.webhook_handler import WebhookHandler, enforce_webhook_security
+from .core.webhook_handler import (
+    DeviceStateApplier,
+    WebhookHandler,
+    enforce_webhook_security,
+)
 from .services.status import StatusService, build_effective_config
 
 if TYPE_CHECKING:
@@ -224,10 +228,21 @@ class ExporterApp:
         )
         self.webhook_handler: WebhookHandler | None = None
         if self.settings.webhooks.enabled:
-            self.webhook_handler = WebhookHandler(self.settings)
+            # #614: wire the DeviceCollector as the fast-path device-state applier
+            # so a device_down webhook can flip meraki_device_up ahead of the poll.
+            # Absent/disabled `device` collector => None => count-only degradation.
+            device_collector = self.collector_manager.get_collector_by_class_name("DeviceCollector")
+            self.webhook_handler = WebhookHandler(
+                self.settings,
+                device_state_applier=cast(
+                    "DeviceStateApplier | None",
+                    device_collector,
+                ),
+            )
             logger.info(
                 "Webhook receiver enabled",
                 require_secret=self.settings.webhooks.require_secret,
+                device_state_fast_path=device_collector is not None,
             )
 
         # Initialize status service for /status endpoint

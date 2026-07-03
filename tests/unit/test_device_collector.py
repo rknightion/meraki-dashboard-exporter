@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -9,11 +10,13 @@ import pytest
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.core.constants import UpdateTier
 from meraki_dashboard_exporter.core.error_handling import CollectorError, NothingCollectedError
+from meraki_dashboard_exporter.core.metric_expiration import MetricExpirationManager
 from meraki_dashboard_exporter.core.org_health import (
     SOURCE_DEVICE,
     SOURCE_ORGANIZATION,
     OrgHealthTracker,
 )
+from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import (
     DeviceFactory,
@@ -1022,3 +1025,196 @@ class TestDeviceCollectorOrgHealthReporting(BaseCollectorTest):
         collector._fetch_devices = AsyncMock(return_value=[])  # type: ignore[method-assign]
         # Must not raise despite there being no tracker to record into.
         await collector._collect_org_devices("ORG1", "Org One")
+
+
+def _device_up_samples(registry) -> dict[tuple, float]:
+    """Return {sorted-label-tuple: value} for every meraki_device_up series."""
+    out: dict[tuple, float] = {}
+    for family in registry.collect():
+        if family.name == "meraki_device_up":
+            for sample in family.samples:
+                out[tuple(sorted(sample.labels.items()))] = sample.value
+    return out
+
+
+class TestWebhookDeviceStateApplier(BaseCollectorTest):
+    """#614: DeviceCollector.apply_webhook_device_state fast-path flip.
+
+    The poll owns meraki_device_up; the webhook may only accelerate a DOWN
+    transition by writing the exact same-labelled series via the same
+    _set_metric path (same collector identity + TTL), never a novel series.
+    """
+
+    collector_class = DeviceCollector
+    update_tier = UpdateTier.MEDIUM
+
+    SERIAL = "Q2AA-BBBB-CCCC"
+
+    def _build_online_api(self, mock_api_builder, *, status: str = "online"):
+        """Build a mock API for one MR device at ``status`` in org ORG1."""
+        org = OrganizationFactory.create(org_id="ORG1")
+        network = NetworkFactory.create(network_id="N_1", name="Net")
+        device = DeviceFactory.create_mr(serial=self.SERIAL, name="AP1", network_id="N_1")
+        return (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id="ORG1")
+            .with_devices([device], org_id="ORG1")
+            .with_device_statuses(
+                [DeviceStatusFactory.create(serial=self.SERIAL, status=status)],
+                org_id="ORG1",
+            )
+            .build()
+        )
+
+    async def test_webhook_down_flip_before_next_poll(self, collector, mock_api_builder, metrics):
+        """Test 1: a poll seeds device_up=1; a webhook flip drops it to 0."""
+        collector.api = self._build_online_api(mock_api_builder)
+        await self.run_collector(collector)
+        metrics.assert_gauge_value("meraki_device_up", 1, serial=self.SERIAL)
+
+        assert collector.apply_webhook_device_state(self.SERIAL, up=False) is True
+        metrics.assert_gauge_value("meraki_device_up", 0, serial=self.SERIAL)
+
+    async def test_poll_reasserts_truth_after_flip(self, collector, mock_api_builder, metrics):
+        """Test 2: the next poll re-asserts polled truth over a webhook write."""
+        collector.api = self._build_online_api(mock_api_builder)
+        await self.run_collector(collector)
+
+        # Wrong/spurious webhook: mark an online device down.
+        assert collector.apply_webhook_device_state(self.SERIAL, up=False) is True
+        metrics.assert_gauge_value("meraki_device_up", 0, serial=self.SERIAL)
+
+        # Next poll (device still online) corrects it back to 1.
+        await self.run_collector(collector)
+        metrics.assert_gauge_value("meraki_device_up", 1, serial=self.SERIAL)
+
+    async def test_flip_creates_no_duplicate_series(
+        self, collector, mock_api_builder, metrics, isolated_registry
+    ):
+        """Test 3: the flip mutates the poll's series in place, adds no series."""
+        collector.api = self._build_online_api(mock_api_builder)
+        await self.run_collector(collector)
+
+        before = _device_up_samples(isolated_registry)
+        assert collector.apply_webhook_device_state(self.SERIAL, up=False) is True
+        after = _device_up_samples(isolated_registry)
+
+        # Same set of label tuples, same count — no duplicate/relabelled series.
+        assert set(before) == set(after)
+        assert len(after) == len(before)
+
+        # The flipped sample carries EXACTLY the poll-owned label dict, now at 0.
+        poll_labels = collector._webhook_device_labels[self.SERIAL]
+        key = tuple(sorted(poll_labels.items()))
+        assert after[key] == 0.0
+        # And that label dict is the byte-identical create_device_labels output.
+        assert poll_labels["serial"] == self.SERIAL
+
+    async def test_unknown_serial_is_noop(
+        self, collector, mock_api_builder, metrics, isolated_registry
+    ):
+        """Test 4 (applier side): unknown serial returns False, touches nothing."""
+        collector.api = self._build_online_api(mock_api_builder)
+        await self.run_collector(collector)
+
+        before = _device_up_samples(isolated_registry)
+        assert collector.apply_webhook_device_state("NOPE-NOPE-NOPE", up=False) is False
+        after = _device_up_samples(isolated_registry)
+        assert before == after  # values and series identical
+
+    async def test_expiration_tracking_identity(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ):
+        """Test 7: a webhook flip refreshes the poll's tracking entry, not a 2nd.
+
+        Exactly one (collector, meraki_device_up, labels) tracking entry exists,
+        and its per-series TTL equals the device_availability group TTL.
+        """
+        expiration_manager = MetricExpirationManager(settings=settings)
+        api = self._build_online_api(mock_api_builder)
+        collector = DeviceCollector(
+            api=api,
+            settings=settings,
+            registry=isolated_registry,
+            inventory=inventory,
+            expiration_manager=expiration_manager,
+        )
+        inventory.api = api
+        await collector.collect()
+
+        def _device_up_keys():
+            return [
+                key for key in expiration_manager._metric_timestamps if key[1] == "meraki_device_up"
+            ]
+
+        assert len(_device_up_keys()) == 1
+        collector.apply_webhook_device_state(self.SERIAL, up=False)
+        keys = _device_up_keys()
+        assert len(keys) == 1  # refreshed, not duplicated
+
+        entry = expiration_manager._metric_timestamps[keys[0]]
+        assert entry.ttl_seconds == collector._group_ttl_seconds(
+            EndpointGroupName.DEVICE_AVAILABILITY
+        )
+
+    async def test_pruning_removed_device(self, collector, mock_api_builder, metrics):
+        """Test 8: a device dropped from a later poll becomes a webhook no-op.
+
+        The per-org atomic rebind drops prior entries owned by the org and merges
+        the fresh set, so a serial absent from a later (still non-empty) poll is
+        pruned from the map.
+        """
+        collector.api = self._build_online_api(mock_api_builder)
+        await self.run_collector(collector)
+        assert self.SERIAL in collector._webhook_device_labels
+
+        # Next poll for the same org returns a DIFFERENT device -> old serial pruned.
+        org = OrganizationFactory.create(org_id="ORG1")
+        network = NetworkFactory.create(network_id="N_1", name="Net")
+        other = DeviceFactory.create_mr(serial="Q2ZZ-ZZZZ-ZZZZ", name="AP2", network_id="N_1")
+        replaced_api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id="ORG1")
+            .with_devices([other], org_id="ORG1")
+            .with_device_statuses(
+                [DeviceStatusFactory.create(serial="Q2ZZ-ZZZZ-ZZZZ", status="online")],
+                org_id="ORG1",
+            )
+            .build()
+        )
+        collector.api = replaced_api
+        # Drop the inventory device cache so the second poll sees the new device
+        # list (get_devices is cached; a real removed-device poll would refetch).
+        await collector.inventory.invalidate()
+        await self.run_collector(collector)
+
+        assert self.SERIAL not in collector._webhook_device_labels
+        assert "Q2ZZ-ZZZZ-ZZZZ" in collector._webhook_device_labels
+        assert collector.apply_webhook_device_state(self.SERIAL, up=False) is False
+
+    async def test_concurrency_smoke_flip_interleaved_with_poll(
+        self, collector, mock_api_builder, metrics, isolated_registry
+    ):
+        """Test 9: flips fired concurrently with a poll never raise; count stable."""
+        collector.api = self._build_online_api(mock_api_builder)
+        await self.run_collector(collector)
+
+        async def _flip(up: bool) -> None:
+            collector.apply_webhook_device_state(self.SERIAL, up=up)
+
+        # Interleave a poll cycle with a burst of flips on the same event loop.
+        await asyncio.gather(
+            self.run_collector(collector),
+            _flip(False),
+            _flip(False),
+            _flip(True),
+        )
+
+        samples = _device_up_samples(isolated_registry)
+        # Exactly one device_up series for the serial (no duplication under races).
+        serial_series = [v for k, v in samples.items() if ("serial", self.SERIAL) in k]
+        assert len(serial_series) == 1
+        # Final value is a valid 0/1 written by the last writer (poll or flip).
+        assert serial_series[0] in {0.0, 1.0}

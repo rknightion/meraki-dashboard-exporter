@@ -674,3 +674,7 @@ class WebhookMetricName(StrEnum):
 
     # Validation metrics
     WEBHOOK_VALIDATION_FAILURES_TOTAL = "meraki_webhook_validation_failures_total"
+
+    # Fast-path device state transitions driven by inbound webhooks (#614).
+    # direction=down|up, result=applied|unknown_serial. Bounded ≤4 series.
+    WEBHOOK_DEVICE_STATE_TRANSITIONS_TOTAL = "meraki_webhook_device_state_transitions_total"

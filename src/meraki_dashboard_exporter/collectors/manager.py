@@ -378,6 +378,30 @@ class CollectorManager:
         tier = self._collector_tiers.get(collector_name, collector.update_tier)
         return collector, tier
 
+    def get_collector_by_class_name(self, name: str) -> MetricCollector | None:
+        """Return the instantiated collector whose class name is ``name`` (#614).
+
+        Scans every tier's collector instances. Returns ``None`` when no enabled
+        collector has that class name — e.g. the collector was disabled via
+        ``active_collectors`` — so callers degrade gracefully.
+
+        Parameters
+        ----------
+        name : str
+            Exact collector class name (e.g. ``"DeviceCollector"``).
+
+        Returns
+        -------
+        MetricCollector | None
+            The matching collector instance, or ``None`` if absent/disabled.
+
+        """
+        for tier_collectors in self.collectors.values():
+            for collector in tier_collectors:
+                if collector.__class__.__name__ == name:
+                    return collector
+        return None
+
     def is_collector_running(self, collector_name: str) -> bool:
         """Check whether the named collector is currently running."""
         lock = self._collector_locks.get(collector_name)
