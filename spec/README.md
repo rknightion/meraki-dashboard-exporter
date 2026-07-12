@@ -5,7 +5,7 @@ API OpenAPI spec. The `api-drift` CI lane uses it as the comparison baseline for
 upstream API drift on the operations this exporter consumes.
 
 - **Source:** <https://raw.githubusercontent.com/meraki/openapi/master/openapi/spec3.json>
-- **Vendored version (`info.version`):** 1.71.0
+- **Vendored version (`info.version`):** 1.72.0
 - **Do not hand-edit.** Refresh with `make refresh-meraki-spec`, then update the version above.
 
 ## How drift detection uses this
