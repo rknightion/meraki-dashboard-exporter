@@ -22,6 +22,7 @@ runs:
         INPUTS_TITLE: ${{ inputs.title }}
       run: |
         set -euo pipefail
+        gh label create "${INPUTS_LANE_LABEL}" --color d4c5f9 --description "Drift detected by the ${INPUTS_LANE_LABEL} workflow" 2>/dev/null || true
         existing=$(gh issue list --label "${INPUTS_LANE_LABEL}" --state open --json number -q '.[0].number // empty')
         if [ -n "$existing" ]; then
           gh issue comment "$existing" --body-file "${INPUTS_REPORT_PATH}"
