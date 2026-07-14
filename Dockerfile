@@ -7,7 +7,7 @@ ARG PY_VERSION=3.14
 # Digest-pinned for supply-chain immutability (#562). Renovate's built-in `dockerfile`
 # manager natively tracks `FROM image:${ARG}@sha256:digest` (expands the ARG default to
 # resolve the tag, then keeps the digest in sync with that tag) — no custom regex manager
-# needed, unlike the UV_VERSION ARG below which lives outside a FROM line.
+# needed. The uv `COPY --from` pin below rides on the same built-in manager (#661).
 # Pinned digest resolves to python:3.14-slim-bookworm (3.14.6-slim-bookworm, multi-arch
 # index incl. linux/amd64 + linux/arm64) as of 2026-07-02.
 FROM python:${PY_VERSION}-slim-bookworm@sha256:86f975aca15cf04a40b399eebede9aea7c82eae084d1f1a0a6ef6bcaae871a30 AS builder
@@ -18,7 +18,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
-        curl \
         libffi-dev \
         git \
         pkg-config
@@ -30,44 +29,15 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/app/.venv
 
-# Install uv for the target architecture
-# renovate: datasource=github-releases depName=astral-sh/uv
-ARG UV_VERSION=0.11.28
-# Expected sha256 checksums for the uv release tarballs fetched below, one per supported
-# TARGETARCH, pinned from https://github.com/astral-sh/uv/releases/download/<UV_VERSION>/sha256.sum
-# (verified against that release's per-asset *.sha256 files too). This is a real pin — the
-# values are committed here, not fetched at build time alongside the tarball they'd be
-# checking, so a compromised/corrupted release download still fails the build (#562).
-# Renovate's github-releases datasource only tracks UV_VERSION (comment above); it cannot
-# compute these hashes, so whenever UV_VERSION bumps (via Renovate or by hand) these two
-# ARGs must be refreshed in the same change — `make docker-uv-checksums` prints the current
-# values for the pinned UV_VERSION to copy in. A stale checksum here fails the build loudly
-# rather than silently installing an unverified uv, so this cannot go unnoticed.
-ARG UV_CHECKSUM_AMD64=e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224
-ARG UV_CHECKSUM_ARM64=03e9fe0a81b0718d0bc84625de3885df6cc3f89a8b6af6121d6b9f6113fb6533
-ARG TARGETARCH
-# The only pipe below is `echo <sha> | sha256sum -c -`: echo cannot fail and sha256sum is the last
-# stage, so its exit code already propagates. pipefail would add nothing.
-# hadolint ignore=DL4006
-RUN set -eux \
-    && case "${TARGETARCH}" in \
-         amd64) uv_arch="x86_64-unknown-linux-gnu"; uv_sha256="${UV_CHECKSUM_AMD64}" ;; \
-         arm64) uv_arch="aarch64-unknown-linux-gnu"; uv_sha256="${UV_CHECKSUM_ARM64}" ;; \
-         *) echo "Unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
-       esac \
-    && if [ "${UV_VERSION}" = "latest" ]; then \
-         echo "UV_VERSION=latest is a manual dev override only; it has no pinned checksum" >&2; \
-         echo "and is intentionally not supported with checksum verification." >&2; \
-         exit 1; \
-       fi \
-    && uv_url="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${uv_arch}.tar.gz" \
-    && mkdir -p /tmp/uv \
-    && curl -sSfL "${uv_url}" -o /tmp/uv.tar.gz \
-    && echo "${uv_sha256}  /tmp/uv.tar.gz" | sha256sum -c - \
-    && tar -xzf /tmp/uv.tar.gz -C /tmp/uv --strip-components=1 \
-    && install -m 0755 /tmp/uv/uv /usr/local/bin/uv \
-    && rm -rf /tmp/uv /tmp/uv.tar.gz \
-    && uv --version
+# Install uv from its official image, digest-pinned for supply-chain immutability (#562, #661).
+# The @sha256 digest is an immutable content address for the whole image, committed here rather
+# than fetched at build time alongside the artefact it would be verifying — the same guarantee the
+# python base pins above rely on. Renovate's built-in `dockerfile` manager natively tracks
+# `COPY --from` refs and updates the tag and digest together in one commit, so uv bumps land
+# unattended. (The previous curl+tarball+sha256sum approach could not: Renovate bumped the version
+# ARG but had no way to compute the tarball hashes, so every bump broke the build.)
+# The image is a multi-arch index (linux/amd64 + linux/arm64), so no TARGETARCH handling is needed.
+COPY --from=ghcr.io/astral-sh/uv:0.11.28@sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa /uv /uvx /bin/
 
 # Copy dependency files first (most cacheable layer)
 COPY pyproject.toml uv.lock ./
