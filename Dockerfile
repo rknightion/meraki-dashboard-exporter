@@ -32,7 +32,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 # Install uv for the target architecture
 # renovate: datasource=github-releases depName=astral-sh/uv
-ARG UV_VERSION=0.11.26
+ARG UV_VERSION=0.11.28
 # Expected sha256 checksums for the uv release tarballs fetched below, one per supported
 # TARGETARCH, pinned from https://github.com/astral-sh/uv/releases/download/<UV_VERSION>/sha256.sum
 # (verified against that release's per-asset *.sha256 files too). This is a real pin — the
@@ -43,9 +43,12 @@ ARG UV_VERSION=0.11.26
 # ARGs must be refreshed in the same change — `make docker-uv-checksums` prints the current
 # values for the pinned UV_VERSION to copy in. A stale checksum here fails the build loudly
 # rather than silently installing an unverified uv, so this cannot go unnoticed.
-ARG UV_CHECKSUM_AMD64=6426a73c3837e6e2483ee344cbc00f36394d179afcba6183cb77437e67db4af0
-ARG UV_CHECKSUM_ARM64=befa1a59c91e96eb601b0fd9a97c03dd666f17baba644b2b4db9c59a767e387e
+ARG UV_CHECKSUM_AMD64=e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224
+ARG UV_CHECKSUM_ARM64=03e9fe0a81b0718d0bc84625de3885df6cc3f89a8b6af6121d6b9f6113fb6533
 ARG TARGETARCH
+# The only pipe below is `echo <sha> | sha256sum -c -`: echo cannot fail and sha256sum is the last
+# stage, so its exit code already propagates. pipefail would add nothing.
+# hadolint ignore=DL4006
 RUN set -eux \
     && case "${TARGETARCH}" in \
          amd64) uv_arch="x86_64-unknown-linux-gnu"; uv_sha256="${UV_CHECKSUM_AMD64}" ;; \
