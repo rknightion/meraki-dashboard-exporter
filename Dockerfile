@@ -10,7 +10,7 @@ ARG PY_VERSION=3.14
 # needed, unlike the UV_VERSION ARG below which lives outside a FROM line.
 # Pinned digest resolves to python:3.14-slim-bookworm (3.14.6-slim-bookworm, multi-arch
 # index incl. linux/amd64 + linux/arm64) as of 2026-07-02.
-FROM python:${PY_VERSION}-slim-bookworm@sha256:4ff4b92a68355dbdb52584ab3391dff8d371a61d4e063468bfd0130e3189c6d9 AS builder
+FROM python:${PY_VERSION}-slim-bookworm@sha256:cac1946205b382b2a656412ca211a5f8b64f74c8e9dcd2146308fccbf2bac5f1 AS builder
 
 # Install system deps with cache mounts for faster rebuilds
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -81,7 +81,7 @@ COPY src/meraki_dashboard_exporter ./meraki_dashboard_exporter
 # --------------------------------------------------------------------------- #
 # Same digest pin as the builder stage above (#562) — both stages must resolve to the
 # identical base image.
-FROM python:${PY_VERSION}-slim-bookworm@sha256:4ff4b92a68355dbdb52584ab3391dff8d371a61d4e063468bfd0130e3189c6d9 AS runtime
+FROM python:${PY_VERSION}-slim-bookworm@sha256:cac1946205b382b2a656412ca211a5f8b64f74c8e9dcd2146308fccbf2bac5f1 AS runtime
 
 # Install runtime dependencies and create non-root user
 RUN apt-get update -qq \
