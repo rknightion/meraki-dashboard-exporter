@@ -32,7 +32,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 # Install uv for the target architecture
 # renovate: datasource=github-releases depName=astral-sh/uv
-ARG UV_VERSION=0.11.26
+ARG UV_VERSION=0.11.28
 # Expected sha256 checksums for the uv release tarballs fetched below, one per supported
 # TARGETARCH, pinned from https://github.com/astral-sh/uv/releases/download/<UV_VERSION>/sha256.sum
 # (verified against that release's per-asset *.sha256 files too). This is a real pin — the
