@@ -1,5 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "pre-commit": {
+    "enabled": true
+  },
   "packageRules": [
     {
       "description": "Rebase GitHub Actions PRs only when conflicted (override the fleet default)",

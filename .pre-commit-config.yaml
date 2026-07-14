@@ -1,9 +1,9 @@
 repos:
-  # Auto-update pre-commit hooks
--   repo: https://gitlab.com/vojko.pribudic.foss/pre-commit-update
-    rev: v0.9.0
-    hooks:
-    -   id: pre-commit-update
+  # Hook versions below are kept current by Renovate's `pre-commit` manager
+  # (enabled in renovate.json), which opens a PR per bump. Do not re-add an
+  # in-repo auto-updater: pre-commit-update rewrote this file during `git commit`
+  # and then failed the commit ("files were modified by this hook"), so every
+  # commit after an upstream hook release was blocked until its bump was staged.
 
   # Python code formatting and linting
 -   repo: https://github.com/astral-sh/ruff-pre-commit
