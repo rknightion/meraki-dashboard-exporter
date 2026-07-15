@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v1.0.0...v1.0.1) (2026-07-14)
+
+
+### Bug Fixes
+
+* **ci:** create api-drift label before upserting the drift tracking issue ([2c72cfb](https://github.com/rknightion/meraki-dashboard-exporter/commit/2c72cfb4d66e42aea733de372e6f688a62f05bbc))
+* **deps:** update dependency meraki to v4 ([#655](https://github.com/rknightion/meraki-dashboard-exporter/issues/655)) ([94ec491](https://github.com/rknightion/meraki-dashboard-exporter/commit/94ec491753d3c2ef91e50ca278c724d8d1d5cfda))
+
 ## [1.0.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v0.31.0...v1.0.0) (2026-07-03)
 
 
