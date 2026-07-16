@@ -522,14 +522,14 @@ wheels = [
 
 [[package]]
 name = "meraki"
-version = "4.3.0"
+version = "4.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e3/11/ecc5b2f94bd955102c359c7faadb5859b89c5a4e6f6093016a0719d018a7/meraki-4.3.0.tar.gz", hash = "sha256:c7ecdf4711529cb575eb5480ba504f860a7f73685c2c8518d3366933c4953666", size = 355173, upload-time = "2026-07-09T04:12:07.337Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/95/55/c79b65167018b50838874967a657982a1bc3847ff3c96a1e80ba82b6edff/meraki-4.3.1.tar.gz", hash = "sha256:29c2b12544041eb8e1e47e4ec915cc624f6d7790e2e9052258caf6b007f89295", size = 356889, upload-time = "2026-07-16T00:51:46.663Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a4/83/6614b59109f7984c87a5318b15337466db1725d7aaee74a4eb43c6e6ef2d/meraki-4.3.0-py3-none-any.whl", hash = "sha256:182e2af96eb84569b829999540b149a55519bb62dcc6d738a88345df2b4afbb8", size = 400144, upload-time = "2026-07-09T04:12:05.618Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/3a/62b848956650d70dd1eaaf1611639956baca83e2bb388745fd0b88638c92/meraki-4.3.1-py3-none-any.whl", hash = "sha256:f51d393d3b392d2a0f32aa3119a0b11ca775eec70ed8f578f96e52e8142050ff", size = 401973, upload-time = "2026-07-16T00:51:45.132Z" },
 ]
 
 [[package]]
@@ -579,7 +579,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "jinja2", specifier = ">=3.1" },
-    { name = "meraki", specifier = "==4.3.0" },
+    { name = "meraki", specifier = "==4.3.1" },
     { name = "opentelemetry-api", specifier = ">=1.29" },
     { name = "opentelemetry-exporter-otlp", specifier = ">=1.29" },
     { name = "opentelemetry-instrumentation-fastapi", specifier = ">=0.50b0" },
