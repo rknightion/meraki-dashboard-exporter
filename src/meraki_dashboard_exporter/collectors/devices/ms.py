@@ -1772,11 +1772,13 @@ class MSCollector(BaseDeviceCollector):
                     for switch_serial, priority in switch_priorities.items():
                         # Get switch details from device lookup. Copy the entry
                         # (never mutate the shared lookup) and always stamp the
-                        # real serial from the STP config: device_lookup entries
-                        # carry name/model but no "serial" key, so without this
-                        # create_device_labels would emit serial="" for
-                        # lookup-matched switches and two same-named switches in
-                        # a network would collide on (network, name) (F-174).
+                        # real serial from the STP config. The shared lookup now
+                        # carries a "serial" key (#669), but a switch present in
+                        # the STP config yet absent from the lookup falls back to
+                        # {} here, so this stamp is still required: without it
+                        # create_device_labels would emit serial="" and two
+                        # same-named switches in a network would collide on
+                        # (network, name) (F-174).
                         device_info = dict(devices.get(switch_serial, {}))
                         device_info["serial"] = switch_serial
                         device_info["networkId"] = network_id

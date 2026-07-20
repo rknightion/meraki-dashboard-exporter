@@ -857,6 +857,14 @@ class DeviceCollector(MetricCollector):
                 serial = device["serial"]
                 network_id = device.get("networkId", "")
                 device_lookup[serial] = {
+                    # #669: MUST carry the serial. Consumers feed this dict
+                    # straight into create_device_labels(), which reads
+                    # device.get("serial", ""); omitting it made every
+                    # lookup-matched device emit serial="" -> identical label
+                    # sets -> Prometheus collapsed all APs/switches into a single
+                    # aggregated series (e.g. meraki_mr_clients_connected,
+                    # meraki_mr_connection_stats_*, meraki_mr_power/port_*).
+                    "serial": serial,
                     "name": device.get("name", serial),
                     "model": device.get("model", "Unknown"),
                     "network_id": network_id,

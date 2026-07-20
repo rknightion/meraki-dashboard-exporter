@@ -521,6 +521,81 @@ class TestDeviceCollector(BaseCollectorTest):
         # Verify API was called
         api.wireless.getOrganizationWirelessClientsOverviewByDevice.assert_called()
 
+    async def test_mr_clients_connected_one_series_per_ap(
+        self, collector, mock_api_builder, metrics
+    ):
+        """#669: meraki_mr_clients_connected must emit one series per AP.
+
+        Regression test for the shared ``device_lookup`` (built in
+        ``device.py::_collect_org_devices``) omitting the ``serial`` key. When the
+        coordinator built the lookup and fed each entry to
+        ``create_device_labels`` via ``collect_wireless_clients``, every AP got
+        ``serial=""`` -> identical label sets -> Prometheus collapsed all APs into
+        a single aggregated series. This exercises the REAL lookup-building path
+        (``_collect_org_devices``), not a hand-built lookup that already carries a
+        serial (which is why the sub-collector unit tests never caught this).
+        """
+        org = OrganizationFactory.create(org_id="123456")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network")
+        aps = [
+            DeviceFactory.create_mr(
+                serial="Q2KD-0001", name="AP1", model="MR36", network_id=network["id"]
+            ),
+            DeviceFactory.create_mr(
+                serial="Q2KD-0002", name="AP2", model="MR36", network_id=network["id"]
+            ),
+            DeviceFactory.create_mr(
+                serial="Q2KD-0003", name="AP3", model="MR36", network_id=network["id"]
+            ),
+        ]
+        # Distinct online counts (5 + 3 + 7) so a collapse to one series is
+        # unambiguous: the last-written value would win, not the sum.
+        client_overview_response = [
+            {
+                "serial": "Q2KD-0001",
+                "network": {"id": network["id"], "name": network["name"]},
+                "counts": {"byStatus": {"online": 5}},
+            },
+            {
+                "serial": "Q2KD-0002",
+                "network": {"id": network["id"], "name": network["name"]},
+                "counts": {"byStatus": {"online": 3}},
+            },
+            {
+                "serial": "Q2KD-0003",
+                "network": {"id": network["id"], "name": network["name"]},
+                "counts": {"byStatus": {"online": 7}},
+            },
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_devices(aps, org_id=org["id"])
+            .with_device_statuses([], org_id=org["id"])
+            .with_custom_response(
+                "getOrganizationWirelessClientsOverviewByDevice", client_overview_response
+            )
+            .build()
+        )
+        collector.api = api
+        collector.inventory.api = api
+        collector.mr_collector.api = api
+
+        # Real coordinator path: builds device_lookup internally, then runs the
+        # MR org-wide block (which includes collect_wireless_clients).
+        await collector._collect_org_devices(org["id"], org.get("name", "Test Org"))
+
+        # One distinct series per AP serial. Pre-fix, all three collapsed to a
+        # single series with serial="".
+        serials = {ls["serial"] for ls in metrics.get_all_label_sets("meraki_mr_clients_connected")}
+        assert serials == {"Q2KD-0001", "Q2KD-0002", "Q2KD-0003"}
+
+        metrics.assert_gauge_value("meraki_mr_clients_connected", 5, serial="Q2KD-0001")
+        metrics.assert_gauge_value("meraki_mr_clients_connected", 3, serial="Q2KD-0002")
+        metrics.assert_gauge_value("meraki_mr_clients_connected", 7, serial="Q2KD-0003")
+
     def test_get_device_type(self, collector):
         """Test device type extraction from model."""
         assert collector._get_device_type({"model": "MR36"}) == "MR"
