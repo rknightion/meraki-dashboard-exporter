@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.2](https://github.com/rknightion/meraki-dashboard-exporter/compare/v1.0.1...v1.0.2) (2026-07-20)
+
+
+### Bug Fixes
+
+* **deps:** update dependency meraki to v4.3.1 ([#665](https://github.com/rknightion/meraki-dashboard-exporter/issues/665)) ([b81e8a5](https://github.com/rknightion/meraki-dashboard-exporter/commit/b81e8a542d94c119a673d039adf6dd75d3343ea5))
+* **mr:** add serial to shared device_lookup so per-device metrics don't collapse ([afe2562](https://github.com/rknightion/meraki-dashboard-exporter/commit/afe2562c099d59892ca06429a39cac368af6cf50)), closes [#669](https://github.com/rknightion/meraki-dashboard-exporter/issues/669)
+
 ## [1.0.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v1.0.0...v1.0.1) (2026-07-14)
 
 
