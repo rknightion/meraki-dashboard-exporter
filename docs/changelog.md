@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/rknightion/meraki-dashboard-exporter/compare/v1.0.2...v1.0.3) (2026-07-24)
+
+
+### Documentation
+
+* **assets:** replace the social card with one for this project ([0fd660b](https://github.com/rknightion/meraki-dashboard-exporter/commit/0fd660beecc385eb2473c9e6f4896cb81e89e0da))
+
 ## [1.0.2](https://github.com/rknightion/meraki-dashboard-exporter/compare/v1.0.1...v1.0.2) (2026-07-20)
 
 

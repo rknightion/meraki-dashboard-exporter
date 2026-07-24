@@ -8,7 +8,7 @@ type: application
 version: 0.1.0
 # appVersion tracks the exporter release via release-please's extra-files mechanism
 # (release-please-config.json), matched by the x-release-please-version marker below.
-appVersion: "1.0.2" # x-release-please-version
+appVersion: "1.0.3" # x-release-please-version
 home: https://github.com/rknightion/meraki-dashboard-exporter
 sources:
   - https://github.com/rknightion/meraki-dashboard-exporter
