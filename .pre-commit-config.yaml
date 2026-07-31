@@ -72,7 +72,7 @@ repos:
 
   # Dockerfile linting
 -   repo: https://github.com/hadolint/hadolint
-    rev: v2.14.0
+    rev: v2.15.0
     hooks:
     -   id: hadolint
         args: ["--ignore", "DL3008"]
