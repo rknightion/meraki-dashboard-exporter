@@ -22,11 +22,18 @@ concurrency:
 jobs:
   relock:
     name: Regenerate uv.lock
-    # Only the release-please branch — never a contributor/fork PR (which lacks the secret anyway).
-    if: startsWith(github.head_ref, 'release-please--')
+    # Only release-please PRs from this repository. The secret-bearing push runs in a
+    # separate job that never executes PR-controlled dependency/build metadata.
+    if: >-
+      startsWith(github.head_ref, 'release-please--') &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.pull_request.user.login == 'github-actions[bot]' ||
+       github.event.pull_request.user.login == 'release-please[bot]')
     runs-on: ubuntu-latest
     permissions:
-      contents: read  # checkout only; the push uses the PAT below
+      contents: read
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
@@ -47,17 +54,50 @@ jobs:
       - name: Regenerate lockfile
         run: uv lock
 
-      - name: Commit and push if uv.lock changed
+      - name: Check for lockfile changes
+        id: diff
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- uv.lock; then
+            echo "uv.lock already in sync — nothing to do"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload regenerated lockfile
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: regenerated-uv-lock
+          path: uv.lock
+          if-no-files-found: error
+
+  push-lockfile:
+    name: Push regenerated uv.lock
+    needs: relock
+    if: needs.relock.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.head_ref }}
+          persist-credentials: false
+
+      - name: Download regenerated lockfile
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: regenerated-uv-lock
+
+      - name: Commit and push lockfile
         env:
           # PAT so the push re-triggers CI (a GITHUB_TOKEN push would not); masked in logs.
           PUSH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           HEAD_REF: ${{ github.head_ref }}
         run: |
           set -euo pipefail
-          if git diff --quiet -- uv.lock; then
-            echo "uv.lock already in sync — nothing to do"
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add uv.lock
