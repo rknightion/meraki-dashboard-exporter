@@ -11,8 +11,14 @@ on:
     types: [opened, synchronize, reopened]
     branches: [main]
 
-# Workflow-level lockdown; the single job grants only what it needs. The push authenticates
-# as the PAT (RELEASE_PLEASE_TOKEN), not GITHUB_TOKEN, so no contents:write is needed here.
+# Workflow-level lockdown; each job grants only what it needs. The push authenticates with a
+# GitHub App installation token minted per run from the OpenBao broker, not GITHUB_TOKEN, so no
+# contents:write is needed on the job itself.
+#
+# NOTE: until 2026-08-08 the author guard below listed only github-actions[bot] and
+# release-please[bot], while the release PR was actually opened by `rknightion` (the PAT
+# identity) -- so this workflow was dead: EVERY run skipped, and uv.lock was never
+# regenerated. The App identity is now listed first.
 permissions: {}
 
 concurrency:
@@ -27,7 +33,8 @@ jobs:
     if: >-
       startsWith(github.head_ref, 'release-please--') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      (github.event.pull_request.user.login == 'github-actions[bot]' ||
+      (github.event.pull_request.user.login == 'rknightion-token-broker[bot]' ||
+       github.event.pull_request.user.login == 'github-actions[bot]' ||
        github.event.pull_request.user.login == 'release-please[bot]')
     runs-on: ubuntu-latest
     permissions:
@@ -80,6 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write # exchanged for a tailnet identity and an OpenBao token
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -91,10 +99,22 @@ jobs:
         with:
           name: regenerated-uv-lock
 
+      # A distinct permission set from release-please's, because this is the only
+      # PULL_REQUEST-triggered consumer: its OpenBao role cannot bind
+      # ref=refs/heads/main like the others, so it binds event_name=pull_request
+      # plus this exact workflow_ref instead.
+      - name: Mint a scoped push token
+        id: bao
+        uses: rknightion/.github/.github/actions/broker-token@b9ab5f80961f2c29c47a8d7d5dff112b6551169c
+        with:
+          permission-set: lockfile-meraki-dashboard-exporter
+          tailscale-client-id: ${{ secrets.TS_WIF_CLIENT_ID }}
+          tailscale-audience: ${{ secrets.TS_WIF_AUDIENCE }}
+
       - name: Commit and push lockfile
         env:
-          # PAT so the push re-triggers CI (a GITHUB_TOKEN push would not); masked in logs.
-          PUSH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          # An App token, so the push re-triggers CI (a GITHUB_TOKEN push would not).
+          PUSH_TOKEN: ${{ steps.bao.outputs.token }}
           HEAD_REF: ${{ github.head_ref }}
         run: |
           set -euo pipefail
