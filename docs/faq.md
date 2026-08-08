@@ -43,7 +43,7 @@ in the generated [Configuration](config.md) reference.
 
 Yes - the recommended deployment model is one exporter instance per Meraki organization, pinned
 with `MERAKI_EXPORTER_MERAKI__ORG_ID`. If the org ID is left unset the exporter polls every
-organization the API key can see. See [Upgrading](upgrading.md#single-org-deployment-contract)
+organization the API key can see. See [Upgrading](upgrading.md#single-org-deployment-contract-breaking)
 for the contract and [Configuration](config.md) for the key.
 
 ### How do I limit which networks are collected?

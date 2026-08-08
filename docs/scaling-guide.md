@@ -148,7 +148,7 @@ instance runs cleanly up to roughly:
 
 Past that you must [cut demand](#cutting-api-demand) (filter networks, raise intervals, disable
 collectors) — sharding does **not** help a single oversized org, because the 10 req/s budget is
-per-org, not per-instance (see [Scaling out & HA](#scaling-out--ha)).
+per-org, not per-instance (see [Scaling out & HA](#scaling-out-ha)).
 
 ## Cutting API demand
 
@@ -365,7 +365,7 @@ debugging/transition fallback, not a recommended steady-state choice.
 ### Cardinality spikes / OOM
 
 - **Symptom:** `meraki_exporter_cardinality_limit_reached = 1`, or the pod OOM-kills.
-- **Fix:** size memory from observed RSS (see [Resource sizing](#resource-sizing-memory--cpu)),
+- **Fix:** size memory from observed RSS (see [Resource sizing](#resource-sizing-memory-cpu)),
   keep the clients collector off, and reduce the tracked fleet with the filter. Raising
   `MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR` trades memory for retention — it is
   not free.

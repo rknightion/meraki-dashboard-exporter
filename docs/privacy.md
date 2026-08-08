@@ -64,7 +64,7 @@ Three places, only when client collection is enabled:
 2. **The `/clients` HTML page.** This is a full non-Prometheus, non-labelled view: rendered in
    `templates/clients.html`, it shows description, hostname (DNS), IP address, IPv6 address, **MAC
    address**, and SSID/VLAN per client, sourced from the in-memory `ClientStore` and `DNSResolver`
-   caches (not from the Prometheus registry). See [Security → endpoint exposure](security.md#endpoint-exposure--threat-model)
+   caches (not from the Prometheus registry). See [Security → endpoint exposure](security.md#endpoint-exposure-threat-model)
    for the full endpoint table — `/clients` is flagged there as the one endpoint with a firm **PII:
    Yes**.
 3. **The OTel structured data-log channel**, if separately enabled (`otel.logs.enabled`, off by

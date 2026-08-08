@@ -44,7 +44,7 @@ image tag.
 
 The 1.0 release carries a **one-time, pre-1.0 breaking sweep**. This churn is explicitly
 permitted by, and described in, the [Metric Stability & Deprecation
-Policy](stability.md#one-time-pre-1-0-sweep) - it happens exactly once so that the disruptive
+Policy](stability.md#one-time-pre-10-sweep) - it happens exactly once so that the disruptive
 renames land before the compatibility promise takes effect, rather than trickling out afterwards.
 
 ### Metric name and unit renames
@@ -128,7 +128,7 @@ The conventions the project follows so you can spot them:
   changelog for that release and drive the semantic-version bump.
 - **Metric deprecations and removals** are called out in the changelog and follow the
   dual-publish deprecation window described in the [Metric Stability & Deprecation
-  Policy](stability.md#post-1-0-rename-deprecation-process): a Stable metric is emitted under both
+  Policy](stability.md#post-10-rename-deprecation-process): a Stable metric is emitted under both
   the old and new name for at least one full minor release before the old name is removed, and the
   old metric's `# HELP` is prefixed with a `DEPRECATED:` note naming the replacement.
 
