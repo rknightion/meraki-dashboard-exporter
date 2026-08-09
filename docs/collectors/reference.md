@@ -1,3 +1,15 @@
+---
+description: Comprehensive reference of all 27+ metric collectors in the Meraki Dashboard
+  Exporter, including device-specific collectors and collection strategies
+tags:
+- collectors
+- data-collection
+- api
+- cisco-meraki
+- monitoring
+- prometheus
+---
+
 # Collector Reference
 
 This page summarizes the collectors that ship with the exporter.

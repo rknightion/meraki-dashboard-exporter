@@ -1,3 +1,13 @@
+---
+description: This page lists HTTP endpoints exposed by the exporter.
+tags:
+- prometheus
+- monitoring
+- cisco-meraki
+- network-monitoring
+- observability
+---
+
 # HTTP Endpoints
 
 This page lists HTTP endpoints exposed by the exporter.
