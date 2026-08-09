@@ -56,6 +56,22 @@ jobs:
       - name: Type-check (mypy)
         run: uv run mypy .
 
+      # Four pages under docs/ are generated from the code by scripts/generate_*.py
+      # and committed. Nothing enforced that, and the generators overwrite with no
+      # "DO NOT EDIT" banner, so a config or collector change that skipped
+      # `make docgen` shipped documentation describing the previous release —
+      # silently, and on the pages readers and answer engines trust most.
+      # The generators are deterministic (no timestamps), so a diff here is drift.
+      - name: Docs are in sync with the code
+        run: |
+          ./scripts/generate-docs.sh
+          if ! git diff --quiet; then
+            echo "::error::Generated docs are stale. Run 'make docgen' and commit the result."
+            git diff --stat
+            git diff
+            exit 1
+          fi
+
       - name: Meraki model conformance (offline, vs vendored spec)
         env:
           PYTHONPATH: src:tools
