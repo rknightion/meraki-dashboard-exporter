@@ -1,14 +1,3 @@
----
-description: Per-org calls fetch data for an entire organization in one request, which
-  is the optimal pattern.
-tags:
-- prometheus
-- monitoring
-- cisco-meraki
-- network-monitoring
-- observability
----
-
 # API Call Audit
 
 !!! warning "Internal snapshot - not a supported reference"

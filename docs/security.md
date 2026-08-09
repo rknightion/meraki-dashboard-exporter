@@ -1,14 +1,3 @@
----
-description: 'We release patches for security vulnerabilities. Which versions are
-  eligible for receiving such patches depends on the CVSS v3.0 Rating:'
-tags:
-- prometheus
-- monitoring
-- cisco-meraki
-- network-monitoring
-- observability
----
-
 # Security Policy
 
 ## Supported Versions

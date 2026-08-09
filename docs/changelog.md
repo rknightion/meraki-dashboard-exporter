@@ -1,13 +1,3 @@
----
-description: All notable changes to this project will be documented in this file.
-tags:
-- prometheus
-- monitoring
-- cisco-meraki
-- network-monitoring
-- observability
----
-
 # Changelog
 
 ## [1.0.2](https://github.com/rknightion/meraki-dashboard-exporter/compare/v1.0.1...v1.0.2) (2026-07-20)

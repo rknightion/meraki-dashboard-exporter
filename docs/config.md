@@ -1,14 +1,3 @@
----
-description: This document provides a comprehensive reference for all configuration
-  options available in the Meraki Dashboard Exporter.
-tags:
-- prometheus
-- monitoring
-- cisco-meraki
-- network-monitoring
-- observability
----
-
 # Configuration Reference
 
 This document provides a comprehensive reference for all configuration options available in the Meraki Dashboard Exporter.

@@ -1,13 +1,3 @@
----
-description: Releases are automated with release-please and GitHub Actions.
-tags:
-- prometheus
-- monitoring
-- cisco-meraki
-- network-monitoring
-- observability
----
-
 # Release Process
 
 Releases are automated with **release-please** and GitHub Actions.
