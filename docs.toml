@@ -83,7 +83,6 @@ Development = [
 ]
 
 [assets]
-logo_icon = "material/cloud-outline"
 social_image = "assets/social-card.png"
 social_image_alt = "Meraki Dashboard Exporter social preview card"
 extra_css = [
