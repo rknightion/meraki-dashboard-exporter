@@ -1,4 +1,4 @@
-# Metrics Reference
+# Complete Metrics Catalog
 
 This page provides a reference of Prometheus metrics exposed by the Meraki Dashboard Exporter.
 Some metrics are conditional (clients or webhooks); notes are shown where relevant.
