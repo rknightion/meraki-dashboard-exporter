@@ -9,7 +9,8 @@ version: 0.1.0
 # appVersion tracks the exporter release via release-please's extra-files mechanism
 # (release-please-config.json), matched by the x-release-please-version marker below.
 appVersion: "1.0.2" # x-release-please-version
-home: https://github.com/rknightion/meraki-dashboard-exporter
+home: https://m7kni.io/meraki-dashboard-exporter/
+icon: https://m7kni.io/meraki-dashboard-exporter/assets/project-icon-solid.svg
 sources:
   - https://github.com/rknightion/meraki-dashboard-exporter
 maintainers:
@@ -19,3 +20,19 @@ keywords:
   - prometheus
   - exporter
   - monitoring
+annotations:
+  artifacthub.io/category: monitoring-logging
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://m7kni.io/meraki-dashboard-exporter/
+    - name: Getting started
+      url: https://m7kni.io/meraki-dashboard-exporter/getting-started/
+    - name: Metrics reference
+      url: https://m7kni.io/meraki-dashboard-exporter/metrics/
+    - name: source
+      url: https://github.com/rknightion/meraki-dashboard-exporter
+  artifacthub.io/maintainers: |
+    - name: rknightion
+      email: rob@rob-knight.com
