@@ -12,6 +12,19 @@ image: assets/social-card.png
 
 A production-ready Prometheus exporter for the Cisco Meraki Dashboard API. It covers all Meraki device types, includes collector health and cardinality monitoring, and supports OpenTelemetry tracing.
 
+## Quickstart
+
+With a Meraki Dashboard API key (read-only is enough):
+
+```bash
+docker run -d \
+  -e MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here \
+  -p 9099:9099 \
+  ghcr.io/rknightion/meraki-dashboard-exporter:latest
+```
+
+Metrics are then at `http://localhost:9099/metrics`.
+
 ## Get started
 
 Start with the [Getting Started](getting-started.md) guide for the fastest setup, then review
