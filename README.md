@@ -2,6 +2,9 @@
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Frknightion%2Fmeraki-dashboard-exporter.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Frknightion%2Fmeraki-dashboard-exporter?ref=badge_shield)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/rknightion/meraki-dashboard-exporter/badge)](https://scorecard.dev/viewer/?uri=github.com/rknightion/meraki-dashboard-exporter)
 
+Prometheus exporter and OpenTelemetry collector for the Cisco Meraki Dashboard API. Scrapes
+device, network and MT sensor metrics into a `/metrics` endpoint and pushes native OTLP metrics.
+
 > [!WARNING]
 > I no longer have access to a Meraki network with anything other than MT, MR & MS devices. Changes affecting other device types (MX, MG, MV) are best-effort and driven from publicly available API documentation and SDK references rather than tested against live hardware.
 > If you are willing to work with myself to boost support for other device types or add coverage please reach out! See the [Support Matrix](docs/support-matrix.md) for exactly what is collected per product line.
