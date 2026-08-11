@@ -47,6 +47,7 @@ jobs:
           uv run python -m apidrift \
             --baseline spec/meraki-openapi.json.gz \
             --live /tmp/live.json \
+            --ignore spec/apidrift-ignore.txt \
             --src src \
             --emit-reduced /tmp/reduced \
             --format md > /tmp/drift.md

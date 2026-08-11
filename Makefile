@@ -115,6 +115,7 @@ api-drift: ## Run the drift tool locally against the live Meraki spec
 	PYTHONPATH=src:tools uv run python -m apidrift \
 		--baseline spec/meraki-openapi.json.gz \
 		--live-url "$(MERAKI_SPEC_URL)" \
+		--ignore spec/apidrift-ignore.txt \
 		--src src --format md
 
 .PHONY: api-conformance
@@ -122,6 +123,7 @@ api-conformance: ## Run the offline model-conformance check against the vendored
 	PYTHONPATH=src:tools uv run python -m apidrift \
 		--baseline spec/meraki-openapi.json.gz \
 		--live spec/meraki-openapi.json.gz \
+		--ignore spec/apidrift-ignore.txt \
 		--src src --conformance-only --format md
 
 .PHONY: api-suggest

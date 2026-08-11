@@ -1,0 +1,20 @@
+# apidrift acknowledge file.
+#
+# One pattern per line. Case-insensitive SUBSTRING match against a finding's
+# "kind|op|detail" line, so a pattern can be as coarse as a finding kind or as
+# precise as a single model field:
+#
+#   op-newly-deprecated          # every newly-deprecated op
+#   getDeviceCameraAnalyticsZones # one operation, any kind
+#   ApplianceSecurityEvent.ts     # one model field
+#
+# A matched BREAKING/WARNING finding is DOWNGRADED to INFO (kind gains an
+# "-acknowledged" suffix) — it stays in the report so the accepted risk stays
+# visible, it just stops gating the build. INFO findings are unaffected.
+#
+# This is the narrow lever. Re-vendoring the baseline (make refresh-meraki-spec)
+# silences everything at once, including drift nobody has looked at yet; an entry
+# here silences exactly one known, decided thing. Prefer this, and say WHY in a
+# comment above each entry so the next person knows whether it still applies.
+#
+# The sibling oasdiff-ignore.txt does the same job for oasdiff's schema diff.

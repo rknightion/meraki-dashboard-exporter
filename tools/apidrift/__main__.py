@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from apidrift.acknowledge import apply_acknowledgements, load_patterns
 from apidrift.conformance import (
     Finding,
     check_deprecated_operations,
@@ -52,10 +53,12 @@ def _emit(findings: list[Finding], fmt: str) -> None:
     print(render_json(findings) if fmt == "json" else render_markdown(findings))
 
 
-def _conformance_only(live: dict[str, Any], fmt: str) -> int:
+def _conformance_only(live: dict[str, Any], fmt: str, ignore: str | None) -> int:
     from apidrift.models import conformance_models
 
-    findings = check_models(conformance_models(), live)
+    findings = apply_acknowledgements(
+        check_models(conformance_models(), live), load_patterns(ignore)
+    )
     _emit(findings, fmt)
     return 3 if has_actionable(findings) else 0
 
@@ -74,6 +77,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--format", choices=["md", "json"], default="md")
     ap.add_argument("--emit-reduced", help="dir to write reduced baseline.json + live.json")
     ap.add_argument("--no-conformance", action="store_true", help="skip the Pydantic check")
+    ap.add_argument(
+        "--ignore",
+        help="acknowledge file; matching findings are downgraded to INFO and stop gating",
+    )
     ap.add_argument(
         "--conformance-only",
         action="store_true",
@@ -109,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.conformance_only:
-        return _conformance_only(live, args.format)
+        return _conformance_only(live, args.format, args.ignore)
 
     consumed = consumed_operations(args.src)
 
@@ -146,6 +153,8 @@ def main(argv: list[str] | None = None) -> int:
         from apidrift.models import conformance_models
 
         findings.extend(check_models(conformance_models(), live))
+
+    findings = apply_acknowledgements(findings, load_patterns(args.ignore))
 
     _emit(findings, args.format)
     return 3 if has_actionable(findings) else 0

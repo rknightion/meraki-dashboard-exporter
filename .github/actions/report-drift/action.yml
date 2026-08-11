@@ -1,5 +1,5 @@
 name: report-drift
-description: Upsert a dedup'd api-drift tracking issue from a Markdown report, then fail the job.
+description: Upsert a dedup'd drift tracking issue from a Markdown report, then fail the job.
 inputs:
   lane-label:
     required: true
@@ -13,6 +13,11 @@ inputs:
 runs:
   using: composite
   steps:
+    # The issue BODY is the current drift state and is rewritten whenever that state
+    # changes; a COMMENT means the state actually moved. Previously this commented
+    # unconditionally on every run, so an unchanged report produced a new copy of the
+    # same table every 24h (issue #686 collected five) and a real change was
+    # indistinguishable from the daily repeat.
     - name: Upsert tracking issue
       shell: bash
       env:
@@ -20,15 +25,39 @@ runs:
         INPUTS_LANE_LABEL: ${{ inputs.lane-label }}
         INPUTS_REPORT_PATH: ${{ inputs.report-path }}
         INPUTS_TITLE: ${{ inputs.title }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: |
         set -euo pipefail
         gh label create "${INPUTS_LANE_LABEL}" --color d4c5f9 --description "Drift detected by the ${INPUTS_LANE_LABEL} workflow" 2>/dev/null || true
+
+        fingerprint=$(sha256sum "${INPUTS_REPORT_PATH}" | cut -d' ' -f1)
+        marker="<!-- drift-fingerprint: ${fingerprint} -->"
+
+        body_file=$(mktemp)
+        {
+          cat "${INPUTS_REPORT_PATH}"
+          echo
+          echo "---"
+          echo "Last updated by ${RUN_URL}"
+          echo "${marker}"
+        } > "$body_file"
+
         existing=$(gh issue list --label "${INPUTS_LANE_LABEL}" --state open --json number -q '.[0].number // empty')
-        if [ -n "$existing" ]; then
-          gh issue comment "$existing" --body-file "${INPUTS_REPORT_PATH}"
-        else
-          gh issue create --label "${INPUTS_LANE_LABEL}" --title "${INPUTS_TITLE}" --body-file "${INPUTS_REPORT_PATH}"
+
+        if [ -z "$existing" ]; then
+          gh issue create --label "${INPUTS_LANE_LABEL}" --title "${INPUTS_TITLE}" --body-file "$body_file"
+          exit 0
         fi
+
+        previous=$(gh issue view "$existing" --json body -q .body | sed -n 's/.*<!-- drift-fingerprint: \([0-9a-f]*\) -->.*/\1/p' | tail -1)
+
+        if [ "$previous" = "$fingerprint" ]; then
+          echo "Drift report unchanged (${fingerprint}) — issue #${existing} left as-is."
+          exit 0
+        fi
+
+        gh issue edit "$existing" --body-file "$body_file"
+        gh issue comment "$existing" --body "Drift report **changed** — the issue body above now shows the current state. See ${RUN_URL}"
     - name: Fail the run
       shell: bash
       env:

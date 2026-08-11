@@ -10,6 +10,18 @@ sibling tailscale2otel repo's apidrift tool; exit-code contract is intentionally
 - **Separate import root**: this package lives under `tools/`, not `src/`, and is invoked with
   `PYTHONPATH=src:tools uv run python -m apidrift ...` (see Makefile / CI) so `apidrift` resolves
   while still being able to `import meraki_dashboard_exporter` for `models.conformance_models()`.
+- **`spec/apidrift-ignore.txt` is the narrow acknowledge lever** (`--ignore`, wired into both `make`
+  targets and both workflows). Case-insensitive substring match against a finding's `kind|op|detail`.
+  A matched BREAKING/WARNING is **downgraded to `INFO <kind>-acknowledged`, never dropped** — an
+  accepted risk that disappears from the report is an accepted risk nobody remembers. Prefer it over
+  `make refresh-meraki-spec`, which silences *everything* including drift nobody has reviewed. INFO
+  findings are unaffected (acknowledging is purely about gating).
+- **The tracking issue's BODY is the current state; a COMMENT means it changed.** `report-drift`
+  fingerprints the report (`<!-- drift-fingerprint: sha256 -->` in the body) and on an unchanged
+  fingerprint does nothing at all. Before this, it commented unconditionally every run — #686
+  collected five identical 69-row tables in five days, which is how a lane gets ignored. If you
+  change the report's rendering, note that any formatting churn changes the fingerprint and will
+  produce one "changed" comment.
 - **Exit codes are load-bearing** (mirrors tailscale2otel's apidrift): `0` = clean or INFO-only,
   `2` = usage/IO error (bad paths, unparseable spec), `3` = actionable drift (BREAKING or WARNING
   findings). CI branches on these exact codes — don't repurpose them.
@@ -90,17 +102,21 @@ sibling tailscale2otel repo's apidrift tool; exit-code contract is intentionally
   `domain_models` and returns every `BaseModel` subclass *defined in* those modules (not re-exports).
 - `suggest.py` - `suggest_for_model()` / `render_suggestions()`: ranks live spec operations by field-name
   overlap with an unmapped model, for `--suggest` (a review aid only — always exits 0, never gates).
-- `report.py` - Renders findings as a Markdown table or JSON array; `has_actionable()` decides exit 3.
+- `report.py` - Renders findings as Markdown (actionable table first, routine INFO in a collapsed
+  `<details>` block with per-kind counts) or a JSON array; `has_actionable()` decides exit 3.
+- `acknowledge.py` - `load_patterns()` / `apply_acknowledgements()`: reads `spec/apidrift-ignore.txt`
+  and downgrades matching actionable findings to INFO so a decided-and-accepted finding stops gating.
 - `tests/` - `test_cli.py` runs the tool end-to-end via `subprocess` (exercises the real
   `PYTHONPATH=tools` wiring); the rest are focused unit tests per module (`test_scanner.py`,
   `test_conformance.py`, `test_conformance_offline.py`, `test_reducer.py`, `test_report.py`,
-  `test_spec.py`, `test_suggest.py`, `test_deprecation.py`). No dedicated `tests/CLAUDE.md` — this
+  `test_spec.py`, `test_suggest.py`, `test_deprecation.py`, `test_acknowledge.py`). No dedicated `tests/CLAUDE.md` — this
   file covers both.
 </file_map>
 
 <paved_path>
 ## Running locally (Makefile targets, see repo root `Makefile`)
-- `make api-drift` - full drift check against the **live** spec (`--live-url`, SSRF-guarded), scanning `src/`.
+- `make api-drift` - full drift check against the **live** spec (`--live-url`, SSRF-guarded), scanning `src/`,
+  with `--ignore spec/apidrift-ignore.txt` applied.
 - `make api-conformance` - offline: runs `--conformance-only` with the **vendored baseline** as both
   `--baseline` and `--live` (i.e. "do our models still parse the spec we already vendored" — this is
   also what `ci.yml`'s "Meraki model conformance" step runs on every PR, so it never depends on network access).

@@ -48,3 +48,43 @@ def test_render_coverage_json_roundtrips() -> None:
     out = json.loads(render_coverage_json(cov))
     assert out["total"] == 2
     assert out["beta"] == ["A"]
+
+
+# --- report layout: actionable first, routine INFO collapsed (#693) -------------
+
+
+def test_actionable_findings_come_before_informational() -> None:
+    findings = [
+        Finding("INFO", "derived", "Thing", "computed model, not API-mapped"),
+        Finding("WARNING", "type-mismatch", "getA", "Model.x mismatch"),
+    ]
+
+    out = render_markdown(findings)
+
+    assert out.index("## Actionable (1)") < out.index("<details>")
+    assert out.index("type-mismatch") < out.index("derived")
+
+
+def test_informational_summary_carries_per_kind_counts() -> None:
+    findings = [
+        Finding("INFO", "derived", "A", "d"),
+        Finding("INFO", "derived", "B", "d"),
+        Finding("INFO", "model-extra", "C", "e"),
+    ]
+
+    out = render_markdown(findings)
+
+    assert "Informational (3)" in out
+    assert "derived x2" in out
+    assert "model-extra x1" in out
+
+
+def test_no_actionable_findings_says_so_explicitly() -> None:
+    out = render_markdown([Finding("INFO", "derived", "A", "d")])
+
+    assert "## Actionable (0)" in out
+    assert "Nothing actionable" in out
+
+
+def test_clean_run_message_unchanged() -> None:
+    assert render_markdown([]) == "No drift detected on consumed operations.\n"

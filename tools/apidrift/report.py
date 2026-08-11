@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import asdict
 
 from apidrift.conformance import Coverage, Finding
@@ -16,13 +17,46 @@ def has_actionable(findings: list[Finding]) -> bool:
     return any(f.severity in _ACTIONABLE for f in findings)
 
 
-def render_markdown(findings: list[Finding]) -> str:
-    """Render findings as a Markdown table, or a clean-run message."""
-    if not findings:
-        return "No drift detected on consumed operations.\n"
+def _table(findings: list[Finding]) -> list[str]:
     lines = ["| Severity | Op | Kind | Detail |", "| --- | --- | --- | --- |"]
     for f in sorted(findings, key=lambda x: (_ORDER.get(x.severity, 9), x.op, x.kind)):
         lines.append(f"| {f.severity} | {f.op} | {f.kind} | {f.detail} |")
+    return lines
+
+
+def render_markdown(findings: list[Finding]) -> str:
+    """Render findings as Markdown, actionable first, routine INFO collapsed.
+
+    The report is read as a GitHub issue body, where whatever is above the fold gets
+    read and the rest does not. Routine INFO (one ``derived`` row per derived model,
+    every run, forever) is accounting rather than news, so it goes into a collapsed
+    block with per-kind counts and the actionable findings get the top of the page.
+    """
+    if not findings:
+        return "No drift detected on consumed operations.\n"
+
+    actionable = [f for f in findings if f.severity in _ACTIONABLE]
+    info = [f for f in findings if f.severity not in _ACTIONABLE]
+
+    lines: list[str] = []
+    if actionable:
+        lines += [f"## Actionable ({len(actionable)})", ""]
+        lines += _table(actionable)
+    else:
+        lines += ["## Actionable (0)", "", "Nothing actionable — informational findings only."]
+
+    if info:
+        counts = Counter(f.kind for f in info)
+        summary = ", ".join(f"{kind} x{n}" for kind, n in sorted(counts.items()))
+        lines += [
+            "",
+            "<details>",
+            f"<summary>Informational ({len(info)}): {summary}</summary>",
+            "",
+            *_table(info),
+            "",
+            "</details>",
+        ]
     return "\n".join(lines) + "\n"
 
 
