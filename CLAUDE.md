@@ -57,7 +57,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - **Adaptive scheduling, not fixed tiers**: each collector declares one or more endpoint groups (name, priority, `floor_seconds`, `cost_fn`); the scheduler (`core/scheduler.py`) solves each group's actual interval from org shape and the API budget, stretching lower-priority groups when demand exceeds it (default per-collector timeout: 240s)
 - **Parallel collection**: Use `ManagedTaskGroup` for bounded concurrency
 - **Inventory caching (mandatory for networks)**: All network fetches go through `OrganizationInventory.get_networks(org_id)`; this is the single enforcement point for the configured `NetworkFilter` (`core/network_filter.py`, `NetworkFilterSettings` in `core/config_models.py`).
-- **Meraki SDK 3.3.0** (`pyproject.toml`, exact pin — Renovate bumps it, so check `pyproject.toml` rather than trusting this number): `validate_kwargs` setting (`core/config_models.py` `APISettings.validate_kwargs`); recommended for dev/CI, off by default in production.
+- **Meraki SDK 4.4.0** (`pyproject.toml`, exact pin — Renovate bumps it, so check `pyproject.toml` rather than trusting this number): `validate_kwargs` setting (`core/config_models.py` `APISettings.validate_kwargs`); recommended for dev/CI, off by default in production.
 - **Metric lifecycle**: Track and expire metrics for offline/removed devices
 - **Web endpoints**: `app.py` exposes `/metrics`, the web UI, and a `/status` health dashboard endpoint.
 
