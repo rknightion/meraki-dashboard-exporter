@@ -200,3 +200,80 @@ def test_coverage_child_does_not_inherit_mapping() -> None:
     cov = coverage([ChildModel])
     assert cov.unmapped == ["ChildModel"]
     assert cov.mapped == []
+
+
+# --- untyped (free-form) response schemas (#690) -------------------------------
+
+
+def _untyped_op(op_id: str, schema: dict[str, Any]) -> dict[str, Any]:
+    return {
+        f"/{op_id}": {
+            "get": {
+                "operationId": op_id,
+                "responses": {"200": {"content": {"application/json": {"schema": schema}}}},
+            }
+        }
+    }
+
+
+UNTYPED_SPEC: dict[str, Any] = {
+    "openapi": "3.0.1",
+    "info": {"title": "t", "version": "1"},
+    "paths": {
+        # Shape of the real getOrganizationApplianceSecurityEvents response: the
+        # spec describes no properties at all, only that it is a free-form object.
+        **_untyped_op(
+            "getFreeForm", {"type": "object", "additionalProperties": {"type": "string"}}
+        ),
+        **_untyped_op("getBareObject", {"type": "object"}),
+        **_op("getDescribed", {"known": {"type": "string"}}),
+    },
+}
+
+
+class UntypedModel(BaseModel):
+    __meraki_op__ = "getFreeForm"
+    ts: str | None = None
+    eventType: str | None = None
+    networkId: str | None = None
+
+
+class BareObjectModel(BaseModel):
+    __meraki_op__ = "getBareObject"
+    anything: str | None = None
+
+
+class PartlyUntypedModel(BaseModel):
+    __meraki_op__ = ["getDescribed", "getFreeForm"]
+    known: str | None = None
+    onlyInFreeForm: str | None = None
+
+
+def test_untyped_response_reports_once_not_per_field() -> None:
+    """A spec that describes no properties must not read as 'our model is stale'."""
+    findings = check_models([UntypedModel], UNTYPED_SPEC)
+
+    kinds = [f.kind for f in findings]
+    assert kinds == ["spec-untyped"]
+    assert findings[0].severity == "INFO"
+    assert "getFreeForm" in findings[0].op
+
+
+def test_bare_object_response_also_counts_as_untyped() -> None:
+    findings = check_models([BareObjectModel], UNTYPED_SPEC)
+
+    assert [f.kind for f in findings] == ["spec-untyped"]
+
+
+def test_partly_untyped_model_suppresses_model_extra() -> None:
+    """Absence cannot be proven when one mapped op's response is undescribed."""
+    findings = check_models([PartlyUntypedModel], UNTYPED_SPEC)
+
+    assert "model-extra" not in [f.kind for f in findings]
+    assert "spec-untyped" in [f.kind for f in findings]
+
+
+def test_untyped_findings_never_gate() -> None:
+    from apidrift.report import has_actionable
+
+    assert not has_actionable(check_models([UntypedModel], UNTYPED_SPEC))

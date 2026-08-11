@@ -16,7 +16,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from apidrift.conformance import Finding, check_models, coverage
+from apidrift.conformance import (
+    Finding,
+    check_deprecated_operations,
+    check_models,
+    coverage,
+)
 from apidrift.reducer import index_operations, reduce_spec
 from apidrift.report import (
     has_actionable,
@@ -124,6 +129,11 @@ def main(argv: list[str] | None = None) -> int:
     # now absent from the live spec — this filters scanner false positives.
     for op in sorted((consumed & baseline_ops) - live_ops):
         findings.append(Finding("BREAKING", "missing-op", op, "consumed op removed from live spec"))
+
+    # Deprecation is an early warning for exactly the ops that would later become
+    # BREAKING missing-op above. Runs over the consumed set rather than the mapped
+    # models, so an op with no registered Pydantic model is still covered.
+    findings.extend(check_deprecated_operations(consumed, baseline, live))
 
     if args.emit_reduced:
         out = Path(args.emit_reduced)

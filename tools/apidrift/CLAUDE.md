@@ -46,6 +46,25 @@ sibling tailscale2otel repo's apidrift tool; exit-code contract is intentionally
   mapped op's response is only `INFO` (`model-extra` — the exporter's models legitimately carry
   derived/enrichment fields); only a concrete `type-mismatch` or a vanished mapped op
   (`model-op-absent`) is `WARNING`. Only `WARNING`/`BREAKING` are "actionable" (gate the build).
+- **Deprecation is checked over the CONSUMED set, not the mapped models** (`check_deprecated_operations`
+  in `conformance.py`, called from `main()`). This is deliberate: `getDeviceCameraAnalyticsRecent`'s
+  model lives in `collectors/devices/mv.py`, which `models.conformance_models()` does not collect
+  (it only reads `core/api_models.py` + `core/domain_models.py`), so a model-scoped check would miss
+  it. Severity splits on baseline-vs-live: `INFO op-deprecated` when deprecated in **both** specs
+  (pre-existing backlog — non-gating on purpose, or a years-old deprecation would pin the tracking
+  issue open and train everyone to ignore it), `WARNING op-newly-deprecated` when deprecated in live
+  but not baseline (real drift, gates, opens the tracker). Re-vendoring the baseline is the
+  acknowledge path and downgrades the WARNING to INFO on the next run. Ops absent from the live spec
+  are skipped — `BREAKING missing-op` already covers removal, and the consumed set carries scanner
+  false positives (`api`, `serial`) that are not operations. Two ops report `op-deprecated` today
+  (both camera analytics — see issue #691 for the migration plan).
+- **`INFO spec-untyped` means the spec describes nothing, NOT that our model is stale.** Some Meraki
+  ops declare a free-form response (`{"type": "object"}`, optionally `additionalProperties`) instead
+  of naming fields — `getOrganizationApplianceSecurityEvents` is the only one in the consumed surface
+  today. `model-extra` claims a field is absent from *every* mapped op response, which cannot be
+  asserted against an undescribed response, so when any mapped op is untyped the model reports one
+  `spec-untyped` finding and its `model-extra` findings are suppressed. Do not "fix" a `spec-untyped`
+  finding by deleting model fields.
 - **`MERAKI_CONTROLLERS` in `scanner.py`** is a hardcoded frozenset of top-level Meraki SDK
   controller names (`organizations`, `networks`, `devices`, `wireless`, `switch`, ...) used to
   AST-match `<receiver>.<controller>.<method>` calls. If Meraki's SDK adds a new controller
@@ -65,7 +84,8 @@ sibling tailscale2otel repo's apidrift tool; exit-code contract is intentionally
   minimal sub-spec (ops + transitively-referenced `#/components/...`) for fast oasdiff comparison.
 - `conformance.py` - `Finding` dataclass; `check_models()` compares each registered Pydantic model's
   fields/types against its mapped operation(s)' live response schema; `response_properties()` extracts
-  the 2xx `application/json` schema (unwraps array-of-items responses).
+  the 2xx `application/json` schema (unwraps array-of-items responses);
+  `check_deprecated_operations()` flags consumed ops upstream has marked `deprecated`.
 - `models.py` - `conformance_models()`: lazily imports `meraki_dashboard_exporter.core.api_models` +
   `domain_models` and returns every `BaseModel` subclass *defined in* those modules (not re-exports).
 - `suggest.py` - `suggest_for_model()` / `render_suggestions()`: ranks live spec operations by field-name
@@ -74,7 +94,8 @@ sibling tailscale2otel repo's apidrift tool; exit-code contract is intentionally
 - `tests/` - `test_cli.py` runs the tool end-to-end via `subprocess` (exercises the real
   `PYTHONPATH=tools` wiring); the rest are focused unit tests per module (`test_scanner.py`,
   `test_conformance.py`, `test_conformance_offline.py`, `test_reducer.py`, `test_report.py`,
-  `test_spec.py`, `test_suggest.py`). No dedicated `tests/CLAUDE.md` — this file covers both.
+  `test_spec.py`, `test_suggest.py`, `test_deprecation.py`). No dedicated `tests/CLAUDE.md` — this
+  file covers both.
 </file_map>
 
 <paved_path>

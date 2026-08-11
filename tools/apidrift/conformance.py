@@ -25,8 +25,10 @@ the beta blind spot until/unless full beta-channel fetching is implemented.
 from __future__ import annotations
 
 import datetime
+import re
 import types
 import typing
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -57,6 +59,86 @@ class Finding:
     kind: str
     op: str
     detail: str
+
+
+# Fallback reference when an operation carries no x-deprecation-notice of its own.
+_DEPRECATED_OPS_URL = "https://developer.cisco.com/meraki/api-v1/deprecated-operations/"
+
+# Meraki's x-deprecation-notice is a sentence of HTML wrapping a link to the
+# deprecated-operations page. Pull the href out rather than emitting raw markup
+# into the report (which is rendered as Markdown into a GitHub issue).
+_HREF_RE = re.compile(r"""href=['"]([^'"]+)['"]""")
+
+
+def _deprecation_url(operation: dict[str, Any]) -> str:
+    notice = operation.get("x-deprecation-notice")
+    if isinstance(notice, str):
+        match = _HREF_RE.search(notice)
+        if match:
+            return match.group(1)
+    return _DEPRECATED_OPS_URL
+
+
+def check_deprecated_operations(
+    consumed: Iterable[str], baseline: dict[str, Any], live: dict[str, Any]
+) -> list[Finding]:
+    """Report consumed operations that upstream has marked ``deprecated``.
+
+    Severity splits on the tool's usual baseline-vs-live axis, because "this op has
+    been deprecated for a year" and "this op was deprecated since we last looked"
+    call for very different responses:
+
+    * ``INFO op-deprecated`` - deprecated in *both* specs. A pre-existing backlog
+      item; visible in the report but non-gating, so a long-standing deprecation
+      cannot hold the tracking issue open indefinitely and train us to ignore it.
+    * ``WARNING op-newly-deprecated`` - deprecated in live but not in the baseline.
+      Genuine drift, and the moment a human should decide on a migration, so it
+      gates (exit 3) and opens the tracker. Re-vendoring the baseline is the
+      acknowledge path and naturally downgrades it to INFO on the next run.
+
+    Operations absent from the live spec produce nothing: a genuinely removed op is
+    already reported as ``BREAKING missing-op``, and the consumed set contains
+    scanner false positives (``api``, ``serial``) that are not operations at all.
+    """
+    live_idx = index_operations(live)
+    baseline_idx = index_operations(baseline)
+    findings: list[Finding] = []
+    for op_id in sorted(set(consumed)):
+        loc = live_idx.get(op_id)
+        if loc is None:
+            continue
+        path, method = loc
+        operation = live["paths"][path][method]
+        if operation.get("deprecated") is not True:
+            continue
+
+        was_deprecated = False
+        base_loc = baseline_idx.get(op_id)
+        if base_loc is not None:
+            base_path, base_method = base_loc
+            was_deprecated = baseline["paths"][base_path][base_method].get("deprecated") is True
+
+        route = f"{method.upper()} {path}"
+        url = _deprecation_url(operation)
+        if was_deprecated:
+            findings.append(
+                Finding(
+                    "INFO",
+                    "op-deprecated",
+                    op_id,
+                    f"{route} is deprecated upstream (also in baseline); see {url}",
+                )
+            )
+        else:
+            findings.append(
+                Finding(
+                    "WARNING",
+                    "op-newly-deprecated",
+                    op_id,
+                    f"{route} became deprecated since the vendored baseline; see {url}",
+                )
+            )
+    return findings
 
 
 def _concrete_types(annotation: Any) -> tuple[type, ...]:
@@ -114,29 +196,46 @@ def _normalize_ops(value: object) -> list[str]:
     return []
 
 
+def _is_untyped_schema(schema: dict[str, Any]) -> bool:
+    """Return whether a response schema describes no properties at all.
+
+    Some Meraki operations declare a free-form response — ``{"type": "object"}``,
+    optionally with ``additionalProperties`` — rather than naming their fields
+    (``getOrganizationApplianceSecurityEvents`` is the one in the consumed surface
+    today). The spec is silent about the payload, so nothing can be concluded about
+    a model's fields from it either way.
+    """
+    if schema.get("properties"):
+        return False
+    return schema.get("type") == "object" or "additionalProperties" in schema
+
+
 def _union_properties(
     spec: dict[str, Any], op_ids: list[str]
-) -> tuple[dict[str, set[str | None]], list[str], list[str]]:
+) -> tuple[dict[str, set[str | None]], list[str], list[str], list[str]]:
     """Merge the response properties of several ops.
 
-    Returns ``(alias -> set of spec types across ops, resolved_ops, missing_ops)``.
-    A field present in *any* mapped op is considered present; a type is acceptable
-    if it matches in *any* mapped op (aggregate models source fields from several
-    endpoints, so the union is the correct conformance surface).
+    Returns ``(alias -> set of spec types across ops, resolved_ops, missing_ops,
+    untyped_ops)``. A field present in *any* mapped op is considered present; a type
+    is acceptable if it matches in *any* mapped op (aggregate models source fields
+    from several endpoints, so the union is the correct conformance surface).
     """
     union: dict[str, set[str | None]] = {}
     resolved: list[str] = []
     missing: list[str] = []
+    untyped: list[str] = []
     for op_id in op_ids:
         schema = response_properties(spec, op_id)
         if schema is None:
             missing.append(op_id)
             continue
         resolved.append(op_id)
+        if _is_untyped_schema(schema):
+            untyped.append(op_id)
         for name, pschema in (schema.get("properties") or {}).items():
             spec_type = pschema.get("type") if isinstance(pschema, dict) else None
             union.setdefault(name, set()).add(spec_type)
-    return union, resolved, missing
+    return union, resolved, missing, untyped
 
 
 def check_models(models: list[type], spec: dict[str, Any]) -> list[Finding]:
@@ -160,7 +259,7 @@ def check_models(models: list[type], spec: dict[str, Any]) -> list[Finding]:
             continue
 
         is_beta = model.__dict__.get("__meraki_beta__") is True
-        union, resolved, missing = _union_properties(spec, op_ids)
+        union, resolved, missing, untyped = _union_properties(spec, op_ids)
         label = "+".join(op_ids)
         if not resolved:
             # Every mapped op is missing from the (GA) spec. For a beta-declared
@@ -200,10 +299,27 @@ def check_models(models: list[type], spec: dict[str, Any]) -> list[Finding]:
                     )
                 )
 
+        if untyped:
+            # At least one mapped op's response is free-form, so the spec does not
+            # describe what comes back. `model-extra` asserts a field is absent from
+            # *every* mapped op response — an assertion that cannot be made here —
+            # so report the undescribed response once and suppress it, rather than
+            # emitting one misleading "field not in response" per model field.
+            findings.append(
+                Finding(
+                    "INFO",
+                    "spec-untyped",
+                    "+".join(untyped),
+                    f"{name}: response schema declares no properties; field presence not checkable",
+                )
+            )
+
         fields: dict[str, Any] = getattr(model, "model_fields", {})
         for fname, info in fields.items():
             alias = getattr(info, "alias", None) or fname
             if alias not in union:
+                if untyped:
+                    continue
                 # Informational, not gating: the model carries a field absent from
                 # every mapped op response. Usually a derived/enrichment field or a
                 # stale one worth a human look — not, by itself, upstream drift.
