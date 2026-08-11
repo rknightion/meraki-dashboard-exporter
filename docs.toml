@@ -5,7 +5,7 @@
 [site]
 name = "Meraki Dashboard Exporter"
 description = "A high-performance Prometheus exporter for Cisco Meraki Dashboard API metrics with comprehensive monitoring capabilities and OpenTelemetry support"
-author = "Rob Knighton"
+author = "Rob Knight"
 keywords = [
     "meraki",
     "prometheus exporter",
@@ -106,4 +106,3 @@ API = "api"
 Configuration = "config"
 Deployment = "deployment"
 Troubleshooting = "troubleshooting"
-
