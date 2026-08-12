@@ -121,14 +121,16 @@ class FleetParameters:
             raise ValueError("Meraki permits at most 5,000 devices per network")
         for family, count in self.devices_per_network.items():
             if count > _VENDOR_CAPS[family]:
-                raise ValueError(f"Meraki permits at most {_VENDOR_CAPS[family]} {family} devices/network")
+                raise ValueError(
+                    f"Meraki permits at most {_VENDOR_CAPS[family]} {family} devices/network"
+                )
 
         devices_per_org = per_network * self.networks_per_org
         if devices_per_org > 50000:
             raise ValueError("Meraki permits at most 50,000 devices per organization")
-        if self.switch_port_counts is not None and len(self.switch_port_counts) != self.devices_per_network.get(
-            "MS", 0
-        ):
+        if self.switch_port_counts is not None and len(
+            self.switch_port_counts
+        ) != self.devices_per_network.get("MS", 0):
             raise ValueError("switch_port_counts must provide one count per switch")
 
 
@@ -332,7 +334,10 @@ def build_fleet(preset: FleetPreset | str) -> FleetFixture:
 
     for org_index in range(parameters.organizations):
         org_id = f"fleet-{selected.value.lower()}-org-{org_index:02d}"
-        organizations.append({"id": org_id, "name": f"{selected.value} Organization {org_index + 1}"})
+        organizations.append({
+            "id": org_id,
+            "name": f"{selected.value} Organization {org_index + 1}",
+        })
         org_networks: list[dict[str, object]] = []
         org_devices: list[dict[str, object]] = []
 
@@ -469,19 +474,17 @@ def _build_application_usage(
     response: list[dict[str, object]] = []
     for client in clients:
         row_count = rows_per_client if remaining is None else min(rows_per_client, remaining)
-        response.append(
-            {
-                "clientId": client["id"],
-                "applicationUsage": [
-                    {
-                        "application": f"Fixture Application {row_index + 1}",
-                        "received": 200 + row_index,
-                        "sent": 100 + row_index,
-                    }
-                    for row_index in range(row_count)
-                ],
-            }
-        )
+        response.append({
+            "clientId": client["id"],
+            "applicationUsage": [
+                {
+                    "application": f"Fixture Application {row_index + 1}",
+                    "received": 200 + row_index,
+                    "sent": 100 + row_index,
+                }
+                for row_index in range(row_count)
+            ],
+        })
         if remaining is not None:
             remaining -= row_count
     return response

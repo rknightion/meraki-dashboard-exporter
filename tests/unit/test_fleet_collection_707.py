@@ -91,9 +91,7 @@ def isolated_probe_registry(monkeypatch: pytest.MonkeyPatch) -> CollectorRegistr
     return registry
 
 
-def _fleet_api(
-    network_clients: Callable[..., list[dict[str, object]]]
-) -> tuple[MagicMock, int]:
+def _fleet_api(network_clients: Callable[..., list[dict[str, object]]]) -> tuple[MagicMock, int]:
     """Create a real SDK-shaped mock from the branch topology and return its width."""
     fleet = build_fleet(FleetPreset.BRANCH_RETAIL)
     organization = fleet.organizations[0]
@@ -102,7 +100,9 @@ def _fleet_api(
     api.organizations = MagicMock()
     api.networks = MagicMock()
     api.organizations.getOrganizations = MagicMock(return_value=fleet.organizations)
-    api.organizations.getOrganizationNetworks = MagicMock(return_value=fleet.networks_by_org[org_id])
+    api.organizations.getOrganizationNetworks = MagicMock(
+        return_value=fleet.networks_by_org[org_id]
+    )
     api.networks.getNetworkClients = MagicMock(side_effect=network_clients)
     return api, fleet.network_count
 
@@ -173,7 +173,9 @@ async def test_fanout_records_429_timeout_and_partial_failure_without_fabricatin
     async def no_wait(_: float) -> None:
         return None
 
-    monkeypatch.setattr("meraki_dashboard_exporter.core.api_facade.asyncio.sleep", AsyncMock(side_effect=no_wait))
+    monkeypatch.setattr(
+        "meraki_dashboard_exporter.core.api_facade.asyncio.sleep", AsyncMock(side_effect=no_wait)
+    )
     fleet_settings.api.per_fetch_deadline_seconds = 0.1
 
     def clients(network_id: str, **_: object) -> list[dict[str, object]]:
@@ -208,15 +210,19 @@ async def test_fanout_records_429_timeout_and_partial_failure_without_fabricatin
         for sample in metric.samples
     ]
     assert len(samples) == network_count - 2
-    assert {sample.labels["network_id"] for sample in samples}.isdisjoint(
-        {timeout_network, failed_network}
-    )
+    assert {sample.labels["network_id"] for sample in samples}.isdisjoint({
+        timeout_network,
+        failed_network,
+    })
 
     await asyncio.sleep(0.002)
     await expiration._cleanup_expired_metrics()
-    assert isolated_probe_registry.get_sample_value(
-        "test_fleet_network_client_rows", {"network_id": first_network}
-    ) is None
+    assert (
+        isolated_probe_registry.get_sample_value(
+            "test_fleet_network_client_rows", {"network_id": first_network}
+        )
+        is None
+    )
 
 
 async def test_two_overlapping_collection_runs_share_inventory_but_not_network_metrics(
