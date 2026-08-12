@@ -101,11 +101,28 @@ class TestMerakiUrlValidation:
         m = MerakiSettings(api_key=_KEY, api_base_url=url)
         assert m.api_base_url == url
 
-    def test_unknown_but_wellformed_region_warns_not_fails(self):
-        """A well-formed custom/proxy base URL is accepted (warn only)."""
+    def test_unknown_https_region_requires_explicit_opt_in(self):
+        """#697: an unknown HTTPS origin is rejected unless explicitly allowed."""
         url = "https://meraki-proxy.internal.example.com/api/v1"
-        m = MerakiSettings(api_key=_KEY, api_base_url=url)
+
+        with pytest.raises(ValidationError, match="allow_custom_api_base_url"):
+            MerakiSettings(api_key=_KEY, api_base_url=url)
+
+        m = MerakiSettings(
+            api_key=_KEY,
+            api_base_url=url,
+            allow_custom_api_base_url=True,
+        )
         assert m.api_base_url == url
+
+    def test_plain_http_region_is_rejected_even_with_custom_opt_in(self):
+        """#697: custom-origin opt-in never permits clear-text API credentials."""
+        with pytest.raises(ValidationError, match="HTTPS"):
+            MerakiSettings(
+                api_key=_KEY,
+                api_base_url="http://meraki-proxy.internal.example.com/api/v1",
+                allow_custom_api_base_url=True,
+            )
 
     @pytest.mark.parametrize(
         "url",

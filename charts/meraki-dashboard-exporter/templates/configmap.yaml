@@ -21,6 +21,9 @@ data:
   {{- if hasKey . "apiBaseUrl" }}
   MERAKI_EXPORTER_MERAKI__API_BASE_URL: {{ .apiBaseUrl | quote }}
   {{- end }}
+  {{- if hasKey . "merakiAllowCustomApiBaseUrl" }}
+  MERAKI_EXPORTER_MERAKI__ALLOW_CUSTOM_API_BASE_URL: {{ .merakiAllowCustomApiBaseUrl | quote }}
+  {{- end }}
   {{- if hasKey . "logLevel" }}
   MERAKI_EXPORTER_LOGGING__LEVEL: {{ .logLevel | quote }}
   {{- end }}
@@ -137,6 +140,15 @@ data:
   {{- end }}
   {{- if hasKey . "webhooksMaxPayloadSize" }}
   MERAKI_EXPORTER_WEBHOOKS__MAX_PAYLOAD_SIZE: {{ .webhooksMaxPayloadSize | quote }}
+  {{- end }}
+  {{- if hasKey . "webhooksFreshnessWindowSeconds" }}
+  MERAKI_EXPORTER_WEBHOOKS__FRESHNESS_WINDOW_SECONDS: {{ .webhooksFreshnessWindowSeconds | quote }}
+  {{- end }}
+  {{- if hasKey . "webhooksReplayCacheTtlSeconds" }}
+  MERAKI_EXPORTER_WEBHOOKS__REPLAY_CACHE_TTL_SECONDS: {{ .webhooksReplayCacheTtlSeconds | quote }}
+  {{- end }}
+  {{- if hasKey . "webhooksReplayCacheMaxEntries" }}
+  MERAKI_EXPORTER_WEBHOOKS__REPLAY_CACHE_MAX_ENTRIES: {{ .webhooksReplayCacheMaxEntries | quote }}
   {{- end }}
   {{- if hasKey . "otelEnabled" }}
   MERAKI_EXPORTER_OTEL__ENABLED: {{ .otelEnabled | quote }}

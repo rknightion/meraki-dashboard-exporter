@@ -573,6 +573,7 @@ class CollectorMetricName(StrEnum):
 
     # API client metrics
     API_REQUESTS_TOTAL = "meraki_exporter_api_requests_total"
+    EXPORTER_API_REQUEST_ATTEMPTS_TOTAL = "meraki_exporter_api_request_attempts_total"
     API_RETRY_ATTEMPTS_TOTAL = "meraki_exporter_api_retry_total"
     API_RATE_LIMITER_WAIT_SECONDS = "meraki_exporter_api_rate_limiter_wait_seconds"
     API_RATE_LIMITER_THROTTLED_TOTAL = "meraki_exporter_api_rate_limiter_throttled_total"
@@ -595,6 +596,9 @@ class CollectorMetricName(StrEnum):
     EXPORTER_CARDINALITY_LIMIT_REACHED_TOTAL = "meraki_exporter_cardinality_limit_reached_total"
     # Gauge (per-cycle snapshot, not a monotonic counter) — must not end in `_total`.
     CARDINALITY_ANALYZED_METRICS = "meraki_exporter_cardinality_analyzed_metrics"
+    CARDINALITY_PRODUCT_SERIES = "meraki_exporter_cardinality_product_series"
+    CARDINALITY_SELF_SERIES = "meraki_exporter_cardinality_self_series"
+    CARDINALITY_EXPOSED_SERIES = "meraki_exporter_cardinality_exposed_series"
 
     # Clients dropped from metric emission by the per-network/global client cap
     # (#533). Per-cycle snapshot gauge (0 = within caps), not a Counter.
@@ -677,6 +681,10 @@ class WebhookMetricName(StrEnum):
     WEBHOOK_EVENTS_RECEIVED_TOTAL = "meraki_webhook_events_received_total"
     WEBHOOK_EVENTS_PROCESSED_TOTAL = "meraki_webhook_events_processed_total"
     WEBHOOK_EVENTS_FAILED_TOTAL = "meraki_webhook_events_failed_total"
+    WEBHOOK_DELIVERY_ATTEMPTS_TOTAL = "meraki_webhook_delivery_attempts_total"
+    WEBHOOK_UNIQUE_ALERTS_TOTAL = "meraki_webhook_unique_alerts_total"
+    WEBHOOK_REPLAYS_REJECTED_TOTAL = "meraki_webhook_replays_rejected_total"
+    WEBHOOK_STALE_REJECTED_TOTAL = "meraki_webhook_stale_rejected_total"
 
     # Processing latency
     WEBHOOK_PROCESSING_DURATION_SECONDS = "meraki_webhook_processing_duration_seconds"

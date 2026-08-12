@@ -20,9 +20,8 @@ from .logging import get_logger
 
 logger = get_logger(__name__)
 
-#: Well-known Meraki regional API base URLs. A configured ``api_base_url`` that
-#: is well-formed but not in this set is accepted with a warning (custom proxies
-#: and future regions must keep working) - see :class:`MerakiSettings`.
+#: Well-known Meraki regional API base URLs. Custom HTTPS origins require the
+#: explicit ``allow_custom_api_base_url`` opt-in - see :class:`MerakiSettings`.
 KNOWN_REGION_BASE_URLS: frozenset[str] = frozenset({
     MERAKI_API_BASE_URL,
     MERAKI_API_BASE_URL_CANADA,
@@ -826,6 +825,24 @@ class WebhookSettings(BaseModel):
         le=10 * 1024 * 1024,  # 10MB max
         description="Maximum webhook payload size in bytes",
     )
+    freshness_window_seconds: int = Field(
+        300,
+        ge=30,
+        le=3600,
+        description="Maximum accepted webhook clock skew in seconds",
+    )
+    replay_cache_ttl_seconds: int = Field(
+        3600,
+        ge=60,
+        le=86400,
+        description="TTL in seconds for processed-webhook replay protection entries",
+    )
+    replay_cache_max_entries: int = Field(
+        10000,
+        ge=100,
+        le=1000000,
+        description="Maximum processed-webhook replay protection entries",
+    )
 
 
 class CollectorSettings(BaseModel):
@@ -1005,6 +1022,12 @@ class MerakiSettings(BaseModel):
         "https://api.meraki.com/api/v1",
         description="Meraki API base URL (use regional endpoints if needed)",
     )
+    allow_custom_api_base_url: bool = Field(
+        False,
+        description=(
+            "Explicitly allow an HTTPS Meraki API base URL outside the known regional origins"
+        ),
+    )
 
     @field_validator("api_key")
     @classmethod
@@ -1018,12 +1041,10 @@ class MerakiSettings(BaseModel):
     @field_validator("api_base_url", mode="before")
     @classmethod
     def validate_api_base_url(cls, v: object) -> str:
-        """Reject malformed base URLs; warn on unknown-but-well-formed regions.
+        """Reject malformed or clear-text base URLs.
 
         A typo'd base URL otherwise surfaces much later as an opaque connection
-        failure (#590). We require a well-formed http(s) URL with a host. A
-        well-formed URL that is not a recognised Meraki region is accepted with
-        a warning so custom proxies / future regions keep working (CFG-15).
+        failure (#590). API credentials may only be sent over HTTPS (#697).
         """
         if not isinstance(v, str):
             raise ValueError("api_base_url must be a string")
@@ -1031,19 +1052,30 @@ class MerakiSettings(BaseModel):
         if not url:
             raise ValueError("api_base_url must not be empty")
         parsed = urlparse(url)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        if parsed.scheme != "https" or not parsed.netloc:
             raise ValueError(
-                f"Invalid api_base_url {url!r}: must be a well-formed http(s) URL "
+                f"Invalid api_base_url {url!r}: must be a well-formed HTTPS URL "
                 "(e.g. https://api.meraki.com/api/v1)"
             )
-        if url.rstrip("/") not in {u.rstrip("/") for u in KNOWN_REGION_BASE_URLS}:
-            logger.warning(
-                "api_base_url is not a recognised Meraki region base URL; "
-                "proceeding anyway (custom/proxy endpoint)",
-                api_base_url=url,
-                known_regions=sorted(KNOWN_REGION_BASE_URLS),
-            )
         return url
+
+    @model_validator(mode="after")
+    def validate_custom_api_base_url_opt_in(self) -> MerakiSettings:
+        """Require explicit opt-in for HTTPS origins outside known Meraki regions."""
+        known_urls = {url.rstrip("/") for url in KNOWN_REGION_BASE_URLS}
+        if self.api_base_url.rstrip("/") in known_urls:
+            return self
+        if not self.allow_custom_api_base_url:
+            raise ValueError(
+                "api_base_url is not a recognised Meraki regional URL; set "
+                "meraki.allow_custom_api_base_url=true to opt in to a custom HTTPS origin"
+            )
+        logger.warning(
+            "Using explicitly allowed custom Meraki API base URL",
+            api_base_url=self.api_base_url,
+            known_regions=sorted(KNOWN_REGION_BASE_URLS),
+        )
+        return self
 
     @field_validator("org_id", mode="before")
     @classmethod
