@@ -74,6 +74,18 @@ class CollectorError(Exception):
         self.context = context or {}
 
 
+class TaskExpiredBeforeStartError(CollectorError):
+    """A bounded task's deadline elapsed before execution was admitted."""
+
+    def __init__(self, task_name: str, wait_seconds: float) -> None:
+        """Initialize the distinct pre-execution expiry classification."""
+        super().__init__(
+            f"{task_name} expired before execution started after waiting {wait_seconds:.3f}s",
+            ErrorCategory.TIMEOUT,
+            {"wait_seconds": wait_seconds},
+        )
+
+
 class APINotAvailableError(CollectorError):
     """Raised when an API endpoint is not available (404)."""
 

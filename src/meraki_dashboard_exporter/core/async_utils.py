@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import AsyncIterator, Callable, Coroutine
 from contextlib import asynccontextmanager
 from contextvars import copy_context
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from opentelemetry import trace
+from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
+from .constants.metrics_constants import CollectorMetricName
 from .logging import get_logger
+from .metrics import LabelName
 
 if TYPE_CHECKING:
     from asyncio import Semaphore, Task
@@ -19,6 +24,52 @@ logger = get_logger(__name__)
 
 T = TypeVar("T")
 R = TypeVar("R")
+
+_TASK_GROUP_PHASE = "task_group"
+
+
+@dataclass(frozen=True)
+class TaskAdmissionMetrics:
+    """Shared bounded-task admission metrics, labelled by a fixed lifecycle phase."""
+
+    pending: Gauge
+    active: Gauge
+    queue_wait_seconds: Histogram
+    expired_before_start: Counter
+
+
+_task_admission_metrics: TaskAdmissionMetrics | None = None
+
+
+def get_task_admission_metrics() -> TaskAdmissionMetrics:
+    """Return task admission metrics, recreating them after an isolated test registry reset."""
+    global _task_admission_metrics
+    metric_name = CollectorMetricName.TASKS_PENDING.value
+    if _task_admission_metrics is None or metric_name not in REGISTRY._names_to_collectors:
+        labelnames = [LabelName.PHASE.value]
+        _task_admission_metrics = TaskAdmissionMetrics(
+            pending=Gauge(
+                CollectorMetricName.TASKS_PENDING.value,
+                "Tasks waiting for a bounded admission slot",
+                labelnames=labelnames,
+            ),
+            active=Gauge(
+                CollectorMetricName.TASKS_ACTIVE.value,
+                "Tasks admitted for execution",
+                labelnames=labelnames,
+            ),
+            queue_wait_seconds=Histogram(
+                CollectorMetricName.TASK_QUEUE_WAIT_SECONDS.value,
+                "Seconds tasks wait for admission before execution starts",
+                labelnames=labelnames,
+            ),
+            expired_before_start=Counter(
+                CollectorMetricName.TASK_EXPIRED_BEFORE_START_TOTAL.value,
+                "Tasks whose admission deadline elapsed before execution began",
+                labelnames=labelnames,
+            ),
+        )
+    return _task_admission_metrics
 
 
 class ManagedTaskGroup:
@@ -126,6 +177,7 @@ class ManagedTaskGroup:
             asyncio.Semaphore(max_concurrency) if max_concurrency else None
         )
         self._active_count = 0
+        self._pending_count = 0
         self._total_created = 0
         self._total_completed = 0
         self._cancelled_count = 0
@@ -133,6 +185,7 @@ class ManagedTaskGroup:
         # early finishers that are discarded from ``self.tasks`` before
         # ``__aexit__`` gathers the survivors), so no task's failure is lost.
         self._task_exceptions: list[BaseException] = []
+        self._task_metrics = get_task_admission_metrics()
 
         # Tracing support for distributed tracing context propagation
         self._span: trace.Span | None = None
@@ -277,14 +330,35 @@ class ManagedTaskGroup:
         if self._closed:
             raise RuntimeError(f"Cannot add tasks to closed group: {self.name}")
 
+        admitted = False
+        if self._semaphore is not None:
+            queued_at = time.monotonic()
+            self._pending_count += 1
+            self._task_metrics.pending.labels(phase=_TASK_GROUP_PHASE).inc()
+            try:
+                await self._semaphore.acquire()
+                admitted = True
+            except BaseException:
+                close = getattr(coro, "close", None)
+                if callable(close):
+                    close()
+                raise
+            finally:
+                self._pending_count -= 1
+                self._task_metrics.pending.labels(phase=_TASK_GROUP_PHASE).dec()
+
+            self._task_metrics.queue_wait_seconds.labels(phase=_TASK_GROUP_PHASE).observe(
+                time.monotonic() - queued_at
+            )
+            self._active_count += 1
+            self._task_metrics.active.labels(phase=_TASK_GROUP_PHASE).inc()
+
         # Copy the current context to propagate trace context to child tasks
         # This ensures distributed tracing maintains proper parent-child relationships
         ctx = copy_context()
 
         async def _run_with_context() -> T:
             """Run the coroutine within the copied context."""
-            if self._semaphore:
-                return await self._run_with_semaphore(coro, name or "unnamed")
             return await coro
 
         # Create the task using the copied context
@@ -299,6 +373,11 @@ class ManagedTaskGroup:
         def _on_complete(t: Task[T]) -> None:
             self.tasks.discard(t)
             self._total_completed += 1
+            if admitted:
+                self._active_count -= 1
+                self._task_metrics.active.labels(phase=_TASK_GROUP_PHASE).dec()
+                if self._semaphore is not None:
+                    self._semaphore.release()
             # Retrieve and record any exception immediately. Calling
             # ``t.exception()`` here also marks it retrieved (suppressing the
             # "Task exception was never retrieved" warning), and stashing it
@@ -326,43 +405,6 @@ class ManagedTaskGroup:
         """Number of tasks that completed without raising (cancellations excluded)."""
         return self._total_completed - self._cancelled_count - len(self._task_exceptions)
 
-    async def _run_with_semaphore(
-        self,
-        coro: Coroutine[Any, Any, T],
-        task_name: str,
-    ) -> T:
-        """Run coroutine with semaphore for bounded concurrency.
-
-        Parameters
-        ----------
-        coro : Coroutine
-            The coroutine to run.
-        task_name : str
-            Name of the task for logging.
-
-        Returns
-        -------
-        T
-            Result from the coroutine.
-
-        """
-        if not self._semaphore:
-            return await coro
-
-        # Wait for semaphore slot (backpressure)
-        async with self._semaphore:
-            self._active_count += 1
-            logger.debug(
-                f"Task acquired semaphore in {self.name}",
-                task_name=task_name,
-                active=self._active_count,
-                max_concurrency=self.max_concurrency,
-            )
-            try:
-                return await coro
-            finally:
-                self._active_count -= 1
-
     async def gather(self) -> list[Any]:
         """Wait for all tasks and return results.
 
@@ -387,10 +429,10 @@ class ManagedTaskGroup:
 
         """
         return {
-            "active": len(self.tasks),
+            "active": self._active_count if self._semaphore is not None else len(self.tasks),
             "total_created": self._total_created,
             "total_completed": self._total_completed,
-            "pending": self._total_created - self._total_completed,
+            "pending": self._pending_count,
             "active_count": self._active_count,
         }
 

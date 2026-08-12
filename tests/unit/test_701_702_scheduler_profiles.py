@@ -17,6 +17,7 @@ from meraki_dashboard_exporter.collectors.mt_alerts import MTSensorAlertsCollect
 from meraki_dashboard_exporter.collectors.mt_sensor import MTSensorCollector
 from meraki_dashboard_exporter.collectors.network_health import NetworkHealthCollector
 from meraki_dashboard_exporter.collectors.organization import OrganizationCollector
+from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.scheduler import (
     EndpointGroup,
     EndpointGroupName,
@@ -226,26 +227,27 @@ async def test_unset_over_budget_profile_fails_the_startup_preflight() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unset_profile_fails_when_startup_shape_cannot_be_verified() -> None:
-    """A swallowed inventory warm failure cannot become an empty-shape approval."""
+async def test_unset_profile_defers_decision_when_startup_shape_cannot_be_verified() -> None:
+    """Transient inventory failure remains startup-tolerant and makes no profile decision."""
     manager = object.__new__(CollectorManager)
     manager.settings = SimpleNamespace(collectors=SimpleNamespace(profile=None))
     manager.inventory = SimpleNamespace(warm_cache=AsyncMock())
     manager._resolve_and_log_schedule = AsyncMock(return_value=False)  # type: ignore[method-assign]
     manager.scheduler = MagicMock()
 
-    with pytest.raises(RuntimeError, match="could not verify the organization shape"):
-        await manager.validate_profile_selection()
+    await manager.validate_profile_selection()
 
     manager.scheduler.requires_explicit_profile.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_discovery_uses_the_collector_manager_rate_limiter(
-    fast_test_settings: object,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """#723 startup discovery shares the collector manager's metered limiter."""
-    exporter = ExporterApp(fast_test_settings)  # type: ignore[arg-type]
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__API_KEY", "0" * 40)
+    monkeypatch.setenv("MERAKI_EXPORTER_MERAKI__ORG_ID", "123456")
+    exporter = ExporterApp(Settings())
     exporter.collector_manager.collect_initial = AsyncMock()  # type: ignore[method-assign]
     exporter._collector_loop = AsyncMock()  # type: ignore[method-assign]
     exporter._scheduler_resolve_loop = AsyncMock()  # type: ignore[method-assign]

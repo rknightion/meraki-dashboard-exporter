@@ -10,7 +10,9 @@ from typing import TYPE_CHECKING, Any
 from opentelemetry import trace
 from prometheus_client import Counter, Gauge
 
+from ..core.async_utils import get_task_admission_metrics
 from ..core.constants.metrics_constants import CollectorMetricName
+from ..core.error_handling import TaskExpiredBeforeStartError
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
 from ..core.org_health import OrgHealthTracker
@@ -29,6 +31,23 @@ if TYPE_CHECKING:
     from ..core.scheduler import OrgShape
 
 logger = get_logger(__name__)
+
+_COLLECTOR_ADMISSION_PHASE = "collector_admission"
+
+
+def calculate_collector_admission_limit(settings: Any) -> int:
+    """Align collector admission with the bounded SDK executor capacity.
+
+    Each admitted collector may fan out to ``api.concurrency_limit`` SDK
+    calls. Capping the outer admission count prevents those task groups from
+    collectively queuing more work than the dedicated executor can run.
+    """
+    configured = int(settings.collectors.max_concurrent_collectors)
+    executor_workers = int(settings.api.executor_workers)
+    fanout = int(settings.api.concurrency_limit)
+    executor_capacity = max(1, executor_workers // fanout)
+    return min(configured, executor_capacity)
+
 
 # Collectors that consult the shared OrgHealthTracker to skip per-org collection
 # for organizations currently in exponential backoff (F-169). Three of them also
@@ -89,8 +108,9 @@ class CollectorManager:
 
         # Bound concurrent collector runs across all the per-collector loops.
         self._collector_semaphore = asyncio.Semaphore(
-            self.settings.collectors.max_concurrent_collectors
+            calculate_collector_admission_limit(self.settings)
         )
+        self._task_metrics = get_task_admission_metrics()
 
         # Initialize shared inventory service for caching org/network/device data.
         # Pass a NetworkFilter so excluded networks are dropped at the read path.
@@ -564,13 +584,11 @@ class CollectorManager:
         if self.settings.collectors.profile is not None:
             return
         await self.inventory.warm_cache()
+        # D10 keeps transient Meraki unavailability startup-tolerant. If the
+        # shape cannot be verified, make no profile decision; a later resolver
+        # pass will solve once inventory recovers.
         if not await self._resolve_and_log_schedule():
-            raise RuntimeError(
-                "The startup preflight could not verify the organization shape. "
-                "Retry when inventory is reachable or set "
-                "MERAKI_EXPORTER_COLLECTORS__PROFILE explicitly to availability, "
-                "standard, or full."
-            )
+            return
         if not self.scheduler.requires_explicit_profile():
             return
         diagnostics = self.scheduler.diagnostics()
@@ -759,15 +777,81 @@ class CollectorManager:
         # cannot queue another full run in the check/acquire gap (#695).
         await collector_lock.acquire()
         try:
-            async with self._collector_semaphore:
-                await self._execute_admitted_collector(
-                    collector,
-                    collector_name,
-                    timeout,
-                    force=force,
-                )
+            await self._admit_collector(collector, collector_name, timeout, force=force)
         finally:
             collector_lock.release()
+
+    async def _admit_collector(
+        self,
+        collector: MetricCollector,
+        collector_name: str,
+        timeout: int,
+        *,
+        force: bool,
+    ) -> None:
+        """Admit a collector run or record a deadline expiry before it starts."""
+        if not hasattr(self, "_task_metrics"):
+            # Keep lightweight manager fixtures and direct unit construction
+            # compatible while production instances initialize this in __init__.
+            self._task_metrics = get_task_admission_metrics()
+        loop = asyncio.get_running_loop()
+        queued_at = loop.time()
+        self._task_metrics.pending.labels(phase=_COLLECTOR_ADMISSION_PHASE).inc()
+        admitted = False
+        try:
+            try:
+                async with asyncio.timeout(timeout):
+                    await self._collector_semaphore.acquire()
+                admitted = True
+            except TimeoutError:
+                wait_seconds = loop.time() - queued_at
+                error = TaskExpiredBeforeStartError(collector_name, wait_seconds)
+                logger.error(
+                    "Collector expired before execution started",
+                    collector=collector_name,
+                    timeout_seconds=timeout,
+                    queue_wait_seconds=round(wait_seconds, 3),
+                )
+                self._task_metrics.expired_before_start.labels(
+                    phase=_COLLECTOR_ADMISSION_PHASE
+                ).inc()
+                self._collection_errors.labels(
+                    collector=collector_name,
+                    error_type=type(error).__name__,
+                ).inc()
+                self._mark_span_error(error)
+                self._record_pre_start_failure(collector_name)
+                return
+            finally:
+                self._task_metrics.pending.labels(phase=_COLLECTOR_ADMISSION_PHASE).dec()
+
+            wait_seconds = loop.time() - queued_at
+            self._task_metrics.queue_wait_seconds.labels(phase=_COLLECTOR_ADMISSION_PHASE).observe(
+                wait_seconds
+            )
+            self._task_metrics.active.labels(phase=_COLLECTOR_ADMISSION_PHASE).inc()
+            await self._execute_admitted_collector(
+                collector,
+                collector_name,
+                timeout,
+                force=force,
+            )
+        finally:
+            if admitted:
+                self._collector_semaphore.release()
+                self._task_metrics.active.labels(phase=_COLLECTOR_ADMISSION_PHASE).dec()
+
+    def _record_pre_start_failure(self, collector_name: str) -> None:
+        """Account for an attempted collector run that could not begin in time."""
+        health = self.collector_health.get(collector_name)
+        if health is None:
+            return
+        health["total_runs"] += 1
+        health["failure_streak"] += 1
+        health["total_failures"] += 1
+        self._collector_failure_streak.labels(collector=collector_name).set(
+            health["failure_streak"]
+        )
 
     async def _execute_admitted_collector(
         self,
