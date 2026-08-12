@@ -12,6 +12,26 @@ Collectors gather metrics from the Meraki API. New collectors live in `src/merak
 - **Registration is import-driven**: add your module to the import list in `src/meraki_dashboard_exporter/collectors/manager.py` so the decorator executes.
 - **Sub-collectors** are instantiated by a parent coordinator (manual registration in the parent `__init__`).
 
+## Measured extension cost
+
+This is a closed-set measurement, not an estimate. A new top-level collector changes **three
+existing files**: its module is added to `collectors/manager.py`'s import-to-register list, its
+endpoint groups are declared, and its metrics are added to
+`core/constants/metrics_constants.py` (excluding the new module, generated docs, and tests).
+
+A genuinely new Meraki **product family** changes **six existing seams**:
+
+1. `src/meraki_dashboard_exporter/core/constants/device_constants.py:9-42` — family enum and API product strings.
+2. `src/meraki_dashboard_exporter/collectors/devices/__init__.py:3-20` — public collector import.
+3. `src/meraki_dashboard_exporter/collectors/device.py:32-44` — parent routing.
+4. `src/meraki_dashboard_exporter/core/scheduler.py:66-220` — endpoint-group and organization-shape accounting.
+5. `src/meraki_dashboard_exporter/services/inventory.py:1156-1235` — inventory classification.
+6. `src/meraki_dashboard_exporter/core/constants/metrics_constants.py` — metric enum.
+
+A new **model subtype** of an existing family costs **zero structural seams**: Catalyst/CS already
+routes through MS and Catalyst CW through MR. Do not introduce declarative family registration to
+avoid a cost that this measurement does not show for model subtypes.
+
 ## Basic steps
 1. Create a new module under `collectors/` and add it to the import list in `collectors/manager.py`.
 2. Define a class inheriting from `MetricCollector` (or the relevant base) and decorate it with `@register_collector`. Declare its endpoint group(s) (name, priority, `floor_seconds`, `cost_fn`) via `get_endpoint_groups()` so the scheduler knows how to pace it.
