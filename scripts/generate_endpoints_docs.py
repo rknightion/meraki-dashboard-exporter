@@ -10,9 +10,22 @@ from pathlib import Path
 HTTP_METHODS = {"get", "post", "put", "delete", "patch", "options", "head"}
 
 ENDPOINT_NOTES = {
-    "/clients": "Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true",
-    "/api/clients/clear-dns-cache": "Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true",
-    "/api/webhooks/meraki": "Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true",
+    "/": "Public landing page; UI may be disabled.",
+    "/health": "Public, read-only liveness probe.",
+    "/ready": "Public, read-only readiness probe.",
+    "/metrics": "Public, read-only Prometheus scrape endpoint.",
+    "/clients": "Read-only client UI; requires clients enabled and is UI/token-gated when configured.",
+    "/status": "Read-only status UI; UI/token-gated when configured.",
+    "/config": "Read-only redacted configuration; UI/token-gated when configured.",
+    "/api/clients/clear-dns-cache": "State-changing control API; fail-closed bearer token required, and clients must be enabled.",
+    "/api/collectors/trigger": "State-changing forced collection; fail-closed bearer token required.",
+    "/api/webhooks/meraki": "Webhook receiver; requires webhooks enabled and validates the configured shared secret.",
+    "/api/metrics/cardinality": "Read-only cardinality JSON; UI/token-gated when configured.",
+    "/cardinality": "Read-only cardinality UI; UI/token-gated when configured.",
+    "/cardinality/all-metrics": "Read-only cardinality UI; UI/token-gated when configured.",
+    "/cardinality/all-labels": "Read-only cardinality UI; UI/token-gated when configured.",
+    "/cardinality/export/json": "Read-only cardinality export; UI/token-gated when configured.",
+    "/cardinality/label-values/{metric_name}": "Read-only cardinality detail; UI/token-gated when configured.",
 }
 
 CARDINALITY_NOTE = "Cardinality data appears after the first full collection cycle."
@@ -97,10 +110,6 @@ def generate_markdown(endpoints: list[Endpoint]) -> str:
 
     for endpoint in sorted(endpoints, key=lambda e: (e.path, e.method)):
         notes = ENDPOINT_NOTES.get(endpoint.path, "")
-        if endpoint.path.startswith("/cardinality") or endpoint.path.startswith(
-            "/api/metrics/cardinality"
-        ):
-            notes = CARDINALITY_NOTE
         lines.append(
             f"| `{endpoint.method}` | `{endpoint.path}` | {endpoint.description} | {notes} |"
         )
@@ -114,6 +123,15 @@ def generate_markdown(endpoints: list[Endpoint]) -> str:
     lines.append("")
 
     return "\n".join(lines)
+
+
+def validate_endpoint_notes(endpoints: list[Endpoint]) -> None:
+    """Require every discovered route to document its auth and side-effect contract."""
+    missing = sorted(
+        endpoint.path for endpoint in endpoints if not ENDPOINT_NOTES.get(endpoint.path, "").strip()
+    )
+    if missing:
+        raise RuntimeError(f"Missing endpoint auth/side-effect notes: {', '.join(missing)}")
 
 
 def main() -> None:
@@ -131,6 +149,7 @@ def main() -> None:
     deduped: dict[tuple[str, str], Endpoint] = {}
     for endpoint in endpoints:
         deduped[(endpoint.method, endpoint.path)] = endpoint
+    validate_endpoint_notes(list(deduped.values()))
 
     output_file = repo_root / "docs" / "reference" / "endpoints.md"
     output_file.parent.mkdir(parents=True, exist_ok=True)

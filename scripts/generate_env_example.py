@@ -56,6 +56,10 @@ SECTION_TITLES: dict[str, str] = {
 
 def load_settings_model(repo_root: Path) -> type[BaseModel]:
     """Load the top-level ``Settings`` model without importing the package init."""
+    existing = sys.modules.get("meraki_dashboard_exporter.core.config")
+    if existing is not None:
+        return existing.Settings  # type: ignore[no-any-return]
+
     # Register lightweight stub parent packages (same technique as
     # generate_config_docs.load_config_models) so config.py's relative imports
     # resolve without executing the heavy package __init__.

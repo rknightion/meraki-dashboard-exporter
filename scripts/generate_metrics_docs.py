@@ -20,11 +20,6 @@ PROM_METRIC_TYPES = {
 
 EXCLUDED_CLASS_NAMES = {
     "SpanMetricsAggregator",  # Not instantiated yet
-    "CircuitBreaker",  # Not wired in
-}
-
-EXCLUDED_FILES = {
-    "async_utils.py",  # CircuitBreaker metrics are not wired in
 }
 
 CONDITIONAL_NOTES = {
@@ -448,9 +443,6 @@ def scan_for_metrics(
             continue
         if any(part in {"tests", "test", "__pycache__"} for part in py_file.parts):
             continue
-        if py_file.name in EXCLUDED_FILES:
-            continue
-
         try:
             tree = ast.parse(read_text(py_file), filename=str(py_file))
             create_visitor = CreateMetricVisitor(py_file, repo_root, metric_name_map, label_map)
@@ -464,7 +456,7 @@ def scan_for_metrics(
                 print(f"  Found {len(file_metrics)} metrics in {py_file.relative_to(src_path)}")
             all_metrics.extend(file_metrics)
         except Exception as exc:
-            print(f"Error parsing {py_file}: {exc}")
+            raise RuntimeError(f"Error parsing {py_file}: {exc}") from exc
 
     # Deduplicate by name + owner + type
     deduped: list[MetricDefinition] = []
@@ -477,6 +469,12 @@ def scan_for_metrics(
         deduped.append(metric)
 
     return deduped
+
+
+def require_metric_definitions(metrics: list[MetricDefinition]) -> None:
+    """Reject an empty scan rather than writing an incomplete metric catalog."""
+    if not metrics:
+        raise RuntimeError("No metric definitions found while generating documentation")
 
 
 def generate_markdown(metrics: list[MetricDefinition]) -> str:
@@ -558,6 +556,7 @@ def main() -> None:
     label_map = parse_label_constants(metrics_file)
 
     metrics = scan_for_metrics(src_path, repo_root, metric_name_map, label_map)
+    require_metric_definitions(metrics)
     print(f"Found {len(metrics)} metric definitions")
 
     markdown = generate_markdown(metrics)

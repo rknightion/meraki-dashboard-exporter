@@ -290,10 +290,16 @@ def scan_for_collectors(root_path: Path, repo_root: Path) -> list[dict[str, Any]
                 )
 
             all_collectors.extend(visitor.collectors)
-        except Exception as e:
-            print(f"Error parsing {py_file}: {e}")
+        except Exception as exc:
+            raise RuntimeError(f"Error parsing {py_file}: {exc}") from exc
 
     return all_collectors
+
+
+def require_collector_definitions(collectors: list[dict[str, Any]]) -> None:
+    """Reject an empty scan rather than writing an incomplete collector reference."""
+    if not collectors:
+        raise RuntimeError("No collector definitions found while generating documentation")
 
 
 def generate_markdown(collectors: list[dict[str, Any]]) -> str:
@@ -401,6 +407,7 @@ def main() -> None:
 
     print("Scanning for collectors...")
     collectors = scan_for_collectors(src_path, repo_root)
+    require_collector_definitions(collectors)
     print(f"Found {len(collectors)} collector definitions")
 
     # Generate markdown

@@ -34,6 +34,10 @@ def find_repo_root(start_path: Path) -> Path:
 
 def load_config_models(repo_root: Path) -> Any:
     """Load config_models without importing the package __init__."""
+    existing = sys.modules.get("meraki_dashboard_exporter.core.config_models")
+    if existing is not None:
+        return existing
+
     module_path = repo_root / "src" / "meraki_dashboard_exporter" / "core" / "config_models.py"
     if not module_path.exists():
         raise FileNotFoundError(f"Config models not found at {module_path}")
@@ -187,53 +191,9 @@ def generate_model_docs(model: type[BaseModel], prefix: str = "") -> list[dict[s
     return docs
 
 
-def generate_configuration_docs() -> str:
-    """Generate complete configuration documentation in mkdocs style."""
-    sections = []
-
-    # Header
-    sections.append("# Configuration Reference")
-    sections.append("")
-    sections.append(
-        "This document provides a comprehensive reference for all configuration options available in the Meraki Dashboard Exporter."
-    )
-    sections.append("")
-
-    # Overview section
-    sections.append("## Overview")
-    sections.append("")
-    sections.append("The exporter can be configured using environment variables.")
-    sections.append("All configuration is based on Pydantic models with built-in validation.")
-    sections.append("")
-
-    # Environment variable format
-    sections.append("## Environment Variable Format")
-    sections.append("")
-    sections.append("Configuration follows a hierarchical structure using environment variables:")
-    sections.append("")
-    sections.append("- **All settings**: `MERAKI_EXPORTER_{SECTION}__{SETTING}`")
-    sections.append("- **Double underscore** (`__`) separates nested configuration levels")
-    sections.append("")
-    sections.append('!!! example "Environment Variable Examples"')
-    sections.append("    ```bash")
-    sections.append("    # Meraki API configuration")
-    sections.append("    export MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here")
-    sections.append("    export MERAKI_EXPORTER_MERAKI__ORG_ID=123456")
-    sections.append("    ")
-    sections.append("    # Logging configuration")
-    sections.append("    export MERAKI_EXPORTER_LOGGING__LEVEL=INFO")
-    sections.append("    ")
-    sections.append("    # API settings")
-    sections.append("    export MERAKI_EXPORTER_API__TIMEOUT=30")
-    sections.append("    export MERAKI_EXPORTER_API__CONCURRENCY_LIMIT=5")
-    sections.append("    ```")
-    sections.append("")
-
-    # Nested model sections
-    repo_root = find_repo_root(Path(__file__).resolve())
-    config_models = load_config_models(repo_root)
-
-    nested_models = [
+def get_nested_models(config_models: Any) -> list[tuple[str, type[BaseModel], str, str]]:
+    """Return the explicitly curated config.md sections."""
+    return [
         (
             "Meraki Settings",
             config_models.MerakiSettings,
@@ -307,6 +267,81 @@ def generate_configuration_docs() -> str:
             "Restrict which networks are scraped by name glob, ID, or tag",
         ),
     ]
+
+
+def validate_nested_models(
+    nested_models: list[tuple[str, type[BaseModel], str, str]], settings: type[BaseModel]
+) -> None:
+    """Ensure config.md sections cover exactly the nested Settings models in .env.example."""
+    expected = {
+        field_info.annotation
+        for field_info in settings.model_fields.values()
+        if isinstance(field_info.annotation, type) and issubclass(field_info.annotation, BaseModel)
+    }
+    documented = {model for _, model, _, _ in nested_models}
+    if expected == documented:
+        return
+
+    missing = sorted(model.__name__ for model in expected - documented)
+    unexpected = sorted(model.__name__ for model in documented - expected)
+    details = []
+    if missing:
+        details.append(f"missing: {', '.join(missing)}")
+    if unexpected:
+        details.append(f"unexpected: {', '.join(unexpected)}")
+    raise RuntimeError(f"nested_models does not match Settings: {'; '.join(details)}")
+
+
+def generate_configuration_docs() -> str:
+    """Generate complete configuration documentation in mkdocs style."""
+    sections = []
+
+    # Header
+    sections.append("# Configuration Reference")
+    sections.append("")
+    sections.append(
+        "This document provides a comprehensive reference for all configuration options available in the Meraki Dashboard Exporter."
+    )
+    sections.append("")
+
+    # Overview section
+    sections.append("## Overview")
+    sections.append("")
+    sections.append("The exporter can be configured using environment variables.")
+    sections.append("All configuration is based on Pydantic models with built-in validation.")
+    sections.append("")
+
+    # Environment variable format
+    sections.append("## Environment Variable Format")
+    sections.append("")
+    sections.append("Configuration follows a hierarchical structure using environment variables:")
+    sections.append("")
+    sections.append("- **All settings**: `MERAKI_EXPORTER_{SECTION}__{SETTING}`")
+    sections.append("- **Double underscore** (`__`) separates nested configuration levels")
+    sections.append("")
+    sections.append('!!! example "Environment Variable Examples"')
+    sections.append("    ```bash")
+    sections.append("    # Meraki API configuration")
+    sections.append("    export MERAKI_EXPORTER_MERAKI__API_KEY=your_api_key_here")
+    sections.append("    export MERAKI_EXPORTER_MERAKI__ORG_ID=123456")
+    sections.append("    ")
+    sections.append("    # Logging configuration")
+    sections.append("    export MERAKI_EXPORTER_LOGGING__LEVEL=INFO")
+    sections.append("    ")
+    sections.append("    # API settings")
+    sections.append("    export MERAKI_EXPORTER_API__TIMEOUT=30")
+    sections.append("    export MERAKI_EXPORTER_API__CONCURRENCY_LIMIT=5")
+    sections.append("    ```")
+    sections.append("")
+
+    # Nested model sections
+    repo_root = find_repo_root(Path(__file__).resolve())
+    config_models = load_config_models(repo_root)
+
+    nested_models = get_nested_models(config_models)
+    from generate_env_example import load_settings_model
+
+    validate_nested_models(nested_models, load_settings_model(repo_root))
 
     section_notes = {
         "Webhook Settings": ("Webhooks are received on `POST /api/webhooks/meraki` when enabled."),
