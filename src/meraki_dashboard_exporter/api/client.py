@@ -5,11 +5,15 @@ from __future__ import annotations
 import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING
+from types import MethodType
+from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import urlsplit
 
+import httpx
 import meraki
 from prometheus_client import Counter
 
+from ..core.api_facade import MerakiApiFacade
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
@@ -18,6 +22,44 @@ if TYPE_CHECKING:
     from ..core.config import Settings
 
 logger = get_logger(__name__)
+
+
+def _install_redirect_auth_boundary(api: Any) -> None:
+    """Strip Bearer credentials from every SDK request off the configured origin.
+
+    The Meraki SDK follows redirects manually and intentionally uses one
+    persistent ``httpx.Client``.  Its default Authorization header would
+    otherwise be merged into a cross-origin follow-up request.  Building the
+    request explicitly lets us remove that one header without mutating the
+    shared client (which is important when concurrent collector workers are
+    still making same-origin requests).
+    """
+    session = api._session
+    base_url = getattr(session, "_base_url", None)
+    if not isinstance(base_url, str):
+        return
+    configured_origin = _origin(base_url)
+    original_send = session._send_request
+
+    def send_with_auth_boundary(self: Any, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        if _origin(url) == configured_origin:
+            return cast(httpx.Response, original_send(method, url, **kwargs))
+
+        request = self._client.build_request(method, url, **kwargs)
+        request.headers.pop("Authorization", None)
+        return cast(httpx.Response, self._client.send(request, follow_redirects=False))
+
+    session._send_request = MethodType(send_with_auth_boundary, session)
+
+
+def _origin(url: str) -> tuple[str, str, int | None]:
+    """Return the scheme/host/port security origin for a URL."""
+    parsed = urlsplit(url)
+    scheme = parsed.scheme.lower()
+    port = parsed.port
+    if port is None:
+        port = 443 if scheme == "https" else 80 if scheme == "http" else None
+    return (scheme, (parsed.hostname or "").lower(), port)
 
 
 class AsyncMerakiClient:
@@ -43,8 +85,8 @@ class AsyncMerakiClient:
     _metrics_initialized = False
     _metrics_lock = threading.Lock()
     # Class-level metrics (shared across all instances).
-    # _api_requests_total is incremented by services/inventory.py::_make_api_call;
-    # _api_retry_attempts by core/collector.py::_track_retry on rate-limit retries.
+    # _api_requests_total is incremented by MerakiApiFacade for every routed
+    # SDK attempt; _api_retry_attempts remains the collector retry metric.
     _api_requests_total: Counter | None = None
     _api_retry_attempts: Counter | None = None
     # Last observed authentication outcome: None = unknown (no auth-signalling
@@ -110,17 +152,9 @@ class AsyncMerakiClient:
             # (collectors use the raw SDK via asyncio.to_thread), so it exported an empty
             # histogram. Removed rather than left dead.
 
-            # Request counter
-            cls._api_requests_total = Counter(
-                CollectorMetricName.API_REQUESTS_TOTAL.value,
-                "Total number of outbound Meraki API requests made by THIS exporter process "
-                "(monotonic counter), labeled by endpoint/method/status_code",
-                labelnames=[
-                    LabelName.ENDPOINT.value,
-                    LabelName.METHOD.value,
-                    LabelName.STATUS_CODE.value,
-                ],
-            )
+            # The facade owns every outbound attempt.  Keep this class attribute
+            # as the compatibility surface used by status/readiness consumers.
+            cls._api_requests_total = MerakiApiFacade.requests_total()
 
             # NB: no api_rate_limit_remaining/_total gauges (F-073). They were
             # registered but never set by any code path (the only place that could
@@ -176,7 +210,7 @@ class AsyncMerakiClient:
             Newly created API client instance.
 
         """
-        return meraki.DashboardAPI(
+        api = meraki.DashboardAPI(
             api_key=self.settings.meraki.api_key.get_secret_value(),
             base_url=self.settings.meraki.api_base_url,
             output_log=False,
@@ -195,19 +229,23 @@ class AsyncMerakiClient:
             maximum_retries=self.settings.api.max_retries,
             action_batch_retry_wait_time=self.settings.api.action_batch_retry_wait,
             nginx_429_retry_wait_time=self.settings.api.rate_limit_retry_wait,
-            # #545: single 429 retry owner. With wait_on_rate_limit=False the
+            # #545/#698: single 429 retry owner. With wait_on_rate_limit=False the
             # SDK raises APIError immediately on a 429 (verified against
             # meraki 3.3.0 RestSession.request: the Retry-After branch is only
             # entered when _wait_on_rate_limit is truthy) instead of sleeping
             # int(Retry-After) UNBOUNDED inside the worker thread up to
-            # maximum_retries times. core/error_handling.py::with_error_handling
-            # owns all 429 retries: bounded (retry_after_max_seconds), on the
+            # maximum_retries times. MerakiApiFacade owns all 429 retries:
+            # bounded (retry_after_max_seconds), on the
             # event loop, cancellable. maximum_retries still governs the SDK's
             # short (1s) connection-error/5xx/JSON-decode retries.
             wait_on_rate_limit=False,
             retry_4xx_error=False,  # Don't retry 4xx errors
             caller="merakidashboardexporter rknightion",
             validate_kwargs=self.settings.api.validate_kwargs,
+            # #698: exporter-owned OrgRateLimiter is the only request pacer.
+            # This also prevents the SDK from persisting smart-flow state below
+            # $HOME, which is unsafe for read-only containers.
+            smart_flow_enabled=False,
             # #586: first-class proxy + custom-CA support. Both are forwarded
             # verbatim; the SDK guards each with a truthiness check
             # (``if self._requests_proxy:`` / ``if self._certificate_path:``),
@@ -216,6 +254,8 @@ class AsyncMerakiClient:
             requests_proxy=self.settings.api.requests_proxy,
             certificate_path=self.settings.api.certificate_path,
         )
+        _install_redirect_auth_boundary(api)
+        return api
 
     @property
     def api(self) -> meraki.DashboardAPI:
@@ -237,7 +277,7 @@ class AsyncMerakiClient:
         """Return the total number of Meraki API requests recorded so far.
 
         Sums the shared ``_api_requests_total`` counter (incremented by
-        ``services/inventory.py::_make_api_call``) across every
+        ``MerakiApiFacade``) across every
         endpoint/method/status_code label combination. This is the real request
         count surfaced on ``/status`` (F-028/F-074); the legacy
         ``_api_call_count`` attribute was initialised to 0 and never incremented.

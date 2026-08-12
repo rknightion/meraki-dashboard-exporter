@@ -98,23 +98,23 @@ The exporter serves three categories of HTTP endpoint (see the
   can be **token-gated** (`MERAKI_EXPORTER_SERVER__API_TOKEN`) and/or
   **suppressed entirely** (`MERAKI_EXPORTER_SERVER__UI_ENABLED=false`).
 - **State-changing `POST` control endpoints** — `/api/collectors/trigger`
-  (force an on-demand collector run) and `/api/clients/clear-dns-cache` — can
-  optionally be protected by the same bearer token.
+  (force an on-demand collector run) and `/api/clients/clear-dns-cache` — fail
+  closed unless the bearer token is configured.
 
 Set `MERAKI_EXPORTER_SERVER__API_TOKEN` to require callers of the sensitive GET
 UIs and the control POSTs to send `Authorization: Bearer <token>` (a
-constant-time compare). When it is unset (the default), those endpoints are
-unauthenticated. The webhook receiver (`POST /api/webhooks/meraki`) is gated
-separately by its own shared secret
+constant-time compare). When it is unset (the default), the control POSTs return
+HTTP 401 and their UI controls are disabled; the sensitive GET UIs remain open.
+The webhook receiver (`POST /api/webhooks/meraki`) is gated separately by its own shared secret
 (`MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET`), not by this token.
 
 ### Endpoint exposure & threat model
 
-**Default posture is unauthenticated and plaintext.** The exporter binds
-`0.0.0.0:9099` with no TLS and, by default, no auth on any endpoint. Anyone who
-can reach the port can read everything below. This is acceptable **only** on a
-trusted/private interface; for any other deployment apply the mitigations that
-follow.
+**Default read posture is unauthenticated and plaintext.** The exporter binds
+`0.0.0.0:9099` with no TLS and, by default, no auth on GET endpoints. Anyone who
+can reach the port can read everything below, but cannot invoke either control
+POST without configuring and presenting a token. This is acceptable **only** on
+a trusted/private interface; for any other deployment apply the mitigations that follow.
 
 What each endpoint exposes:
 
@@ -126,8 +126,8 @@ What each endpoint exposes:
 | `/config` | GET | Effective configuration (secrets masked as `**********`) | No (redacted) | token / `ui_enabled=false` |
 | `/clients` | GET | **Client MAC / IP / hostname / username** | **Yes** | token / `ui_enabled=false` |
 | `/cardinality*`, `/api/metrics/cardinality` | GET | Metric + label-value surface | Low | token / `ui_enabled=false` |
-| `/api/collectors/trigger` | POST | Burns org API-rate-limit budget on demand | No | `api_token` |
-| `/api/clients/clear-dns-cache` | POST | Clears DNS cache | No | `api_token` |
+| `/api/collectors/trigger` | POST | Burns org API-rate-limit budget on demand | No | Fail-closed `api_token` |
+| `/api/clients/clear-dns-cache` | POST | Clears DNS cache | No | Fail-closed `api_token` |
 | `/api/webhooks/meraki` | POST | Ingest surface | No | shared secret |
 
 For the full client-tracking privacy/GDPR picture — exactly which fields are PII,
@@ -137,8 +137,9 @@ every mitigation control — see [Data Privacy](privacy.md).
 **Mitigations (v1).**
 
 - **Bearer token** — set `MERAKI_EXPORTER_SERVER__API_TOKEN`. Sensitive GET UIs
-  and control POSTs then require `Authorization: Bearer <token>`; `/metrics` and
-  the probes stay open so Prometheus/Kubernetes keep working.
+  then require `Authorization: Bearer <token>`; setting it also enables the
+  fail-closed control POSTs. `/metrics` and the probes stay open so
+  Prometheus/Kubernetes keep working.
 - **Suppress the UI** — set `MERAKI_EXPORTER_SERVER__UI_ENABLED=false` to drop
   the human UI surface (`/`, `/status`, `/config`, `/clients`, `/cardinality*`)
   entirely; they return `404`. Use this when you only need `/metrics` scraped
@@ -172,6 +173,10 @@ network and expose only `/metrics` (via a reverse proxy where possible). Set
 `MERAKI_EXPORTER_SERVER__API_TOKEN` and/or
 `MERAKI_EXPORTER_SERVER__UI_ENABLED=false` whenever the sensitive GET UIs or
 control POSTs are reachable from any network segment you do not fully trust.
+
+**Meraki API credential boundary.** The exporter accepts known Meraki HTTPS origins by default;
+custom HTTPS origins require explicit opt-in, and `Authorization` is never forwarded across a
+redirect to a different origin.
 
 ### Beta / early-access API surface
 
