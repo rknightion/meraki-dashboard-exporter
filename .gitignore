@@ -226,3 +226,7 @@ docs/assets/project-icon-solid.svg
 docs/assets/social-card.png
 docs/assets/social-card.svg
 docs/fonts/
+
+# Codex fan-out run artefacts (goal/launch/report files + scratch creds) — working state, never committed.
+# Gitignore the DIRECTORY, not a filename pattern, so a new artefact type cannot leak.
+/codex/
