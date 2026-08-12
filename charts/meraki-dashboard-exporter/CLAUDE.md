@@ -78,7 +78,7 @@ container image — the chart is a recent addition (started publishing per the
 - **Webhook receiver needs external TLS.** Meraki delivers webhooks (`POST /api/webhooks/meraki`)
   HTTPS-only; the exporter serves HTTP. The optional Ingress (or an external nginx/Traefik) is the
   TLS-termination point — see `docs/deployment-operations.md`. The webhook shared secret is NOT a
-  chart value; inject `MERAKI_EXPORTER_WEBHOOKS__SECRET` via `extraEnv` from a Secret.
+  chart value; inject `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET` via `extraEnv` from a Secret.
 </critical_notes>
 
 <file_map>

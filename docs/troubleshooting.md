@@ -227,7 +227,8 @@ networks/devices than intended (see the NetworkFilter section above).
 
 ## Log aggregation and querying
 
-The exporter's structured logs default to `logfmt`
-(`MERAKI_EXPORTER_LOGGING__LOG_FORMAT=logfmt`); set it to `json` for JSON-native pipelines. See
+The exporter's structured logs default to `json`
+(`MERAKI_EXPORTER_LOGGING__LOG_FORMAT=json`); set it to `logfmt` only when a logfmt parser is
+required. See
 [Log Aggregation](deployment-operations.md#log-aggregation) for the Grafana Alloy shipping config
 and worked LogQL examples for both formats.

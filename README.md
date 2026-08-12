@@ -218,7 +218,9 @@ All configuration is done via environment variables. See `.env.example` for all 
 - `MERAKI_EXPORTER_MERAKI__API_KEY`: Your Meraki Dashboard API key
 
 #### Optional
-- `MERAKI_EXPORTER_MERAKI__ORG_ID`: Specific org ID to monitor (monitors all orgs if not set)
+- `MERAKI_EXPORTER_MERAKI__ORG_ID`: Specific org ID to monitor. If unset, startup auto-selects
+  the only visible org, but fails fast when the API key can see multiple orgs; deploy one instance
+  per org. See the [sharding recipe](docs/scaling-guide.md#scaling-out-ha).
 - `MERAKI_EXPORTER_LOGGING__LEVEL`: Logging level (default: INFO)
 - `MERAKI_EXPORTER_MERAKI__API_BASE_URL`: API base URL for regional endpoints (default: https://api.meraki.com/api/v1)
 - `MERAKI_EXPORTER_API__TIMEOUT`: API request timeout in seconds (default: 30)
@@ -229,7 +231,7 @@ All configuration is done via environment variables. See `.env.example` for all 
 - `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT`: Per-run collector timeout budget in seconds (default: 240)
 - `MERAKI_EXPORTER_CLIENTS__ENABLED`: Enable client collector and DNS resolution (default: false)
 - `MERAKI_EXPORTER_WEBHOOKS__ENABLED`: Enable Meraki webhook receiver (default: false)
-- `MERAKI_EXPORTER_SERVER__API_TOKEN`: Optional bearer token guarding the two state-changing control POSTs (`/api/collectors/trigger`, `/api/clients/clear-dns-cache`). When unset (default) those POSTs are unauthenticated and all GET endpoints (`/metrics`, `/status`, `/health`, ...) are always unauthenticated — bind the exporter to a trusted network. See [security.md](docs/security.md#endpoint-authentication).
+- `MERAKI_EXPORTER_SERVER__API_TOKEN`: Bearer token that enables the two state-changing control POSTs (`/api/collectors/trigger`, `/api/clients/clear-dns-cache`). When unset (default), those POSTs fail closed with HTTP 401 and their UI controls are disabled. The sensitive GET UIs remain open by default; bind the exporter to a trusted network or disable them. See [security.md](docs/security.md#endpoint-authentication).
 - Beta / early-access API: the exporter never calls Meraki's beta endpoints and has no opt-in flag (they are unversioned and would undermine the v1 stability promise). It instead surfaces the risk — `meraki_org_has_beta_api` (`1`/`0` per org) plus a WARN log fire when an org is on the beta Dashboard spec, which can silently break assumed-stable collection. Alert on `meraki_org_has_beta_api == 1`. See [security.md](docs/security.md#beta--early-access-api-surface).
 
 ### Adaptive Scheduler

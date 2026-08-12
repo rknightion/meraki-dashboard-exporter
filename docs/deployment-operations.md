@@ -86,7 +86,7 @@ The exporter can receive Meraki alert webhooks (`config.webhooksEnabled: true`, 
 `http://` receiver URLs — but the exporter itself serves plain **HTTP**. So you must terminate
 TLS in front of it and forward HTTP to the exporter. The receiver URL you configure in the Meraki
 Dashboard (Network-wide → Alerts → Webhooks) must therefore be `https://…/api/webhooks/meraki`,
-never `http://`. Always set the shared secret (`MERAKI_EXPORTER_WEBHOOKS__SECRET`) so payloads are
+never `http://`. Always set the shared secret (`MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET`) so payloads are
 validated — in the Helm chart, inject it via `extraEnv` (sourced from a Secret) rather than a plain
 value.
 
@@ -103,7 +103,7 @@ TLS at the ingress (e.g. via cert-manager) and it forwards HTTP to the exporter:
 config:
   webhooksEnabled: "true"
 extraEnv:
-  - name: MERAKI_EXPORTER_WEBHOOKS__SECRET
+  - name: MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET
     valueFrom:
       secretKeyRef:
         name: meraki-webhook-secret
@@ -253,8 +253,8 @@ exits with an error so typos fail loudly. See `.env.example` and the
 ## Log Aggregation
 
 The exporter outputs structured logs via `structlog`, rendered by
-`MERAKI_EXPORTER_LOGGING__LOG_FORMAT` — `logfmt` (the default, ideal for Loki's `| logfmt` parser
-stage) or `json` (for JSON-native pipelines such as Datadog, ELK, or CloudWatch). Both formats
+`MERAKI_EXPORTER_LOGGING__LOG_FORMAT` — `json` (the default, suitable for Loki, Datadog, ELK, or
+CloudWatch) or opt-in `logfmt`. Both formats
 carry the same fields (`level`, `event`, `timestamp`, plus any structured kwargs the log call
 attaches); only the wire encoding differs. See [Configuration](config.md) for the setting.
 
@@ -299,35 +299,35 @@ loki.source.docker "meraki" {
 
 ### Example LogQL Queries
 
-These example queries assume the default `MERAKI_EXPORTER_LOGGING__LOG_FORMAT=logfmt`, where the `| logfmt` parser
+These example queries assume the default `MERAKI_EXPORTER_LOGGING__LOG_FORMAT=json`, where the `| json` parser
 stage extracts each structured field (e.g. `collector`, `duration`) as a label you can filter or
 group on. The line-filter (`|=`/`|~`) portion of every query below also works unchanged against
-`log_format=json` output — the raw text still contains the same substrings — but the `| logfmt`
-parser stage does not understand JSON, so swap it for `| json` if you run with
-`log_format=json`, as shown in the first example.
+opt-in `logfmt` output — the raw text still contains the same substrings — but the `| json`
+parser stage does not understand logfmt, so swap it for `| logfmt` if you opt in to
+`log_format=logfmt`.
 
 **Collector failures:**
 ```logql
-{container="meraki-dashboard-exporter"} |= "Failed to collect" | logfmt
-```
-With `log_format=json` instead:
-```logql
 {container="meraki-dashboard-exporter"} |= "Failed to collect" | json
+```
+With opt-in `log_format=logfmt` instead:
+```logql
+{container="meraki-dashboard-exporter"} |= "Failed to collect" | logfmt
 ```
 
 **Rate limit events:**
 ```logql
-{container="meraki-dashboard-exporter"} |~ "rate limit|429" | logfmt
+{container="meraki-dashboard-exporter"} |~ "rate limit|429" | json
 ```
 
 **Slow collections (utilization warnings, logged when a collector uses >80% of its cadence):**
 ```logql
-{container="meraki-dashboard-exporter"} |= "Collector utilization high" | logfmt | duration > 60
+{container="meraki-dashboard-exporter"} |= "Collector utilization high" | json | duration > 60
 ```
 
 **Error summary by collector:**
 ```logql
-sum by (collector) (count_over_time({container="meraki-dashboard-exporter"} |= "error" | logfmt [1h]))
+sum by (collector) (count_over_time({container="meraki-dashboard-exporter"} |= "error" | json [1h]))
 ```
 
 For configuration options see the [Configuration](config.md) guide. A list of

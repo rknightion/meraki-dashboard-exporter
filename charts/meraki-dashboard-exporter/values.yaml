@@ -129,7 +129,9 @@ meraki:
   existingSecret: ""
   # -- Key within the existing Secret that holds the API key value.
   existingSecretKey: "api-key"  # pragma: allowlist secret
-  # -- Meraki organization ID. Leave empty to collect metrics from all accessible organizations.
+  # -- Meraki organization ID. Leave empty only when the key sees exactly one organization;
+  # startup rejects ambiguous multi-org keys. Deploy one exporter per org; see
+  # https://rknightion.github.io/meraki-dashboard-exporter/scaling-guide/#scaling-out-ha
   organizationId: ""
 
 # Application configuration (maps to MERAKI_EXPORTER_* environment variables).
@@ -183,8 +185,8 @@ config: {}
   # apiRateLimitEnabled: "true"
   # -- Target requests per second per organization (min: 1.0, max: 50.0)
   # apiRateLimitRequestsPerSecond: "10.0"
-  # -- Token bucket burst capacity per organization (min: 1, max: 100)
-  # apiRateLimitBurst: "20"
+  # -- Token bucket burst capacity per organization. Defaults to Meraki's documented +10 first-second allowance; refill supplies the sustained rate separately. (min: 1, max: 100)
+  # apiRateLimitBurst: "10"
   # -- Fraction of the org API call budget this exporter is allowed to consume. Defaults to 0.8 so ~20% headroom is left for other consumers of the same org budget (dashboards, other tools, humans); set to 1.0 to claim the whole budget (#550). (min: 0.1, max: 1.0)
   # apiRateLimitSharedFraction: "0.8"
   # -- Jitter ratio applied to client-side rate limiter waits (min: 0.0, max: 0.5)

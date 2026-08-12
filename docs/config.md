@@ -69,7 +69,7 @@ Configuration for Meraki API interactions
 | `MERAKI_EXPORTER_API__CERTIFICATE_PATH` | `str | None` | `_(none)_` | Path to a custom CA bundle for verifying the Meraki API TLS cert (SDK certificate_path); mount into read-only containers as a volume. |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_ENABLED` | `bool` | `True` | Enable client-side rate limiting to smooth API calls |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_REQUESTS_PER_SECOND` | `float` | `10.0` | Target requests per second per organization (min: 1.0, max: 50.0) |
-| `MERAKI_EXPORTER_API__RATE_LIMIT_BURST` | `int` | `20` | Token bucket burst capacity per organization (min: 1, max: 100) |
+| `MERAKI_EXPORTER_API__RATE_LIMIT_BURST` | `int` | `10` | Token bucket burst capacity per organization. Defaults to Meraki's documented +10 first-second allowance; refill supplies the sustained rate separately. (min: 1, max: 100) |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_SHARED_FRACTION` | `float` | `0.8` | Fraction of the org API call budget this exporter is allowed to consume. Defaults to 0.8 so ~20% headroom is left for other consumers of the same org budget (dashboards, other tools, humans); set to 1.0 to claim the whole budget (#550). (min: 0.1, max: 1.0) |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_JITTER_RATIO` | `float` | `0.1` | Jitter ratio applied to client-side rate limiter waits (min: 0.0, max: 0.5) |
 | `MERAKI_EXPORTER_API__SMOOTHING_ENABLED` | `bool` | `True` | Spread batch work across the collection interval |
@@ -94,7 +94,7 @@ HTTP server configuration for the metrics endpoint
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_SERVER__HOST` | `str` | `0.0.0.0` | Host to bind the exporter to |
 | `MERAKI_EXPORTER_SERVER__PORT` | `int` | `9099` | Port to bind the exporter to (min: 1, max: 65535) |
-| `MERAKI_EXPORTER_SERVER__API_TOKEN` | `SecretStr | None` | `_(none)_` | Optional bearer token required for state-changing POST control endpoints (/api/collectors/trigger, /api/clients/clear-dns-cache). When unset (default) these endpoints are unauthenticated - bind the exporter to a trusted interface. When set, requests must present 'Authorization: Bearer <token>'. |
+| `MERAKI_EXPORTER_SERVER__API_TOKEN` | `SecretStr | None` | `_(none)_` | Bearer token required to enable state-changing POST control endpoints (/api/collectors/trigger, /api/clients/clear-dns-cache). When unset (default) these endpoints fail closed with HTTP 401 and their UI controls are disabled. When set, requests must present 'Authorization: Bearer <token>'. |
 | `MERAKI_EXPORTER_SERVER__UI_ENABLED` | `bool` | `True` | When false, sensitive GET UI/status endpoints return 404 (metrics/health/ready stay open). |
 
 ## Webhook Settings

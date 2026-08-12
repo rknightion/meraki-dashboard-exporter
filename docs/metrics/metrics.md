@@ -5,9 +5,9 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 344
-- **Gauges:** 315
-- **Counters:** 25
+- **Total metrics:** 352
+- **Gauges:** 318
+- **Counters:** 30
 - **Histograms:** 3
 - **Info metrics:** 1
 
@@ -465,7 +465,6 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
-| `meraki_exporter_api_requests_total` | counter | `endpoint`, `method`, `status_code` | Total number of outbound Meraki API requests made by THIS exporter process (monotonic counter), labeled by endpoint/method/status_code |  |
 | `meraki_exporter_api_retry_total` | counter | `endpoint`, `retry_reason` | Total number of API retry attempts |  |
 
 ### CardinalityMonitor
@@ -474,6 +473,9 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_exporter_cardinality_analyzed_metrics` | gauge | — | Number of metrics analyzed in last run |  |
 | `meraki_exporter_cardinality_duration_seconds` | gauge | — | Time taken to complete cardinality analysis |  |
+| `meraki_exporter_cardinality_exposed_series` | gauge | — | Total metric series exposed by the Prometheus scrape |  |
+| `meraki_exporter_cardinality_product_series` | gauge | — | Product metric series, excluding CardinalityMonitor self-observability series |  |
+| `meraki_exporter_cardinality_self_series` | gauge | — | CardinalityMonitor self-observability metric series included in the scrape |  |
 | `meraki_exporter_cardinality_warnings_total` | counter | `metric_name`, `severity` | Number of cardinality warnings triggered |  |
 | `meraki_exporter_total_series` | gauge | — | Total number of time series across all metrics |  |
 
@@ -511,6 +513,13 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_exporter_cpu_usage_percent` | gauge | — | CPU utilization percent of the exporter process itself, sampled periodically (#277). |  |
 | `meraki_exporter_memory_usage_bytes` | gauge | — | Resident memory (RSS) used by the exporter process itself, in bytes (#277). |  |
+
+### MerakiApiFacade
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_exporter_api_request_attempts_total` | counter | `operation`, `status` | Total outbound Meraki SDK request attempts by operation and outcome. |  |
+| `meraki_exporter_api_requests_total` | counter | `endpoint`, `method`, `status_code` | Total outbound Meraki SDK request attempts made by this exporter process. |  |
 
 ### MetricCollector
 
@@ -561,11 +570,15 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
+| `meraki_webhook_delivery_attempts_total` | counter | — | Authenticated webhook delivery attempts, including Meraki retries | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_device_state_transitions_total` | counter | — | Webhook-driven meraki_device_up fast-path transitions, by direction (down/up) and result (applied = series flipped; unknown_serial = serial not poll-known) | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_events_failed_total` | counter | — | Total webhook events that failed processing | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_events_processed_total` | counter | — | Total webhook events successfully processed | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_events_received_total` | counter | — | Total webhook events received by the active WebhookHandler request pipeline (POST /api/webhooks/meraki), labeled by org_id and alert_type | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_processing_duration_seconds` | histogram | — | Time spent processing webhook events | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_replays_rejected_total` | counter | — | Authenticated webhook replay deliveries rejected by the per-process cache | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_stale_rejected_total` | counter | — | Authenticated webhook deliveries rejected outside the freshness window | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_unique_alerts_total` | counter | — | Unique authenticated webhook alerts accepted for processing | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_validation_failures_total` | counter | — | Total webhook validation failures | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 
 ### build_info

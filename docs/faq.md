@@ -42,9 +42,10 @@ in the generated [Configuration](config.md) reference.
 ### Should I run one instance per organization?
 
 Yes - the recommended deployment model is one exporter instance per Meraki organization, pinned
-with `MERAKI_EXPORTER_MERAKI__ORG_ID`. If the org ID is left unset the exporter polls every
-organization the API key can see. See [Upgrading](upgrading.md#single-org-deployment-contract-breaking)
-for the contract and [Configuration](config.md) for the key.
+with `MERAKI_EXPORTER_MERAKI__ORG_ID`. If it is unset, startup auto-selects the only visible
+organization; when the key can see multiple organizations, startup fails and you must deploy one
+instance per org. See the [sharding recipe](scaling-guide.md#scaling-out-ha), [Upgrading](upgrading.md#single-org-deployment-contract-breaking),
+and [Configuration](config.md) for the contract and key.
 
 ### How do I limit which networks are collected?
 
