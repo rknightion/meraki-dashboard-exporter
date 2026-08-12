@@ -48,7 +48,7 @@ class ClientsCollector(MetricCollector):
     # ``clients_signal_quality`` (pri4) keep their existing per-network interval
     # gates but read the interval from the scheduler and are pinned by their
     # legacy interval settings when the operator sets them. Dropped entirely when
-    # client collection is disabled (see get_endpoint_groups).
+    # their owning feature is disabled (see get_endpoint_groups).
     endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = (
         EndpointGroup(
             name=EndpointGroupName.CLIENTS_LIST,
@@ -73,10 +73,14 @@ class ClientsCollector(MetricCollector):
     )
 
     def get_endpoint_groups(self) -> tuple[EndpointGroup, ...]:
-        """Return client endpoint groups, or ``()`` when clients are disabled.
+        """Return only endpoint groups whose owning client feature is enabled.
 
         When ``clients.enabled`` is False the collector emits nothing, so its
         groups must never enter the solver's demand accounting (#617 §1c).
+        Signal quality has a separate opt-in because its per-client fan-out is
+        expensive; its scheduler group must likewise be absent until that flag
+        is enabled (#703), rather than contributing demand for work that cannot
+        run.
 
         Returns
         -------
@@ -86,7 +90,13 @@ class ClientsCollector(MetricCollector):
         """
         if not self.settings.clients.enabled:
             return ()
-        return type(self).endpoint_groups
+        if self.settings.clients.signal_quality_enabled:
+            return type(self).endpoint_groups
+        return tuple(
+            group
+            for group in type(self).endpoint_groups
+            if group.name is not EndpointGroupName.CLIENTS_SIGNAL_QUALITY
+        )
 
     @property
     def is_active(self) -> bool:
@@ -1335,6 +1345,10 @@ class ClientsCollector(MetricCollector):
                 continue
 
         self._last_app_usage_by_network[network_id] = time.time()
+        # The app-usage group's cadence is enforced locally per network rather
+        # than through ``_should_run_group``. Mark its successful local cycle so
+        # the outer collector loop can sleep until its solved deadline (#703).
+        self._mark_group_ran(EndpointGroupName.CLIENTS_APP_USAGE)
 
         logger.info(
             "Completed application usage collection",
@@ -1528,6 +1542,7 @@ class ClientsCollector(MetricCollector):
 
         # Record the run so the interval gate can throttle the next cycle (F-060).
         self._last_signal_quality_by_network[network_id] = time.time()
+        self._mark_group_ran(EndpointGroupName.CLIENTS_SIGNAL_QUALITY)
 
         logger.debug(
             "Completed wireless signal quality collection",

@@ -114,7 +114,18 @@ class TestClientsGetEndpointGroups(BaseCollectorTest):
         )
 
     def test_groups_present_when_enabled(self, settings, isolated_registry, inventory) -> None:
-        """Enabled ⇒ all three groups reported to the solver."""
+        """Enabled defaults report only the two enabled client groups."""
+        collector = self._make(settings, isolated_registry, inventory, enabled=True)
+        assert {g.name for g in collector.get_endpoint_groups()} == {
+            EndpointGroupName.CLIENTS_LIST,
+            EndpointGroupName.CLIENTS_APP_USAGE,
+        }
+
+    def test_signal_quality_group_present_when_enabled(
+        self, settings, isolated_registry, inventory
+    ) -> None:
+        """The optional signal-quality group enters the solver only when enabled."""
+        settings.clients.signal_quality_enabled = True
         collector = self._make(settings, isolated_registry, inventory, enabled=True)
         assert {g.name for g in collector.get_endpoint_groups()} == _EXPECTED_CLIENT_GROUPS
 
