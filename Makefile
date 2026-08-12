@@ -63,6 +63,7 @@ format: ## Format code with ruff
 lint: ## Run linting with ruff
 	@echo "$(BLUE)Running linter...$(NC)"
 	uv run ruff check .
+	uv run ruff format --check .
 
 .PHONY: lint-fix
 lint-fix: ## Run linting with fixes
@@ -96,7 +97,7 @@ coverage-report: test-cov ## Generate and open coverage report
 	$(OPEN_CMD) htmlcov/index.html
 
 .PHONY: check
-check: lint typecheck test ## Run all checks (lint, typecheck, test)
+check: lint typecheck test ## Run all checks (lint, formatting, typecheck, test)
 	@echo "$(GREEN)All checks passed!$(NC)"
 
 # API drift detection (vendored Meraki OpenAPI spec vs live)

@@ -42,3 +42,26 @@ You can also run the **Release Please** workflow manually from GitHub Actions (w
   hidden.
 - Avoid manual version edits; use the release-please flow to keep tags and
   changelog consistent.
+
+## Local and CI verification
+
+`make check` is the local Python gate. It runs `ruff check`, `ruff format
+--check`, mypy, and the test suite. Run it before committing Python or
+documentation changes.
+
+CI deliberately covers additional checks that are not part of `make check`:
+
+- actionlint for workflow syntax and semantics;
+- Helm lint plus a rendered-manifest kubeconform validation;
+- Docker image build and startup smoke tests, including the non-root runtime
+  assertion and HTTP endpoint checks;
+- generated-documentation drift detection, offline API-model conformance, and
+  the CI coverage threshold;
+- zizmor, actionlint, and dependency review, which currently run outside the
+  repository's required `ci-success` merge gate; and
+- the separate CodeQL, Docker-security, and Scorecard workflows.
+
+CI does not currently run `git diff --check`; use it locally when reviewing a
+patch that may have whitespace errors. `make check` intentionally remains a
+fast source-tree gate rather than a substitute for the container, chart, or
+security workflow suites.
