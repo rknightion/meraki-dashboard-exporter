@@ -379,6 +379,15 @@ class ClientStore:
         self._network_orgs.clear()
         logger.info("Client store cleared")
 
+    def _evict_network(self, network_id: str) -> str | None:
+        """Remove every record associated with one network as one operation."""
+        network_name = self._network_names.get(network_id)
+        self._clients.pop(network_id, None)
+        self._last_update.pop(network_id, None)
+        self._network_names.pop(network_id, None)
+        self._network_orgs.pop(network_id, None)
+        return network_name
+
     def cleanup_stale_networks(self) -> int:
         """Remove data for stale networks.
 
@@ -393,12 +402,11 @@ class ClientStore:
         ]
 
         for network_id in stale_networks:
-            del self._clients[network_id]
-            del self._last_update[network_id]
+            network_name = self._evict_network(network_id)
             logger.info(
                 "Removed stale network data",
                 network_id=network_id,
-                network_name=self._network_names.get(network_id),
+                network_name=network_name,
             )
 
         return len(stale_networks)

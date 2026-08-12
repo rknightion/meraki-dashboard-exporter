@@ -23,6 +23,22 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+# These families are emitted by ``CardinalityMonitor`` itself.  They are not
+# product metrics, but must remain in the exposed-series total because a
+# Prometheus scrape includes them.  Do not use the broad
+# ``meraki_exporter_cardinality_`` prefix here: other exporter features may
+# legitimately expose cardinality-related product instrumentation.
+_CARDINALITY_SELF_METRIC_NAMES = frozenset({
+    "meraki_exporter_cardinality_warnings",
+    "meraki_exporter_total_series",
+    "meraki_exporter_cardinality_duration_seconds",
+    CollectorMetricName.CARDINALITY_ANALYZED_METRICS.value,
+    CollectorMetricName.CARDINALITY_PRODUCT_SERIES.value,
+    CollectorMetricName.CARDINALITY_SELF_SERIES.value,
+    CollectorMetricName.CARDINALITY_EXPOSED_SERIES.value,
+})
+
+
 def normalize_metric_name(name: str) -> str:
     """Normalize a metric family name for comparison.
 
@@ -240,6 +256,24 @@ class CardinalityMonitor:
             registry=self.registry,
         )
 
+        self.product_series = Gauge(
+            CollectorMetricName.CARDINALITY_PRODUCT_SERIES.value,
+            "Product metric series, excluding CardinalityMonitor self-observability series",
+            registry=self.registry,
+        )
+
+        self.self_series = Gauge(
+            CollectorMetricName.CARDINALITY_SELF_SERIES.value,
+            "CardinalityMonitor self-observability metric series included in the scrape",
+            registry=self.registry,
+        )
+
+        self.exposed_series = Gauge(
+            CollectorMetricName.CARDINALITY_EXPOSED_SERIES.value,
+            "Total metric series exposed by the Prometheus scrape",
+            registry=self.registry,
+        )
+
     def _is_cache_valid(self) -> bool:
         """Check if the analysis cache is still valid.
 
@@ -334,6 +368,9 @@ class CardinalityMonitor:
                 "timestamp": time.time(),
                 "metrics": {},
                 "total_series": 0,
+                "product_series": 0,
+                "self_series": 0,
+                "exposed_series": 0,
                 "warnings": [],
                 "critical": [],
                 "error": "Waiting for initial collector run to complete",
@@ -346,6 +383,9 @@ class CardinalityMonitor:
                 "timestamp": time.time(),
                 "metrics": {},
                 "total_series": 0,
+                "product_series": 0,
+                "self_series": 0,
+                "exposed_series": 0,
                 "warnings": [],
                 "critical": [],
                 "error": "Waiting for inventory cache to be populated",
@@ -360,6 +400,9 @@ class CardinalityMonitor:
             "timestamp": start_time,
             "metrics": {},
             "total_series": 0,
+            "product_series": 0,
+            "self_series": 0,
+            "exposed_series": 0,
             "warnings": [],
             "critical": [],
             "first_analysis_time": self._first_analysis_time,
@@ -369,16 +412,16 @@ class CardinalityMonitor:
         # Collect all metrics
         try:
             for metric_family in self.registry.collect():
-                if metric_family.name.startswith(
-                    "meraki_exporter_cardinality_"
-                ) or metric_family.name.startswith("meraki_exporter_total_series"):
-                    # Skip our own metrics to avoid recursion
+                if metric_family.name in _CARDINALITY_SELF_METRIC_NAMES:
+                    # Analyze product families only. Monitor self-observability
+                    # families are counted separately below so exposed_series
+                    # reconciles exactly with the Prometheus text scrape.
                     continue
 
                 metric_info = self._analyze_metric(metric_family)
                 if metric_info:
                     results["metrics"][metric_family.name] = metric_info
-                    results["total_series"] += metric_info["cardinality"]
+                    results["product_series"] += metric_info["cardinality"]
                     metric_count += 1
 
                     # Check thresholds
@@ -421,15 +464,32 @@ class CardinalityMonitor:
 
         # Update monitoring metrics
         duration = time.time() - start_time
-        self.total_series.set(results["total_series"])
         self.analysis_duration.set(duration)
         self.analyzed_metrics_count.set(metric_count)
+        self.product_series.set(results["product_series"])
+
+        # Count after warning labels and all snapshot gauges have been updated.
+        # The monitor's self-observability samples are intentionally excluded
+        # from product_series but included here: exposed_series is the value an
+        # operator can reconcile one-for-one with a locally generated scrape.
+        results["exposed_series"] = sum(
+            len(metric_family.samples) for metric_family in self.registry.collect()
+        )
+        results["self_series"] = results["exposed_series"] - results["product_series"]
+        results["total_series"] = results["exposed_series"]
+
+        self.self_series.set(results["self_series"])
+        self.exposed_series.set(results["exposed_series"])
+        # Retain the legacy family as an exact, exposed-total compatibility alias.
+        self.total_series.set(results["exposed_series"])
 
         # Log summary
         logger.debug(
             "Cardinality analysis complete",
             duration=f"{duration:.3f}s",
-            total_series=results["total_series"],
+            exposed_series=results["exposed_series"],
+            product_series=results["product_series"],
+            self_series=results["self_series"],
             metrics_count=metric_count,
             warnings=len(results["warnings"]),
             critical=len(results["critical"]),
