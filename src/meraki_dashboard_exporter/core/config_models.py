@@ -860,6 +860,16 @@ class WebhookSettings(BaseModel):
 class CollectorSettings(BaseModel):
     """Collector-specific settings."""
 
+    profile: Literal["availability", "standard", "full"] | None = Field(
+        None,
+        description=(
+            "Collection profile controlling which endpoint priorities run: availability "
+            "includes priority 1, standard includes priorities 1-3, and full includes all "
+            "priorities. When unset, standard is used only while the solved API demand fits "
+            "the budget; over-budget fleets must choose a profile explicitly."
+        ),
+    )
+
     # NoDecode disables pydantic-settings JSON-parsing of complex types so the
     # raw env-var string reaches our _split_csv validator - the documented CSV
     # form (COLLECTORS__ENABLED_COLLECTORS=a,b,c) would otherwise crash at boot
@@ -957,6 +967,42 @@ class ClientSettings(BaseModel):
     enabled: bool = Field(
         False,
         description="Enable client data collection",
+    )
+    application_top_n: int = Field(
+        20,
+        ge=1,
+        le=200,
+        description=(
+            "Maximum application names retained per client collection scope; remaining "
+            "application usage is aggregated into the optional other bucket."
+        ),
+    )
+    application_other_bucket: bool = Field(
+        True,
+        description=(
+            "Aggregate application usage outside application_top_n into a stable other bucket."
+        ),
+    )
+    application_allowlist: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Application names always retained in addition to the configured top-N; empty "
+            "keeps only the ranked applications and optional other bucket."
+        ),
+    )
+    dns_reverse_lookup_enabled: bool = Field(
+        True,
+        description=(
+            "Enable reverse-DNS lookups for client IP addresses. Enabled by default to preserve "
+            "the existing hostname-enrichment behaviour; disable to avoid sending client IPs "
+            "to the configured system resolver."
+        ),
+    )
+    dns_max_concurrent_lookups: int = Field(
+        32,
+        ge=1,
+        le=512,
+        description="Maximum number of reverse-DNS lookups in flight at once.",
     )
     dns_timeout: float = Field(
         5.0,

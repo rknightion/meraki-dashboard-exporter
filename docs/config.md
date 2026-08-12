@@ -162,6 +162,7 @@ Enable/disable specific metric collectors
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
+| `MERAKI_EXPORTER_COLLECTORS__PROFILE` | `availability | standard | full | None` | `_(none)_` | Collection profile controlling which endpoint priorities run: availability includes priority 1, standard includes priorities 1-3, and full includes all priorities. When unset, standard is used only while the solved API demand fits the budget; over-budget fleets must choose a profile explicitly. |
 | `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set[str]` | `["alerts", "clients", "config", "device", "insight", "mtsensor", "mtsensoralerts", "networkhealth", "organization"]` | Enabled collector names |
 | `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` | `set[str]` | `[]` | Explicitly disabled collectors (overrides enabled) |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` | `int` | `240` | Timeout for individual collector runs in seconds (min: 30, max: 600) |
@@ -178,6 +179,11 @@ Client data collection and DNS resolution settings
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_CLIENTS__ENABLED` | `bool` | `False` | Enable client data collection |
+| `MERAKI_EXPORTER_CLIENTS__APPLICATION_TOP_N` | `int` | `20` | Maximum application names retained per client collection scope; remaining application usage is aggregated into the optional other bucket. (min: 1, max: 200) |
+| `MERAKI_EXPORTER_CLIENTS__APPLICATION_OTHER_BUCKET` | `bool` | `True` | Aggregate application usage outside application_top_n into a stable other bucket. |
+| `MERAKI_EXPORTER_CLIENTS__APPLICATION_ALLOWLIST` | `list[str]` | `[]` | Application names always retained in addition to the configured top-N; empty keeps only the ranked applications and optional other bucket. |
+| `MERAKI_EXPORTER_CLIENTS__DNS_REVERSE_LOOKUP_ENABLED` | `bool` | `True` | Enable reverse-DNS lookups for client IP addresses. Enabled by default to preserve the existing hostname-enrichment behaviour; disable to avoid sending client IPs to the configured system resolver. |
+| `MERAKI_EXPORTER_CLIENTS__DNS_MAX_CONCURRENT_LOOKUPS` | `int` | `32` | Maximum number of reverse-DNS lookups in flight at once. (min: 1, max: 512) |
 | `MERAKI_EXPORTER_CLIENTS__DNS_TIMEOUT` | `float` | `5.0` | DNS lookup timeout in seconds (min: 0.5, max: 10.0) |
 | `MERAKI_EXPORTER_CLIENTS__DNS_CACHE_TTL` | `int` | `21600` | DNS cache TTL in seconds (default: 6 hours) (min: 300, max: 86400) |
 | `MERAKI_EXPORTER_CLIENTS__DNS_CACHE_MAX_ENTRIES` | `int` | `100000` | Maximum number of reverse-DNS cache entries (and per-client IP-tracking entries) held in memory. When exceeded, expired entries are pruned first, then the oldest entries are evicted so RSS stays bounded under sustained client churn (#543). (min: 1000, max: 5000000) |

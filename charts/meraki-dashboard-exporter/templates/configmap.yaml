@@ -228,6 +228,9 @@ data:
   {{- if hasKey . "monitoringLivenessMaxStaleSeconds" }}
   MERAKI_EXPORTER_MONITORING__LIVENESS_MAX_STALE_SECONDS: {{ .monitoringLivenessMaxStaleSeconds | quote }}
   {{- end }}
+  {{- if hasKey . "collectorsProfile" }}
+  MERAKI_EXPORTER_COLLECTORS__PROFILE: {{ .collectorsProfile | quote }}
+  {{- end }}
   {{- if hasKey . "collectorsEnabledCollectors" }}
   MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS: {{ .collectorsEnabledCollectors | quote }}
   {{- end }}
@@ -269,6 +272,21 @@ data:
   {{- end }}
   {{- if hasKey . "clientsEnabled" }}
   MERAKI_EXPORTER_CLIENTS__ENABLED: {{ .clientsEnabled | quote }}
+  {{- end }}
+  {{- if hasKey . "clientsApplicationTopN" }}
+  MERAKI_EXPORTER_CLIENTS__APPLICATION_TOP_N: {{ .clientsApplicationTopN | quote }}
+  {{- end }}
+  {{- if hasKey . "clientsApplicationOtherBucket" }}
+  MERAKI_EXPORTER_CLIENTS__APPLICATION_OTHER_BUCKET: {{ .clientsApplicationOtherBucket | quote }}
+  {{- end }}
+  {{- if hasKey . "clientsApplicationAllowlist" }}
+  MERAKI_EXPORTER_CLIENTS__APPLICATION_ALLOWLIST: {{ .clientsApplicationAllowlist | quote }}
+  {{- end }}
+  {{- if hasKey . "clientsDnsReverseLookupEnabled" }}
+  MERAKI_EXPORTER_CLIENTS__DNS_REVERSE_LOOKUP_ENABLED: {{ .clientsDnsReverseLookupEnabled | quote }}
+  {{- end }}
+  {{- if hasKey . "clientsDnsMaxConcurrentLookups" }}
+  MERAKI_EXPORTER_CLIENTS__DNS_MAX_CONCURRENT_LOOKUPS: {{ .clientsDnsMaxConcurrentLookups | quote }}
   {{- end }}
   {{- if hasKey . "clientsDnsTimeout" }}
   MERAKI_EXPORTER_CLIENTS__DNS_TIMEOUT: {{ .clientsDnsTimeout | quote }}

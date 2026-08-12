@@ -101,6 +101,8 @@ class LabelName(StrEnum):
     COLLECTOR = "collector"  # Collector name
     GROUP = "group"  # Adaptive-scheduler endpoint group (#617); bounded, ~40 static values
     OPERATION = "operation"  # Meraki SDK operation ID
+    PROFILE = "profile"  # Active collection profile (#701)
+    PHASE = "phase"  # Bounded task lifecycle phase (#710)
 
     # API client labels (Phase 2.1)
     ENDPOINT = "endpoint"  # API endpoint name

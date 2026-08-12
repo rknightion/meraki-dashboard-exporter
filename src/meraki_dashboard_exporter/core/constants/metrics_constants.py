@@ -599,6 +599,7 @@ class CollectorMetricName(StrEnum):
     CARDINALITY_PRODUCT_SERIES = "meraki_exporter_cardinality_product_series"
     CARDINALITY_SELF_SERIES = "meraki_exporter_cardinality_self_series"
     CARDINALITY_EXPOSED_SERIES = "meraki_exporter_cardinality_exposed_series"
+    CARDINALITY_EXPORTER_SERIES = "meraki_exporter_cardinality_exporter_series"
 
     # Clients dropped from metric emission by the per-network/global client cap
     # (#533). Per-cycle snapshot gauge (0 = within caps), not a Counter.
@@ -618,6 +619,9 @@ class CollectorMetricName(StrEnum):
     CLIENT_DNS_LOOKUPS_FAILED_TOTAL = "meraki_exporter_client_dns_lookups_failed_total"
     CLIENT_DNS_LOOKUPS_CACHED_TOTAL = "meraki_exporter_client_dns_lookups_cached_total"
     CLIENT_DNS_RESOLUTION_SECONDS_TOTAL = "meraki_exporter_client_dns_resolution_seconds_total"
+    CLIENT_DNS_QUEUE_DEPTH = "meraki_exporter_client_dns_queue_depth"
+    CLIENT_DNS_QUEUE_WAIT_SECONDS = "meraki_exporter_client_dns_queue_wait_seconds"
+    CLIENT_DNS_LOOKUPS_TIMEOUT_TOTAL = "meraki_exporter_client_dns_lookups_timeout_total"
     CLIENT_STORE_TOTAL = "meraki_exporter_client_store_total"
     CLIENT_STORE_NETWORKS = "meraki_exporter_client_store_networks"
 
@@ -641,6 +645,12 @@ class CollectorMetricName(StrEnum):
     COLLECTOR_API_CALLS_TOTAL = "meraki_exporter_collector_api_calls_total"
     COLLECTOR_FAILURE_STREAK = "meraki_exporter_collector_failure_streak"
 
+    # Bounded task admission and queue visibility (#710).
+    TASKS_PENDING = "meraki_exporter_tasks_pending"
+    TASKS_ACTIVE = "meraki_exporter_tasks_active"
+    TASK_QUEUE_WAIT_SECONDS = "meraki_exporter_task_queue_wait_seconds"
+    TASK_EXPIRED_BEFORE_START_TOTAL = "meraki_exporter_task_expired_before_start_total"
+
     # Adaptive budget-aware scheduler (#617). Computed-schedule outputs owned +
     # emitted by core/scheduler.py::EndpointScheduler.resolve(). Gauges labelled
     # by LabelName.GROUP (bounded, ~40 static groups) or unlabeled where noted.
@@ -651,6 +661,15 @@ class CollectorMetricName(StrEnum):
     SCHEDULER_INTERVAL_SECONDS = "meraki_exporter_scheduler_interval_seconds"
     SCHEDULER_STRETCH_FACTOR = "meraki_exporter_scheduler_stretch_factor"
     SCHEDULER_THROTTLE_BACKOFFS_TOTAL = "meraki_exporter_scheduler_throttle_backoffs_total"
+    SCHEDULER_OVER_BUDGET = "meraki_exporter_scheduler_over_budget"
+    SCHEDULER_GROUP_SUCCESS_TIMESTAMP_SECONDS = (
+        "meraki_exporter_scheduler_group_success_timestamp_seconds"
+    )
+    SCHEDULER_GROUP_ATTEMPTS_TOTAL = "meraki_exporter_scheduler_group_attempts_total"
+    SCHEDULER_GROUP_FAILURES_TOTAL = "meraki_exporter_scheduler_group_failures_total"
+    SCHEDULER_GROUP_SKIPS_TOTAL = "meraki_exporter_scheduler_group_skips_total"
+    SCHEDULER_GROUP_SHED = "meraki_exporter_scheduler_group_shed"
+    COLLECTION_PROFILE_INFO = "meraki_exporter_collection_profile_info"
 
     # OTel data-log emitter self-observability (#622). Counters labelled by
     # LabelName.EVENT (bounded by the built-in DataLogEvent set). Owned +

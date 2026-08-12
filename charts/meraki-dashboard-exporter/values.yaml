@@ -287,6 +287,8 @@ config: {}
   # monitoringMaxCardinalityPerCollector: "10000"
   # -- Dead-man switch threshold. /health returns 503 once no collector has completed a successful run within this many seconds, so Kubernetes/Docker restart a wedged exporter instead of leaving it serving stale metrics. 0 (default) auto-derives the threshold as 3x the fastest solved endpoint-group interval, so a stalled fast poll trips liveness promptly while slower groups never cause false positives (the threshold widens automatically as the scheduler stretches intervals). Set a large value to effectively disable. (min: 0, max: 86400)
   # monitoringLivenessMaxStaleSeconds: "0"
+  # -- Collection profile controlling which endpoint priorities run: availability includes priority 1, standard includes priorities 1-3, and full includes all priorities. When unset, standard is used only while the solved API demand fits the budget; over-budget fleets must choose a profile explicitly.
+  # collectorsProfile: ""
   # -- Enabled collector names
   # collectorsEnabledCollectors: "["alerts", "clients", "config", "device", "insight", "mtsensor", "mtsensoralerts", "networkhealth", "organization"]"
   # -- Explicitly disabled collectors (overrides enabled)
@@ -315,6 +317,16 @@ config: {}
   # cardinalityMonitorMaxLabelValues: "100"
   # -- Enable client data collection
   # clientsEnabled: "false"
+  # -- Maximum application names retained per client collection scope; remaining application usage is aggregated into the optional other bucket. (min: 1, max: 200)
+  # clientsApplicationTopN: "20"
+  # -- Aggregate application usage outside application_top_n into a stable other bucket.
+  # clientsApplicationOtherBucket: "true"
+  # -- Application names always retained in addition to the configured top-N; empty keeps only the ranked applications and optional other bucket.
+  # clientsApplicationAllowlist: ""
+  # -- Enable reverse-DNS lookups for client IP addresses. Enabled by default to preserve the existing hostname-enrichment behaviour; disable to avoid sending client IPs to the configured system resolver.
+  # clientsDnsReverseLookupEnabled: "true"
+  # -- Maximum number of reverse-DNS lookups in flight at once. (min: 1, max: 512)
+  # clientsDnsMaxConcurrentLookups: "32"
   # -- DNS lookup timeout in seconds (min: 0.5, max: 10.0)
   # clientsDnsTimeout: "5.0"
   # -- DNS cache TTL in seconds (default: 6 hours) (min: 300, max: 86400)
