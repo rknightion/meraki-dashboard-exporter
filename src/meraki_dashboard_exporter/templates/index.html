@@ -575,9 +575,14 @@
                                 <button
                                     class="collector-trigger"
                                     data-collector="{{ collector.key }}"
-                                    {% if collector.is_running %}disabled{% endif %}
+                                    {% if not control_api_enabled %}
+                                    disabled
+                                    title="Configure server.api_token to enable manual controls."
+                                    {% elif collector.is_running %}disabled{% endif %}
                                 >
-                                    {% if collector.is_running %}
+                                    {% if not control_api_enabled %}
+                                    Token required
+                                    {% elif collector.is_running %}
                                     Running...
                                     {% else %}
                                     Run Now

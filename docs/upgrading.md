@@ -115,6 +115,15 @@ single instance covering multiple organizations, split it into **one instance pe
 Helm chart's multi-instance example (`charts/meraki-dashboard-exporter`) for running one release
 per organization, and the [Configuration](config.md) reference for the `org_id` key.
 
+### Control API now requires an API token (BREAKING)
+
+The manual **Run Now** and **Clear DNS Cache** controls, and their POST endpoints
+(`/api/collectors/trigger` and `/api/clients/clear-dns-cache`), now fail closed when
+`server.api_token` is unset. Tokenless requests return HTTP 401 and the UI controls are disabled
+with a configuration tooltip. Configure `MERAKI_EXPORTER_SERVER__API_TOKEN` and have API clients
+or the authenticating reverse proxy supply `Authorization: Bearer <token>`. There is no
+unauthenticated compatibility flag. `/metrics`, `/health`, and `/ready` are unchanged.
+
 ## Where breaking changes are announced
 
 Breaking metric and configuration changes are announced in the [Changelog](changelog.md), which

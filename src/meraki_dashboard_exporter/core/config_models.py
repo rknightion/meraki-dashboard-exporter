@@ -156,7 +156,7 @@ class APISettings(BaseModel):
         description="Wait time in seconds when rate limited",
     )
     action_batch_retry_wait: int = Field(
-        10,
+        20,
         ge=1,
         le=60,
         description="Wait time for action batch retries",
@@ -193,7 +193,7 @@ class APISettings(BaseModel):
         description="Target requests per second per organization",
     )
     rate_limit_burst: int = Field(
-        20,
+        10,
         ge=1,
         le=100,
         description="Token bucket burst capacity per organization",
@@ -781,13 +781,22 @@ class ServerSettings(BaseModel):
     api_token: SecretStr | None = Field(
         None,
         description=(
-            "Optional bearer token required for state-changing POST control "
+            "Bearer token required to enable state-changing POST control "
             "endpoints (/api/collectors/trigger, /api/clients/clear-dns-cache). "
-            "When unset (default) these endpoints are unauthenticated - bind the "
-            "exporter to a trusted interface. When set, requests must present "
+            "When unset (default) these endpoints fail closed with HTTP 401 and "
+            "their UI controls are disabled. When set, requests must present "
             "'Authorization: Bearer <token>'."
         ),
     )
+
+    @field_validator("api_token", mode="after")
+    @classmethod
+    def normalize_blank_api_token(cls, value: SecretStr | None) -> SecretStr | None:
+        """Treat an empty or whitespace-only control token as unconfigured."""
+        if value is not None and not value.get_secret_value().strip():
+            return None
+        return value
+
     ui_enabled: bool = Field(
         True,
         description=(

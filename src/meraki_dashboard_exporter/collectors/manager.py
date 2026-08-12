@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -715,7 +716,31 @@ class CollectorManager:
             )
             return
 
-        async with self._collector_semaphore, collector_lock:
+        # Admission must be atomic with the running check. Claim the collector
+        # lock before waiting for global capacity so a second forced request
+        # cannot queue another full run in the check/acquire gap (#695).
+        await collector_lock.acquire()
+        try:
+            async with self._collector_semaphore:
+                await self._execute_admitted_collector(
+                    collector,
+                    collector_name,
+                    timeout,
+                    force=force,
+                )
+        finally:
+            collector_lock.release()
+
+    async def _execute_admitted_collector(
+        self,
+        collector: MetricCollector,
+        collector_name: str,
+        timeout: int,
+        *,
+        force: bool,
+    ) -> None:
+        """Execute a collector after its per-collector admission lock is held."""
+        with contextlib.nullcontext():
             logger.debug("Starting collector", collector=collector_name)
 
             # Track active collection

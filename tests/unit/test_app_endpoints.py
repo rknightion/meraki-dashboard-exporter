@@ -455,6 +455,7 @@ class TestTriggerCollectorEndpoint:
     @pytest.fixture
     def trigger_client(self, test_settings: Settings) -> tuple[TestClient, MagicMock, ExporterApp]:
         """Create a fresh TestClient with mock manager for trigger tests."""
+        test_settings.server.api_token = SecretStr("trigger-test-token")
         exporter = ExporterApp(test_settings)
         mock_manager = MagicMock()
         mock_manager.collectors = []
@@ -464,7 +465,11 @@ class TestTriggerCollectorEndpoint:
         mock_manager.get_scheduling_diagnostics.return_value = _SCHEDULING_DIAGNOSTICS
         exporter.collector_manager = mock_manager
         fastapi_app = exporter.create_app()
-        client = TestClient(fastapi_app, raise_server_exceptions=False)
+        client = TestClient(
+            fastapi_app,
+            raise_server_exceptions=False,
+            headers={"Authorization": "Bearer trigger-test-token"},
+        )
         return client, mock_manager, exporter
 
     def test_trigger_collector_not_found(
@@ -621,9 +626,14 @@ class TestClearDnsCacheEndpoint:
     ) -> None:
         """Test clear-dns-cache returns error when clients disabled."""
         exporter, _ = exporter_with_mock_manager
+        exporter.settings.server.api_token = SecretStr("dns-test-token")
         exporter.settings.clients.enabled = False
         fastapi_app = exporter.create_app()
-        client = TestClient(fastapi_app, raise_server_exceptions=True)
+        client = TestClient(
+            fastapi_app,
+            raise_server_exceptions=True,
+            headers={"Authorization": "Bearer dns-test-token"},
+        )
 
         response = client.post("/api/clients/clear-dns-cache")
         assert response.status_code == 200
@@ -636,11 +646,16 @@ class TestClearDnsCacheEndpoint:
     ) -> None:
         """Test clear-dns-cache returns error when no DNS resolver found."""
         exporter, mock_manager = exporter_with_mock_manager
+        exporter.settings.server.api_token = SecretStr("dns-test-token")
         exporter.settings.clients.enabled = True
         # No ClientsCollector -> lookup returns None -> no dns resolver
         mock_manager.get_collector_by_class_name.return_value = None
         fastapi_app = exporter.create_app()
-        client = TestClient(fastapi_app, raise_server_exceptions=True)
+        client = TestClient(
+            fastapi_app,
+            raise_server_exceptions=True,
+            headers={"Authorization": "Bearer dns-test-token"},
+        )
 
         response = client.post("/api/clients/clear-dns-cache")
         assert response.status_code == 200
@@ -653,6 +668,7 @@ class TestClearDnsCacheEndpoint:
     ) -> None:
         """Test clear-dns-cache successfully clears the cache."""
         exporter, mock_manager = exporter_with_mock_manager
+        exporter.settings.server.api_token = SecretStr("dns-test-token")
         exporter.settings.clients.enabled = True
 
         # Create a mock ClientsCollector with a dns_resolver
@@ -664,7 +680,11 @@ class TestClearDnsCacheEndpoint:
 
         mock_manager.get_collector_by_class_name.return_value = mock_clients_collector
         fastapi_app = exporter.create_app()
-        client = TestClient(fastapi_app, raise_server_exceptions=True)
+        client = TestClient(
+            fastapi_app,
+            raise_server_exceptions=True,
+            headers={"Authorization": "Bearer dns-test-token"},
+        )
 
         response = client.post("/api/clients/clear-dns-cache")
         assert response.status_code == 200
@@ -882,12 +902,11 @@ class TestApiTokenGuard:
         )
         assert response.status_code == 401
 
-    def test_trigger_open_when_token_unset(self, test_settings: Settings) -> None:
-        """With no token configured the endpoint stays open (backward compatible)."""
-        client, mock_manager = self._make_client(test_settings, token=None)
-        mock_manager.get_collector_by_name.return_value = None
+    def test_trigger_fails_closed_when_token_unset(self, test_settings: Settings) -> None:
+        """#695: no configured token means the mutating endpoint is unavailable."""
+        client, _ = self._make_client(test_settings, token=None)
         response = client.post("/api/collectors/trigger", json={"collector": "DeviceCollector"})
-        assert response.status_code == 200
+        assert response.status_code == 401
 
     def test_clear_dns_cache_requires_token_when_configured(self, test_settings: Settings) -> None:
         """POST /api/clients/clear-dns-cache returns 401 without the token when configured."""

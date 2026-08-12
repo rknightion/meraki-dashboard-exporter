@@ -389,7 +389,15 @@
                     <div class="value">{{ dns_cache_stats.cache_ttl_seconds }}s</div>
                 </div>
             </div>
-            <button class="clear-cache-btn" onclick="clearDNSCache()">Clear DNS Cache</button>
+            <button
+                class="clear-cache-btn"
+                {% if control_api_enabled %}
+                onclick="clearDNSCache()"
+                {% else %}
+                disabled
+                title="Configure server.api_token to enable manual controls."
+                {% endif %}
+            >Clear DNS Cache</button>
         </div>
         {% endif %}
 

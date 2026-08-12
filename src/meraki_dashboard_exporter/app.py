@@ -68,6 +68,11 @@ SENSITIVE_UI_PREFIXES: tuple[str, ...] = (
     "/api/metrics/cardinality",
 )
 
+CONTROL_POST_PATHS: frozenset[str] = frozenset({
+    "/api/clients/clear-dns-cache",
+    "/api/collectors/trigger",
+})
+
 
 def _is_sensitive_ui_path(path: str) -> bool:
     """Return True if ``path`` is a sensitive GET UI/endpoint (see #558)."""
@@ -326,18 +331,16 @@ class ExporterApp:
         return False, "healthy"
 
     def _check_api_token(self, request: FastAPIRequest) -> None:
-        """Enforce the optional bearer-token guard on state-changing endpoints (F-167).
+        """Fail closed unless a valid control API bearer token is configured.
 
-        When ``server.api_token`` is unset (default) the control endpoints stay
-        open - the exporter is assumed bound to a trusted interface, and the web
-        UI trigger / DNS-clear buttons call them unauthenticated. When a token is
-        configured, requests must present ``Authorization: Bearer <token>`` or
-        this raises ``HTTPException(401)``.
+        State-changing control endpoints are unavailable when ``server.api_token``
+        is unset. When configured, requests must present ``Authorization: Bearer
+        <token>`` or this raises ``HTTPException(401)``.
         """
         configured = self.settings.server.api_token
-        if configured is None:
-            return
-        expected = configured.get_secret_value()
+        expected = configured.get_secret_value() if configured is not None else ""
+        if not expected.strip():
+            raise HTTPException(status_code=401, detail="Invalid or missing API token")
         header = request.headers.get("authorization", "")
         scheme, _, provided = header.partition(" ")
         if scheme.lower() != "bearer" or not hmac.compare_digest(provided, expected):
@@ -864,15 +867,29 @@ class ExporterApp:
             (suppress the human UI). ``/metrics`` and the probes stay open.
             """
             api_token_setting = self.settings.server.api_token
+            api_token = (
+                api_token_setting.get_secret_value() if api_token_setting is not None else None
+            )
+            if request.method == "POST" and request.url.path in CONTROL_POST_PATHS:
+                header = request.headers.get("authorization", "")
+                scheme, _, provided = header.partition(" ")
+                if (
+                    not api_token
+                    or not api_token.strip()
+                    or scheme.lower() != "bearer"
+                    or not hmac.compare_digest(provided, api_token)
+                ):
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Invalid or missing API token"},
+                    )
             decision = ui_guard_decision(
                 method=request.method,
                 path=request.url.path,
                 # TODO(CFG-BIG): server.ui_enabled lands with the config sweep;
                 # getattr keeps the default (True = UI enabled) until then.
                 ui_enabled=getattr(self.settings.server, "ui_enabled", True),
-                api_token=(
-                    api_token_setting.get_secret_value() if api_token_setting is not None else None
-                ),
+                api_token=api_token,
                 auth_header=request.headers.get("authorization", ""),
             )
             if decision is not None:
@@ -949,6 +966,7 @@ class ExporterApp:
                 "skipped_collectors": skipped_collectors,
                 "org_id": exporter.settings.meraki.org_id,
                 "scheduling": scheduling,
+                "control_api_enabled": exporter.settings.server.api_token is not None,
             }
 
             return app.state.templates.TemplateResponse(request, "index.html", context=context)  # type: ignore[no-any-return]
@@ -1069,6 +1087,7 @@ class ExporterApp:
                 "network_count": stats["total_networks"],
                 "cache_ttl": exporter.settings.clients.cache_ttl,
                 "dns_cache_stats": dns_cache_stats,
+                "control_api_enabled": exporter.settings.server.api_token is not None,
             }
 
             return app.state.templates.TemplateResponse(request, "clients.html", context=context)  # type: ignore[no-any-return]
@@ -1101,11 +1120,11 @@ class ExporterApp:
 
         @app.post("/api/clients/clear-dns-cache")
         async def clear_dns_cache(request: FastAPIRequest) -> dict[str, str]:
-            """Clear the DNS cache."""
+            """Clear the DNS cache through the authenticated control API."""
             # Get exporter instance from app state
             exporter = app.state.exporter
 
-            # Optional bearer-token guard (F-167)
+            # Fail-closed bearer-token guard (F-L8-01 / #695)
             exporter._check_api_token(request)
 
             # Check if client collection is enabled
@@ -1132,10 +1151,10 @@ class ExporterApp:
             request: FastAPIRequest,
             payload: CollectorTriggerRequest,
         ) -> dict[str, str]:
-            """Trigger a collector run on-demand."""
+            """Trigger a collector run through the authenticated control API."""
             exporter = app.state.exporter
 
-            # Optional bearer-token guard (F-167)
+            # Fail-closed bearer-token guard (F-L8-01 / #695)
             exporter._check_api_token(request)
 
             collector = exporter.collector_manager.get_collector_by_name(payload.collector)
