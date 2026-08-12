@@ -16,16 +16,18 @@ limit, and the **shard-by-org / HA recipes** for running more than one organizat
 pod loss.
 
 If you only read one thing: **each exporter instance polls exactly one Meraki organization
-(1 poller = 1 org, from 1.0 — see the [single-org contract](upgrading.md#single-org-deployment-contract-breaking))**,
-and a single organization has a **fixed 10 req/s API budget** that the exporter shares with every
-other consumer of that org (dashboards, scripts, humans). Scaling is therefore a question of
-keeping one instance's call demand under that org's budget — you cannot add exporter replicas to
+(1 poller = 1 org, from 1.0 — see the [single-org contract](upgrading.md#single-org-deployment-contract-breaking))**.
+Meraki applies both a **10 req/s per-organization** budget and a **100 req/s per-source-IP** budget.
+Scaling is therefore a question of keeping one instance's call demand under its org budget *and*
+keeping all shards sharing an egress IP under the IP budget — you cannot add exporter replicas to
 go faster for the same org.
 
 ## The org API budget envelope
 
 Meraki enforces **10 requests/second per organization** (v1 API; the exporter calls no
-special-limited `liveTools` endpoints). Every collector's API calls for an org are metered through
+special-limited `liveTools` endpoints), shared by every application using that organization. It
+also enforces **100 requests/second per source IP**, shared by every client that leaves through
+that egress address. Every collector's API calls for an org are metered through
 a single shared client-side token bucket, sized as:
 
 $$
@@ -75,7 +77,7 @@ cycle** are:
 
 $$
 \text{calls}_{\text{baseline}} \approx
-\underbrace{8W}_{\text{network health}}
+\underbrace{C_{\mathrm{NH}}}_{\text{network health; current group-cost sum}}
 + \underbrace{W}_{\text{MR conn-stats}}
 + \underbrace{\lceil D/10 \rceil}_{\text{org memory pages}}
 + \underbrace{\lceil \text{MS}/20 \rceil}_{\text{MS port pages}}
@@ -85,11 +87,18 @@ $$
 + \underbrace{\sim 28}_{\text{org + device bulk}}
 $$
 
-The **network-health term ($8W$) dominates everything** — eight per-wireless-network endpoint
-groups (channel-util, connection-stats, data-rates, bluetooth, failed-conns, device-latency,
-client-latency, air-marshal), each with a ≈300 s floor. A ~60 s-floor group (MT sensor readings)
-adds only $2 \times$ per cycle; a ~900 s-floor group (config/security) adds $\sim 3$ calls per
-cycle. Convert to a sustained rate and compare to the ceiling:
+<!-- BEGIN GENERATED NETWORK HEALTH CAPACITY -->
+### Network-health capacity (generated from endpoint groups)
+
+These figures are derived from `NetworkHealthCollector.endpoint_groups`. The steady-state number weights each group by `300 / floor_seconds`; it is not the cost of one simultaneous due sweep.
+
+| Shape | Steady-state equivalent (calls/300 s) | One all-groups due sweep |
+|---|---:|---:|
+| HOMELAB (`W=1`, `AP=1,000`) | **4.58** | 10 |
+| `W=400`, `AP=4,000` | **1,041.3** | 3,208 |
+
+A due sweep is larger because it includes every windowed group at once; use the steady-state equivalent for API-budget planning and the due-sweep column when judging a single collection run against its timeout.
+<!-- END GENERATED NETWORK HEALTH CAPACITY -->
 
 $$
 \text{demand (req/s)} \approx \frac{\text{calls}_{\text{baseline}}}{300}
@@ -108,14 +117,15 @@ the scheduler paces the *next* run — see the LARGE example below.
 
 ### Worked example — SMALL (≈100 devices, 10 networks)
 
-$W=6$, $D=100$. Network health $8\times6=48$; MR conn-stats $6$; pagination is trivial
-($\lceil100/10\rceil=10$ memory pages); org+device bulk $\sim28$ → **~100 calls/cycle**.
+$W=6$, $D=100$. Network health's 300-second equivalent is $2 + 6 + 6 + 6/6 + 6/12 + 12/12 +
+6/12 + 6/12 = 17.5$ calls; MR conn-stats $6$; pagination is trivial ($\lceil100/10\rceil=10$
+memory pages); org+device bulk $\sim28$ → **~62 calls/300 s equivalent**.
 
 $$
-\frac{100}{300} \approx 0.33 \;\text{req/s} \;(+\,0.03\;\text{sensor readings}) \;\approx\; \mathbf{0.43\ req/s}
+\frac{62}{300} \approx \mathbf{0.21\ req/s}
 $$
 
-That is **~4% of the 10 req/s budget** (~5% of the 8 req/s default ceiling). Comfortable — default
+That is **~2% of the 10 req/s budget** (~3% of the 8 req/s default ceiling). Comfortable — default
 settings need no tuning, registry holds ~20–50k series, RSS < 256 Mi.
 
 ### Worked example — LARGE (≈5,000 devices, 500 networks)
@@ -124,20 +134,16 @@ A university-shaped org: $W=400$ wireless nets, 4,000 MR, 700 MS, 150 MX, 100 MV
 
 | Load source | Calls/cycle | req/s |
 |---|---:|---:|
-| Network health ($8W$) | 3,200 | **10.7** |
+| Network health (current endpoint groups) | 1,041.3 / 300 s equivalent | **3.47** |
 | Device (MR conn-stats 400 + 500 memory pages + 350 MS packet + 200 CPU batches + 167 MV + 150 MX-perf + ~20 bulk) | ~2,000 | **~6.7** |
 | Organization + Alerts + Config + sensor readings | ~120 | ~0.4 |
-| **Total unstretched demand** | | **~17.8 req/s** |
+| **Total unstretched demand** | | **~10.6 req/s** |
 
-**~17.8 req/s is 178% of the 10 req/s org budget** (222% of the 8 req/s default ceiling). The
-adaptive scheduler will stretch the lower-priority groups here (network health is priority 3),
-but stretching only lengthens the *interval between* runs — it cannot make one run's own
-page-fetch loop faster. Network health alone needs 3,200 calls in a single run; even granted the
-*entire* org budget that run takes ≥320 s, past the 240 s `collector_timeout` — so
-**`NetworkHealthCollector`'s own run will not finish inside its timeout budget**, and
-`DeviceCollector` contends for the same shared budget concurrently. More CPU/memory does **not**
-fix this; it is a rate-limit wall, and it shows up as an `over_budget` warning in the logs and a
-sustained `meraki_exporter_scheduler_budget_utilization_ratio` at or above 1.0.
+**~10.6 req/s is still above the 10 req/s org budget** (and 133% of the 8 req/s default ceiling).
+The adaptive scheduler will stretch lower-priority groups here (network health is priority 3).
+The largest due sweep is not the 1,041.3-call equivalent: it is the per-network 3,600-second groups
+together, so capacity planning must distinguish that sweep from steady-state demand. More
+CPU/memory does not increase the API budget; see #701 for the remaining large-org demand limit.
 
 ### Practical single-org envelope today
 
@@ -154,13 +160,14 @@ per-org, not per-instance (see [Scaling out & HA](#scaling-out-ha)).
 
 Ordered by leverage. These are the only levers that actually reduce the calls a cycle needs.
 
-1. **Network Filter — the single biggest lever.** Excluding a wireless network removes its $8$
-   network-health calls *and* its MR conn-stats call **every cycle**, at the inventory layer, for
-   all collectors at once. See [Network Filter](#network-filter).
+1. **Network Filter — the single biggest lever.** Excluding a wireless network removes the
+   applicable per-network network-health calls and its MR conn-stats work at their respective
+   endpoint-group floors, at the inventory layer, for all collectors at once. See
+   [Network Filter](#network-filter).
 2. **Disable collectors you don't need** via
    `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` (JSON array or CSV). Disabling
    `mtsensor` removes the sensor-reading endpoint group entirely; disabling `network_health`
-   removes the dominant $8W$ term (at the cost of RF/connection-quality metrics).
+   removes the network-health endpoint groups (at the cost of RF/connection-quality metrics).
 3. **Keep the clients collector OFF** (default). It is the worst per-client fan-out; it is disabled
    by default (`MERAKI_EXPORTER_CLIENTS__ENABLED=false`) and per-client signal quality is a further
    opt-in (`MERAKI_EXPORTER_CLIENTS__SIGNAL_QUALITY_ENABLED=false`). Leave both off at scale.
@@ -283,6 +290,28 @@ configure by hand. (If two exporters ever pointed at the *same* org — discoura
 would need `0.5` to keep the combined draw within budget. Shard by org instead so every org has
 exactly one exporter and one full budget.)
 
+### Egress-IP budget when sharding organizations
+
+The 100 req/s source-IP limit is shared across organizations. The usual shard-by-org recipe assumes
+each release has a distinct organization **and that no more than about eight default shards share
+one egress IP**: $8 \times (10 \times 0.8) = 64$ req/s, leaving room for bursts and other API
+clients below 100 req/s. Do not treat the mathematical maximum of 12 default shards (96 req/s) as
+an operating target.
+
+If more organizations must run concurrently, spread their egress across additional public IPs or
+lower `MERAKI_EXPORTER_API__RATE_LIMIT_SHARED_FRACTION`; lowering the fraction reduces permitted
+pace, not collection demand. Kubernetes nodes and a shared NAT gateway commonly collapse many pods
+onto one egress IP, so count the actual NAT/egress topology rather than pod replicas.
+
+### Burst-capacity comparison
+
+Meraki documents an allowance of an extra 10 requests in the first second, totalling 30 requests
+in two seconds. The exporter token bucket starts full. With the historical default burst capacity
+of 20 and the default 8 req/s effective rate, it can issue 20 immediately plus 16 in two seconds
+(36 total), so 20 is not compatible with that documented envelope. The default should be a
+conservative 10-token capacity: at 8 req/s it permits at most 18 in the first second and 26 in two
+seconds. Operators overriding this setting accept the risk of avoidable 429s.
+
 ### Why `replicaCount > 1` for one org is harmful
 
 Running two replicas of the same instance does **not** share load or provide HA — with no leader
@@ -356,8 +385,8 @@ debugging/transition fallback, not a recommended steady-state choice.
 - **Symptom:** `meraki_exporter_collection_errors_total{error_type="TimeoutError"}` rising (the
   run-level collector budget expiring — distinct from
   `meraki_exporter_collector_errors_total{error_type="timeout"}`, which is per-API-call).
-- **Fix:** the collector cannot finish inside 240 s — almost always the network-health $8W$ term at
-  scale. Reduce $W$ via the filter, or pin the offending group(s) to a longer interval via
+- **Fix:** the collector cannot finish inside 240 s when a large due sweep exceeds the available
+  API budget. Reduce $W$ via the filter, or pin the offending group(s) to a longer interval via
   `scheduler.group_interval_overrides` (this reduces how often the run happens, not how long a
   single run takes, but fewer runs means fewer chances to time out); raising
   `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` only masks it.

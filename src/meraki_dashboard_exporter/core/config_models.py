@@ -156,7 +156,7 @@ class APISettings(BaseModel):
         description="Wait time in seconds when rate limited",
     )
     action_batch_retry_wait: int = Field(
-        20,
+        10,
         ge=1,
         le=60,
         description="Wait time for action batch retries",
@@ -196,7 +196,10 @@ class APISettings(BaseModel):
         10,
         ge=1,
         le=100,
-        description="Token bucket burst capacity per organization",
+        description=(
+            "Token bucket burst capacity per organization. Defaults to Meraki's documented "
+            "+10 first-second allowance; refill supplies the sustained rate separately."
+        ),
     )
     rate_limit_shared_fraction: float = Field(
         0.8,
