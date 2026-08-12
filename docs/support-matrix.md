@@ -5,12 +5,12 @@ description: Per-product-line collection coverage, tested hardware, and explicit
 
 # Support Matrix
 
-This page states, per Meraki product line, what the exporter actually collects today — as
-opposed to what is aspirational or merely planned. "Supported" means the collector is enabled by
-default and has been exercised against real hardware in the maintainer's homelab. "Best-effort"
-means the collector exists, is shipped, and follows the published Meraki API/OpenAPI spec, but has
-not been verified against live hardware of that type. "Not collected" means there is currently no
-collector for that data at all.
+This page states the evidence level behind each product family, rather than treating shipped code
+as live support. **Live-verified** means the named response envelope was observed on maintainer
+hardware; **spec-verified** means code was checked against the Meraki OpenAPI specification, SDK,
+and vendor documentation; **community-reported** is reserved for a sanitised real response supplied
+by a user and recorded in the fixture corpus. It is not a promise that every endpoint, scale, or
+pagination shape was observed.
 
 !!! note "Source of truth"
     This matrix is derived directly from the collectors present in
@@ -18,7 +18,7 @@ collector for that data at all.
     `core/constants/metrics_constants.py` — not from aspiration. If you find a mismatch between
     this page and actual behavior, please [open an issue](https://github.com/rknightion/meraki-dashboard-exporter/issues).
 
-## Tested hardware
+## Verification scope
 
 The maintainer's homelab currently has:
 
@@ -26,26 +26,27 @@ The maintainer's homelab currently has:
 - **MS** (switches)
 - **MT** (environmental sensors)
 
-These three product lines are exercised against live hardware on an ongoing basis and are
-considered fully **supported**.
+The live scope is **one network only**. It does not verify multi-site discovery, NetworkFilter
+behavior across sites, pagination, or large-fleet fan-out. The date and scope in the table are the
+current evidence record as of **2026-08-12**.
 
-**MX** (security appliances), **MG** (cellular gateways), and **MV** (security cameras) are not
-present in the homelab. Their collectors are implemented against the published Meraki OpenAPI spec
-and SDK, and are shipped and enabled, but are **best-effort**: they have not been confirmed against
-real hardware of those types. See [`README.md`](https://github.com/rknightion/meraki-dashboard-exporter#readme)
-for the standing disclaimer. If you run MX/MG/MV hardware and hit a bug or a missing field, please
-open an issue — reports from real deployments are how these move from best-effort to supported.
+**MX**, **MG**, and **MV** are not present in the homelab. A sanitised response from a real
+deployment can move a response envelope from spec-verified to community-reported; maintainers then
+add it through the corpus and preset path tracked in #713.
 
 ## Per-product-line coverage
 
-| Product line | Status | Collector | Notes |
+| Product family | Verification level (date and checked scope) | Collector | Coverage and limits |
 |---|---|---|---|
-| **MR** (wireless) | Supported | `collectors/devices/mr/` (`wireless.py`, `clients.py`, `client_logs.py`, `performance.py`, `rf_profiles.py`, `signal_quality.py`, `catalyst.py`, `firewall.py`) | Broadest coverage of any product line — ~45 dedicated metrics (`MRMetricName`) covering radio/SSID performance, per-AP signal quality (opt-in fan-out, see below), RF profiles, and client counts. Tested continuously against live APs. |
-| **MS** (switches) | Supported | `collectors/devices/ms.py`, `ms_power.py`, `ms_stack.py` | ~44 dedicated metrics (`MSMetricName`) covering port status/traffic/errors, PoE power draw, and switch-stack topology. Tested continuously against live switches. |
-| **MT** (sensors) | Supported | `collectors/devices/mt.py` | ~27 dedicated metrics (`MTMetricName`) covering all published sensor data fields (temperature, humidity, water detection, door, CO2, noise, PM2.5, indoor air quality, etc.) plus sensor-gateway (Bluetooth) connection status. Tested continuously against live MT sensors — this is the maintainer's most heavily-verified product line. |
-| **MX** (security appliances) | Best-effort | `collectors/devices/mx.py`, `mx_firewall.py`, `mx_ha.py`, `mx_uplink_health.py`, `mx_uplink_usage.py`, `mx_vpn.py` | ~36 dedicated metrics (`MXMetricName`) covering uplink health/usage, HA/warm-spare status, site-to-site VPN status, and firewall rule counts. Implemented and enabled by default, but not verified against live MX hardware — see the hardware caveat above. |
-| **MG** (cellular gateways) | Best-effort | `collectors/devices/mg.py` | ~11 dedicated metrics (`MGMetricName`) covering cellular uplink status, signal quality, and band configuration. No usage-history endpoint is collected (Meraki does not expose one comparable to MX/MR uplink usage). Not verified against live MG hardware. |
-| **MV** (security cameras) | Best-effort | `collectors/devices/mv.py` | ~10 dedicated metrics (`MVMetricName`) covering camera quality/retention settings and Sense (analytics) configuration. This is the thinnest of the six device collectors — MV analytics/telemetry coverage is minimal compared to MR/MS/MT. Not verified against live MV hardware. |
+| **MR** (wireless) | **Live-verified — 2026-08-12:** one MR56 response envelope. Multi-AP scale, pagination, SSID counts, and packet-loss shapes remain unverified. | `collectors/devices/mr/` | ~45 dedicated metrics for radio/SSID performance, opt-in per-AP signal quality, RF profiles, and client counts. |
+| **MS** (pre-Catalyst switches) | **Live-verified — 2026-08-12:** MS120-8LP and MS250-24P envelopes. 500+ switches, stacks, and page boundaries remain unverified. | `collectors/devices/ms.py`, `ms_power.py`, `ms_stack.py` | ~44 dedicated port, PoE, and stack metrics. |
+| **MT** (sensors) | **Live-verified — 2026-08-12:** 16 sensor-reading envelopes. Not every reading variant, gateway link, or multi-network page was observed. | `collectors/devices/mt.py` | ~27 sensor and sensor-gateway metrics. |
+| **Catalyst / CS switches** | **Spec-verified — 2026-08-12:** routing through MS. No live device, stack, or port response observed. | MS routing | Uses the MS collector; no distinct live evidence. |
+| **Catalyst CW APs** | **Spec-verified — 2026-08-12:** routing through MR. No controller-association response observed. | MR routing | Uses the MR collector; no distinct live evidence. |
+| **MX** (security appliances) | **Spec-verified — 2026-08-12:** SDK, vendor docs, and spec only. No live MX, HA, VPN, uplink, firewall, or security-event sample. | `mx.py`, `mx_firewall.py`, `mx_ha.py`, `mx_uplink_health.py`, `mx_uplink_usage.py`, `mx_vpn.py` | ~36 dedicated metrics. |
+| **Z-series / vMX** | **Spec-verified — 2026-08-12:** code and spec through MX routing only. | MX routing | No separate live response evidence. |
+| **MG** (cellular gateways) | **Spec-verified — 2026-08-12:** SDK and spec only. No uplink, eSIM, tower, or HA sample. | `collectors/devices/mg.py` | ~11 dedicated metrics. |
+| **MV** (security cameras) | **Spec-verified — 2026-08-12:** SDK and spec only; deprecations are tracked in #691. | `collectors/devices/mv.py` | ~10 quality, retention, and Sense-configuration metrics. |
 
 Beyond the six device-specific collectors, `DeviceMetricName` (~7 metrics) and
 `NetworkMetricName`/`NetworkHealthMetricName` (device-agnostic health signals such as connection

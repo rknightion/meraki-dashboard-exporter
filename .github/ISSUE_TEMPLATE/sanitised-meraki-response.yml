@@ -1,0 +1,52 @@
+name: Sanitised Meraki API response
+description: Share a redacted response shape to improve fixture and device-family verification.
+title: "[Response corpus] "
+labels:
+  - documentation
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping us verify a Meraki device family without granting organization access.
+        Never include an API key, Authorization header, cookie, dashboard URL, or other credential.
+  - type: dropdown
+    id: family
+    attributes:
+      label: Device family
+      options:
+        - MR wireless
+        - MS switch
+        - Catalyst / CS switch
+        - Catalyst CW access point
+        - MX / Z-series / vMX appliance
+        - MG cellular gateway
+        - MV camera
+        - MT sensor
+    validations:
+      required: true
+  - type: input
+    id: operation
+    attributes:
+      label: SDK operation or API path
+      description: For example, getOrganizationDevices or GET /organizations/{organizationId}/devices.
+    validations:
+      required: true
+  - type: textarea
+    id: response
+    attributes:
+      label: Sanitised response
+      description: Replace IDs, serials, MACs, IPs, names, locations, URLs, and user-entered text with obvious placeholders. Keep field names, nesting, types, nulls, and pagination structure unchanged.
+      render: json
+    validations:
+      required: true
+  - type: checkboxes
+    id: sanitisation
+    attributes:
+      label: Sanitisation confirmation
+      options:
+        - label: I removed API keys, Authorization headers, cookies, and other credentials.
+          required: true
+        - label: I replaced organization, network, device, client, user, location, and dashboard identifiers while preserving the response shape.
+          required: true
+        - label: I understand maintainers may add this shape to the recorded #713 corpus and the relevant #707 fleet preset.
+          required: true
