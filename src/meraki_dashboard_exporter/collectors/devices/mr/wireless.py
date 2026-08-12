@@ -9,9 +9,9 @@ Pattern established in Phase 3.1 following Phase 3.2 metric expiration integrati
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ....core.api_facade import facade_for
 from ....core.constants import MRMetricName
 from ....core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ....core.label_helpers import create_device_labels
@@ -179,7 +179,8 @@ class MRWirelessCollector:
 
         try:
             with LogContext(org_id=org_id):
-                ssid_statuses = await asyncio.to_thread(
+                ssid_statuses = await facade_for(self).call(
+                    "getOrganizationWirelessSsidsStatusesByDevice",
                     self.api.wireless.getOrganizationWirelessSsidsStatusesByDevice,
                     org_id,
                     perPage=500,
@@ -317,7 +318,8 @@ class MRWirelessCollector:
             with LogContext(org_id=org_id):
                 # quantity=50 is the endpoint maximum (default is only top 10),
                 # so orgs with up to 50 SSIDs get stable per-SSID series.
-                ssid_usage = await asyncio.to_thread(
+                ssid_usage = await facade_for(self).call(
+                    "getOrganizationSummaryTopSsidsByUsage",
                     self.api.organizations.getOrganizationSummaryTopSsidsByUsage,
                     org_id,
                     quantity=50,

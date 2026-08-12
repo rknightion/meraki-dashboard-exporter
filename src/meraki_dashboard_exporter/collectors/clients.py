@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import Any, ClassVar, cast
 
 import structlog
 
+from ..core.api_facade import facade_for
 from ..core.api_helpers import create_api_helper
 from ..core.api_models import NetworkClient
 from ..core.batch_processing import process_in_batches_with_errors
@@ -561,7 +561,8 @@ class ClientsCollector(MetricCollector):
         # Always fetch fresh data from API to get current status and usage
         # The cache is only used for hostname lookups, not for skipping API calls
         try:
-            clients_data = await asyncio.to_thread(
+            clients_data = await facade_for(self).call(
+                "getNetworkClients",
                 self.api.networks.getNetworkClients,
                 network_id,
                 timespan=3600,  # 1 hour as requested
@@ -1176,10 +1177,8 @@ class ClientsCollector(MetricCollector):
             try:
                 if i > 0:
                     self._track_api_call("getNetworkClientsApplicationUsage")
-                rate_limiter = getattr(self, "rate_limiter", None)
-                if rate_limiter is not None and i > 0:
-                    await rate_limiter.acquire(org_id, "getNetworkClientsApplicationUsage")
-                usage_response = await asyncio.to_thread(
+                usage_response = await facade_for(self).call(
+                    "getNetworkClientsApplicationUsage",
                     self.api.networks.getNetworkClientsApplicationUsage,
                     network_id,
                     clients=",".join(batch_ids),
@@ -1360,8 +1359,6 @@ class ClientsCollector(MetricCollector):
             wireless_client_count=len(clients_to_query),
         )
 
-        rate_limiter = getattr(self, "rate_limiter", None)
-
         # Process each wireless client individually. One API call per client; the
         # @log_api_call decorator already counts the first, so only track the rest
         # to avoid an off-by-one overcount (mirrors the batched pattern elsewhere).
@@ -1369,12 +1366,8 @@ class ClientsCollector(MetricCollector):
             try:
                 if idx > 0:
                     self._track_api_call("getNetworkWirelessSignalQualityHistory")
-                # F-060: throttle the fan-out through the shared org rate limiter
-                # (mirrors application-usage; the first call is already accounted
-                # for by @log_api_call).
-                if rate_limiter is not None and idx > 0:
-                    await rate_limiter.acquire(org_id, "getNetworkWirelessSignalQualityHistory")
-                signal_response = await asyncio.to_thread(
+                signal_response = await facade_for(self).call(
+                    "getNetworkWirelessSignalQualityHistory",
                     self.api.wireless.getNetworkWirelessSignalQualityHistory,
                     network_id,
                     clientId=client.id,

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+from ....core.api_facade import facade_for
 from ....core.async_utils import ManagedTaskGroup
 from ....core.constants import MRMetricName
 from ....core.domain_models import (
@@ -77,7 +77,6 @@ class MRFirewallCollector:
             ],
         )
 
-    @log_api_call("getNetworkWirelessSsidFirewallL3FirewallRules")
     @with_error_handling(
         operation="Collect MR SSID firewall rules",
         continue_on_error=True,
@@ -159,7 +158,8 @@ class MRFirewallCollector:
         ttl = self.parent._group_ttl_seconds(EndpointGroupName.MR_SSID_FIREWALL)
 
         with LogContext(org_id=org_id, network_id=network_id):
-            raw_ssids = await asyncio.to_thread(
+            raw_ssids = await facade_for(self).call(
+                "getNetworkWirelessSsids",
                 self.api.wireless.getNetworkWirelessSsids,
                 network_id,
             )
@@ -220,11 +220,7 @@ class MRFirewallCollector:
             Fully-resolved per-series TTL for the MR_SSID_FIREWALL group.
 
         """
-        l3_raw = await asyncio.to_thread(
-            self.api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules,
-            network_id,
-            ssid_number,
-        )
+        l3_raw = await self._fetch_l3_rules(network_id, ssid_number)
         l3_data = validate_response_format(
             l3_raw,
             expected_type=dict,
@@ -251,11 +247,7 @@ class MRFirewallCollector:
                 ttl_seconds=ttl,
             )
 
-        l7_raw = await asyncio.to_thread(
-            self.api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules,
-            network_id,
-            ssid_number,
-        )
+        l7_raw = await self._fetch_l7_rules(network_id, ssid_number)
         l7_data = validate_response_format(
             l7_raw,
             expected_type=dict,
@@ -268,4 +260,30 @@ class MRFirewallCollector:
             {**base_labels, LabelName.RULE_TYPE.value: "L7"},
             float(len(l7.rules)),
             ttl_seconds=ttl,
+        )
+
+    @log_api_call("getNetworkWirelessSsidFirewallL3FirewallRules")
+    async def _fetch_l3_rules(self, network_id: str, ssid_number: str) -> dict[str, Any]:
+        """Fetch the L3 rules with endpoint-accurate API attribution."""
+        return cast(
+            dict[str, Any],
+            await facade_for(self).call(
+                "getNetworkWirelessSsidFirewallL3FirewallRules",
+                self.api.wireless.getNetworkWirelessSsidFirewallL3FirewallRules,
+                network_id,
+                ssid_number,
+            ),
+        )
+
+    @log_api_call("getNetworkWirelessSsidFirewallL7FirewallRules")
+    async def _fetch_l7_rules(self, network_id: str, ssid_number: str) -> dict[str, Any]:
+        """Fetch the L7 rules with endpoint-accurate API attribution."""
+        return cast(
+            dict[str, Any],
+            await facade_for(self).call(
+                "getNetworkWirelessSsidFirewallL7FirewallRules",
+                self.api.wireless.getNetworkWirelessSsidFirewallL7FirewallRules,
+                network_id,
+                ssid_number,
+            ),
         )

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..core.api_facade import facade_for
 from ..core.async_utils import ManagedTaskGroup
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
@@ -556,7 +557,8 @@ class MTSensorAlertsCollector(MetricCollector):
         """
         if self.api is None:
             raise RuntimeError("API client not initialized")
-        raw = await asyncio.to_thread(
+        raw = await facade_for(self).call(
+            "getNetworkSensorAlertsCurrentOverviewByMetric",
             self.api.sensor.getNetworkSensorAlertsCurrentOverviewByMetric,
             network_id,
         )
@@ -588,7 +590,8 @@ class MTSensorAlertsCollector(MetricCollector):
         """
         if self.api is None:
             raise RuntimeError("API client not initialized")
-        raw = await asyncio.to_thread(
+        raw = await facade_for(self).call(
+            "getNetworkSensorAlertsProfiles",
             self.api.sensor.getNetworkSensorAlertsProfiles,
             network_id,
         )
@@ -621,7 +624,8 @@ class MTSensorAlertsCollector(MetricCollector):
         """
         if self.api is None:
             raise RuntimeError("API client not initialized")
-        raw = await asyncio.to_thread(
+        raw = await facade_for(self).call(
+            "getNetworkSensorRelationships",
             self.api.sensor.getNetworkSensorRelationships,
             network_id,
         )

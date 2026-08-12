@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.api_facade import facade_for
 from ...core.constants.metrics_constants import MSMetricName
 from ...core.domain_models import DevicePowerModuleStatus
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -95,7 +95,8 @@ class MSPowerCollector(SubCollectorMixin):
             return
         power_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_POWER)
 
-        resp = await asyncio.to_thread(
+        resp = await facade_for(self).call(
+            "getOrganizationDevicesPowerModulesStatusesByDevice",
             self.api.organizations.getOrganizationDevicesPowerModulesStatusesByDevice,
             org_id,
             productTypes=["switch"],

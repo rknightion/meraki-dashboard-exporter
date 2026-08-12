@@ -25,9 +25,9 @@ shape is confirmed on the wire:
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
+from ...core.api_facade import facade_for
 from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_device_labels, create_network_labels
 from ...core.logging import get_logger
@@ -100,7 +100,8 @@ class RFHealthCollector(BaseNetworkHealthCollector):
             Per-device utilization rows (``serial``, ``network``, ``byBand``).
 
         """
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationWirelessDevicesChannelUtilizationByDevice",
             self.api.wireless.getOrganizationWirelessDevicesChannelUtilizationByDevice,
             org_id,
             timespan=600,
@@ -132,7 +133,8 @@ class RFHealthCollector(BaseNetworkHealthCollector):
             Per-network utilization rows (``network``, ``byBand``).
 
         """
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationWirelessDevicesChannelUtilizationByNetwork",
             self.api.wireless.getOrganizationWirelessDevicesChannelUtilizationByNetwork,
             org_id,
             timespan=600,

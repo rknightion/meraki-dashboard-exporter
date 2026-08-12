@@ -15,9 +15,10 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 import structlog
 from meraki.exceptions import APIError
-from prometheus_client import Counter, Gauge
+from prometheus_client import Gauge
 
 from ..api.client import AsyncMerakiClient
+from ..core.api_facade import facade_for
 from ..core.constants.metrics_constants import CollectorMetricName, NetworkMetricName
 from ..core.error_handling import validate_response_format
 from ..core.network_filter import NetworkFilter
@@ -156,11 +157,6 @@ class OrganizationInventory:
             ttl_seconds=self._ttl,
         )
 
-    async def _acquire_rate_limit(self, org_id: str | None, endpoint: str) -> None:
-        if self.rate_limiter is None:
-            return
-        await self.rate_limiter.acquire(org_id, endpoint)
-
     def _maybe_filter_networks(
         self, networks: list[dict[str, Any]], *, unfiltered: bool
     ) -> list[dict[str, Any]]:
@@ -241,18 +237,6 @@ class OrganizationInventory:
         jittered_ttl = ttl * (0.9 + random.random() * 0.2)
         return (time.time() - timestamp) >= jittered_ttl
 
-    @classmethod
-    def _get_api_metrics(cls) -> Counter:
-        """Get the API requests counter from AsyncMerakiClient.
-
-        Reuses the Counter already registered by AsyncMerakiClient to avoid
-        duplicate metric registration errors.
-        """
-        AsyncMerakiClient._ensure_metrics_initialized()
-        if AsyncMerakiClient._api_requests_total is None:
-            raise RuntimeError("AsyncMerakiClient metrics not available after initialization.")
-        return AsyncMerakiClient._api_requests_total
-
     async def _make_api_call(
         self,
         endpoint: str,
@@ -286,19 +270,13 @@ class OrganizationInventory:
             Any other exception with metric recorded as "error".
 
         """
-        counter = self._get_api_metrics()
         try:
-            result = await asyncio.to_thread(api_func, *args, **kwargs)
-            counter.labels(endpoint=endpoint, method="GET", status_code="200").inc()
+            result = await facade_for(self).call(endpoint, api_func, *args, **kwargs)
             AsyncMerakiClient.record_auth_outcome(True)
-            return result
+            return cast(T, result)
         except APIError as e:
-            counter.labels(endpoint=endpoint, method="GET", status_code=str(e.status)).inc()
             if e.status == 401:
                 AsyncMerakiClient.record_auth_outcome(False)
-            raise
-        except Exception:
-            counter.labels(endpoint=endpoint, method="GET", status_code="error").inc()
             raise
 
     async def get_organizations(
@@ -354,7 +332,6 @@ class OrganizationInventory:
                 # lookup fails for any reason (e.g. transient API error).
                 org_id = self.settings.meraki.org_id
                 try:
-                    await self._acquire_rate_limit(org_id, "getOrganization")
                     org_result = await self._make_api_call(
                         "getOrganization",
                         self.api.organizations.getOrganization,
@@ -378,7 +355,6 @@ class OrganizationInventory:
                     ]
             else:
                 # Multi-org mode
-                await self._acquire_rate_limit(None, "getOrganizations")
                 orgs_result = await self._make_api_call(
                     "getOrganizations",
                     self.api.organizations.getOrganizations,
@@ -462,7 +438,6 @@ class OrganizationInventory:
                 return self._maybe_filter_networks(self._networks[org_id], unfiltered=unfiltered)
 
             # Fetch from API
-            await self._acquire_rate_limit(org_id, "getOrganizationNetworks")
             networks_result = await self._make_api_call(
                 "getOrganizationNetworks",
                 self.api.organizations.getOrganizationNetworks,
@@ -586,7 +561,6 @@ class OrganizationInventory:
                     devices = self._devices[org_id]
                 else:
                     # Fetch from API
-                    await self._acquire_rate_limit(org_id, "getOrganizationDevices")
                     devices_result = await self._make_api_call(
                         "getOrganizationDevices",
                         self.api.organizations.getOrganizationDevices,
@@ -698,7 +672,6 @@ class OrganizationInventory:
                 )
 
             # Fetch from API
-            await self._acquire_rate_limit(org_id, "getOrganizationDevicesAvailabilities")
             availabilities_result = await self._make_api_call(
                 "getOrganizationDevicesAvailabilities",
                 self.api.organizations.getOrganizationDevicesAvailabilities,
@@ -1025,7 +998,6 @@ class OrganizationInventory:
 
             # Fetch from API
             try:
-                await self._acquire_rate_limit(org_id, "getOrganizationLicensesOverview")
                 overview_result = await self._make_api_call(
                     "getOrganizationLicensesOverview",
                     self.api.organizations.getOrganizationLicensesOverview,
@@ -1118,7 +1090,6 @@ class OrganizationInventory:
 
             # Fetch from API
             try:
-                await self._acquire_rate_limit(org_id, "getOrganizationLicenses")
                 licenses_result = await self._make_api_call(
                     "getOrganizationLicenses",
                     self.api.organizations.getOrganizationLicenses,

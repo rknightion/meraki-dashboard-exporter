@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
+from ....core.api_facade import facade_for
 from ....core.async_utils import ManagedTaskGroup
 from ....core.constants import MRMetricName
 from ....core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -207,7 +207,8 @@ class MRSignalQualityCollector:
         network_id = device.get("networkId", "")
 
         with LogContext(org_id=org_id, network_id=network_id):
-            raw_history = await asyncio.to_thread(
+            raw_history = await facade_for(self).call(
+                "getNetworkWirelessSignalQualityHistory",
                 self.api.wireless.getNetworkWirelessSignalQualityHistory,
                 network_id,
                 deviceSerial=serial,

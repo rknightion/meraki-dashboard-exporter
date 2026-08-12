@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.api_facade import facade_for
 from ...core.constants.metrics_constants import MXMetricName
 from ...core.domain_models import ApplianceUplinkUsage
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -97,7 +97,8 @@ class MXUplinkUsageCollector(SubCollectorMixin):
         if not self.parent._should_run_group(EndpointGroupName.MX_UPLINK_USAGE):
             return
 
-        resp = await asyncio.to_thread(
+        resp = await facade_for(self).call(
+            "getOrganizationApplianceUplinksUsageByNetwork",
             self.api.appliance.getOrganizationApplianceUplinksUsageByNetwork,
             org_id,
             timespan=300,

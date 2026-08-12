@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 from statistics import mean
 from typing import TYPE_CHECKING, Any
 
+from ...core.api_facade import facade_for
 from ...core.constants.metrics_constants import NetworkHealthMetricName
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_network_labels
@@ -97,7 +97,8 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
             (handled by the error decorator).
 
         """
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getNetworkWirelessDevicesLatencyStats",
             self.api.wireless.getNetworkWirelessDevicesLatencyStats,
             network_id,
             timespan=3600,
@@ -131,7 +132,8 @@ class LatencyStatsCollector(BaseNetworkHealthCollector):
             (handled by the error decorator).
 
         """
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getNetworkWirelessClientsLatencyStats",
             self.api.wireless.getNetworkWirelessClientsLatencyStats,
             network_id,
             timespan=3600,

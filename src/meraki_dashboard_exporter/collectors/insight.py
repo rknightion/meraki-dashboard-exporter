@@ -31,11 +31,11 @@ field-verified pre-launch.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from pydantic import BaseModel, ConfigDict
 
+from ..core.api_facade import facade_for
 from ..core.async_utils import ManagedTaskGroup
 from ..core.collector import MetricCollector
 from ..core.constants import InsightMetricName
@@ -632,7 +632,8 @@ class InsightCollector(MetricCollector):
 
         """
         try:
-            response = await asyncio.to_thread(
+            response = await facade_for(self).call(
+                "getOrganizationInsightApplications",
                 self.api.insight.getOrganizationInsightApplications,
                 org_id,
             )
@@ -676,7 +677,8 @@ class InsightCollector(MetricCollector):
 
         """
         try:
-            response = await asyncio.to_thread(
+            response = await facade_for(self).call(
+                "getNetworkInsightApplicationHealthByTime",
                 self.api.insight.getNetworkInsightApplicationHealthByTime,
                 network_id,
                 application_id,

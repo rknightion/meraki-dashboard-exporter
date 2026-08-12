@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
 from meraki.exceptions import APIError
 
+from ...core.api_facade import facade_for
 from ...core.constants.metrics_constants import MXMetricName
 from ...core.domain_models import (
     ApplianceContentFiltering,
@@ -278,7 +278,8 @@ class MXFirewallCollector(SubCollectorMixin):
             # L3 rules. Wrap in validate_response_format so an SDK exhausted-retry
             # error shape (a dict with an "errors" key) raises instead of silently
             # yielding empty rules and emitting a false-zero rule count (F-034).
-            l3_response = await asyncio.to_thread(
+            l3_response = await facade_for(self).call(
+                "getNetworkApplianceFirewallL3FirewallRules",
                 self.api.appliance.getNetworkApplianceFirewallL3FirewallRules,
                 network_id,
             )
@@ -312,7 +313,8 @@ class MXFirewallCollector(SubCollectorMixin):
 
             # L7 rules (same error-shape normalization as L3)
             self._track_api_call("getNetworkApplianceFirewallL7FirewallRules")
-            l7_response = await asyncio.to_thread(
+            l7_response = await facade_for(self).call(
+                "getNetworkApplianceFirewallL7FirewallRules",
                 self.api.appliance.getNetworkApplianceFirewallL7FirewallRules,
                 network_id,
             )
@@ -392,7 +394,8 @@ class MXFirewallCollector(SubCollectorMixin):
         ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_SECURITY_CONFIG)
 
         # Content filtering (no license gate; always available on MX appliances).
-        cf_response = await asyncio.to_thread(
+        cf_response = await facade_for(self).call(
+            "getNetworkApplianceContentFiltering",
             self.api.appliance.getNetworkApplianceContentFiltering,
             network_id,
         )
@@ -424,7 +427,8 @@ class MXFirewallCollector(SubCollectorMixin):
         # Malware protection -- 400/404 without an Advanced Security license.
         try:
             self._track_api_call("getNetworkApplianceSecurityMalware")
-            malware_response = await asyncio.to_thread(
+            malware_response = await facade_for(self).call(
+                "getNetworkApplianceSecurityMalware",
                 self.api.appliance.getNetworkApplianceSecurityMalware,
                 network_id,
             )
@@ -466,7 +470,8 @@ class MXFirewallCollector(SubCollectorMixin):
         # IDS/IPS (intrusion) -- 400/404 without an Advanced Security license.
         try:
             self._track_api_call("getNetworkApplianceSecurityIntrusion")
-            intrusion_response = await asyncio.to_thread(
+            intrusion_response = await facade_for(self).call(
+                "getNetworkApplianceSecurityIntrusion",
                 self.api.appliance.getNetworkApplianceSecurityIntrusion,
                 network_id,
             )
@@ -537,7 +542,8 @@ class MXFirewallCollector(SubCollectorMixin):
         }
         ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_NAT_CONFIG)
 
-        pf_response = await asyncio.to_thread(
+        pf_response = await facade_for(self).call(
+            "getNetworkApplianceFirewallPortForwardingRules",
             self.api.appliance.getNetworkApplianceFirewallPortForwardingRules,
             network_id,
         )
@@ -555,7 +561,8 @@ class MXFirewallCollector(SubCollectorMixin):
         )
 
         self._track_api_call("getNetworkApplianceFirewallOneToOneNatRules")
-        one_to_one_response = await asyncio.to_thread(
+        one_to_one_response = await facade_for(self).call(
+            "getNetworkApplianceFirewallOneToOneNatRules",
             self.api.appliance.getNetworkApplianceFirewallOneToOneNatRules,
             network_id,
         )
@@ -573,7 +580,8 @@ class MXFirewallCollector(SubCollectorMixin):
         )
 
         self._track_api_call("getNetworkApplianceFirewallOneToManyNatRules")
-        one_to_many_response = await asyncio.to_thread(
+        one_to_many_response = await facade_for(self).call(
+            "getNetworkApplianceFirewallOneToManyNatRules",
             self.api.appliance.getNetworkApplianceFirewallOneToManyNatRules,
             network_id,
         )
@@ -630,7 +638,8 @@ class MXFirewallCollector(SubCollectorMixin):
         ttl_seconds = self.parent._group_ttl_seconds(EndpointGroupName.MX_VLAN_CONFIG)
 
         try:
-            vlans_response = await asyncio.to_thread(
+            vlans_response = await facade_for(self).call(
+                "getNetworkApplianceVlans",
                 self.api.appliance.getNetworkApplianceVlans,
                 network_id,
             )
@@ -658,7 +667,8 @@ class MXFirewallCollector(SubCollectorMixin):
                 raise
 
         self._track_api_call("getNetworkApplianceStaticRoutes")
-        routes_response = await asyncio.to_thread(
+        routes_response = await facade_for(self).call(
+            "getNetworkApplianceStaticRoutes",
             self.api.appliance.getNetworkApplianceStaticRoutes,
             network_id,
         )
@@ -719,7 +729,8 @@ class MXFirewallCollector(SubCollectorMixin):
         # (covers the whole cadence even when the solver stretches it, #631).
         timespan = int(self.parent._group_interval(EndpointGroupName.MX_SECURITY_EVENTS))
 
-        events_response = await asyncio.to_thread(
+        events_response = await facade_for(self).call(
+            "getOrganizationApplianceSecurityEvents",
             self.api.appliance.getOrganizationApplianceSecurityEvents,
             org_id,
             total_pages="all",

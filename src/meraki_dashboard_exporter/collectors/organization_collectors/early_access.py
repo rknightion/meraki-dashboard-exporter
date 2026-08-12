@@ -29,11 +29,11 @@ own scheduler endpoint group (a dedicated budget group could be added later).
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from ...core.api_facade import facade_for
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
@@ -72,7 +72,8 @@ class EarlyAccessCollector(BaseOrganizationCollector):
     async def _fetch_opt_ins(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch the organization's Early Access feature opt-ins."""
         self._track_api_call("getOrganizationEarlyAccessFeaturesOptIns")
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationEarlyAccessFeaturesOptIns",
             self.api.organizations.getOrganizationEarlyAccessFeaturesOptIns,
             org_id,
         )

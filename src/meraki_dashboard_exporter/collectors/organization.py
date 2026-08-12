@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+from ..core.api_facade import facade_for
 from ..core.api_helpers import create_api_helper
 from ..core.async_utils import ManagedTaskGroup
 from ..core.collector import MetricCollector
@@ -1006,7 +1007,8 @@ class OrganizationCollector(MetricCollector):
             # {"items": [...]} -- handle that shape too rather than silently
             # dropping it (bug-bash finding F-041). Detect the SDK's
             # exhausted-retry error shape inline.
-            overview = await asyncio.to_thread(
+            overview = await facade_for(self).call(
+                "getOrganizationDevicesOverviewByModel",
                 self.api.organizations.getOrganizationDevicesOverviewByModel,
                 org_id,
                 **kwargs,
@@ -1109,7 +1111,8 @@ class OrganizationCollector(MetricCollector):
                 logger.debug(
                     "Inventory not available, fetching availabilities directly", org_id=org_id
                 )
-                availabilities_response = await asyncio.to_thread(
+                availabilities_response = await facade_for(self).call(
+                    "getOrganizationDevicesAvailabilities",
                     self.api.organizations.getOrganizationDevicesAvailabilities,
                     org_id,
                     total_pages="all",
@@ -1214,7 +1217,8 @@ class OrganizationCollector(MetricCollector):
             kwargs: dict[str, Any] = {"perPage": 3}
             if network_ids is not None:
                 kwargs["networkIds"] = network_ids
-            response = await asyncio.to_thread(
+            response = await facade_for(self).call(
+                "getOrganizationDevicesPacketCaptureCaptures",
                 self.api.organizations.getOrganizationDevicesPacketCaptureCaptures,
                 org_id,
                 **kwargs,
@@ -1342,7 +1346,8 @@ class OrganizationCollector(MetricCollector):
             return
 
         with LogContext(org_id=org_id, org_name=org_name):
-            raw_response = await asyncio.to_thread(
+            raw_response = await facade_for(self).call(
+                "getOrganizationSummaryTopApplicationsCategoriesByUsage",
                 self.api.organizations.getOrganizationSummaryTopApplicationsCategoriesByUsage,
                 org_id,
                 quantity=_APPLICATION_USAGE_MAX_QUANTITY,
@@ -1417,7 +1422,8 @@ class OrganizationCollector(MetricCollector):
 
         """
         self._track_api_call("getOrganizationConfigTemplates")
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationConfigTemplates",
             self.api.organizations.getOrganizationConfigTemplates,
             org_id,
         )
@@ -1495,7 +1501,8 @@ class OrganizationCollector(MetricCollector):
 
         """
         self._track_api_call("getOrganizationAdaptivePolicyOverview")
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationAdaptivePolicyOverview",
             self.api.organizations.getOrganizationAdaptivePolicyOverview,
             org_id,
         )

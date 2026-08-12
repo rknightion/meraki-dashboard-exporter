@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, ClassVar, cast
+
+from ...core.api_facade import facade_for
 
 if TYPE_CHECKING:
     from meraki import DashboardAPI
@@ -220,7 +221,9 @@ class MTCollector(BaseDeviceCollector):
         if self.api is None:
             raise RuntimeError("API client not initialized")
         # Access the API - self.api should already be the DashboardAPI
-        raw = await asyncio.to_thread(self.api.organizations.getOrganizations)
+        raw = await facade_for(self).call(
+            "getOrganizations", self.api.organizations.getOrganizations
+        )
         return cast(
             list[dict[str, Any]],
             validate_response_format(raw, expected_type=list, operation="getOrganizations"),
@@ -251,13 +254,10 @@ class MTCollector(BaseDeviceCollector):
 
             if self.api is None:
                 return org_id
-            # Fallback direct call (no @log_api_call here): throttle explicitly.
-            rate_limiter = (
-                getattr(self.parent, "rate_limiter", None) if self.parent is not None else None
+            # Fallback direct call: the facade owns pacing and retries.
+            org = await facade_for(self).call(
+                "getOrganization", self.api.organizations.getOrganization, org_id
             )
-            if rate_limiter is not None:
-                await rate_limiter.acquire(org_id, "getOrganization")
-            org = await asyncio.to_thread(self.api.organizations.getOrganization, org_id)
             return str(org.get("name", org_id))
         except Exception:
             logger.debug("Failed to get org name", org_id=org_id)
@@ -280,7 +280,8 @@ class MTCollector(BaseDeviceCollector):
         """
         if self.api is None:
             raise RuntimeError("API client not initialized")
-        raw = await asyncio.to_thread(
+        raw = await facade_for(self).call(
+            "getOrganizationDevices",
             self.api.organizations.getOrganizationDevices,
             org_id,
             total_pages="all",
@@ -318,7 +319,8 @@ class MTCollector(BaseDeviceCollector):
         """
         if self.api is None:
             raise RuntimeError("API client not initialized")
-        raw = await asyncio.to_thread(
+        raw = await facade_for(self).call(
+            "getOrganizationSensorReadingsLatest",
             self.api.sensor.getOrganizationSensorReadingsLatest,
             org_id,
             total_pages="all",
@@ -437,7 +439,8 @@ class MTCollector(BaseDeviceCollector):
         """
         if self.api is None:
             raise RuntimeError("API client not initialized")
-        raw = await asyncio.to_thread(
+        raw = await facade_for(self).call(
+            "getOrganizationSensorGatewaysConnectionsLatest",
             self.api.sensor.getOrganizationSensorGatewaysConnectionsLatest,
             org_id,
             total_pages="all",

@@ -138,6 +138,8 @@ class TestAsyncMerakiClientInitialization:
             # like the mesh 404 are logged once, at debug, not double-logged).
             suppress_logging=True,
             inherit_logging_config=True,
+            # #698: the exporter facade is the sole pacing owner.
+            smart_flow_enabled=False,
             single_request_timeout=30,
             maximum_retries=3,
             action_batch_retry_wait_time=10,

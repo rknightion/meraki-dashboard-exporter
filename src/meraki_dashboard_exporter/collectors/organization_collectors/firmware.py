@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
+from ...core.api_facade import facade_for
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels, create_org_labels
 from ...core.logging import get_logger
@@ -72,7 +72,8 @@ class FirmwareCollector(BaseOrganizationCollector):
             List of firmware upgrade events.
 
         """
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationFirmwareUpgrades",
             self.api.organizations.getOrganizationFirmwareUpgrades,
             org_id,
             total_pages="all",
@@ -272,7 +273,8 @@ class FirmwareCollector(BaseOrganizationCollector):
 
         """
         self._track_api_call("getOrganizationFirmwareUpgradesByDevice")
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationFirmwareUpgradesByDevice",
             self.api.organizations.getOrganizationFirmwareUpgradesByDevice,
             org_id,
             total_pages="all",

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ....core.api_facade import facade_for
 from ....core.constants import MRMetricName
 from ....core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ....core.label_helpers import create_device_labels
@@ -141,7 +141,8 @@ class MRClientsCollector:
             try:
                 with LogContext(org_id=org_id, network_id=network_id):
                     # Get connection stats for all devices in this network
-                    connection_stats = await asyncio.to_thread(
+                    connection_stats = await facade_for(self).call(
+                        "getNetworkWirelessDevicesConnectionStats",
                         self.api.wireless.getNetworkWirelessDevicesConnectionStats,
                         network_id,
                         timespan=1800,  # 30 minutes
@@ -223,7 +224,8 @@ class MRClientsCollector:
 
         try:
             with LogContext(org_id=org_id):
-                client_overview = await asyncio.to_thread(
+                client_overview = await facade_for(self).call(
+                    "getOrganizationWirelessClientsOverviewByDevice",
                     self.api.wireless.getOrganizationWirelessClientsOverviewByDevice,
                     org_id,
                     total_pages="all",

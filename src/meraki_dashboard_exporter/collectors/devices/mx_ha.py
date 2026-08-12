@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.api_facade import facade_for
 from ...core.constants.metrics_constants import MXMetricName
 from ...core.domain_models import ApplianceDeviceRedundancy
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -105,7 +105,8 @@ class MXHACollector(SubCollectorMixin):
         if not self.parent._should_run_group(EndpointGroupName.MX_HA):
             return
 
-        resp = await asyncio.to_thread(
+        resp = await facade_for(self).call(
+            "getOrganizationApplianceDevicesRedundancyByNetwork",
             self.api.appliance.getOrganizationApplianceDevicesRedundancyByNetwork,
             org_id,
             total_pages="all",

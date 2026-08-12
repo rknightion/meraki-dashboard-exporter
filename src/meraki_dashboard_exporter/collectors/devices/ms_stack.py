@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.api_facade import facade_for
 from ...core.async_utils import ManagedTaskGroup
 from ...core.constants.metrics_constants import MSMetricName
 from ...core.error_handling import ErrorCategory, with_error_handling
@@ -104,7 +104,8 @@ class MSStackCollector(SubCollectorMixin):
         stacks_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_STACKS)
 
         with LogContext(org_id=org_id, network_id=network_id):
-            stacks = await asyncio.to_thread(
+            stacks = await facade_for(self).call(
+                "getNetworkSwitchStacks",
                 self.api.switch.getNetworkSwitchStacks,
                 network_id,
             )

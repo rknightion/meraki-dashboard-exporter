@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+from ..core.api_facade import facade_for
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import AlertMetricName
@@ -357,14 +357,17 @@ class AlertsCollector(MetricCollector):
 
         """
         if self.settings.meraki.org_id:
-            org = await asyncio.to_thread(
+            org = await facade_for(self).call(
+                "getOrganization",
                 self.api.organizations.getOrganization,
                 self.settings.meraki.org_id,
             )
             org = validate_response_format(org, expected_type=dict, operation="getOrganization")
             return [cast(dict[str, Any], org)]
         else:
-            orgs = await asyncio.to_thread(self.api.organizations.getOrganizations)
+            orgs = await facade_for(self).call(
+                "getOrganizations", self.api.organizations.getOrganizations
+            )
             orgs = validate_response_format(orgs, expected_type=list, operation="getOrganizations")
             return cast(list[dict[str, Any]], orgs)
 
@@ -391,7 +394,8 @@ class AlertsCollector(MetricCollector):
         """
         with LogContext(org_id=org_id, org_name=org_name):
             # Get all active alerts
-            alerts = await asyncio.to_thread(
+            alerts = await facade_for(self).call(
+                "getOrganizationAssuranceAlerts",
                 self.api.organizations.getOrganizationAssuranceAlerts,
                 org_id,
                 total_pages="all",
@@ -621,7 +625,8 @@ class AlertsCollector(MetricCollector):
             List of networks (filtered) or None on error.
 
         """
-        networks = await asyncio.to_thread(
+        networks = await facade_for(self).call(
+            "getOrganizationNetworks",
             self.api.organizations.getOrganizationNetworks,
             org_id,
             total_pages="all",
@@ -663,7 +668,8 @@ class AlertsCollector(MetricCollector):
 
         with LogContext(network_id=network_id, network_name=network_name, org_id=org_id):
             # Get sensor alerts for the last hour
-            overview = await asyncio.to_thread(
+            overview = await facade_for(self).call(
+                "getNetworkSensorAlertsOverviewByMetric",
                 self.api.sensor.getNetworkSensorAlertsOverviewByMetric,
                 network_id,
                 timespan=3600,

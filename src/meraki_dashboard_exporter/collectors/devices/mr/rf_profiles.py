@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
+from ....core.api_facade import facade_for
 from ....core.constants import MRMetricName
 from ....core.domain_models import WirelessRfProfileAssignment
 from ....core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -81,7 +81,8 @@ class MRRfProfilesCollector:
         ttl = self.parent._group_ttl_seconds(EndpointGroupName.MR_RF_PROFILES)
 
         with LogContext(org_id=org_id):
-            raw_assignments = await asyncio.to_thread(
+            raw_assignments = await facade_for(self).call(
+                "getOrganizationWirelessRfProfilesAssignmentsByDevice",
                 self.api.wireless.getOrganizationWirelessRfProfilesAssignmentsByDevice,
                 org_id,
                 total_pages="all",

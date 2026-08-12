@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.api_facade import facade_for
 from ...core.async_utils import ManagedTaskGroup
 from ...core.constants.device_constants import ProductType
 from ...core.constants.metrics_constants import MXMetricName
@@ -144,7 +144,8 @@ class MXVpnCollector(SubCollectorMixin):
         # second call each cycle per DeviceCollector._collect_mx_specific_metrics)
         # so marking here would not throttle the pair out mid-cycle.
         if due:
-            vpn_statuses = await asyncio.to_thread(
+            vpn_statuses = await facade_for(self).call(
+                "getOrganizationApplianceVpnStatuses",
                 self.api.appliance.getOrganizationApplianceVpnStatuses,
                 org_id,
                 total_pages="all",
@@ -298,7 +299,8 @@ class MXVpnCollector(SubCollectorMixin):
             Network ID for the appliance network.
 
         """
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getNetworkApplianceVpnSiteToSiteVpn",
             self.api.appliance.getNetworkApplianceVpnSiteToSiteVpn,
             network_id,
         )
@@ -383,7 +385,8 @@ class MXVpnCollector(SubCollectorMixin):
         if not due:
             return
 
-        resp = await asyncio.to_thread(
+        resp = await facade_for(self).call(
+            "getOrganizationApplianceVpnStats",
             self.api.appliance.getOrganizationApplianceVpnStats,
             org_id,
             total_pages="all",

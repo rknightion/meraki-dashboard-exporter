@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
+from ...core.api_facade import facade_for
 from ...core.constants import MVMetricName
 from ...core.domain_models import (
     CameraAnalyticsZone,
@@ -445,7 +445,8 @@ class MVCollector(BaseDeviceCollector):
             Mapping of zone ID (as string) to zone label.
 
         """
-        zones = await asyncio.to_thread(
+        zones = await facade_for(self).call(
+            "getDeviceCameraAnalyticsZones",
             self.api.camera.getDeviceCameraAnalyticsZones,
             serial,
         )
@@ -515,7 +516,8 @@ class MVCollector(BaseDeviceCollector):
             ``None`` instead.
 
         """
-        recent = await asyncio.to_thread(
+        recent = await facade_for(self).call(
+            "getDeviceCameraAnalyticsRecent",
             self.api.camera.getDeviceCameraAnalyticsRecent,
             serial,
         )
@@ -576,7 +578,8 @@ class MVCollector(BaseDeviceCollector):
             ``None`` instead.
 
         """
-        quality_retention = await asyncio.to_thread(
+        quality_retention = await facade_for(self).call(
+            "getDeviceCameraQualityAndRetention",
             self.api.camera.getDeviceCameraQualityAndRetention,
             serial,
         )
@@ -669,7 +672,8 @@ class MVCollector(BaseDeviceCollector):
             ``None`` instead.
 
         """
-        sense = await asyncio.to_thread(
+        sense = await facade_for(self).call(
+            "getDeviceCameraSense",
             self.api.camera.getDeviceCameraSense,
             serial,
         )
@@ -737,7 +741,8 @@ class MVCollector(BaseDeviceCollector):
         if not self.parent._should_run_group(EndpointGroupName.MV_ONBOARDING):
             return
 
-        raw = await asyncio.to_thread(
+        raw = await facade_for(self).call(
+            "getOrganizationCameraOnboardingStatuses",
             self.api.camera.getOrganizationCameraOnboardingStatuses,
             org_id,
         )

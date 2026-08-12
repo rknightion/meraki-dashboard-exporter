@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
+from ...core.api_facade import facade_for
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
@@ -111,7 +111,8 @@ class BaseDeviceCollector(SubCollectorMixin, ABC):
             # Use a short timespan (300 seconds = 5 minutes) with 300 second interval
             # This gives us the most recent memory data block
             with LogContext(org_id=org_id):
-                memory_response = await asyncio.to_thread(
+                memory_response = await facade_for(self).call(
+                    "getOrganizationDevicesSystemMemoryUsageHistoryByInterval",
                     self.api.organizations.getOrganizationDevicesSystemMemoryUsageHistoryByInterval,
                     org_id,
                     timespan=300,

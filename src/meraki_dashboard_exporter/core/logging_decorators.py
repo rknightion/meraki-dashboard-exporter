@@ -62,20 +62,12 @@ def log_api_call(
             elif hasattr(self, "parent") and hasattr(self.parent, "_track_api_call"):
                 self.parent._track_api_call(operation)
 
-            rate_limiter = _get_rate_limiter(self)
-            if rate_limiter is not None:
-                wait_seconds = await rate_limiter.acquire(context.get("org_id"), operation)
-                if wait_seconds > 0:
-                    logger.debug(
-                        "Rate limiter wait",
-                        operation=operation,
-                        wait_seconds=round(wait_seconds, 3),
-                        **context,
-                    )
-
             start_time = time.time()
             try:
-                result = await func(self, *args, **kwargs)  # type: ignore[misc]
+                # Make extracted IDs available to the facade while preserving
+                # this decorator as logging-only rather than a pacing owner.
+                with structlog.contextvars.bound_contextvars(**context):
+                    result = await func(self, *args, **kwargs)  # type: ignore[misc]
                 duration = time.time() - start_time
 
                 # Log successful API call with result info
@@ -418,22 +410,6 @@ def _extract_context(args: tuple[Any, ...], kwargs: dict[str, Any]) -> dict[str,
             context["org_id"] = args[0]["orgId"]
 
     return context
-
-
-def _get_rate_limiter(target: Any) -> Any | None:
-    """Resolve a rate limiter instance from collector or parent.
-
-    A ``rate_limiter`` attribute that is present but ``None`` (e.g. a
-    sub-collector that declares the attribute but relies on its parent's
-    limiter) falls through to the parent rather than short-circuiting.
-    """
-    own = getattr(target, "rate_limiter", None)
-    if own is not None:
-        return own
-    parent = getattr(target, "parent", None)
-    if parent is not None:
-        return getattr(parent, "rate_limiter", None)
-    return None
 
 
 def _get_result_info(result: Any) -> dict[str, Any]:

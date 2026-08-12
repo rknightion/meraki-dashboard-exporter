@@ -10,9 +10,9 @@ NetworkFilter (there is no per-network breakdown to filter on).
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
+from ...core.api_facade import facade_for
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
@@ -44,7 +44,8 @@ class TopUsageCollector(BaseOrganizationCollector):
     async def _fetch_top_clients(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch the top-N clients by usage."""
         self._track_api_call("getOrganizationSummaryTopClientsByUsage")
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationSummaryTopClientsByUsage",
             self.api.organizations.getOrganizationSummaryTopClientsByUsage,
             org_id,
             quantity=_TOP_N,
@@ -62,7 +63,8 @@ class TopUsageCollector(BaseOrganizationCollector):
     async def _fetch_top_ssids(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch the top-N SSIDs by usage."""
         self._track_api_call("getOrganizationSummaryTopSsidsByUsage")
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationSummaryTopSsidsByUsage",
             self.api.organizations.getOrganizationSummaryTopSsidsByUsage,
             org_id,
             quantity=_TOP_N,
@@ -80,7 +82,8 @@ class TopUsageCollector(BaseOrganizationCollector):
     async def _fetch_top_manufacturers(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch the top-N client-device manufacturers by usage."""
         self._track_api_call("getOrganizationSummaryTopClientsManufacturersByUsage")
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationSummaryTopClientsManufacturersByUsage",
             self.api.organizations.getOrganizationSummaryTopClientsManufacturersByUsage,
             org_id,
             quantity=_TOP_N,

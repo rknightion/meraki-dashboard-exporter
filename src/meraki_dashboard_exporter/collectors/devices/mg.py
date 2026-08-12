@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ...core.api_facade import facade_for
 from ...core.constants import MGMetricName
 from ...core.domain_models import CellularGatewayUplinkStatus
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -683,7 +683,8 @@ class MGCollector(BaseDeviceCollector):
         if not self.parent._should_run_group(EndpointGroupName.MG_UPLINK_STATUS):
             return
 
-        uplink_statuses = await asyncio.to_thread(
+        uplink_statuses = await facade_for(self).call(
+            "getOrganizationCellularGatewayUplinkStatuses",
             self.api.cellularGateway.getOrganizationCellularGatewayUplinkStatuses,
             org_id,
             total_pages="all",
@@ -883,7 +884,8 @@ class MGCollector(BaseDeviceCollector):
             Device lookup table keyed by serial.
 
         """
-        raw = await asyncio.to_thread(
+        raw = await facade_for(self).call(
+            "getOrganizationDevicesCellularUplinksBandsByDevice",
             self.api.organizations.getOrganizationDevicesCellularUplinksBandsByDevice,
             org_id,
             total_pages="all",
@@ -970,7 +972,8 @@ class MGCollector(BaseDeviceCollector):
             Device lookup table keyed by serial.
 
         """
-        raw = await asyncio.to_thread(
+        raw = await facade_for(self).call(
+            "getOrganizationDevicesCellularUplinksTowersByDevice",
             self.api.organizations.getOrganizationDevicesCellularUplinksTowersByDevice,
             org_id,
             total_pages="all",
@@ -1067,7 +1070,8 @@ class MGCollector(BaseDeviceCollector):
         if not self.parent._should_run_group(EndpointGroupName.MG_ESIMS):
             return
 
-        raw = await asyncio.to_thread(
+        raw = await facade_for(self).call(
+            "getOrganizationCellularGatewayEsimsInventory",
             self.api.cellularGateway.getOrganizationCellularGatewayEsimsInventory,
             org_id,
         )
@@ -1189,7 +1193,8 @@ class MGCollector(BaseDeviceCollector):
         if not self.parent._should_run_group(EndpointGroupName.MG_HA):
             return
 
-        raw = await asyncio.to_thread(
+        raw = await facade_for(self).call(
+            "getOrganizationUplinksStatuses",
             self.api.organizations.getOrganizationUplinksStatuses,
             org_id,
             total_pages="all",

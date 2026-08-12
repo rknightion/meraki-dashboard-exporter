@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
+from ....core.api_facade import facade_for
 from ....core.constants import MRMetricName
 from ....core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ....core.logging import get_logger
@@ -153,7 +153,8 @@ class MRCatalystCollector:
         ttl = self.parent._group_ttl_seconds(EndpointGroupName.MR_WIRELESS_CONTROLLER)
 
         with LogContext(org_id=org_id):
-            raw_rows = await asyncio.to_thread(
+            raw_rows = await facade_for(self).call(
+                "getOrganizationWirelessDevicesWirelessControllersByDevice",
                 self.api.wireless.getOrganizationWirelessDevicesWirelessControllersByDevice,
                 org_id,
                 total_pages="all",

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
+from ...core.api_facade import facade_for
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
@@ -58,7 +58,8 @@ class DeviceAvailabilityHistoryCollector(BaseOrganizationCollector):
             List of device availability change events.
 
         """
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationDevicesAvailabilitiesChangeHistory",
             self.api.organizations.getOrganizationDevicesAvailabilitiesChangeHistory,
             org_id,
             timespan=int(self.parent._group_interval(EndpointGroupName.ORG_AVAILABILITY_HISTORY)),

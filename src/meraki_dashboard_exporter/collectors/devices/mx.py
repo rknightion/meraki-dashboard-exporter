@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
+from ...core.api_facade import facade_for
 from ...core.constants import MXMetricName
 from ...core.domain_models import ApplianceDhcpSubnet
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -294,7 +294,8 @@ class MXCollector(BaseDeviceCollector):
         # value (and also the SDK's documented default) -- it's the freshest
         # window available and matches this collector's per-cycle granularity,
         # so re-running collect() doesn't average over an ever-shifting range.
-        resp = await asyncio.to_thread(
+        resp = await facade_for(self).call(
+            "getDeviceAppliancePerformance",
             self.api.appliance.getDeviceAppliancePerformance,
             serial,
             timespan=1800,
@@ -369,7 +370,8 @@ class MXCollector(BaseDeviceCollector):
         if not self._should_collect_dhcp_subnets(serial):
             return
 
-        resp = await asyncio.to_thread(
+        resp = await facade_for(self).call(
+            "getDeviceApplianceDhcpSubnets",
             self.api.appliance.getDeviceApplianceDhcpSubnets,
             serial,
         )
@@ -444,7 +446,8 @@ class MXCollector(BaseDeviceCollector):
         if not self.parent._should_run_group(EndpointGroupName.MX_UPLINK_STATUS):
             return
 
-        uplink_statuses = await asyncio.to_thread(
+        uplink_statuses = await facade_for(self).call(
+            "getOrganizationApplianceUplinkStatuses",
             self.api.appliance.getOrganizationApplianceUplinkStatuses,
             org_id,
             total_pages="all",
@@ -554,7 +557,8 @@ class MXCollector(BaseDeviceCollector):
         if not self.parent._should_run_group(EndpointGroupName.MX_UPLINKS_OVERVIEW):
             return
 
-        resp = await asyncio.to_thread(
+        resp = await facade_for(self).call(
+            "getOrganizationApplianceUplinksStatusesOverview",
             self.api.appliance.getOrganizationApplianceUplinksStatusesOverview,
             org_id,
         )

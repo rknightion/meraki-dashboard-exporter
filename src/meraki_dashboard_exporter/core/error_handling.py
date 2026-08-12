@@ -246,6 +246,30 @@ def with_error_handling(
                         return result
 
                     except RetryableAPIError as e:
+                        # A facade-marked exhaustion remains a RetryableAPIError
+                        # for compatibility with callers that classify rate
+                        # limits by exception type, but the facade has already
+                        # spent the one retry budget.  Never retry it here.
+                        if getattr(e, "facade_retry_exhausted", False):
+                            error_context = dict(context)
+                            error_context.update({
+                                "duration_seconds": round(time.time() - start_time, 2),
+                                "error": str(e),
+                            })
+                            logger.warning(
+                                f"{operation} rate limited after facade retries",
+                                **error_context,
+                            )
+                            if collector_instance and hasattr(collector_instance, "_track_error"):
+                                collector_instance._track_error(ErrorCategory.API_RATE_LIMIT)
+                            if continue_on_error:
+                                return None
+                            raise CollectorError(
+                                f"{operation} failed after facade retries: {e}",
+                                ErrorCategory.API_RATE_LIMIT,
+                                error_context,
+                            ) from e
+
                         # Handle retryable errors with exponential backoff
                         if retry_count < max_retries:
                             retry_count += 1

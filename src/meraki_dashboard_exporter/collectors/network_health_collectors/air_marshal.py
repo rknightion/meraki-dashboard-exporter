@@ -28,9 +28,9 @@ treated as docstring-refresh-only (drop the gauge in a follow-up).
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.api_facade import facade_for
 from ...core.constants.metrics_constants import NetworkHealthMetricName
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_network_labels
@@ -154,7 +154,8 @@ class AirMarshalCollector(BaseNetworkHealthCollector):
             the error decorator).
 
         """
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getNetworkWirelessAirMarshal",
             self.api.wireless.getNetworkWirelessAirMarshal,
             network_id,
             timespan=3600,

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
+from ...core.api_facade import facade_for
 from ...core.async_utils import ManagedTaskGroup
 from ...core.constants import MSMetricName
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
@@ -910,7 +910,8 @@ class MSCollector(BaseDeviceCollector):
             return True
 
         with LogContext(org_id=org_id):
-            response = await asyncio.to_thread(
+            response = await facade_for(self).call(
+                "getOrganizationSwitchPortsStatusesBySwitch",
                 self.api.switch.getOrganizationSwitchPortsStatusesBySwitch,
                 org_id,
                 serials=serials,
@@ -1016,7 +1017,8 @@ class MSCollector(BaseDeviceCollector):
         try:
             # Get port statuses with 1-hour timespan
             with LogContext(serial=device_labels["serial"], name=device.get("name", "")):
-                port_statuses = await asyncio.to_thread(
+                port_statuses = await facade_for(self).call(
+                    "getDeviceSwitchPortsStatuses",
                     self.api.switch.getDeviceSwitchPortsStatuses,
                     device_labels["serial"],
                     timespan=3600,  # 1 hour timespan for better accuracy
@@ -1239,7 +1241,8 @@ class MSCollector(BaseDeviceCollector):
         usage_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_PORT_USAGE)
 
         with LogContext(serial=device_labels["serial"], name=device_labels["name"]):
-            port_statuses = await asyncio.to_thread(
+            port_statuses = await facade_for(self).call(
+                "getDeviceSwitchPortsStatuses",
                 self.api.switch.getDeviceSwitchPortsStatuses,
                 device_labels["serial"],
                 timespan=3600,
@@ -1450,7 +1453,8 @@ class MSCollector(BaseDeviceCollector):
             return True
 
         with LogContext(org_id=org_id):
-            usage_response = await asyncio.to_thread(
+            usage_response = await facade_for(self).call(
+                "getOrganizationSwitchPortsUsageHistoryByDeviceByInterval",
                 self.api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval,
                 org_id,
                 serials=serials,
@@ -1464,7 +1468,8 @@ class MSCollector(BaseDeviceCollector):
                 operation="getOrganizationSwitchPortsUsageHistoryByDeviceByInterval",
             )
 
-            clients_response = await asyncio.to_thread(
+            clients_response = await facade_for(self).call(
+                "getOrganizationSwitchPortsClientsOverviewByDevice",
                 self.api.switch.getOrganizationSwitchPortsClientsOverviewByDevice,
                 org_id,
                 serials=serials,
@@ -1745,14 +1750,9 @@ class MSCollector(BaseDeviceCollector):
 
                 try:
                     # Fetch STP configuration for the network
-                    with LogContext(network_id=network_id):
-                        # This nested per-network fetch is not decorated with
-                        # @log_api_call, so acquire the rate limiter explicitly
-                        # (keyed by the owning org) to avoid bypassing throttling.
-                        rate_limiter = getattr(self.parent, "rate_limiter", None)
-                        if rate_limiter is not None:
-                            await rate_limiter.acquire(org_id, "getNetworkSwitchStp")
-                        stp_data = await asyncio.to_thread(
+                    with LogContext(org_id=org_id, network_id=network_id):
+                        stp_data = await facade_for(self).call(
+                            "getNetworkSwitchStp",
                             self.api.switch.getNetworkSwitchStp,
                             network_id,
                         )
@@ -1864,7 +1864,8 @@ class MSCollector(BaseDeviceCollector):
         try:
             # Get packet statistics with 5-minute timespan
             with LogContext(serial=device_labels["serial"], name=device.get("name", "")):
-                packet_stats = await asyncio.to_thread(
+                packet_stats = await facade_for(self).call(
+                    "getDeviceSwitchPortsStatusesPackets",
                     self.api.switch.getDeviceSwitchPortsStatusesPackets,
                     device_labels["serial"],
                     timespan=300,  # 5-minute window
@@ -2051,7 +2052,8 @@ class MSCollector(BaseDeviceCollector):
         ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_PORT_OVERVIEW)
 
         # Call the API with required timespan
-        overview = await asyncio.to_thread(
+        overview = await facade_for(self).call(
+            "getOrganizationSwitchPortsOverview",
             self.api.switch.getOrganizationSwitchPortsOverview,
             org_id,
             timespan=43200,  # 12 hours as required
@@ -2177,7 +2179,8 @@ class MSCollector(BaseDeviceCollector):
         ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_POWER_SUMMARY)
 
         with LogContext(org_id=org_id):
-            response = await asyncio.to_thread(
+            response = await facade_for(self).call(
+                "getOrganizationSummarySwitchPowerHistory",
                 self.api.switch.getOrganizationSummarySwitchPowerHistory,
                 org_id,
             )
@@ -2250,7 +2253,6 @@ class MSCollector(BaseDeviceCollector):
         if not self.parent._should_run_group(EndpointGroupName.MS_DHCP_SECURITY):
             return
         ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_DHCP_SECURITY)
-        rate_limiter = getattr(self.parent, "rate_limiter", None)
 
         try:
             with LogContext(org_id=org_id):
@@ -2264,9 +2266,8 @@ class MSCollector(BaseDeviceCollector):
                 # Rogue/unauthorized DHCP servers seen (#292).
                 try:
                     with LogContext(network_id=network_id):
-                        if rate_limiter is not None:
-                            await rate_limiter.acquire(org_id, "getNetworkSwitchDhcpV4ServersSeen")
-                        servers_response = await asyncio.to_thread(
+                        servers_response = await facade_for(self).call(
+                            "getNetworkSwitchDhcpV4ServersSeen",
                             self.api.switch.getNetworkSwitchDhcpV4ServersSeen,
                             network_id,
                             total_pages="all",
@@ -2316,12 +2317,8 @@ class MSCollector(BaseDeviceCollector):
                 # Dynamic ARP Inspection coverage (#293).
                 try:
                     with LogContext(network_id=network_id):
-                        if rate_limiter is not None:
-                            await rate_limiter.acquire(
-                                org_id,
-                                "getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice",
-                            )
-                        dai_response = await asyncio.to_thread(
+                        dai_response = await facade_for(self).call(
+                            "getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice",
                             self.api.switch.getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice,
                             network_id,
                             total_pages="all",
@@ -2412,7 +2409,6 @@ class MSCollector(BaseDeviceCollector):
         if not self.parent._should_run_group(EndpointGroupName.MS_LINK_AGGREGATIONS):
             return
         ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_LINK_AGGREGATIONS)
-        rate_limiter = getattr(self.parent, "rate_limiter", None)
 
         try:
             with LogContext(org_id=org_id):
@@ -2424,9 +2420,8 @@ class MSCollector(BaseDeviceCollector):
                 network_id = network["id"]
                 try:
                     with LogContext(network_id=network_id):
-                        if rate_limiter is not None:
-                            await rate_limiter.acquire(org_id, "getNetworkSwitchLinkAggregations")
-                        response = await asyncio.to_thread(
+                        response = await facade_for(self).call(
+                            "getNetworkSwitchLinkAggregations",
                             self.api.switch.getNetworkSwitchLinkAggregations,
                             network_id,
                         )

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
+from ...core.api_facade import facade_for
 from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_network_labels
 from ...core.logging import get_logger
@@ -44,7 +44,8 @@ class DataRatesCollector(BaseNetworkHealthCollector):
 
         """
         _ = org_id  # Consumed by the @log_api_call decorator for rate-limit keying.
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getNetworkWirelessDataRateHistory",
             self.api.wireless.getNetworkWirelessDataRateHistory,
             network_id,
             timespan=300,

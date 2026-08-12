@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
+from ...core.api_facade import facade_for
 from ...core.constants.api_constants import LicenseState
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_org_labels
@@ -56,7 +56,8 @@ class LicenseCollector(BaseOrganizationCollector):
             return await self.inventory.get_licenses_overview(org_id)
 
         # Fallback to direct API call
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationLicensesOverview",
             self.api.organizations.getOrganizationLicensesOverview,
             org_id,
         )
@@ -95,7 +96,8 @@ class LicenseCollector(BaseOrganizationCollector):
             return await self.inventory.get_licenses(org_id)
 
         # Fallback to direct API call
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationLicenses",
             self.api.organizations.getOrganizationLicenses,
             org_id,
             total_pages="all",

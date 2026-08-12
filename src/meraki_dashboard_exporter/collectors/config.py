@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+from ..core.api_facade import facade_for
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import OrgMetricName
@@ -263,7 +263,8 @@ class ConfigCollector(MetricCollector):
         """
         if self.settings.meraki.org_id:
             # Single organization
-            org = await asyncio.to_thread(
+            org = await facade_for(self).call(
+                "getOrganization",
                 self.api.organizations.getOrganization,
                 self.settings.meraki.org_id,
             )
@@ -273,7 +274,9 @@ class ConfigCollector(MetricCollector):
             return [cast(dict[str, Any], org)]
         else:
             # All accessible organizations
-            organizations = await asyncio.to_thread(self.api.organizations.getOrganizations)
+            organizations = await facade_for(self).call(
+                "getOrganizations", self.api.organizations.getOrganizations
+            )
             organizations = validate_response_format(
                 organizations, expected_type=list, operation="getOrganizations"
             )
@@ -337,7 +340,8 @@ class ConfigCollector(MetricCollector):
         """
         try:
             with LogContext(org_id=org_id, org_name=org_name):
-                security = await asyncio.to_thread(
+                security = await facade_for(self).call(
+                    "getOrganizationLoginSecurity",
                     self.api.organizations.getOrganizationLoginSecurity,
                     org_id,
                 )
@@ -447,7 +451,8 @@ class ConfigCollector(MetricCollector):
         """
         try:
             with LogContext(org_id=org_id, org_name=org_name):
-                admins = await asyncio.to_thread(
+                admins = await facade_for(self).call(
+                    "getOrganizationAdmins",
                     self.api.organizations.getOrganizationAdmins,
                     org_id,
                 )
@@ -539,7 +544,8 @@ class ConfigCollector(MetricCollector):
         """
         try:
             with LogContext(org_id=org_id, org_name=org_name):
-                saml = await asyncio.to_thread(
+                saml = await facade_for(self).call(
+                    "getOrganizationSaml",
                     self.api.organizations.getOrganizationSaml,
                     org_id,
                 )
@@ -556,7 +562,8 @@ class ConfigCollector(MetricCollector):
                 # when SAML is off, which is a benign skip rather than a failure.
                 try:
                     with LogContext(org_id=org_id, org_name=org_name):
-                        idps = await asyncio.to_thread(
+                        idps = await facade_for(self).call(
+                            "getOrganizationSamlIdps",
                             self.api.organizations.getOrganizationSamlIdps,
                             org_id,
                         )
@@ -618,7 +625,8 @@ class ConfigCollector(MetricCollector):
         try:
             with LogContext(org_id=org_id, org_name=org_name):
                 # Get configuration changes for the last 24 hours
-                config_changes = await asyncio.to_thread(
+                config_changes = await facade_for(self).call(
+                    "getOrganizationConfigurationChanges",
                     self.api.organizations.getOrganizationConfigurationChanges,
                     org_id,
                     timespan=86400,  # 24 hours in seconds

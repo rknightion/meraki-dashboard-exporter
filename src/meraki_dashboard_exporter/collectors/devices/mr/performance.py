@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ....core.api_facade import facade_for
 from ....core.constants import MRMetricName
 from ....core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ....core.label_helpers import create_device_labels, create_network_labels
@@ -425,7 +426,8 @@ class MRPerformanceCollector:
 
         try:
             with LogContext(org_id=org_id):
-                ethernet_statuses = await asyncio.to_thread(
+                ethernet_statuses = await facade_for(self).call(
+                    "getOrganizationWirelessDevicesEthernetStatuses",
                     self.api.wireless.getOrganizationWirelessDevicesEthernetStatuses,
                     org_id,
                     total_pages="all",
@@ -637,7 +639,8 @@ class MRPerformanceCollector:
         ttl = self.parent._group_ttl_seconds(EndpointGroupName.MR_POWER_MODE)
 
         with LogContext(org_id=org_id):
-            raw_history = await asyncio.to_thread(
+            raw_history = await facade_for(self).call(
+                "getOrganizationWirelessDevicesPowerModeHistory",
                 self.api.wireless.getOrganizationWirelessDevicesPowerModeHistory,
                 org_id,
                 total_pages="all",
@@ -1002,7 +1005,8 @@ class MRPerformanceCollector:
 
         """
         with LogContext(org_id=org_id):
-            packet_loss = await asyncio.to_thread(
+            packet_loss = await facade_for(self).call(
+                "getOrganizationWirelessDevicesPacketLossByDevice",
                 self.api.wireless.getOrganizationWirelessDevicesPacketLossByDevice,
                 org_id,
                 total_pages="all",
@@ -1032,7 +1036,8 @@ class MRPerformanceCollector:
         """
         try:
             with LogContext(org_id=org_id):
-                packet_loss = await asyncio.to_thread(
+                packet_loss = await facade_for(self).call(
+                    "getOrganizationWirelessDevicesPacketLossByNetwork",
                     self.api.wireless.getOrganizationWirelessDevicesPacketLossByNetwork,
                     org_id,
                     total_pages="all",
@@ -1156,7 +1161,8 @@ class MRPerformanceCollector:
         # catches per-batch so it can distinguish a successful batch from a
         # failed one and only mark the group ran on >=1 success (#629).
         with LogContext(org_id=org_id):
-            cpu_data_raw = await asyncio.to_thread(
+            cpu_data_raw = await facade_for(self).call(
+                "getOrganizationWirelessDevicesSystemCpuLoadHistory",
                 self.api.wireless.getOrganizationWirelessDevicesSystemCpuLoadHistory,
                 org_id,
                 serials=serials,

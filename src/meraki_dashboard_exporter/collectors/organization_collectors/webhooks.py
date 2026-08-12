@@ -21,10 +21,10 @@ alert type, URL *host* only) for operators with a log backend. See
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlparse
 
+from ...core.api_facade import facade_for
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
@@ -69,7 +69,8 @@ class WebhookLogsCollector(BaseOrganizationCollector):
     async def _fetch_webhook_logs(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch the organization's webhook delivery logs for the last hour."""
         self._track_api_call("getOrganizationWebhooksLogs")
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationWebhooksLogs",
             self.api.organizations.getOrganizationWebhooksLogs,
             org_id,
             timespan=_WEBHOOK_LOG_TIMESPAN,

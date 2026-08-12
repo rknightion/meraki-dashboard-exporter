@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+from ..core.api_facade import facade_for
 from ..core.async_utils import ManagedTaskGroup
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
@@ -1875,7 +1876,8 @@ class DeviceCollector(MetricCollector):
 
         """
         with LogContext(org_id=org_id):
-            availabilities = await asyncio.to_thread(
+            availabilities = await facade_for(self).call(
+                "getOrganizationDevicesAvailabilities",
                 self.api.organizations.getOrganizationDevicesAvailabilities,
                 org_id,
                 total_pages="all",

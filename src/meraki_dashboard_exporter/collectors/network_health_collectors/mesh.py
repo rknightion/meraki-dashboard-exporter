@@ -24,9 +24,9 @@ mesh deployment is available to verify against.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ...core.api_facade import facade_for
 from ...core.constants.metrics_constants import NetworkHealthMetricName
 from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_network_labels
@@ -104,7 +104,8 @@ class MeshCollector(BaseNetworkHealthCollector):
             no repeaters).
 
         """
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getNetworkWirelessMeshStatuses",
             self.api.wireless.getNetworkWirelessMeshStatuses,
             network_id,
             total_pages="all",

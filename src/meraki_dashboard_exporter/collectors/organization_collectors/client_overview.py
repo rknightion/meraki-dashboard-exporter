@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import TYPE_CHECKING, Any, cast
 
+from ...core.api_facade import facade_for
 from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
@@ -57,7 +57,8 @@ class ClientOverviewCollector(BaseOrganizationCollector):
             Client overview data.
 
         """
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getOrganizationClientsOverview",
             self.api.organizations.getOrganizationClientsOverview,
             org_id,
             timespan=3600,  # 1 hour - required for reliable data

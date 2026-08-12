@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
+from ...core.api_facade import facade_for
 from ...core.domain_models import ConnectionStats, NetworkConnectionStats
 from ...core.error_handling import validate_response_format
 from ...core.label_helpers import create_network_labels
@@ -43,7 +43,8 @@ class ConnectionStatsCollector(BaseNetworkHealthCollector):
 
         """
         _ = org_id  # Included for logging/rate limiting context
-        response = await asyncio.to_thread(
+        response = await facade_for(self).call(
+            "getNetworkWirelessConnectionStats",
             self.api.wireless.getNetworkWirelessConnectionStats,
             network_id,
             timespan=1800,  # 30 minutes
