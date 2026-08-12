@@ -97,10 +97,11 @@ for the full boundary rule. This channel is:
   `clients.enabled` gate.
 - **PII-stripped by default even when enabled** — `otel.logs.include_identifiers`
   (`MERAKI_EXPORTER_OTEL__LOGS__INCLUDE_IDENTIFIERS`) defaults to `false`, which drops
-  `client.mac` / `client.hostname` / `client.description` from every emitted record; only the stable
-  `client.id` is included. Set it to `true` only if you specifically want the human-readable
-  identifiers on that channel too, and understand they'll travel to whatever OTLP endpoint you've
-  configured.
+  `client.mac` / `client.hostname` / `client.description` from every emitted record and scrubs
+  MAC-shaped strings from data-log bodies as well as identifier keys. MAC-only client rows omit
+  `client.id`; the MAC is never substituted as an identifier. Set the flag to `true` only if you
+  specifically want the human-readable identifiers on that channel too, and understand they'll
+  travel to whatever OTLP endpoint you've configured.
 
 ## Mitigations (by config key)
 
@@ -113,7 +114,7 @@ for the full boundary rule. This channel is:
 | Bound in-memory PII cache lifetime | `clients.cache_ttl`, `clients.dns_cache_ttl`, `clients.dns_cache_max_entries` | `3600`s, `21600`s, `100000` | Shorter TTLs age out stale hostname/description/DNS mappings sooner; the max-entries cap bounds worst-case memory regardless of churn. |
 | Cap overall client series volume | `clients.max_clients_per_network`, `clients.max_clients_total` | `10000`, `25000` | Clients beyond the cap are dropped from metric emission (counted in `meraki_exporter_clients_over_cap`), bounding both cardinality and PII surface area under very large client populations. |
 | Avoid per-client signal-quality collection | `clients.signal_quality_enabled` | `false` | RSSI/SNR are ID-only labelled already, but this endpoint is also the most expensive per-client API call; leave off unless needed. |
-| Keep the structured data-log PII-stripped if that channel is used | `otel.logs.include_identifiers` | `false` | Drops `client.mac`/`client.hostname`/`client.description` from data-log records; only `client.id` is emitted. |
+| Keep the structured data-log PII-stripped if that channel is used | `otel.logs.include_identifiers` | `false` | Drops identifier keys and scrubs MAC-shaped strings from data-log bodies; MAC-only rows omit `client.id` rather than substituting a MAC. |
 
 ## Summary
 

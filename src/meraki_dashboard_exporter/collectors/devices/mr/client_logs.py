@@ -31,11 +31,11 @@ new top-level ``DeviceCollector`` call site / no ``device.py`` edit is needed.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, ConfigDict
 
+from ....core.api_facade import MerakiApiFacade, facade_for
 from ....core.async_utils import ManagedTaskGroup
 from ....core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ....core.logging import get_logger
@@ -145,6 +145,7 @@ class MRClientLogsCollector:
         self.parent = parent
         self.api = parent.api
         self.settings = parent.settings
+        self.api_facade: MerakiApiFacade = facade_for(self)
 
     @with_error_handling(
         operation="Collect MR per-client data logs",
@@ -252,7 +253,8 @@ class MRClientLogsCollector:
 
         """
         with LogContext(org_id=org_id):
-            raw = await asyncio.to_thread(
+            raw = await self.api_facade.call(
+                "getOrganizationWirelessDevicesPacketLossByClient",
                 self.api.wireless.getOrganizationWirelessDevicesPacketLossByClient,
                 org_id,
                 total_pages="all",
@@ -289,9 +291,7 @@ class MRClientLogsCollector:
         for row in rows:
             client = row.client or _ClientRef()
             network = row.network or _NetworkRef()
-            client_id = client.id or client.mac or ""
-            if not client_id:
-                continue
+            client_id = client.id
 
             down = row.downstream or _LossDirection()
             up = row.upstream or _LossDirection()
@@ -301,9 +301,10 @@ class MRClientLogsCollector:
                 "org.name": org_name,
                 "network.id": network.id or "",
                 "network.name": network.name or network.id or "",
-                "client.id": client_id,
                 "data.window_seconds": PACKET_LOSS_WINDOW_SECONDS,
             }
+            if client_id:
+                attributes["client.id"] = client_id
             self._add_numeric(attributes, "downstream.total_packets", down.total)
             self._add_numeric(attributes, "downstream.lost_packets", down.lost)
             self._add_numeric(attributes, "downstream.loss_percent", down.lossPercentage)
@@ -319,11 +320,12 @@ class MRClientLogsCollector:
             if emitter.include_identifiers and client.mac:
                 attributes["client.mac"] = client.mac
 
+            client_summary = f"client {client_id} " if client_id else ""
             emitter.emit(
                 DataLogEvent.WIRELESS_CLIENT_PACKET_LOSS,
                 attributes,
                 body=(
-                    f"client {client_id} packet loss "
+                    f"{client_summary}packet loss "
                     f"down={self._fmt_pct(down.lossPercentage)} "
                     f"up={self._fmt_pct(up.lossPercentage)}"
                 ),
@@ -441,7 +443,8 @@ class MRClientLogsCollector:
 
         """
         with LogContext(network_id=network_id):
-            raw = await asyncio.to_thread(
+            raw = await self.api_facade.call(
+                "getNetworkClients",
                 self.api.networks.getNetworkClients,
                 network_id,
                 total_pages="all",
@@ -488,7 +491,8 @@ class MRClientLogsCollector:
 
         """
         with LogContext(org_id=org_id, network_id=network_id):
-            raw_history = await asyncio.to_thread(
+            raw_history = await self.api_facade.call(
+                "getNetworkWirelessSignalQualityHistory",
                 self.api.wireless.getNetworkWirelessSignalQualityHistory,
                 network_id,
                 clientId=client_id,

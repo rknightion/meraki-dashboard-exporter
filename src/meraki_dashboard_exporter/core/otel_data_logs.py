@@ -24,6 +24,7 @@ Design invariants
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -89,6 +90,18 @@ PII_ATTRIBUTE_KEYS: frozenset[str] = frozenset({
     "client.hostname",
     "client.description",
 })
+
+#: MAC addresses are personal identifiers even when an upstream producer puts
+#: them in an unstructured record body rather than a named attribute. Support
+#: colon/hyphen-delimited and Cisco dotted forms.
+_MAC_ADDRESS_PATTERN = re.compile(
+    r"(?i)(?<![0-9a-f])(?:"
+    r"(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}"
+    r"|(?:[0-9a-f]{4}\.){2}[0-9a-f]{4}"
+    r"|[0-9a-f]{12}"
+    r")(?![0-9a-f])"
+)
+_REDACTED_MAC_ADDRESS = "[redacted-mac]"
 
 
 class DataLogEmitter:
@@ -296,6 +309,14 @@ class DataLogEmitter:
                 attrs.update(attributes)
             else:
                 attrs.update({k: v for k, v in attributes.items() if k not in PII_ATTRIBUTE_KEYS})
+                attrs = {
+                    key: _MAC_ADDRESS_PATTERN.sub(_REDACTED_MAC_ADDRESS, value)
+                    if isinstance(value, str)
+                    else value
+                    for key, value in attrs.items()
+                }
+                if body is not None:
+                    body = _MAC_ADDRESS_PATTERN.sub(_REDACTED_MAC_ADDRESS, body)
 
             assert self._logger is not None  # guaranteed by is_event_enabled/enabled
             self._logger.emit(
