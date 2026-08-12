@@ -525,6 +525,18 @@
                 <div class="value">{{ "{:,}".format(report.summary.total_series) }}</div>
             </div>
             <div class="stat-card">
+                <h3>Product Data Series</h3>
+                <div class="value">{{ "{:,}".format(report.summary.product_series) }}</div>
+            </div>
+            <div class="stat-card">
+                <h3>Exporter Self-Instrumentation</h3>
+                <div class="value">{{ "{:,}".format(report.summary.exporter_series) }}</div>
+            </div>
+            <div class="stat-card">
+                <h3>Cardinality Monitor Series</h3>
+                <div class="value">{{ "{:,}".format(report.summary.self_series) }}</div>
+            </div>
+            <div class="stat-card">
                 <h3>Total Metrics</h3>
                 <div class="value">{{ report.summary.total_metrics }}</div>
             </div>

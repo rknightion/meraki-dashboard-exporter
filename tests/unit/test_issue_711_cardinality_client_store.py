@@ -39,7 +39,7 @@ def test_cardinality_endpoint_total_reconciles_with_generated_scrape() -> None:
     registry = CollectorRegistry()
     monitor = CardinalityMonitor(registry=registry)
     monitor.mark_first_run_complete()
-    Gauge("issue_711_product_metric", "A product metric", registry=registry).set(1)
+    Gauge("meraki_issue_711_product_metric", "A product metric", registry=registry).set(1)
 
     analysis = monitor.analyze_cardinality(use_cache=False)
     scrape_sample_count = _scrape_sample_count(registry)
@@ -47,7 +47,10 @@ def test_cardinality_endpoint_total_reconciles_with_generated_scrape() -> None:
     assert analysis["product_series"] == 1
     assert analysis["self_series"] > 0
     assert analysis["exposed_series"] == scrape_sample_count
-    assert analysis["product_series"] + analysis["self_series"] == scrape_sample_count
+    assert (
+        analysis["product_series"] + analysis["exporter_series"] + analysis["self_series"]
+        == scrape_sample_count
+    )
     assert analysis["total_series"] == scrape_sample_count
 
     scrape = generate_latest(registry).decode()

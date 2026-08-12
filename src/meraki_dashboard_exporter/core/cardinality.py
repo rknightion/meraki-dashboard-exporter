@@ -23,11 +23,12 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-# These families are emitted by ``CardinalityMonitor`` itself.  They are not
+# These families are emitted by ``CardinalityMonitor`` itself. They are not
 # product metrics, but must remain in the exposed-series total because a
-# Prometheus scrape includes them.  Do not use the broad
-# ``meraki_exporter_cardinality_`` prefix here: other exporter features may
-# legitimately expose cardinality-related product instrumentation.
+# Prometheus scrape includes them. The full ``meraki_exporter_`` prefix is
+# deliberately *not* used here: that prefix is exclusively exporter
+# self-instrumentation (not product data), and this narrower set preserves the
+# separate monitor-own bucket.
 _CARDINALITY_SELF_METRIC_NAMES = frozenset({
     "meraki_exporter_cardinality_warnings",
     "meraki_exporter_total_series",
@@ -36,6 +37,7 @@ _CARDINALITY_SELF_METRIC_NAMES = frozenset({
     CollectorMetricName.CARDINALITY_PRODUCT_SERIES.value,
     CollectorMetricName.CARDINALITY_SELF_SERIES.value,
     CollectorMetricName.CARDINALITY_EXPOSED_SERIES.value,
+    CollectorMetricName.CARDINALITY_EXPORTER_SERIES.value,
 })
 
 
@@ -258,13 +260,19 @@ class CardinalityMonitor:
 
         self.product_series = Gauge(
             CollectorMetricName.CARDINALITY_PRODUCT_SERIES.value,
-            "Product metric series, excluding CardinalityMonitor self-observability series",
+            "Product data series, excluding exporter self-instrumentation and CardinalityMonitor",
+            registry=self.registry,
+        )
+
+        self.exporter_series = Gauge(
+            CollectorMetricName.CARDINALITY_EXPORTER_SERIES.value,
+            "Exporter self-instrumentation series, excluding CardinalityMonitor self-observability",
             registry=self.registry,
         )
 
         self.self_series = Gauge(
             CollectorMetricName.CARDINALITY_SELF_SERIES.value,
-            "CardinalityMonitor self-observability metric series included in the scrape",
+            "CardinalityMonitor self-observability series included in the scrape",
             registry=self.registry,
         )
 
@@ -369,6 +377,7 @@ class CardinalityMonitor:
                 "metrics": {},
                 "total_series": 0,
                 "product_series": 0,
+                "exporter_series": 0,
                 "self_series": 0,
                 "exposed_series": 0,
                 "warnings": [],
@@ -384,6 +393,7 @@ class CardinalityMonitor:
                 "metrics": {},
                 "total_series": 0,
                 "product_series": 0,
+                "exporter_series": 0,
                 "self_series": 0,
                 "exposed_series": 0,
                 "warnings": [],
@@ -401,6 +411,7 @@ class CardinalityMonitor:
             "metrics": {},
             "total_series": 0,
             "product_series": 0,
+            "exporter_series": 0,
             "self_series": 0,
             "exposed_series": 0,
             "warnings": [],
@@ -413,13 +424,18 @@ class CardinalityMonitor:
         try:
             for metric_family in self.registry.collect():
                 if metric_family.name in _CARDINALITY_SELF_METRIC_NAMES:
-                    # Analyze product families only. Monitor self-observability
-                    # families are counted separately below so exposed_series
-                    # reconciles exactly with the Prometheus text scrape.
+                    # Monitor-own families are counted separately below so the
+                    # three buckets reconcile exactly with the text scrape.
                     continue
 
                 metric_info = self._analyze_metric(metric_family)
                 if metric_info:
+                    if not metric_family.name.startswith(
+                        "meraki_"
+                    ) or metric_family.name.startswith("meraki_exporter_"):
+                        results["exporter_series"] += metric_info["cardinality"]
+                        continue
+
                     results["metrics"][metric_family.name] = metric_info
                     results["product_series"] += metric_info["cardinality"]
                     metric_count += 1
@@ -467,15 +483,18 @@ class CardinalityMonitor:
         self.analysis_duration.set(duration)
         self.analyzed_metrics_count.set(metric_count)
         self.product_series.set(results["product_series"])
+        self.exporter_series.set(results["exporter_series"])
 
         # Count after warning labels and all snapshot gauges have been updated.
-        # The monitor's self-observability samples are intentionally excluded
-        # from product_series but included here: exposed_series is the value an
-        # operator can reconcile one-for-one with a locally generated scrape.
+        # The buckets distinguish product data, exporter self-instrumentation,
+        # and CardinalityMonitor self-observability while preserving an exact
+        # reconciliation with a locally generated scrape.
         results["exposed_series"] = sum(
             len(metric_family.samples) for metric_family in self.registry.collect()
         )
-        results["self_series"] = results["exposed_series"] - results["product_series"]
+        results["self_series"] = (
+            results["exposed_series"] - results["product_series"] - results["exporter_series"]
+        )
         results["total_series"] = results["exposed_series"]
 
         self.self_series.set(results["self_series"])
@@ -489,6 +508,7 @@ class CardinalityMonitor:
             duration=f"{duration:.3f}s",
             exposed_series=results["exposed_series"],
             product_series=results["product_series"],
+            exporter_series=results["exporter_series"],
             self_series=results["self_series"],
             metrics_count=metric_count,
             warnings=len(results["warnings"]),
@@ -613,6 +633,9 @@ class CardinalityMonitor:
         report = {
             "summary": {
                 "total_series": analysis["total_series"],
+                "product_series": analysis["product_series"],
+                "exporter_series": analysis["exporter_series"],
+                "self_series": analysis["self_series"],
                 "total_metrics": len(analysis["metrics"]),
                 "warnings": len(analysis["warnings"]),
                 "critical": len(analysis["critical"]),

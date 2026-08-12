@@ -40,6 +40,15 @@ image tag.
     Release images and charts are signed. See [Security](security.md) for how to verify
     signatures before deploying.
 
+## Changes at 1.1
+
+`meraki_exporter_cardinality_product_series` now counts only `meraki_*` product-data samples.
+Exporter instrumentation and Python/process runtime samples move to the new
+`meraki_exporter_cardinality_exporter_series` bucket; the cardinality monitor's own samples remain
+in `meraki_exporter_cardinality_self_series`. The three buckets still reconcile exactly to
+`meraki_exporter_cardinality_exposed_series` and the compatibility alias
+`meraki_exporter_total_series`.
+
 ## Breaking changes at 1.0
 
 The 1.0 release carries a **one-time, pre-1.0 breaking sweep**. This churn is explicitly
