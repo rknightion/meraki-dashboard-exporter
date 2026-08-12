@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import hmac
+import json
 import time
+from collections import OrderedDict
 from typing import TYPE_CHECKING, Any, Protocol
 
 from prometheus_client import Counter, Histogram
@@ -192,6 +195,9 @@ def enforce_webhook_security(*, enabled: bool, require_secret: bool, allow_insec
 class WebhookHandler:
     """Handler for processing Meraki webhook events with metrics tracking.
 
+    Replay protection is in-memory and per-process. Deployments with multiple
+    replicas therefore apply each alert at most once per replica.
+
     Parameters
     ----------
     settings : Settings
@@ -231,6 +237,9 @@ class WebhookHandler:
         self._known_org_ids: set[str] = (
             {settings.meraki.org_id} if settings.meraki.org_id else set()
         )
+        # Keys are fixed-length SHA-256 digests; entries expire by insertion
+        # time and the configured maximum bounds process memory.
+        self._replay_cache: OrderedDict[str, float] = OrderedDict()
 
         # In-memory receiver health (surfaced on /status, #317). These are plain
         # counters/timestamps kept alongside the Prometheus metrics because the
@@ -281,6 +290,30 @@ class WebhookHandler:
         self.events_processed = Counter(
             WebhookMetricName.WEBHOOK_EVENTS_PROCESSED_TOTAL.value,
             "Total webhook events successfully processed",
+            [LabelName.ORG_ID.value, LabelName.ALERT_TYPE.value],
+        )
+
+        self.delivery_attempts = Counter(
+            WebhookMetricName.WEBHOOK_DELIVERY_ATTEMPTS_TOTAL.value,
+            "Authenticated webhook delivery attempts, including Meraki retries",
+            [LabelName.ORG_ID.value, LabelName.ALERT_TYPE.value],
+        )
+
+        self.unique_alerts = Counter(
+            WebhookMetricName.WEBHOOK_UNIQUE_ALERTS_TOTAL.value,
+            "Unique authenticated webhook alerts accepted for processing",
+            [LabelName.ORG_ID.value, LabelName.ALERT_TYPE.value],
+        )
+
+        self.replays_rejected = Counter(
+            WebhookMetricName.WEBHOOK_REPLAYS_REJECTED_TOTAL.value,
+            "Authenticated webhook replay deliveries rejected by the per-process cache",
+            [LabelName.ORG_ID.value, LabelName.ALERT_TYPE.value],
+        )
+
+        self.stale_rejected = Counter(
+            WebhookMetricName.WEBHOOK_STALE_REJECTED_TOTAL.value,
+            "Authenticated webhook deliveries rejected outside the freshness window",
             [LabelName.ORG_ID.value, LabelName.ALERT_TYPE.value],
         )
 
@@ -359,6 +392,40 @@ class WebhookHandler:
 
         return True
 
+    @staticmethod
+    def _replay_cache_key(payload: WebhookPayload) -> str:
+        """Return a bounded replay-cache key for an alert ID or payload body."""
+        if payload.alert_id:
+            return f"alert:{hashlib.sha256(payload.alert_id.encode()).hexdigest()}"
+
+        # The secret authenticates the body but is not part of its identity.
+        body = payload.model_dump(mode="json", by_alias=True, exclude={"shared_secret"})
+        canonical_body = json.dumps(body, sort_keys=True, separators=(",", ":"))
+        return f"body:{hashlib.sha256(canonical_body.encode()).hexdigest()}"
+
+    def _is_stale(self, payload: WebhookPayload) -> tuple[bool, float]:
+        """Return whether ``payload.sent_at`` is outside the configured skew window."""
+        age_seconds = time.time() - payload.sent_at.timestamp()
+        return abs(age_seconds) > self.settings.webhooks.freshness_window_seconds, age_seconds
+
+    def _is_replay(self, payload: WebhookPayload) -> bool:
+        """Record a unique alert in the bounded TTL cache or identify a replay."""
+        now = time.monotonic()
+        while self._replay_cache:
+            _key, expires_at = next(iter(self._replay_cache.items()))
+            if expires_at > now:
+                break
+            self._replay_cache.popitem(last=False)
+
+        cache_key = self._replay_cache_key(payload)
+        if cache_key in self._replay_cache:
+            return True
+
+        self._replay_cache[cache_key] = now + self.settings.webhooks.replay_cache_ttl_seconds
+        if len(self._replay_cache) > self.settings.webhooks.replay_cache_max_entries:
+            self._replay_cache.popitem(last=False)
+        return False
+
     def process_webhook(self, payload_data: dict[str, Any]) -> WebhookPayload | None:
         """Process a webhook event.
 
@@ -376,12 +443,17 @@ class WebhookHandler:
         start_time = time.time()
 
         try:
-            # Parse and validate payload
-            payload = WebhookPayload.model_validate(payload_data)
-
-            # Validate shared secret
-            if not self.validate_secret(payload.shared_secret):
+            # The route has already size-capped and decoded the JSON body. Check
+            # the shared secret before Pydantic performs schema parsing of it.
+            if not self.validate_secret(payload_data.get("sharedSecret")):
+                # The unauthenticated failure path still needs a bounded
+                # receiver-health signal, without inspecting payload fields.
+                self.events_failed.labels(error_type="authentication_error").inc()
+                self._events_failed_total += 1
                 return None
+
+            # Parse and validate the authenticated payload.
+            payload = WebhookPayload.model_validate(payload_data)
 
             # SECURITY (SEC-03 / #561): bound the success-path labels. On the
             # insecure path org_id/alert_type are attacker-controlled, so
@@ -394,6 +466,33 @@ class WebhookHandler:
                 org_id=org_id,
                 alert_type=alert_type,
             ).inc()
+            self.delivery_attempts.labels(
+                org_id=org_id,
+                alert_type=alert_type,
+            ).inc()
+
+            is_stale, age_seconds = self._is_stale(payload)
+            if is_stale:
+                self.stale_rejected.labels(org_id=org_id, alert_type=alert_type).inc()
+                logger.warning(
+                    "Rejected stale webhook delivery; check receiver and Meraki clock skew",
+                    org_id=org_id,
+                    alert_type=alert_type,
+                    age_seconds=age_seconds,
+                    freshness_window_seconds=self.settings.webhooks.freshness_window_seconds,
+                )
+                return None
+
+            if self._is_replay(payload):
+                self.replays_rejected.labels(org_id=org_id, alert_type=alert_type).inc()
+                logger.warning(
+                    "Rejected replayed webhook delivery",
+                    org_id=org_id,
+                    alert_type=alert_type,
+                )
+                return None
+
+            self.unique_alerts.labels(org_id=org_id, alert_type=alert_type).inc()
 
             # Log the event (bounded label values only).
             logger.info(
