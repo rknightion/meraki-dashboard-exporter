@@ -481,7 +481,7 @@ def scan_for_metrics(
 
 def generate_markdown(metrics: list[MetricDefinition]) -> str:
     """Generate concise markdown documentation for metrics."""
-    lines: list[str] = ["# Metrics Reference", ""]
+    lines: list[str] = ["# Complete Metrics Catalog", ""]
     lines.append(
         "This page provides a reference of Prometheus metrics exposed by the Meraki Dashboard Exporter."
     )
