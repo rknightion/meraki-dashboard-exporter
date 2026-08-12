@@ -42,6 +42,29 @@ spec:
               3x its effective cadence (meraki_exporter_collector_cadence_seconds).
               Its metrics are stale.
 
+        - alert: MerakiExporterSchedulerGroupStale
+          expr: >-
+            time() - meraki_exporter_scheduler_group_success_timestamp_seconds
+            > on(group) (3 * meraki_exporter_scheduler_interval_seconds)
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Endpoint group {{ "{{ $labels.group }}" }} is stale"
+            description: >-
+              The endpoint group has not succeeded within three solved intervals.
+
+        - alert: MerakiExporterSchedulerOverBudget
+          expr: meraki_exporter_scheduler_over_budget == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Meraki exporter scheduler is over budget"
+            description: >-
+              The selected collection profile exceeds its API budget and lower-priority
+              endpoint groups are being deferred.
+
         - alert: MerakiExporterCollectorFailureStreak
           expr: meraki_exporter_collector_failure_streak >= 3
           for: 15m

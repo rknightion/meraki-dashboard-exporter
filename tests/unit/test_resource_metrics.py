@@ -149,6 +149,7 @@ class TestResourceMetricsLifespanWiring:
         # scheduler resolve loop) so this test exercises only the resource-metrics
         # task lifecycle without spinning up real collector loops.
         exporter._startup_collections = AsyncMock()  # type: ignore[method-assign]
+        exporter.collector_manager.validate_profile_selection = AsyncMock()  # type: ignore[method-assign]
         exporter._cardinality_monitor_loop = AsyncMock()  # type: ignore[method-assign]
         exporter.expiration_manager.start = AsyncMock()  # type: ignore[method-assign]
         exporter.expiration_manager.stop = AsyncMock()  # type: ignore[method-assign]
@@ -172,7 +173,7 @@ class TestResourceMetricsLifespanWiring:
 
         with patch(
             "meraki_dashboard_exporter.app.DiscoveryService",
-            lambda api, settings: SimpleNamespace(
+            lambda api, settings, rate_limiter=None: SimpleNamespace(
                 run_discovery=AsyncMock(return_value={"orgs": 1})
             ),
         ):

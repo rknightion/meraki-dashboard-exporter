@@ -10,6 +10,7 @@ from prometheus_client import CollectorRegistry, Gauge
 
 from meraki_dashboard_exporter.collectors.devices.ms_stack import MSStackCollector
 from meraki_dashboard_exporter.core.constants.metrics_constants import MSMetricName
+from meraki_dashboard_exporter.core.error_handling import ErrorCategory
 
 
 def _get_samples(registry: CollectorRegistry, metric_name: str) -> list[Any]:
@@ -377,6 +378,28 @@ class TestMSStackCollector:
         )
 
         assert _get_samples(registry, MSMetricName.MS_STACK_MEMBERS) == []
+
+    async def test_exhausted_retry_shape_is_counted_and_not_marked_successful(
+        self,
+        stack_collector: MSStackCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An exhausted SDK response remains a classified group failure (#706)."""
+        mock_api.switch.getNetworkSwitchStacks = MagicMock(
+            return_value={"errors": ["upstream exhausted"]}
+        )
+
+        result = await stack_collector.collect_for_network(
+            org_id="org1",
+            org_name="Org One",
+            network_id="net1",
+            network_name="Net One",
+        )
+
+        assert result is None
+        mock_parent._track_error.assert_called_once_with(ErrorCategory.VALIDATION)
+        mock_parent._mark_group_ran.assert_not_called()
 
     # -----------------------------------------------------------------------
     # collect_for_org

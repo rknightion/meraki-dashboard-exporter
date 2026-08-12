@@ -104,9 +104,28 @@ The exporter serves three categories of HTTP endpoint (see the
 Set `MERAKI_EXPORTER_SERVER__API_TOKEN` to require callers of the sensitive GET
 UIs and the control POSTs to send `Authorization: Bearer <token>` (a
 constant-time compare). When it is unset (the default), the control POSTs return
-HTTP 401 and their UI controls are disabled; the sensitive GET UIs remain open.
+HTTP 401 and their UI controls remain visibly disabled; the sensitive GET UIs
+remain open. When it is configured, controls become API-only and are absent from the UI: it never
+places the token, or a token-derived credential, in page HTML or JavaScript.
 The webhook receiver (`POST /api/webhooks/meraki`) is gated separately by its own shared secret
 (`MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET`), not by this token.
+
+### Control API
+
+When a control token is configured, the exporter deliberately provides no browser controls for state-changing actions.
+Use the authenticated API directly instead:
+
+```bash
+curl -sS -X POST \
+  -H "Authorization: Bearer $MERAKI_EXPORTER_SERVER__API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"collector":"DeviceCollector"}' \
+  http://localhost:9099/api/collectors/trigger
+
+curl -sS -X POST \
+  -H "Authorization: Bearer $MERAKI_EXPORTER_SERVER__API_TOKEN" \
+  http://localhost:9099/api/clients/clear-dns-cache
+```
 
 ### Endpoint exposure & threat model
 

@@ -161,6 +161,26 @@ groups:
 
   - name: meraki-exporter-device-availability
     rules:
+      - alert: MerakiExporterSchedulerGroupStale
+        expr: >-
+          time() - meraki_exporter_scheduler_group_success_timestamp_seconds{job="meraki_dashboard"}
+          > on(group, instance) (3 * meraki_exporter_scheduler_interval_seconds{job="meraki_dashboard"})
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Endpoint group {{ $labels.group }} is stale"
+          description: "The endpoint group has not succeeded within three solved intervals."
+
+      - alert: MerakiExporterSchedulerOverBudget
+        expr: meraki_exporter_scheduler_over_budget{job="meraki_dashboard"} == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Meraki exporter scheduler is over budget"
+          description: "Lower-priority endpoint groups are being deferred."
+
       # The chart renders exactly ONE of these two (toggled by .Values.prometheusRule.webhooksEnabled)
       # since they're mutually-exclusive detection paths for the same condition. This static YAML
       # ships both — disable/delete whichever doesn't match your deployment's webhook config

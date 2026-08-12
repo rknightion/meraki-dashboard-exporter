@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
+from ..core.api_facade import MerakiApiFacade
 from ..core.error_handling import validate_response_format
 from ..core.logging import get_logger
 
@@ -26,7 +26,11 @@ class OrgResolutionError(RuntimeError):
     """
 
 
-async def resolve_org_id(api: DashboardAPI, settings: Settings) -> str:
+async def resolve_org_id(
+    api: DashboardAPI,
+    settings: Settings,
+    rate_limiter: Any | None = None,
+) -> str:
     """Resolve the single organization this exporter instance will poll (#585).
 
     Enforces the v1 single-org contract (one poller instance = one organization):
@@ -50,6 +54,8 @@ async def resolve_org_id(api: DashboardAPI, settings: Settings) -> str:
     settings : Settings
         Application settings. ``settings.meraki.org_id`` is mutated in place in
         the auto-select case so the rest of the app reads the resolved id.
+    rate_limiter : Any | None
+        Shared request limiter used by the API facade, when available at startup.
 
     Returns
     -------
@@ -71,7 +77,9 @@ async def resolve_org_id(api: DashboardAPI, settings: Settings) -> str:
         )
         return configured
 
-    organizations = await asyncio.to_thread(api.organizations.getOrganizations)
+    organizations = await MerakiApiFacade(settings=settings, rate_limiter=rate_limiter).call(
+        "getOrganizations", api.organizations.getOrganizations
+    )
     organizations = validate_response_format(
         organizations, expected_type=list, operation="getOrganizations"
     )
@@ -115,10 +123,16 @@ async def resolve_org_id(api: DashboardAPI, settings: Settings) -> str:
 class DiscoveryService:
     """Service to perform one-time discovery and log environment information."""
 
-    def __init__(self, api: DashboardAPI, settings: Settings) -> None:
+    def __init__(
+        self,
+        api: DashboardAPI,
+        settings: Settings,
+        rate_limiter: Any | None = None,
+    ) -> None:
         """Initialize discovery service."""
         self.api = api
         self.settings = settings
+        self.api_facade = MerakiApiFacade(settings=settings, rate_limiter=rate_limiter)
 
     async def run_discovery(self) -> dict[str, Any]:
         """Run discovery scan and return environment summary for startup logging."""
@@ -133,14 +147,17 @@ class DiscoveryService:
         try:
             # Get organizations
             if self.settings.meraki.org_id:
-                org = await asyncio.to_thread(
+                org = await self.api_facade.call(
+                    "getOrganization",
                     self.api.organizations.getOrganization,
                     self.settings.meraki.org_id,
                 )
                 org = validate_response_format(org, expected_type=dict, operation="getOrganization")
                 organizations = [org]
             else:
-                organizations = await asyncio.to_thread(self.api.organizations.getOrganizations)
+                organizations = await self.api_facade.call(
+                    "getOrganizations", self.api.organizations.getOrganizations
+                )
                 organizations = validate_response_format(
                     organizations, expected_type=list, operation="getOrganizations"
                 )
@@ -166,7 +183,8 @@ class DiscoveryService:
                     # every network in the org so operators can verify their
                     # filter rules. Routing through inventory.get_networks
                     # would hide excluded networks and defeat that purpose.
-                    networks = await asyncio.to_thread(
+                    networks = await self.api_facade.call(
+                        "getOrganizationNetworks",
                         self.api.organizations.getOrganizationNetworks,
                         org_id,
                         total_pages="all",

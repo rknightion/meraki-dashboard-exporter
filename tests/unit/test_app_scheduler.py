@@ -184,11 +184,12 @@ class TestStartupCollections:
         """Discovery runs, then the initial sequential collection completes."""
         exporter = ExporterApp(test_settings)
         _stub_startup(exporter)
+        exporter.collector_manager.validate_profile_selection = AsyncMock()  # type: ignore[method-assign]
         exporter._wait_for_first_collection = AsyncMock()  # type: ignore[method-assign]
 
         with patch(
             "meraki_dashboard_exporter.app.DiscoveryService",
-            lambda api, settings: SimpleNamespace(
+            lambda api, settings, rate_limiter=None: SimpleNamespace(
                 run_discovery=AsyncMock(return_value={"orgs": 1})
             ),
         ):
@@ -216,7 +217,7 @@ class TestStartupCollections:
 
         with patch(
             "meraki_dashboard_exporter.app.DiscoveryService",
-            lambda api, settings: SimpleNamespace(
+            lambda api, settings, rate_limiter=None: SimpleNamespace(
                 run_discovery=AsyncMock(return_value={"orgs": 1})
             ),
         ):
@@ -243,6 +244,7 @@ class TestLifespanCancelsWaitTask:
         """The gated wait task receives CancelledError on lifespan exit."""
         exporter = ExporterApp(test_settings)
         _stub_startup(exporter)
+        exporter.collector_manager.validate_profile_selection = AsyncMock()  # type: ignore[method-assign]
         exporter._cardinality_monitor_loop = AsyncMock()  # type: ignore[method-assign]
         exporter.expiration_manager.start = AsyncMock()  # type: ignore[method-assign]
         exporter.expiration_manager.stop = AsyncMock()  # type: ignore[method-assign]
@@ -266,7 +268,7 @@ class TestLifespanCancelsWaitTask:
 
         with patch(
             "meraki_dashboard_exporter.app.DiscoveryService",
-            lambda api, settings: SimpleNamespace(
+            lambda api, settings, rate_limiter=None: SimpleNamespace(
                 run_discovery=AsyncMock(return_value={"orgs": 1})
             ),
         ):

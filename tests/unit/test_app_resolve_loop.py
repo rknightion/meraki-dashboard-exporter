@@ -187,7 +187,7 @@ class TestStartupWiresResolveLoop:
 
         with patch(
             "meraki_dashboard_exporter.app.DiscoveryService",
-            lambda api, settings: SimpleNamespace(
+            lambda api, settings, rate_limiter=None: SimpleNamespace(
                 run_discovery=AsyncMock(return_value={"orgs": 1})
             ),
         ):

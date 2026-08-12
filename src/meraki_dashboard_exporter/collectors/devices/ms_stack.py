@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from ...core.api_facade import facade_for
 from ...core.async_utils import ManagedTaskGroup
 from ...core.constants.metrics_constants import MSMetricName
-from ...core.error_handling import ErrorCategory, with_error_handling
+from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
 from ...core.logging_helpers import LogContext
@@ -82,7 +82,7 @@ class MSStackCollector(SubCollectorMixin):
         org_name: str,
         network_id: str,
         network_name: str,
-    ) -> None:
+    ) -> bool:
         """Collect stack metrics for a single network.
 
         Parameters
@@ -110,13 +110,9 @@ class MSStackCollector(SubCollectorMixin):
                 network_id,
             )
 
-        if not isinstance(stacks, list):
-            logger.warning(
-                "Unexpected response format for getNetworkSwitchStacks",
-                network_id=network_id,
-                response_type=type(stacks).__name__,
-            )
-            return
+        stacks = validate_response_format(
+            stacks, expected_type=list, operation="getNetworkSwitchStacks"
+        )
 
         logger.debug(
             "Fetched switch stacks for network",
@@ -191,6 +187,8 @@ class MSStackCollector(SubCollectorMixin):
                         ttl_seconds=stacks_ttl,
                     )
 
+        return True
+
     async def collect_for_org(
         self,
         org_id: str,
@@ -223,18 +221,26 @@ class MSStackCollector(SubCollectorMixin):
             switch_network_count=len(switch_networks),
         )
 
+        successful_fetches: list[bool] = []
+
+        async def collect_and_record(network: dict[str, Any]) -> None:
+            result = await self.collect_for_network(
+                org_id,
+                org_name,
+                network.get("id", ""),
+                network.get("name", network.get("id", "")),
+            )
+            successful_fetches.append(result is True)
+
         async with ManagedTaskGroup(
             name="ms_stack_networks",
             max_concurrency=self.settings.api.concurrency_limit,
         ) as group:
             for network in switch_networks:
                 network_id = network.get("id", "")
-                network_name = network.get("name", network_id)
                 if not network_id:
                     continue
-                await group.create_task(
-                    self.collect_for_network(org_id, org_name, network_id, network_name),
-                    name=f"stack_{network_id}",
-                )
+                await group.create_task(collect_and_record(network), name=f"stack_{network_id}")
 
-        self.parent._mark_group_ran(EndpointGroupName.MS_STACKS)
+        if any(successful_fetches):
+            self.parent._mark_group_ran(EndpointGroupName.MS_STACKS)

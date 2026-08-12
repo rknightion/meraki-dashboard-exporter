@@ -19,6 +19,7 @@ from ..core.error_handling import (
     CollectorError,
     ErrorCategory,
     NothingCollectedError,
+    categorize_error,
     validate_response_format,
     with_error_handling,
 )
@@ -686,7 +687,7 @@ class DeviceCollector(MetricCollector):
                 org_id = org["id"]
                 if (
                     self.org_health_tracker is not None
-                    and not self.org_health_tracker.should_collect(org_id)
+                    and not self.org_health_tracker.should_collect(org_id, source=SOURCE_DEVICE)
                 ):
                     skipped_backoff += 1
                     logger.debug(
@@ -784,6 +785,7 @@ class DeviceCollector(MetricCollector):
         # Recorded in a finally so exactly one verdict is written per org per
         # cycle, on every control-flow path, before the raise propagates.
         device_failed = False
+        failure_category: ErrorCategory | None = None
         try:
             with LogContext(org_id=org_id):
                 # Local device lookup map - must not be an instance attribute
@@ -964,7 +966,7 @@ class DeviceCollector(MetricCollector):
                             max_batch_delay=max_delay,
                             item_description="MS device",
                             error_context_func=lambda device: {"serial": device["serial"]},
-                            on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
+                            on_error=lambda error: self._track_error(categorize_error(error)),
                         )
 
                     if not used_fallback:
@@ -998,7 +1000,9 @@ class DeviceCollector(MetricCollector):
                                     max_batch_delay=max_delay,
                                     item_description="MS port usage",
                                     error_context_func=lambda device: {"serial": device["serial"]},
-                                    on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
+                                    on_error=lambda error: self._track_error(
+                                        categorize_error(error)
+                                    ),
                                 )
                 else:
                     # Process devices in batches (configurable via device_batch_size)
@@ -1014,7 +1018,7 @@ class DeviceCollector(MetricCollector):
                         max_batch_delay=max_delay,
                         item_description="MS device",
                         error_context_func=lambda device: {"serial": device["serial"]},
-                        on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
+                        on_error=lambda error: self._track_error(categorize_error(error)),
                     )
 
                 # Collect packet statistics with smoothing and interval gating
@@ -1030,7 +1034,7 @@ class DeviceCollector(MetricCollector):
                         max_batch_delay=max_delay,
                         item_description="MS packet stats",
                         error_context_func=lambda device: {"serial": device["serial"]},
-                        on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
+                        on_error=lambda error: self._track_error(categorize_error(error)),
                     )
 
             # Note: MR per-device collection has been replaced with org/network-level
@@ -1059,30 +1063,30 @@ class DeviceCollector(MetricCollector):
                         delay_between_batches=self.settings.api.batch_delay,
                         item_description=f"{device_type} device",
                         error_context_func=lambda device: {"serial": device["serial"]},
-                        on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
+                        on_error=lambda error: self._track_error(categorize_error(error)),
                     )
 
             # Aggregate network-wide POE metrics after all switches are collected
             try:
                 await self._aggregate_network_poe(org_id, org_name, devices)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to aggregate POE metrics")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect switch port overview metrics
             try:
                 await self.ms_collector.collect_port_overview(org_id, org_name)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect switch port overview")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect memory metrics for all devices
             try:
                 # Use base collector's memory collection
                 await self.ms_collector.collect_memory_metrics(org_id, org_name, device_lookup)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect memory metrics")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect MR-specific metrics. Gate on productType == "wireless" in addition
             # to the "MR"-prefixed model check so Catalyst APs (productType "wireless",
@@ -1127,8 +1131,9 @@ class DeviceCollector(MetricCollector):
             if any(d for d in devices if d.get("model", "").startswith(DeviceType.MV)):
                 await self.mv_collector.collect_onboarding_statuses(org_id, org_name)
 
-        except CollectorError:
+        except CollectorError as exc:
             device_failed = True
+            failure_category = exc.category
             raise
         except Exception as e:
             logger.exception(
@@ -1137,11 +1142,20 @@ class DeviceCollector(MetricCollector):
                 error_type=type(e).__name__,
                 error=str(e),
             )
-            self._track_error(ErrorCategory.UNKNOWN)
+            self._track_error(categorize_error(e))
         finally:
-            self._record_org_health_verdict(org_id, org_name, success=not device_failed)
+            self._record_org_health_verdict(
+                org_id, org_name, success=not device_failed, category=failure_category
+            )
 
-    def _record_org_health_verdict(self, org_id: str, org_name: str, *, success: bool) -> None:
+    def _record_org_health_verdict(
+        self,
+        org_id: str,
+        org_name: str,
+        *,
+        success: bool,
+        category: ErrorCategory | None = None,
+    ) -> None:
         """Report this org's device-domain verdict into the shared tracker (#547).
 
         No-op when no tracker is wired. Runs synchronously (no await) so
@@ -1156,6 +1170,8 @@ class DeviceCollector(MetricCollector):
             Organization name.
         success : bool
             True to record a device-domain success for this org, False a failure.
+        category : ErrorCategory | None
+            Classification of the failure, when available.
 
         """
         if self.org_health_tracker is None:
@@ -1163,7 +1179,9 @@ class DeviceCollector(MetricCollector):
         if success:
             self.org_health_tracker.record_success(org_id, org_name, source=SOURCE_DEVICE)
         else:
-            self.org_health_tracker.record_failure(org_id, org_name, source=SOURCE_DEVICE)
+            self.org_health_tracker.record_failure(
+                org_id, org_name, source=SOURCE_DEVICE, category=category
+            )
 
     async def _collect_device_with_timeout(
         self, device: dict[str, Any], device_type: DeviceType
@@ -1230,9 +1248,9 @@ class DeviceCollector(MetricCollector):
             # Collect wireless client counts (org-wide - replaces per-device getDeviceWirelessStatus)
             try:
                 await self.mr_collector.collect_wireless_clients(org_id, org_name, device_lookup)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect wireless client counts")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect connection stats (network-level - replaces per-device getDeviceWirelessConnectionStats)
             if networks:
@@ -1240,51 +1258,51 @@ class DeviceCollector(MetricCollector):
                     await self.mr_collector.collect_connection_stats(
                         org_id, org_name, networks, device_lookup
                     )
-                except Exception:
+                except Exception as exc:
                     logger.exception("Failed to collect MR connection stats")
-                    self._track_error(ErrorCategory.UNKNOWN)
+                    self._track_error(categorize_error(exc))
 
             # Collect MR ethernet status
             try:
                 await self.mr_collector.collect_ethernet_status(org_id, org_name, device_lookup)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect MR ethernet status")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect MR packet loss metrics
             try:
                 await self.mr_collector.collect_packet_loss(org_id, org_name, device_lookup)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect MR packet loss metrics")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect MR CPU load metrics
             try:
                 await self.mr_collector.collect_cpu_load(org_id, org_name, devices)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect MR CPU load metrics")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect MR SSID status metrics
             try:
                 await self.mr_collector.collect_ssid_status(org_id, org_name, device_lookup)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect MR SSID status metrics")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect MR SSID usage metrics
             try:
                 await self.mr_collector.collect_ssid_usage(org_id, org_name)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect MR SSID usage metrics")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "Failed to collect MR-specific metrics",
                 org_id=org_id,
             )
-            self._track_error(ErrorCategory.UNKNOWN)
+            self._track_error(categorize_error(exc))
 
     @trace_method("collect.ms_metrics")
     async def _collect_ms_specific_metrics(
@@ -1312,9 +1330,9 @@ class DeviceCollector(MetricCollector):
             # Collect STP metrics
             try:
                 await self.ms_collector.collect_stp_priorities(org_id, org_name, device_lookup)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect STP priorities")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect switch stack metrics
             try:
@@ -1322,22 +1340,22 @@ class DeviceCollector(MetricCollector):
                 if self.inventory:
                     networks = await self.inventory.get_networks(org_id)
                 await self.ms_stack_collector.collect_for_org(org_id, org_name, networks)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect switch stack metrics")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect power-supply module status (org-wide, single call)
             try:
                 await self.ms_power_collector.collect_power_modules(org_id, org_name, device_lookup)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect MS power module statuses")
-                self._track_error(ErrorCategory.UNKNOWN)
-        except Exception:
+                self._track_error(categorize_error(exc))
+        except Exception as exc:
             logger.exception(
                 "Failed to collect MS-specific metrics",
                 org_id=org_id,
             )
-            self._track_error(ErrorCategory.UNKNOWN)
+            self._track_error(categorize_error(exc))
 
     @trace_method("collect.mx_metrics")
     async def _collect_mx_specific_metrics(
@@ -1362,34 +1380,34 @@ class DeviceCollector(MetricCollector):
             # Collect uplink statuses
             try:
                 await self.mx_collector.collect_uplink_statuses(org_id, org_name, device_lookup)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect MX uplink statuses")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect per-uplink WAN loss & latency (org-wide, single call)
             try:
                 await self.mx_uplink_health_collector.collect_uplink_loss_latency(
                     org_id, org_name, device_lookup
                 )
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect MX uplink loss and latency")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect per-uplink WAN bandwidth usage (org-wide, single call)
             try:
                 await self.mx_uplink_usage_collector.collect_uplink_usage(
                     org_id, org_name, device_lookup
                 )
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect MX uplink usage")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect HA / warm-spare redundancy status (org-wide, paginated)
             try:
                 await self.mx_ha_collector.collect_redundancy(org_id, org_name, device_lookup)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect MX HA redundancy")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # The mx_vpn group covers BOTH the VpnStatuses call (collect) and the
             # VpnStats call (collect_vpn_stats). Evaluate the gate ONCE here and
@@ -1401,27 +1419,27 @@ class DeviceCollector(MetricCollector):
             # Collect VPN health metrics (point-in-time statuses)
             try:
                 await self.mx_collector.vpn_collector.collect(org_id, org_name, due=mx_vpn_due)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect MX VPN metrics")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect VPN history stats (usage volume + per-peer-pair latency)
             try:
                 await self.mx_collector.vpn_collector.collect_vpn_stats(
                     org_id, org_name, due=mx_vpn_due
                 )
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect MX VPN stats")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect security events (org-wide, single call per org)
             try:
                 await self.mx_collector.firewall_collector.collect_org_security_events(
                     org_id, org_name
                 )
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect MX security events")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
             # Collect firewall rules (SLOW tier: per-network API calls)
             try:
@@ -1447,16 +1465,16 @@ class DeviceCollector(MetricCollector):
                             ),
                             name=f"fw_{network_id}",
                         )
-            except Exception:
+            except Exception as exc:
                 logger.exception("Failed to collect MX firewall metrics")
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
 
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "Failed to collect MX-specific metrics",
                 org_id=org_id,
             )
-            self._track_error(ErrorCategory.UNKNOWN)
+            self._track_error(categorize_error(exc))
 
     @trace_method("collect.mg_metrics")
     async def _collect_mg_specific_metrics(
@@ -1479,12 +1497,12 @@ class DeviceCollector(MetricCollector):
         """
         try:
             await self.mg_collector.collect_uplink_statuses(org_id, org_name, device_lookup)
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "Failed to collect MG-specific metrics",
                 org_id=org_id,
             )
-            self._track_error(ErrorCategory.UNKNOWN)
+            self._track_error(categorize_error(exc))
 
     def _get_device_type(self, device: dict[str, Any]) -> str:
         """Get device type from device model.
@@ -1791,12 +1809,12 @@ class DeviceCollector(MetricCollector):
                     switch_count=len(switch_serials),
                 )
 
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "Failed to aggregate network POE metrics",
                 org_id=org_id,
             )
-            self._track_error(ErrorCategory.UNKNOWN)
+            self._track_error(categorize_error(exc))
 
     @with_error_handling(
         operation="Fetch devices",

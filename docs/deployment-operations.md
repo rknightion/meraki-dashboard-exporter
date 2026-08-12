@@ -79,6 +79,12 @@ reports (`/cardinality`), and optional client (`/clients`) and webhook
 (`POST /api/webhooks/meraki`) features. See the [HTTP Endpoints](reference/endpoints.md)
 reference for the authoritative list and enablement notes.
 
+`/ready` is a startup-only gate: it returns `200` after the initial required collection has
+succeeded and remains ready during later upstream failures. This keeps the pod in Service endpoints
+so Prometheus can scrape the metrics needed to diagnose the outage. `/health` is the liveness
+dead-man check; alert on `time() - meraki_exporter_scheduler_group_success_timestamp_seconds` for
+per-endpoint-group freshness and on `meraki_exporter_scheduler_over_budget` for deferred work.
+
 ## Webhook receiver (HTTPS / TLS termination)
 
 The exporter can receive Meraki alert webhooks (`config.webhooksEnabled: true`, endpoint
@@ -198,13 +204,19 @@ raise — while one or more *sub-phases* inside it fail and are silently tolerat
 deliberate resilience (a single broken endpoint, e.g. one MX VPN fetch or one org's config
 sub-collection, must never abort the rest of that cycle's collection), but it means the honest
 top-level failure signals introduced for [#509](https://github.com/rknightion/meraki-dashboard-exporter/issues/509)
-(a raised `_collect_impl()`, `/ready` flipping, `meraki_exporter_org_collection_status`) can stay
+(a raised `_collect_impl()`, `/health` staleness, `meraki_exporter_org_collection_status`) can stay
 green for cycles that are nonetheless degraded.
 
 Every one of those tolerated sub-phase failures increments the same counter used for full
 collector failures — **`meraki_exporter_collector_errors_total`** (labels: `collector`, `tier`,
 `error_type`) — so it is the only signal that surfaces this class of degradation. Alert on its
 rate rather than waiting for a full-cycle failure:
+
+The bounded coordinator-category values are `api_rate_limit`, `api_auth_error`,
+`api_client_error`, `api_server_error`, `api_not_available`, `connectivity`, `timeout`, `parsing`,
+`validation`, and `unknown`; fatal top-level failures use their fixed exception class name (for
+example `NothingCollectedError`). `unknown` is reserved for exceptions that genuinely cannot be
+classified; alert on it separately because a rise means the classifier needs extending.
 
 ```promql
 # Any tolerated sub-phase failure in the last 15 minutes, broken out by
@@ -223,14 +235,18 @@ min_over_time(
 ) == 1
 ```
 
+`NothingCollectedError` now means the collector genuinely obtained no usable result, rather than
+one optional endpoint being unavailable. Treat more than five such failures in 15 minutes as a
+warning (the supplied `MerakiCollectorErrorsHigh` rule uses this same `> 5` threshold across each
+collector); page only when the org status is also `0` or `/health` is stale.
+
 Because this counter increments for tolerated *and* fatal failures alike, corroborate a firing
 alert against the [#509](https://github.com/rknightion/meraki-dashboard-exporter/issues/509) health
 signals before treating it as critical:
 
 - `up{job="meraki-dashboard-exporter"}` / `/health` - process liveness (unaffected either way).
-- `/ready` and its backing readiness gate - only trips for a **total** cycle failure in a
-  collector owning an enabled priority-<=3 endpoint group (config-only, priority-4 collectors
-  like `ConfigCollector` are excluded from readiness by design).
+- `/ready` - startup-only confirmation that the initial required collection completed. It does not
+  trip on later failures; use `/health` and the scheduler success timestamps for ongoing health.
 - `meraki_exporter_org_collection_status{org_id="..."}` - per-organization gauge, `0` only when
   *every* sub-collection failed for that org this cycle (see `OrganizationCollector`/`OrgHealthTracker`
   in `core/org_health.py`).
@@ -238,9 +254,8 @@ signals before treating it as critical:
 If `meraki_exporter_collector_errors_total` is climbing but `/ready` is `200` and
 `meraki_exporter_org_collection_status` is `1`, the cycle is completing with **partial** data loss
 for the affected sub-phase (e.g. one MR/MS/MX sub-collection, one config sub-collection, or one
-org's sensor gateway connections) - worth investigating, but not an outage. If `/ready` also flips
-or the org status gauge drops to `0`, treat it as the higher-severity, already-covered #509 failure
-case instead.
+org's sensor gateway connections) - worth investigating, but not an outage. If `/health` becomes
+stale or the org status gauge drops to `0`, treat it as the higher-severity failure case instead.
 
 ## Network Filter
 For large organisations, restrict scraping to a subset of networks via the

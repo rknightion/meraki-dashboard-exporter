@@ -11,7 +11,12 @@ from ..core.async_utils import ManagedTaskGroup
 from ..core.batch_processing import process_in_batches_with_errors
 from ..core.collector import MetricCollector
 from ..core.constants import NetworkHealthMetricName, NetworkMetricName, ProductType
-from ..core.error_handling import ErrorCategory, NothingCollectedError, with_error_handling
+from ..core.error_handling import (
+    ErrorCategory,
+    NothingCollectedError,
+    categorize_error,
+    with_error_handling,
+)
 from ..core.logging import get_logger
 from ..core.logging_decorators import log_batch_operation
 from ..core.logging_helpers import log_metric_collection_summary
@@ -346,7 +351,9 @@ class NetworkHealthCollector(MetricCollector):
                 org_name = org.get("name", org_id)
                 if (
                     self.org_health_tracker is not None
-                    and not self.org_health_tracker.should_collect(org_id)
+                    and not self.org_health_tracker.should_collect(
+                        org_id, source=SOURCE_NETWORK_HEALTH
+                    )
                 ):
                     skipped_backoff += 1
                     logger.debug(
@@ -448,6 +455,7 @@ class NetworkHealthCollector(MetricCollector):
         # success for this domain. Recorded in a finally so exactly one verdict is
         # written per org per cycle, on every path, before the raise propagates.
         nh_failed = False
+        failure_category: ErrorCategory | None = None
         try:
             # Get all networks. A failure here (raised through inventory) means
             # this org's worker fails; no blanket swallow.
@@ -501,7 +509,7 @@ class NetworkHealthCollector(MetricCollector):
                         "network_id": network.get("id"),
                         "network_name": network.get("name"),
                     },
-                    on_error=lambda: self._track_error(ErrorCategory.UNKNOWN),
+                    on_error=lambda error: self._track_error(categorize_error(error)),
                 )
                 # Mark each group ran only if >=1 network fetched THAT group's
                 # data this cycle (#629). Each bundle call reports the set of
@@ -516,13 +524,26 @@ class NetworkHealthCollector(MetricCollector):
                 for group in due_groups:
                     if group in succeeded_groups:
                         self._mark_group_ran(group)
-        except Exception:
+        except Exception as exc:
             nh_failed = True
+            failure_category = categorize_error(exc)
             raise
         finally:
-            self._record_org_health_verdict(org_id, org_name or org_id, success=not nh_failed)
+            self._record_org_health_verdict(
+                org_id,
+                org_name or org_id,
+                success=not nh_failed,
+                category=failure_category,
+            )
 
-    def _record_org_health_verdict(self, org_id: str, org_name: str, *, success: bool) -> None:
+    def _record_org_health_verdict(
+        self,
+        org_id: str,
+        org_name: str,
+        *,
+        success: bool,
+        category: ErrorCategory | None = None,
+    ) -> None:
         """Report this org's network-health verdict into the shared tracker (#547).
 
         No-op when no tracker is wired. Runs synchronously (no await) so
@@ -537,6 +558,8 @@ class NetworkHealthCollector(MetricCollector):
             Organization name.
         success : bool
             True to record a network-health success for this org, False a failure.
+        category : ErrorCategory | None
+            Classification of the failure, when available.
 
         """
         if self.org_health_tracker is None:
@@ -544,7 +567,9 @@ class NetworkHealthCollector(MetricCollector):
         if success:
             self.org_health_tracker.record_success(org_id, org_name, source=SOURCE_NETWORK_HEALTH)
         else:
-            self.org_health_tracker.record_failure(org_id, org_name, source=SOURCE_NETWORK_HEALTH)
+            self.org_health_tracker.record_failure(
+                org_id, org_name, source=SOURCE_NETWORK_HEALTH, category=category
+            )
 
     async def _collect_network_health_bundle(
         self, network: dict[str, Any], due_groups: frozenset[EndpointGroupName]
@@ -595,11 +620,11 @@ class NetworkHealthCollector(MetricCollector):
                 continue
             try:
                 await collect(network)
-            except Exception:
+            except Exception as exc:
                 # Per-network per-group failure: isolate it so sibling groups
                 # (and other networks) still run, mirror the fan-out's #621
                 # error accounting, and record no success for this group here.
-                self._track_error(ErrorCategory.UNKNOWN)
+                self._track_error(categorize_error(exc))
                 logger.debug(
                     "Network-health group fetch failed for network",
                     group=group.value,

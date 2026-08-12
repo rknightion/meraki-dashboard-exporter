@@ -277,22 +277,12 @@
         }
 
         .clear-cache-btn {
-            background-color: var(--warning-color);
+            background-color: #ccc;
             color: white;
             border: none;
             padding: 10px 20px;
             border-radius: 6px;
             font-size: 1rem;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-
-        .clear-cache-btn:hover {
-            background-color: #e68900;
-        }
-
-        .clear-cache-btn:disabled {
-            background-color: #ccc;
             cursor: not-allowed;
         }
 
@@ -389,15 +379,15 @@
                     <div class="value">{{ dns_cache_stats.cache_ttl_seconds }}s</div>
                 </div>
             </div>
+            {% if not control_api_enabled %}
             <button
                 class="clear-cache-btn"
-                {% if control_api_enabled %}
-                onclick="clearDNSCache()"
-                {% else %}
                 disabled
                 title="Configure server.api_token to enable manual controls."
-                {% endif %}
-            >Clear DNS Cache</button>
+            >Token required</button>
+            {% else %}
+            <p>Clear the cache through the <a href="https://m7kni.io/meraki-dashboard-exporter/security/#control-api">authenticated control API</a>.</p>
+            {% endif %}
         </div>
         {% endif %}
 
@@ -639,42 +629,6 @@
             });
         });
 
-        // Clear DNS cache functionality
-        async function clearDNSCache() {
-            const button = document.querySelector('.clear-cache-btn');
-            button.disabled = true;
-            button.textContent = 'Clearing...';
-
-            try {
-                const response = await fetch('/api/clients/clear-dns-cache', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                const data = await response.json();
-
-                if (data.status === 'success') {
-                    button.textContent = 'Cache Cleared!';
-                    setTimeout(() => {
-                        button.textContent = 'Clear DNS Cache';
-                        button.disabled = false;
-                        // Reload the page to show updated stats
-                        window.location.reload();
-                    }, 2000);
-                } else {
-                    throw new Error(data.message || 'Failed to clear cache');
-                }
-            } catch (error) {
-                console.error('Error clearing DNS cache:', error);
-                button.textContent = 'Error!';
-                setTimeout(() => {
-                    button.textContent = 'Clear DNS Cache';
-                    button.disabled = false;
-                }, 2000);
-            }
-        }
     </script>
 </body>
 </html>

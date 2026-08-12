@@ -14,9 +14,9 @@ from ..core.constants import DeviceMetricName, NetworkMetricName, OrgMetricName
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.error_handling import (
     CollectorError,
-    DataValidationError,
     ErrorCategory,
     NothingCollectedError,
+    categorize_error,
     validate_response_format,
     with_error_handling,
 )
@@ -53,6 +53,10 @@ logger = get_logger(__name__)
 # getOrganizationSummaryTopApplicationsCategoriesByUsage documents "Maximum is 50"
 # for `quantity` (SDK 3.2.0 docstring) -- see bug-bash finding F-042.
 _APPLICATION_USAGE_MAX_QUANTITY = 50
+# The request-log endpoint returns every Dashboard API request for the trailing
+# hour. Meraki's per-organization ceiling is 10 requests/s, so the bulk side is
+# bounded at 36 pages with perPage=1000; add one call for the overview endpoint.
+_API_USAGE_MAX_CALLS_PER_RUN = 1 + pages(10 * 3600, 1000)
 
 
 @register_collector
@@ -78,7 +82,7 @@ class OrganizationCollector(MetricCollector):
             name=EndpointGroupName.ORG_API_USAGE,
             priority=3,
             floor_seconds=300,
-            cost_fn=lambda shape: 2,
+            cost_fn=lambda shape: _API_USAGE_MAX_CALLS_PER_RUN,
         ),
         EndpointGroup(
             name=EndpointGroupName.ORG_CLIENT_OVERVIEW,
@@ -531,7 +535,7 @@ class OrganizationCollector(MetricCollector):
         ) as group:
             for org in organizations:
                 org_id = org["id"]
-                if not self.org_health_tracker.should_collect(org_id):
+                if not self.org_health_tracker.should_collect(org_id, source=SOURCE_ORGANIZATION):
                     health = self.org_health_tracker.get_health(org_id)
                     logger.info(
                         "Skipping organization collection due to backoff",
@@ -640,6 +644,7 @@ class OrganizationCollector(MetricCollector):
                 (
                     failed_sub_collections,
                     succeeded_sub_collections,
+                    failure_categories,
                 ) = await self._run_org_sub_collections(org_id, org_name)
 
             if failed_sub_collections:
@@ -654,7 +659,20 @@ class OrganizationCollector(MetricCollector):
                     org_name=org_name,
                     failed_sub_collections=failed_sub_collections,
                 )
-                self.org_health_tracker.record_failure(org_id, org_name, source=SOURCE_ORGANIZATION)
+                failure_category = next(
+                    (
+                        category
+                        for category in failure_categories
+                        if category is ErrorCategory.API_AUTH_ERROR
+                    ),
+                    failure_categories[0] if failure_categories else ErrorCategory.UNKNOWN,
+                )
+                self.org_health_tracker.record_failure(
+                    org_id,
+                    org_name,
+                    source=SOURCE_ORGANIZATION,
+                    category=failure_category,
+                )
                 self._org_collection_status.labels(**org_labels).set(0)
             else:
                 self.org_health_tracker.record_success(org_id, org_name, source=SOURCE_ORGANIZATION)
@@ -687,7 +705,9 @@ class OrganizationCollector(MetricCollector):
                 {"org_id": org_id},
             )
 
-    async def _run_org_sub_collections(self, org_id: str, org_name: str) -> tuple[list[str], int]:
+    async def _run_org_sub_collections(
+        self, org_id: str, org_name: str
+    ) -> tuple[list[str], int, list[ErrorCategory]]:
         """Run every per-organization sub-collection, tracking which ones fail.
 
         Every sub-collection is attempted even if an earlier one failed, so a
@@ -718,8 +738,8 @@ class OrganizationCollector(MetricCollector):
 
         Returns
         -------
-        tuple[list[str], int]
-            ``(failed, succeeded)`` -- ``failed`` is the names of
+        tuple[list[str], int, list[ErrorCategory]]
+            ``(failed, succeeded, categories)`` -- ``failed`` is the names of
             sub-collections that failed with a non-404 error this cycle
             (either by raising, the six direct sub-collections, or by
             returning ``False``, the five delegating sub-collectors); empty
@@ -733,30 +753,43 @@ class OrganizationCollector(MetricCollector):
 
         """
         failed: list[str] = []
+        categories: list[ErrorCategory] = []
         succeeded = 0
 
-        async def _attempt(name: str, coro: Coroutine[Any, Any, bool | None]) -> None:
+        async def _attempt(
+            name: str,
+            coro: Coroutine[Any, Any, bool | ErrorCategory | None],
+        ) -> None:
             nonlocal succeeded
             try:
                 result = await coro
             except CollectorError as exc:
                 if exc.category == ErrorCategory.API_NOT_AVAILABLE:
                     return
+                categories.append(exc.category)
                 failed.append(name)
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "Sub-collection failed for organization",
                     org_id=org_id,
                     org_name=org_name,
                     sub_collection=name,
                 )
-                self._track_error(ErrorCategory.UNKNOWN)
+                category = categorize_error(exc)
+                self._track_error(category)
+                categories.append(category)
                 failed.append(name)
             else:
                 # Delegating sub-collectors signal a real (non-404) failure by
                 # returning False instead of raising (F-172). The six direct
                 # sub-collections return None on success and are unaffected.
-                if result is False:
+                if isinstance(result, ErrorCategory):
+                    if result is ErrorCategory.API_NOT_AVAILABLE:
+                        return
+                    categories.append(result)
+                    failed.append(name)
+                elif result is False:
+                    categories.append(ErrorCategory.UNKNOWN)
                     failed.append(name)
                 else:
                     succeeded += 1
@@ -798,9 +831,9 @@ class OrganizationCollector(MetricCollector):
         )
         await _attempt("early_access_metrics", self._collect_early_access_metrics(org_id, org_name))
 
-        return failed, succeeded
+        return failed, succeeded, categories
 
-    async def _collect_api_metrics(self, org_id: str, org_name: str) -> bool:
+    async def _collect_api_metrics(self, org_id: str, org_name: str) -> bool | ErrorCategory:
         """Collect API usage metrics.
 
         Returns the sub-collector's success/failure signal so an isolated
@@ -817,9 +850,9 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        return await self.api_usage_collector.collect(org_id, org_name) is True
+        return await self.api_usage_collector.collect(org_id, org_name)
 
-    async def _collect_firmware_metrics(self, org_id: str, org_name: str) -> bool:
+    async def _collect_firmware_metrics(self, org_id: str, org_name: str) -> bool | ErrorCategory:
         """Collect firmware upgrade status metrics.
 
         Returns the sub-collector's success/failure signal (see
@@ -834,7 +867,8 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        return await self.firmware_collector.collect(org_id, org_name) is True
+        result = await self.firmware_collector.collect(org_id, org_name)
+        return result if result is not None else ErrorCategory.UNKNOWN
 
     async def _collect_device_availability_changes_metrics(
         self, org_id: str, org_name: str
@@ -1002,23 +1036,18 @@ class OrganizationCollector(MetricCollector):
             if network_ids is not None:
                 kwargs["networkIds"] = network_ids
 
-            # This endpoint's documented response is a plain {"counts": [...]}
-            # object, but some org bulk endpoints wrap their payload in
-            # {"items": [...]} -- handle that shape too rather than silently
-            # dropping it (bug-bash finding F-041). Detect the SDK's
-            # exhausted-retry error shape inline.
             overview = await facade_for(self).call(
                 "getOrganizationDevicesOverviewByModel",
                 self.api.organizations.getOrganizationDevicesOverviewByModel,
                 org_id,
                 **kwargs,
             )
-            if isinstance(overview, dict) and "errors" in overview:
-                raise DataValidationError(
-                    "getOrganizationDevicesOverviewByModel: API returned errors: "
-                    f"{overview['errors']}",
-                    {"errors": overview["errors"]},
-                )
+            overview = validate_response_format(
+                overview,
+                expected_type=dict,
+                operation="getOrganizationDevicesOverviewByModel",
+                unwrap_items=False,
+            )
 
         # Fetch succeeded — record the group ran so gating stretches from here.
         self._mark_group_ran(EndpointGroupName.ORG_DEVICE_MODEL_OVERVIEW)
@@ -1064,7 +1093,7 @@ class OrganizationCollector(MetricCollector):
         else:
             logger.error("_devices_by_model_total metric not initialized")
 
-    async def _collect_license_metrics(self, org_id: str, org_name: str) -> bool:
+    async def _collect_license_metrics(self, org_id: str, org_name: str) -> bool | ErrorCategory:
         """Collect license metrics.
 
         Returns the sub-collector's success/failure signal (see
@@ -1079,7 +1108,8 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        return await self.license_collector.collect(org_id, org_name) is True
+        result = await self.license_collector.collect(org_id, org_name)
+        return result if result is not None else ErrorCategory.UNKNOWN
 
     @with_error_handling(
         operation="Collect device availability metrics",
@@ -1161,7 +1191,7 @@ class OrganizationCollector(MetricCollector):
         else:
             logger.error("_devices_availability_total metric not initialized")
 
-    async def _collect_client_overview(self, org_id: str, org_name: str) -> bool:
+    async def _collect_client_overview(self, org_id: str, org_name: str) -> bool | ErrorCategory:
         """Collect client overview metrics.
 
         Returns the sub-collector's success/failure signal (see
@@ -1176,7 +1206,7 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        return await self.client_overview_collector.collect(org_id, org_name) is True
+        return await self.client_overview_collector.collect(org_id, org_name)
 
     @log_api_call("getOrganizationDevicesPacketCaptureCaptures")
     @with_error_handling(
@@ -1211,9 +1241,6 @@ class OrganizationCollector(MetricCollector):
 
         with LogContext(org_id=org_id, org_name=org_name):
             # Use perPage=3 to minimize data transfer while still getting the meta counts.
-            # Note: this endpoint returns {"items": [...], "meta": {...}}, so we cannot
-            # use validate_response_format (which unwraps "items"). Check for the
-            # SDK's exhausted-retry error shape inline instead.
             kwargs: dict[str, Any] = {"perPage": 3}
             if network_ids is not None:
                 kwargs["networkIds"] = network_ids
@@ -1223,12 +1250,12 @@ class OrganizationCollector(MetricCollector):
                 org_id,
                 **kwargs,
             )
-            if isinstance(response, dict) and "errors" in response:
-                raise DataValidationError(
-                    "getOrganizationDevicesPacketCaptureCaptures: API returned errors: "
-                    f"{response['errors']}",
-                    {"errors": response["errors"]},
-                )
+            response = validate_response_format(
+                response,
+                expected_type=dict,
+                operation="getOrganizationDevicesPacketCaptureCaptures",
+                unwrap_items=False,
+            )
 
         # Fetch succeeded — record the group ran so gating stretches from here.
         # (These two gauges use direct .set(), not _set_metric, so no per-series
@@ -1614,7 +1641,9 @@ class OrganizationCollector(MetricCollector):
         """
         return await self.webhook_logs_collector.collect(org_id, org_name) is True
 
-    async def _collect_firmware_compliance_metrics(self, org_id: str, org_name: str) -> bool:
+    async def _collect_firmware_compliance_metrics(
+        self, org_id: str, org_name: str
+    ) -> bool | ErrorCategory:
         """Collect firmware compliance metrics (#611).
 
         Returns the sub-collector's success/failure signal (see
@@ -1629,7 +1658,8 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        return await self.firmware_collector.collect_compliance(org_id, org_name) is True
+        result = await self.firmware_collector.collect_compliance(org_id, org_name)
+        return result if result is not None else ErrorCategory.UNKNOWN
 
     async def _collect_early_access_metrics(self, org_id: str, org_name: str) -> bool:
         """Collect Early Access opt-in + beta-API risk metrics (#278, #279).

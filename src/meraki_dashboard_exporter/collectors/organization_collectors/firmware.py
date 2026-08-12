@@ -91,8 +91,9 @@ class FirmwareCollector(BaseOrganizationCollector):
         operation="Collect firmware upgrade metrics",
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
+        return_error_category=True,
     )
-    async def collect(self, org_id: str, org_name: str) -> bool:
+    async def collect(self, org_id: str, org_name: str) -> bool | ErrorCategory:
         """Collect firmware upgrade metrics.
 
         Parameters
@@ -292,8 +293,9 @@ class FirmwareCollector(BaseOrganizationCollector):
         operation="Collect firmware compliance metrics",
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
+        return_error_category=True,
     )
-    async def collect_compliance(self, org_id: str, org_name: str) -> bool:
+    async def collect_compliance(self, org_id: str, org_name: str) -> bool | ErrorCategory:
         """Collect firmware compliance metrics (#611).
 
         Emits two things:

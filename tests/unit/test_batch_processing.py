@@ -173,9 +173,12 @@ class TestProcessInBatchesWithErrors:
         """
         error_calls = 0
 
-        def on_error() -> None:
+        seen_errors: list[Exception] = []
+
+        def on_error(error: Exception) -> None:
             nonlocal error_calls
             error_calls += 1
+            seen_errors.append(error)
 
         async def process_item(item: int) -> str:
             await asyncio.sleep(0.01)
@@ -194,6 +197,11 @@ class TestProcessInBatchesWithErrors:
 
         # Items 0, 3, 6 fail -> 3 sink invocations.
         assert error_calls == 3
+        assert [str(error) for error in seen_errors] == [
+            "Item 0 failed",
+            "Item 3 failed",
+            "Item 6 failed",
+        ]
 
         # Partial results are still returned unchanged (control flow intact).
         assert len(results) == 9
@@ -206,7 +214,7 @@ class TestProcessInBatchesWithErrors:
         """on_error is never invoked when every item succeeds."""
         error_calls = 0
 
-        def on_error() -> None:
+        def on_error(_error: Exception) -> None:
             nonlocal error_calls
             error_calls += 1
 

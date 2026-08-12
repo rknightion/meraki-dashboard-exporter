@@ -31,7 +31,7 @@ def _backed_off_tracker(org_id: str) -> OrgHealthTracker:
     """Build a tracker with ``org_id`` driven into backoff (should_collect False)."""
     tracker = OrgHealthTracker()
     for _ in range(tracker.max_consecutive_failures):
-        tracker.record_failure(org_id, "Backed Org")
+        tracker.record_failure(org_id, "Backed Org", source="network_health")
     assert tracker.should_collect(org_id) is False
     return tracker
 

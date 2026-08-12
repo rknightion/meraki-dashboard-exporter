@@ -63,6 +63,30 @@ that the solver hasn't needed to stretch anything — check `/status` or the gau
 your actual deployment's live numbers, since a larger estate against a fixed API budget will
 show longer effective intervals for lower-priority groups.
 
+## Profiles, overload, and alerting
+
+Priority 1 availability and priority 2 sensor groups keep their natural floors even when the
+budget is exhausted. Lower-priority groups may stretch; if the selected plan still exceeds its
+budget, priority 3 and then priority 4 groups are deferred rather than making up-ness stale.
+
+`MERAKI_EXPORTER_COLLECTORS__PROFILE` selects `availability` (priority 1), `standard`
+(priorities 1–3), or `full` (all groups). Leaving it unset behaves as `standard` only while that
+**solved** plan fits the effective budget; a larger shape fails startup and names the computed
+demand, so choose a profile deliberately. This is a demand calculation from the registered group
+costs and your actual inventory shape, not a network-count limit.
+
+Alert on freshness from timestamps, not `/ready`:
+
+```promql
+time() - meraki_exporter_scheduler_group_success_timestamp_seconds
+  > on(group) (3 * meraki_exporter_scheduler_interval_seconds)
+```
+
+`meraki_exporter_scheduler_over_budget == 1` identifies a selected plan that required deferral.
+`/ready` is intentionally only an initial-collection gate; it stays ready after startup. `/health`
+retains the dead-man staleness check, so Prometheus continues scraping the diagnostics during an
+upstream outage.
+
 | Collector | Typical cadence | Data |
 | --- | --- | --- |
 | `MTSensorCollector` | ~60s | Latest MT environmental sensor readings (temperature, humidity, CO2, water detection, etc.) and sensor-to-gateway connection status |

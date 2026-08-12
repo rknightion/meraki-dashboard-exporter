@@ -106,12 +106,13 @@ $$
 \text{budget}_{\text{eff}} = 10 \times \texttt{shared\_fraction}
 $$
 
-If **demand > budget**, the scheduler automatically stretches lower-priority groups' intervals
-(up to `scheduler.max_stretch_factor`/`max_interval_seconds`) to bring steady-state demand back
-under `budget × target_utilization` — see [Scheduler Architecture](observability/scheduler.md).
-If it still can't (every group has hit its cap), it logs an `over_budget` warning; at that point
-you need to actually [cut demand](#cutting-api-demand), not just wait for auto-stretching to save
-you. Separately, if network-health's *own single run* needs more calls than the budget can drain
+If **demand > budget**, the scheduler stretches only priority 3/4 groups (up to
+`scheduler.max_stretch_factor`/`max_interval_seconds`); priority 1/2 availability and sensor
+groups keep their floors. If the solved plan remains over budget, it defers lower-priority groups
+and exposes `meraki_exporter_scheduler_over_budget` plus the shed group labels. Set
+`MERAKI_EXPORTER_COLLECTORS__PROFILE` explicitly to `availability`, `standard`, or `full` above
+the computed standard-plan threshold; the threshold is calculated from the actual solved plan and
+inventory shape, never a raw network count. Separately, if network-health's *own single run* needs more calls than the budget can drain
 inside 240 s, that collector's run will not finish before `collector_timeout` regardless of how
 the scheduler paces the *next* run — see the LARGE example below.
 
@@ -171,9 +172,11 @@ Ordered by leverage. These are the only levers that actually reduce the calls a 
 3. **Keep the clients collector OFF** (default). It is the worst per-client fan-out; it is disabled
    by default (`MERAKI_EXPORTER_CLIENTS__ENABLED=false`) and per-client signal quality is a further
    opt-in (`MERAKI_EXPORTER_CLIENTS__SIGNAL_QUALITY_ENABLED=false`). Leave both off at scale.
-4. **Let the scheduler stretch automatically, or pin specific groups yourself.** In `adaptive`
-   mode (the default) the solver already lengthens lower-priority groups' intervals on its own
-   when demand exceeds the budget — you don't need to raise anything by hand for that to happen.
+4. **Choose a collection profile, then use the scheduler or pin specific groups yourself.** In
+   `adaptive` mode, `availability` keeps only priority-1 groups, `standard` includes priorities
+   1–3, and `full` includes everything. Above the solved-plan threshold, set
+   `MERAKI_EXPORTER_COLLECTORS__PROFILE` explicitly. The solver lengthens only lower-priority
+   groups; if they cannot make the plan fit, it defers them rather than stretching priority 1/2.
    To force a *specific* endpoint group to a longer interval regardless of budget pressure (e.g.
    to permanently deprioritize a noisy group), pin it via
    `MERAKI_EXPORTER_SCHEDULER__GROUP_INTERVAL_OVERRIDES='{"nh_connection_stats": 900}'` (JSON

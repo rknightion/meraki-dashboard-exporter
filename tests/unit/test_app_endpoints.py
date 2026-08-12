@@ -951,6 +951,7 @@ class TestStartupDiscoveryOffCriticalPath:
             return {"orgs": 1}
 
         exporter.collector_manager.collect_initial = AsyncMock()  # type: ignore[method-assign]
+        exporter.collector_manager.validate_profile_selection = AsyncMock()  # type: ignore[method-assign]
         # #631: _startup_collections now spawns one group-clocked loop per
         # collector plus the scheduler resolve loop — stub them so the test
         # exercises only discovery + initial collection ordering.
@@ -960,7 +961,9 @@ class TestStartupDiscoveryOffCriticalPath:
 
         with patch(
             "meraki_dashboard_exporter.app.DiscoveryService",
-            lambda api, settings: SimpleNamespace(run_discovery=fake_run_discovery),
+            lambda api, settings, rate_limiter=None: SimpleNamespace(
+                run_discovery=fake_run_discovery
+            ),
         ):
             await exporter._startup_collections()
 
@@ -984,6 +987,7 @@ class TestStartupDiscoveryOffCriticalPath:
             return {"orgs": 1}
 
         exporter.collector_manager.collect_initial = AsyncMock()  # type: ignore[method-assign]
+        exporter.collector_manager.validate_profile_selection = AsyncMock()  # type: ignore[method-assign]
         exporter._collector_loop = AsyncMock()  # type: ignore[method-assign]
         exporter._scheduler_resolve_loop = AsyncMock()  # type: ignore[method-assign]
         exporter._wait_for_first_collection = AsyncMock()  # type: ignore[method-assign]
@@ -996,7 +1000,9 @@ class TestStartupDiscoveryOffCriticalPath:
 
         with patch(
             "meraki_dashboard_exporter.app.DiscoveryService",
-            lambda api, settings: SimpleNamespace(run_discovery=gated_run_discovery),
+            lambda api, settings, rate_limiter=None: SimpleNamespace(
+                run_discovery=gated_run_discovery
+            ),
         ):
             stack = AsyncExitStack()
             cm = exporter.lifespan(fastapi_app)

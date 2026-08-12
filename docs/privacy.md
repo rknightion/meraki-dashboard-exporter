@@ -84,6 +84,26 @@ Neither cache persists to disk; both are cleared on process restart, and the DNS
 on demand via `POST /api/clients/clear-dns-cache` (itself protectable by `server.api_token`, see
 below).
 
+### Application-usage and reverse-DNS bounds
+
+Client application-usage metrics retain at most `clients.application_top_n` application labels per
+client, plus any names in `clients.application_allowlist` and (by default) one `__other__` aggregate
+label. Rows are ranked by total usage descending; equal totals break by the sanitized application
+label in ascending order. That stable tie-break prevents series from changing merely because the API
+returns equal-traffic applications in a different order. The maximum application-usage series per
+client is therefore three times `application_top_n + len(application_allowlist) + 1` while the
+`__other__` bucket is enabled (sent, received, and total); the existing client cap bounds the number of
+clients.
+
+Reverse DNS is independently controlled by
+`clients.dns_reverse_lookup_enabled` (`MERAKI_EXPORTER_CLIENTS__DNS_REVERSE_LOOKUP_ENABLED`). It
+defaults to `true` to preserve existing hostname enrichment. When enabled, the exporter submits client
+IP addresses to the host resolver configured for the deployment; that resolver and its upstream query
+destination are chosen by the operating system or platform, not by the exporter. Set it to `false` to
+keep client collection while preventing those reverse-DNS queries. DNS work is capped by
+`clients.dns_max_concurrent_lookups` (default `32`), and DEBUG logs can include both queried IPs and
+resolved hostnames; keep DEBUG logs under the same access controls as other client data.
+
 ## OTel data logs: the other PII surface, and its own opt-in gate
 
 Independently of Prometheus metrics, the exporter has an optional OTLP **data-log** emitter
@@ -112,6 +132,8 @@ for the full boundary rule. This channel is:
 | Restrict who can view the `/clients` PII page | `server.api_token` (`MERAKI_EXPORTER_SERVER__API_TOKEN`) | unset (open) | Requires `Authorization: Bearer <token>` on `/clients` and the other sensitive GET UIs plus the control POSTs (`/api/collectors/trigger`, `/api/clients/clear-dns-cache`). |
 | Remove the `/clients` page (and other human UI) entirely | `server.ui_enabled` (`MERAKI_EXPORTER_SERVER__UI_ENABLED`) | `true` | When `false`, `/clients` (and `/`, `/status`, `/config`, `/cardinality*`) return `404`; `/metrics`/`/health`/`/ready` stay open. |
 | Bound in-memory PII cache lifetime | `clients.cache_ttl`, `clients.dns_cache_ttl`, `clients.dns_cache_max_entries` | `3600`s, `21600`s, `100000` | Shorter TTLs age out stale hostname/description/DNS mappings sooner; the max-entries cap bounds worst-case memory regardless of churn. |
+| Disable reverse-DNS queries without disabling client metrics | `clients.dns_reverse_lookup_enabled` | `true` | When enabled, client IPs are sent to the deployment host resolver; set `false` to keep client collection while making no reverse-DNS queries. |
+| Bound reverse-DNS work in flight | `clients.dns_max_concurrent_lookups` | `32` | Caps DNS workers and queue allocation, independently of the client cap. |
 | Cap overall client series volume | `clients.max_clients_per_network`, `clients.max_clients_total` | `10000`, `25000` | Clients beyond the cap are dropped from metric emission (counted in `meraki_exporter_clients_over_cap`), bounding both cardinality and PII surface area under very large client populations. |
 | Avoid per-client signal-quality collection | `clients.signal_quality_enabled` | `false` | RSSI/SNR are ID-only labelled already, but this endpoint is also the most expensive per-client API call; leave off unless needed. |
 | Keep the structured data-log PII-stripped if that channel is used | `otel.logs.include_identifiers` | `false` | Drops identifier keys and scrubs MAC-shaped strings from data-log bodies; MAC-only rows omit `client.id` rather than substituting a MAC. |

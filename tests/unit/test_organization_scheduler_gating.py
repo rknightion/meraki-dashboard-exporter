@@ -116,7 +116,7 @@ class TestOrgEndpointGroupDeclarations:
         shape = _shape(device_count=1200)
         assert groups[EndpointGroupName.ORG_AVAILABILITIES].cost_fn(shape) == pages(1200, 500)
         assert groups[EndpointGroupName.ORG_AVAILABILITY_HISTORY].cost_fn(shape) == 1
-        assert groups[EndpointGroupName.ORG_API_USAGE].cost_fn(shape) == 2
+        assert groups[EndpointGroupName.ORG_API_USAGE].cost_fn(shape) == 37
         assert groups[EndpointGroupName.ORG_CLIENT_OVERVIEW].cost_fn(shape) == 1
         assert groups[EndpointGroupName.ORG_DEVICE_MODEL_OVERVIEW].cost_fn(shape) == 1
         assert groups[EndpointGroupName.ORG_PACKET_CAPTURES].cost_fn(shape) == 1

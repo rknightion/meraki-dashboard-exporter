@@ -224,6 +224,13 @@ class MetricCollector(ABC):
                     collector=collector_name,
                     duration=f"{duration:.2f}s",
                 )
+                # A coordinator may isolate and swallow an endpoint-group
+                # failure while the collector cycle still succeeds overall.
+                # Attribute any admitted-but-unmarked group here; mark_failed
+                # ignores groups that were not attempted or did succeed.
+                if self.scheduler is not None:
+                    for group in groups:
+                        self.scheduler.mark_failed(group.name)
 
             except Exception as e:
                 # Record error
@@ -233,6 +240,14 @@ class MetricCollector(ABC):
                 span.set_attribute("collector.duration_seconds", duration)
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 span.record_exception(e)
+
+                # Attribute a raised collector-cycle failure to every endpoint
+                # group that this cycle admitted but did not mark successful.
+                # The scheduler de-duplicates the attempt timestamp, so retries
+                # count once rather than once per surrounding collector error.
+                if self.scheduler is not None:
+                    for group in groups:
+                        self.scheduler.mark_failed(group.name)
 
                 # Always try to record metrics (they should be initialized)
                 if MetricCollector._collector_errors is not None:
@@ -555,6 +570,9 @@ class MetricCollector(ABC):
             return True
         if self.scheduler is None:
             return True
+        profile_allows = getattr(self.scheduler, "profile_allows", None)
+        if profile_allows is not None and not profile_allows(group):
+            return False
         return self.scheduler.should_run(group)
 
     def _mark_group_ran(self, group: EndpointGroupName) -> None:

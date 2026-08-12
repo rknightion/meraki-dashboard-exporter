@@ -422,7 +422,12 @@ class ExporterApp:
         # before it serves any request (fail fast). A configured org_id is used
         # as-is with no extra API call, so this never adds crash-loop risk to a
         # correctly-pinned single-org instance.
-        await resolve_org_id(self.client.api, self.settings)
+        await resolve_org_id(
+            self.client.api,
+            self.settings,
+            rate_limiter=self.collector_manager.rate_limiter,
+        )
+        await self.collector_manager.validate_profile_selection()
 
         logger.info(
             "Starting Meraki Dashboard Exporter",
@@ -518,7 +523,11 @@ class ExporterApp:
         try:
             # Run discovery off the lifespan critical path (F-104) so /health is
             # serveable within seconds of process start. It tolerates failure.
-            discovery = DiscoveryService(self.client.api, self.settings)
+            discovery = DiscoveryService(
+                self.client.api,
+                self.settings,
+                rate_limiter=self.collector_manager.rate_limiter,
+            )
             try:
                 self._discovery_summary = await discovery.run_discovery()
             except Exception:

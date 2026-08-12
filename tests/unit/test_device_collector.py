@@ -29,7 +29,7 @@ def _backed_off_tracker(org_id: str) -> OrgHealthTracker:
     """Build a tracker with ``org_id`` driven into backoff (should_collect False)."""
     tracker = OrgHealthTracker()
     for _ in range(tracker.max_consecutive_failures):
-        tracker.record_failure(org_id, "Backed Org")
+        tracker.record_failure(org_id, "Backed Org", source="device")
     assert tracker.should_collect(org_id) is False
     return tracker
 
@@ -898,7 +898,7 @@ class TestDeviceCollector(BaseCollectorTest):
         # Must not raise - a single MR sub-collection failure is tolerated.
         await collector._collect_mr_specific_metrics("123456", "Test Org", [], {})
 
-        self.assert_collector_error(collector, metrics, error_type="unknown")
+        self.assert_collector_error(collector, metrics, error_type="api_server_error")
 
     async def test_org_devices_top_level_failure_increments_error_counter(
         self, collector, mock_api_builder, metrics

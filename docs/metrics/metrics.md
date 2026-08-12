@@ -5,9 +5,9 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 352
-- **Gauges:** 318
-- **Counters:** 30
+- **Total metrics:** 363
+- **Gauges:** 325
+- **Counters:** 34
 - **Histograms:** 3
 - **Info metrics:** 1
 
@@ -54,7 +54,10 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_exporter_client_dns_lookups_cached_total` | counter | — | Total number of DNS lookups served from cache | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_lookups_failed_total` | counter | — | Total number of failed DNS lookups | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_lookups_successful_total` | counter | — | Total number of successful DNS lookups | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_exporter_client_dns_lookups_timeout_total` | counter | — | Total reverse-DNS lookups that exceeded clients.dns_timeout | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_lookups_total` | counter | — | Total number of DNS lookups performed | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_exporter_client_dns_queue_depth` | gauge | — | Peak reverse-DNS work queue depth in the most recent resolution batch | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_exporter_client_dns_queue_wait_seconds` | gauge | — | Mean reverse-DNS work queue wait time in seconds over the process lifetime | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_resolution_seconds_total` | counter | — | Cumulative seconds spent performing reverse-DNS lookups (excludes cache hits) | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_store_networks` | gauge | — | Total number of networks with clients | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_store_total` | gauge | — | Total number of clients in the store | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
@@ -473,9 +476,10 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_exporter_cardinality_analyzed_metrics` | gauge | — | Number of metrics analyzed in last run |  |
 | `meraki_exporter_cardinality_duration_seconds` | gauge | — | Time taken to complete cardinality analysis |  |
+| `meraki_exporter_cardinality_exporter_series` | gauge | — | Exporter self-instrumentation series, excluding CardinalityMonitor self-observability |  |
 | `meraki_exporter_cardinality_exposed_series` | gauge | — | Total metric series exposed by the Prometheus scrape |  |
-| `meraki_exporter_cardinality_product_series` | gauge | — | Product metric series, excluding CardinalityMonitor self-observability series |  |
-| `meraki_exporter_cardinality_self_series` | gauge | — | CardinalityMonitor self-observability metric series included in the scrape |  |
+| `meraki_exporter_cardinality_product_series` | gauge | — | Product data series, excluding exporter self-instrumentation and CardinalityMonitor |  |
+| `meraki_exporter_cardinality_self_series` | gauge | — | CardinalityMonitor self-observability series included in the scrape |  |
 | `meraki_exporter_cardinality_warnings_total` | counter | `metric_name`, `severity` | Number of cardinality warnings triggered |  |
 | `meraki_exporter_total_series` | gauge | — | Total number of time series across all metrics |  |
 
@@ -500,11 +504,18 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
+| `meraki_exporter_collection_profile_info` | gauge | `profile` | Active collection profile (exactly one profile label has value 1). |  |
 | `meraki_exporter_scheduler_budget_rps` | gauge | — | Configured API budget in requests/second (rate_limit_requests_per_second x rate_limit_shared_fraction; computed schedule input) |  |
 | `meraki_exporter_scheduler_budget_utilization_ratio` | gauge | — | Total estimated demand divided by the effective budget (computed schedule output, refreshed on each solver resolve) |  |
 | `meraki_exporter_scheduler_effective_budget_rps` | gauge | — | AIMD-adjusted effective API budget in requests/second (computed schedule input, lowered after 429 throttling and recovered additively) |  |
 | `meraki_exporter_scheduler_estimated_demand_rps` | gauge | `group` | Estimated steady-state API demand per endpoint group in requests/second (computed schedule output, refreshed on each solver resolve; not a measured rate) |  |
+| `meraki_exporter_scheduler_group_attempts_total` | counter | `group` | Total endpoint-group attempts admitted by the scheduler. |  |
+| `meraki_exporter_scheduler_group_failures_total` | counter | `group` | Total endpoint-group failures attributed by owning collectors. |  |
+| `meraki_exporter_scheduler_group_shed` | gauge | `group` | Whether an endpoint group is currently deferred by the over-budget policy. |  |
+| `meraki_exporter_scheduler_group_skips_total` | counter | `group` | Total endpoint-group executions deferred by over-budget shedding. |  |
+| `meraki_exporter_scheduler_group_success_timestamp_seconds` | gauge | `group` | Unix timestamp of the last successful endpoint-group fetch. |  |
 | `meraki_exporter_scheduler_interval_seconds` | gauge | `group` | Solved collection interval per endpoint group in seconds (computed schedule output, refreshed on each solver resolve) |  |
+| `meraki_exporter_scheduler_over_budget` | gauge | — | Whether the selected scheduler profile exceeds its API budget after solving (1=yes). |  |
 | `meraki_exporter_scheduler_stretch_factor` | gauge | `group` | Solved interval divided by the group's volatility floor; 1.0 = unstretched (computed schedule output, refreshed on each solver resolve) |  |
 
 ### ExporterApp

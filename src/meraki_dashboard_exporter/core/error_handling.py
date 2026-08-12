@@ -12,7 +12,7 @@ import random
 import time
 from collections.abc import Callable, Coroutine
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 
 from ..core.logging import get_logger
 
@@ -37,9 +37,11 @@ class ErrorCategory(StrEnum):
     """Categories of errors for tracking and handling."""
 
     API_RATE_LIMIT = "api_rate_limit"
+    API_AUTH_ERROR = "api_auth_error"
     API_CLIENT_ERROR = "api_client_error"
     API_SERVER_ERROR = "api_server_error"
     API_NOT_AVAILABLE = "api_not_available"
+    CONNECTIVITY = "connectivity"
     TIMEOUT = "timeout"
     PARSING = "parsing"
     VALIDATION = "validation"
@@ -158,6 +160,7 @@ def with_error_handling(
     max_retries: int = 3,
     base_delay: float = 10.0,
     max_delay: float = 60.0,
+    return_error_category: bool = False,
 ) -> Callable[[Callable[P, Coroutine[Any, Any, T]]], Callable[P, Coroutine[Any, Any, T | None]]]:
     """Decorator for standardized error handling on collector methods.
 
@@ -175,6 +178,10 @@ def with_error_handling(
         Base delay in seconds for exponential backoff (default: 10.0).
     max_delay : float
         Maximum delay in seconds (default: 60.0).
+    return_error_category : bool
+        Return the classified :class:`ErrorCategory` after a tolerated final
+        failure. Intended for coordinator-owned sub-collections that must keep
+        running while propagating the failure category to domain backoff.
 
     Returns
     -------
@@ -214,6 +221,9 @@ def with_error_handling(
         @functools.wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T | None:
             start_time = time.time()
+
+            def _continued(category: ErrorCategory) -> T | None:
+                return cast(T | None, category if return_error_category else None)
 
             # Extract context and collector instance from self if available
             context: dict[str, Any] = {}
@@ -263,7 +273,7 @@ def with_error_handling(
                             if collector_instance and hasattr(collector_instance, "_track_error"):
                                 collector_instance._track_error(ErrorCategory.API_RATE_LIMIT)
                             if continue_on_error:
-                                return None
+                                return _continued(ErrorCategory.API_RATE_LIMIT)
                             raise CollectorError(
                                 f"{operation} failed after facade retries: {e}",
                                 ErrorCategory.API_RATE_LIMIT,
@@ -327,7 +337,7 @@ def with_error_handling(
                             collector_instance._track_error(ErrorCategory.API_RATE_LIMIT)
 
                         if continue_on_error:
-                            return None
+                            return _continued(ErrorCategory.API_RATE_LIMIT)
                         raise CollectorError(
                             f"{operation} failed after {max_retries} retries: {e}",
                             ErrorCategory.API_RATE_LIMIT,
@@ -349,7 +359,7 @@ def with_error_handling(
                             collector_instance._track_error(ErrorCategory.TIMEOUT)
 
                         if continue_on_error:
-                            return None
+                            return _continued(ErrorCategory.TIMEOUT)
                         raise CollectorError(
                             f"{operation} timed out",
                             ErrorCategory.TIMEOUT,
@@ -420,7 +430,7 @@ def with_error_handling(
                                 collector_instance._track_error(ErrorCategory.API_RATE_LIMIT)
 
                             if continue_on_error:
-                                return None
+                                return _continued(ErrorCategory.API_RATE_LIMIT)
 
                             raise CollectorError(
                                 f"{operation} failed after {max_retries} retries: {error_msg}",
@@ -429,7 +439,12 @@ def with_error_handling(
                             ) from e
 
                         # Determine error category
-                        category = error_category or _categorize_error(e)
+                        # A nested decorated fetch can already have made a
+                        # precise classification.  Never erase it with the
+                        # outer operation's broad default category (#705).
+                        category = categorize_error(e)
+                        if category is ErrorCategory.UNKNOWN and error_category is not None:
+                            category = error_category
 
                         # Create new context with mixed types
                         exc_context: dict[str, Any] = dict(context)
@@ -439,7 +454,7 @@ def with_error_handling(
                             "error": error_msg,
                         })
 
-                        # Special handling for 404 errors. Prefer the structured
+                        # Special handling for 402/404 errors. Prefer the structured
                         # HTTP status code (e.g. meraki.APIError.status) over a bare
                         # substring check: str(APIError) concatenates server-controlled
                         # body text, so a genuine 500 whose message merely contains
@@ -447,7 +462,9 @@ def with_error_handling(
                         # substring heuristic for non-APIError exceptions with no status.
                         status_code = getattr(e, "status", None)
                         is_not_available = (
-                            status_code == 404 if status_code is not None else "404" in error_msg
+                            status_code in {402, 404}
+                            if status_code is not None
+                            else "402" in error_msg or "404" in error_msg
                         )
                         if is_not_available:
                             logger.debug(
@@ -466,7 +483,7 @@ def with_error_handling(
                             collector_instance._track_error(category)
 
                         if continue_on_error:
-                            return None
+                            return _continued(category)
 
                         # Re-raise as CollectorError with context
                         raise CollectorError(
@@ -502,7 +519,7 @@ def with_error_handling(
                     collector_instance._track_error(ErrorCategory.TIMEOUT)
 
                 if continue_on_error:
-                    return None
+                    return _continued(ErrorCategory.TIMEOUT)
                 raise CollectorError(
                     f"{operation} exceeded per-fetch deadline",
                     ErrorCategory.TIMEOUT,
@@ -597,7 +614,7 @@ def _resolve_per_fetch_deadline(instance: Any) -> float | None:
     return float(deadline) if deadline > 0 else None
 
 
-def _categorize_error(error: Exception) -> ErrorCategory:
+def categorize_error(error: Exception) -> ErrorCategory:
     """Categorize an error based on its type and message.
 
     Parameters
@@ -611,6 +628,9 @@ def _categorize_error(error: Exception) -> ErrorCategory:
         The category of the error.
 
     """
+    if isinstance(error, CollectorError):
+        return error.category
+
     error_str = str(error).lower()
     error_type = type(error).__name__
     status = getattr(error, "status", None)
@@ -622,25 +642,33 @@ def _categorize_error(error: Exception) -> ErrorCategory:
     if status is not None:
         if status == 429:
             return ErrorCategory.API_RATE_LIMIT
-        if status == 404:
+        if status in {402, 404}:
             return ErrorCategory.API_NOT_AVAILABLE
-        if status in {400, 401, 403, 405, 406}:
+        if status in {401, 403}:
+            return ErrorCategory.API_AUTH_ERROR
+        if status in {400, 405, 406}:
             return ErrorCategory.API_CLIENT_ERROR
-        if status in {500, 502, 503, 504}:
+        if status in {500, 502, 503, 504, 530}:
             return ErrorCategory.API_SERVER_ERROR
         # Unknown/other status: fall through to the heuristics below.
 
     # Fallback string heuristics for non-APIError exceptions (no .status).
     if "429" in error_str or "rate limit" in error_str:
         return ErrorCategory.API_RATE_LIMIT
-    elif "404" in error_str or "not found" in error_str:
+    elif any(code in error_str for code in ["402", "404"]) or "not found" in error_str:
         return ErrorCategory.API_NOT_AVAILABLE
-    elif any(code in error_str for code in ["400", "401", "403", "405", "406"]):
+    elif any(code in error_str for code in ["401", "403"]):
+        return ErrorCategory.API_AUTH_ERROR
+    elif any(code in error_str for code in ["400", "405", "406"]):
         return ErrorCategory.API_CLIENT_ERROR
-    elif any(code in error_str for code in ["500", "502", "503", "504"]):
+    elif any(code in error_str for code in ["500", "502", "503", "504", "530"]):
         return ErrorCategory.API_SERVER_ERROR
     elif error_type == "TimeoutError" or "timeout" in error_str:
         return ErrorCategory.TIMEOUT
+    elif isinstance(error, (ConnectionError, OSError)) or any(
+        term in error_str for term in ("connection reset", "connection refused", "dns", "tls")
+    ):
+        return ErrorCategory.CONNECTIVITY
     elif "parsing" in error_str or "json" in error_str:
         return ErrorCategory.PARSING
     elif "validation" in error_str or "invalid" in error_str:
@@ -649,10 +677,16 @@ def _categorize_error(error: Exception) -> ErrorCategory:
         return ErrorCategory.UNKNOWN
 
 
+# Backward-compatible private spelling for existing internal callers.
+_categorize_error = categorize_error
+
+
 def validate_response_format(
     response: Any,
     expected_type: type,
     operation: str,
+    *,
+    unwrap_items: bool = True,
 ) -> Any:
     """Validate API response format and extract data.
 
@@ -664,6 +698,10 @@ def validate_response_format(
         Expected type of the response (list or dict).
     operation : str
         Description of the operation for error messages.
+    unwrap_items : bool
+        Whether a response envelope's ``items`` payload should be unwrapped.
+        Set this to ``False`` for endpoints where metadata beside ``items`` is
+        part of the response contract.
 
     Returns
     -------
@@ -701,7 +739,7 @@ def validate_response_format(
         )
 
     # Handle wrapped responses
-    if isinstance(response, dict) and "items" in response:
+    if unwrap_items and isinstance(response, dict) and "items" in response:
         data = response["items"]
     else:
         data = response
@@ -717,7 +755,7 @@ def validate_response_format(
         f"Successfully validated response format for {operation}",
         response_type=expected_type.__name__,
         item_count=len(data) if isinstance(data, (list, dict)) else 1,
-        wrapped="items" in response if isinstance(response, dict) else False,
+        wrapped=unwrap_items and "items" in response if isinstance(response, dict) else False,
     )
 
     return data

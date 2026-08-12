@@ -444,12 +444,15 @@ class TestSolveIntervals:
         b = self.solve(LARGE_SHAPE)
         assert a == b
 
-    def test_over_budget_all_groups_capped(self) -> None:
-        """A tiny budget drives every gated group with headroom to its cap."""
+    def test_over_budget_protects_priority_one_and_two_floors(self) -> None:
+        """A tiny budget preserves availability/sensor floors and stretches lower priorities."""
         solved = self.solve(LARGE_SHAPE, budget=0.001)
         groups = {g.name: g for g in _representative_groups()}
         for name, g in groups.items():
             if not g.gated:
+                continue
+            if g.priority <= 2:
+                assert solved[name].interval_seconds == float(g.floor_seconds)
                 continue
             cap = min(g.floor_seconds * 4.0, 3600.0)
             base = float(g.floor_seconds)

@@ -21,6 +21,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
+from .error_handling import ErrorCategory
 from .logging import get_logger
 
 logger = get_logger(__name__)
@@ -32,6 +33,7 @@ logger = get_logger(__name__)
 SOURCE_ORGANIZATION = "organization"
 SOURCE_DEVICE = "device"
 SOURCE_NETWORK_HEALTH = "network_health"
+SOURCE_GLOBAL = "global"
 
 
 @dataclass
@@ -60,6 +62,8 @@ class OrgHealth:
     org_id: str
     org_name: str
     source_failures: dict[str, int] = field(default_factory=dict)
+    source_backoff_until: dict[str, float] = field(default_factory=dict)
+    source_categories: dict[str, ErrorCategory] = field(default_factory=dict)
     last_success: float = field(default=0.0)
     last_failure: float = field(default=0.0)
     backoff_until: float = field(default=0.0)
@@ -132,25 +136,43 @@ class OrgHealthTracker:
 
         """
         health = self._get_or_create(org_id, org_name)
-        was_backed_off = health.consecutive_failures >= self.max_consecutive_failures
+        was_backed_off = health.source_failures.get(source, 0) >= self.max_consecutive_failures
         health.source_failures[source] = 0
+        health.source_backoff_until[source] = 0.0
+        health.source_categories.pop(source, None)
+        global_category = health.source_categories.get(SOURCE_GLOBAL)
+        if global_category is ErrorCategory.API_AUTH_ERROR:
+            health.source_failures[SOURCE_GLOBAL] = 0
+            health.source_backoff_until[SOURCE_GLOBAL] = 0.0
+            health.source_categories.pop(SOURCE_GLOBAL, None)
+        elif global_category in {ErrorCategory.CONNECTIVITY, ErrorCategory.TIMEOUT}:
+            active_connectivity_sources = [
+                domain
+                for domain, domain_category in health.source_categories.items()
+                if domain != SOURCE_GLOBAL
+                and domain_category in {ErrorCategory.CONNECTIVITY, ErrorCategory.TIMEOUT}
+                and health.source_failures.get(domain, 0) >= self.max_consecutive_failures
+            ]
+            if len(active_connectivity_sources) < 2:
+                health.source_failures[SOURCE_GLOBAL] = 0
+                health.source_backoff_until[SOURCE_GLOBAL] = 0.0
+                health.source_categories.pop(SOURCE_GLOBAL, None)
         health.last_success = time.time()
-        # Only clear backoff if no remaining domain is still over threshold.
-        if health.consecutive_failures < self.max_consecutive_failures:
-            health.backoff_until = 0.0
-            if was_backed_off:
-                logger.warning(
-                    "Organization recovered from backoff",
-                    org_id=org_id,
-                    org_name=org_name,
-                    source=source,
-                )
+        health.backoff_until = max(health.source_backoff_until.values(), default=0.0)
+        if was_backed_off:
+            logger.warning(
+                "Organization failure domain recovered from backoff",
+                org_id=org_id,
+                org_name=org_name,
+                source=source,
+            )
 
     def record_failure(
         self,
         org_id: str,
         org_name: str = "",
         source: str = SOURCE_ORGANIZATION,
+        category: ErrorCategory | None = None,
     ) -> None:
         """Record a failed collection for an org in one failure domain.
 
@@ -166,34 +188,72 @@ class OrgHealthTracker:
             Organization name (used to populate health record on first creation).
         source : str
             Failure domain reporting the failure (one of ``SOURCE_*``).
+        category : ErrorCategory | None
+            Failure classification. Endpoint-unavailable outcomes do not
+            advance the health streak.
 
         """
         health = self._get_or_create(org_id, org_name)
+        if category is ErrorCategory.API_AUTH_ERROR:
+            source = SOURCE_GLOBAL
+        if category is ErrorCategory.API_NOT_AVAILABLE:
+            logger.debug(
+                "Endpoint unavailable for organization; not counting against health",
+                org_id=org_id,
+                org_name=org_name,
+                source=source,
+            )
+            return
+        if category is not None:
+            health.source_categories[source] = category
         health.source_failures[source] = health.source_failures.get(source, 0) + 1
         health.last_failure = time.time()
-        effective = health.consecutive_failures
-        if effective >= self.max_consecutive_failures:
+        failures = health.source_failures[source]
+        if failures >= self.max_consecutive_failures:
             backoff = min(
-                self.base_backoff * (2 ** (effective - self.max_consecutive_failures)),
+                self.base_backoff * (2 ** (failures - self.max_consecutive_failures)),
                 self.max_backoff,
             )
-            health.backoff_until = time.time() + backoff
+            health.source_backoff_until[source] = time.time() + backoff
+            health.backoff_until = max(health.source_backoff_until.values(), default=0.0)
             logger.warning(
                 "Organization entering backoff",
                 org_id=org_id,
                 org_name=org_name,
                 source=source,
-                consecutive_failures=effective,
+                consecutive_failures=failures,
                 backoff_seconds=backoff,
             )
 
-    def should_collect(self, org_id: str) -> bool:
+        if category in {ErrorCategory.CONNECTIVITY, ErrorCategory.TIMEOUT}:
+            active_connectivity_sources = [
+                domain
+                for domain, domain_category in health.source_categories.items()
+                if domain != SOURCE_GLOBAL
+                and domain_category in {ErrorCategory.CONNECTIVITY, ErrorCategory.TIMEOUT}
+                and health.source_failures.get(domain, 0) >= self.max_consecutive_failures
+            ]
+            if len(active_connectivity_sources) >= 2:
+                health.source_failures[SOURCE_GLOBAL] = max(
+                    health.source_failures[domain] for domain in active_connectivity_sources
+                )
+                health.source_backoff_until[SOURCE_GLOBAL] = max(
+                    health.source_backoff_until.get(domain, 0.0)
+                    for domain in active_connectivity_sources
+                )
+                health.source_categories[SOURCE_GLOBAL] = category
+                health.backoff_until = max(health.source_backoff_until.values(), default=0.0)
+
+    def should_collect(self, org_id: str, *, source: str | None = None) -> bool:
         """Check if an org should be collected (not in backoff).
 
         Parameters
         ----------
         org_id : str
             Organization ID.
+        source : str | None
+            Optional failure domain. When supplied, only that domain's
+            backoff is consulted; omitted preserves the aggregate view.
 
         Returns
         -------
@@ -204,7 +264,17 @@ class OrgHealthTracker:
         health = self._orgs.get(org_id)
         if health is None:
             return True
-        return time.time() >= health.backoff_until
+        backoff_until = health.backoff_until
+        if source is not None:
+            # The organization source is reserved for an org-wide verdict
+            # (authentication or multi-domain connectivity). It therefore
+            # suppresses every domain, while ordinary source failures remain
+            # local to their source.
+            backoff_until = max(
+                health.source_backoff_until.get(source, 0.0),
+                health.source_backoff_until.get(SOURCE_GLOBAL, 0.0),
+            )
+        return time.time() >= backoff_until
 
     def get_health(self, org_id: str) -> OrgHealth | None:
         """Get health state for an org.

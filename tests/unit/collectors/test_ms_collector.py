@@ -1322,12 +1322,12 @@ class TestMSCollector:
         result = await ms_collector.collect_port_usage_by_switch("org1", "Org One", devices)
         assert result is True
 
-        # Scoped the org query to the requested serials.
+        # The org-wide endpoint cannot accept unbounded serial filters; filter the response locally.
         mock_api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval.assert_called_once()
         _, kwargs = (
             mock_api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval.call_args
         )
-        assert kwargs["serials"] == ["Q2XX-0001"]
+        assert "serials" not in kwargs
 
         base = {
             "org_id": "org1",

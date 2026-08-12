@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 from pydantic import BaseModel, ConfigDict
 
 from ...core.api_facade import facade_for
-from ...core.error_handling import validate_response_format
+from ...core.error_handling import ErrorCategory, categorize_error, validate_response_format
 from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -121,6 +121,7 @@ class APIUsageCollector(BaseOrganizationCollector):
             self.api.organizations.getOrganizationApiRequests,
             org_id,
             timespan=3600,  # Last 1 hour, aligned with the overview call
+            perPage=1000,
             total_pages="all",
         )
         return cast(
@@ -208,7 +209,7 @@ class APIUsageCollector(BaseOrganizationCollector):
             series=len(by_operation),
         )
 
-    async def collect(self, org_id: str, org_name: str) -> bool:
+    async def collect(self, org_id: str, org_name: str) -> bool | ErrorCategory:
         """Collect API usage metrics.
 
         Parameters
@@ -231,6 +232,7 @@ class APIUsageCollector(BaseOrganizationCollector):
             return True
 
         ttl = self.parent._group_ttl_seconds(EndpointGroupName.ORG_API_USAGE)
+        bulk_complete = True
         try:
             with LogContext(org_id=org_id, org_name=org_name):
                 overview = await self._fetch_api_requests_overview(org_id)
@@ -240,9 +242,6 @@ class APIUsageCollector(BaseOrganizationCollector):
                     has_data=bool(overview),
                     response_type=type(overview).__name__,
                 )
-
-            # Overview fetch succeeded — record the group ran so gating stretches.
-            self.parent._mark_group_ran(EndpointGroupName.ORG_API_USAGE)
 
             if overview and isinstance(overview, dict) and "responseCodeCounts" in overview:
                 response_codes = overview["responseCodeCounts"]
@@ -319,12 +318,15 @@ class APIUsageCollector(BaseOrganizationCollector):
                 with LogContext(org_id=org_id, org_name=org_name):
                     try:
                         await self._collect_requests_by_operation(org_id, org_name, org_data)
-                    except Exception:
+                    except Exception as exc:
+                        bulk_complete = False
+                        self._track_error(categorize_error(exc))
                         logger.warning(
                             "Failed to collect API requests by operation; "
                             "status-code metrics are unaffected",
                             org_id=org_id,
                             org_name=org_name,
+                            complete=False,
                             exc_info=True,
                         )
             else:
@@ -337,9 +339,15 @@ class APIUsageCollector(BaseOrganizationCollector):
                     else False,
                 )
 
-            # Reached only when no exception was raised (success or benign
-            # no-data). Signal success so the parent does not count this cycle
-            # as a failure (F-172).
+            # A deadline-cut or otherwise failed bulk enrichment must not mark
+            # the endpoint group successful. The parent collector's end-of-run
+            # accounting records the admitted-but-unmarked group failure, while
+            # the primary overview metrics above remain available (#699).
+            if bulk_complete:
+                self.parent._mark_group_ran(EndpointGroupName.ORG_API_USAGE)
+
+            # The primary overview succeeded (or returned benign no-data), so
+            # the org itself remains healthy even if the enrichment was partial.
             return True
 
         except Exception as e:
@@ -358,4 +366,4 @@ class APIUsageCollector(BaseOrganizationCollector):
                 org_id=org_id,
                 org_name=org_name,
             )
-            return False
+            return categorize_error(e)

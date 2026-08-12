@@ -11,6 +11,7 @@ _OWNED_ROOTS = (
     _SOURCE_ROOT / "services",
     _SOURCE_ROOT / "collectors",
     _SOURCE_ROOT / "core" / "api_helpers.py",
+    _SOURCE_ROOT / "core" / "discovery.py",
 )
 _EXCEPTIONS = {
     _SOURCE_ROOT / "collectors" / "devices" / "mr" / "client_logs.py",
@@ -44,12 +45,12 @@ def _bare_sdk_thread_calls() -> list[str]:
 
 
 def _is_sdk_method(node: ast.expr) -> bool:
-    """Whether an attribute access is rooted at a collector's ``self.api``."""
+    """Whether an attribute access is rooted at ``self.api`` or an API parameter."""
     while isinstance(node, ast.Attribute):
         if node.attr == "api" and isinstance(node.value, ast.Name) and node.value.id == "self":
             return True
         node = node.value
-    return False
+    return isinstance(node, ast.Name) and node.id == "api"
 
 
 def test_698_no_raw_sdk_thread_calls_outside_facade() -> None:

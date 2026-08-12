@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ..core.error_handling import ErrorCategory
 from ..core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -66,6 +67,11 @@ class SubCollectorMixin:
         """
         if hasattr(self.parent, "_track_api_call"):
             self.parent._track_api_call(method_name)
+
+    def _track_error(self, category: ErrorCategory) -> None:
+        """Track a classified sub-collector failure on the owning collector."""
+        if hasattr(self.parent, "_track_error"):
+            self.parent._track_error(category)
 
     def update_api(self, api: DashboardAPI) -> None:
         """Update the API client instance.

@@ -787,8 +787,8 @@ class ServerSettings(BaseModel):
             "Bearer token required to enable state-changing POST control "
             "endpoints (/api/collectors/trigger, /api/clients/clear-dns-cache). "
             "When unset (default) these endpoints fail closed with HTTP 401 and "
-            "their UI controls are disabled. When set, requests must present "
-            "'Authorization: Bearer <token>'."
+            "their UI controls are disabled. When set, the browser controls are hidden and "
+            "requests must present 'Authorization: Bearer <token>'."
         ),
     )
 

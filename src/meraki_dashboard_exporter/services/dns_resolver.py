@@ -8,6 +8,7 @@ import socket
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from typing import cast
 
 import structlog
 
@@ -61,8 +62,12 @@ class DNSResolver:
         # executor (`run_in_executor(None, ...)`) would let hung DNS threads
         # accumulate in the SAME pool `asyncio.to_thread()` uses for every Meraki
         # API call, starving it. A private pool caps the blast radius to DNS.
-        # max_workers matches the resolve_multiple concurrency cap (Semaphore(5)).
-        self._executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="dns-resolver")
+        # max_workers matches the bounded resolve_multiple worker pool.
+        self.max_concurrent_lookups = settings.clients.dns_max_concurrent_lookups
+        self._executor = ThreadPoolExecutor(
+            max_workers=self.max_concurrent_lookups,
+            thread_name_prefix="dns-resolver",
+        )
 
         # Statistics tracking
         self._stats = {
@@ -70,6 +75,10 @@ class DNSResolver:
             "successful_lookups": 0,
             "failed_lookups": 0,
             "cache_hits": 0,
+            "queue_wait_seconds": 0.0,
+            "queue_wait_count": 0,
+            "queue_peak_depth": 0,
+            "lookup_timeouts": 0,
         }
 
     def track_client(self, client_id: str, ip: str | None, description: str | None) -> bool:
@@ -275,15 +284,20 @@ class DNSResolver:
             Full hostname or None if resolution fails.
 
         """
+        timeout_sentinel = object()
         try:
             # Reverse DNS via the system resolver, always bounded by the
             # configured dns_timeout (F-076).
-            return await with_timeout(
+            result = await with_timeout(
                 self._system_dns_lookup(ip),
                 timeout=self.timeout,
                 operation=f"DNS lookup for {ip}",
-                default=None,
+                default=timeout_sentinel,
             )
+            if result is timeout_sentinel:
+                self._stats["lookup_timeouts"] += 1
+                return None
+            return cast(str | None, result)
         except Exception as e:
             logger.debug("DNS lookup failed", ip=ip, error=str(e))
             return None
@@ -335,6 +349,10 @@ class DNSResolver:
             logger.debug("No clients to resolve")
             return {}
 
+        if not self.settings.clients.dns_reverse_lookup_enabled:
+            logger.debug("Reverse DNS lookups are disabled")
+            return {}
+
         # Track client changes and filter IPs to resolve
         ips_to_resolve = []
         for client_id, ip, description in clients:
@@ -352,18 +370,46 @@ class DNSResolver:
             ips_to_resolve=len(ips_to_resolve),
         )
 
-        # Resolve concurrently with limited concurrency (reduced from 10 to 5)
-        semaphore = asyncio.Semaphore(5)  # Limit concurrent DNS lookups
+        # This gauge reports the batch high-water mark, rather than retaining
+        # an obsolete peak after a later, smaller batch.
+        self._stats["queue_peak_depth"] = 0
 
-        async def resolve_with_limit(client_id: str, ip: str) -> tuple[str, str | None]:
-            async with semaphore:
-                hostname = await self.resolve_hostname(ip, client_id)
-                return ip, hostname
-
-        results = await asyncio.gather(
-            *[resolve_with_limit(client_id, ip) for client_id, ip in ips_to_resolve],
-            return_exceptions=True,
+        # A bounded queue means only one producer plus ``max_concurrent_lookups``
+        # workers exist, even for the 25,000-client cap. A semaphore around a
+        # whole-list gather limits execution but still allocates one coroutine and
+        # future per client (#709).
+        queue: asyncio.Queue[tuple[str, str, float] | None] = asyncio.Queue(
+            maxsize=self.max_concurrent_lookups
         )
+        results: list[tuple[str, str | None] | Exception] = []
+
+        async def produce() -> None:
+            for client_id, ip in ips_to_resolve:
+                await queue.put((client_id, ip, time.perf_counter()))
+                self._stats["queue_peak_depth"] = max(
+                    self._stats["queue_peak_depth"], queue.qsize()
+                )
+            for _ in range(self.max_concurrent_lookups):
+                await queue.put(None)
+
+        async def worker() -> None:
+            while True:
+                item = await queue.get()
+                try:
+                    if item is None:
+                        return
+                    client_id, ip, enqueued_at = item
+                    self._stats["queue_wait_seconds"] += time.perf_counter() - enqueued_at
+                    self._stats["queue_wait_count"] += 1
+                    results.append((ip, await self.resolve_hostname(ip, client_id)))
+                except Exception as exc:
+                    results.append(exc)
+                finally:
+                    queue.task_done()
+
+        producer = asyncio.create_task(produce())
+        workers = [asyncio.create_task(worker()) for _ in range(self.max_concurrent_lookups)]
+        await asyncio.gather(producer, *workers)
 
         # Build result dictionary
         resolved = {}
@@ -411,6 +457,10 @@ class DNSResolver:
             "successful_lookups": 0,
             "failed_lookups": 0,
             "cache_hits": 0,
+            "queue_wait_seconds": 0.0,
+            "queue_wait_count": 0,
+            "queue_peak_depth": 0,
+            "lookup_timeouts": 0,
         }
         self._total_resolution_time = 0.0
         logger.info("DNS cache cleared", entries_cleared=old_size)
@@ -459,9 +509,13 @@ class DNSResolver:
             "cache_hits": cache_hits,
             "cache_hit_ratio": hit_ratio,
             "total_resolution_time": self._total_resolution_time,
+            "queue_wait_seconds": self._stats["queue_wait_seconds"],
+            "queue_wait_count": self._stats["queue_wait_count"],
+            "queue_peak_depth": self._stats["queue_peak_depth"],
+            "lookup_timeouts": self._stats["lookup_timeouts"],
         }
 
-    def get_lookup_stats(self) -> dict[str, int]:
+    def get_lookup_stats(self) -> dict[str, float]:
         """Get DNS lookup statistics.
 
         Returns

@@ -30,7 +30,7 @@ async def process_in_batches_with_errors[T, R](
     max_batch_delay: float | None = None,
     item_description: str = "item",
     error_context_func: Callable[[T], dict[str, Any]] | None = None,
-    on_error: Callable[[], None] | None = None,
+    on_error: Callable[[Exception], None] | None = None,
 ) -> list[tuple[T, R | Exception]]:
     """Process items in batches with error handling and logging.
 
@@ -56,8 +56,8 @@ async def process_in_batches_with_errors[T, R](
         Description of items for logging (e.g., "device", "network").
     error_context_func : Callable[[T], dict[str, Any]] | None
         Optional function to extract error context from item.
-    on_error : Callable[[], None] | None
-        Optional sink invoked once per swallowed per-item exception (#621).
+    on_error : Callable[[Exception], None] | None
+        Optional sink invoked with each swallowed per-item exception (#621).
         Callers typically bind this to their collector's ``_track_error`` so
         per-item batch failures surface in ``meraki_exporter_collector_errors_total``.
         Control flow is unchanged — partial results are still returned.
@@ -119,9 +119,9 @@ async def process_in_batches_with_errors[T, R](
                 # Surface the swallowed per-item failure to the caller's error
                 # sink (#621). Guarded so a misbehaving sink never breaks batch
                 # processing or loses partial results.
-                if on_error is not None:
+                if on_error is not None and isinstance(result, Exception):
                     try:
-                        on_error()
+                        on_error(result)
                     except Exception:
                         logger.exception("on_error sink raised while reporting batch item failure")
 

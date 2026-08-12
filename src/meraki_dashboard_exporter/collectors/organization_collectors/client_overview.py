@@ -6,7 +6,7 @@ import time
 from typing import TYPE_CHECKING, Any, cast
 
 from ...core.api_facade import facade_for
-from ...core.error_handling import validate_response_format
+from ...core.error_handling import ErrorCategory, categorize_error, validate_response_format
 from ...core.label_helpers import create_org_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -72,7 +72,7 @@ class ClientOverviewCollector(BaseOrganizationCollector):
             ),
         )
 
-    async def collect(self, org_id: str, org_name: str) -> bool:
+    async def collect(self, org_id: str, org_name: str) -> bool | ErrorCategory:
         """Collect client overview metrics.
 
         Parameters
@@ -246,4 +246,4 @@ class ClientOverviewCollector(BaseOrganizationCollector):
             )
             # A real (non-404) failure must be surfaced to OrgHealthTracker via
             # the parent (F-172).
-            return False
+            return categorize_error(e)

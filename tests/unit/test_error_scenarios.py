@@ -805,14 +805,14 @@ class TestErrorCategorization:
         assert _categorize_error(error) == ErrorCategory.API_CLIENT_ERROR
 
     def test_categorize_client_error_401(self) -> None:
-        """401 Unauthorized should map to API_CLIENT_ERROR."""
+        """401 Unauthorized should map to the org-wide authentication category."""
         error = Exception("401 Unauthorized")
-        assert _categorize_error(error) == ErrorCategory.API_CLIENT_ERROR
+        assert _categorize_error(error) == ErrorCategory.API_AUTH_ERROR
 
     def test_categorize_client_error_403(self) -> None:
-        """403 Forbidden should map to API_CLIENT_ERROR."""
+        """403 Forbidden should map to the org-wide authentication category."""
         error = Exception("403 Forbidden")
-        assert _categorize_error(error) == ErrorCategory.API_CLIENT_ERROR
+        assert _categorize_error(error) == ErrorCategory.API_AUTH_ERROR
 
     def test_categorize_server_error_500(self) -> None:
         """500 Internal Server Error should map to API_SERVER_ERROR."""
@@ -872,8 +872,7 @@ class TestCollectorContextExtraction:
 
         await call_api(collector)
 
-        # error_category parameter forces API_CLIENT_ERROR
-        assert ErrorCategory.API_CLIENT_ERROR in collector._tracked_errors
+        assert ErrorCategory.API_AUTH_ERROR in collector._tracked_errors
 
     async def test_error_tracking_called_when_retries_exhausted(self) -> None:
         """_track_error should be called when retry limit is exhausted."""

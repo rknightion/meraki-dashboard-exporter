@@ -24,7 +24,7 @@ from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
-from prometheus_client import Gauge
+from prometheus_client import REGISTRY, Counter, Gauge
 
 from .constants.metrics_constants import CollectorMetricName
 from .logging import get_logger
@@ -60,6 +60,8 @@ _GATE_TOLERANCE = 0.9
 
 # Multiplicative step applied to the chosen group's interval per stretch round.
 _STRETCH_STEP = 1.5
+
+_PROFILE_PRIORITIES = {"availability": 1, "standard": 3, "full": 4}
 
 
 class EndpointGroupName(StrEnum):
@@ -301,7 +303,9 @@ def solve_intervals(
     while demand() > target:
         candidates: list[tuple[EndpointGroup, float]] = []
         for g in group_list:
-            if pinned[g.name] or not g.gated:
+            # Priority 1/2 are the availability contract.  A plan which cannot
+            # afford them is reported honestly; it must never make up-ness stale.
+            if pinned[g.name] or not g.gated or g.priority <= 2:
                 continue
             # Disabled groups contribute zero demand and never stretch, so their
             # SolvedInterval stays pinned at base (interval never flaps) — #623.
@@ -349,6 +353,13 @@ class EndpointScheduler:
     _utilization_gauge: ClassVar[Gauge | None] = None
     _interval_gauge: ClassVar[Gauge | None] = None
     _stretch_gauge: ClassVar[Gauge | None] = None
+    _over_budget_gauge: ClassVar[Gauge | None] = None
+    _group_success_gauge: ClassVar[Gauge | None] = None
+    _group_attempts: ClassVar[Counter | None] = None
+    _group_failures: ClassVar[Counter | None] = None
+    _group_skips: ClassVar[Counter | None] = None
+    _group_shed_gauge: ClassVar[Gauge | None] = None
+    _profile_info: ClassVar[Gauge | None] = None
 
     def __init__(self, settings: Settings, rate_limiter: OrgRateLimiter) -> None:
         """Initialize the scheduler.
@@ -373,6 +384,11 @@ class EndpointScheduler:
         # most recent attempt failed (last_attempt > last_ran, or never ran), the
         # next attempt is spaced by failure_retry_seconds to avoid a hot loop.
         self._last_attempt: dict[EndpointGroupName, float] = {}
+        self._attempts: dict[EndpointGroupName, int] = {}
+        self._failed_attempt: dict[EndpointGroupName, float] = {}
+        self._last_success_timestamp: dict[EndpointGroupName, float] = {}
+        self._shed_groups: set[EndpointGroupName] = set()
+        self._profile_threshold_demand_rps: float = 0.0
         self._last_shape: OrgShape | None = None
         self._last_resolve_ts: float | None = None
         self._budget_used_at_last_solve: float | None = None
@@ -388,6 +404,33 @@ class EndpointScheduler:
         if section is None:
             return default
         return getattr(section, name, default)
+
+    def configured_profile(self) -> str | None:
+        """Return the explicitly selected collection profile, if any."""
+        collectors = getattr(self._settings, "collectors", None)
+        value = getattr(collectors, "profile", None)
+        return str(value) if value is not None else None
+
+    def active_profile(self) -> str:
+        """Return the selected profile; absent selection behaves as standard."""
+        return self.configured_profile() or "standard"
+
+    def _groups_for_profile(self, profile: str) -> list[EndpointGroup]:
+        priority = _PROFILE_PRIORITIES[profile]
+        return [group for group in self._groups.values() if group.priority <= priority]
+
+    def profile_allows(self, group: EndpointGroupName) -> bool:
+        """Whether the active profile includes a registered endpoint group."""
+        declared = self._groups.get(group)
+        return (
+            declared is not None and declared.priority <= _PROFILE_PRIORITIES[self.active_profile()]
+        )
+
+    def requires_explicit_profile(self) -> bool:
+        """Whether the default standard plan exceeds its solved budget target."""
+        return self.configured_profile() is None and self._profile_threshold_demand_rps > (
+            (self._budget_used_at_last_solve or 0.0) * float(self._sched("target_utilization"))
+        )
 
     def configured_budget_rps(self) -> float:
         """Configured API budget: requests_per_second × shared_fraction."""
@@ -454,8 +497,19 @@ class EndpointScheduler:
         effective_budget = self._effective_budget_rps()
         solve_budget = math.inf if mode == "fixed" else effective_budget
 
+        standard = solve_intervals(
+            self._groups_for_profile("standard"),
+            shape,
+            solve_budget,
+            target_utilization,
+            self._collect_overrides(),
+            float(self._sched("max_stretch_factor")),
+            float(self._sched("max_interval_seconds")),
+        )
+        self._profile_threshold_demand_rps = sum(item.demand_rps for item in standard.values())
+        profile = self.active_profile()
         solved = solve_intervals(
-            self._groups.values(),
+            self._groups_for_profile(profile),
             shape,
             solve_budget,
             target_utilization,
@@ -466,6 +520,19 @@ class EndpointScheduler:
 
         total_demand = sum(s.demand_rps for s in solved.values())
         over_budget = bool(solved) and total_demand > effective_budget * target_utilization
+        self._shed_groups = set()
+        remaining = total_demand
+        if over_budget:
+            # Shed only protected-last classes.  The order is deterministic and
+            # keeps all priority-1/2 groups at their declared floors.
+            for name, item in sorted(
+                solved.items(), key=lambda row: (-self._groups[row[0]].priority, str(row[0]))
+            ):
+                if remaining <= effective_budget * target_utilization:
+                    break
+                if self._groups[name].priority >= 3 and self._groups[name].gated:
+                    self._shed_groups.add(name)
+                    remaining -= item.demand_rps
 
         self._solved = solved
         self._last_shape = shape
@@ -484,6 +551,7 @@ class EndpointScheduler:
         logger.info(
             "Scheduler resolved endpoint-group intervals",
             mode=mode,
+            profile=profile,
             groups=len(solved),
             total_demand_rps=round(total_demand, 3),
             budget_rps=round(configured_budget, 3),
@@ -567,7 +635,16 @@ class EndpointScheduler:
             assert last_attempt is not None
             if (now - last_attempt) < self._failure_retry_seconds():
                 return False
+        if not self.profile_allows(group) or group in self._shed_groups:
+            skips = type(self)._group_skips
+            if skips is not None:
+                skips.labels(group=str(group)).inc()
+            return False
         self._last_attempt[group] = now
+        self._attempts[group] = self._attempts.get(group, 0) + 1
+        attempts = type(self)._group_attempts
+        if attempts is not None:
+            attempts.labels(group=str(group)).inc()
         return True
 
     def next_due(self, group: EndpointGroupName, now: float | None = None) -> float:
@@ -606,6 +683,8 @@ class EndpointScheduler:
             declared = self._groups.get(group)
             if declared is None or not declared.gated:
                 continue
+            if not self.profile_allows(group) or group in self._shed_groups:
+                continue
             if (
                 declared.enabled_fn is not None
                 and self._last_shape is not None
@@ -621,6 +700,28 @@ class EndpointScheduler:
     def mark_ran(self, group: EndpointGroupName, now: float | None = None) -> None:
         """Record a successful fetch (call only after success; failures retry)."""
         self._last_ran[group] = time.monotonic() if now is None else now
+        timestamp = time.time()
+        self._last_success_timestamp[group] = timestamp
+        success_gauge = type(self)._group_success_gauge
+        if success_gauge is not None:
+            success_gauge.labels(group=str(group)).set(timestamp)
+
+    def mark_failed(self, group: EndpointGroupName) -> None:
+        """Record a group failure where the owning collector can attribute one."""
+        attempt = self._last_attempt.get(group)
+        last_success = self._last_ran.get(group)
+        if attempt is None or (last_success is not None and last_success >= attempt):
+            return
+        if self._failed_attempt.get(group) == attempt:
+            return
+        self._failed_attempt[group] = attempt
+        failures = type(self)._group_failures
+        if failures is not None:
+            failures.labels(group=str(group)).inc()
+
+    def is_shed(self, group: EndpointGroupName) -> bool:
+        """Whether an over-budget profile has deferred this lower-priority group."""
+        return group in self._shed_groups
 
     def is_enabled(self, group: EndpointGroupName) -> bool:
         """True when the group is registered and enabled against the last shape.
@@ -630,6 +731,8 @@ class EndpointScheduler:
         """
         declared = self._groups.get(group)
         if declared is None:
+            return False
+        if not self.profile_allows(group) or group in self._shed_groups:
             return False
         if declared.enabled_fn is None or self._last_shape is None:
             return True
@@ -686,6 +789,9 @@ class EndpointScheduler:
                 "cost_per_cycle": solved.cost_per_cycle if solved else None,
                 "demand_rps": solved.demand_rps if solved else None,
                 "last_ran_ago_seconds": (now - last_ran) if last_ran is not None else None,
+                "last_success_timestamp_seconds": self._last_success_timestamp.get(name),
+                "attempts": self._attempts.get(name, 0),
+                "shed": name in self._shed_groups,
                 # #623: True when always-enabled, no shape yet, or enabled against last shape.
                 "enabled": (
                     declared.enabled_fn is None
@@ -695,6 +801,12 @@ class EndpointScheduler:
             })
         return {
             "mode": str(self._sched("mode")),
+            "profile": {
+                "selected": self.configured_profile(),
+                "active": self.active_profile(),
+                "threshold_demand_rps": self._profile_threshold_demand_rps,
+                "requires_explicit": self.requires_explicit_profile(),
+            },
             "org_shape": asdict(self._last_shape) if self._last_shape is not None else None,
             "budget_rps": self.configured_budget_rps(),
             "effective_budget_rps": self._effective_budget_rps(),
@@ -709,7 +821,12 @@ class EndpointScheduler:
 
     @classmethod
     def _init_metrics(cls) -> None:
-        if cls._metrics_initialized:
+        # Test suites can clear the default registry between cases while this
+        # class remains imported. Recreate scheduler metrics if that happened.
+        if (
+            cls._metrics_initialized
+            and CollectorMetricName.SCHEDULER_OVER_BUDGET.value in REGISTRY._names_to_collectors
+        ):
             return
         cls._demand_gauge = Gauge(
             CollectorMetricName.SCHEDULER_ESTIMATED_DEMAND_RPS.value,
@@ -746,6 +863,40 @@ class EndpointScheduler:
             "solver resolve)",
             labelnames=[LabelName.GROUP.value],
         )
+        cls._over_budget_gauge = Gauge(
+            CollectorMetricName.SCHEDULER_OVER_BUDGET.value,
+            "Whether the selected scheduler profile exceeds its API budget after solving (1=yes).",
+        )
+        cls._group_success_gauge = Gauge(
+            CollectorMetricName.SCHEDULER_GROUP_SUCCESS_TIMESTAMP_SECONDS.value,
+            "Unix timestamp of the last successful endpoint-group fetch.",
+            labelnames=[LabelName.GROUP.value],
+        )
+        cls._group_attempts = Counter(
+            CollectorMetricName.SCHEDULER_GROUP_ATTEMPTS_TOTAL.value,
+            "Total endpoint-group attempts admitted by the scheduler.",
+            labelnames=[LabelName.GROUP.value],
+        )
+        cls._group_failures = Counter(
+            CollectorMetricName.SCHEDULER_GROUP_FAILURES_TOTAL.value,
+            "Total endpoint-group failures attributed by owning collectors.",
+            labelnames=[LabelName.GROUP.value],
+        )
+        cls._group_skips = Counter(
+            CollectorMetricName.SCHEDULER_GROUP_SKIPS_TOTAL.value,
+            "Total endpoint-group executions deferred by over-budget shedding.",
+            labelnames=[LabelName.GROUP.value],
+        )
+        cls._group_shed_gauge = Gauge(
+            CollectorMetricName.SCHEDULER_GROUP_SHED.value,
+            "Whether an endpoint group is currently deferred by the over-budget policy.",
+            labelnames=[LabelName.GROUP.value],
+        )
+        cls._profile_info = Gauge(
+            CollectorMetricName.COLLECTION_PROFILE_INFO.value,
+            "Active collection profile (exactly one profile label has value 1).",
+            labelnames=[LabelName.PROFILE.value],
+        )
         cls._metrics_initialized = True
 
     def _emit_gauges(
@@ -760,6 +911,13 @@ class EndpointScheduler:
             cls._utilization_gauge.set(
                 total_demand / effective_budget if effective_budget > 0 else 0.0
             )
+        if cls._over_budget_gauge is not None:
+            cls._over_budget_gauge.set(1.0 if self._over_budget else 0.0)
+        if cls._profile_info is not None:
+            for profile in _PROFILE_PRIORITIES:
+                cls._profile_info.labels(profile=profile).set(
+                    1.0 if profile == self.active_profile() else 0.0
+                )
         for name, solved in self._solved.items():
             if cls._demand_gauge is not None:
                 cls._demand_gauge.labels(group=str(name)).set(solved.demand_rps)
@@ -767,3 +925,7 @@ class EndpointScheduler:
                 cls._interval_gauge.labels(group=str(name)).set(solved.interval_seconds)
             if cls._stretch_gauge is not None:
                 cls._stretch_gauge.labels(group=str(name)).set(solved.stretch_factor)
+            if cls._group_shed_gauge is not None:
+                cls._group_shed_gauge.labels(group=str(name)).set(
+                    1.0 if name in self._shed_groups else 0.0
+                )

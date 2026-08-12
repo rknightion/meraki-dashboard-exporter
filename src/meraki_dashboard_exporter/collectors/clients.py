@@ -29,6 +29,10 @@ from ..services.dns_resolver import DNSResolver
 
 logger = structlog.get_logger(__name__)
 
+# The sanitizer collapses repeated and edge underscores, so this reserved
+# label cannot collide with a genuine application name.
+_APPLICATION_OTHER_LABEL = "__other__"
+
 # Per-network wireless-client cap used to estimate signal-quality demand (mirrors
 # APISettings.client_signal_quality_max_clients default; cost_fn takes only the
 # OrgShape, so the cap is encoded here rather than read from settings).
@@ -260,6 +264,19 @@ class ClientsCollector(MetricCollector):
         self.dns_resolution_seconds = self._create_counter(
             CollectorMetricName.CLIENT_DNS_RESOLUTION_SECONDS_TOTAL,
             "Cumulative seconds spent performing reverse-DNS lookups (excludes cache hits)",
+        )
+
+        self.dns_queue_depth = self._create_gauge(
+            CollectorMetricName.CLIENT_DNS_QUEUE_DEPTH,
+            "Peak reverse-DNS work queue depth in the most recent resolution batch",
+        )
+        self.dns_queue_wait_seconds = self._create_gauge(
+            CollectorMetricName.CLIENT_DNS_QUEUE_WAIT_SECONDS,
+            "Mean reverse-DNS work queue wait time in seconds over the process lifetime",
+        )
+        self.dns_lookups_timeout = self._create_counter(
+            CollectorMetricName.CLIENT_DNS_LOOKUPS_TIMEOUT_TOTAL,
+            "Total reverse-DNS lookups that exceeded clients.dns_timeout",
         )
 
         # Client store metrics
@@ -840,6 +857,61 @@ class ClientsCollector(MetricCollector):
 
         return result if result else "unknown"
 
+    def _bound_application_usage(
+        self, application_usage: list[dict[str, Any]]
+    ) -> dict[str, tuple[float, float]]:
+        """Bound one client's application rows with deterministic top-N selection.
+
+        Application usage is aggregated after label sanitization. The retained
+        top-N ranks by total bytes descending, then sanitized label ascending;
+        the latter makes equal-traffic ties stable between scrapes. Configured
+        allowlisted labels are retained in addition to the top-N. All remaining
+        usage is summed into the reserved ``__other__`` label when enabled.
+        """
+        totals: dict[str, tuple[float, float]] = {}
+        for row in application_usage:
+            application = self._sanitize_application_name(row.get("application"))
+            received = float(row.get("received", 0))
+            sent = float(row.get("sent", 0))
+            previous_received, previous_sent = totals.get(application, (0.0, 0.0))
+            totals[application] = (previous_received + received, previous_sent + sent)
+
+        allowlist = {
+            self._sanitize_application_name(application)
+            for application in self.settings.clients.application_allowlist
+        }
+        ranked = sorted(
+            totals,
+            key=lambda application: (
+                -(totals[application][0] + totals[application][1]),
+                application,
+            ),
+        )
+        selected = set(ranked[: self.settings.clients.application_top_n]) | (
+            allowlist & totals.keys()
+        )
+        bounded = {application: totals[application] for application in selected}
+
+        if self.settings.clients.application_other_bucket:
+            other_received = sum(
+                received
+                for application, (received, _sent) in totals.items()
+                if application not in selected
+            )
+            other_sent = sum(
+                sent
+                for application, (_received, sent) in totals.items()
+                if application not in selected
+            )
+            if any(application not in selected for application in totals):
+                selected_received, selected_sent = bounded.get(_APPLICATION_OTHER_LABEL, (0.0, 0.0))
+                bounded[_APPLICATION_OTHER_LABEL] = (
+                    selected_received + other_received,
+                    selected_sent + other_sent,
+                )
+
+        return bounded
+
     def _determine_hostname(
         self,
         client: NetworkClient,
@@ -1201,13 +1273,11 @@ class ClientsCollector(MetricCollector):
                     if not client_id or client_id not in client_map:
                         continue
 
-                    # Process each application's usage
-                    for app_usage in client_usage.get("applicationUsage", []):
-                        app_name = app_usage.get("application", "unknown")
-                        sanitized_app = self._sanitize_application_name(app_name)
-
-                        received_kb = app_usage.get("received", 0)
-                        sent_kb = app_usage.get("sent", 0)
+                    # Bound the per-client application dimension before metric
+                    # emission. See _bound_application_usage for the stable tie-break.
+                    for sanitized_app, (received_kb, sent_kb) in self._bound_application_usage(
+                        client_usage.get("applicationUsage", [])
+                    ).items():
                         total_kb = received_kb + sent_kb
 
                         # Create client labels using helper (ID-only + type -- #533)
@@ -1246,7 +1316,7 @@ class ClientsCollector(MetricCollector):
                         logger.debug(
                             "Set application usage metrics",
                             client_id=client_id,
-                            application=app_name,
+                            application=sanitized_app,
                             sanitized_app=sanitized_app,
                             sent_kb=sent_kb,
                             received_kb=received_kb,
@@ -1476,6 +1546,11 @@ class ClientsCollector(MetricCollector):
         self.dns_cache_expired.set(dns_stats["expired_entries"])
         # Cache-hit ratio is a point-in-time ratio gauge, not a delta (#319).
         self.dns_cache_hit_ratio.set(dns_stats["cache_hit_ratio"])
+        self.dns_queue_depth.set(dns_stats["queue_peak_depth"])
+        queue_wait_count = dns_stats["queue_wait_count"]
+        self.dns_queue_wait_seconds.set(
+            dns_stats["queue_wait_seconds"] / queue_wait_count if queue_wait_count else 0.0
+        )
 
         # Update DNS lookup counters (these are cumulative counters)
         # We need to track the difference since last update
@@ -1490,6 +1565,7 @@ class ClientsCollector(MetricCollector):
             resolution_delta = (
                 dns_stats["total_resolution_time"] - self._last_dns_stats["total_resolution_time"]
             )
+            timeout_delta = dns_stats["lookup_timeouts"] - self._last_dns_stats["lookup_timeouts"]
 
             # Increment counters by the delta using inc()
             if total_delta > 0:
@@ -1502,6 +1578,8 @@ class ClientsCollector(MetricCollector):
                 self.dns_lookups_cached.inc(cached_delta)
             if resolution_delta > 0:
                 self.dns_resolution_seconds.inc(resolution_delta)
+            if timeout_delta > 0:
+                self.dns_lookups_timeout.inc(timeout_delta)
         else:
             # First run - set initial values by incrementing from 0
             if dns_stats["total_lookups"] > 0:
@@ -1514,6 +1592,8 @@ class ClientsCollector(MetricCollector):
                 self.dns_lookups_cached.inc(dns_stats["cache_hits"])
             if dns_stats["total_resolution_time"] > 0:
                 self.dns_resolution_seconds.inc(dns_stats["total_resolution_time"])
+            if dns_stats["lookup_timeouts"] > 0:
+                self.dns_lookups_timeout.inc(dns_stats["lookup_timeouts"])
 
         # Store current stats for next update
         self._last_dns_stats = dns_stats.copy()

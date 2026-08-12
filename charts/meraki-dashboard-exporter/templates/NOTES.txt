@@ -12,6 +12,10 @@ Health endpoints:
   Liveness:  http://localhost:{{ .Values.service.port }}/health
   Readiness: http://localhost:{{ .Values.service.port }}/ready
 
+`/ready` is a startup gate: it becomes ready after the initial required
+collection succeeds and does not become stale later. Use `/health` for the
+dead-man check and Prometheus scheduler success timestamps for freshness.
+
 {{- if .Values.serviceMonitor.enabled }}
 
 A Prometheus Operator ServiceMonitor has been created. Ensure your Prometheus

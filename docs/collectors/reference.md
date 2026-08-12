@@ -12,7 +12,7 @@ Each collector owns one or more scheduler endpoint groups and runs its own group
 | Collector | Purpose | Metrics | Notes |
 |-----------|---------|---------|-------|
 | `AlertsCollector` | Collector for Meraki assurance alerts. | 5 |  |
-| `ClientsCollector` | Collector for client-level metrics across all networks. | 25 | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `ClientsCollector` | Collector for client-level metrics across all networks. | 28 | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `ConfigCollector` | Collector for configuration and security settings. | 17 |  |
 | `DeviceCollector` | Collector for device-level metrics. | 6 |  |
 | `InsightCollector` | Collector for Meraki Insight application-health metrics (#613). | 10 |  |

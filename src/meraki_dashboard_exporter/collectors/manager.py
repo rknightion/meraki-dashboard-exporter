@@ -523,6 +523,16 @@ class CollectorManager:
         # degrades to floors/heartbeats. The first tier cycles below then run with
         # every gate open (never-ran => due), preserving today's warm startup.
         await self._resolve_and_log_schedule()
+        if self.scheduler.requires_explicit_profile():
+            diagnostics = self.scheduler.diagnostics()
+            profile = diagnostics["profile"]
+            raise RuntimeError(
+                "The solved standard collection plan requires an explicit "
+                "MERAKI_EXPORTER_COLLECTORS__PROFILE choice: estimated demand "
+                f"{profile['threshold_demand_rps']:.3f} rps exceeds the budget target "
+                f"{diagnostics['effective_budget_rps'] * diagnostics['target_utilization']:.3f} "
+                "rps. Choose availability, standard, or full."
+            )
 
         # Validate the network filter resolves to at least one network somewhere.
         if self.settings.network_filter.is_active:
@@ -531,7 +541,7 @@ class CollectorManager:
         # Collect one collector at a time (priority order) to bound startup load.
         for collector in self._ordered_collectors():
             try:
-                await self.run_collector_once(collector)
+                await self.run_collector_once(collector, force=True)
                 # Small delay between collectors to avoid connection pool exhaustion
                 await asyncio.sleep(1)
             except Exception:
@@ -544,7 +554,36 @@ class CollectorManager:
         # Publish the per-collector cadence gauges now that a schedule exists.
         self._emit_cadence_gauges()
 
-    async def _resolve_and_log_schedule(self) -> None:
+    async def validate_profile_selection(self) -> None:
+        """Resolve the startup plan and reject an ambiguous over-budget profile.
+
+        This is the narrow fail-fast preflight required by D6. It runs before
+        the server lifespan yields so an implicit over-budget profile cannot be
+        logged and swallowed by the background initial-collection task.
+        """
+        if self.settings.collectors.profile is not None:
+            return
+        await self.inventory.warm_cache()
+        if not await self._resolve_and_log_schedule():
+            raise RuntimeError(
+                "The startup preflight could not verify the organization shape. "
+                "Retry when inventory is reachable or set "
+                "MERAKI_EXPORTER_COLLECTORS__PROFILE explicitly to availability, "
+                "standard, or full."
+            )
+        if not self.scheduler.requires_explicit_profile():
+            return
+        diagnostics = self.scheduler.diagnostics()
+        profile = diagnostics["profile"]
+        raise RuntimeError(
+            "The solved standard collection plan requires an explicit "
+            "MERAKI_EXPORTER_COLLECTORS__PROFILE choice: estimated demand "
+            f"{profile['threshold_demand_rps']:.3f} rps exceeds the budget target "
+            f"{diagnostics['effective_budget_rps'] * diagnostics['target_utilization']:.3f} "
+            "rps. Choose availability, standard, or full."
+        )
+
+    async def _resolve_and_log_schedule(self) -> bool:
         """Compute the org shape and resolve endpoint-group intervals (#617).
 
         Reads the warmed inventory cache to build the single-org shape (#585),
@@ -560,15 +599,16 @@ class CollectorManager:
             logger.warning(
                 "Skipping scheduler resolve: org_id is not set",
             )
-            return
+            return False
         try:
             shape = await self.inventory.get_org_shape(org_id)
             self.scheduler.resolve(shape)
         except Exception:
             logger.exception("Scheduler resolve failed during initial collection")
-            return
+            return False
         self._emit_cadence_gauges()
         self._log_schedule_summary(shape)
+        return True
 
     def _log_schedule_summary(self, shape: OrgShape) -> None:
         """Emit the one-line startup demand-vs-budget summary + over-budget warning."""
@@ -590,19 +630,17 @@ class CollectorManager:
             stretched=stretched,
         )
         if diagnostics.get("over_budget"):
-            shed = self._priority_shed_collectors()
+            shed = [group["name"] for group in diagnostics.get("groups", []) if group.get("shed")]
             logger.warning(
-                "Estimated API demand exceeds budget even at interval caps; disable "
-                "low-priority (priority 3/4) collectors to fit within the API budget",
+                "Estimated API demand exceeds budget; lower-priority endpoint groups are deferred",
                 estimated_demand_rps=round(diagnostics.get("total_demand_rps", 0.0), 2),
                 budget_rps=round(diagnostics.get("budget_rps", 0.0), 2),
                 target_utilization=diagnostics.get("target_utilization"),
-                collectors_to_disable=shed,
-                env_hint=(
-                    "MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS=" + ",".join(shed)
-                    if shed
-                    else None
-                ),
+                shed_groups=shed,
+                # Retained for existing structured-log consumers; the scheduler
+                # now defers endpoint groups rather than requiring this action.
+                collectors_to_disable=self._priority_shed_collectors(),
+                profile_options=["availability", "standard", "full"],
             )
 
     def _priority_shed_collectors(self) -> list[str]:

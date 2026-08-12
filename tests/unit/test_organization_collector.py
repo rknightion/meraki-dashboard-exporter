@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -11,7 +11,11 @@ from meraki_dashboard_exporter.core.constants import (
     NetworkMetricName,
     OrgMetricName,
 )
-from meraki_dashboard_exporter.core.error_handling import NothingCollectedError
+from meraki_dashboard_exporter.core.error_handling import (
+    CollectorError,
+    ErrorCategory,
+    NothingCollectedError,
+)
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import (
     NetworkFactory,
@@ -594,7 +598,7 @@ class TestOrganizationCollector(BaseCollectorTest):
         # Must not raise - only one of several sub-collections failed.
         await collector._collect_org_metrics(org)
 
-        self.assert_collector_error(collector, metrics, error_type="unknown")
+        self.assert_collector_error(collector, metrics, error_type="api_server_error")
 
     async def test_org_metrics_backoff_engages_after_consecutive_failures(self, collector, metrics):
         """Persistent per-cycle failures must eventually engage backoff.
@@ -913,6 +917,31 @@ class TestOrganizationCollector(BaseCollectorTest):
 
         call = api.organizations.getOrganizationDevicesPacketCaptureCaptures.call_args
         assert call.kwargs["networkIds"] == ["N_3"]
+
+    @pytest.mark.parametrize(
+        "method_name",
+        [
+            "_collect_device_counts_by_model",
+            "_collect_packet_capture_metrics",
+        ],
+    )
+    async def test_exhausted_retry_shapes_are_classified_and_never_mark_success(
+        self, collector, method_name
+    ):
+        """Both audited org fetchers reject exhausted SDK response dicts (#706)."""
+        collector.api.organizations.getOrganizationDevicesOverviewByModel.return_value = {
+            "errors": ["upstream exhausted"]
+        }
+        collector.api.organizations.getOrganizationDevicesPacketCaptureCaptures.return_value = {
+            "errors": ["upstream exhausted"]
+        }
+        collector._mark_group_ran = MagicMock()  # type: ignore[method-assign]
+
+        with pytest.raises(CollectorError) as exc_info:
+            await getattr(collector, method_name)("org-1", "Org")
+
+        assert exc_info.value.category is ErrorCategory.VALIDATION
+        collector._mark_group_ran.assert_not_called()
 
     # -- #534 NI-1: meraki_network_info id->name join backbone ---------------
 

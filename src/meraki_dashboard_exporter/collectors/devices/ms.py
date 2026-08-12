@@ -905,8 +905,7 @@ class MSCollector(BaseDeviceCollector):
             return False
 
         device_lookup = {device.get("serial"): device for device in devices}
-        serials = [device.get("serial") for device in devices if device.get("serial")]
-        if not serials:
+        if not devices:
             return True
 
         with LogContext(org_id=org_id):
@@ -914,7 +913,6 @@ class MSCollector(BaseDeviceCollector):
                 "getOrganizationSwitchPortsStatusesBySwitch",
                 self.api.switch.getOrganizationSwitchPortsStatusesBySwitch,
                 org_id,
-                serials=serials,
                 perPage=20,
                 total_pages="all",
             )
@@ -1448,8 +1446,7 @@ class MSCollector(BaseDeviceCollector):
             return False
 
         device_lookup = {device.get("serial"): device for device in devices}
-        serials = [device.get("serial") for device in devices if device.get("serial")]
-        if not serials:
+        if not devices:
             return True
 
         with LogContext(org_id=org_id):
@@ -1457,7 +1454,6 @@ class MSCollector(BaseDeviceCollector):
                 "getOrganizationSwitchPortsUsageHistoryByDeviceByInterval",
                 self.api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval,
                 org_id,
-                serials=serials,
                 timespan=3600,
                 perPage=50,
                 total_pages="all",
@@ -1472,7 +1468,6 @@ class MSCollector(BaseDeviceCollector):
                 "getOrganizationSwitchPortsClientsOverviewByDevice",
                 self.api.switch.getOrganizationSwitchPortsClientsOverviewByDevice,
                 org_id,
-                serials=serials,
                 timespan=3600,
                 perPage=20,
                 total_pages="all",

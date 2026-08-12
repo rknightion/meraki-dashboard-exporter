@@ -20,7 +20,12 @@ from ...core.constants import (
     SensorMetricType,
 )
 from ...core.domain_models import SensorGatewayConnection, SensorMeasurement
-from ...core.error_handling import ErrorCategory, NothingCollectedError, validate_response_format
+from ...core.error_handling import (
+    ErrorCategory,
+    NothingCollectedError,
+    categorize_error,
+    validate_response_format,
+)
 from ...core.label_helpers import create_device_labels
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
@@ -187,13 +192,13 @@ class MTCollector(BaseDeviceCollector):
                 await self._collect_org_gateway_connections(
                     organization_id, current_org_name, due=due
                 )
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "Failed to collect sensors for organization",
                     org_id=organization_id,
                 )
                 if self.parent is not None:
-                    self.parent._track_error(ErrorCategory.UNKNOWN)
+                    self.parent._track_error(categorize_error(exc))
                 failed += 1
                 # Continue with next organization
 
@@ -525,13 +530,13 @@ class MTCollector(BaseDeviceCollector):
                     "_sensor_gateway_last_connected", labels, epoch, ttl_seconds=ttl_seconds
                 )
 
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "Failed to collect sensor gateway connections for organization",
                 org_id=org_id,
             )
             if self.parent is not None:
-                self.parent._track_error(ErrorCategory.UNKNOWN)
+                self.parent._track_error(categorize_error(exc))
 
     @staticmethod
     def _parse_iso_timestamp(value: str | None) -> float | None:

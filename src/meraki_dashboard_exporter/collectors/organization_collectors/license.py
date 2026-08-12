@@ -115,8 +115,9 @@ class LicenseCollector(BaseOrganizationCollector):
         operation="Collect license metrics",
         continue_on_error=True,
         error_category=ErrorCategory.API_CLIENT_ERROR,
+        return_error_category=True,
     )
-    async def collect(self, org_id: str, org_name: str) -> bool:
+    async def collect(self, org_id: str, org_name: str) -> bool | ErrorCategory:
         """Collect license metrics.
 
         Parameters
