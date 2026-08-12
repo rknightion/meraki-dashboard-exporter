@@ -110,6 +110,8 @@ asyncio_default_fixture_loop_scope = "function"
 pythonpath = [ "src", "tools" ]
 markers = [
   "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+  "fleet_scheduled: scale presets selected by scheduled CI",
+  "fleet_on_demand: scale presets selected by workflow dispatch",
 ]
 testpaths = [ "tests", "tools/apidrift/tests" ]
 python_files = [ "test_*.py", "*_test.py" ]

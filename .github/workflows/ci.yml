@@ -85,7 +85,9 @@ jobs:
       - name: Run tests
         env:
           PYTHONPATH: src
-        run: uv run pytest --cov=meraki_dashboard_exporter --cov-report=xml --cov-fail-under=80
+        run: >-
+          uv run pytest -m "not fleet_scheduled and not fleet_on_demand"
+          --cov=meraki_dashboard_exporter --cov-report=xml --cov-fail-under=80
 
       - name: Upload coverage
         if: success() && env.HAS_CODECOV_TOKEN == 'true'
@@ -264,7 +266,7 @@ jobs:
         run: |
           kubeconform -summary -strict -ignore-missing-schemas "${RUNNER_TEMP}/rendered-manifests.yaml"
 
-  slow-tests:
+  scheduled-fleet-tests:
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
     steps:
@@ -280,24 +282,30 @@ jobs:
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
       - name: Install dependencies
         run: uv sync --all-extras --locked
-      - name: Run slow tests
-        # No test is currently marked `slow` (the marker is registered in pyproject.toml for
-        # future use), so pytest exits 5 ("no tests collected") every week and this job has been
-        # perpetually red (#595). Exit 5 is not a test failure — treat it the same as success;
-        # any other non-zero exit (an actual failure/error) still fails the job.
-        run: |
-          set +e
-          uv run pytest -m slow -v --timeout=300
-          status=$?
-          set -e
-          if [ "${status}" -eq 5 ]; then
-            echo "No tests marked 'slow' were collected — treating as success, not a failure."
-            exit 0
-          fi
-          exit "${status}"
+      - name: Run scheduled fleet presets
+        run: uv run pytest -m fleet_scheduled -v -s --timeout=300
+
+  on-demand-fleet-tests:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.14'
+          allow-prereleases: true
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - name: Install dependencies
+        run: uv sync --all-extras --locked
+      - name: Run on-demand fleet presets
+        run: uv run pytest -m fleet_on_demand -v -s --timeout=300
 
   # Single required status check (the branch ruleset requires only this). if: always() + an explicit
-  # failure check so a failed/cancelled leg fails the gate; the schedule-only slow-tests job isn't
+  # failure check so a failed/cancelled leg fails the gate; the optional fleet jobs aren't
   # depended on. Renovate automerge waits for this to go green.
   ci-success:
     name: ci-success
