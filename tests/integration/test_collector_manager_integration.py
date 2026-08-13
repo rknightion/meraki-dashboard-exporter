@@ -50,11 +50,8 @@ class TestCollectorManagerIntegration:
         actual_names = {c.__class__.__name__ for c in manager.collectors}
         for name in (
             "MTSensorCollector",
-            "OrganizationCollector",
             "DeviceCollector",
-            "NetworkHealthCollector",
-            "AlertsCollector",
-            "ConfigCollector",
+            "MTSensorAlertsCollector",
         ):
             assert name in actual_names, f"{name} not found in collectors"
 

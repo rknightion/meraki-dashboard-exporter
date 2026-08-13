@@ -71,8 +71,8 @@ def test_720_endpoint_notes_reject_a_nontrivial_route_without_a_contract_note() 
 def test_720_scaling_region_is_source_derived_and_distinguishes_due_sweep() -> None:
     """The capacity region is derived from endpoint groups, not hand-maintained (#720)."""
     rendered = gscd.render_network_health_capacity(SCRIPTS_DIR.parents[0] / "src")
-    assert "**4.58**" in rendered
-    assert "**1,041.3**" in rendered
+    assert "**168.42**" in rendered
+    assert "**3,810.9**" in rendered
     assert "due sweep" in rendered
 
 

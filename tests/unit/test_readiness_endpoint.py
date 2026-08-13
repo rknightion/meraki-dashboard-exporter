@@ -57,7 +57,7 @@ class TestReadinessEndpointNotReady:
         client, mock_manager = app_and_manager
         mock_manager.get_readiness_status.return_value = {
             "ready": False,
-            "collectors": {"DeviceCollector": False, "NetworkHealthCollector": False},
+            "collectors": {"DeviceCollector": False, "MTSensorCollector": False},
         }
 
         response = client.get("/ready")
@@ -73,7 +73,7 @@ class TestReadinessEndpointNotReady:
         client, mock_manager = app_and_manager
         mock_manager.get_readiness_status.return_value = {
             "ready": False,
-            "collectors": {"DeviceCollector": True, "NetworkHealthCollector": False},
+            "collectors": {"DeviceCollector": True, "MTSensorCollector": False},
         }
 
         response = client.get("/ready")
@@ -82,7 +82,7 @@ class TestReadinessEndpointNotReady:
         body = response.json()
         assert body["ready"] is False
         assert body["collectors"]["DeviceCollector"] is True
-        assert body["collectors"]["NetworkHealthCollector"] is False
+        assert body["collectors"]["MTSensorCollector"] is False
 
 
 class TestReadinessEndpointReady:
@@ -95,7 +95,7 @@ class TestReadinessEndpointReady:
         client, mock_manager = app_and_manager
         mock_manager.get_readiness_status.return_value = {
             "ready": True,
-            "collectors": {"DeviceCollector": True, "NetworkHealthCollector": True},
+            "collectors": {"DeviceCollector": True, "MTSensorCollector": True},
         }
 
         response = client.get("/ready")
@@ -104,7 +104,7 @@ class TestReadinessEndpointReady:
         body = response.json()
         assert body["ready"] is True
         assert body["collectors"]["DeviceCollector"] is True
-        assert body["collectors"]["NetworkHealthCollector"] is True
+        assert body["collectors"]["MTSensorCollector"] is True
 
 
 class TestReadinessStatusFormat:
@@ -132,7 +132,7 @@ class TestReadinessStatusFormat:
         client, mock_manager = app_and_manager
         mock_manager.get_readiness_status.return_value = {
             "ready": True,
-            "collectors": {"DeviceCollector": True, "NetworkHealthCollector": False},
+            "collectors": {"DeviceCollector": True, "MTSensorCollector": False},
         }
 
         response = client.get("/ready")
@@ -140,7 +140,7 @@ class TestReadinessStatusFormat:
 
         assert isinstance(body["ready"], bool)
         assert isinstance(body["collectors"]["DeviceCollector"], bool)
-        assert isinstance(body["collectors"]["NetworkHealthCollector"], bool)
+        assert isinstance(body["collectors"]["MTSensorCollector"], bool)
 
 
 def _gating_collector(name: str):  # type: ignore[no-untyped-def]

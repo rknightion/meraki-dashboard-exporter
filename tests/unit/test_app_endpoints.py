@@ -158,14 +158,14 @@ class TestRootEndpoint:
         """Test root renders skipped collectors section."""
         exporter, mock_manager = exporter_with_mock_manager
         mock_manager.skipped_collectors = [
-            {"name": "AlertsCollector", "reason": "disabled in config"},
+            {"name": "MTSensorAlertsCollector", "reason": "disabled in config"},
         ]
         fastapi_app = exporter.create_app()
         client = TestClient(fastapi_app, raise_server_exceptions=True)
 
         response = client.get("/")
         assert response.status_code == 200
-        assert "AlertsCollector" in response.text
+        assert "MTSensorAlertsCollector" in response.text
 
     def test_root_with_inactive_collector(
         self, exporter_with_mock_manager: tuple[ExporterApp, MagicMock]

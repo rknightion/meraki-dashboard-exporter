@@ -9,14 +9,10 @@ import pytest
 from prometheus_client import REGISTRY, generate_latest
 
 from meraki_dashboard_exporter.app import ExporterApp
-from meraki_dashboard_exporter.collectors.alerts import AlertsCollector
-from meraki_dashboard_exporter.collectors.config import ConfigCollector
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
 from meraki_dashboard_exporter.collectors.manager import CollectorManager
 from meraki_dashboard_exporter.collectors.mt_alerts import MTSensorAlertsCollector
 from meraki_dashboard_exporter.collectors.mt_sensor import MTSensorCollector
-from meraki_dashboard_exporter.collectors.network_health import NetworkHealthCollector
-from meraki_dashboard_exporter.collectors.organization import OrganizationCollector
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.scheduler import (
     EndpointGroup,
@@ -112,13 +108,9 @@ def _fixture_groups() -> list[EndpointGroup]:
     return [
         group
         for collector in (
-            AlertsCollector,
-            ConfigCollector,
             DeviceCollector,
             MTSensorAlertsCollector,
             MTSensorCollector,
-            NetworkHealthCollector,
-            OrganizationCollector,
         )
         for group in collector.endpoint_groups
     ]

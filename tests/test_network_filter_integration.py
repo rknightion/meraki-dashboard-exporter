@@ -15,23 +15,6 @@ import pytest
 pytestmark = pytest.mark.asyncio
 
 
-async def test_network_health_uses_inventory() -> None:
-    """NetworkHealthCollector._fetch_networks_for_health goes via inventory."""
-    from meraki_dashboard_exporter.collectors.network_health import (
-        NetworkHealthCollector,
-    )
-
-    collector = NetworkHealthCollector.__new__(NetworkHealthCollector)
-    collector.inventory = AsyncMock()
-    collector.inventory.get_networks.return_value = [{"id": "L_1", "name": "x"}]
-    collector._track_api_call = MagicMock()
-
-    result = await collector._fetch_networks_for_health("ORG")
-
-    collector.inventory.get_networks.assert_awaited_once_with("ORG")
-    assert result == [{"id": "L_1", "name": "x"}]
-
-
 async def test_device_poe_uses_inventory() -> None:
     """DeviceCollector._fetch_networks_for_poe goes via inventory."""
     from meraki_dashboard_exporter.collectors.device import DeviceCollector
@@ -127,28 +110,6 @@ async def test_mr_ssid_usage_does_not_fetch_per_network() -> None:
     for call in parent._set_metric.call_args_list:
         labels = call[0][1]
         assert set(labels) == {"org_id", "ssid"}
-
-
-async def test_alerts_direct_fallback_applies_filter() -> None:
-    """AlertsCollector._fetch_networks_direct applies the filter."""
-    from meraki_dashboard_exporter.collectors.alerts import AlertsCollector
-    from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
-
-    collector = AlertsCollector.__new__(AlertsCollector)
-    collector.api = MagicMock()
-    collector.api.organizations.getOrganizationNetworks = MagicMock(
-        return_value=[
-            {"id": "L_1", "name": "prod", "tags": []},
-            {"id": "L_2", "name": "lab", "tags": ["lab"]},
-        ]
-    )
-    settings = MagicMock()
-    settings.network_filter = NetworkFilterSettings(exclude_tags=["lab"])
-    collector.settings = settings
-
-    result = await collector._fetch_networks_direct("ORG")
-    assert result is not None
-    assert [n["id"] for n in result] == ["L_1"]
 
 
 async def test_api_helpers_direct_fallback_applies_filter() -> None:

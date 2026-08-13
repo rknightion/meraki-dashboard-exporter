@@ -84,9 +84,6 @@ ALL_FAMILIES = [
     "mv",
     "mt",
     "device_common",
-    "network_health",
-    "org",
-    "clients",
 ]
 
 
@@ -314,25 +311,13 @@ def _clients_settings() -> Settings:
 def _build_all_families() -> dict[str, dict[str, tuple[str, str, set[tuple[str, ...]]]]]:
     """Drive every coordinator once and partition into per-family contracts."""
     # Imported lazily so registration side effects are contained to this call.
-    from meraki_dashboard_exporter.collectors.clients import ClientsCollector
     from meraki_dashboard_exporter.collectors.device import DeviceCollector
     from meraki_dashboard_exporter.collectors.mt_sensor import MTSensorCollector
-    from meraki_dashboard_exporter.collectors.network_health import NetworkHealthCollector
-    from meraki_dashboard_exporter.collectors.organization import OrganizationCollector
 
     base = _base_settings()
 
     device_contract = _select(_extract_contract(_run_coordinator(DeviceCollector, base)), _included)
     mt_contract = _select(_extract_contract(_run_coordinator(MTSensorCollector, base)), _included)
-    nh_contract = _select(
-        _extract_contract(_run_coordinator(NetworkHealthCollector, base)), _included
-    )
-    org_contract = _select(
-        _extract_contract(_run_coordinator(OrganizationCollector, base)), _included
-    )
-    clients_contract = _select(
-        _extract_contract(_run_coordinator(ClientsCollector, _clients_settings())), _included
-    )
 
     families: dict[str, dict[str, tuple[str, str, set[tuple[str, ...]]]]] = {
         fam: {} for fam in ALL_FAMILIES
@@ -354,10 +339,6 @@ def _build_all_families() -> dict[str, dict[str, tuple[str, str, set[tuple[str, 
             keysets |= value[2]
         else:
             families["mt"][name] = value
-
-    families["network_health"] = nh_contract
-    families["org"] = org_contract
-    families["clients"] = clients_contract
 
     return families
 

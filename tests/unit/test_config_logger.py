@@ -257,19 +257,19 @@ class TestLogStartupSummary:
                 return list(call.kwargs.get("collectors", []))
         raise AssertionError("'  Enabled Collectors' line was not emitted")
 
-    def test_networkhealth_and_mtsensor_reported_enabled_by_default(
+    def test_device_and_mtsensor_reported_enabled_by_default(
         self, test_settings: Settings
     ) -> None:
-        """Network Health and MT Sensors must show as enabled by default (F-005)."""
+        """Device and MT Sensors must show as enabled by default."""
         collectors = self._enabled_collectors(test_settings)
 
-        assert "networkhealth" in collectors
+        assert "device" in collectors
         assert "mtsensor" in collectors
 
     def test_disabled_collector_is_reflected(self, test_settings: Settings) -> None:
-        """Disabling a collector via disable_collectors is reflected in the summary (F-005)."""
-        test_settings.collectors.disable_collectors = {"networkhealth"}
+        """Disabling a collector via disable_collectors is reflected in the summary."""
+        test_settings.collectors.disable_collectors = {"mtsensor"}
 
         collectors = self._enabled_collectors(test_settings)
 
-        assert "networkhealth" not in collectors
+        assert "mtsensor" not in collectors

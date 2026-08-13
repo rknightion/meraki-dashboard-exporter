@@ -251,11 +251,7 @@ class TestMetricsIntegration:
         await manager.collect_initial()
 
         # Verify API calls were made across the collectors that ran.
-        mock_api_client.api.organizations.getOrganizationLicenses.assert_called()
         mock_api_client.api.organizations.getOrganizationDevices.assert_called()
-        mock_api_client.api.organizations.getOrganizationAssuranceAlerts.assert_called()
-        # NOTE: the MT sensor-readings assertion lives in its own cold-start test
-        # below (test_mt_sensor_readings_fetched_on_cold_start).
 
     @pytest.mark.asyncio
     async def test_mt_sensor_readings_fetched_on_cold_start(
@@ -320,31 +316,8 @@ class TestMetricsIntegration:
 
         # Set up minimal mock responses
         mock_api_client.api.sensor.getOrganizationSensorReadingsLatest = MagicMock(return_value=[])
-        mock_api_client.api.organizations.getOrganizationLicensesOverview = MagicMock(
-            return_value={}
-        )
-        mock_api_client.api.organizations.getOrganizationLicenses = MagicMock(return_value=[])
         mock_api_client.api.organizations.getOrganizationNetworks = MagicMock(return_value=[])
-        mock_api_client.api.organizations.getOrganizationApiRequests = MagicMock(return_value=[])
         mock_api_client.api.organizations.getOrganizationDevices = MagicMock(return_value=[])
-        mock_api_client.api.organizations.getOrganizationAssuranceAlerts = MagicMock(
-            return_value=[]
-        )
-        mock_api_client.api.organizations.getOrganizationDevicesOverviewByModel = MagicMock(
-            return_value={"counts": []}
-        )
-        mock_api_client.api.organizations.getOrganizationClientsOverview = MagicMock(
-            return_value={
-                "usage": {"overall": {"total": 0, "downstream": 0, "upstream": 0}},
-                "counts": {"total": 0},
-            }
-        )
-        mock_api_client.api.organizations.getOrganizationLoginSecurity = MagicMock(
-            return_value={"enforcePasswordExpiration": False}
-        )
-        mock_api_client.api.organizations.getOrganizationConfigurationChanges = MagicMock(
-            return_value=[]
-        )
 
         # Create collector manager
         manager = CollectorManager(client=mock_api_client, settings=mock_settings)
@@ -357,19 +330,17 @@ class TestMetricsIntegration:
         # Sensor collector calls getOrganizationDevices; verify it ran.
         mock_api_client.api.organizations.getOrganizationDevices.assert_called()
 
-        # License API belongs to the organization collector, not the sensor one.
-        mock_api_client.api.organizations.getOrganizationLicenses.assert_not_called()
-
-        # Reset mocks
+        # Reset mocks and invalidate inventory cache so the next collector fetches afresh
         mock_api_client.api.organizations.getOrganizationDevices.reset_mock()
+        await manager.inventory.invalidate()
 
-        # Now run the organization collector.
-        org = manager.get_collector_by_class_name("OrganizationCollector")
-        assert org is not None
-        await manager.run_collector_once(org, force=True)
+        # Now run the device collector.
+        dev = manager.get_collector_by_class_name("DeviceCollector")
+        assert dev is not None
+        await manager.run_collector_once(dev, force=True)
 
-        # Organization APIs should be called by the organization collector.
-        mock_api_client.api.organizations.getOrganizationLicenses.assert_called()
+        # Device APIs should be called by the device collector.
+        mock_api_client.api.organizations.getOrganizationDevices.assert_called()
 
     @pytest.mark.asyncio
     async def test_error_handling_continues_collection(
@@ -380,45 +351,19 @@ class TestMetricsIntegration:
         isolated_registry = CollectorRegistry()
         monkeypatch.setattr("meraki_dashboard_exporter.core.collector.REGISTRY", isolated_registry)
 
-        # Make device collector fail (avoid "rate limit" in message to prevent retries)
-        mock_api_client.api.organizations.getOrganizationDevices = MagicMock(
+        # Make sensor readings fail
+        mock_api_client.api.sensor.getOrganizationSensorReadingsLatest = MagicMock(
             side_effect=Exception("API unavailable")
         )
-
-        # Other collectors should work
-        mock_api_client.api.organizations.getOrganizationLicensesOverview = MagicMock(
-            return_value={}
-        )
-        mock_api_client.api.organizations.getOrganizationLicenses = MagicMock(return_value=[])
         mock_api_client.api.organizations.getOrganizationNetworks = MagicMock(return_value=[])
-        mock_api_client.api.organizations.getOrganizationApiRequests = MagicMock(return_value=[])
-        mock_api_client.api.organizations.getOrganizationAssuranceAlerts = MagicMock(
-            return_value=[]
-        )
-        mock_api_client.api.organizations.getOrganizationDevicesOverviewByModel = MagicMock(
-            return_value={"counts": []}
-        )
-        mock_api_client.api.organizations.getOrganizationClientsOverview = MagicMock(
-            return_value={
-                "usage": {"overall": {"total": 0, "downstream": 0, "upstream": 0}},
-                "counts": {"total": 0},
-            }
-        )
-        mock_api_client.api.organizations.getOrganizationLoginSecurity = MagicMock(
-            return_value={"enforcePasswordExpiration": False}
-        )
-        mock_api_client.api.organizations.getOrganizationConfigurationChanges = MagicMock(
-            return_value=[]
-        )
+        mock_api_client.api.organizations.getOrganizationDevices = MagicMock(return_value=[])
 
         # Create collector manager
         manager = CollectorManager(client=mock_api_client, settings=mock_settings)
 
         # Run one initial collection of every collector - should not raise even
-        # though the device collector fails (#631: collect_initial replaces the
-        # per-tier collection entry point).
+        # though one collector fails.
         await manager.collect_initial()
 
-        # Verify other collectors were still called despite device collector failure
-        mock_api_client.api.organizations.getOrganizationLicenses.assert_called()
-        mock_api_client.api.organizations.getOrganizationAssuranceAlerts.assert_called()
+        # Verify device collector was still called despite sensor readings failure
+        mock_api_client.api.organizations.getOrganizationDevices.assert_called()

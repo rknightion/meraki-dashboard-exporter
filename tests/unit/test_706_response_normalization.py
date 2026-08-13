@@ -22,12 +22,12 @@ _ROOT = Path(__file__).parents[2]
             "_fetch_sensor_devices",
         ),
         (
-            "src/meraki_dashboard_exporter/collectors/organization.py",
-            "_collect_device_counts_by_model",
+            "src/meraki_dashboard_exporter/collectors/devices/ms.py",
+            "collect_stp_priorities",
         ),
         (
-            "src/meraki_dashboard_exporter/collectors/organization.py",
-            "_collect_packet_capture_metrics",
+            "src/meraki_dashboard_exporter/collectors/devices/mv.py",
+            "_collect_analytics_zones",
         ),
     ],
 )
