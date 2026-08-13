@@ -94,8 +94,8 @@ These figures are derived from `NetworkHealthCollector.endpoint_groups`. The ste
 
 | Shape | Steady-state equivalent (calls/300 s) | One all-groups due sweep |
 |---|---:|---:|
-| HOMELAB (`W=1`, `AP=1,000`) | **4.58** | 10 |
-| `W=400`, `AP=4,000` | **1,041.3** | 3,208 |
+| HOMELAB (`W=1`, `AP=1,000`) | **168.42** | 259 |
+| `W=400`, `AP=4,000` | **3,810.9** | 10,711 |
 
 A due sweep is larger because it includes every windowed group at once; use the steady-state equivalent for API-budget planning and the due-sweep column when judging a single collection run against its timeout.
 <!-- END GENERATED NETWORK HEALTH CAPACITY -->

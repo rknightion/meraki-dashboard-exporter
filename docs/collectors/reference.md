@@ -4,30 +4,22 @@ This page summarizes the collectors that ship with the exporter.
 
 Each collector owns one or more scheduler endpoint groups and runs its own group-clocked loop; the adaptive scheduler solves a per-group interval (floored at that group's volatility floor) from the configured request budget, so cadence is derived rather than assigned from a fixed tier. See the [Scheduler Architecture](../observability/scheduler.md) page for details.
 
-**Total collector classes:** 49
-**Auto-registered collectors:** 9
+**Total collector classes:** 25
+**Auto-registered collectors:** 3
 
 ## Main Collectors (auto-registered)
 
 | Collector | Purpose | Metrics | Notes |
 |-----------|---------|---------|-------|
-| `AlertsCollector` | Collector for Meraki assurance alerts. | 5 |  |
-| `ClientsCollector` | Collector for client-level metrics across all networks. | 28 | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `ConfigCollector` | Collector for configuration and security settings. | 17 |  |
 | `DeviceCollector` | Collector for device-level metrics. | 6 |  |
-| `InsightCollector` | Collector for Meraki Insight application-health metrics (#613). | 10 |  |
 | `MTSensorAlertsCollector` | Collector for network-wide currently-alerting MT sensor counts. | 3 |  |
 | `MTSensorCollector` | Collector for fast-moving sensor metrics (MT devices). | 24 |  |
-| `NetworkHealthCollector` | Collector for medium-moving network health metrics. | 11 |  |
-| `OrganizationCollector` | Collector for organization-level metrics. | 38 |  |
 
 ## Coordinator Relationships
 
 - **DeviceCollector** → MGCollector, MRCollector, MSCollector, MSStackCollector, MVCollector, MXCollector, MXUplinkHealthCollector, MXUplinkUsageCollector, MXHACollector, MSPowerCollector
 - **MRCollector** → MRClientsCollector, MRPerformanceCollector, MRWirelessCollector, MRFirewallCollector, MRRfProfilesCollector, MRSignalQualityCollector, MRCatalystCollector, MRClientLogsCollector
 - **MXCollector** → MXVpnCollector, MXFirewallCollector
-- **NetworkHealthCollector** → RFHealthCollector, ConnectionStatsCollector, DataRatesCollector, BluetoothCollector, SSIDPerformanceCollector, LatencyStatsCollector, AirMarshalCollector, MeshCollector
-- **OrganizationCollector** → APIUsageCollector, LicenseCollector, ClientOverviewCollector, FirmwareCollector, DeviceAvailabilityHistoryCollector, TopUsageCollector, WebhookLogsCollector, EarlyAccessCollector
 
 ## Sub-collector Catalog
 
@@ -55,30 +47,6 @@ Each collector owns one or more scheduler endpoint groups and runs its own group
 - `MXUplinkHealthCollector` — Collector for MX per-uplink WAN loss/latency health metrics.
 - `MXUplinkUsageCollector` — Collector for MX per-uplink WAN usage (sent/received bytes) metrics.
 - `MXVpnCollector` — Collector for MX VPN/WAN health metrics.
-
-### Network Health Sub-collectors
-
-- `AirMarshalCollector` — Collector for Air Marshal rogue AP / SSID-spoofing detection counts.
-- `BaseNetworkHealthCollector` — Base class for network health sub-collectors.
-- `BluetoothCollector` — Collector for Bluetooth clients detected by MR devices in a network.
-- `ConnectionStatsCollector` — Collector for network-wide wireless connection statistics.
-- `DataRatesCollector` — Collector for network-wide wireless data rate metrics.
-- `LatencyStatsCollector` — Collector for MR wireless latency statistics.
-- `MeshCollector` — Collector for wireless mesh link health (repeater APs) - #307.
-- `RFHealthCollector` — Collector for org-wide wireless RF channel utilization (#271).
-- `SSIDPerformanceCollector` — Collector for per-SSID wireless performance metrics.
-
-### Organization Sub-collectors
-
-- `APIUsageCollector` — Collector for organization API usage metrics.
-- `BaseOrganizationCollector` — Base class for organization sub-collectors.
-- `ClientOverviewCollector` — Collector for organization client overview metrics.
-- `DeviceAvailabilityHistoryCollector` — Collector for organization device availability change history metrics.
-- `EarlyAccessCollector` — Collector for organization Early Access opt-in state (#278, #279).
-- `FirmwareCollector` — Collector for organization firmware upgrade metrics.
-- `LicenseCollector` — Collector for organization license metrics.
-- `TopUsageCollector` — Collector for organization-wide top-N usage leaderboards.
-- `WebhookLogsCollector` — Collector for organization webhook delivery-log metrics.
 
 ## Notes
 

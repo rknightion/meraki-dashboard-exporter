@@ -290,7 +290,7 @@ config: {}
   # -- Collection profile controlling which endpoint priorities run: availability includes priority 1, standard includes priorities 1-3, and full includes all priorities. When unset, standard is used only while the solved API demand fits the budget; over-budget fleets must choose a profile explicitly.
   # collectorsProfile: ""
   # -- Enabled collector names
-  # collectorsEnabledCollectors: "["alerts", "clients", "config", "device", "insight", "mtsensor", "mtsensoralerts", "networkhealth", "organization"]"
+  # collectorsEnabledCollectors: "["device", "mtsensor", "mtsensoralerts"]"
   # -- Explicitly disabled collectors (overrides enabled)
   # collectorsDisableCollectors: ""
   # -- Timeout for individual collector runs in seconds (min: 30, max: 600)

@@ -23,7 +23,6 @@ EXCLUDED_CLASS_NAMES = {
 }
 
 CONDITIONAL_NOTES = {
-    "ClientsCollector": "Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true",
     "WebhookHandler": "Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true",
 }
 

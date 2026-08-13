@@ -163,7 +163,7 @@ Enable/disable specific metric collectors
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_COLLECTORS__PROFILE` | `availability | standard | full | None` | `_(none)_` | Collection profile controlling which endpoint priorities run: availability includes priority 1, standard includes priorities 1-3, and full includes all priorities. When unset, standard is used only while the solved API demand fits the budget; over-budget fleets must choose a profile explicitly. |
-| `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set[str]` | `["alerts", "clients", "config", "device", "insight", "mtsensor", "mtsensoralerts", "networkhealth", "organization"]` | Enabled collector names |
+| `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set[str]` | `["device", "mtsensor", "mtsensoralerts"]` | Enabled collector names |
 | `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` | `set[str]` | `[]` | Explicitly disabled collectors (overrides enabled) |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` | `int` | `240` | Timeout for individual collector runs in seconds (min: 30, max: 600) |
 | `MERAKI_EXPORTER_COLLECTORS__MAX_CONCURRENT_COLLECTORS` | `int` | `5` | Max number of collectors whose group-clocked loops may be executing a run concurrently, GLOBALLY (single shared semaphore; replaces the old per-tier concurrency knobs). This bounds how many collectors run at once; it is distinct from api.concurrency_limit, which bounds the fan-out breadth INSIDE one collector. The two compose: up to max_concurrent_collectors collectors run, each fanning out up to api.concurrency_limit sub-requests (#636). (min: 1, max: 50) |

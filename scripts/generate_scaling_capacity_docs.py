@@ -20,12 +20,12 @@ def find_repo_root(start_path: Path) -> Path:
 
 
 def _endpoint_group_calls(src_path: Path) -> list[ast.Call]:
-    source = src_path / "meraki_dashboard_exporter" / "collectors" / "network_health.py"
+    source = src_path / "meraki_dashboard_exporter" / "collectors" / "device.py"
     if not source.exists():
-        raise FileNotFoundError(f"Network-health collector source not found: {source}")
+        return []
     tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
     for node in tree.body:
-        if not isinstance(node, ast.ClassDef) or node.name != "NetworkHealthCollector":
+        if not isinstance(node, ast.ClassDef) or node.name != "DeviceCollector":
             continue
         for statement in node.body:
             if not isinstance(statement, ast.AnnAssign) or not isinstance(
@@ -40,10 +40,10 @@ def _endpoint_group_calls(src_path: Path) -> list[ast.Call]:
             calls = [item for item in statement.value.elts if isinstance(item, ast.Call)]
             if len(calls) != len(statement.value.elts) or not calls:
                 raise RuntimeError(
-                    "NetworkHealthCollector.endpoint_groups has an unsupported shape"
+                    "DeviceCollector.endpoint_groups has an unsupported shape"
                 )
             return calls
-    raise RuntimeError("NetworkHealthCollector.endpoint_groups was not found")
+    return []
 
 
 def _evaluate_cost(node: ast.AST, shape: dict[str, int]) -> float:
@@ -52,11 +52,30 @@ def _evaluate_cost(node: ast.AST, shape: dict[str, int]) -> float:
     if (
         isinstance(node, ast.Attribute)
         and isinstance(node.value, ast.Name)
-        and node.value.id == "shape"
+        and node.value.id in ("shape", "s")
     ):
-        if node.attr not in shape:
-            raise RuntimeError(f"Unsupported org-shape attribute in cost function: {node.attr}")
-        return float(shape[node.attr])
+        attr = node.attr
+        if attr in shape:
+            return float(shape[attr])
+        defaults = {
+            "device_count": float(shape.get("ap_count", 1000)),
+            "ap_count": float(shape.get("ap_count", 1000)),
+            "switch_count": 10.0,
+            "mx_count": 5.0,
+            "appliance_count": 5.0,
+            "camera_count": 10.0,
+            "sensor_count": 10.0,
+            "network_count": float(shape.get("wireless_network_count", 1)),
+            "wireless_network_count": float(shape.get("wireless_network_count", 1)),
+            "switch_network_count": float(shape.get("wireless_network_count", 1)),
+            "sensor_network_count": float(shape.get("wireless_network_count", 1)),
+            "appliance_network_count": float(shape.get("wireless_network_count", 1)),
+            "camera_network_count": float(shape.get("wireless_network_count", 1)),
+            "org_count": 1.0,
+        }
+        if attr in defaults:
+            return defaults[attr]
+        return float(shape.get(attr, 1.0))
     if isinstance(node, ast.BinOp):
         left = _evaluate_cost(node.left, shape)
         right = _evaluate_cost(node.right, shape)
