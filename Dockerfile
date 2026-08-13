@@ -1,5 +1,11 @@
-# syntax=docker/dockerfile:1.26
 ARG PY_VERSION=3.14
+ARG PY_VARIANT=slim-bookworm
+ARG PY_SHA256=23c59390fc717bf09f9336908199a0ae75d9c4264bf296123f94ad772fea3b52
+
+ARG UV_VERSION=0.11.28
+ARG UV_SHA256=0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa
+
+FROM ghcr.io/astral-sh/uv:${UV_VERSION}@sha256:${UV_SHA256} AS uv_bin
 
 # --------------------------------------------------------------------------- #
 # Builder stage - uses official slim image to compile wheels with uv
@@ -10,17 +16,17 @@ ARG PY_VERSION=3.14
 # needed. The uv `COPY --from` pin below rides on the same built-in manager (#661).
 # Pinned digest resolves to python:3.14-slim-bookworm (3.14.6-slim-bookworm, multi-arch
 # index incl. linux/amd64 + linux/arm64) as of 2026-07-02.
-FROM python:${PY_VERSION}-slim-bookworm@sha256:23c59390fc717bf09f9336908199a0ae75d9c4264bf296123f94ad772fea3b52 AS builder
+FROM python:${PY_VERSION}-${PY_VARIANT}@sha256:${PY_SHA256} AS builder
 
 # Install system deps with cache mounts for faster rebuilds
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-        build-essential \
-        ca-certificates \
-        libffi-dev \
-        git \
-        pkg-config
+    build-essential \
+    ca-certificates \
+    libffi-dev \
+    git \
+    pkg-config
 
 WORKDIR /app
 
@@ -30,14 +36,7 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_PROJECT_ENVIRONMENT=/app/.venv
 
 # Install uv from its official image, digest-pinned for supply-chain immutability (#562, #661).
-# The @sha256 digest is an immutable content address for the whole image, committed here rather
-# than fetched at build time alongside the artefact it would be verifying — the same guarantee the
-# python base pins above rely on. Renovate's built-in `dockerfile` manager natively tracks
-# `COPY --from` refs and updates the tag and digest together in one commit, so uv bumps land
-# unattended. (The previous curl+tarball+sha256sum approach could not: Renovate bumped the version
-# ARG but had no way to compute the tarball hashes, so every bump broke the build.)
-# The image is a multi-arch index (linux/amd64 + linux/arm64), so no TARGETARCH handling is needed.
-COPY --from=ghcr.io/astral-sh/uv:0.11.28@sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa /uv /uvx /bin/
+COPY --from=uv_bin /uv /uvx /bin/
 
 # Copy dependency files first (most cacheable layer)
 COPY pyproject.toml uv.lock ./
@@ -54,7 +53,7 @@ COPY src/meraki_dashboard_exporter ./meraki_dashboard_exporter
 # --------------------------------------------------------------------------- #
 # Same digest pin as the builder stage above (#562) — both stages must resolve to the
 # identical base image.
-FROM python:${PY_VERSION}-slim-bookworm@sha256:23c59390fc717bf09f9336908199a0ae75d9c4264bf296123f94ad772fea3b52 AS runtime
+FROM python:${PY_VERSION}-${PY_VARIANT}@sha256:${PY_SHA256} AS runtime
 
 # Install runtime dependencies and create non-root user
 RUN apt-get update -qq \
@@ -64,9 +63,9 @@ RUN apt-get update -qq \
 
 # Labels for container metadata (consolidated for single layer)
 LABEL org.opencontainers.image.source="https://github.com/rknightion/meraki-dashboard-exporter" \
-      org.opencontainers.image.description="Prometheus exporter for Cisco Meraki Dashboard API metrics" \
-      org.opencontainers.image.vendor="Rob Knight" \
-      org.opencontainers.image.licenses="MIT"
+    org.opencontainers.image.description="Prometheus exporter for Cisco Meraki Dashboard API metrics" \
+    org.opencontainers.image.vendor="Rob Knight" \
+    org.opencontainers.image.licenses="MIT"
 
 WORKDIR /app
 
