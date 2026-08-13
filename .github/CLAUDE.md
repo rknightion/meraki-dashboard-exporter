@@ -62,7 +62,7 @@ workflows") — don't recreate them from memory of an earlier version of this do
 <file_map>
 ## Workflows (`.github/workflows/`)
 - `ci.yml` - main gate: mypy, offline apidrift conformance check, pytest (`--cov-fail-under=80`,
-  uploads to Codecov + Codacy), a Docker build+startup smoke test (asserts non-root `exporter`
+  uploads to Codecov), a Docker build+startup smoke test (asserts non-root `exporter`
   user), a schedule-only `slow-tests` job, and the `ci-success` required-check aggregator.
 - `release-please.yml` - cuts releases (PAT-authored PR, see above); on `release_created`, prepends
   a "limited testing" hardware-coverage warning to the GitHub release notes, then calls
