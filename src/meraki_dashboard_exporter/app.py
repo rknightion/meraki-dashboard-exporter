@@ -1043,11 +1043,10 @@ class ExporterApp:
             # Get exporter instance from app state
             exporter = app.state.exporter
 
-            # Check if client collection is enabled
-            if not exporter.settings.clients.enabled:
+            if not getattr(exporter.settings, "clients", None) or not getattr(exporter.settings.clients, "enabled", False):
                 return HTMLResponse(
-                    content="<h1>Client data collection is disabled</h1>"
-                    "<p>Set MERAKI_EXPORTER_CLIENTS__ENABLED=true to enable.</p>",
+                    content="<h1>Client data collection disabled</h1>"
+                    "<p>Exporter is running in simplified Meraki device metrics mode.</p>",
                     status_code=404,
                 )
 

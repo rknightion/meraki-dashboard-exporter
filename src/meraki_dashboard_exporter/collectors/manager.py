@@ -59,11 +59,7 @@ def calculate_collector_admission_limit(settings: Any) -> int:
 # MTSensorAlertsCollector remain gating consumers only (read should_collect,
 # never mutate the tracker).
 _ORG_HEALTH_TRACKER_COLLECTORS = frozenset({
-    "OrganizationCollector",
     "DeviceCollector",
-    "NetworkHealthCollector",
-    "ClientsCollector",
-    "AlertsCollector",
     "MTSensorAlertsCollector",
 })
 
@@ -232,18 +228,12 @@ class CollectorManager:
 
     def _initialize_collectors(self) -> None:
         """Initialize all enabled collectors."""
-        # Import all collectors to trigger registration
+        # Import device collectors to trigger registration
         # This ensures the @register_collector decorators are executed
         from . import (  # noqa: F401
-            alerts,
-            clients,
-            config,
             device,
-            insight,
             mt_alerts,
             mt_sensor,
-            network_health,
-            organization,
         )
 
         # Get all registered collectors (flat list, no tiers)

@@ -16,25 +16,17 @@ Meraki Dashboard Exporter Collectors - All metric collection logic organized by 
 ## COLLECTOR ORGANIZATION
 ### Subdirectories (each has its own CLAUDE.md)
 - `devices/` - Device-specific collectors (MR, MS, MX, MT, MG, MV) - See `devices/CLAUDE.md`
-- `network_health_collectors/` - Network health metrics - See `network_health_collectors/CLAUDE.md`
-- `organization_collectors/` - Organization-level metrics - See `organization_collectors/CLAUDE.md`
 
 ### Coordinator Files
-- `manager.py` - `CollectorManager`: discovers, instantiates, and schedules all collectors (see REGISTRATION & DISCOVERY below)
-- `device.py` - `DeviceCollector` coordinator (mostly ~300s-floor groups) fanning out to per-device-type sub-collectors (MG/MR/MS/MS-stack/MT/MV/MX) via `ManagedTaskGroup`, bounded by `settings.api.concurrency_limit`
-- `network_health.py` - `NetworkHealthCollector` coordinator (~300s-floor groups) fanning out to `network_health_collectors/` (bluetooth, connection_stats, data_rates, rf_health, ssid_performance) via `ManagedTaskGroup`
-- `organization.py` - `OrganizationCollector` coordinator (mostly ~300s-floor groups) fanning out to `organization_collectors/` (`APIUsageCollector`, `ClientOverviewCollector`, `LicenseCollector`) via `ManagedTaskGroup`; the only collector that also receives an `org_health_tracker` kwarg from the manager
-- `config.py` - `ConfigCollector` for configuration/security settings (~900s-floor groups)
+- `manager.py` - `CollectorManager`: discovers, instantiates, and schedules all collectors
+- `device.py` - `DeviceCollector` coordinator fanning out to per-device-type sub-collectors (MG/MR/MS/MS-stack/MT/MV/MX) via `ManagedTaskGroup`, bounded by `settings.api.concurrency_limit`
 
 ### Shared Infrastructure
-- `subcollector_mixin.py` - `SubCollectorMixin` providing common sub-collector delegation patterns (`_set_metric_value`, `_track_api_call`, `update_api`); mixed into `devices/base.py::BaseDeviceCollector`, `network_health_collectors/base.py::BaseNetworkHealthCollector`, `organization_collectors/base.py::BaseOrganizationCollector`, and standalone sub-collectors (`devices/mx_firewall.py`, `devices/mx_vpn.py`, `devices/ms_stack.py`)
+- `subcollector_mixin.py` - `SubCollectorMixin` providing common sub-collector delegation patterns (`_set_metric_value`, `_track_api_call`, `update_api`); mixed into `devices/base.py::BaseDeviceCollector` and standalone sub-collectors
 
 ### Standalone Collectors
-- `alerts.py` - `AlertsCollector` (~300s-floor groups) - alert/event collection
-- `clients.py` - `ClientsCollector` (~300s-floor groups) - client device tracking
-- `mt_sensor.py` - `MTSensorCollector` (~60s-floor group) - standalone sensor data collection
-- `mt_alerts.py` - `MTSensorAlertsCollector` (~300s-floor group) - MT sensor alert collection
-- `webhook_metrics.py` - **removed (issue #530)**: `WebhookMetricsCollector` was dead code (never instantiated/wired anywhere; its `network_id`-labeled counter was also a cardinality risk). The live webhook receiver's metrics (`meraki_webhook_events_received_total`, `_processed_total`, `_failed_total`, `_processing_duration_seconds`, `_validation_failures_total`) are owned entirely by `core/webhook_handler.py::WebhookHandler` and are unaffected — those remain Stable per `docs/stability.md`.
+- `mt_sensor.py` - `MTSensorCollector` - standalone sensor data collection
+- `mt_alerts.py` - `MTSensorAlertsCollector` - MT sensor alert collection
 </file_map>
 
 <paved_path>

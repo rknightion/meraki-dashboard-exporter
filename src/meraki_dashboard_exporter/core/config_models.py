@@ -876,15 +876,9 @@ class CollectorSettings(BaseModel):
     # with SettingsError because a bare CSV string is not valid JSON (#514).
     enabled_collectors: Annotated[set[str], NoDecode] = Field(
         default_factory=lambda: {
-            "alerts",
-            "clients",
-            "config",
             "device",
             "mtsensor",
             "mtsensoralerts",
-            "networkhealth",
-            "organization",
-            "insight",
         },
         description="Enabled collector names",
     )
