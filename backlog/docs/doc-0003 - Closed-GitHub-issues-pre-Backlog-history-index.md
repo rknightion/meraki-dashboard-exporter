@@ -3,7 +3,7 @@ id: doc-0003
 title: 'Closed GitHub issues: pre-Backlog history index'
 type: other
 created_date: '2026-08-14 16:01'
-updated_date: '2026-08-14 16:01'
+updated_date: '2026-08-14 16:18'
 ---
 GitHub Issues was retired as this project's tracker on **2026-08-14**, after 449 closed issues. This
 document is the index of that history. It is the record of *what happened*; the board
@@ -50,10 +50,22 @@ subject or body cites `#NNN`, so a row with several commits usually means the wo
 and a row with none was closed without a code change (a decision, a duplicate, or a docs-only change
 that did not cite it).
 
-Bodies, acceptance criteria and comment threads for these issues live at `gh issue view <N>` **for
-now** — the same 2026-08-14 migration deletes the issues authored by the maintainer and by CI, after
-capturing them to `archive/`. Once that lands, this section points at the archive instead and
-`gh issue view` will 404 for those numbers.
+Bodies, acceptance criteria and comment threads **are not on GitHub any more.** The same 2026-08-14
+migration deleted the 444 issues authored by the maintainer and by CI, after capturing all 455 issues
+and 642 comments to `archive/github-issues-2026-08-14.json`, so `gh issue view <N>` 404s for the rows
+below. Read them there instead:
+
+```sh
+jq '.[] | select(.number == 694)' archive/github-issues-2026-08-14.json
+jq -r '.[] | select(.number == 694) | .comments[].body' archive/github-issues-2026-08-14.json
+```
+
+**The archive is redacted** — device serials, MACs, network IDs and names, organisation IDs, street
+addresses, coordinates and host names are replaced by stable placeholders, one token per real value.
+`archive/README.md` carries the mapping and the verification method.
+
+Eleven issues were **not** deleted and are still readable on GitHub: the nine filed by outside
+contributors, and Renovate's two dependency dashboards. They are in the archive too.
 
 | # | closed | outcome | title | commits |
 | --- | --- | --- | --- | --- |

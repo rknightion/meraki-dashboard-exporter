@@ -85,8 +85,13 @@ default_language_version:
 default_stages: [pre-commit, pre-push]
 
 # Exclude certain paths globally
+# `archive/` holds the deleted GitHub Issues tracker as one 2.4 MB JSON file. It trips
+# check-added-large-files (--maxkb=1000) and detect-secrets flags its 40-hex Action pins as
+# high-entropy; end-of-file-fixer and trailing-whitespace would rewrite it. It is an immutable
+# historical record, not source — see archive/README.md.
 exclude: |-
   (?x)^(
+    archive/|
     .*\.egg-info/|
     \.git/|
     \.mypy_cache/|
