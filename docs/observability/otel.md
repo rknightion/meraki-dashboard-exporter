@@ -287,21 +287,40 @@ to work identically against both paths:
   sample exists for that label-set. So the information isn't dropped — it's relocated from a
   standalone Prometheus series into the OTLP data point's `start_time_unix_nano` field, which is
   exactly what that field is for.
-- **Resource identity is relocated to `target_info` and `service_*`/`deployment_environment`
-  labels.** The scrape's `job`/`instance` come from the Prometheus scrape config; the OTLP path
+- **Resource identity is represented by `job`/`instance` plus `target_info`.** The scrape's
+  `job`/`instance` come from the Prometheus scrape config; the OTLP path
   derives them from the same OTel resource used by traces and data logs (`service.name` → `job`,
   `service.instance.id` → `instance`), and every other resource attribute — including the scrape's
-  `env` label, which maps to `deployment.environment` — lands on a synthetic `target_info` series
-  rather than as a label on every product metric. This means `job`/`instance` values can differ from
-  the scrape, and a query filtering on `env` against the scrape needs `deployment_environment` (and a
-  join through `target_info`) on the OTLP path instead. To recover the resource labels for a given
-  series, join on `instance`/`job` against `target_info` — this is the standard OTLP-to-Prometheus
-  pattern (the same join Prometheus's own OTLP receiver support and most OTLP-native backends use),
-  not something bespoke to this exporter.
+  `env` label, which maps to `deployment.environment`, and `service.version`, which normalizes to
+  `service_version` — lands on a synthetic `target_info` series rather than as a label on every
+  ordinary metric. `service.version` deliberately remains on the OTel Resource: receiver-side
+  options such as `resource_to_telemetry_conversion` or `promote_resource_attributes` can copy it
+  onto every ordinary series, but that is downstream, opt-in promotion and should stay disabled for
+  version. To recover the version from `target_info`, join on the actual OTLP identity labels:
+
+  ```promql
+  meraki_exporter_otlp_metrics_last_success_timestamp_seconds
+    * on (job, instance) group_left (service_version)
+      target_info
+  ```
+
+  The scrape's explicit build identity is also queryable without promoting a Resource attribute:
+
+  ```promql
+  meraki_exporter_otlp_metrics_last_success_timestamp_seconds
+    * on (job, instance) group_left (version, commit)
+      meraki_exporter_build_info
+  ```
+
+  The OTLP bridge includes `meraki_exporter_build_info` in the default `include=all` mode and in
+  `include=self`; `include=product` excludes that self-observability metric, so use `target_info` for
+  the Resource version on that path. The build-info gauge remains present on the `/metrics` scrape.
+  This `target_info` join is the standard OTLP-to-Prometheus pattern (the same join Prometheus's own
+  OTLP receiver support and most OTLP-native backends use), not something bespoke to this exporter.
 
   This is correct-by-design — it's how the OTLP data model represents resource attributes versus
-  per-point attributes — but it is a real surprise if you expect `job`/`instance`/`env` to read
-  identically on both paths without the join.
+  per-point attributes — but it is a real surprise if you expect `job`/`instance`/resource labels to
+  read identically on both paths without the join.
 
 - **`le` bucket-boundary labels render as integers on the bridge path, floats on the scrape path.**
   `_translate_histogram` builds `explicit_bounds` as Python floats (`core/otel_metrics.py`, the
