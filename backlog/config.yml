@@ -1,0 +1,20 @@
+project_name: "meraki-dashboard-exporter"
+default_status: "To Do"
+statuses: ["To Do", "In Progress", "Parked", "Done"]
+definition_of_done:
+  - "make check (uv run ruff check . && uv run ruff format --check . && uv run mypy . && uv run pytest -v)"
+  - "make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift"
+  - "Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed"
+labels: []
+date_format: yyyy-mm-dd
+max_column_width: 20
+auto_open_browser: true
+default_port: 6420
+remote_operations: false
+auto_commit: false
+filesystem_only: false
+zero_padded_ids: 4
+bypass_git_hooks: false
+check_active_branches: false
+active_branch_days: 30
+task_prefix: "mde"

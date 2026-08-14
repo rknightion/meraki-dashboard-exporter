@@ -52,7 +52,11 @@ dev = [
 target-version = "py314"
 line-length = 100
 indent-width = 4
-extend-exclude = [ "docs/*.md" ]
+# `.claude/hooks/` holds the Backlog.md guard hook and its test. They are kept BYTE-IDENTICAL to the
+# canonical copies in the other repos that use this tracker, so a drift check is a plain `cmp` — which
+# means they cannot also be reformatted to this project's style. They are agent-harness files, not
+# shipped code, and they carry their own 16-case suite (`python3 .claude/hooks/backlog-guard_test.py`).
+extend-exclude = [ "docs/*.md", ".claude/" ]
 
 preview = true
 lint.select = [
@@ -137,6 +141,7 @@ exclude = [
   "docs/.*\\.md$",
   "tests/",
   "scripts/.*\\.py",
+  "\\.claude/",  # verbatim tracker-guard hook — see the ruff extend-exclude note above
 ]
 
 [[tool.mypy.overrides]]
