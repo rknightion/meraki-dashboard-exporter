@@ -2,6 +2,8 @@
 
 # ruff: noqa: S101
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from meraki_dashboard_exporter.core.config import Settings
@@ -131,6 +133,17 @@ async def test_system_dns_lookup_uses_dedicated_executor(monkeypatch, resolver):
     # Ran on a thread from the dedicated pool, not a default-executor thread.
     assert thread_names
     assert thread_names[0].startswith("dns-resolver")
+
+
+def test_close_drains_dedicated_lookup_executor(resolver):
+    """Shutdown joins reverse-DNS workers before the process exits."""
+    executor = MagicMock()
+    resolver._executor = executor
+
+    resolver.close()
+    resolver.close()
+
+    executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
 
 
 @pytest.mark.asyncio

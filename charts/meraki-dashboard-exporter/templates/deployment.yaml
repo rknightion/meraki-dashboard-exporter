@@ -1,5 +1,6 @@
 {{- include "meraki-dashboard-exporter.validateApiKey" . }}
 {{- include "meraki-dashboard-exporter.validateOtel" . }}
+{{- include "meraki-dashboard-exporter.validateShutdownGrace" . }}
 {{- if and (not .Values.autoscaling.enabled) (gt (int .Values.replicaCount) 1) }}
 {{- fail "replicaCount must be 1: the exporter is a single-writer singleton with no leader election, so >1 replica doubles Meraki API load and emits duplicate metrics. See values.yaml `replicaCount`." }}
 {{- end }}

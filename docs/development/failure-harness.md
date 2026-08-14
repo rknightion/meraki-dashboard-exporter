@@ -19,6 +19,7 @@ make failure-harness-run MODE=baseline
 uv run python -m tests.harness.runner --build-exporter run --all-modes
 uv run python -m tests.harness.runner --build-exporter --target-operation getOrganizationDevices run --mode slow_valid
 uv run python -m tests.harness.runner --build-exporter observe-duration
+uv run python -m tests.harness.runner --build-exporter observe-shutdown
 ```
 
 The runner builds the proxy from the local exporter tag with pulls disabled, records the resolved
@@ -47,6 +48,27 @@ exporter-side transport failure log. The 429 modes retain the response-sent `Ret
 the redacted journal: seconds mode is exactly `2`, while HTTP-date mode must be an HTTP-date value.
 Timeout/stall requests enter a deterministic barrier and are released only when the origin process is
 torn down.
+
+## Blocked SDK worker shutdown observation
+
+`observe-shutdown` is a distinct native replay command, not a normal fault-mode run. It starts the
+timeout replay with the SDK executor constrained to one worker, selects one `LIVE-VERIFIED` corpus
+operation, and waits for the proxy's `barrier:entered` journal record. It resolves the exporter
+container by its exact Compose project and service labels, records wall-clock and monotonic times,
+and sends SIGTERM directly to PID1 with `docker kill --signal TERM`. PID1 must remain running while
+the barrier is closed. The runner then writes `HARNESS_BARRIER_RELEASE` without stopping the origin,
+uses bounded `docker wait`, and requires exit code zero within the chart's 150-second default grace.
+
+`shutdown-observation.json` retains redacted raw journal and PID1 logs, parsed barrier evidence,
+timestamps, image and manifest provenance, exit timing, and lifecycle markers. It fails closed unless
+the journal proves `request:entered < TERM < barrier:released` and the structured lifecycle order is
+OTel metrics, DNS executor, SDK executor, SDK session/client close, serving executor, then `Shutdown
+complete` (tracing, OTel logging, and data-log markers may appear between OTel and DNS in their
+documented order). A failure still retains the fullest redacted partial candidate. Separate bounded
+`teardown-shutdown-observation.json` evidence proves no resources with that exact project label remain.
+The journal records the origin container's monotonic clock while TERM timing is host-monotonic, so
+causal order uses the journal line boundary captured immediately before TERM; the artifact retains
+both clocks independently and never compares their epochs.
 
 ## DeviceCollector duration observation
 

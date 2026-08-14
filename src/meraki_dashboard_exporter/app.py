@@ -215,6 +215,9 @@ class ExporterApp:
 
         self._background_tasks: set[asyncio.Task[Any]] = set()
         self._shutdown_event = asyncio.Event()
+        self._shutdown_lock = asyncio.Lock()
+        self._shutdown_complete = False
+        self._expiration_started = False
         self._collector_tasks: dict[str, asyncio.Task[Any]] = {}
         self._start_time = time.time()
         self._discovery_summary: dict[str, Any] | None = None
@@ -278,6 +281,56 @@ class ExporterApp:
         """Handle shutdown request."""
         logger.info("Shutdown requested, stopping collection...")
         self._shutdown_event.set()
+
+    async def _shutdown(self) -> None:
+        """Drain process-owned work in dependency order; safe to call repeatedly."""
+        async with self._shutdown_lock:
+            if self._shutdown_complete:
+                return
+            logger.info("Shutting down Meraki Dashboard Exporter")
+            self._shutdown_event.set()
+
+            tasks = tuple(self._background_tasks)
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            if tasks:
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(*tasks, return_exceptions=True), timeout=3.0
+                    )
+                except TimeoutError:
+                    logger.warning("Some background tasks did not complete within timeout")
+
+            if self._expiration_started:
+                await self.expiration_manager.stop()
+                self._expiration_started = False
+                logger.info("Stopped metric expiration manager")
+
+            # This performs the final OTLP export through the live default executor.
+            await self.otel_metrics_bridge.stop()
+            logger.info("Shutdown phase complete", phase="otel_metrics_stopped")
+            self.tracing.shutdown()
+            logger.info("Shutdown phase complete", phase="tracing_stopped")
+            if self.settings.otel.enabled:
+                self.otel_logging.shutdown()
+                logger.info("Shutdown phase complete", phase="otel_logging_stopped")
+            self.data_log_emitter.shutdown()
+            logger.info("Shutdown phase complete", phase="data_log_stopped")
+
+            # DNS has a separate executor owned by the optional clients collector.
+            for collector in self.collector_manager.collectors:
+                resolver = getattr(collector, "dns_resolver", None)
+                if resolver is not None:
+                    resolver.close()
+            logger.info("Shutdown phase complete", phase="dns_executor_drained")
+
+            await self.client.close()
+            logger.info("Shutdown phase complete", phase="sdk_client_closed")
+            self._serving_executor.shutdown(wait=True, cancel_futures=True)
+            logger.info("Shutdown phase complete", phase="serving_executor_drained")
+            self._shutdown_complete = True
+            logger.info("Shutdown complete")
 
     def _liveness_threshold_seconds(self) -> float:
         """Return the dead-man staleness threshold in seconds (F-043).
@@ -422,12 +475,16 @@ class ExporterApp:
         # before it serves any request (fail fast). A configured org_id is used
         # as-is with no extra API call, so this never adds crash-loop risk to a
         # correctly-pinned single-org instance.
-        await resolve_org_id(
-            self.client.api,
-            self.settings,
-            rate_limiter=self.collector_manager.rate_limiter,
-        )
-        await self.collector_manager.validate_profile_selection()
+        try:
+            await resolve_org_id(
+                self.client.api,
+                self.settings,
+                rate_limiter=self.collector_manager.rate_limiter,
+            )
+            await self.collector_manager.validate_profile_selection()
+        except BaseException:
+            await self._shutdown()
+            raise
 
         logger.info(
             "Starting Meraki Dashboard Exporter",
@@ -445,10 +502,19 @@ class ExporterApp:
         # Start the optional OTLP metrics bridge export loop (#339/#313); it needs
         # the running event loop, so it starts here rather than in __init__. No-op
         # when otel.metrics.enabled is False.
-        await self.otel_metrics_bridge.start()
+        try:
+            await self.otel_metrics_bridge.start()
+        except BaseException:
+            await self._shutdown()
+            raise
 
         # Start metric expiration manager (Phase 3.2)
-        await self.expiration_manager.start()
+        try:
+            await self.expiration_manager.start()
+            self._expiration_started = True
+        except BaseException:
+            await self._shutdown()
+            raise
         logger.info(
             "Started metric expiration manager",
             ttl_multiplier=self.settings.monitoring.metric_ttl_multiplier,
@@ -472,51 +538,7 @@ class ExporterApp:
         try:
             yield
         finally:
-            logger.info("Shutting down Meraki Dashboard Exporter")
-            # Signal shutdown to stop collection loop
-            self._shutdown_event.set()
-
-            # Give tasks a moment to finish their current work
-            await asyncio.sleep(0.5)
-
-            # Cancel all background tasks
-            for task in self._background_tasks:
-                if not task.done():
-                    task.cancel()
-
-            # Wait for tasks to complete with a timeout
-            if self._background_tasks:
-                try:
-                    await asyncio.wait_for(
-                        asyncio.gather(*self._background_tasks, return_exceptions=True), timeout=3.0
-                    )
-                except TimeoutError:
-                    logger.warning("Some tasks did not complete within timeout")
-
-            # Stop metric expiration manager (Phase 3.2)
-            await self.expiration_manager.stop()
-            logger.info("Stopped metric expiration manager")
-
-            # Cleanup (client.close also shuts down the dedicated SDK executor)
-            await self.client.close()
-            self._serving_executor.shutdown(wait=False, cancel_futures=True)
-
-            # Stop the OTLP metrics bridge (#339/#313) before tracing/logging
-            # teardown so its final flush export still has a live channel. No-op
-            # when disabled.
-            await self.otel_metrics_bridge.stop()
-
-            # Shutdown tracing
-            self.tracing.shutdown()
-
-            # Shutdown OTEL logging
-            if self.settings.otel.enabled:
-                self.otel_logging.shutdown()
-
-            # Flush + shutdown the data-log emitter (#622); no-op when disabled.
-            self.data_log_emitter.shutdown()
-
-            logger.info("Shutdown complete")
+            await self._shutdown()
 
     async def _startup_collections(self) -> None:
         """Start tiered collection loops immediately."""

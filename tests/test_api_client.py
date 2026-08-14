@@ -6,7 +6,7 @@ import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, call, patch
 
 import pytest
 from pydantic import SecretStr
@@ -172,6 +172,32 @@ class TestAsyncMerakiClientInitialization:
 
         assert api1 == api2
         assert mock_dashboard_class.call_count == 1
+
+
+class TestAsyncMerakiClientShutdown:
+    """Terminal cleanup releases the SDK transport only after SDK work drains."""
+
+    @pytest.mark.asyncio
+    async def test_close_drains_executor_and_closes_sdk_session(
+        self, mock_settings: Settings
+    ) -> None:
+        """The terminal path joins workers before closing the SDK HTTP session."""
+        client = AsyncMerakiClient(mock_settings)
+        ordered = MagicMock()
+        session = ordered.session
+        client._api = SimpleNamespace(_session=session)  # type: ignore[assignment]
+        executor = ordered.executor
+        client._executor = executor
+
+        await client.close()
+
+        executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
+        session.close.assert_called_once_with()
+        assert ordered.mock_calls == [
+            call.executor.shutdown(wait=True, cancel_futures=True),
+            call.session.close(),
+        ]
+        assert client._api is None
 
 
 class TestProxyAndCustomCA:

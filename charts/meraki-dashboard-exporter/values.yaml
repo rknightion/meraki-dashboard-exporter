@@ -52,10 +52,10 @@ serviceAccount:
 # the wall-clock cap on one logical fetch including pagination) plus a margin above
 # the per-request SDK timeout (single_request_timeout, 30s) so the deadline has time
 # to fire and the fetch to unwind before Kubernetes gives up and sends SIGKILL. If you
-# raise config.apiPerFetchDeadline (not yet a chart value; set via extraEnv as
-# MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS) above 120s, raise this value to match
-# (per_fetch_deadline_seconds + ~30s margin is a reasonable rule of thumb). See
-# docs/deployment-operations.md "Shutdown behaviour" for the full explanation.
+# raise config.apiPerFetchDeadlineSeconds above 120s, raise this value to match
+# (per_fetch_deadline_seconds + 30s margin is enforced at Helm render time). See
+# docs/deployment-operations.md "Shutdown behaviour" for the full explanation. The
+# check rejects contradictory settings; it cannot interrupt an SDK or DNS thread.
 terminationGracePeriodSeconds: 150
 
 # -- Annotations to add to the pod

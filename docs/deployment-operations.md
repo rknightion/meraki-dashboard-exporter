@@ -58,7 +58,7 @@ Two settings bound how long a single blocked fetch can hold things up:
 | Setting | Default | Description |
 | --- | --- | --- |
 | `single_request_timeout` (`MERAKI_EXPORTER_API__TIMEOUT`) | `30s` | Bounds one HTTP request to the Meraki API. |
-| `per_fetch_deadline_seconds` | `120s` (not yet exposed as a chart value) | Bounds a whole logical fetch, including every page requested under `total_pages="all"` pagination — so a bulk fetch that keeps making slow page requests still fails fast at 120s instead of hanging for the full per-collector timeout. |
+| `per_fetch_deadline_seconds` | `120s` (`config.apiPerFetchDeadlineSeconds` in Helm) | Bounds how long the exporter awaits a whole logical fetch, including pagination. It cancels the awaiting coroutine, but Python cannot interrupt a synchronous SDK thread that is already in HTTP or pagination work. |
 
 Kubernetes only gives a pod `terminationGracePeriodSeconds` after `SIGTERM` before force-killing it
 with `SIGKILL`. If that grace period is shorter than the worst-case blocked fetch, Kubernetes kills
@@ -66,11 +66,16 @@ the pod mid-shutdown, which is harmless (the exporter is stateless and safely re
 up as noisy `SIGKILL`/`terminated: Error` events instead of a clean exit. The Helm chart's
 [`terminationGracePeriodSeconds`](https://github.com/rknightion/meraki-dashboard-exporter/blob/main/charts/meraki-dashboard-exporter/values.yaml)
 value defaults to **150s** — comfortably above the `per_fetch_deadline_seconds` default (120s) with
-a ~30s margin (matching `single_request_timeout`) for the deadline to actually fire and the fetch to
-unwind before Kubernetes gives up. If you raise `per_fetch_deadline_seconds` above its default (via
-`extraEnv`, e.g. `MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS`), raise
-`terminationGracePeriodSeconds` to match — as a rule of thumb, keep it at
-`per_fetch_deadline_seconds + ~30s`.
+a fixed 30s margin for the deadline to actually fire and the fetch to unwind before Kubernetes gives
+up. Set longer fetches with Helm's `config.apiPerFetchDeadlineSeconds`; the chart rejects a
+`terminationGracePeriodSeconds` below `per_fetch_deadline_seconds + 30s`, and rejects an `extraEnv`
+override of that environment variable so the relationship cannot be bypassed.
+
+That render-time rule prevents a known contradictory configuration; it is not a hard process-exit
+guarantee. An SDK pagination call or operating-system DNS lookup already running in a thread cannot
+observe coroutine cancellation and may outlive the deadline. The exporter joins those threads and
+closes their sessions during orderly shutdown, but Kubernetes can still send SIGKILL at the grace
+boundary if an underlying call does not return.
 
 ## Endpoints
 The exporter exposes endpoints for metrics (`/metrics`), liveness (`/health`),

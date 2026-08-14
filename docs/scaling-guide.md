@@ -340,11 +340,14 @@ exactly the double-load / double-metrics problem above.
 On `SIGTERM` the exporter drains best-effort: in-flight HTTP requests finish and running collector
 work winds down before exit. Because collector fetches run the synchronous Meraki SDK on a thread
 pool, a thread blocked inside an SDK HTTP call cannot be cancelled mid-flight, so shutdown waits for
-it to return or hit `per_fetch_deadline_seconds` (default **120 s**). The chart's
-`terminationGracePeriodSeconds` defaults to **150 s** — `per_fetch_deadline_seconds` plus a ~30 s
-margin — so Kubernetes doesn't `SIGKILL` mid-drain. If you raise `per_fetch_deadline_seconds`
-(via `extraEnv`), raise `terminationGracePeriodSeconds` to match (`deadline + ~30 s`). Full detail
-in [Deployment & Operations](deployment-operations.md#shutdown-behaviour-and-grace-period).
+the underlying call to return. `per_fetch_deadline_seconds` (default **120 s**) bounds the awaiting
+coroutine but cannot interrupt a synchronous thread already doing HTTP or pagination. The chart's
+`terminationGracePeriodSeconds` defaults to **150 s** — `per_fetch_deadline_seconds` plus a 30 s
+margin — so Kubernetes doesn't `SIGKILL` mid-drain. Set a longer deadline with
+`config.apiPerFetchDeadlineSeconds`; Helm enforces `terminationGracePeriodSeconds >= deadline + 30`.
+That check rejects known contradictory settings; an uninterruptible SDK or DNS call can still outlive
+the grace period. Full detail is in
+[Deployment & Operations](deployment-operations.md#shutdown-behaviour-and-grace-period).
 
 ## Adaptive scheduling is the default
 

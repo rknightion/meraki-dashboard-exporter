@@ -80,6 +80,14 @@ class DNSResolver:
             "queue_peak_depth": 0,
             "lookup_timeouts": 0,
         }
+        self._closed = False
+
+    def close(self) -> None:
+        """Cancel queued reverse-DNS work and join active resolver threads."""
+        if self._closed:
+            return
+        self._closed = True
+        self._executor.shutdown(wait=True, cancel_futures=True)
 
     def track_client(self, client_id: str, ip: str | None, description: str | None) -> bool:
         """Track client information to detect changes.

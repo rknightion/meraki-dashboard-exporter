@@ -26,6 +26,10 @@ COMPOSE_TEARDOWN_TIMEOUT_SECONDS: Final = 30
 DURATION_OBSERVATION_TIMEOUT_SECONDS: Final = 90
 DURATION_OBSERVATION_CONTROL_TOKEN: Final = "harness-control-token-not-a-secret"
 _DURATION_METRIC: Final = "meraki_exporter_collector_duration_seconds"
+SHUTDOWN_BARRIER_TIMEOUT_SECONDS: Final = 40
+SHUTDOWN_RUNNING_PROOF_SECONDS: Final = 0.5
+SHUTDOWN_EXIT_TIMEOUT_SECONDS: Final = 30
+SHUTDOWN_GRACE_PERIOD_SECONDS: Final = 150
 
 
 class HarnessError(RuntimeError):
@@ -275,6 +279,216 @@ class HarnessRunner:
                         _redact(json.dumps(teardown, indent=2, sort_keys=True)) + "\n",
                         encoding="utf-8",
                     )
+
+    def observe_shutdown(self) -> None:
+        """Prove SIGTERM waits for a blocked SDK worker before clean process exit."""
+        corpus = load_manifest(self.manifest, require_real=True)
+        self.artifacts.mkdir(parents=True, exist_ok=True)
+        exporter_id, proxy_id = self._build_images()
+        target = self.target_operation or corpus.fixtures[0].sdk_operation
+        target_fixture = next(
+            (item for item in corpus.fixtures if item.sdk_operation == target), None
+        )
+        if target_fixture is None:
+            raise HarnessError(f"shutdown target operation {target!r} is absent from the corpus")
+        with tempfile.TemporaryDirectory(prefix="shutdown-observation-") as temporary:
+            runtime = Path(temporary)
+            shutil.copytree(self.manifest.parent, runtime / "corpus")
+            create_tls_material(runtime)
+            (runtime / "journal.jsonl").touch(mode=0o666)
+            project = f"shutdown-observation-{int(time.time() * 1000)}"
+            env = {
+                "HARNESS_IMAGE_ID": exporter_id,
+                "HARNESS_PROXY_IMAGE_ID": proxy_id,
+                "HARNESS_RUNTIME_DIR": str(runtime),
+                "HARNESS_MODE": FaultMode.TIMEOUT.value,
+                "HARNESS_TARGET_OPERATION": target,
+                "HARNESS_ORIGIN_HOST": "replay-origin",
+                "HARNESS_TRUSTED_CA": "trusted-ca.pem",
+            }
+            command = [
+                "docker",
+                "compose",
+                "--project-name",
+                project,
+                "--env-file",
+                "/dev/null",
+                "-f",
+                str(COMPOSE_FILE),
+            ]
+            teardown: dict[str, object] = {"fallback_required": False}
+            observation: dict[str, object] = {
+                "schema_version": 1,
+                "acceptance": "pending",
+                "observation_mode": "blocked_sdk_worker_sigterm",
+                "target_operation": target,
+                "target_path": target_fixture.path,
+                "image_ids": {"exporter": exporter_id, "proxy": proxy_id},
+                "manifest_provenance": _manifest_provenance(self.manifest, corpus),
+            }
+            container_id: str | None = None
+            try:
+                _run([*command, "up", "--detach", "--no-build"], env=env)
+                container_id = self._exporter_container_id(project, env)
+                observation["exporter_container_id"] = container_id
+                entered = self._wait_for_shutdown_barrier(runtime, target_fixture.path)
+                term_wall, term_monotonic = time.time(), time.monotonic()
+                term_journal_boundary = len(
+                    (runtime / "journal.jsonl").read_text(encoding="utf-8").splitlines()
+                )
+                observation["term"] = {
+                    "wall_seconds": term_wall,
+                    "monotonic_seconds": term_monotonic,
+                    "journal_line_boundary": term_journal_boundary,
+                }
+                _run(
+                    ["docker", "kill", "--signal", "TERM", container_id],
+                    env=env,
+                    timeout=COMPOSE_TEARDOWN_TIMEOUT_SECONDS,
+                )
+                self._prove_container_remains_running(container_id, env)
+                release_wall, release_monotonic = time.time(), time.monotonic()
+                (runtime / "barrier-release").write_text("released\n", encoding="utf-8")
+                exit_code, elapsed = self._wait_for_container_exit(container_id, env)
+                elapsed_after_term = time.monotonic() - term_monotonic
+                if exit_code != 0:
+                    raise HarnessError(f"exporter exited with code {exit_code}, expected 0")
+                if elapsed_after_term > SHUTDOWN_GRACE_PERIOD_SECONDS:
+                    raise HarnessError("exporter did not exit within the 150-second default grace")
+                journal = (runtime / "journal.jsonl").read_text(encoding="utf-8")
+                logs = self._container_logs(container_id, env)
+                entries, parsed_logs = (
+                    _journal_entries(journal),
+                    _parse_json_logs(logs.splitlines()),
+                )
+                observation.update({
+                    "barrier": {
+                        "entered": entered,
+                        "release_written": {
+                            "wall_seconds": release_wall,
+                            "monotonic_seconds": release_monotonic,
+                        },
+                        "ordering": _barrier_order(
+                            entries,
+                            term_monotonic_seconds=term_monotonic,
+                            target_path=target_fixture.path,
+                            term_journal_boundary=term_journal_boundary,
+                        ),
+                    },
+                    "exit": {
+                        "code": exit_code,
+                        "elapsed_after_release_seconds": elapsed,
+                        "elapsed_after_term_seconds": elapsed_after_term,
+                        "grace_period_seconds": SHUTDOWN_GRACE_PERIOD_SECONDS,
+                    },
+                    "journal": {"raw": journal, "parsed": entries},
+                    "logs": {"raw": logs, "parsed": parsed_logs},
+                    "lifecycle": _lifecycle_order(parsed_logs),
+                    "acceptance": "passed",
+                })
+                self._write_shutdown_observation(observation)
+            except Exception as error:
+                observation.update({"acceptance": "failed", "error": str(error)})
+                journal = (runtime / "journal.jsonl").read_text(encoding="utf-8")
+                observation["journal"] = {"raw": journal, "parsed": _journal_entries(journal)}
+                if container_id is not None:
+                    logs = self._container_logs(container_id, env)
+                    observation["logs"] = {
+                        "raw": logs,
+                        "parsed": _parse_json_logs(logs.splitlines()),
+                    }
+                self._write_shutdown_observation(observation)
+                raise
+            finally:
+                try:
+                    self._teardown(command, env, project, teardown)
+                finally:
+                    (self.artifacts / "teardown-shutdown-observation.json").write_text(
+                        _redact(json.dumps(teardown, indent=2, sort_keys=True)) + "\n",
+                        encoding="utf-8",
+                    )
+
+    def _write_shutdown_observation(self, observation: dict[str, object]) -> None:
+        self.artifacts.mkdir(parents=True, exist_ok=True)
+        (self.artifacts / "shutdown-observation.json").write_text(
+            _redact(json.dumps(observation, indent=2, sort_keys=True)) + "\n", encoding="utf-8"
+        )
+
+    def _exporter_container_id(self, project: str, env: dict[str, str]) -> str:
+        result = _run(
+            [
+                "docker",
+                "ps",
+                "--all",
+                "--quiet",
+                "--filter",
+                f"label=com.docker.compose.project={project}",
+                "--filter",
+                "label=com.docker.compose.service=exporter",
+            ],
+            env=env,
+            timeout=COMPOSE_TEARDOWN_TIMEOUT_SECONDS,
+        )
+        container_ids = [line for line in result.stdout.splitlines() if line]
+        if len(container_ids) != 1:
+            raise HarnessError(
+                "could not resolve exactly one exporter container for shutdown proof"
+            )
+        return container_ids[0]
+
+    def _wait_for_shutdown_barrier(self, runtime: Path, target_path: str) -> dict[str, object]:
+        deadline = time.monotonic() + SHUTDOWN_BARRIER_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
+            entries = _journal_entries((runtime / "journal.jsonl").read_text(encoding="utf-8"))
+            if entry := next(
+                (
+                    item
+                    for item in entries
+                    if item.get("reason") == "barrier:entered" and item.get("path") == target_path
+                ),
+                None,
+            ):
+                return entry
+            time.sleep(0.05)
+        raise HarnessError(
+            "target SDK request did not enter the shutdown barrier within 40 seconds"
+        )
+
+    def _prove_container_remains_running(self, container_id: str, env: dict[str, str]) -> None:
+        deadline = time.monotonic() + SHUTDOWN_RUNNING_PROOF_SECONDS
+        while time.monotonic() < deadline:
+            result = _run(
+                ["docker", "inspect", "--format", "{{.State.Running}}", container_id],
+                env=env,
+                timeout=COMPOSE_TEARDOWN_TIMEOUT_SECONDS,
+            )
+            if result.stdout.strip() != "true":
+                raise HarnessError("exporter exited while the shutdown barrier remained closed")
+            time.sleep(0.05)
+
+    def _wait_for_container_exit(self, container_id: str, env: dict[str, str]) -> tuple[int, float]:
+        started = time.monotonic()
+        try:
+            result = _run(
+                ["docker", "wait", container_id],
+                env=env,
+                check=False,
+                timeout=SHUTDOWN_EXIT_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise HarnessError("exporter did not exit within shutdown proof bound") from error
+        try:
+            return int(result.stdout.strip()), time.monotonic() - started
+        except ValueError as error:
+            raise HarnessError("docker wait did not return an exporter exit code") from error
+
+    def _container_logs(self, container_id: str, env: dict[str, str]) -> str:
+        return _run(
+            ["docker", "logs", container_id],
+            env=env,
+            check=False,
+            timeout=COMPOSE_TEARDOWN_TIMEOUT_SECONDS,
+        ).stdout
 
     def _build_images(self) -> tuple[str, str]:
         """Build and resolve the locally pinned exporter and replay-origin images."""
@@ -1093,6 +1307,118 @@ def _manifest_provenance(manifest: Path, corpus: object) -> dict[str, object]:
     }
 
 
+def _barrier_order(
+    entries: list[dict[str, object]],
+    *,
+    term_monotonic_seconds: float,
+    target_path: str | None = None,
+    term_journal_boundary: int | None = None,
+) -> dict[str, object]:
+    """Require the blocked request, TERM, and independent release in causal order."""
+    relevant = [
+        entry for entry in entries if target_path is None or entry.get("path") == target_path
+    ]
+    entered_index = next(
+        (
+            index
+            for index, entry in enumerate(entries)
+            if (target_path is None or entry.get("path") == target_path)
+            and entry.get("reason") == "barrier:entered"
+        ),
+        None,
+    )
+    released_index = next(
+        (
+            index
+            for index, entry in enumerate(entries)
+            if (target_path is None or entry.get("path") == target_path)
+            and entry.get("reason") == "barrier:released"
+        ),
+        None,
+    )
+    entered = next(
+        (
+            entry.get("monotonic_seconds")
+            for entry in relevant
+            if entry.get("reason") == "barrier:entered"
+        ),
+        None,
+    )
+    released = next(
+        (
+            entry.get("monotonic_seconds")
+            for entry in relevant
+            if entry.get("reason") == "barrier:released"
+        ),
+        None,
+    )
+    if not isinstance(entered, (int, float)) or not isinstance(released, (int, float)):
+        raise HarnessError(
+            "shutdown proof requires barrier:entered and barrier:released journal markers"
+        )
+    entered_value, released_value = float(entered), float(released)
+    if term_journal_boundary is not None:
+        if not isinstance(entered_index, int) or not isinstance(released_index, int):
+            raise HarnessError("shutdown proof could not locate barrier journal positions")
+        if not entered_index < term_journal_boundary <= released_index:
+            raise HarnessError("shutdown proof requires request:entered < TERM < barrier:released")
+    elif not entered_value < term_monotonic_seconds < released_value:
+        raise HarnessError("shutdown proof requires request:entered < TERM < barrier:released")
+    return {
+        "causal_order": "barrier:entered < host TERM < barrier:released",
+        "causal_basis": (
+            "journal_line_boundary"
+            if term_journal_boundary is not None
+            else "shared_monotonic_test_clock"
+        ),
+        "entered_journal_index": entered_index,
+        "term_journal_boundary": term_journal_boundary,
+        "released_journal_index": released_index,
+        # Origin and host clocks are retained independently, not compared across containers.
+        "origin_entered_monotonic_seconds": entered_value,
+        "host_term_monotonic_seconds": term_monotonic_seconds,
+        "origin_released_monotonic_seconds": released_value,
+    }
+
+
+def _lifecycle_order(logs: list[dict[str, object]]) -> dict[str, object]:
+    """Require the structured shutdown dependency order emitted by the exporter."""
+    markers = [
+        str(entry["phase"])
+        if entry.get("event") == "Shutdown phase complete" and isinstance(entry.get("phase"), str)
+        else "Shutdown complete"
+        for entry in logs
+        if entry.get("event") in {"Shutdown phase complete", "Shutdown complete"}
+    ]
+    required = [
+        "otel_metrics_stopped",
+        "dns_executor_drained",
+        "sdk_executor_drained",
+        "sdk_session_closed",
+        "sdk_client_closed",
+        "serving_executor_drained",
+        "Shutdown complete",
+    ]
+    optional_order = ["tracing_stopped", "otel_logging_stopped", "data_log_stopped"]
+    positions: dict[str, int] = {}
+    for marker in required:
+        if marker not in markers:
+            raise HarnessError(f"shutdown lifecycle marker {marker!r} was absent")
+        positions[marker] = markers.index(marker)
+    for first, second in zip(required, required[1:], strict=False):
+        if positions[first] >= positions[second]:
+            raise HarnessError(f"shutdown lifecycle order requires {first} before {second}")
+    observed_optional = [marker for marker in optional_order if marker in markers]
+    optional_positions = [markers.index(marker) for marker in observed_optional]
+    if optional_positions != sorted(optional_positions):
+        raise HarnessError("optional OTel shutdown lifecycle markers were out of documented order")
+    if any(
+        markers.index(marker) > positions["dns_executor_drained"] for marker in observed_optional
+    ):
+        raise HarnessError("optional OTel shutdown lifecycle markers must precede DNS drain")
+    return {"ordered_markers": markers, "required_positions": positions}
+
+
 def _mode_observed(
     mode: FaultMode,
     journal: str,
@@ -1214,6 +1540,7 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("validate-corpus")
     commands.add_parser("observe-duration")
+    commands.add_parser("observe-shutdown")
     run_parser = commands.add_parser("run")
     run_parser.add_argument("--mode", choices=[mode.value for mode in FaultMode])
     run_parser.add_argument("--all-modes", action="store_true")
@@ -1231,6 +1558,15 @@ def main() -> int:
                 exporter_image=args.exporter_image,
                 build_exporter=args.build_exporter,
             ).observe_duration()
+            return 0
+        if args.command == "observe-shutdown":
+            HarnessRunner(
+                args.manifest,
+                args.artifacts,
+                exporter_image=args.exporter_image,
+                build_exporter=args.build_exporter,
+                target_operation=args.target_operation,
+            ).observe_shutdown()
             return 0
         if not args.mode and not args.all_modes:
             parser.error("run requires --mode or --all-modes")

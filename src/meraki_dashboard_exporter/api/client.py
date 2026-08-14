@@ -98,6 +98,7 @@ class AsyncMerakiClient:
         self.settings = settings
         self._api: meraki.DashboardAPI | None = None
         self._api_lock = asyncio.Lock()
+        self._closed = False
         self._api_call_count = 0
 
         # #544: dedicated, sized executor for synchronous SDK calls. app.py
@@ -333,10 +334,21 @@ class AsyncMerakiClient:
     async def close(self) -> None:
         """Close the API client and shut down the dedicated SDK executor.
 
-        Terminal: queued SDK futures are cancelled (#544) and no further SDK
-        calls can be scheduled on this client's executor afterwards.
+        Terminal: queued SDK futures are cancelled, running SDK work is joined,
+        and the SDK's private HTTP session is closed afterwards.  DashboardAPI
+        4.4.0 has no public close method; its ``_session`` is a RestSession with
+        the synchronous close method that owns the underlying HTTP client.
         """
         logger.debug("Closing AsyncMerakiClient")
         async with self._api_lock:
+            if self._closed:
+                return
+            self._closed = True
+            api = self._api
             self._api = None
-        self._executor.shutdown(wait=False, cancel_futures=True)
+        self._executor.shutdown(wait=True, cancel_futures=True)
+        logger.info("Shutdown phase complete", phase="sdk_executor_drained")
+        session = getattr(api, "_session", None)
+        if session is not None:
+            session.close()
+            logger.info("Shutdown phase complete", phase="sdk_session_closed")
