@@ -82,7 +82,6 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - `backlog task list --plain` - The queue. `-m v1.1-hardening` filters to that programme
 - `backlog task view <id> --plain` - One task's full spec, criteria and gate
 - `backlog doc list --plain` / `backlog doc view <id> --plain` - The durable docs, loaded on demand
-- `python3 .claude/hooks/backlog-guard_test.py` - Re-test the tracker guard hook after editing it
 </bash_commands>
 
 <code_style>
@@ -152,9 +151,7 @@ Tracker rules, each of which exists because the upstream behaviour is silent and
   structural findings are fine. A tracker *feels* private, which is exactly why this breaks by
   accident.
 - **Never use `--notes` or `--plan` bare** — they *silently replace* the whole section, destroying
-  another session's writes with no warning at exit 0. Use `--append-notes` and `--append-plan`. The
-  `PreToolUse` hook at `.claude/hooks/backlog-guard.py` denies the bare forms; it ships with its own
-  negative-tested suite (`backlog-guard_test.py`, 16 cases).
+  another session's writes with no warning at exit 0. Use `--append-notes` and `--append-plan`. A global `PreToolUse` hook in the agent config denies the bare forms.
 - **Finalize in one call**, so an interrupted run cannot leave finished work looking unfinished:
   `backlog task edit mde-0001 --check-ac 1 --check-ac 2 -s Done`.
 - **Never hand-edit task, draft, doc, decision or milestone markdown.** Section boundaries are
