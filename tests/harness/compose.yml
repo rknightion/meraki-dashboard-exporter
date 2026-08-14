@@ -15,6 +15,11 @@ services:
       - MERAKI_EXPORTER_API__MAX_RETRIES=1
       - MERAKI_EXPORTER_API__CERTIFICATE_PATH=/run/harness/${HARNESS_TRUSTED_CA:-trusted-ca.pem}
       - MERAKI_EXPORTER_SERVER__PORT=9099
+      - MERAKI_EXPORTER_SERVER__API_TOKEN=harness-control-token-not-a-secret
+      # The duration lineage proof consumes the exporter\'s structured cache logs.
+      # This is deliberately scoped to the disposable replay environment.
+      - MERAKI_EXPORTER_LOGGING__LEVEL=DEBUG
+      - MERAKI_EXPORTER_LOGGING__LOG_FORMAT=json
     volumes:
       - ${HARNESS_RUNTIME_DIR:?set per-run runtime directory}:/run/harness:ro
     depends_on:

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import re
 import shutil
 import subprocess
 import tempfile
@@ -21,6 +23,9 @@ DEFAULT_MANIFEST: Final = Path("tests/harness/corpus/manifest.json")
 COMPOSE_FILE: Final = Path("tests/harness/compose.yml")
 PROXY_DOCKERFILE: Final = Path("tests/harness/Dockerfile")
 COMPOSE_TEARDOWN_TIMEOUT_SECONDS: Final = 30
+DURATION_OBSERVATION_TIMEOUT_SECONDS: Final = 90
+DURATION_OBSERVATION_CONTROL_TOKEN: Final = "harness-control-token-not-a-secret"
+_DURATION_METRIC: Final = "meraki_exporter_collector_duration_seconds"
 
 
 class HarnessError(RuntimeError):
@@ -81,6 +86,198 @@ class HarnessRunner:
     def run(self, modes: list[FaultMode]) -> None:
         corpus = load_manifest(self.manifest, require_real=True)
         self.artifacts.mkdir(parents=True, exist_ok=True)
+        exporter_id, proxy_id = self._build_images()
+        evidence: list[dict[str, object]] = []
+        expected_paths = {fixture.path for fixture in corpus.fixtures}
+        for mode in modes:
+            try:
+                evidence.append(
+                    self._run_mode(
+                        mode, exporter_id, proxy_id, len(corpus.fixtures), expected_paths
+                    )
+                )
+            except Exception as error:
+                evidence.append({
+                    "mode": mode.value,
+                    "observed": False,
+                    "error": str(error),
+                    "teardown_fallback": self._last_teardown_fallback,
+                })
+                self._write_evidence(evidence)
+                raise
+            self._write_evidence(evidence)
+
+    def observe_duration(self) -> None:
+        """Prove one scheduled DeviceCollector wrapper run observes the histogram once."""
+        corpus = load_manifest(self.manifest, require_real=True)
+        self.artifacts.mkdir(parents=True, exist_ok=True)
+        exporter_id, proxy_id = self._build_images()
+        expected_paths = {fixture.path for fixture in corpus.fixtures}
+        with tempfile.TemporaryDirectory(prefix="duration-observation-") as temporary:
+            runtime = Path(temporary)
+            shutil.copytree(self.manifest.parent, runtime / "corpus")
+            create_tls_material(runtime)
+            (runtime / "journal.jsonl").touch(mode=0o666)
+            project = f"duration-observation-{int(time.time() * 1000)}"
+            env = {
+                "HARNESS_IMAGE_ID": exporter_id,
+                "HARNESS_PROXY_IMAGE_ID": proxy_id,
+                "HARNESS_RUNTIME_DIR": str(runtime),
+                "HARNESS_MODE": FaultMode.BASELINE.value,
+                "HARNESS_TARGET_OPERATION": "",
+                "HARNESS_ORIGIN_HOST": "replay-origin",
+                "HARNESS_TRUSTED_CA": "trusted-ca.pem",
+            }
+            command = [
+                "docker",
+                "compose",
+                "--project-name",
+                project,
+                "--env-file",
+                "/dev/null",
+                "-f",
+                str(COMPOSE_FILE),
+            ]
+            teardown: dict[str, object] = {"fallback_required": False}
+            observation: dict[str, object] = {
+                "schema_version": 2,
+                "acceptance": "pending",
+                "collector": "DeviceCollector",
+                "image_ids": {"exporter": exporter_id, "proxy": proxy_id},
+                "manifest_provenance": _manifest_provenance(self.manifest, corpus),
+            }
+            try:
+                _run([*command, "up", "--detach", "--no-build"], env=env)
+                self._probe_exporter(command, env)
+                pre = self._wait_for_duration_baseline(command, env, runtime, expected_paths)
+                journal_before = (runtime / "journal.jsonl").read_text(encoding="utf-8")
+                logs_before = _duration_logs(command, env)
+                boundary = len(journal_before.splitlines())
+                log_boundary = len(logs_before.splitlines())
+                wall_started = time.time()
+                monotonic_started = time.monotonic()
+                observation.update({
+                    "observation_mode": "natural_scheduler_wrapper",
+                    "journal_line_boundary": boundary,
+                    "exporter_log_line_boundary": log_boundary,
+                    "pre": pre,
+                    "journal": {"before": journal_before},
+                    "logs": {"before": logs_before},
+                    "product_metric_evidence": _product_metric_evidence(pre["metrics_raw"]),
+                    "observation_times": {
+                        "wall_started_seconds": wall_started,
+                        "monotonic_started_seconds": monotonic_started,
+                    },
+                })
+                post, elapsed = self._wait_for_duration_completion(
+                    command, env, pre, monotonic_started
+                )
+                wall_finished = time.time()
+                monotonic_finished = time.monotonic()
+                observation["post"] = post
+                observation["observation_times"] = {
+                    "wall_started_seconds": wall_started,
+                    "wall_finished_seconds": wall_finished,
+                    "monotonic_started_seconds": monotonic_started,
+                    "monotonic_finished_seconds": monotonic_finished,
+                }
+                observation.update(
+                    _duration_observation(
+                        pre,
+                        post,
+                        elapsed_seconds=elapsed,
+                        observation_window=(wall_started, wall_finished),
+                    )
+                )
+                journal_after = (runtime / "journal.jsonl").read_text(encoding="utf-8")
+                logs_after = _duration_logs(command, env)
+                post_logs = _parse_json_logs(logs_after.splitlines()[log_boundary:])
+                _post_boundary_cache_lineage(post_logs)
+                _processing_evidence(post_logs)
+                _post_boundary_verified_paths(journal_after, boundary, set())
+                observation.update({
+                    "schema_version": 2,
+                    "collector": "DeviceCollector",
+                    "acceptance_stage": "completed",
+                    "image_ids": {"exporter": exporter_id, "proxy": proxy_id},
+                    "manifest_provenance": _manifest_provenance(self.manifest, corpus),
+                    "observation_mode": "natural_scheduler_wrapper",
+                    "journal_line_boundary": boundary,
+                    "exporter_log_line_boundary": log_boundary,
+                    "journal": {
+                        "before": journal_before,
+                        "after": journal_after,
+                        "before_parsed": _journal_entries(journal_before),
+                        "after_parsed": _journal_entries(journal_after),
+                        "suffix": "",
+                    },
+                    "logs": {
+                        "before": logs_before,
+                        "after": logs_after,
+                        "post_boundary_parsed": post_logs,
+                    },
+                    "pre": pre,
+                    "post": post,
+                    "product_metric_evidence": _product_metric_evidence(pre["metrics_raw"]),
+                })
+                self._write_duration_observation(observation)
+            except Exception as error:
+                # Preserve every candidate collected before the failing gate; teardown is separate.
+                candidate = observation
+                candidate.update({
+                    "schema_version": 2,
+                    "acceptance": "failed",
+                    "failure_stage": "duration_observation",
+                    "error": str(error),
+                    "image_ids": {"exporter": exporter_id, "proxy": proxy_id},
+                })
+                for name, value in (("pre", locals().get("pre")), ("post", locals().get("post"))):
+                    if isinstance(value, dict):
+                        candidate[name] = value
+                current_journal = (runtime / "journal.jsonl").read_text(encoding="utf-8")
+                journal_candidate = candidate.get("journal")
+                if not isinstance(journal_candidate, dict):
+                    journal_candidate = {}
+                journal_boundary = candidate.get("journal_line_boundary")
+                suffix = (
+                    current_journal.splitlines()[journal_boundary:]
+                    if isinstance(journal_boundary, int)
+                    else current_journal.splitlines()
+                )
+                journal_candidate.update({
+                    "after": current_journal,
+                    "after_parsed": _journal_entries(current_journal),
+                    "suffix_parsed": _journal_entries("\n".join(suffix)),
+                })
+                candidate["journal"] = journal_candidate
+                current_logs = _duration_logs(command, env, check=False)
+                logs_candidate = candidate.get("logs")
+                if not isinstance(logs_candidate, dict):
+                    logs_candidate = {}
+                log_boundary_value = candidate.get("exporter_log_line_boundary")
+                post_log_lines = (
+                    current_logs.splitlines()[log_boundary_value:]
+                    if isinstance(log_boundary_value, int)
+                    else current_logs.splitlines()
+                )
+                logs_candidate.update({
+                    "after": current_logs,
+                    "post_boundary_parsed": _parse_json_logs(post_log_lines),
+                })
+                candidate["logs"] = logs_candidate
+                self._write_duration_observation(candidate)
+                raise
+            finally:
+                try:
+                    self._teardown(command, env, project, teardown)
+                finally:
+                    (self.artifacts / "teardown-duration-observation.json").write_text(
+                        _redact(json.dumps(teardown, indent=2, sort_keys=True)) + "\n",
+                        encoding="utf-8",
+                    )
+
+    def _build_images(self) -> tuple[str, str]:
+        """Build and resolve the locally pinned exporter and replay-origin images."""
         if self.build_exporter:
             _run(["docker", "build", "--load", "--tag", self.exporter_image, "."])
         exporter_id = image_id(self.exporter_image)
@@ -103,25 +300,120 @@ class HarnessRunner:
         recorded_base = image_label(proxy_tag, "io.m7kni.failure-harness.base-image-id")
         if recorded_base != exporter_id:
             raise HarnessError("proxy image does not record the resolved exporter image ID")
-        evidence: list[dict[str, object]] = []
-        expected_paths = {fixture.path for fixture in corpus.fixtures}
-        for mode in modes:
+        return exporter_id, proxy_id
+
+    def _write_duration_observation(self, observation: dict[str, object]) -> None:
+        """Write redacted duration evidence, including the raw exporter responses."""
+        (self.artifacts / "duration-observation.json").write_text(
+            _redact(json.dumps(observation, indent=2, sort_keys=True)) + "\n", encoding="utf-8"
+        )
+
+    def _wait_for_duration_baseline(
+        self,
+        command: list[str],
+        env: dict[str, str],
+        runtime: Path,
+        expected_paths: set[str],
+    ) -> dict[str, object]:
+        """Wait for a completed, stable baseline replay before observing the next wrapper."""
+        deadline = time.monotonic() + DURATION_OBSERVATION_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
             try:
-                evidence.append(
-                    self._run_mode(
-                        mode, exporter_id, proxy_id, len(corpus.fixtures), expected_paths
-                    )
-                )
-            except Exception as error:
-                evidence.append({
-                    "mode": mode.value,
-                    "observed": False,
-                    "error": str(error),
-                    "teardown_fallback": self._last_teardown_fallback,
-                })
-                self._write_evidence(evidence)
-                raise
-            self._write_evidence(evidence)
+                first = self._capture_duration_snapshot(command, env)
+            except HarnessError:
+                # The web process becomes probeable before the first collector
+                # has necessarily emitted its labelled histogram child.
+                time.sleep(0.25)
+                continue
+            journal = (runtime / "journal.jsonl").read_text(encoding="utf-8")
+            logs_first = _duration_logs(command, env)
+            if (
+                _status_from_snapshot(first)["is_running"]
+                or not _baseline_fixture_evidence(journal, expected_paths)
+                or not _baseline_cache_evidence(_parse_json_logs(logs_first.splitlines()))
+                or not _product_metric_evidence(first["metrics_raw"])
+            ):
+                time.sleep(0.25)
+                continue
+            time.sleep(0.25)
+            second = self._capture_duration_snapshot(command, env)
+            logs_second = _duration_logs(command, env)
+            if _status_from_snapshot(second)["is_running"]:
+                continue
+            if (
+                first["histogram"] == second["histogram"]
+                and first["status"] == second["status"]
+                and first["scheduler"] == second["scheduler"]
+                and len(journal.splitlines())
+                == len((runtime / "journal.jsonl").read_text(encoding="utf-8").splitlines())
+                and len(_parse_json_logs(logs_first.splitlines()))
+                == len(_parse_json_logs(logs_second.splitlines()))
+            ):
+                return second
+        raise HarnessError("DeviceCollector did not reach a stable idle baseline within 90 seconds")
+
+    def _wait_for_duration_completion(
+        self,
+        command: list[str],
+        env: dict[str, str],
+        pre: dict[str, object],
+        observation_started_at: float,
+    ) -> tuple[dict[str, object], float]:
+        """Wait for the next scheduled wrapper run without altering its endpoint gates."""
+        deadline = observation_started_at + DURATION_OBSERVATION_TIMEOUT_SECONDS
+        pre_histogram = _histogram_from_snapshot(pre)
+        while time.monotonic() < deadline:
+            post = self._capture_duration_snapshot(command, env)
+            elapsed = time.monotonic() - observation_started_at
+            post_histogram = _histogram_from_snapshot(post)
+            if post_histogram["count"] == pre_histogram["count"]:
+                time.sleep(0.25)
+                continue
+            if _status_from_snapshot(post)["is_running"]:
+                time.sleep(0.25)
+                continue
+            return post, elapsed
+        raise HarnessError("scheduled DeviceCollector wrapper did not complete within 90 seconds")
+
+    def _capture_duration_snapshot(
+        self, command: list[str], env: dict[str, str]
+    ) -> dict[str, object]:
+        """Capture raw metrics/status responses and their DeviceCollector values."""
+        snapshot_script = (
+            "import json,os,httpx;"
+            "headers={'Authorization':'Bearer '+os.environ['MERAKI_EXPORTER_SERVER__API_TOKEN']};"
+            "m=httpx.get('http://127.0.0.1:9099/metrics',timeout=5);"
+            "s=httpx.get('http://127.0.0.1:9099/status?format=json',headers=headers,timeout=5);"
+            "print(json.dumps({'metrics_status':m.status_code,'metrics_raw':m.text,"
+            "'status_status':s.status_code,'status_raw':s.text}))"
+        )
+        result = _run(
+            [*command, "exec", "--no-TTY", "exporter", "python", "-c", snapshot_script], env=env
+        )
+        try:
+            value = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            raise HarnessError("duration snapshot returned invalid JSON output") from error
+        if not isinstance(value, dict):
+            raise HarnessError("duration snapshot output was not an object")
+        metrics_raw = value.get("metrics_raw")
+        status_raw = value.get("status_raw")
+        if value.get("metrics_status") != 200 or not isinstance(metrics_raw, str):
+            raise HarnessError("duration snapshot metrics request failed")
+        if value.get("status_status") != 200 or not isinstance(status_raw, str):
+            raise HarnessError("duration snapshot status request failed")
+        try:
+            status_payload = json.loads(status_raw)
+        except json.JSONDecodeError as error:
+            raise HarnessError("duration snapshot status response was not JSON") from error
+        return {
+            "monotonic_seconds": time.monotonic(),
+            "metrics_raw": metrics_raw,
+            "status_raw": status_raw,
+            "histogram": _histogram_values(metrics_raw),
+            "status": _device_collector_status(status_payload),
+            "scheduler": _device_availability_scheduler(status_payload),
+        }
 
     def _write_evidence(self, evidence: list[dict[str, object]]) -> None:
         """Persist completed and partial mode summaries as each mode terminates."""
@@ -406,7 +698,399 @@ def _run(
 
 
 def _redact(value: str) -> str:
-    return value.replace("harness-sentinel-not-a-secret", "[REDACTED]")
+    return value.replace("harness-sentinel-not-a-secret", "[REDACTED]").replace(
+        DURATION_OBSERVATION_CONTROL_TOKEN, "[REDACTED]"
+    )
+
+
+def _histogram_values(metrics_raw: str) -> dict[str, float]:
+    """Extract the DeviceCollector duration histogram sum and count from Prometheus text."""
+    values: dict[str, float] = {}
+    for suffix in ("sum", "count"):
+        pattern = re.compile(
+            rf"^{re.escape(_DURATION_METRIC)}_{suffix}"
+            r'\{[^\n}]*collector="DeviceCollector"[^\n}]*\}\s+([^\s]+)$',
+            re.MULTILINE,
+        )
+        match = pattern.search(metrics_raw)
+        if match is None:
+            raise HarnessError(f"DeviceCollector duration histogram {suffix} was absent")
+        try:
+            values[suffix] = float(match.group(1))
+        except ValueError as error:
+            raise HarnessError(
+                f"DeviceCollector duration histogram {suffix} was not numeric"
+            ) from error
+    if values["count"] < 0 or values["sum"] < 0:
+        raise HarnessError("DeviceCollector duration histogram cannot be negative")
+    return values
+
+
+def _device_collector_status(status_payload: object) -> dict[str, int | float | bool]:
+    """Return precisely the status fields used to prove one scheduled collector run."""
+    if not isinstance(status_payload, dict):
+        raise HarnessError("status response was not an object")
+    collectors = status_payload.get("collectors")
+    if not isinstance(collectors, list):
+        raise HarnessError("status response did not contain collectors")
+    for collector in collectors:
+        if not isinstance(collector, dict) or collector.get("name") != "DeviceCollector":
+            continue
+        result: dict[str, int | float | bool] = {}
+        for name in ("total_runs", "total_successes", "total_failures"):
+            value = collector.get(name)
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise HarnessError(f"DeviceCollector status {name} was not an integer")
+            result[name] = value
+        is_running = collector.get("is_running")
+        if not isinstance(is_running, bool):
+            raise HarnessError("DeviceCollector status is_running was not a boolean")
+        result["is_running"] = is_running
+        last_success_time = collector.get("last_success_time")
+        if not isinstance(last_success_time, (int, float)) or isinstance(last_success_time, bool):
+            raise HarnessError("DeviceCollector status last_success_time was not numeric")
+        result["last_success_time"] = float(last_success_time)
+        return result
+    raise HarnessError("status response did not contain DeviceCollector")
+
+
+def _histogram_from_snapshot(snapshot: dict[str, object]) -> dict[str, float]:
+    histogram = snapshot.get("histogram")
+    if not isinstance(histogram, dict):
+        raise HarnessError("duration snapshot did not contain a histogram")
+    count = histogram.get("count")
+    total = histogram.get("sum")
+    if not isinstance(count, float) or not isinstance(total, float):
+        raise HarnessError("duration snapshot histogram values were invalid")
+    return {"count": count, "sum": total}
+
+
+def _status_from_snapshot(snapshot: dict[str, object]) -> dict[str, int | float | bool]:
+    status = snapshot.get("status")
+    if not isinstance(status, dict):
+        raise HarnessError("duration snapshot did not contain collector status")
+    result: dict[str, int | float | bool] = {}
+    for name in (
+        "total_runs",
+        "total_successes",
+        "total_failures",
+        "is_running",
+        "last_success_time",
+    ):
+        value = status.get(name)
+        if name == "is_running":
+            if not isinstance(value, bool):
+                raise HarnessError("duration snapshot is_running was invalid")
+        elif name == "last_success_time":
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                raise HarnessError("duration snapshot last_success_time was invalid")
+            value = float(value)
+        elif not isinstance(value, int) or isinstance(value, bool):
+            raise HarnessError(f"duration snapshot {name} was invalid")
+        result[name] = value
+    return result
+
+
+def _duration_observation(
+    pre: dict[str, object],
+    post: dict[str, object],
+    *,
+    elapsed_seconds: float,
+    observation_window: tuple[float, float] | None = None,
+) -> dict[str, object]:
+    """Calculate and enforce the fixed single-run duration-observation contract."""
+    if elapsed_seconds <= 0:
+        raise HarnessError("observation elapsed time must be positive")
+    pre_histogram = _histogram_from_snapshot(pre)
+    post_histogram = _histogram_from_snapshot(post)
+    pre_status = _status_from_snapshot(pre)
+    post_status = _status_from_snapshot(post)
+    if bool(post_status["is_running"]):
+        raise HarnessError("DeviceCollector must be idle after the observed wrapper")
+
+    count_delta = post_histogram["count"] - pre_histogram["count"]
+    sum_delta = post_histogram["sum"] - pre_histogram["sum"]
+    run_delta = int(post_status["total_runs"]) - int(pre_status["total_runs"])
+    success_delta = int(post_status["total_successes"]) - int(pre_status["total_successes"])
+    failure_delta = int(post_status["total_failures"]) - int(pre_status["total_failures"])
+    if count_delta != 1:
+        raise HarnessError("duration histogram count delta must equal 1")
+    if run_delta != 1:
+        raise HarnessError("total_runs delta must equal 1")
+    if success_delta != 1:
+        raise HarnessError("total_successes delta must equal 1")
+    if failure_delta != 0:
+        raise HarnessError("total_failures delta must equal 0")
+    if sum_delta <= 0:
+        raise HarnessError("duration histogram sum delta must be positive")
+    mean = sum_delta / count_delta
+    if not 0 < mean <= elapsed_seconds:
+        raise HarnessError(
+            "duration mean must be positive and no greater than observation elapsed time"
+        )
+    pre_success = float(pre_status["last_success_time"])
+    post_success = float(post_status["last_success_time"])
+    if post_success <= pre_success:
+        raise HarnessError("last_success_time must advance after the observed wrapper")
+    pre_scheduler = _scheduler_from_snapshot(pre)
+    post_scheduler = _scheduler_from_snapshot(post)
+    if post_scheduler["attempts"] != pre_scheduler["attempts"]:
+        raise HarnessError("device_availability scheduler attempts changed during wrapper-only run")
+    if (
+        post_scheduler["last_success_timestamp_seconds"]
+        != pre_scheduler["last_success_timestamp_seconds"]
+    ):
+        raise HarnessError("device_availability scheduler success changed during wrapper-only run")
+    if observation_window is not None:
+        started, finished = observation_window
+        if not started <= post_success <= finished:
+            raise HarnessError("last_success_time must fall within the observation window")
+    return {
+        "acceptance": "passed",
+        "observation_elapsed_seconds": elapsed_seconds,
+        "deltas": {
+            "histogram_count": int(count_delta),
+            "histogram_sum_seconds": sum_delta,
+            "mean_seconds": mean,
+            "total_runs": run_delta,
+            "total_successes": success_delta,
+            "total_failures": failure_delta,
+            "last_success_time_seconds": post_success - pre_success,
+        },
+    }
+
+
+def _has_verified_paths(journal: str, expected_paths: set[str]) -> bool:
+    """Check that all fixed corpus paths have a verified fixture match."""
+    return _baseline_fixture_evidence(journal, expected_paths)
+
+
+def _post_boundary_verified_paths(
+    journal: str, boundary: int, expected_paths: set[str]
+) -> set[str]:
+    """Reject all upstream requests after the observation boundary.
+
+    A warmed inventory must satisfy the observed scheduler wrapper entirely from cache;
+    the old requirement to replay every route after the boundary was impossible.
+    """
+    suffix = journal.splitlines()[boundary:]
+    if suffix:
+        raise HarnessError("upstream request recorded after duration observation boundary")
+    if not expected_paths:
+        return set()
+    # Retained only for callers that explicitly need pre-boundary fixture proof.
+    matched: set[str] = set()
+    for line in journal.splitlines()[:boundary]:
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(entry, dict):
+            continue
+        path = entry.get("path")
+        if (
+            isinstance(path, str)
+            and entry.get("reason") == "matched"
+            and entry.get("evidence") == "verified fixture"
+        ):
+            matched.add(path)
+    missing = expected_paths - matched
+    if missing:
+        raise HarnessError(
+            f"missing verified fixture matches before observation: {sorted(missing)}"
+        )
+    return matched & expected_paths
+
+
+def _duration_logs(command: list[str], env: dict[str, str], *, check: bool = True) -> str:
+    """Read only exporter JSON logs; Compose itself remains outside the proof."""
+    return _run(
+        [*command, "logs", "--no-color", "--no-log-prefix", "exporter"], env=env, check=check
+    ).stdout
+
+
+def _parse_json_logs(lines: list[str]) -> list[dict[str, object]]:
+    """Parse JSON structured exporter logs, ignoring non-JSON runtime noise."""
+    parsed: list[dict[str, object]] = []
+    for line in lines:
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            parsed.append(value)
+    return parsed
+
+
+def _baseline_fixture_evidence(journal: str, expected_paths: set[str]) -> bool:
+    """Require matched verified fixtures and a separate HTTP 200 response for each route."""
+    entries = _journal_entries(journal)
+    matched = {
+        str(entry["path"])
+        for entry in entries
+        if entry.get("reason") == "matched"
+        and entry.get("evidence") == "verified fixture"
+        and isinstance(entry.get("path"), str)
+    }
+    responded = {
+        str(entry["path"])
+        for entry in entries
+        if entry.get("reason") == "response:sent"
+        and entry.get("evidence") == "HTTP 200 response sent"
+        and isinstance(entry.get("path"), str)
+    }
+    return expected_paths <= matched and expected_paths <= responded
+
+
+def _journal_entries(journal: str) -> list[dict[str, object]]:
+    return _parse_json_logs(journal.splitlines())
+
+
+def _baseline_cache_evidence(logs: list[dict[str, object]]) -> bool:
+    """Require each warmed cache to contain data before the observation boundary."""
+    required = {
+        "Updated organization cache": "org_count",
+        "Updated network cache": "network_count",
+        "Updated device cache": "device_count",
+        "Updated device availabilities cache": "device_count",
+    }
+    for event, count_name in required.items():
+        if not any(
+            entry.get("event") == event and _positive_count(entry, count_name) for entry in logs
+        ):
+            return False
+    return True
+
+
+def _post_boundary_cache_lineage(logs: list[dict[str, object]]) -> None:
+    """Prove the scheduled wrapper used warm inventory without a due endpoint group."""
+    required = {
+        "Cache hit for organizations",
+        "Cache hit for networks",
+        "Cache hit for devices",
+    }
+    hits = {str(entry.get("event")) for entry in logs if entry.get("event") in required}
+    if hits != required:
+        raise HarnessError(f"missing post-boundary cache hits: {sorted(required - hits)}")
+    for entry in logs:
+        event = entry.get("event")
+        if event in required:
+            age = entry.get("cache_age_seconds")
+            if (
+                not isinstance(age, (int, float))
+                or isinstance(age, bool)
+                or not math.isfinite(age)
+                or age < 0
+            ):
+                raise HarnessError("post-boundary cache hit had invalid cache_age_seconds")
+        if isinstance(event, str) and (
+            event.startswith("Cache miss")
+            or "cache update" in event.lower()
+            or "cache invalidat" in event.lower()
+        ):
+            raise HarnessError(f"post-boundary cache mutation observed: {event}")
+
+
+def _processing_evidence(logs: list[dict[str, object]]) -> None:
+    """Require non-empty cached processing while the availability endpoint remains gated."""
+    has_orgs = any(_positive_count(entry, "org_count") for entry in logs)
+    if not has_orgs:
+        raise HarnessError("scheduled DeviceCollector processing evidence had no organizations")
+    for entry in logs:
+        if entry.get("event") != "Processing devices":
+            continue
+        if (
+            _positive_count(entry, "device_count")
+            and entry.get("availability_count") == 0
+            and entry.get("availability_due") is False
+        ):
+            return
+    raise HarnessError("scheduled DeviceCollector processing evidence was absent or empty")
+
+
+def _positive_count(entry: dict[str, object], name: str) -> bool:
+    value = entry.get(name)
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _device_availability_scheduler(status_payload: object) -> dict[str, int | float]:
+    """Return the device_availability scheduler lineage exposed by /status."""
+    if not isinstance(status_payload, dict):
+        raise HarnessError("status response was not an object")
+    scheduler = status_payload.get("scheduler")
+    if not isinstance(scheduler, dict) or not isinstance(scheduler.get("groups"), list):
+        raise HarnessError("status response did not contain scheduler groups")
+    for group in scheduler["groups"]:
+        if not isinstance(group, dict) or group.get("name") != "device_availability":
+            continue
+        attempts = group.get("attempts")
+        success = group.get("last_success_timestamp_seconds")
+        if not isinstance(attempts, int) or isinstance(attempts, bool):
+            raise HarnessError("device_availability scheduler attempts were invalid")
+        if not isinstance(success, (int, float)) or isinstance(success, bool):
+            raise HarnessError("device_availability scheduler success timestamp was invalid")
+        return {"attempts": attempts, "last_success_timestamp_seconds": float(success)}
+    raise HarnessError("status response did not contain device_availability scheduler group")
+
+
+def _scheduler_from_snapshot(snapshot: dict[str, object]) -> dict[str, int | float]:
+    scheduler = snapshot.get("scheduler")
+    if not isinstance(scheduler, dict):
+        raise HarnessError("duration snapshot did not contain scheduler lineage")
+    attempts = scheduler.get("attempts")
+    success = scheduler.get("last_success_timestamp_seconds")
+    if not isinstance(attempts, int) or isinstance(attempts, bool):
+        raise HarnessError("duration snapshot scheduler attempts were invalid")
+    if not isinstance(success, float):
+        raise HarnessError("duration snapshot scheduler success timestamp was invalid")
+    return {"attempts": attempts, "last_success_timestamp_seconds": success}
+
+
+def _product_metric_evidence(metrics_raw: object) -> list[str]:
+    """Keep one corpus-backed device product series as baseline evidence."""
+    if not isinstance(metrics_raw, str):
+        return []
+    return [
+        line
+        for line in metrics_raw.splitlines()
+        if line.startswith((
+            "meraki_device_",
+            "meraki_mr_",
+            "meraki_ms_",
+            "meraki_mx_",
+            "meraki_mt_",
+            "meraki_mg_",
+            "meraki_mv_",
+        ))
+        and not line.startswith("#")
+    ][:10]
+
+
+def _manifest_provenance(manifest: Path, corpus: object) -> dict[str, object]:
+    """Retain the manifest's verified immutable provenance without fixture bodies."""
+    try:
+        raw = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise HarnessError("could not retain duration manifest provenance") from error
+    rows = raw.get("fixtures") if isinstance(raw, dict) else None
+    if not isinstance(rows, list):
+        raise HarnessError("duration manifest provenance did not contain fixtures")
+    fixtures = getattr(corpus, "fixtures", ())
+    return {
+        "manifest_schema_version": raw.get("schema_version"),
+        "fixture_count": len(fixtures),
+        "fixtures": [
+            {
+                "fixture": row.get("fixture"),
+                "path": row.get("path"),
+                "sha256": row.get("sha256"),
+                "evidence_status": row.get("evidence_status"),
+                "evidence_source": row.get("evidence_source"),
+            }
+            for row in rows
+            if isinstance(row, dict)
+        ],
+    }
 
 
 def _mode_observed(
@@ -529,6 +1213,7 @@ def main() -> int:
     parser.add_argument("--target-operation")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("validate-corpus")
+    commands.add_parser("observe-duration")
     run_parser = commands.add_parser("run")
     run_parser.add_argument("--mode", choices=[mode.value for mode in FaultMode])
     run_parser.add_argument("--all-modes", action="store_true")
@@ -538,6 +1223,14 @@ def main() -> int:
             print(
                 f"validated {len(load_manifest(args.manifest, require_real=True).fixtures)} fixture(s)"
             )
+            return 0
+        if args.command == "observe-duration":
+            HarnessRunner(
+                args.manifest,
+                args.artifacts,
+                exporter_image=args.exporter_image,
+                build_exporter=args.build_exporter,
+            ).observe_duration()
             return 0
         if not args.mode and not args.all_modes:
             parser.error("run requires --mode or --all-modes")

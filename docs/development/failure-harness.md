@@ -18,6 +18,7 @@ make failure-harness-validate
 make failure-harness-run MODE=baseline
 uv run python -m tests.harness.runner --build-exporter run --all-modes
 uv run python -m tests.harness.runner --build-exporter --target-operation getOrganizationDevices run --mode slow_valid
+uv run python -m tests.harness.runner --build-exporter observe-duration
 ```
 
 The runner builds the proxy from the local exporter tag with pulls disabled, records the resolved
@@ -46,6 +47,45 @@ exporter-side transport failure log. The 429 modes retain the response-sent `Ret
 the redacted journal: seconds mode is exactly `2`, while HTTP-date mode must be an HTTP-date value.
 Timeout/stall requests enter a deterministic barrier and are released only when the origin process is
 torn down.
+
+## DeviceCollector duration observation
+
+`observe-duration` is a separate native replay command, not a fault mode. It starts a clean
+baseline replay, requires every manifest route to have a verified-fixture match and HTTP 200 response,
+and requires non-empty organization, network, device, and availability cache-population evidence. It
+then takes two idle snapshots at least 250 ms apart. Their histogram, collector status,
+`device_availability` scheduler state, journal length, and exporter-log length must be identical.
+The disposable Compose environment alone enables JSON DEBUG logging so the proof can inspect
+structured inventory-cache events; it does not alter production logging.
+
+The runner records wall-clock and monotonic observation boundaries and captures raw `/metrics` plus
+authenticated `/status?format=json`. It then waits for the next natural scheduler wrapper invocation;
+it deliberately does not use the manual force endpoint, because force bypasses the selected profile
+and would call product-family routes absent from the four-route corpus. The disposable Compose
+environment supplies a fixed explicitly non-secret token solely for the protected status request.
+
+It writes redacted `duration-observation.json` with the pre/post raw responses, histogram count and
+sum, `total_runs`, `total_successes`, `total_failures`, `is_running`, journal boundary, elapsed time,
+and calculated mean. It also retains the image IDs, manifest provenance, raw and parsed journal/log
+boundaries, parsed scheduler state, corpus-backed product-series evidence, and all deltas. If a gate
+fails after startup, the fullest partial candidate is retained with its stage and redacted error;
+teardown evidence remains a separate artifact.
+
+Native acceptance is deliberately exact: one histogram observation, one run, one success, no
+failures, an advancing collector `last_success_time`, a positive sum, and a positive mean no greater
+than the observation elapsed time. The wrapper must use warm caches: structured post-boundary logs
+need finite non-negative cache ages and hits for organizations, networks, and devices, with no miss,
+update, or invalidation. It must log non-empty device processing while availability remains not due.
+The `device_availability` attempt and success state must therefore remain unchanged. This establishes
+that the histogram measures every successful top-level collector wrapper, including cached processing
+cycles where no endpoint group is due; it is not an API-latency histogram. The journal suffix must be
+exactly empty: any post-boundary origin request fails the proof. Teardown remains bounded and must
+leave no resources bearing the exact Compose-project label.
+
+This proves only `DeviceCollector`; it does not exercise `ClientsCollector`.
+The command fails closed if a newly due endpoint group reaches a route that is absent from the
+LIVE-VERIFIED corpus. Capture and sanitise that route under an explicit read-only evidence grant;
+never relax the journal gate or invent a response merely to make the observation pass.
 
 The GitHub Actions workflow is manual-only. In **Actions → Failure harness → Run workflow**, provide
 `all` to exercise every mode, or provide one of the mode names above to run only that replay. Its
