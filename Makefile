@@ -216,6 +216,14 @@ docker-compose-down: ## Stop services
 	@echo "$(BLUE)Stopping services...$(NC)"
 	docker compose -f docker-compose.yml down
 
+.PHONY: failure-harness-validate
+failure-harness-validate: ## Validate the committed live-verified failure corpus
+	uv run python -m tests.harness.runner validate-corpus
+
+.PHONY: failure-harness-run
+failure-harness-run: ## Build locally and run a selected failure mode (MODE=baseline)
+	uv run python -m tests.harness.runner --build-exporter run --mode $(or $(MODE),baseline)
+
 # BuildKit Setup
 .PHONY: buildkit-setup
 buildkit-setup: ## Setup Docker BuildKit builder for multi-arch builds

@@ -79,6 +79,7 @@ Changelog = "changelog.md"
 [[site.nav]]
 Development = [
     { "Extending Collectors" = "extending-collectors.md" },
+    { "Failure Harness" = "development/failure-harness.md" },
     { "Release Process" = "development/release-process.md" },
 ]
 

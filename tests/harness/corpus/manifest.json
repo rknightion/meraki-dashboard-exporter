@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "fixture": "organization.json",
+      "sha256": "1dae2ce0fcca39220e6d1689efe273c18e4535a57363097de21851d3e8010bed",
+      "capture_date_utc": "2026-08-14",
+      "product_family": "organization metadata",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001",
+      "query": "",
+      "sdk_operation": "getOrganization",
+      "sanitizer": {
+        "name": "failure-harness",
+        "version": "3",
+        "method": "operation-and-path-aware stable placeholders"
+      },
+      "evidence_source": "authorised read-only homelab capture for GitHub issue #713",
+      "evidence_status": "LIVE-VERIFIED"
+    },
+    {
+      "fixture": "networks.json",
+      "sha256": "e3f971cf15937254a28aae756b47317437c595fde728abfd935151caacdd03b9",
+      "capture_date_utc": "2026-08-14",
+      "product_family": "sensor,switch,wireless",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/networks",
+      "query": "",
+      "sdk_operation": "getOrganizationNetworks",
+      "sanitizer": {
+        "name": "failure-harness",
+        "version": "3",
+        "method": "operation-and-path-aware stable placeholders"
+      },
+      "evidence_source": "authorised read-only homelab capture for GitHub issue #713",
+      "evidence_status": "LIVE-VERIFIED"
+    },
+    {
+      "fixture": "devices.json",
+      "sha256": "0ac23cf232b22063e7a7350af5fa20cdbd6b1aacc92c389ecd0b9d3caf97603f",
+      "capture_date_utc": "2026-08-14",
+      "product_family": "sensor,switch,wireless",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/devices",
+      "query": "",
+      "sdk_operation": "getOrganizationDevices",
+      "sanitizer": {
+        "name": "failure-harness",
+        "version": "3",
+        "method": "operation-and-path-aware stable placeholders"
+      },
+      "evidence_source": "authorised read-only homelab capture for GitHub issue #713",
+      "evidence_status": "LIVE-VERIFIED"
+    },
+    {
+      "fixture": "device-availabilities.json",
+      "sha256": "9d887974b5db0ff9cce025dcbb2e7c0054ba05eff009a68525df87dfb2f2c244",
+      "capture_date_utc": "2026-08-14",
+      "product_family": "sensor,switch,wireless",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/devices/availabilities",
+      "query": "",
+      "sdk_operation": "getOrganizationDevicesAvailabilities",
+      "sanitizer": {
+        "name": "failure-harness",
+        "version": "3",
+        "method": "operation-and-path-aware stable placeholders"
+      },
+      "evidence_source": "authorised read-only homelab capture for GitHub issue #713",
+      "evidence_status": "LIVE-VERIFIED"
+    }
+  ]
+}

@@ -230,3 +230,6 @@ docs/fonts/
 # Codex fan-out run artefacts (goal/launch/report files + scratch creds) — working state, never committed.
 # Gitignore the DIRECTORY, not a filename pattern, so a new artefact type cannot leak.
 /codex/
+
+# Disposable local evidence from failure replay runs.
+/.failure-harness-artifacts/

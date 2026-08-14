@@ -1,0 +1,771 @@
+[
+  {
+    "address": "address_value_001",
+    "configurationUpdatedAt": "value_003",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_004"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "switch-18-1-8",
+    "lanIp": "value_006",
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:01",
+    "model": "MS120-8LP",
+    "name": "device_name_003",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "switch",
+    "serial": "device_001",
+    "tags": [
+      "tags_value_002"
+    ],
+    "url": "url_value_003"
+  },
+  {
+    "address": "address_value_001",
+    "configurationUpdatedAt": "value_007",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_004"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "switch-18-1-8",
+    "lanIp": "value_008",
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:02",
+    "model": "MS250-24P",
+    "name": "device_name_004",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "switch",
+    "serial": "device_002",
+    "tags": [
+      "tags_value_002"
+    ],
+    "url": "url_value_004"
+  },
+  {
+    "address": "address_value_002",
+    "configurationUpdatedAt": "value_009",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_010"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "wireless-33-1-2",
+    "lanIp": "value_011",
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:03",
+    "model": "MR56",
+    "name": "device_name_005",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "wireless",
+    "serial": "device_003",
+    "tags": [
+      "tags_value_002"
+    ],
+    "url": "url_value_005"
+  },
+  {
+    "address": "address_value_003",
+    "configurationUpdatedAt": "value_012",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:04",
+    "model": "MT20",
+    "name": "device_name_006",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [],
+      "metrics": [
+        "value_014",
+        "value_015"
+      ]
+    },
+    "serial": "device_004",
+    "tags": [
+      "tags_value_002"
+    ],
+    "url": "url_value_006"
+  },
+  {
+    "address": "address_value_003",
+    "configurationUpdatedAt": "value_016",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:05",
+    "model": "MT20",
+    "name": "device_name_007",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [],
+      "metrics": [
+        "value_014",
+        "value_015"
+      ]
+    },
+    "serial": "device_005",
+    "tags": [
+      "tags_value_002"
+    ],
+    "url": "url_value_007"
+  },
+  {
+    "address": "address_value_004",
+    "configurationUpdatedAt": "value_017",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:06",
+    "model": "MT14",
+    "name": "device_name_008",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [
+        "value_018"
+      ],
+      "metrics": [
+        "value_018",
+        "value_019",
+        "value_020",
+        "value_021",
+        "value_022",
+        "value_023",
+        "value_015"
+      ]
+    },
+    "serial": "device_006",
+    "tags": [],
+    "url": "url_value_008"
+  },
+  {
+    "address": "address_value_005",
+    "configurationUpdatedAt": "value_024",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:07",
+    "model": "MT14",
+    "name": "device_name_009",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [],
+      "metrics": [
+        "value_018",
+        "value_019",
+        "value_020",
+        "value_021",
+        "value_022",
+        "value_023",
+        "value_015"
+      ]
+    },
+    "serial": "device_007",
+    "tags": [],
+    "url": "url_value_009"
+  },
+  {
+    "address": "address_value_002",
+    "configurationUpdatedAt": "value_025",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:08",
+    "model": "MT14",
+    "name": "device_name_010",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [],
+      "metrics": [
+        "value_018",
+        "value_019",
+        "value_020",
+        "value_021",
+        "value_022",
+        "value_023",
+        "value_015"
+      ]
+    },
+    "serial": "device_008",
+    "tags": [
+      "tags_value_002"
+    ],
+    "url": "url_value_010"
+  },
+  {
+    "address": "address_value_002",
+    "configurationUpdatedAt": "value_026",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:09",
+    "model": "MT14",
+    "name": "device_name_011",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [],
+      "metrics": [
+        "value_018",
+        "value_019",
+        "value_020",
+        "value_021",
+        "value_022",
+        "value_023",
+        "value_015"
+      ]
+    },
+    "serial": "device_009",
+    "tags": [
+      "tags_value_002"
+    ],
+    "url": "url_value_011"
+  },
+  {
+    "address": "address_value_002",
+    "configurationUpdatedAt": "value_027",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:0a",
+    "model": "MT14",
+    "name": "device_name_012",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [],
+      "metrics": [
+        "value_018",
+        "value_019",
+        "value_020",
+        "value_021",
+        "value_022",
+        "value_023",
+        "value_015"
+      ]
+    },
+    "serial": "device_010",
+    "tags": [
+      "tags_value_002"
+    ],
+    "url": "url_value_012"
+  },
+  {
+    "address": "address_value_002",
+    "configurationUpdatedAt": "value_028",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:0b",
+    "model": "MT14",
+    "name": "device_name_013",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [],
+      "alertingOn": [],
+      "metrics": [
+        "value_018",
+        "value_019",
+        "value_020",
+        "value_021",
+        "value_022",
+        "value_023",
+        "value_015"
+      ]
+    },
+    "serial": "device_011",
+    "tags": [
+      "tags_value_002"
+    ],
+    "url": "url_value_013"
+  },
+  {
+    "address": "address_value_002",
+    "configurationUpdatedAt": "value_026",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:0c",
+    "model": "MT40",
+    "name": "device_name_014",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [],
+      "metrics": [
+        "value_029",
+        "value_030",
+        "value_031",
+        "value_032",
+        "value_033",
+        "value_034",
+        "value_035",
+        "value_036"
+      ]
+    },
+    "serial": "device_012",
+    "tags": [],
+    "url": "url_value_014"
+  },
+  {
+    "address": "address_value_002",
+    "configurationUpdatedAt": "value_037",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:0d",
+    "model": "MT40",
+    "name": "device_name_015",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [],
+      "metrics": [
+        "value_029",
+        "value_030",
+        "value_031",
+        "value_032",
+        "value_033",
+        "value_034",
+        "value_035",
+        "value_036"
+      ]
+    },
+    "serial": "device_013",
+    "tags": [],
+    "url": "url_value_015"
+  },
+  {
+    "address": "address_value_006",
+    "configurationUpdatedAt": "value_037",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:0e",
+    "model": "MT40",
+    "name": "device_name_016",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [],
+      "metrics": [
+        "value_029",
+        "value_030",
+        "value_031",
+        "value_032",
+        "value_033",
+        "value_034",
+        "value_035",
+        "value_036"
+      ]
+    },
+    "serial": "device_014",
+    "tags": [],
+    "url": "url_value_016"
+  },
+  {
+    "address": "address_value_002",
+    "configurationUpdatedAt": "value_026",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:0f",
+    "model": "MT40",
+    "name": "device_name_017",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [],
+      "metrics": [
+        "value_029",
+        "value_030",
+        "value_031",
+        "value_032",
+        "value_033",
+        "value_034",
+        "value_035",
+        "value_036"
+      ]
+    },
+    "serial": "device_015",
+    "tags": [],
+    "url": "url_value_017"
+  },
+  {
+    "address": "address_value_002",
+    "configurationUpdatedAt": "value_026",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:10",
+    "model": "MT40",
+    "name": "device_name_018",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [],
+      "metrics": [
+        "value_029",
+        "value_030",
+        "value_031",
+        "value_032",
+        "value_033",
+        "value_034",
+        "value_035",
+        "value_036"
+      ]
+    },
+    "serial": "device_016",
+    "tags": [],
+    "url": "url_value_018"
+  },
+  {
+    "address": "address_value_002",
+    "configurationUpdatedAt": "value_037",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:11",
+    "model": "MT40",
+    "name": "device_name_019",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [],
+      "metrics": [
+        "value_029",
+        "value_030",
+        "value_031",
+        "value_032",
+        "value_033",
+        "value_034",
+        "value_035",
+        "value_036"
+      ]
+    },
+    "serial": "device_017",
+    "tags": [],
+    "url": "url_value_019"
+  },
+  {
+    "address": "address_value_002",
+    "configurationUpdatedAt": "value_026",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:12",
+    "model": "MT15",
+    "name": "device_name_020",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [
+        "value_018"
+      ],
+      "metrics": [
+        "value_018",
+        "value_019",
+        "value_038",
+        "value_020",
+        "value_021",
+        "value_022",
+        "value_023"
+      ]
+    },
+    "serial": "device_018",
+    "tags": [],
+    "url": "url_value_020"
+  },
+  {
+    "address": "address_value_002",
+    "configurationUpdatedAt": "value_037",
+    "details": [
+      {
+        "name": "device_name_001",
+        "value": "value_013"
+      },
+      {
+        "name": "device_name_002",
+        "value": "value_005"
+      }
+    ],
+    "firmware": "mt-2-0-1",
+    "lanIp": null,
+    "lat": 0.0,
+    "lng": 0.0,
+    "mac": "02:00:00:00:00:13",
+    "model": "MT15",
+    "name": "device_name_021",
+    "networkId": "network_001",
+    "notes": "notes_value_001",
+    "productType": "sensor",
+    "sensor": {
+      "alertProfileIds": [
+        900000000000000001
+      ],
+      "alertingOn": [],
+      "metrics": [
+        "value_018",
+        "value_019",
+        "value_038",
+        "value_020",
+        "value_021",
+        "value_022",
+        "value_023"
+      ]
+    },
+    "serial": "device_019",
+    "tags": [],
+    "url": "url_value_021"
+  }
+]

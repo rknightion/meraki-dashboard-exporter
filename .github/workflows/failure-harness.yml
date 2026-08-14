@@ -1,0 +1,48 @@
+name: Failure harness
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Failure mode, or all
+        required: true
+        default: all
+        type: string
+
+permissions: {}
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
+        with:
+          python-version: "3.14"
+          activate-environment: true
+      - run: uv sync --locked
+      - name: Build local exporter image
+        run: docker build --pull=false --tag meraki-dashboard-exporter:failure-harness .
+      - name: Run selected replay
+        env:
+          HARNESS_MODE: ${{ inputs.mode }}
+        run: |
+          if [ "$HARNESS_MODE" = all ]; then
+            uv run python -m tests.harness.runner run --all-modes
+          else
+            uv run python -m tests.harness.runner run --mode "$HARNESS_MODE"
+          fi
+      - name: Upload redacted failure-harness artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: failure-harness-artifacts
+          path: .failure-harness-artifacts
+          if-no-files-found: warn

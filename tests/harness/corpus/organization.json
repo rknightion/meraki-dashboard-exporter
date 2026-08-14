@@ -1,0 +1,32 @@
+{
+  "api": {
+    "enabled": true
+  },
+  "cloud": {
+    "region": {
+      "host": {
+        "name": "org_name_001"
+      },
+      "name": "org_name_001"
+    }
+  },
+  "id": "org_001",
+  "licensing": {
+    "model": "co-term"
+  },
+  "management": {
+    "details": [
+      {
+        "name": "org_name_002",
+        "value": "value_001"
+      }
+    ]
+  },
+  "name": "org_name_003",
+  "privacy": {
+    "byDefault": {
+      "enabled": false
+    }
+  },
+  "url": "url_value_001"
+}

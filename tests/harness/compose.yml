@@ -1,0 +1,45 @@
+services:
+  exporter:
+    image: ${HARNESS_IMAGE_ID:?set exact local exporter sha256 image ID}
+    pull_policy: never
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+    environment:
+      - MERAKI_EXPORTER_MERAKI__API_KEY=harness-sentinel-not-a-secret-000000000000
+      - MERAKI_EXPORTER_MERAKI__ORG_ID=org_001
+      - MERAKI_EXPORTER_MERAKI__API_BASE_URL=https://${HARNESS_ORIGIN_HOST:-replay-origin}:9443/api/v1
+      - MERAKI_EXPORTER_MERAKI__ALLOW_CUSTOM_API_BASE_URL=true
+      - MERAKI_EXPORTER_COLLECTORS__PROFILE=availability
+      - MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS=device
+      - MERAKI_EXPORTER_API__TIMEOUT=10
+      - MERAKI_EXPORTER_API__MAX_RETRIES=1
+      - MERAKI_EXPORTER_API__CERTIFICATE_PATH=/run/harness/${HARNESS_TRUSTED_CA:-trusted-ca.pem}
+      - MERAKI_EXPORTER_SERVER__PORT=9099
+    volumes:
+      - ${HARNESS_RUNTIME_DIR:?set per-run runtime directory}:/run/harness:ro
+    depends_on:
+      replay-origin:
+        condition: service_started
+    networks: [harness]
+
+  replay-origin:
+    image: ${HARNESS_PROXY_IMAGE_ID:?set exact local proxy sha256 image ID}
+    pull_policy: never
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+    environment:
+      HARNESS_MODE: ${HARNESS_MODE:-baseline}
+      HARNESS_MANIFEST: /run/harness/corpus/manifest.json
+      HARNESS_TLS_CERT: /run/harness/server-cert.pem
+      HARNESS_TLS_KEY: /run/harness/server-key.pem
+      HARNESS_JOURNAL: /run/harness/journal.jsonl
+      HARNESS_TARGET_OPERATION: ${HARNESS_TARGET_OPERATION:-}
+      HARNESS_BARRIER_ENTERED: /run/harness/barrier-entered
+      HARNESS_BARRIER_RELEASE: /run/harness/barrier-release
+    volumes:
+      - ${HARNESS_RUNTIME_DIR:?set per-run runtime directory}:/run/harness
+    networks: [harness]
+
+networks:
+  harness:
+    internal: true

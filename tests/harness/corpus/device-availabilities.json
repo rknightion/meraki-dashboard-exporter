@@ -1,0 +1,229 @@
+[
+  {
+    "mac": "02:00:00:00:00:01",
+    "name": "device_name_003",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "switch",
+    "serial": "device_001",
+    "status": "online",
+    "tags": [
+      "tags_value_002"
+    ]
+  },
+  {
+    "mac": "02:00:00:00:00:02",
+    "name": "device_name_004",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "switch",
+    "serial": "device_002",
+    "status": "online",
+    "tags": [
+      "tags_value_002"
+    ]
+  },
+  {
+    "mac": "02:00:00:00:00:03",
+    "name": "device_name_005",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "wireless",
+    "serial": "device_003",
+    "status": "online",
+    "tags": [
+      "tags_value_002"
+    ]
+  },
+  {
+    "mac": "02:00:00:00:00:04",
+    "name": "device_name_006",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_004",
+    "status": "online",
+    "tags": [
+      "tags_value_002"
+    ]
+  },
+  {
+    "mac": "02:00:00:00:00:05",
+    "name": "device_name_007",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_005",
+    "status": "online",
+    "tags": [
+      "tags_value_002"
+    ]
+  },
+  {
+    "mac": "02:00:00:00:00:06",
+    "name": "device_name_008",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_006",
+    "status": "online",
+    "tags": []
+  },
+  {
+    "mac": "02:00:00:00:00:07",
+    "name": "device_name_009",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_007",
+    "status": "online",
+    "tags": []
+  },
+  {
+    "mac": "02:00:00:00:00:08",
+    "name": "device_name_010",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_008",
+    "status": "online",
+    "tags": [
+      "tags_value_002"
+    ]
+  },
+  {
+    "mac": "02:00:00:00:00:09",
+    "name": "device_name_011",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_009",
+    "status": "online",
+    "tags": [
+      "tags_value_002"
+    ]
+  },
+  {
+    "mac": "02:00:00:00:00:0a",
+    "name": "device_name_012",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_010",
+    "status": "online",
+    "tags": [
+      "tags_value_002"
+    ]
+  },
+  {
+    "mac": "02:00:00:00:00:0b",
+    "name": "device_name_013",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_011",
+    "status": "online",
+    "tags": [
+      "tags_value_002"
+    ]
+  },
+  {
+    "mac": "02:00:00:00:00:0c",
+    "name": "device_name_014",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_012",
+    "status": "online",
+    "tags": []
+  },
+  {
+    "mac": "02:00:00:00:00:0d",
+    "name": "device_name_015",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_013",
+    "status": "online",
+    "tags": []
+  },
+  {
+    "mac": "02:00:00:00:00:0e",
+    "name": "device_name_016",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_014",
+    "status": "online",
+    "tags": []
+  },
+  {
+    "mac": "02:00:00:00:00:0f",
+    "name": "device_name_017",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_015",
+    "status": "online",
+    "tags": []
+  },
+  {
+    "mac": "02:00:00:00:00:10",
+    "name": "device_name_018",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_016",
+    "status": "online",
+    "tags": []
+  },
+  {
+    "mac": "02:00:00:00:00:11",
+    "name": "device_name_019",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_017",
+    "status": "online",
+    "tags": []
+  },
+  {
+    "mac": "02:00:00:00:00:12",
+    "name": "device_name_020",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_018",
+    "status": "online",
+    "tags": []
+  },
+  {
+    "mac": "02:00:00:00:00:13",
+    "name": "device_name_021",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "sensor",
+    "serial": "device_019",
+    "status": "online",
+    "tags": []
+  }
+]

@@ -1,0 +1,22 @@
+[
+  {
+    "details": null,
+    "enrollmentString": "enrollmentstring_value_001",
+    "id": "network_001",
+    "isBoundToConfigTemplate": false,
+    "isVirtual": false,
+    "name": "network_name_001",
+    "notes": "notes_value_001",
+    "organizationId": "org_001",
+    "productTypes": [
+      "sensor",
+      "switch",
+      "wireless"
+    ],
+    "tags": [
+      "tags_value_001"
+    ],
+    "timeZone": "value_002",
+    "url": "url_value_002"
+  }
+]
