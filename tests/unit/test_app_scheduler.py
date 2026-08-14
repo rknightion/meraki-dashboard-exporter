@@ -25,6 +25,7 @@ from pydantic import SecretStr
 from meraki_dashboard_exporter.app import ExporterApp
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
+from meraki_dashboard_exporter.core.error_handling import StartupConfigurationError
 
 
 @pytest.fixture
@@ -200,6 +201,45 @@ class TestStartupCollections:
         # One group-clocked loop task per instantiated collector.
         assert exporter._collector_tasks
         assert len(exporter._collector_tasks) == len(exporter.collector_manager.collectors)
+
+    async def test_reraises_startup_configuration_error(self, test_settings: Settings) -> None:
+        """Deterministic configuration faults abort startup rather than starting loops."""
+        exporter = ExporterApp(test_settings)
+        _stub_startup(exporter)
+        exporter.collector_manager.collect_initial = AsyncMock(
+            side_effect=StartupConfigurationError("fix configuration")
+        )
+
+        with patch(
+            "meraki_dashboard_exporter.app.DiscoveryService",
+            lambda api, settings, rate_limiter=None: SimpleNamespace(
+                run_discovery=AsyncMock(return_value={"orgs": 1})
+            ),
+        ):
+            with pytest.raises(StartupConfigurationError, match="fix configuration"):
+                await exporter._startup_collections()
+
+        assert not exporter._collector_tasks
+
+    async def test_transient_inventory_failure_is_swallowed_and_starts_loops(
+        self, test_settings: Settings
+    ) -> None:
+        """Unverifiable inventory remains startup-tolerant while loops keep running."""
+        exporter = ExporterApp(test_settings)
+        _stub_startup(exporter)
+        exporter.collector_manager.collect_initial = AsyncMock(
+            side_effect=RuntimeError("503 upstream")
+        )
+
+        with patch(
+            "meraki_dashboard_exporter.app.DiscoveryService",
+            lambda api, settings, rate_limiter=None: SimpleNamespace(
+                run_discovery=AsyncMock(return_value={"orgs": 1})
+            ),
+        ):
+            await exporter._startup_collections()
+
+        assert exporter._collector_tasks
 
     async def test_wait_task_is_tracked_in_background_tasks(self, test_settings: Settings) -> None:
         """F-044: the _wait_for_first_collection task is tracked, not discarded."""

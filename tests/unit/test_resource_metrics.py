@@ -149,6 +149,7 @@ class TestResourceMetricsLifespanWiring:
         # scheduler resolve loop) so this test exercises only the resource-metrics
         # task lifecycle without spinning up real collector loops.
         exporter._startup_collections = AsyncMock()  # type: ignore[method-assign]
+        exporter.collector_manager.validate_startup_configuration = AsyncMock()  # type: ignore[method-assign]
         exporter.collector_manager.validate_profile_selection = AsyncMock()  # type: ignore[method-assign]
         exporter._cardinality_monitor_loop = AsyncMock()  # type: ignore[method-assign]
         exporter.expiration_manager.start = AsyncMock()  # type: ignore[method-assign]

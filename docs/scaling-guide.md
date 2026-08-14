@@ -218,7 +218,9 @@ MERAKI_EXPORTER_NETWORK_FILTER__EXCLUDE_NAMES=*-test,*-sandbox
 Resolution semantics: if any `INCLUDE_*` is set, a network must match at least one include rule;
 any `EXCLUDE_*` match drops the network (excludes win). The filter is inactive by default. If a
 configured filter resolves to **zero** networks at startup, the exporter exits with an error so
-typos fail loudly. Live state is observable via `meraki_network_filter_match`,
+typos fail loudly. This happens only after the API successfully verifies that every configured
+organization has an empty filtered result; a transient API failure (including HTTP 503) is logged
+and the exporter starts its collection loops, which retry normally. Live state is observable via `meraki_network_filter_match`,
 `meraki_network_filter_resolved`, and `meraki_network_filter_networks`. See `.env.example` for the
 full field set.
 

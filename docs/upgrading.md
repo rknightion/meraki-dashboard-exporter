@@ -133,6 +133,15 @@ with a configuration tooltip. Configure `MERAKI_EXPORTER_SERVER__API_TOKEN` and 
 or the authenticating reverse proxy supply `Authorization: Bearer <token>`. There is no
 unauthenticated compatibility flag. `/metrics`, `/health`, and `/ready` are unchanged.
 
+### Startup configuration validation
+
+The exporter now adds three deterministic configuration refusals before serving: an active Network
+Filter that successfully resolves to zero networks, no effective enabled collectors, or a
+`MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` lower than
+`MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS`. Each error names the setting to correct.
+Temporary Meraki API failures during startup verification do not abort the process; collection
+loops continue and retry when the API recovers.
+
 ## Where breaking changes are announced
 
 Breaking metric and configuration changes are announced in the [Changelog](changelog.md), which

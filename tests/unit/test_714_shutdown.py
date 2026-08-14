@@ -9,9 +9,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
+from pydantic import SecretStr
 
 from meraki_dashboard_exporter.app import ExporterApp
 from meraki_dashboard_exporter.core.config import Settings
+from meraki_dashboard_exporter.core.config_models import MerakiSettings
+from meraki_dashboard_exporter.core.error_handling import StartupConfigurationError
 
 
 @pytest.mark.asyncio
@@ -59,11 +62,15 @@ async def test_shutdown_drains_dependencies_before_sdk_and_serving_pools() -> No
 
 
 @pytest.mark.asyncio
-async def test_lifespan_cleans_resources_when_startup_fails_before_yield(
-    fast_test_settings: Settings,
-) -> None:
+async def test_lifespan_cleans_resources_when_startup_fails_before_yield() -> None:
     """A deterministic pre-yield failure still runs the complete cleanup path."""
-    exporter = ExporterApp(fast_test_settings)
+    settings = Settings(
+        meraki=MerakiSettings(
+            api_key=SecretStr("test_api_key_at_least_30_characters_long"),
+            org_id="123456",
+        ),
+    )
+    exporter = ExporterApp(settings)
     app = FastAPI()
 
     with (
@@ -79,3 +86,30 @@ async def test_lifespan_cleans_resources_when_startup_fails_before_yield(
     assert exporter._shutdown_complete is True
     assert exporter.client.executor._shutdown is True
     assert exporter._serving_executor._shutdown is True
+
+
+@pytest.mark.asyncio
+async def test_lifespan_cleans_resources_for_startup_configuration_error() -> None:
+    """Verified configuration errors abort pre-yield through the normal cleanup path."""
+    settings = Settings(
+        meraki=MerakiSettings(
+            api_key=SecretStr("test_api_key_at_least_30_characters_long"),
+            org_id="123456",
+        ),
+    )
+    exporter = ExporterApp(settings)
+    app = FastAPI()
+
+    with (
+        patch("meraki_dashboard_exporter.app.resolve_org_id", AsyncMock()),
+        patch.object(
+            exporter.collector_manager,
+            "validate_startup_configuration",
+            AsyncMock(side_effect=StartupConfigurationError("fix setting")),
+        ),
+        pytest.raises(StartupConfigurationError, match="fix setting"),
+    ):
+        async with exporter.lifespan(app):
+            pytest.fail("lifespan yielded after configuration failure")
+
+    assert exporter._shutdown_complete is True

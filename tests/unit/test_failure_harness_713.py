@@ -196,6 +196,7 @@ def test_every_fault_has_an_externally_checkable_decision(tmp_path: Path) -> Non
         "slow_valid",
         "reset",
         "dns_failure",
+        "server_error",
     }
     for mode in FaultMode:
         decision = fault_decision(mode)
@@ -204,6 +205,7 @@ def test_every_fault_has_an_externally_checkable_decision(tmp_path: Path) -> Non
     assert fault_decision(FaultMode.HTML).status == 200
     assert fault_decision(FaultMode.TLS_FAILURE).origin_host == "replay-origin"
     assert fault_decision(FaultMode.DNS_FAILURE).origin_host == "unresolvable.invalid"
+    assert fault_decision(FaultMode.SERVER_ERROR).status == 503
 
 
 def test_runner_requires_external_evidence_for_each_mode() -> None:
@@ -229,6 +231,16 @@ def test_runner_requires_external_evidence_for_each_mode() -> None:
     timeout_journal = json.dumps({"path": next(iter(paths)), "reason": "barrier:entered"})
     assert not _mode_observed(FaultMode.TIMEOUT, timeout_journal, "", paths, elapsed=9)
     assert _mode_observed(FaultMode.TIMEOUT, timeout_journal, "", paths, elapsed=11)
+    assert _mode_observed(
+        FaultMode.SERVER_ERROR,
+        json.dumps({
+            "path": "/api/v1/organizations/org_001/networks",
+            "reason": "fault:server_error",
+        }),
+        "",
+        paths,
+        elapsed=1,
+    )
 
 
 def test_fault_gates_require_causal_evidence_not_proxy_intent() -> None:

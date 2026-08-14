@@ -74,6 +74,10 @@ class CollectorError(Exception):
         self.context = context or {}
 
 
+class StartupConfigurationError(Exception):
+    """A verified deterministic configuration makes exporter startup unsafe."""
+
+
 class TaskExpiredBeforeStartError(CollectorError):
     """A bounded task's deadline elapsed before execution was admitted."""
 

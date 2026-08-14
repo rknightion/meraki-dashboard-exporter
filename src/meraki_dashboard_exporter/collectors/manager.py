@@ -12,7 +12,7 @@ from prometheus_client import Counter, Gauge
 
 from ..core.async_utils import get_task_admission_metrics
 from ..core.constants.metrics_constants import CollectorMetricName
-from ..core.error_handling import TaskExpiredBeforeStartError
+from ..core.error_handling import StartupConfigurationError, TaskExpiredBeforeStartError
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
 from ..core.org_health import OrgHealthTracker
@@ -421,6 +421,44 @@ class CollectorManager:
             configured_names=sorted(configured_collectors),
         )
 
+    async def validate_startup_configuration(self) -> None:
+        """Reject only configuration failures that can be verified deterministically.
+
+        This preflight runs before the ASGI lifespan yields. Inventory failures
+        cannot distinguish a temporary API outage from an empty filter result,
+        so they remain startup-tolerant and are retried by normal collection.
+        """
+        self._validate_static_startup_configuration()
+        if not self.settings.network_filter.is_active:
+            return
+        try:
+            await self._validate_network_filter()
+        except StartupConfigurationError:
+            raise
+        except Exception:
+            logger.exception(
+                "Could not verify network filter at startup; continuing with collection loops"
+            )
+
+    def _validate_static_startup_configuration(self) -> None:
+        """Validate deterministic local settings before any background tasks start."""
+        if not self.collectors:
+            raise StartupConfigurationError(
+                "No effective collectors are enabled. Set "
+                "MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS to at least one valid "
+                "collector name, or remove conflicting "
+                "MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS entries."
+            )
+
+        collector_timeout = self.settings.collectors.collector_timeout
+        fetch_deadline = self.settings.api.per_fetch_deadline_seconds
+        if collector_timeout < fetch_deadline:
+            raise StartupConfigurationError(
+                "MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT must be greater than or equal "
+                "to MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS. Increase "
+                "COLLECTOR_TIMEOUT or decrease PER_FETCH_DEADLINE_SECONDS."
+            )
+
     def _readiness_collectors(self) -> list[MetricCollector]:
         """Collectors that gate readiness: those owning an enabled priority-<=3 group.
 
@@ -705,9 +743,10 @@ class CollectorManager:
                 )
 
         if total_resolved == 0:
-            raise RuntimeError(
-                "Configured network filter resolved to zero networks across "
-                "all organizations after warm-up. Check filter configuration: "
+            raise StartupConfigurationError(
+                "MERAKI_EXPORTER_NETWORK_FILTER__* resolved to zero networks across all "
+                "configured organizations. Adjust the include/exclude rules or remove the "
+                "NetworkFilter settings: "
                 f"{self.settings.network_filter.model_dump()}"
             )
         logger.info("Network filter active", resolved_total=total_resolved)

@@ -30,6 +30,7 @@ from .core.config import Settings
 from .core.config_logger import log_startup_summary
 from .core.constants.metrics_constants import CollectorMetricName
 from .core.discovery import DiscoveryService, resolve_org_id
+from .core.error_handling import StartupConfigurationError
 from .core.logging import get_logger, setup_logging
 from .core.metric_expiration import MetricExpirationManager
 from .core.otel_data_logs import DataLogEmitter
@@ -481,6 +482,7 @@ class ExporterApp:
                 self.settings,
                 rate_limiter=self.collector_manager.rate_limiter,
             )
+            await self.collector_manager.validate_startup_configuration()
             await self.collector_manager.validate_profile_selection()
         except BaseException:
             await self._shutdown()
@@ -565,6 +567,8 @@ class ExporterApp:
                 initial_collection_completed = True
                 self.cardinality_monitor.mark_first_run_complete()
                 logger.info("Initial collection completed")
+            except StartupConfigurationError:
+                raise
             except Exception:
                 logger.exception("Initial collection failed, continuing with tiered loops")
 
@@ -605,6 +609,8 @@ class ExporterApp:
             self._background_tasks.add(wait_task)
             wait_task.add_done_callback(self._background_tasks.discard)
 
+        except StartupConfigurationError:
+            raise
         except Exception:
             logger.exception("Failed during startup collections")
             # Don't crash the server if initial collection fails

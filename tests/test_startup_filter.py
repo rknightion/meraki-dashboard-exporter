@@ -15,6 +15,7 @@ from prometheus_client import REGISTRY
 
 from meraki_dashboard_exporter.collectors.manager import CollectorManager
 from meraki_dashboard_exporter.core.config_models import NetworkFilterSettings
+from meraki_dashboard_exporter.core.error_handling import StartupConfigurationError
 
 pytestmark = pytest.mark.asyncio
 
@@ -50,13 +51,46 @@ def _bare_manager(*, networks_by_org, filter_settings) -> CollectorManager:
 
 
 async def test_filter_resolving_to_zero_in_all_orgs_raises() -> None:
-    """If the active filter resolves to zero across all orgs, raise RuntimeError."""
+    """A verified all-empty active filter refuses startup with an actionable error."""
     manager = _bare_manager(
         networks_by_org={"ORG_A": [{"id": "L_1", "name": "prod", "tags": []}]},
         filter_settings=NetworkFilterSettings(include_names=["nope-*"]),
     )
-    with pytest.raises(RuntimeError, match="resolved to zero networks"):
+    with pytest.raises(
+        StartupConfigurationError,
+        match=r"MERAKI_EXPORTER_NETWORK_FILTER__\*",
+    ):
         await manager._validate_network_filter()
+
+
+async def test_empty_effective_collector_set_refuses_startup() -> None:
+    """No enabled registered collectors is a deterministic configuration error."""
+    manager = CollectorManager.__new__(CollectorManager)
+    manager.collectors = []
+    manager.settings = MagicMock()
+    manager.settings.collectors.collector_timeout = 240
+    manager.settings.api.per_fetch_deadline_seconds = 120
+
+    with pytest.raises(
+        StartupConfigurationError,
+        match="MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS",
+    ):
+        await manager.validate_startup_configuration()
+
+
+async def test_collector_timeout_below_fetch_deadline_refuses_startup() -> None:
+    """A collector cannot time out before its fetch deadline can elapse."""
+    manager = CollectorManager.__new__(CollectorManager)
+    manager.collectors = [MagicMock()]
+    manager.settings = MagicMock()
+    manager.settings.collectors.collector_timeout = 60
+    manager.settings.api.per_fetch_deadline_seconds = 120
+
+    with pytest.raises(
+        StartupConfigurationError,
+        match="MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT",
+    ):
+        await manager.validate_startup_configuration()
 
 
 async def test_filter_resolving_to_zero_in_one_org_logs_error(
@@ -88,6 +122,21 @@ async def test_filter_resolving_to_zero_in_one_org_logs_error(
     assert any(entry.get("org_id") == "ORG_B" for entry in captured), (
         f"Expected an ERROR log for ORG_B but captured: {captured}"
     )
+
+
+async def test_transient_filter_verification_failure_is_startup_tolerant() -> None:
+    """An API failure cannot prove an empty filter and therefore must not refuse startup."""
+    manager = CollectorManager.__new__(CollectorManager)
+    manager.collectors = [MagicMock()]
+    manager.settings = MagicMock()
+    manager.settings.collectors.collector_timeout = 240
+    manager.settings.api.per_fetch_deadline_seconds = 120
+    manager.settings.network_filter.is_active = True
+    manager._validate_network_filter = AsyncMock(side_effect=RuntimeError("HTTP 503"))
+
+    await manager.validate_startup_configuration()
+
+    manager._validate_network_filter.assert_awaited_once()
 
 
 async def test_filter_match_metric_emitted() -> None:

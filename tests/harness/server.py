@@ -33,6 +33,7 @@ class FaultMode(StrEnum):
     SLOW_VALID = "slow_valid"
     RESET = "reset"
     DNS_FAILURE = "dns_failure"
+    SERVER_ERROR = "server_error"
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,7 @@ def fault_decision(mode: FaultMode) -> FaultDecision:
             "origin set to unresolvable.invalid",
             origin_host="unresolvable.invalid",
         ),
+        FaultMode.SERVER_ERROR: FaultDecision("fault:server_error", "HTTP 503", 503),
     }
     return decisions[mode]
 
@@ -251,6 +253,7 @@ async def serve() -> None:
                 404: "Not Found",
                 429: "Too Many Requests",
                 502: "Bad Gateway",
+                503: "Service Unavailable",
             }.get(status, "Failure")
             response_headers = {
                 "Content-Length": str(len(payload)),

@@ -267,7 +267,9 @@ For large organisations, restrict scraping to a subset of networks via the
 `MERAKI_EXPORTER_NETWORK_FILTER__*` settings (include/exclude by name glob, ID,
 or tag). The filter is inactive by default; if a filter is configured but
 resolves to zero networks across all configured orgs at startup, the exporter
-exits with an error so typos fail loudly. See `.env.example` and the
+exits with an error so typos fail loudly. The refusal requires a successful API response that
+proves the filtered result is empty; a transient verification failure is logged and collection
+starts normally so the exporter can recover when Meraki does. See `.env.example` and the
 [Configuration](config.md) guide for details.
 
 ## Log Aggregation
