@@ -118,17 +118,20 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 
 Open work lives in `backlog/`, driven **only** through the `backlog` CLI. `backlog task list --plain`
 is the queue; `backlog doc list --plain` lists the durable docs. **GitHub Issues was retired as this
-project's tracker on 2026-08-14**, after 449 closed issues, and the issues authored by the maintainer
-and by CI were archived and then **deleted from GitHub** — so `gh issue view <N>` 404s for them.
-Historical work is still cited as `#NNN` everywhere: in 901 commits, in these instruction files and in
-code comments. The *Closed GitHub issues* doc is the index, and `archive/` holds every body and reply
-(redacted; `archive/README.md` carries the placeholder mapping). New work is `mde-NNNN`. Two ID
+project's tracker on 2026-08-14**, after 449 closed issues, and **444 of the 455 were archived and then
+deleted from GitHub** — the 442 filed by the maintainer plus 2 automated API-drift reports — so
+`gh issue view <N>` 404s for them. Historical work is still cited as `#NNN` everywhere: in 901 commits,
+in these instruction files and in code comments. The *Closed GitHub issues* doc is the index, and
+`archive/github-issues-2026-08-14.json` holds every body and reply, redacted with stable placeholders
+(`archive/README.md` carries the mapping and the verification method). New work is `mde-NNNN`. Two ID
 spaces, no overlap. The GitHub Project board "meraki-dashboard-exporter roadmap" is likewise retired.
 
 **The GitHub tracker itself is still open, deliberately** — external contributors must be able to file,
 and it is the channel D16 relies on for sanitised real API responses from device families nobody here
-owns. Renovate keeps its dependency dashboard there. Anything arriving that way becomes an `mde-NNNN`
-task citing the issue number; the board, not the issue, is where it is worked.
+owns. **All 11 surviving issues are other people's:** nine from six outside contributors, plus
+Renovate's live dependency dashboard and its closed predecessor. Nothing anyone else wrote was deleted,
+and nothing here should delete one. Anything arriving that way becomes an `mde-NNNN` task citing the
+issue number; the board, not the issue, is where it is worked.
 
 Four docs, loaded on demand via `backlog doc view <id> --plain`, so none costs context until read:
 
