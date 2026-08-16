@@ -117,7 +117,7 @@ class DNSResolver:
                 # IP changed, invalidate cache for old IP
                 old_ip = previous_info.get("ip")
                 if old_ip and old_ip in self._cache:
-                    logger.info(
+                    logger.debug(
                         "Client IP changed, invalidating DNS cache",
                         client_id=client_id,
                         old_ip=old_ip,
@@ -299,7 +299,7 @@ class DNSResolver:
             result = await with_timeout(
                 self._system_dns_lookup(ip),
                 timeout=self.timeout,
-                operation=f"DNS lookup for {ip}",
+                operation="reverse DNS lookup",
                 default=timeout_sentinel,
             )
             if result is timeout_sentinel:

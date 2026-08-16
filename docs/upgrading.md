@@ -42,6 +42,33 @@ image tag.
 
 ## Changes at 1.1
 
+### Configuration compatibility changes
+
+Review these settings before deploying 1.1; several configurations accepted by 1.0.2 are now
+refused or behave differently:
+
+- `meraki.api_base_url` must use HTTPS. Local HTTP mock endpoints and plaintext proxies are no
+  longer accepted.
+- A base URL outside the built-in Meraki regional URL set requires
+  `meraki.allow_custom_api_base_url=true`. Corporate proxies and egress gateways must opt in and
+  must still expose an HTTPS URL.
+- `collectors.collector_timeout` must be at least `api.per_fetch_deadline_seconds`; values from
+  30 through 119 seconds therefore fail with the shipped 120-second fetch deadline.
+- Disabling every collector is refused. This also means a webhook-receiver-only deployment must
+  leave at least one collector enabled.
+- An active `network_filter` that resolves successfully to no networks is refused.
+- `api.rate_limit_burst` now defaults to 10 instead of 20.
+- The effective global collector concurrency may be lower than
+  `collectors.max_concurrent_collectors` because it is bounded by SDK executor capacity. With the
+  shipped `api.executor_workers=10` and `api.concurrency_limit=5`, the effective cap is 2.
+- The two control POST endpoints require `server.api_token`, as detailed below.
+
+An unset collection profile continues to collect the full endpoint-group surface, preserving
+1.0.2 behavior. Explicit `availability` and `standard` profiles remain opt-in reductions. A solved
+plan that exceeds its API-budget target now starts with a prominent warning and exports the
+`meraki_exporter_scheduler_over_budget` gauge instead of aborting startup; select a smaller profile
+or tune the budget when this occurs.
+
 `meraki_exporter_cardinality_product_series` now counts only `meraki_*` product-data samples.
 Exporter instrumentation and Python/process runtime samples move to the new
 `meraki_exporter_cardinality_exporter_series` bucket; the cardinality monitor's own samples remain
@@ -135,10 +162,12 @@ unauthenticated compatibility flag. `/metrics`, `/health`, and `/ready` are unch
 
 ### Startup configuration validation
 
-The exporter now adds three deterministic configuration refusals before serving: an active Network
-Filter that successfully resolves to zero networks, no effective enabled collectors, or a
+The exporter now adds six deterministic configuration refusals before serving: a non-HTTPS API base
+URL, a custom API base URL without the explicit opt-in, an active Network Filter that successfully
+resolves to zero networks, no effective enabled collectors, a
 `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` lower than
-`MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS`. Each error names the setting to correct.
+`MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS`, or an invalid profile value. Each error names the
+setting to correct.
 Temporary Meraki API failures during startup verification do not abort the process; collection
 loops continue and retry when the API recovers.
 

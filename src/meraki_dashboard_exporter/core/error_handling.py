@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import random
+import re
 import time
 from collections.abc import Callable, Coroutine
 from enum import StrEnum
@@ -480,7 +481,7 @@ def with_error_handling(
                         is_not_available = (
                             status_code in {402, 404}
                             if status_code is not None
-                            else "402" in error_msg or "404" in error_msg
+                            else re.search(r"\b(?:402|404)\b", error_msg) is not None
                         )
                         if is_not_available:
                             logger.debug(
@@ -671,7 +672,7 @@ def categorize_error(error: Exception) -> ErrorCategory:
     # Fallback string heuristics for non-APIError exceptions (no .status).
     if "429" in error_str or "rate limit" in error_str:
         return ErrorCategory.API_RATE_LIMIT
-    elif any(code in error_str for code in ["402", "404"]) or "not found" in error_str:
+    elif re.search(r"\b(?:402|404)\b", error_str) or "not found" in error_str:
         return ErrorCategory.API_NOT_AVAILABLE
     elif any(code in error_str for code in ["401", "403"]):
         return ErrorCategory.API_AUTH_ERROR

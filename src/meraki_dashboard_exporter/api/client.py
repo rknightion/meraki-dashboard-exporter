@@ -38,11 +38,10 @@ def _install_redirect_auth_boundary(api: Any) -> None:
     base_url = getattr(session, "_base_url", None)
     if not isinstance(base_url, str):
         return
-    configured_origin = _origin(base_url)
     original_send = session._send_request
 
     def send_with_auth_boundary(self: Any, method: str, url: str, **kwargs: Any) -> httpx.Response:
-        if _origin(url) == configured_origin:
+        if _is_meraki_owned_url(url):
             return cast(httpx.Response, original_send(method, url, **kwargs))
 
         request = self._client.build_request(method, url, **kwargs)
@@ -50,6 +49,17 @@ def _install_redirect_auth_boundary(api: Any) -> None:
         return cast(httpx.Response, self._client.send(request, follow_redirects=False))
 
     session._send_request = MethodType(send_with_auth_boundary, session)
+
+
+_MERAKI_HOST_SUFFIXES = ("meraki.com", "meraki.ca", "meraki.cn", "meraki.in", "gov-meraki.com")
+
+
+def _is_meraki_owned_url(url: str) -> bool:
+    """Return whether *url* uses HTTPS on a host owned by Meraki."""
+    scheme, host, _port = _origin(url)
+    return scheme == "https" and any(
+        host == suffix or host.endswith(f".{suffix}") for suffix in _MERAKI_HOST_SUFFIXES
+    )
 
 
 def _origin(url: str) -> tuple[str, str, int | None]:

@@ -34,6 +34,7 @@ class TestMSCollector:
         parent.settings.api.ms_port_usage_interval = 0
         parent.settings.api.concurrency_limit = 5
         parent.rate_limiter = None
+        parent.inventory.get_allowed_network_ids = AsyncMock(return_value=None)
 
         # Mock the _create_gauge method to return actual Gauge objects
         def create_gauge(name, description, labelnames):

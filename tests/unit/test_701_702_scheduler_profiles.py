@@ -152,7 +152,7 @@ def test_threshold_is_solved_plan_demand_not_network_count(
     scheduler = EndpointScheduler(_settings(rps=0.5), _Limiter(0.5))  # type: ignore[arg-type]
     scheduler.register_groups(_fixture_groups())
     scheduler.resolve(_fixture_shape(preset))
-    assert scheduler.requires_explicit_profile() is True
+    assert scheduler.requires_explicit_profile() is False
     assert scheduler.diagnostics()["profile"]["threshold_demand_rps"] > 0.35
 
 
@@ -205,8 +205,8 @@ def test_shed_skip_counter_records_only_due_execution_opportunities() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unset_over_budget_profile_fails_the_startup_preflight() -> None:
-    """An ambiguous over-budget plan raises before the server lifespan yields."""
+async def test_unset_over_budget_profile_does_not_block_startup() -> None:
+    """Budget pressure remains observable without crash-looping the exporter."""
     manager = object.__new__(CollectorManager)
     manager.settings = SimpleNamespace(collectors=SimpleNamespace(profile=None))
     manager.inventory = SimpleNamespace(warm_cache=AsyncMock())
@@ -219,11 +219,10 @@ async def test_unset_over_budget_profile_fails_the_startup_preflight() -> None:
         "target_utilization": 0.7,
     }
 
-    with pytest.raises(RuntimeError, match="MERAKI_EXPORTER_COLLECTORS__PROFILE"):
-        await manager.validate_profile_selection()
+    await manager.validate_profile_selection()
 
-    manager.inventory.warm_cache.assert_awaited_once()
-    manager._resolve_and_log_schedule.assert_awaited_once()
+    manager.inventory.warm_cache.assert_not_awaited()
+    manager._resolve_and_log_schedule.assert_not_awaited()
 
 
 @pytest.mark.asyncio

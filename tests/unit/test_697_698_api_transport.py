@@ -101,3 +101,21 @@ def test_697_cross_origin_redirect_strips_authorization() -> None:
     response = session._send_request("GET", "https://attacker.invalid/collect")
 
     assert "Authorization" not in response.request.headers
+
+
+def test_meraki_shard_redirect_retains_authorization() -> None:
+    """SDK shard redirects stay authenticated on a Meraki-owned host."""
+    session = _session_for_redirect_test()
+    client_module._install_redirect_auth_boundary(SimpleNamespace(_session=session))
+    response = session._send_request("GET", "https://n123.meraki.com/api/v1/organizations")
+
+    assert response.request.headers["Authorization"] == "Bearer secret"
+
+
+def test_lookalike_meraki_host_loses_authorization() -> None:
+    """Host-boundary matching rejects attacker-controlled Meraki lookalikes."""
+    session = _session_for_redirect_test()
+    client_module._install_redirect_auth_boundary(SimpleNamespace(_session=session))
+    response = session._send_request("GET", "https://api.meraki.com.attacker.net/collect")
+
+    assert "Authorization" not in response.request.headers
