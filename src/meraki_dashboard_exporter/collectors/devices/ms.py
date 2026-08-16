@@ -907,14 +907,18 @@ class MSCollector(BaseDeviceCollector):
         device_lookup = {device.get("serial"): device for device in devices}
         if not devices:
             return True
-        network_ids = sorted(await self.parent.inventory.get_allowed_network_ids(org_id) or [])
+        allowed_network_ids = await self.parent.inventory.get_allowed_network_ids(org_id)
+        if allowed_network_ids is not None and not allowed_network_ids:
+            # Filter active but resolves to zero networks — nothing to collect.
+            return True
+        network_ids = sorted(allowed_network_ids) if allowed_network_ids is not None else None
 
         with LogContext(org_id=org_id):
             response = await facade_for(self).call(
                 "getOrganizationSwitchPortsStatusesBySwitch",
                 self.api.switch.getOrganizationSwitchPortsStatusesBySwitch,
                 org_id,
-                networkIds=network_ids or None,
+                networkIds=network_ids,
                 perPage=20,
                 total_pages="all",
             )
@@ -1452,14 +1456,18 @@ class MSCollector(BaseDeviceCollector):
         device_lookup = {device.get("serial"): device for device in devices}
         if not devices:
             return True
-        network_ids = sorted(await self.parent.inventory.get_allowed_network_ids(org_id) or [])
+        allowed_network_ids = await self.parent.inventory.get_allowed_network_ids(org_id)
+        if allowed_network_ids is not None and not allowed_network_ids:
+            # Filter active but resolves to zero networks — nothing to collect.
+            return True
+        network_ids = sorted(allowed_network_ids) if allowed_network_ids is not None else None
 
         with LogContext(org_id=org_id):
             usage_response = await facade_for(self).call(
                 "getOrganizationSwitchPortsUsageHistoryByDeviceByInterval",
                 self.api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval,
                 org_id,
-                networkIds=network_ids or None,
+                networkIds=network_ids,
                 timespan=3600,
                 perPage=50,
                 total_pages="all",
@@ -1474,7 +1482,7 @@ class MSCollector(BaseDeviceCollector):
                 "getOrganizationSwitchPortsClientsOverviewByDevice",
                 self.api.switch.getOrganizationSwitchPortsClientsOverviewByDevice,
                 org_id,
-                networkIds=network_ids or None,
+                networkIds=network_ids,
                 timespan=3600,
                 perPage=20,
                 total_pages="all",
