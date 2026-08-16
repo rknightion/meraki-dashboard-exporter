@@ -796,9 +796,12 @@ class ServerSettings(BaseModel):
     @classmethod
     def normalize_blank_api_token(cls, value: SecretStr | None) -> SecretStr | None:
         """Treat an empty or whitespace-only control token as unconfigured."""
-        if value is not None and not value.get_secret_value().strip():
+        if value is None:
             return None
-        return value
+        normalized = value.get_secret_value().strip()
+        if not normalized:
+            return None
+        return SecretStr(normalized)
 
     ui_enabled: bool = Field(
         True,

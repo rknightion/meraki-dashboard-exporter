@@ -907,12 +907,14 @@ class MSCollector(BaseDeviceCollector):
         device_lookup = {device.get("serial"): device for device in devices}
         if not devices:
             return True
+        network_ids = sorted(await self.parent.inventory.get_allowed_network_ids(org_id) or [])
 
         with LogContext(org_id=org_id):
             response = await facade_for(self).call(
                 "getOrganizationSwitchPortsStatusesBySwitch",
                 self.api.switch.getOrganizationSwitchPortsStatusesBySwitch,
                 org_id,
+                networkIds=network_ids or None,
                 perPage=20,
                 total_pages="all",
             )
@@ -925,6 +927,8 @@ class MSCollector(BaseDeviceCollector):
         for switch in switches:
             serial = switch.get("serial")
             if not serial:
+                continue
+            if serial not in device_lookup:
                 continue
 
             device_info = device_lookup.get(serial, {})
@@ -1448,12 +1452,14 @@ class MSCollector(BaseDeviceCollector):
         device_lookup = {device.get("serial"): device for device in devices}
         if not devices:
             return True
+        network_ids = sorted(await self.parent.inventory.get_allowed_network_ids(org_id) or [])
 
         with LogContext(org_id=org_id):
             usage_response = await facade_for(self).call(
                 "getOrganizationSwitchPortsUsageHistoryByDeviceByInterval",
                 self.api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval,
                 org_id,
+                networkIds=network_ids or None,
                 timespan=3600,
                 perPage=50,
                 total_pages="all",
@@ -1468,6 +1474,7 @@ class MSCollector(BaseDeviceCollector):
                 "getOrganizationSwitchPortsClientsOverviewByDevice",
                 self.api.switch.getOrganizationSwitchPortsClientsOverviewByDevice,
                 org_id,
+                networkIds=network_ids or None,
                 timespan=3600,
                 perPage=20,
                 total_pages="all",
@@ -1486,6 +1493,8 @@ class MSCollector(BaseDeviceCollector):
             switch_serial = switch.get("serial")
             if not switch_serial:
                 continue
+            if switch_serial not in device_lookup:
+                continue
             for port in switch.get("ports", []) or []:
                 port_id = str(port.get("portId", ""))
                 online = (port.get("counts", {}) or {}).get("byStatus", {}).get("online", 0)
@@ -1494,6 +1503,8 @@ class MSCollector(BaseDeviceCollector):
         for switch in usage_switches:
             serial = switch.get("serial")
             if not serial:
+                continue
+            if serial not in device_lookup:
                 continue
 
             device_info = device_lookup.get(serial, {})
@@ -2260,7 +2271,7 @@ class MSCollector(BaseDeviceCollector):
 
                 # Rogue/unauthorized DHCP servers seen (#292).
                 try:
-                    with LogContext(network_id=network_id):
+                    with LogContext(org_id=org_id, network_id=network_id):
                         servers_response = await facade_for(self).call(
                             "getNetworkSwitchDhcpV4ServersSeen",
                             self.api.switch.getNetworkSwitchDhcpV4ServersSeen,
@@ -2311,7 +2322,7 @@ class MSCollector(BaseDeviceCollector):
 
                 # Dynamic ARP Inspection coverage (#293).
                 try:
-                    with LogContext(network_id=network_id):
+                    with LogContext(org_id=org_id, network_id=network_id):
                         dai_response = await facade_for(self).call(
                             "getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice",
                             self.api.switch.getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice,
@@ -2414,7 +2425,7 @@ class MSCollector(BaseDeviceCollector):
             async def _collect_network_lags(network: dict[str, Any]) -> None:
                 network_id = network["id"]
                 try:
-                    with LogContext(network_id=network_id):
+                    with LogContext(org_id=org_id, network_id=network_id):
                         response = await facade_for(self).call(
                             "getNetworkSwitchLinkAggregations",
                             self.api.switch.getNetworkSwitchLinkAggregations,

@@ -412,8 +412,8 @@ class EndpointScheduler:
         return str(value) if value is not None else None
 
     def active_profile(self) -> str:
-        """Return the selected profile; absent selection behaves as standard."""
-        return self.configured_profile() or "standard"
+        """Return the selected profile; absent selection preserves full collection."""
+        return self.configured_profile() or "full"
 
     def _groups_for_profile(self, profile: str) -> list[EndpointGroup]:
         priority = _PROFILE_PRIORITIES[profile]
@@ -427,10 +427,8 @@ class EndpointScheduler:
         )
 
     def requires_explicit_profile(self) -> bool:
-        """Whether the default standard plan exceeds its solved budget target."""
-        return self.configured_profile() is None and self._profile_threshold_demand_rps > (
-            (self._budget_used_at_last_solve or 0.0) * float(self._sched("target_utilization"))
-        )
+        """Return false: an over-budget plan is observable but not startup-fatal."""
+        return False
 
     def configured_budget_rps(self) -> float:
         """Configured API budget: requests_per_second × shared_fraction."""

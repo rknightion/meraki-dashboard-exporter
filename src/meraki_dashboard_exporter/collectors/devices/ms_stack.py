@@ -242,5 +242,5 @@ class MSStackCollector(SubCollectorMixin):
                     continue
                 await group.create_task(collect_and_record(network), name=f"stack_{network_id}")
 
-        if any(successful_fetches):
+        if not successful_fetches or any(successful_fetches):
             self.parent._mark_group_ran(EndpointGroupName.MS_STACKS)

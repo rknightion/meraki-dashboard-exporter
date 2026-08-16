@@ -265,6 +265,7 @@ class ExporterApp:
 
         self._startup_summary_logged = False
         self._first_collection_complete = False
+        self._startup_configuration_error: StartupConfigurationError | None = None
 
         # Setup Jinja2 templates
         template_dir = Path(__file__).parent / "templates"
@@ -360,6 +361,8 @@ class ExporterApp:
             startup/discovery before any collection has been attempted.
 
         """
+        if self._startup_configuration_error is not None:
+            return True, "startup configuration failed"
         manager = self.collector_manager
         if not manager.has_attempted_collection():
             return False, "starting up"
@@ -525,7 +528,7 @@ class ExporterApp:
         # Start background task for initial collection and tiered loops
         startup_task = asyncio.create_task(self._startup_collections())
         self._background_tasks.add(startup_task)
-        startup_task.add_done_callback(self._background_tasks.discard)
+        startup_task.add_done_callback(self._on_startup_task_done)
 
         # Start periodic cardinality analysis
         cardinality_task = asyncio.create_task(self._cardinality_monitor_loop())
@@ -614,6 +617,16 @@ class ExporterApp:
         except Exception:
             logger.exception("Failed during startup collections")
             # Don't crash the server if initial collection fails
+
+    def _on_startup_task_done(self, task: asyncio.Task[None]) -> None:
+        """Retrieve startup failures and make configuration failures unhealthy."""
+        self._background_tasks.discard(task)
+        if task.cancelled():
+            return
+        error = task.exception()
+        if isinstance(error, StartupConfigurationError):
+            self._startup_configuration_error = error
+            logger.error("Startup configuration validation failed", error=str(error))
 
     async def _interruptible_sleep(self, seconds: float) -> None:
         """Sleep in 1s increments, waking early on shutdown."""
@@ -914,6 +927,7 @@ class ExporterApp:
                     not api_token
                     or not api_token.strip()
                     or scheme.lower() != "bearer"
+                    or not provided.isascii()
                     or not hmac.compare_digest(provided, api_token)
                 ):
                     return JSONResponse(

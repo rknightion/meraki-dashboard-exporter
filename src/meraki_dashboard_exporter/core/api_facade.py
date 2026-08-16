@@ -13,6 +13,7 @@ from prometheus_client import Counter
 from .constants.metrics_constants import CollectorMetricName
 from .error_handling import (
     RetryableAPIError,
+    _apply_jitter,
     _get_retry_after_seconds,
     _is_rate_limit_error,
     validate_response_format,
@@ -114,9 +115,8 @@ class MerakiApiFacade:
                         retry_after = min(retry_after, retry_after_cap)
                     if self._rate_limiter is not None:
                         self._rate_limiter.record_throttle_event(org_id, retry_after)
-                    await asyncio.sleep(
-                        retry_after if retry_after is not None else min(2**attempt, 60)
-                    )
+                    delay = retry_after if retry_after is not None else min(2**attempt, 60)
+                    await asyncio.sleep(_apply_jitter(delay, 0.2))
                     attempt += 1
                     continue
 
@@ -141,9 +141,17 @@ class MerakiApiFacade:
 
 def facade_for(owner: Any) -> MerakiApiFacade:
     """Create a facade bound to a collector/service and its inherited limiter."""
-    parent = getattr(owner, "parent", None)
-    settings = getattr(owner, "settings", None) or getattr(parent, "settings", None)
-    limiter = getattr(owner, "rate_limiter", None) or getattr(parent, "rate_limiter", None)
+    owner_vars = vars(owner)
+    current = owner_vars.get("collector") or owner
+    settings = None
+    limiter = None
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        current_vars = vars(current)
+        settings = settings or current_vars.get("settings")
+        limiter = limiter or current_vars.get("rate_limiter")
+        current = current_vars.get("parent")
     return MerakiApiFacade(settings=settings, rate_limiter=limiter)
 
 

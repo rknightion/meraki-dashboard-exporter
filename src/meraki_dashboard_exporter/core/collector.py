@@ -566,13 +566,16 @@ class MetricCollector(ABC):
             True when the group should run now.
 
         """
-        if getattr(self, "_force_run", False):
-            return True
         if self.scheduler is None:
             return True
         profile_allows = getattr(self.scheduler, "profile_allows", None)
         if profile_allows is not None and not profile_allows(group):
             return False
+        is_shed = getattr(self.scheduler, "is_shed", None)
+        if is_shed is not None and is_shed(group) is True:
+            return False
+        if getattr(self, "_force_run", False):
+            return True
         return self.scheduler.should_run(group)
 
     def _mark_group_ran(self, group: EndpointGroupName) -> None:

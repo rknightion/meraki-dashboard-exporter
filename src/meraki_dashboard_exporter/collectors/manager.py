@@ -107,9 +107,17 @@ class CollectorManager:
         self.collectors: list[MetricCollector] = []
 
         # Bound concurrent collector runs across all the per-collector loops.
-        self._collector_semaphore = asyncio.Semaphore(
-            calculate_collector_admission_limit(self.settings)
-        )
+        admission_limit = calculate_collector_admission_limit(self.settings)
+        configured_limit = int(self.settings.collectors.max_concurrent_collectors)
+        if admission_limit < configured_limit:
+            logger.warning(
+                "Collector concurrency reduced to fit SDK executor capacity",
+                configured_limit=configured_limit,
+                effective_limit=admission_limit,
+                executor_workers=self.settings.api.executor_workers,
+                per_collector_fanout=self.settings.api.concurrency_limit,
+            )
+        self._collector_semaphore = asyncio.Semaphore(admission_limit)
         self._task_metrics = get_task_admission_metrics()
 
         # Initialize shared inventory service for caching org/network/device data.
@@ -581,17 +589,6 @@ class CollectorManager:
         # degrades to floors/heartbeats. The first tier cycles below then run with
         # every gate open (never-ran => due), preserving today's warm startup.
         await self._resolve_and_log_schedule()
-        if self.scheduler.requires_explicit_profile():
-            diagnostics = self.scheduler.diagnostics()
-            profile = diagnostics["profile"]
-            raise RuntimeError(
-                "The solved standard collection plan requires an explicit "
-                "MERAKI_EXPORTER_COLLECTORS__PROFILE choice: estimated demand "
-                f"{profile['threshold_demand_rps']:.3f} rps exceeds the budget target "
-                f"{diagnostics['effective_budget_rps'] * diagnostics['target_utilization']:.3f} "
-                "rps. Choose availability, standard, or full."
-            )
-
         # Validate the network filter resolves to at least one network somewhere.
         if self.settings.network_filter.is_active:
             await self._validate_network_filter()
@@ -619,25 +616,8 @@ class CollectorManager:
         the server lifespan yields so an implicit over-budget profile cannot be
         logged and swallowed by the background initial-collection task.
         """
-        if self.settings.collectors.profile is not None:
-            return
-        await self.inventory.warm_cache()
-        # D10 keeps transient Meraki unavailability startup-tolerant. If the
-        # shape cannot be verified, make no profile decision; a later resolver
-        # pass will solve once inventory recovers.
-        if not await self._resolve_and_log_schedule():
-            return
-        if not self.scheduler.requires_explicit_profile():
-            return
-        diagnostics = self.scheduler.diagnostics()
-        profile = diagnostics["profile"]
-        raise RuntimeError(
-            "The solved standard collection plan requires an explicit "
-            "MERAKI_EXPORTER_COLLECTORS__PROFILE choice: estimated demand "
-            f"{profile['threshold_demand_rps']:.3f} rps exceeds the budget target "
-            f"{diagnostics['effective_budget_rps'] * diagnostics['target_utilization']:.3f} "
-            "rps. Choose availability, standard, or full."
-        )
+        # Budget pressure is reported by the scheduler warning and gauge. Do not
+        # make API availability a prerequisite for binding the health endpoint.
 
     async def _resolve_and_log_schedule(self) -> bool:
         """Compute the org shape and resolve endpoint-group intervals (#617).
