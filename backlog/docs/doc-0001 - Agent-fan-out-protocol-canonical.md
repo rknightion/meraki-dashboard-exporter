@@ -3,21 +3,23 @@ id: doc-0001
 title: Agent fan-out protocol (canonical)
 type: specification
 created_date: '2026-08-14 15:57'
-updated_date: '2026-08-17 07:57'
+updated_date: '2026-08-17 09:43'
 ---
-> **Imported verbatim from `~/repos/agent-fanout-generic.md` on 2026-08-14.** This in-repo copy is
-> authoritative for `meraki-dashboard-exporter`: it makes the repository self-contained, so an agent
-> holding only this checkout — in CI, or on another machine — has the whole campaign model. The
-> source is a loose unversioned file on one machine, backed up nowhere, so the copy is strictly more
-> durable than a pointer to it.
+> **Generated file — do not edit this copy.** Rendered from `sources/fan-out-protocol.md` in
+> `rknightion/agent-docs` at commit `1b0c0e7`. This copy is authoritative for `meraki-dashboard-exporter`, so an agent
+> with only this checkout has the whole document.
 >
-> **Nothing below is summarised, compressed or adapted.** If the source changes, the edit is not
-> finished until every consuming repo has been re-imported in the same change. Find the consumers
-> with `ls -d ~/repos/*/backlog/docs/*fan-out-protocol*` rather than trusting a list.
+> **To change anything below, edit the source in `agent-docs` and re-render.** An edit made here is
+> silently discarded by the next render, and worse, it makes this board disagree with every other one
+> until someone notices. That has happened: five boards were synced by hand and one diverged within
+> the hour.
 >
-> This project's own rules are the *Wave operating model* doc, which deliberately restates nothing
-> from here.
-
+> Corrections are expected and welcome — this document is meant to absorb what each run learns. Make
+> them at the source, where one edit reaches every consuming repository, and run `bin/doctor` to prove
+> nothing is stale.
+>
+> Do not summarise, compress or adapt the body. A compression drifts from its source while continuing
+> to look authoritative.
 # Prompting a coding agent for long-running fan-out workflows
 
 Use this sourcebook when writing a launch prompt and goal file for a long-running agent campaign. It
