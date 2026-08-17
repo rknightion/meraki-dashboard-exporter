@@ -1,9 +1,9 @@
 ---
 id: doc-0003
-title: 'Closed GitHub issues: pre-Backlog history index'
+title: Closed GitHub issues (pre-Backlog history index)
 type: other
 created_date: '2026-08-14 16:01'
-updated_date: '2026-08-14 16:18'
+updated_date: '2026-08-17 09:03'
 ---
 GitHub Issues was retired as this project's tracker on **2026-08-14**, after 449 closed issues. This
 document is the index of that history. It is the record of *what happened*; the board
