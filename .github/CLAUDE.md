@@ -55,7 +55,7 @@ workflows") — don't recreate them from memory of an earlier version of this do
   list so it doesn't block PRs. When adding a new required CI job, add it to `ci-success`'s
   `needs:`, or it silently won't gate merges/Renovate automerge.
 - **`trigger-docs-sync.yml`** fires a `repository_dispatch` to a *different* repo
-  (`rknightion/m7kni-net-site`) on `docs/**`/`zensical.toml`/`scripts/**` changes, authenticated
+  (`m7kni/m7kni-net-site`) on `docs/**`/`zensical.toml`/`scripts/**` changes, authenticated
   with `secrets.DOCS_SYNC_PAT` (not `GITHUB_TOKEN` — cross-repo dispatch needs a PAT).
 </critical_notes>
 

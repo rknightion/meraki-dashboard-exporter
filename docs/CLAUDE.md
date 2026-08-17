@@ -1,5 +1,5 @@
 <system_context>
-Documentation source for the Meraki Dashboard Exporter. This is a **Zensical** site (config: `zensical.toml` at repo root — despite `mkdocs`-style naming in the Makefile, this project does NOT use MkDocs; there is no `mkdocs.yml`). The site is not built in this repo: pushes to `main` touching `docs/**`, `zensical.toml`, or `scripts/**` trigger `.github/workflows/trigger-docs-sync.yml`, which fires a `repository_dispatch` into `rknightion/m7kni-net-site`, the repo that actually builds/publishes the site.
+Documentation source for the Meraki Dashboard Exporter. This is a **Zensical** site (config: `zensical.toml` at repo root — despite `mkdocs`-style naming in the Makefile, this project does NOT use MkDocs; there is no `mkdocs.yml`). The site is not built in this repo: pushes to `main` touching `docs/**`, `zensical.toml`, or `scripts/**` trigger `.github/workflows/trigger-docs-sync.yml`, which fires a `repository_dispatch` into `m7kni/m7kni-net-site`, the repo that actually builds/publishes the site.
 </system_context>
 
 <critical_notes>
