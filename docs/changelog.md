@@ -1,5 +1,74 @@
 # Changelog
 
+## [1.1.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v1.0.2...v1.1.0) (2026-08-21)
+
+
+### Features
+
+* **apidrift:** acknowledge file, quieter tracker, actionable-first report ([a286fac](https://github.com/rknightion/meraki-dashboard-exporter/commit/a286fac8dae3cf5a11db0b76b812cfad39fc8808)), closes [#693](https://github.com/rknightion/meraki-dashboard-exporter/issues/693)
+* **apidrift:** flag deprecated consumed ops, stop mis-reporting untyped responses ([b354e02](https://github.com/rknightion/meraki-dashboard-exporter/commit/b354e0265f0d7f4d766a6c166008478223c27ff7)), closes [#690](https://github.com/rknightion/meraki-dashboard-exporter/issues/690)
+* **api:** route SDK traffic through one facade ([1997aec](https://github.com/rknightion/meraki-dashboard-exporter/commit/1997aec37a93343fc002cdfeebcb7bdd4d87b7fe)), closes [#698](https://github.com/rknightion/meraki-dashboard-exporter/issues/698)
+* **chart:** add Artifact Hub metadata and point home at the docs site ([b517424](https://github.com/rknightion/meraki-dashboard-exporter/commit/b51742446d93c54af0462fd64eaea9f189031823))
+* **docs:** take the fleet project icon for the site logo and favicon ([e403066](https://github.com/rknightion/meraki-dashboard-exporter/commit/e403066d0eb408607b4f054bde6f950f20ee7d60))
+* **docs:** take the fleet-generated social card ([e1ad7bb](https://github.com/rknightion/meraki-dashboard-exporter/commit/e1ad7bb4c06622339abddbaefc57589f895f2f75))
+* **hardening:** bound collection and preserve availability ([16e5f3b](https://github.com/rknightion/meraki-dashboard-exporter/commit/16e5f3be5aacafd6bc6ff81106378f56a86881af)), closes [#699](https://github.com/rknightion/meraki-dashboard-exporter/issues/699) [#701](https://github.com/rknightion/meraki-dashboard-exporter/issues/701) [#702](https://github.com/rknightion/meraki-dashboard-exporter/issues/702) [#704](https://github.com/rknightion/meraki-dashboard-exporter/issues/704) [#705](https://github.com/rknightion/meraki-dashboard-exporter/issues/705) [#706](https://github.com/rknightion/meraki-dashboard-exporter/issues/706) [#708](https://github.com/rknightion/meraki-dashboard-exporter/issues/708) [#709](https://github.com/rknightion/meraki-dashboard-exporter/issues/709) [#723](https://github.com/rknightion/meraki-dashboard-exporter/issues/723) [#725](https://github.com/rknightion/meraki-dashboard-exporter/issues/725)
+* mint release-please token from the OpenBao broker ([0f9c03c](https://github.com/rknightion/meraki-dashboard-exporter/commit/0f9c03c289c143d314dcd1b42e5357dca4275dc3))
+* mint the docs-sync token from the OpenBao broker ([3086631](https://github.com/rknightion/meraki-dashboard-exporter/commit/308663137b1f2d1cfea2076c44e9b18df927c254))
+
+
+### Bug Fixes
+
+* **api:** enforce Meraki credential origin boundary ([ca8b938](https://github.com/rknightion/meraki-dashboard-exporter/commit/ca8b938b1318aea0c97d73381f13eca58feba1e0)), closes [#697](https://github.com/rknightion/meraki-dashboard-exporter/issues/697)
+* apply CodeRabbit auto-fixes ([9ac78e7](https://github.com/rknightion/meraki-dashboard-exporter/commit/9ac78e788c76cec0bf263ca3f9c1616c38c8f7cf))
+* author is Rob Knight, not Rob Knighton ([3e7bd82](https://github.com/rknightion/meraki-dashboard-exporter/commit/3e7bd82d3679fdb1b19b52164ddffec9ac43cfcf))
+* **cardinality:** reconcile exposed series and evict maps ([349e8ed](https://github.com/rknightion/meraki-dashboard-exporter/commit/349e8edfaf56c241b46ef99f5b90cd96fca64411)), closes [#711](https://github.com/rknightion/meraki-dashboard-exporter/issues/711)
+* **cardinality:** separate exporter instrumentation ([edf538f](https://github.com/rknightion/meraki-dashboard-exporter/commit/edf538fb6a4c757da9f62a9d8dd2d4efce46d6f5)), closes [#726](https://github.com/rknightion/meraki-dashboard-exporter/issues/726)
+* **clients:** schedule only enabled child groups ([fd5cb69](https://github.com/rknightion/meraki-dashboard-exporter/commit/fd5cb69524ec4e1a88c55ad4adf52d5f59dbd6fe)), closes [#703](https://github.com/rknightion/meraki-dashboard-exporter/issues/703)
+* **concurrency:** apply backpressure before allocation ([9e97504](https://github.com/rknightion/meraki-dashboard-exporter/commit/9e975040e87b1582467a3444351139de7855154d)), closes [#710](https://github.com/rknightion/meraki-dashboard-exporter/issues/710)
+* **control:** fail closed and serialize forced runs ([40e24f8](https://github.com/rknightion/meraki-dashboard-exporter/commit/40e24f82315719387bc7fd17242996ca291e43ad)), closes [#695](https://github.com/rknightion/meraki-dashboard-exporter/issues/695)
+* **deps:** update dependency meraki to v4.4.0 ([#685](https://github.com/rknightion/meraki-dashboard-exporter/issues/685)) ([b061c82](https://github.com/rknightion/meraki-dashboard-exporter/commit/b061c82513f7e9991b87edf4ca37cb2e4e82bdb4))
+* **docs:** give the full metrics list a title of its own ([d3d9b65](https://github.com/rknightion/meraki-dashboard-exporter/commit/d3d9b65d61da04cbcd5ecc921b293b0951cddd1e))
+* **docs:** make generators fail on under-reporting ([0410fc2](https://github.com/rknightion/meraki-dashboard-exporter/commit/0410fc263af8da7e98786309d29d2b2fb2956db9)), closes [#719](https://github.com/rknightion/meraki-dashboard-exporter/issues/719)
+* **docs:** stop the metrics generator fighting the committed catalog title ([ce03473](https://github.com/rknightion/meraki-dashboard-exporter/commit/ce034737f58556b8a335845e7d04e3d6dbcb416b))
+* drain lifecycle resources on shutdown ([f2feb5d](https://github.com/rknightion/meraki-dashboard-exporter/commit/f2feb5dff0d77d393ea96d18925ff5351864b568)), closes [#714](https://github.com/rknightion/meraki-dashboard-exporter/issues/714)
+* isolate release lock workflow secret ([26505fd](https://github.com/rknightion/meraki-dashboard-exporter/commit/26505fd73b3d45ec5e8713559d75587b998ccd56))
+* isolate release lock workflow secret ([66865c5](https://github.com/rknightion/meraki-dashboard-exporter/commit/66865c58ab371c3624e69356b357d42143c2a899))
+* **pacing:** align burst default with Meraki budget ([d5adf5b](https://github.com/rknightion/meraki-dashboard-exporter/commit/d5adf5b0ae2c7bcb04067a70e04b0661678ac2fa)), closes [#700](https://github.com/rknightion/meraki-dashboard-exporter/issues/700)
+* pass the JWT role explicitly for docs-sync ([a148a86](https://github.com/rknightion/meraki-dashboard-exporter/commit/a148a861796afd33a58e894a527534cc391150f7))
+* **privacy:** prevent client MAC identifier leakage ([2d73c8d](https://github.com/rknightion/meraki-dashboard-exporter/commit/2d73c8db4fb0458e567ea34fec51e9cfc1efecee)), closes [#696](https://github.com/rknightion/meraki-dashboard-exporter/issues/696)
+* refuse invalid startup configurations ([75a36e2](https://github.com/rknightion/meraki-dashboard-exporter/commit/75a36e2262ba7061a9baba0738c6c6bc7c39afb9)), closes [#716](https://github.com/rknightion/meraki-dashboard-exporter/issues/716)
+* remove hub build artifacts committed by mistake ([76e6147](https://github.com/rknightion/meraki-dashboard-exporter/commit/76e61478276c853b8d112db17da0d4ca1fcd2cdd))
+* revive the lockfile workflow and mint its push token from OpenBao ([bc8c1a9](https://github.com/rknightion/meraki-dashboard-exporter/commit/bc8c1a96cfeea6a6d9f26bfcbe5deca2c93b25db))
+* **scheduler:** fail open for minimal scheduler doubles ([02c0f17](https://github.com/rknightion/meraki-dashboard-exporter/commit/02c0f17dcde99d95591da1ce6eb867b00d4a8a6e))
+* **webhooks:** reject stale and replayed alerts ([26813ed](https://github.com/rknightion/meraki-dashboard-exporter/commit/26813eddea68fe66b8aa7c4035f738f8727c011f)), closes [#715](https://github.com/rknightion/meraki-dashboard-exporter/issues/715)
+
+
+### Documentation
+
+* adopt the m7kni.io inverted docs model ([57fea59](https://github.com/rknightion/meraki-dashboard-exporter/commit/57fea5998defc37adb45847b8fd9ce7aa09ebb38))
+* **agents:** the issues are deleted, so state the real counts ([50b36d6](https://github.com/rknightion/meraki-dashboard-exporter/commit/50b36d63f844288cd6b9d9865f2f9c2da602f051))
+* **archive:** archive the GitHub Issues tracker before deleting it ([1ed3db3](https://github.com/rknightion/meraki-dashboard-exporter/commit/1ed3db3d2fd4d335fdfbd5a435f1ce71204975dc))
+* **assets:** replace the social card with one for this project ([0fd660b](https://github.com/rknightion/meraki-dashboard-exporter/commit/0fd660beecc385eb2473c9e6f4896cb81e89e0da))
+* correct operational and generated references ([61e49fe](https://github.com/rknightion/meraki-dashboard-exporter/commit/61e49fe19251b768085e1726e302acde5431f335)), closes [#720](https://github.com/rknightion/meraki-dashboard-exporter/issues/720)
+* drop MathJax — the hub renders maths at build time now ([0bc204c](https://github.com/rknightion/meraki-dashboard-exporter/commit/0bc204cc6ec6ddde5492ac3a44b3350bcb5c245d))
+* drop the ES6 polyfill and the dead sitemap priority ([29ba66f](https://github.com/rknightion/meraki-dashboard-exporter/commit/29ba66f173c1bb71104ac956f1fdab69a02a19e0))
+* fix broken internal links ([9557435](https://github.com/rknightion/meraki-dashboard-exporter/commit/9557435ac3aa5d4790980d004f772e9df0b495e0))
+* **otel:** clarify resource version queries ([ae4ea9a](https://github.com/rknightion/meraki-dashboard-exporter/commit/ae4ea9a29b81c2bfb8804bd341f55072e65bb8d2)), closes [#664](https://github.com/rknightion/meraki-dashboard-exporter/issues/664)
+* put a copy-paste quickstart on the landing page ([f40edc4](https://github.com/rknightion/meraki-dashboard-exporter/commit/f40edc445e8a5d4bd3218b0867639db38accabe2))
+* re-import fan-out protocol (context-cost rules) ([a697e2b](https://github.com/rknightion/meraki-dashboard-exporter/commit/a697e2b9d6e4fbe9bde50ffc1d814f20f326c86b))
+* re-render the fan-out protocol from agent-docs ([d8a3898](https://github.com/rknightion/meraki-dashboard-exporter/commit/d8a389803a68b890f5c58decd2d069f630fc6982))
+* re-render the fan-out protocol from agent-docs 711db6c ([f5dbe85](https://github.com/rknightion/meraki-dashboard-exporter/commit/f5dbe85ace8294b63ad0974cb91efc6875deea69))
+* re-render the fan-out protocol from agent-docs b0d76d8 ([4fab492](https://github.com/rknightion/meraki-dashboard-exporter/commit/4fab492a0100d1312a422a9840c3e635b47615e4))
+* **readme:** lead with what the project is ([b86ec3e](https://github.com/rknightion/meraki-dashboard-exporter/commit/b86ec3ea1ca28086548cc9a5ed66d6a2f869478d))
+* record collector extension seam costs ([6d03473](https://github.com/rknightion/meraki-dashboard-exporter/commit/6d034732e1581bc98154fa9f98246d1f63338c37)), closes [#722](https://github.com/rknightion/meraki-dashboard-exporter/issues/722)
+* repoint moved repo references after the org consolidation ([f185b24](https://github.com/rknightion/meraki-dashboard-exporter/commit/f185b24a92b218819f04b152961b9d8a9c14c6a0))
+* **support:** publish device verification levels ([15da33c](https://github.com/rknightion/meraki-dashboard-exporter/commit/15da33c5f1249e70625d588a6de236999ded287a)), closes [#718](https://github.com/rknightion/meraki-dashboard-exporter/issues/718)
+* **tracker:** align canonical fan-out protocol ([61eeb4c](https://github.com/rknightion/meraki-dashboard-exporter/commit/61eeb4c8b7f2690abf51a004419677d9484d4881))
+* **tracker:** correct the canonical owner in the rendered header ([22e11f5](https://github.com/rknightion/meraki-dashboard-exporter/commit/22e11f5bf7ee7b89127e51e287cec08475631e0f))
+* **tracker:** normalise the closed-issues doc title ([08f5a6f](https://github.com/rknightion/meraki-dashboard-exporter/commit/08f5a6fceb742520e11a81c13547ef7d1941ccca))
+* **tracker:** re-import the fan-out protocol from canonical ([69ecd2e](https://github.com/rknightion/meraki-dashboard-exporter/commit/69ecd2ee494d23b293e0de9febb167779eb471d7))
+* **tracker:** render agent documents from the canonical source ([affb156](https://github.com/rknightion/meraki-dashboard-exporter/commit/affb1568c574e442b499bd06fb5f7889078f5b9f))
+
 ## [1.0.2](https://github.com/rknightion/meraki-dashboard-exporter/compare/v1.0.1...v1.0.2) (2026-07-20)
 
 
