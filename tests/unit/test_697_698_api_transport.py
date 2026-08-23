@@ -103,13 +103,13 @@ def test_697_cross_origin_redirect_strips_authorization() -> None:
     assert "Authorization" not in response.request.headers
 
 
-def test_meraki_shard_redirect_retains_authorization() -> None:
-    """SDK shard redirects stay authenticated on a Meraki-owned host."""
+def test_meraki_shard_redirect_loses_authorization() -> None:
+    """A Meraki-owned shard is still a distinct credential origin."""
     session = _session_for_redirect_test()
     client_module._install_redirect_auth_boundary(SimpleNamespace(_session=session))
     response = session._send_request("GET", "https://n123.meraki.com/api/v1/organizations")
 
-    assert response.request.headers["Authorization"] == "Bearer secret"
+    assert "Authorization" not in response.request.headers
 
 
 def test_lookalike_meraki_host_loses_authorization() -> None:
@@ -117,5 +117,21 @@ def test_lookalike_meraki_host_loses_authorization() -> None:
     session = _session_for_redirect_test()
     client_module._install_redirect_auth_boundary(SimpleNamespace(_session=session))
     response = session._send_request("GET", "https://api.meraki.com.attacker.net/collect")
+
+    assert "Authorization" not in response.request.headers
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://api.meraki.com/api/v1/organizations",
+        "https://api.meraki.com:8443/api/v1/organizations",
+    ],
+)
+def test_scheme_or_port_origin_change_loses_authorization(url: str) -> None:
+    """Changing the scheme or effective port changes the credential origin."""
+    session = _session_for_redirect_test()
+    client_module._install_redirect_auth_boundary(SimpleNamespace(_session=session))
+    response = session._send_request("GET", url)
 
     assert "Authorization" not in response.request.headers
