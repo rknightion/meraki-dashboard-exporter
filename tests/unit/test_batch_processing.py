@@ -91,12 +91,25 @@ class TestProcessInBatchesWithErrors:
         # Max concurrent should not exceed batch size
         assert max_concurrent <= 3
 
-    async def test_delay_between_batches(self):
-        """Test delay between batch processing."""
+    async def test_delay_between_batches(self, monkeypatch):
+        """Test batch starts follow the configured monotonic schedule."""
         batch_times = []
+        clock = 0.0
+
+        def monotonic() -> float:
+            return clock
+
+        async def sleep(delay: float) -> None:
+            nonlocal clock
+            clock += delay
+
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.core.batch_processing.time.monotonic", monotonic
+        )
+        monkeypatch.setattr("meraki_dashboard_exporter.core.batch_processing.asyncio.sleep", sleep)
 
         async def process_item(item: int) -> int:
-            batch_times.append((item, asyncio.get_event_loop().time()))
+            batch_times.append((item, monotonic()))
             return item
 
         items = list(range(6))
@@ -104,15 +117,11 @@ class TestProcessInBatchesWithErrors:
             items, process_item, batch_size=2, delay_between_batches=0.02
         )
 
-        # Should have 3 batches: [0,1], [2,3], [4,5]
-        # Check delays between batches
-        batch1_end = max(t for i, t in batch_times if i in {0, 1})
         batch2_start = min(t for i, t in batch_times if i in {2, 3})
-        batch2_end = max(t for i, t in batch_times if i in {2, 3})
         batch3_start = min(t for i, t in batch_times if i in {4, 5})
 
-        assert batch2_start - batch1_end >= 0.019  # Allow small variance
-        assert batch3_start - batch2_end >= 0.019
+        assert batch2_start == 0.02
+        assert batch3_start == 0.04
 
     async def test_error_context_function(self):
         """Test custom error context extraction."""

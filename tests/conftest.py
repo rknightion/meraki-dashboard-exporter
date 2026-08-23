@@ -6,6 +6,45 @@ import pytest
 from prometheus_client import REGISTRY, CollectorRegistry
 
 
+class _ImmediateFacadeLimiter:
+    """No-delay limiter for legacy unit constructions that do not wire the app graph."""
+
+    async def acquire(self, org_id: str | None, operation: str) -> float:
+        """Admit immediately while preserving the facade's pacing call shape."""
+        return 0.0
+
+    def record_throttle_event(self, org_id: str | None, retry_after: float | None) -> None:
+        """Accept retry feedback without adding timing to unit tests."""
+
+
+@pytest.fixture(autouse=True)
+def default_facade_limiter_for_tests(monkeypatch, request):
+    """Supply pacing to lightweight tests that do not construct the production owner graph.
+
+    Tests marked ``strict_facade_limiter`` opt out so the production fail-closed contract remains
+    directly exercised. Explicit limiter doubles supplied by a test always take precedence.
+    """
+    if request.node.get_closest_marker("strict_facade_limiter") is not None:
+        yield
+        return
+
+    from meraki_dashboard_exporter.core.api_facade import MerakiApiFacade
+
+    original_init = MerakiApiFacade.__init__
+
+    def init_with_test_limiter(self, *, settings=None, rate_limiter=None):
+        if rate_limiter is None:
+            rate_limiter = _ImmediateFacadeLimiter()
+            api_settings = getattr(settings, "api", None)
+            max_retries = getattr(api_settings, "max_retries", None)
+            if api_settings is not None and not isinstance(max_retries, int | float):
+                api_settings.max_retries = 0
+        original_init(self, settings=settings, rate_limiter=rate_limiter)
+
+    monkeypatch.setattr(MerakiApiFacade, "__init__", init_with_test_limiter)
+    yield
+
+
 @pytest.fixture(autouse=True)
 def fast_test_settings(monkeypatch):
     """Disable production timing features that slow down tests."""

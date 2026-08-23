@@ -137,10 +137,7 @@ async def test_709_dns_work_is_bounded_by_configured_peak_in_flight(
 
     assert len(resolved) == 2000
     assert peak_active == settings.clients.dns_max_concurrent_lookups
-    assert (
-        resolver.get_cache_stats()["queue_peak_depth"]
-        <= settings.clients.dns_max_concurrent_lookups
-    )
+    assert resolver.get_cache_stats()["queue_peak_depth"] == len(clients)
 
 
 def test_709_collector_exports_dns_queue_and_timeout_metrics(settings: Settings) -> None:

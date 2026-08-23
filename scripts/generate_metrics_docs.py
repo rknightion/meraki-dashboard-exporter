@@ -27,6 +27,14 @@ CONDITIONAL_NOTES = {
     "WebhookHandler": "Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true",
 }
 
+OWNER_NOTES = {
+    "async_utils": (
+        "The bounded `phase` label is `collector_admission` for collector-run admission and "
+        "`task_group` for ManagedTaskGroup admission; it describes exporter "
+        "scheduling/backpressure, not endpoint failure."
+    ),
+}
+
 INTERNAL_OWNERS = {
     "CollectorManager",
 }
@@ -366,25 +374,31 @@ class PrometheusMetricVisitor(ast.NodeVisitor):
         self._label_vars_stack.pop()
 
     def visit_Assign(self, node: ast.Assign) -> None:
-        """Capture label variables and direct Prometheus constructors."""
+        """Capture label variables and walk all assignment-value calls."""
         if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
             labels = parse_label_list(node.value, self.label_map)
             if labels:
                 self._label_vars()[node.targets[0].id] = labels
 
-        if not isinstance(node.value, ast.Call):
-            return
+        self.generic_visit(node)
 
+    def visit_Call(self, node: ast.Call) -> None:
+        """Capture direct Prometheus constructors, including nested calls."""
+        self._record_metric(node)
+        self.generic_visit(node)
+
+    def _record_metric(self, call: ast.Call) -> None:
+        """Record a Prometheus constructor call when its name resolves."""
         func_name = None
-        if isinstance(node.value.func, ast.Name):
-            func_name = node.value.func.id
-        elif isinstance(node.value.func, ast.Attribute):
-            func_name = node.value.func.attr
+        if isinstance(call.func, ast.Name):
+            func_name = call.func.id
+        elif isinstance(call.func, ast.Attribute):
+            func_name = call.func.attr
 
         if func_name not in PROM_METRIC_TYPES:
             return
 
-        name_expr = node.value.args[0] if node.value.args else None
+        name_expr = call.args[0] if call.args else None
         if not name_expr:
             return
 
@@ -392,14 +406,14 @@ class PrometheusMetricVisitor(ast.NodeVisitor):
         if not metric_name:
             return
 
-        description = extract_description(node.value)
-        labels = extract_labels(node.value, self.label_map, self._label_vars())
+        description = extract_description(call)
+        labels = extract_labels(call, self.label_map, self._label_vars())
         metric_type = PROM_METRIC_TYPES[func_name]
 
         owner = self.current_class or self.filepath.stem
         file_path = str(self.filepath.relative_to(self.repo_root))
         category = categorize_metric(owner, file_path)
-        notes = CONDITIONAL_NOTES.get(owner)
+        notes = CONDITIONAL_NOTES.get(owner) or OWNER_NOTES.get(owner)
 
         self.metrics.append(
             MetricDefinition(
@@ -410,7 +424,7 @@ class PrometheusMetricVisitor(ast.NodeVisitor):
                 owner=owner,
                 category=category,
                 file=file_path,
-                line=node.lineno,
+                line=call.lineno,
                 notes=notes,
             )
         )

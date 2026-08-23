@@ -101,8 +101,18 @@ defaults to `true` to preserve existing hostname enrichment. When enabled, the e
 IP addresses to the host resolver configured for the deployment; that resolver and its upstream query
 destination are chosen by the operating system or platform, not by the exporter. Set it to `false` to
 keep client collection while preventing those reverse-DNS queries. DNS work is capped by
-`clients.dns_max_concurrent_lookups` (default `32`), and DEBUG logs can include both queried IPs and
-resolved hostnames; keep DEBUG logs under the same access controls as other client data.
+`clients.dns_max_concurrent_lookups` (default `32`); keep DEBUG logs under the same access controls
+as other client data.
+
+### Client-identifying DEBUG logs
+
+INFO, WARNING, and ERROR events deliberately contain counts, stable operation names, and safe error
+types only; they do not include client IP addresses, IDs, MAC addresses, hostnames, or descriptions.
+DEBUG is the intentional diagnostic surface and must receive the same access controls as client data.
+The DNS resolver can record queried, cached, expired, old, and new **client IP addresses**; resolved
+**hostnames**; and a **client ID** when an IP change invalidates a cached entry. The client collector
+can record a **client ID**, **MAC address**, **description**, **hostname**, and **SSID** when it emits
+or diagnoses client metrics. It may also record associated counts and network/organization context.
 
 ## OTel data logs: the other PII surface, and its own opt-in gate
 

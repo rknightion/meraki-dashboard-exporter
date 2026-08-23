@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from meraki_dashboard_exporter.collectors.organization_collectors.api_usage import APIUsageCollector
+from meraki_dashboard_exporter.core.error_handling import ErrorCategory
+from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 
 if TYPE_CHECKING:
     pass
@@ -55,6 +58,8 @@ class TestAPIUsageCollector:
             def __init__(self) -> None:
                 self.api = mock_api_builder.build()
                 self.settings = settings
+                self.rate_limiter = MagicMock()
+                self.rate_limiter.acquire = AsyncMock()
                 self._api_calls: dict[str, int] = {}
                 self._metrics: dict[tuple[str, tuple[tuple[str, str], ...]], float] = {}
 
@@ -624,6 +629,34 @@ class TestAPIUsageCollector:
         # No per-operation series emitted, and the overall collect still succeeds.
         assert not any(name == "_api_requests_by_operation" for name, _ in parent._metrics)
         assert result is True
+
+    async def test_overview_success_marks_group_when_enrichment_times_out(
+        self, api_usage_collector
+    ):
+        """A timed-out enrichment must not put the successful overview on retry cadence."""
+        parent = api_usage_collector.parent
+        parent._mark_group_ran = MagicMock()
+        parent._track_error = MagicMock()
+
+        api_usage_collector._fetch_api_requests_overview = AsyncMock(  # type: ignore[method-assign]
+            return_value={"responseCodeCounts": {"200": 7}}
+        )
+        api_usage_collector._collect_requests_by_operation = AsyncMock(  # type: ignore[method-assign]
+            side_effect=TimeoutError("bulk enrichment timed out")
+        )
+
+        result = await api_usage_collector.collect("org-timeout", "Timed Out Org")
+
+        assert result is True
+        parent._mark_group_ran.assert_called_once_with(EndpointGroupName.ORG_API_USAGE)
+        parent._track_error.assert_called_once_with(ErrorCategory.TIMEOUT)
+        assert (
+            parent._metrics[
+                ("_api_requests_by_status", (("org_id", "org-timeout"), ("status_code", "200")))
+            ]
+            == 7
+        )
+        assert parent._metrics[("_api_requests_total", (("org_id", "org-timeout"),))] == 7
 
     async def test_fetch_api_requests_overview_parameters(
         self, api_usage_collector, mock_api_builder

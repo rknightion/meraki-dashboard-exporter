@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
@@ -33,7 +34,10 @@ class TestMSCollector:
         parent.settings.api.ms_packet_stats_interval = 0
         parent.settings.api.ms_port_usage_interval = 0
         parent.settings.api.concurrency_limit = 5
-        parent.rate_limiter = None
+        parent.rate_limiter = SimpleNamespace(
+            acquire=AsyncMock(return_value=0.0),
+            record_throttle_event=MagicMock(),
+        )
         parent.inventory.get_allowed_network_ids = AsyncMock(return_value=None)
 
         # Mock the _create_gauge method to return actual Gauge objects
@@ -77,6 +81,31 @@ class TestMSCollector:
     ) -> MSCollector:
         """Create MS collector instance."""
         return MSCollector(mock_parent)
+
+    async def test_network_fanouts_pass_org_id_directly_to_the_facade(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """DHCP-security and LAG requests do not depend on task-local log context."""
+        facade = SimpleNamespace(call=AsyncMock(side_effect=[[], [], []]))
+        monkeypatch.setattr(
+            "meraki_dashboard_exporter.collectors.devices.ms.facade_for", lambda _: facade
+        )
+        mock_parent.inventory.get_networks = AsyncMock(
+            return_value=[{"id": "net1", "productTypes": ["switch"]}]
+        )
+
+        await ms_collector.collect_dhcp_security("org123", "Org One")
+        await ms_collector.collect_link_aggregations("org123", "Org One")
+
+        assert [call.kwargs["org_id"] for call in facade.call.await_args_list] == [
+            "org123",
+            "org123",
+            "org123",
+        ]
 
     async def test_collect_basic_api_call(
         self,

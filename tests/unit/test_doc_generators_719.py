@@ -68,6 +68,19 @@ def test_720_endpoint_notes_reject_a_nontrivial_route_without_a_contract_note() 
         ged.validate_endpoint_notes([endpoint])
 
 
+def test_endpoint_docs_preserve_front_matter_and_one_terminal_newline() -> None:
+    """The generated Zensical page keeps its metadata and is byte-stable."""
+    endpoint = ged.Endpoint("GET", "/health", "Health check", "app.py", 1)
+
+    rendered = ged.generate_markdown([endpoint])
+
+    assert rendered.startswith(
+        "---\ntitle: HTTP Endpoints\ndescription: Reference the Meraki Dashboard Exporter"
+    )
+    assert rendered.endswith("disabled.\n")
+    assert not rendered.endswith("\n\n")
+
+
 def test_720_scaling_region_is_source_derived_and_distinguishes_due_sweep() -> None:
     """The capacity region is derived from endpoint groups, not hand-maintained (#720)."""
     rendered = gscd.render_network_health_capacity(SCRIPTS_DIR.parents[0] / "src")

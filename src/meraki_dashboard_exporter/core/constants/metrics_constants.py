@@ -594,6 +594,9 @@ class CollectorMetricName(StrEnum):
     # per-collector shedding gauge `meraki_exporter_cardinality_limit_reached`
     # (same base name — a registered gauge would collide with this counter).
     EXPORTER_CARDINALITY_LIMIT_REACHED_TOTAL = "meraki_exporter_cardinality_limit_reached_total"
+    CARDINALITY_WARNINGS_TOTAL = "meraki_exporter_cardinality_warnings_total"
+    CARDINALITY_TOTAL_SERIES = "meraki_exporter_total_series"
+    CARDINALITY_DURATION_SECONDS = "meraki_exporter_cardinality_duration_seconds"
     # Gauge (per-cycle snapshot, not a monotonic counter) — must not end in `_total`.
     CARDINALITY_ANALYZED_METRICS = "meraki_exporter_cardinality_analyzed_metrics"
     CARDINALITY_PRODUCT_SERIES = "meraki_exporter_cardinality_product_series"

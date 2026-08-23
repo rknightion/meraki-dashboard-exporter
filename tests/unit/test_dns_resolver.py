@@ -7,6 +7,7 @@ import threading
 from unittest.mock import MagicMock
 
 import pytest
+from structlog.testing import capture_logs
 
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.services.dns_resolver import DNSResolver
@@ -85,23 +86,117 @@ async def test_resolve_multiple_uses_resolver(monkeypatch, resolver):
 
 
 @pytest.mark.asyncio
+async def test_resolve_multiple_reports_producer_backlog_not_handoff_queue(resolver, monkeypatch):
+    """The backlog metric distinguishes a small batch from a fleet-sized batch."""
+
+    async def fake_resolve(ip: str, client_id: str | None = None) -> str:
+        return ip
+
+    monkeypatch.setattr(resolver, "resolve_hostname", fake_resolve)
+
+    await resolver.resolve_multiple([("small", "192.0.2.1", None)])
+    assert resolver.get_cache_stats()["queue_peak_depth"] == 1
+
+    fleet_batch = [(f"client-{i}", f"192.0.2.{i + 1}", None) for i in range(40)]
+    await resolver.resolve_multiple(fleet_batch)
+    assert resolver.get_cache_stats()["queue_peak_depth"] == len(fleet_batch)
+
+
+@pytest.mark.asyncio
+async def test_overlapping_batches_cannot_overwrite_newer_backlog_measurement(
+    resolver, monkeypatch
+):
+    """A late-finishing old batch must not reset a later batch's backlog value."""
+
+    resolver.max_concurrent_lookups = 1
+    old_batch_started = asyncio.Event()
+    release_old_batch = asyncio.Event()
+
+    async def fake_resolve(ip: str, client_id: str | None = None) -> str:
+        if ip.startswith("198.51.100."):
+            old_batch_started.set()
+            await release_old_batch.wait()
+        return ip
+
+    monkeypatch.setattr(resolver, "resolve_hostname", fake_resolve)
+
+    old_batch = asyncio.create_task(
+        resolver.resolve_multiple([(f"old-{i}", f"198.51.100.{i + 1}", None) for i in range(3)])
+    )
+    await old_batch_started.wait()
+    await resolver.resolve_multiple([("new", "203.0.113.1", None)])
+    assert resolver.get_cache_stats()["queue_peak_depth"] == 1
+
+    release_old_batch.set()
+    await old_batch
+    assert resolver.get_cache_stats()["queue_peak_depth"] == 1
+
+
+@pytest.mark.asyncio
 async def test_perform_lookup_applies_timeout(monkeypatch, resolver):
     """Reverse lookups are always bounded by the configured dns_timeout (F-076)."""
     import meraki_dashboard_exporter.services.dns_resolver as dns_mod
 
     captured: dict[str, float] = {}
 
-    async def fake_with_timeout(coro, timeout, operation="operation", default=None):
+    async def fake_wait_for(coro, timeout):
         captured["timeout"] = timeout
         coro.close()  # avoid un-awaited coroutine warning
         return "host.example.com"
 
-    monkeypatch.setattr(dns_mod, "with_timeout", fake_with_timeout)
+    monkeypatch.setattr(dns_mod.asyncio, "wait_for", fake_wait_for)
 
     result = await resolver._perform_lookup("1.1.1.1")
 
-    assert result == "host.example.com"
+    assert result.hostname == "host.example.com"
     assert captured["timeout"] == resolver.timeout
+
+
+@pytest.mark.asyncio
+async def test_timeout_is_not_counted_as_resolver_failure_or_logged_with_ip(
+    resolver, monkeypatch, force_debug_log_capture
+):
+    """Deadline expiry increments only the timeout outcome and keeps logs identifier-free."""
+
+    resolver.timeout = 0.001
+
+    async def slow_system_lookup(ip: str) -> str | None:
+        await asyncio.sleep(0.01)
+        return "host.example.com"
+
+    monkeypatch.setattr(resolver, "_system_dns_lookup", slow_system_lookup)
+    client_ip = "198.51.100.42"
+
+    with capture_logs() as captured:
+        assert await resolver.resolve_hostname(client_ip, client_id="private-client-id") is None
+
+    stats = resolver.get_cache_stats()
+    assert stats["lookup_timeouts"] == 1
+    assert stats["failed_lookups"] == 0
+    warning = next(event for event in captured if event["event"] == "Reverse DNS lookup timed out")
+    assert warning["log_level"] == "warning"
+    assert all(
+        value not in str(event)
+        for event in captured
+        if event["log_level"] in {"info", "warning", "error"}
+        for value in {client_ip, "private-client-id"}
+    )
+
+
+@pytest.mark.asyncio
+async def test_resolver_exception_is_not_counted_as_timeout(resolver, monkeypatch):
+    """A resolver exception uses the existing non-timeout failure outcome."""
+
+    async def failing_system_lookup(ip: str) -> str | None:
+        raise RuntimeError(f"resolver rejected {ip}")
+
+    monkeypatch.setattr(resolver, "_system_dns_lookup", failing_system_lookup)
+
+    assert await resolver.resolve_hostname("198.51.100.43") is None
+
+    stats = resolver.get_cache_stats()
+    assert stats["lookup_timeouts"] == 0
+    assert stats["failed_lookups"] == 1
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol
 
 from opentelemetry import trace
@@ -27,6 +28,15 @@ if TYPE_CHECKING:
     from .scheduler import EndpointGroup, EndpointGroupName, EndpointScheduler
 
 logger = get_logger(__name__)
+
+
+class EndpointGroupVerdict(StrEnum):
+    """Outcome of one endpoint group admitted during a collector cycle."""
+
+    ATTEMPTED = "attempted"
+    SUCCEEDED = "succeeded"
+    NOT_APPLICABLE = "not_applicable"
+    FAILED = "failed"
 
 
 class MetricCollector(ABC):
@@ -126,6 +136,11 @@ class MetricCollector(ABC):
         self.scheduler = scheduler
         self.data_log_emitter = data_log_emitter
         self._metrics: dict[str, Any] = {}
+        # Groups are admitted by ``_should_run_group`` and completed through one
+        # of the explicit verdict helpers below.  This is reset at the start of
+        # each ``collect`` invocation because a scheduler admission belongs to
+        # exactly one collector cycle.
+        self._endpoint_group_verdicts: dict[EndpointGroupName, EndpointGroupVerdict] = {}
 
         # Per-metric cardinality control (#309): families named in
         # cardinality.disabled_metrics are created UNREGISTERED (never exposed
@@ -161,6 +176,7 @@ class MetricCollector(ABC):
         """Collect metrics from the Meraki API with performance tracking and tracing."""
         collector_name = self.__class__.__name__
         start_time = time.time()
+        self._endpoint_group_verdicts = {}
 
         # Get tracer for distributed tracing (returns no-op tracer if not configured)
         tracer = trace.get_tracer(__name__)
@@ -224,13 +240,7 @@ class MetricCollector(ABC):
                     collector=collector_name,
                     duration=f"{duration:.2f}s",
                 )
-                # A coordinator may isolate and swallow an endpoint-group
-                # failure while the collector cycle still succeeds overall.
-                # Attribute any admitted-but-unmarked group here; mark_failed
-                # ignores groups that were not attempted or did succeed.
-                if self.scheduler is not None:
-                    for group in groups:
-                        self.scheduler.mark_failed(group.name)
+                self._finalize_endpoint_group_verdicts()
 
             except Exception as e:
                 # Record error
@@ -241,13 +251,7 @@ class MetricCollector(ABC):
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 span.record_exception(e)
 
-                # Attribute a raised collector-cycle failure to every endpoint
-                # group that this cycle admitted but did not mark successful.
-                # The scheduler de-duplicates the attempt timestamp, so retries
-                # count once rather than once per surrounding collector error.
-                if self.scheduler is not None:
-                    for group in groups:
-                        self.scheduler.mark_failed(group.name)
+                self._finalize_endpoint_group_verdicts()
 
                 # Always try to record metrics (they should be initialized)
                 if MetricCollector._collector_errors is not None:
@@ -576,7 +580,10 @@ class MetricCollector(ABC):
             return False
         if getattr(self, "_force_run", False):
             return True
-        return self.scheduler.should_run(group)
+        admitted = self.scheduler.should_run(group)
+        if admitted:
+            self._endpoint_group_verdicts[group] = EndpointGroupVerdict.ATTEMPTED
+        return admitted
 
     def _mark_group_ran(self, group: EndpointGroupName) -> None:
         """Record a successful fetch of a group (no-op without a scheduler).
@@ -589,6 +596,58 @@ class MetricCollector(ABC):
         """
         if self.scheduler is not None:
             self.scheduler.mark_ran(group)
+        self._set_endpoint_group_verdict(group, EndpointGroupVerdict.SUCCEEDED)
+
+    def _mark_group_not_applicable(self, group: EndpointGroupName) -> None:
+        """Complete an admitted group that has no applicable work this cycle.
+
+        Examples include an optional collector with no organizations or an
+        organization with no networks matching its product family.  This is not
+        an endpoint failure and must therefore not increment the scheduler's
+        failure counter.
+
+        Parameters
+        ----------
+        group : EndpointGroupName
+            The admitted group whose scope was empty or inapplicable.
+
+        """
+        self._set_endpoint_group_verdict(group, EndpointGroupVerdict.NOT_APPLICABLE)
+
+    def _mark_group_failed(self, group: EndpointGroupName) -> None:
+        """Complete an admitted group whose endpoint failure was swallowed.
+
+        The scheduler de-duplicates by its admitted attempt timestamp, so this
+        is safe when a surrounding collector cycle later raises as well.
+
+        Parameters
+        ----------
+        group : EndpointGroupName
+            The admitted group that failed.
+
+        """
+        self._set_endpoint_group_verdict(group, EndpointGroupVerdict.FAILED)
+        if self.scheduler is not None:
+            self.scheduler.mark_failed(group)
+
+    def _set_endpoint_group_verdict(
+        self, group: EndpointGroupName, verdict: EndpointGroupVerdict
+    ) -> None:
+        """Store a terminal verdict only for a group admitted in this cycle."""
+        if group in self._endpoint_group_verdicts:
+            self._endpoint_group_verdicts[group] = verdict
+
+    def _finalize_endpoint_group_verdicts(self) -> None:
+        """Close every admitted group and preserve legacy swallowed-failure accounting.
+
+        Coordinators should explicitly use ``_mark_group_not_applicable`` for
+        benign empty scope and ``_mark_group_failed`` for swallowed failures.
+        Until all existing call sites do so, an unresolved admitted group retains
+        the former fail-closed behaviour: it is recorded as failed exactly once.
+        """
+        for group, verdict in tuple(self._endpoint_group_verdicts.items()):
+            if verdict is EndpointGroupVerdict.ATTEMPTED:
+                self._mark_group_failed(group)
 
     def _group_interval(self, group: EndpointGroupName) -> float:
         """Current solved interval for a group in seconds.

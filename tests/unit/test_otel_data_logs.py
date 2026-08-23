@@ -176,6 +176,51 @@ class TestDataLogEmitterIdentifierGating:
         attrs = exp.get_finished_logs()[0].log_record.attributes
         assert attrs["client.mac"] == "aa:bb:cc:dd:ee:ff"
 
+    def test_bare_mac_is_redacted_only_for_mac_plausible_attribute_keys(self) -> None:
+        """Bare 12-hex values need a MAC-plausible key before redaction."""
+        emitter, exp, _ = _make_emitter(enabled=True, endpoint="http://otel:4317")
+        emitter.emit(
+            PACKET_LOSS,
+            {
+                "device.mac": "001122334455",
+                "client.id": "001122334455",
+                "network.name": "store-001122334455",
+                "device.mac_label": "label-001122334455",
+                "device.label": "AP aa:bb:cc:dd:ee:ff",
+            },
+            body="store 001122334455; AP aa:bb:cc:dd:ee:ff",
+        )
+
+        record = exp.get_finished_logs()[0].log_record
+        attrs = record.attributes
+        assert attrs["device.mac"] == "[redacted-mac]"
+        assert attrs["client.id"] == "001122334455"
+        assert attrs["network.name"] == "store-001122334455"
+        assert attrs["device.mac_label"] == "label-001122334455"
+        assert attrs["device.label"] == "AP [redacted-mac]"
+        assert record.body == "store 001122334455; AP [redacted-mac]"
+
+    def test_include_identifiers_true_disables_default_mac_scrubbing(self) -> None:
+        """The explicit identifier opt-in preserves identifier and body values."""
+        emitter, exp, _ = _make_emitter(
+            enabled=True, endpoint="http://otel:4317", include_identifiers=True
+        )
+        emitter.emit(
+            PACKET_LOSS,
+            {
+                "client.mac": "001122334455",
+                "client.hostname": "store-001122334455",
+                "device.label": "AP aa:bb:cc:dd:ee:ff",
+            },
+            body="client aa:bb:cc:dd:ee:ff 001122334455",
+        )
+
+        record = exp.get_finished_logs()[0].log_record
+        assert record.attributes["client.mac"] == "001122334455"
+        assert record.attributes["client.hostname"] == "store-001122334455"
+        assert record.attributes["device.label"] == "AP aa:bb:cc:dd:ee:ff"
+        assert record.body == "client aa:bb:cc:dd:ee:ff 001122334455"
+
 
 class TestDataLogEmitterCounters:
     """Self-observability counters."""

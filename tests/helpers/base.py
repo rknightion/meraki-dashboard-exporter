@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from prometheus_client import CollectorRegistry
@@ -82,12 +82,20 @@ class BaseCollectorTest:
         return mock_api_builder.build()
 
     @pytest.fixture
+    def rate_limiter(self) -> MagicMock:
+        """Provide the shared organization limiter required by the API facade."""
+        limiter = MagicMock()
+        limiter.acquire = AsyncMock()
+        return limiter
+
+    @pytest.fixture
     def collector(
         self,
         mock_api: MagicMock,
         settings: Settings,
         isolated_registry: CollectorRegistry,
         inventory: OrganizationInventory,
+        rate_limiter: MagicMock,
     ) -> MetricCollector:
         """Create the collector instance."""
         if not self.collector_class:
@@ -98,6 +106,7 @@ class BaseCollectorTest:
             settings=settings,
             registry=isolated_registry,
             inventory=inventory,
+            rate_limiter=rate_limiter,
         )
 
     @pytest.fixture
@@ -111,9 +120,11 @@ class BaseCollectorTest:
         return MetricSnapshot(isolated_registry)
 
     @pytest.fixture
-    def inventory(self, mock_api: MagicMock, settings: Settings) -> OrganizationInventory:
+    def inventory(
+        self, mock_api: MagicMock, settings: Settings, rate_limiter: MagicMock
+    ) -> OrganizationInventory:
         """Provide an inventory service backed by the mock API."""
-        return OrganizationInventory(mock_api, settings)
+        return OrganizationInventory(mock_api, settings, rate_limiter=rate_limiter)
 
     # Helper methods
 

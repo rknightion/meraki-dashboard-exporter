@@ -54,22 +54,22 @@ def test_696_missing_client_id_keeps_packet_loss_without_exposing_mac() -> None:
     assert mac not in str(record.body)
 
 
-def test_696_default_privacy_scrubs_mac_addresses_from_bodies() -> None:
-    """MAC-shaped text is redacted while ordinary body content is preserved."""
+def test_696_default_privacy_scrubs_separated_mac_addresses_from_bodies() -> None:
+    """Separated MAC text is redacted while ordinary body content is preserved."""
     exporter = InMemoryLogRecordExporter()  # type: ignore[no-untyped-call]
     emitter = _emitter(exporter)
-    body = "client aa:bb:cc:dd:ee:ff on AP 11-22-33-44-55-66: packet loss stable"
+    body = "client aa:bb:cc:dd:ee:ff on AP 11-22-33-44-55-66: store 112233445566"
 
     emitter.emit(DataLogEvent.WIRELESS_CLIENT_PACKET_LOSS, {"org.id": "org1"}, body=body)
 
     exported_body = str(exporter.get_finished_logs()[0].log_record.body)
     assert "aa:bb:cc:dd:ee:ff" not in exported_body
     assert "11-22-33-44-55-66" not in exported_body
-    assert exported_body.endswith(": packet loss stable")
+    assert exported_body.endswith(": store 112233445566")
 
 
 def test_696_default_privacy_scrubs_mac_values_and_cisco_dotted_form() -> None:
-    """A MAC cannot escape through a generic identifier value or dotted body text."""
+    """A separated MAC cannot escape through an identifier or dotted body text."""
     exporter = InMemoryLogRecordExporter()  # type: ignore[no-untyped-call]
     emitter = _emitter(exporter)
 
@@ -83,4 +83,22 @@ def test_696_default_privacy_scrubs_mac_values_and_cisco_dotted_form() -> None:
     attributes: dict[str, Any] = dict(record.attributes or {})
     assert attributes["client.id"] == "[redacted-mac]"
     assert "aabb.ccdd.eeff" not in str(record.body)
-    assert "112233445566" not in str(record.body)
+    assert "112233445566" in str(record.body)
+
+
+def test_696_default_privacy_redacts_bare_mac_in_mac_attribute_key() -> None:
+    """A delimiter-free MAC is redacted when its attribute key identifies it as a MAC."""
+    exporter = InMemoryLogRecordExporter()  # type: ignore[no-untyped-call]
+    emitter = _emitter(exporter)
+
+    emitter.emit(
+        DataLogEvent.WIRELESS_CLIENT_PACKET_LOSS,
+        {
+            "device.mac": "112233445566",
+            "network.name": "store-112233445566",
+        },
+    )
+
+    attributes = dict(exporter.get_finished_logs()[0].log_record.attributes or {})
+    assert attributes["device.mac"] == "[redacted-mac]"
+    assert attributes["network.name"] == "store-112233445566"

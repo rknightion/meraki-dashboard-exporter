@@ -2284,6 +2284,7 @@ class MSCollector(BaseDeviceCollector):
                             "getNetworkSwitchDhcpV4ServersSeen",
                             self.api.switch.getNetworkSwitchDhcpV4ServersSeen,
                             network_id,
+                            org_id=org_id,
                             total_pages="all",
                         )
                         servers_seen = validate_response_format(
@@ -2335,6 +2336,7 @@ class MSCollector(BaseDeviceCollector):
                             "getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice",
                             self.api.switch.getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice,
                             network_id,
+                            org_id=org_id,
                             total_pages="all",
                         )
                         dai_rows = validate_response_format(
@@ -2438,6 +2440,7 @@ class MSCollector(BaseDeviceCollector):
                             "getNetworkSwitchLinkAggregations",
                             self.api.switch.getNetworkSwitchLinkAggregations,
                             network_id,
+                            org_id=org_id,
                         )
                         lags = validate_response_format(
                             response,

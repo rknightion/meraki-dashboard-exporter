@@ -222,17 +222,18 @@ class APIUsageCollector(BaseOrganizationCollector):
         Returns
         -------
         bool
-            ``True`` on success or when the endpoint is unavailable for this
-            org (404); ``False`` on a real (non-404) failure. The parent
-            coordinator uses this signal so an isolated failure here is counted
-            by ``OrgHealthTracker`` (F-172) instead of being silently swallowed.
+            ``True`` when the primary overview is successfully fetched and
+            accounted for, or when the endpoint is unavailable for this org
+            (404). Optional enrichment failure is tracked separately and does
+            not change this overview result. A real (non-404) overview failure
+            returns its classified error category so the parent coordinator can
+            update ``OrgHealthTracker`` (F-172).
 
         """
         if not self.parent._should_run_group(EndpointGroupName.ORG_API_USAGE):
             return True
 
         ttl = self.parent._group_ttl_seconds(EndpointGroupName.ORG_API_USAGE)
-        bulk_complete = True
         try:
             with LogContext(org_id=org_id, org_name=org_name):
                 overview = await self._fetch_api_requests_overview(org_id)
@@ -311,6 +312,14 @@ class APIUsageCollector(BaseOrganizationCollector):
                     unique_status_codes=sum(1 for c in valid_counts.values() if c > 0),
                 )
 
+                # The primary overview has been fetched and accounted for.
+                # Mark the shared group before attempting optional enrichment
+                # so an enrichment timeout cannot put fresh overview metrics
+                # onto the group's failure-retry cadence. The group's declared
+                # cost still reserves the bounded overview-plus-enrichment
+                # worst case.
+                self.parent._mark_group_ran(EndpointGroupName.ORG_API_USAGE)
+
                 # Per-operation breakdown (#274) is best-effort enrichment on a
                 # separate, heavier endpoint: keep its failure from discarding
                 # the status-code metrics already emitted above, and from
@@ -319,7 +328,6 @@ class APIUsageCollector(BaseOrganizationCollector):
                     try:
                         await self._collect_requests_by_operation(org_id, org_name, org_data)
                     except Exception as exc:
-                        bulk_complete = False
                         self._track_error(categorize_error(exc))
                         logger.warning(
                             "Failed to collect API requests by operation; "
@@ -338,12 +346,8 @@ class APIUsageCollector(BaseOrganizationCollector):
                     if isinstance(overview, dict)
                     else False,
                 )
-
-            # A deadline-cut or otherwise failed bulk enrichment must not mark
-            # the endpoint group successful. The parent collector's end-of-run
-            # accounting records the admitted-but-unmarked group failure, while
-            # the primary overview metrics above remain available (#699).
-            if bulk_complete:
+                # A successfully fetched, benign no-data overview still
+                # advances the shared group's normal cadence.
                 self.parent._mark_group_ran(EndpointGroupName.ORG_API_USAGE)
 
             # The primary overview succeeded (or returned benign no-data), so

@@ -278,7 +278,7 @@ class ClientsCollector(MetricCollector):
 
         self.dns_queue_depth = self._create_gauge(
             CollectorMetricName.CLIENT_DNS_QUEUE_DEPTH,
-            "Peak reverse-DNS work queue depth in the most recent resolution batch",
+            "Peak reverse-DNS producer backlog in the most recently started completed batch",
         )
         self.dns_queue_wait_seconds = self._create_gauge(
             CollectorMetricName.CLIENT_DNS_QUEUE_WAIT_SECONDS,
@@ -414,6 +414,7 @@ class ClientsCollector(MetricCollector):
         organizations = await self.api_helper.get_organizations()
 
         if not organizations:
+            self._mark_group_not_applicable(EndpointGroupName.CLIENTS_LIST)
             return
 
         # Track whether ANY network across ANY org fetched clients successfully so
@@ -596,24 +597,23 @@ class ClientsCollector(MetricCollector):
                 perPage=5000,  # Maximum allowed
                 total_pages="all",
             )
+            # Keep SDK exhausted-retry responses and malformed client rows in
+            # this privacy-safe error path. Letting them escape would route
+            # their server/client text through the generic decorators.
+            clients_data = validate_response_format(
+                clients_data, expected_type=list, operation="getNetworkClients"
+            )
+            clients = [NetworkClient.model_validate(client) for client in clients_data]
         except Exception as e:
             logger.error(
                 "Failed to fetch clients",
                 org_id=org_id,
                 network_id=network_id,
                 network_name=network_name,
-                error=str(e),
+                error_type=type(e).__name__,
             )
             self._track_error(ErrorCategory.API_CLIENT_ERROR)
             return False
-
-        # Validate response format (handles API error responses like rate limits)
-        clients_data = validate_response_format(
-            clients_data, expected_type=list, operation="getNetworkClients"
-        )
-
-        # Parse client data
-        clients = [NetworkClient.model_validate(c) for c in clients_data]
 
         # Accumulate for the aggregate INFO summary emitted by _collect_impl (F-171).
         self._collection_networks += 1
@@ -1338,7 +1338,7 @@ class ClientsCollector(MetricCollector):
                     network_id=network_id,
                     batch_start=i,
                     batch_size=len(batch_ids),
-                    error=str(e),
+                    error_type=type(e).__name__,
                 )
                 self._track_error(ErrorCategory.API_CLIENT_ERROR)
                 # Continue with next batch
@@ -1531,10 +1531,9 @@ class ClientsCollector(MetricCollector):
 
             except Exception as e:
                 logger.error(
-                    "Failed to fetch signal quality for client",
-                    client_id=client.id,
+                    "Failed to fetch client signal quality",
                     network_id=network_id,
-                    error=str(e),
+                    error_type=type(e).__name__,
                 )
                 self._track_error(ErrorCategory.API_CLIENT_ERROR)
                 # Continue with next client

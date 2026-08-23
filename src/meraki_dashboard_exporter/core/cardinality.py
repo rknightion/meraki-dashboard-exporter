@@ -7,7 +7,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi.responses import HTMLResponse
 from prometheus_client import CollectorRegistry, Counter, Gauge
@@ -23,22 +23,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-# These families are emitted by ``CardinalityMonitor`` itself. They are not
-# product metrics, but must remain in the exposed-series total because a
-# Prometheus scrape includes them. The full ``meraki_exporter_`` prefix is
-# deliberately *not* used here: that prefix is exclusively exporter
-# self-instrumentation (not product data), and this narrower set preserves the
-# separate monitor-own bucket.
-_CARDINALITY_SELF_METRIC_NAMES = frozenset({
-    "meraki_exporter_cardinality_warnings",
-    "meraki_exporter_total_series",
-    "meraki_exporter_cardinality_duration_seconds",
-    CollectorMetricName.CARDINALITY_ANALYZED_METRICS.value,
-    CollectorMetricName.CARDINALITY_PRODUCT_SERIES.value,
-    CollectorMetricName.CARDINALITY_SELF_SERIES.value,
-    CollectorMetricName.CARDINALITY_EXPOSED_SERIES.value,
-    CollectorMetricName.CARDINALITY_EXPORTER_SERIES.value,
-})
+MetricFamilyKind = Literal["product", "exporter", "monitor"]
 
 
 def normalize_metric_name(name: str) -> str:
@@ -219,6 +204,10 @@ class CardinalityMonitor:
         # Warning tracking
         self._warning_triggered: dict[str, bool] = {}  # Track if warning already triggered
         self._last_warning_time: dict[str, float] = {}  # Prevent warning spam
+        # Filled from the metric objects after registration. Keeping this
+        # instance-local avoids a second live registry walk and means the
+        # monitor never needs a duplicated list of its own metric literals.
+        self._monitor_metric_names: frozenset[str] = frozenset()
 
         # Initialize monitoring metrics
         self._initialize_metrics()
@@ -233,21 +222,21 @@ class CardinalityMonitor:
     def _initialize_metrics(self) -> None:
         """Initialize cardinality monitoring metrics."""
         self.cardinality_warnings = Counter(
-            "meraki_exporter_cardinality_warnings_total",
+            CollectorMetricName.CARDINALITY_WARNINGS_TOTAL.value,
             "Number of cardinality warnings triggered",
             labelnames=["metric_name", "severity"],
             registry=self.registry,
         )
 
         self.total_series = Gauge(
-            "meraki_exporter_total_series",
+            CollectorMetricName.CARDINALITY_TOTAL_SERIES.value,
             "Total number of time series across all metrics",
             registry=self.registry,
         )
 
         # Add analysis performance metrics
         self.analysis_duration = Gauge(
-            "meraki_exporter_cardinality_duration_seconds",
+            CollectorMetricName.CARDINALITY_DURATION_SECONDS.value,
             "Time taken to complete cardinality analysis",
             registry=self.registry,
         )
@@ -280,6 +269,20 @@ class CardinalityMonitor:
             CollectorMetricName.CARDINALITY_EXPOSED_SERIES.value,
             "Total metric series exposed by the Prometheus scrape",
             registry=self.registry,
+        )
+
+        monitor_metrics = (
+            self.cardinality_warnings,
+            self.total_series,
+            self.analysis_duration,
+            self.analyzed_metrics_count,
+            self.product_series,
+            self.exporter_series,
+            self.self_series,
+            self.exposed_series,
+        )
+        self._monitor_metric_names = frozenset(
+            family.name for metric in monitor_metrics for family in metric.collect()
         )
 
     def _is_cache_valid(self) -> bool:
@@ -345,6 +348,33 @@ class CardinalityMonitor:
         """Mark that collectors have completed their first run."""
         self._first_run_complete = True
         logger.info("First collector run completed, cardinality analysis now available")
+
+    def _classify_metric_family(self, metric_family: Metric) -> MetricFamilyKind:
+        """Classify one materialized metric family for cardinality accounting.
+
+        CardinalityMonitor's own family names are learned from the registered
+        metric objects in ``_initialize_metrics``. All remaining exporter
+        instrumentation and Python/process runtime families share the exporter
+        bucket; only ``meraki_*`` families outside the exporter namespace are
+        product data.
+
+        Parameters
+        ----------
+        metric_family : Metric
+            Materialized metric family from the current registry snapshot.
+
+        Returns
+        -------
+        MetricFamilyKind
+            The single accounting bucket for the family.
+
+        """
+        name = metric_family.name
+        if name in self._monitor_metric_names:
+            return "monitor"
+        if name.startswith("meraki_") and not name.startswith("meraki_exporter_"):
+            return "product"
+        return "exporter"
 
     def analyze_cardinality(
         self, use_cache: bool = True, bypass_inventory_check: bool = False
@@ -420,59 +450,89 @@ class CardinalityMonitor:
         }
 
         metric_count = 0
-        # Collect all metrics
+        # Materialize the registry exactly once. Every bucket and every
+        # product-only detail view below is derived from this same population;
+        # a concurrent expiration cannot make a later live walk disagree with
+        # the product count.
         try:
-            for metric_family in self.registry.collect():
-                if metric_family.name in _CARDINALITY_SELF_METRIC_NAMES:
-                    # Monitor-own families are counted separately below so the
-                    # three buckets reconcile exactly with the text scrape.
+            snapshot = tuple(self.registry.collect())
+            classified_snapshot = [
+                (metric_family, self._classify_metric_family(metric_family))
+                for metric_family in snapshot
+            ]
+
+            # These structures are the current product snapshot, not an
+            # accumulation of exporter/runtime families or stale product
+            # families that disappeared since the previous analysis. Keep the
+            # bounded history for product families that are still present.
+            product_metric_names = {
+                metric_family.name
+                for metric_family, family_kind in classified_snapshot
+                if family_kind == "product"
+            }
+            self._full_metric_data.clear()
+            for metric_name in tuple(self._label_value_distribution):
+                if metric_name not in product_metric_names:
+                    del self._label_value_distribution[metric_name]
+            for metric_name in tuple(self._cardinality_history):
+                if metric_name not in product_metric_names:
+                    del self._cardinality_history[metric_name]
+
+            for metric_family, family_kind in classified_snapshot:
+                sample_count = len(metric_family.samples)
+                results["exposed_series"] += sample_count
+
+                if family_kind == "monitor":
+                    results["self_series"] += sample_count
                     continue
 
+                if family_kind == "exporter":
+                    results["exporter_series"] += sample_count
+                    continue
+
+                # Product families are the only families analyzed into the
+                # report and drill-down state.
                 metric_info = self._analyze_metric(metric_family)
-                if metric_info:
-                    if not metric_family.name.startswith(
-                        "meraki_"
-                    ) or metric_family.name.startswith("meraki_exporter_"):
-                        results["exporter_series"] += metric_info["cardinality"]
-                        continue
+                results["product_series"] += sample_count
+                if metric_info is None:
+                    continue
 
-                    results["metrics"][metric_family.name] = metric_info
-                    results["product_series"] += metric_info["cardinality"]
-                    metric_count += 1
+                results["metrics"][metric_family.name] = metric_info
+                metric_count += 1
 
-                    # Check thresholds
-                    if metric_info["cardinality"] >= self.critical_threshold:
-                        results["critical"].append({
-                            "metric": metric_family.name,
-                            "cardinality": metric_info["cardinality"],
-                            "type": metric_info["type"],
-                        })
-                        # Only increment counter once per metric (not on every analysis)
-                        if not self._warning_triggered.get(f"{metric_family.name}_critical", False):
-                            self.cardinality_warnings.labels(
-                                metric_name=metric_family.name,
-                                severity="critical",
-                            ).inc()
-                            self._warning_triggered[f"{metric_family.name}_critical"] = True
-                            self._last_warning_time[f"{metric_family.name}_critical"] = time.time()
-                    elif metric_info["cardinality"] >= self.warning_threshold:
-                        results["warnings"].append({
-                            "metric": metric_family.name,
-                            "cardinality": metric_info["cardinality"],
-                            "type": metric_info["type"],
-                        })
-                        # Only increment counter once per metric
-                        if not self._warning_triggered.get(f"{metric_family.name}_warning", False):
-                            self.cardinality_warnings.labels(
-                                metric_name=metric_family.name,
-                                severity="warning",
-                            ).inc()
-                            self._warning_triggered[f"{metric_family.name}_warning"] = True
-                            self._last_warning_time[f"{metric_family.name}_warning"] = time.time()
-                    else:
-                        # Reset warning flags if metric drops below threshold
-                        self._warning_triggered.pop(f"{metric_family.name}_warning", None)
-                        self._warning_triggered.pop(f"{metric_family.name}_critical", None)
+                # Check thresholds
+                if metric_info["cardinality"] >= self.critical_threshold:
+                    results["critical"].append({
+                        "metric": metric_family.name,
+                        "cardinality": metric_info["cardinality"],
+                        "type": metric_info["type"],
+                    })
+                    # Only increment counter once per metric (not on every analysis)
+                    if not self._warning_triggered.get(f"{metric_family.name}_critical", False):
+                        self.cardinality_warnings.labels(
+                            metric_name=metric_family.name,
+                            severity="critical",
+                        ).inc()
+                        self._warning_triggered[f"{metric_family.name}_critical"] = True
+                        self._last_warning_time[f"{metric_family.name}_critical"] = time.time()
+                elif metric_info["cardinality"] >= self.warning_threshold:
+                    results["warnings"].append({
+                        "metric": metric_family.name,
+                        "cardinality": metric_info["cardinality"],
+                        "type": metric_info["type"],
+                    })
+                    # Only increment counter once per metric
+                    if not self._warning_triggered.get(f"{metric_family.name}_warning", False):
+                        self.cardinality_warnings.labels(
+                            metric_name=metric_family.name,
+                            severity="warning",
+                        ).inc()
+                        self._warning_triggered[f"{metric_family.name}_warning"] = True
+                        self._last_warning_time[f"{metric_family.name}_warning"] = time.time()
+                else:
+                    # Reset warning flags if metric drops below threshold
+                    self._warning_triggered.pop(f"{metric_family.name}_warning", None)
+                    self._warning_triggered.pop(f"{metric_family.name}_critical", None)
 
         except Exception as e:
             logger.exception("Error during cardinality analysis", error=str(e))
@@ -485,16 +545,9 @@ class CardinalityMonitor:
         self.product_series.set(results["product_series"])
         self.exporter_series.set(results["exporter_series"])
 
-        # Count after warning labels and all snapshot gauges have been updated.
-        # The buckets distinguish product data, exporter self-instrumentation,
-        # and CardinalityMonitor self-observability while preserving an exact
-        # reconciliation with a locally generated scrape.
-        results["exposed_series"] = sum(
-            len(metric_family.samples) for metric_family in self.registry.collect()
-        )
-        results["self_series"] = (
-            results["exposed_series"] - results["product_series"] - results["exporter_series"]
-        )
+        # All three buckets were counted directly from the one snapshot above.
+        # In particular, self_series is never inferred by subtracting two
+        # counts that may have come from different registry populations.
         results["total_series"] = results["exposed_series"]
 
         self.self_series.set(results["self_series"])

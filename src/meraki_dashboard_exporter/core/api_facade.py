@@ -20,6 +20,10 @@ from .error_handling import (
 )
 from .metrics import LabelName
 
+_FACADE_RETRY_BASE_SECONDS = 10.0
+_FACADE_RETRY_MAX_SECONDS = 60.0
+_FACADE_RETRY_JITTER_RATIO = 0.2
+
 
 class FacadeRateLimitExhaustedError(RetryableAPIError):
     """Terminal 429 outcome already retried by :class:`MerakiApiFacade`."""
@@ -27,12 +31,25 @@ class FacadeRateLimitExhaustedError(RetryableAPIError):
     facade_retry_exhausted = True
 
 
+class FacadeRateLimiterUnavailableError(RuntimeError):
+    """A facade owner has no configured limiter and cannot make a paced call."""
+
+
 class MerakiApiFacade:
     """Stable async facade seam for synchronous Meraki SDK operations.
 
     It is intentionally the only component that crosses from async exporter code
-    to the synchronous Dashboard SDK.  One logical call may make multiple SDK
-    attempts when Dashboard returns 429; every attempt is paced and metered.
+    to the synchronous Dashboard SDK. Every SDK attempt acquires the owner's
+    limiter. A 429 is retried at most ``max_retries`` times using a jittered
+    10-second exponential backoff when Dashboard provides no Retry-After;
+    supplied Retry-After values are capped by configuration before jitter.
+
+    ``meraki_exporter_api_requests_total`` is the compatibility HTTP-attempt
+    counter: its ``method`` is derived from the SDK operation name and its
+    ``status_code`` label is emitted only for HTTP outcomes. The detailed
+    ``meraki_exporter_api_request_attempts_total`` records every SDK attempt,
+    using ``status=exception`` when no HTTP response exists. Each facade-owned
+    429 retry increments ``meraki_exporter_api_retry_total`` exactly once.
     """
 
     _attempts_total: Counter | None = None
@@ -82,27 +99,35 @@ class MerakiApiFacade:
         fn: Callable[..., Any],
         /,
         *args: Any,
+        org_id: str | None = None,
         **kwargs: Any,
     ) -> Any:
         """Execute, pace, meter, retry, deadline-bound, and validate one SDK call."""
         deadline = _numeric_setting(self._settings, "per_fetch_deadline_seconds", 120.0)
         max_retries = int(_numeric_setting(self._settings, "max_retries", 3.0))
         retry_after_cap = _numeric_setting(self._settings, "retry_after_max_seconds", 60.0)
-        org_id = _resolve_org_id(args, kwargs)
+        resolved_org_id = _resolve_org_id(operation, args, org_id)
         attempt = 0
 
         async with asyncio.timeout(deadline):
             while True:
-                if self._rate_limiter is not None:
-                    await self._rate_limiter.acquire(org_id, operation)
+                if self._rate_limiter is None:
+                    raise FacadeRateLimiterUnavailableError(
+                        f"{operation} cannot run without an organization rate limiter"
+                    )
+                await self._rate_limiter.acquire(resolved_org_id, operation)
                 try:
                     response = await asyncio.get_running_loop().run_in_executor(
                         None, functools.partial(fn, *args, **kwargs)
                     )
                     result = _validate_generic_response(response, operation)
                 except Exception as exc:
-                    status = _status_from_exception(exc)
-                    self._record_attempt(operation, status)
+                    http_status = _http_status_from_exception(exc)
+                    self._record_attempt(
+                        operation,
+                        attempt_status=http_status or "exception",
+                        http_status=http_status,
+                    )
                     if not _is_rate_limit_error(exc):
                         raise
                     if attempt >= max_retries:
@@ -112,11 +137,18 @@ class MerakiApiFacade:
 
                     retry_after = _get_retry_after_seconds(exc)
                     if retry_after is not None:
-                        retry_after = min(retry_after, retry_after_cap)
-                    if self._rate_limiter is not None:
-                        self._rate_limiter.record_throttle_event(org_id, retry_after)
-                    delay = retry_after if retry_after is not None else min(2**attempt, 60)
-                    await asyncio.sleep(_apply_jitter(delay, 0.2))
+                        retry_after = min(max(retry_after, 0.0), retry_after_cap)
+                    self._rate_limiter.record_throttle_event(resolved_org_id, retry_after)
+                    _record_facade_retry(operation)
+                    delay = (
+                        retry_after
+                        if retry_after is not None
+                        else min(
+                            _FACADE_RETRY_BASE_SECONDS * (2**attempt),
+                            _FACADE_RETRY_MAX_SECONDS,
+                        )
+                    )
+                    await asyncio.sleep(_apply_jitter(delay, _FACADE_RETRY_JITTER_RATIO))
                     attempt += 1
                     continue
 
@@ -124,19 +156,26 @@ class MerakiApiFacade:
                 # response object. A successful SDK return is therefore the
                 # bounded HTTP-success status used by the established readiness
                 # consumer, while failures retain their concrete status.
-                self._record_attempt(operation, "200")
+                self._record_attempt(operation, attempt_status="200", http_status="200")
                 return result
 
-    def _record_attempt(self, operation: str, status: str) -> None:
+    def _record_attempt(
+        self,
+        operation: str,
+        *,
+        attempt_status: str,
+        http_status: str | None,
+    ) -> None:
         """Record both the new detailed attempt metric and legacy counter."""
         attempts_total = type(self)._attempts_total
         assert attempts_total is not None
-        attempts_total.labels(operation=operation, status=status).inc()
-        type(self).requests_total().labels(
-            endpoint=operation,
-            method="unknown",
-            status_code=status,
-        ).inc()
+        attempts_total.labels(operation=operation, status=attempt_status).inc()
+        if http_status is not None:
+            type(self).requests_total().labels(
+                endpoint=operation,
+                method=_http_method_from_operation(operation),
+                status_code=http_status,
+            ).inc()
 
 
 def facade_for(owner: Any) -> MerakiApiFacade:
@@ -155,16 +194,18 @@ def facade_for(owner: Any) -> MerakiApiFacade:
     return MerakiApiFacade(settings=settings, rate_limiter=limiter)
 
 
-def _resolve_org_id(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str | None:
-    """Extract an org ID when the SDK operation's natural first argument is one."""
+def _resolve_org_id(
+    operation: str, args: tuple[Any, ...], explicit_org_id: str | None
+) -> str | None:
+    """Resolve a pacing key without treating an arbitrary identifier as an org ID."""
     context = structlog.contextvars.get_contextvars()
-    explicit = kwargs.get("org_id") or kwargs.get("organization_id") or context.get("org_id")
-    if isinstance(explicit, str) and explicit:
-        return explicit
-    if args and isinstance(args[0], str):
-        candidate = args[0]
-        if candidate.startswith(("org_", "O_")) or candidate.isdigit() or len(candidate) == 18:
-            return candidate
+    if isinstance(explicit_org_id, str) and explicit_org_id:
+        return explicit_org_id
+    context_org_id = context.get("org_id")
+    if isinstance(context_org_id, str) and context_org_id:
+        return context_org_id
+    if operation.startswith("getOrganization") and args and isinstance(args[0], str):
+        return args[0]
     return None
 
 
@@ -185,7 +226,34 @@ def _validate_generic_response(response: Any, operation: str) -> Any:
     return response
 
 
-def _status_from_exception(exc: Exception) -> str:
-    """Return the bounded status label value for an SDK failure."""
+def _http_status_from_exception(exc: Exception) -> str | None:
+    """Return an HTTP status only when the exception supplies a valid one."""
     status = getattr(exc, "status", None)
-    return str(status) if status is not None else type(exc).__name__
+    if not isinstance(status, int | str):
+        return None
+    try:
+        numeric_status = int(status)
+    except TypeError, ValueError:
+        return None
+    return str(numeric_status) if 100 <= numeric_status <= 599 else None
+
+
+def _http_method_from_operation(operation: str) -> str:
+    """Derive the bounded HTTP method family used by the Dashboard SDK operation."""
+    verb = operation.lower()
+    if verb.startswith(("get", "list")):
+        return "GET"
+    if verb.startswith("create"):
+        return "POST"
+    if verb.startswith(("update", "set")):
+        return "PUT"
+    if verb.startswith("delete"):
+        return "DELETE"
+    return "UNKNOWN"
+
+
+def _record_facade_retry(operation: str) -> None:
+    """Increment the API-client compatibility retry counter without an import cycle."""
+    from ..api.client import AsyncMerakiClient
+
+    AsyncMerakiClient.record_retry_attempt(operation, "http_429_rate_limit")

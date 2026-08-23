@@ -7,6 +7,9 @@ as a helm-docs ``# --`` comment) and the matching ``MERAKI_EXPORTER_*`` mapping
 in ``templates/configmap.yaml``. Both regions are spliced between BEGIN/END
 markers so the rest of each file is preserved.
 
+The shutdown-grace validation fallback is also generated into
+``templates/_validation.tpl`` from the same schema-derived knob list.
+
 Friendly names are algorithmic (camelCase of the env-var suffix) with a small
 override map for the handful of legacy names that predate the convention, so no
 per-knob name table has to be maintained and existing values overrides keep
@@ -28,6 +31,12 @@ import generate_env_example as gee  # noqa: E402
 
 BEGIN = "# >>> BEGIN generated config knobs (scripts/generate_helm_config.py) >>>"
 END = "# <<< END generated config knobs <<<"
+VALIDATION_BEGIN = (
+    "{{/* >>> BEGIN generated shutdown validation default "
+    "(scripts/generate_helm_config.py) >>> */}}"
+)
+VALIDATION_END = "{{/* <<< END generated shutdown validation default <<< */}}"
+SHUTDOWN_DEADLINE_ENV = "MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS"
 
 # Env vars wired from other, higher-level chart values (NOT config knobs).
 EXCLUDE = {
@@ -137,13 +146,28 @@ def render_configmap_block(knobs: list[dict[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def splice(path: Path, block: str) -> None:
+def render_shutdown_validation_block(knobs: list[dict[str, str]]) -> str:
+    """Render the schema-derived fallback used by Helm shutdown validation."""
+    try:
+        default = next(k["default"] for k in knobs if k["env"] == SHUTDOWN_DEADLINE_ENV)
+    except StopIteration as exc:
+        raise SystemExit(f"schema knob not found: {SHUTDOWN_DEADLINE_ENV}") from exc
+    if not default:
+        raise SystemExit(f"schema knob has no default: {SHUTDOWN_DEADLINE_ENV}")
+    return "\n".join([
+        VALIDATION_BEGIN,
+        f"{{{{- $deadline := int (default {default} .Values.config.apiPerFetchDeadlineSeconds) -}}}}",
+        VALIDATION_END,
+    ])
+
+
+def splice(path: Path, block: str, *, begin: str = BEGIN, end: str = END) -> None:
     """Replace the BEGIN..END region in ``path`` with ``block`` (markers required)."""
     text = path.read_text()
-    start = text.find(BEGIN)
-    end = text.find(END)
+    start = text.find(begin)
+    end = text.find(end)
     if start == -1 or end == -1:
-        raise SystemExit(f"markers not found in {path} - add {BEGIN} / {END} first")
+        raise SystemExit(f"markers not found in {path} - add {begin} / {end} first")
     # Extend to whole lines (strip leading indent on the BEGIN line, trailing newline on END).
     line_start = text.rfind("\n", 0, start) + 1
     line_end = text.find("\n", end)
@@ -152,14 +176,22 @@ def splice(path: Path, block: str) -> None:
 
 
 def main() -> None:
-    """Regenerate the chart values + configmap knob regions."""
+    """Regenerate the schema-derived Helm values, configmap, and validation regions."""
     repo_root = gcd.find_repo_root(Path(__file__).resolve())
     chart = repo_root / "charts" / "meraki-dashboard-exporter"
     knobs = collect_knobs()
     print(f"Generating Helm config knobs ({len(knobs)} settings)...")
     splice(chart / "values.yaml", render_values_block(knobs))
     splice(chart / "templates" / "configmap.yaml", render_configmap_block(knobs))
-    print(f"  values.yaml + templates/configmap.yaml updated ({len(knobs)} knobs)")
+    splice(
+        chart / "templates" / "_validation.tpl",
+        render_shutdown_validation_block(knobs),
+        begin=VALIDATION_BEGIN,
+        end=VALIDATION_END,
+    )
+    print(
+        f"  values.yaml + templates/configmap.yaml + _validation.tpl updated ({len(knobs)} knobs)"
+    )
 
 
 if __name__ == "__main__":

@@ -92,16 +92,49 @@ PII_ATTRIBUTE_KEYS: frozenset[str] = frozenset({
 })
 
 #: MAC addresses are personal identifiers even when an upstream producer puts
-#: them in an unstructured record body rather than a named attribute. Support
+#: them in an unstructured record body rather than a named attribute. Delimiter-
+#: bearing forms are unambiguous enough to scrub without schema context:
 #: colon/hyphen-delimited and Cisco dotted forms.
-_MAC_ADDRESS_PATTERN = re.compile(
+_SEPARATED_MAC_ADDRESS_PATTERN = re.compile(
     r"(?i)(?<![0-9a-f])(?:"
     r"(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}"
     r"|(?:[0-9a-f]{4}\.){2}[0-9a-f]{4}"
-    r"|[0-9a-f]{12}"
     r")(?![0-9a-f])"
 )
+#: A delimiter-free MAC-shaped token is ambiguous in names, IDs, and bodies.
+#: Only apply it to an attribute whose key explicitly makes a MAC plausible.
+_BARE_MAC_ADDRESS_PATTERN = re.compile(r"(?i)(?<![0-9a-f])[0-9a-f]{12}(?![0-9a-f])")
+_MAC_PLAUSIBLE_ATTRIBUTE_KEY_PATTERN = re.compile(r"(?i)(?:^|[._-])mac(?:[_-]?address)?$")
 _REDACTED_MAC_ADDRESS = "[redacted-mac]"
+
+
+def _redact_mac_addresses(value: str, *, attribute_key: str | None = None) -> str:
+    """Redact MAC-shaped values while preserving ambiguous bare hex text.
+
+    Delimiter-bearing MAC forms are recognizable in any string, including an
+    unstructured record body. A bare 12-hex token is only recognizable when the
+    attribute key says it is a MAC (for example ``client.mac`` or
+    ``device.mac_address``); bodies and ordinary name/ID attributes have no such
+    schema context and are left intact.
+
+    Parameters
+    ----------
+    value : str
+        Attribute value or record body to scrub.
+    attribute_key : str | None
+        Optional attribute key used to opt into bare-MAC scrubbing.
+
+    Returns
+    -------
+    str
+        The value with confidently identified MAC addresses replaced by the
+        bounded ``[redacted-mac]`` marker.
+
+    """
+    redacted = _SEPARATED_MAC_ADDRESS_PATTERN.sub(_REDACTED_MAC_ADDRESS, value)
+    if attribute_key is not None and _MAC_PLAUSIBLE_ATTRIBUTE_KEY_PATTERN.search(attribute_key):
+        redacted = _BARE_MAC_ADDRESS_PATTERN.sub(_REDACTED_MAC_ADDRESS, redacted)
+    return redacted
 
 
 class DataLogEmitter:
@@ -310,13 +343,13 @@ class DataLogEmitter:
             else:
                 attrs.update({k: v for k, v in attributes.items() if k not in PII_ATTRIBUTE_KEYS})
                 attrs = {
-                    key: _MAC_ADDRESS_PATTERN.sub(_REDACTED_MAC_ADDRESS, value)
+                    key: _redact_mac_addresses(value, attribute_key=key)
                     if isinstance(value, str)
                     else value
                     for key, value in attrs.items()
                 }
                 if body is not None:
-                    body = _MAC_ADDRESS_PATTERN.sub(_REDACTED_MAC_ADDRESS, body)
+                    body = _redact_mac_addresses(body)
 
             assert self._logger is not None  # guaranteed by is_event_enabled/enabled
             self._logger.emit(

@@ -5,10 +5,10 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 363
-- **Gauges:** 325
-- **Counters:** 34
-- **Histograms:** 3
+- **Total metrics:** 367
+- **Gauges:** 327
+- **Counters:** 35
+- **Histograms:** 4
 - **Info metrics:** 1
 
 ## Collector Metrics
@@ -56,7 +56,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_exporter_client_dns_lookups_successful_total` | counter | — | Total number of successful DNS lookups | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_lookups_timeout_total` | counter | — | Total reverse-DNS lookups that exceeded clients.dns_timeout | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_lookups_total` | counter | — | Total number of DNS lookups performed | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
-| `meraki_exporter_client_dns_queue_depth` | gauge | — | Peak reverse-DNS work queue depth in the most recent resolution batch | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
+| `meraki_exporter_client_dns_queue_depth` | gauge | — | Peak reverse-DNS producer backlog in the most recently started completed batch | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_queue_wait_seconds` | gauge | — | Mean reverse-DNS work queue wait time in seconds over the process lifetime | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_dns_resolution_seconds_total` | counter | — | Cumulative seconds spent performing reverse-DNS lookups (excludes cache hits) | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
 | `meraki_exporter_client_store_networks` | gauge | — | Total number of networks with clients | Requires MERAKI_EXPORTER_CLIENTS__ENABLED=true |
@@ -591,6 +591,15 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_webhook_stale_rejected_total` | counter | — | Authenticated webhook deliveries acknowledged outside the freshness window | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_unique_alerts_total` | counter | — | Unique authenticated webhook alerts accepted for processing | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_validation_failures_total` | counter | — | Total webhook validation failures | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+
+### async_utils
+
+| Metric | Type | Labels | Description | Notes |
+|--------|------|--------|-------------|-------|
+| `meraki_exporter_task_expired_before_start_total` | counter | `phase` | Tasks whose admission deadline elapsed before execution began | The bounded `phase` label is `collector_admission` for collector-run admission and `task_group` for ManagedTaskGroup admission; it describes exporter scheduling/backpressure, not endpoint failure. |
+| `meraki_exporter_task_queue_wait_seconds` | histogram | `phase` | Seconds tasks wait for admission before execution starts | The bounded `phase` label is `collector_admission` for collector-run admission and `task_group` for ManagedTaskGroup admission; it describes exporter scheduling/backpressure, not endpoint failure. |
+| `meraki_exporter_tasks_active` | gauge | `phase` | Tasks admitted for execution | The bounded `phase` label is `collector_admission` for collector-run admission and `task_group` for ManagedTaskGroup admission; it describes exporter scheduling/backpressure, not endpoint failure. |
+| `meraki_exporter_tasks_pending` | gauge | `phase` | Tasks waiting for a bounded admission slot | The bounded `phase` label is `collector_admission` for collector-run admission and `task_group` for ManagedTaskGroup admission; it describes exporter scheduling/backpressure, not endpoint failure. |
 
 ### build_info
 

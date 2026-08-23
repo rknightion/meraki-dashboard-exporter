@@ -236,9 +236,7 @@ class ExporterApp:
         enforce_webhook_security(
             enabled=self.settings.webhooks.enabled,
             require_secret=self.settings.webhooks.require_secret,
-            # TODO(CFG-BIG): webhooks.allow_insecure lands with the config sweep;
-            # getattr keeps the secure default (False) until then.
-            allow_insecure=getattr(self.settings.webhooks, "allow_insecure", False),
+            allow_insecure=self.settings.webhooks.allow_insecure,
         )
         self.webhook_handler: WebhookHandler | None = None
         if self.settings.webhooks.enabled:
@@ -969,9 +967,7 @@ class ExporterApp:
             decision = ui_guard_decision(
                 method=request.method,
                 path=request.url.path,
-                # TODO(CFG-BIG): server.ui_enabled lands with the config sweep;
-                # getattr keeps the default (True = UI enabled) until then.
-                ui_enabled=getattr(self.settings.server, "ui_enabled", True),
+                ui_enabled=self.settings.server.ui_enabled,
                 api_token=api_token,
                 auth_header=request.headers.get("authorization", ""),
             )

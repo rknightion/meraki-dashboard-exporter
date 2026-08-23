@@ -112,6 +112,11 @@ def get_field_type_str(field_info: FieldInfo) -> str:
     return _format_type(field_type)
 
 
+def escape_markdown_table_delimiters(value: str) -> str:
+    """Escape pipe characters while preserving the table cell's displayed text."""
+    return value.replace("|", "\\|")
+
+
 def format_default(field_info: FieldInfo) -> Any:
     """Format default values for display."""
     if field_info.is_required():
@@ -395,9 +400,9 @@ def generate_configuration_docs() -> str:
                     constraints.extend(constraint_parts)
                     desc += f" ({', '.join(constraints)})"
 
-                # Escape any pipe characters in the description
-                desc = str(desc).replace("|", "\\|")
-                sections.append(f"| `{doc['env_var']}` | `{doc['type']}` | `{default}` | {desc} |")
+                type_display = escape_markdown_table_delimiters(str(doc["type"]))
+                desc = escape_markdown_table_delimiters(str(desc))
+                sections.append(f"| `{doc['env_var']}` | `{type_display}` | `{default}` | {desc} |")
             sections.append("")
 
         if title in section_notes:

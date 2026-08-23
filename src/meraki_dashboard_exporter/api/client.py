@@ -305,6 +305,14 @@ class AsyncMerakiClient:
         return int(total)
 
     @classmethod
+    def record_retry_attempt(cls, operation: str, reason: str) -> None:
+        """Record one retry scheduled by a facade-owned 429 handling loop."""
+        cls._ensure_metrics_initialized()
+        counter = cls._api_retry_attempts
+        assert counter is not None
+        counter.labels(endpoint=operation, retry_reason=reason).inc()
+
+    @classmethod
     def record_auth_outcome(cls, ok: bool) -> None:
         """Record the auth outcome of an API response (200 → True, 401 → False)."""
         cls._auth_ok = ok

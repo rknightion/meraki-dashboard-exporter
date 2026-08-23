@@ -57,6 +57,9 @@ refused or behave differently:
 - Disabling every collector is refused. This also means a webhook-receiver-only deployment must
   leave at least one collector enabled.
 - An active `network_filter` that resolves successfully to no networks is refused.
+- Enabling the webhook receiver with `webhooks.require_secret=false` is refused unless
+  `webhooks.allow_insecure=true` explicitly acknowledges the unauthenticated configuration. The
+  recommended action is to configure `webhooks.shared_secret` and keep secret validation enabled.
 - `api.rate_limit_burst` now defaults to 10 instead of 20.
 - The effective global collector concurrency may be lower than
   `collectors.max_concurrent_collectors` because it is bounded by SDK executor capacity. With the
@@ -73,12 +76,54 @@ keep their volatility floors while lower-priority groups are shed, and
 `meraki_exporter_scheduler_over_budget` remains alertable. Fixed scheduler mode never applies this
 adaptive profile-selection gate.
 
+The API client also strips its `Authorization` header on every cross-origin redirect, including
+when a custom API base URL was explicitly allowed. Proxies must complete authenticated redirects
+without forwarding the Meraki credential to a different origin.
+
+### Network filtering and collected series
+
+`NetworkFilter` is now applied before switch port and power data is emitted. If a switch's network
+is excluded, its `meraki_ms_port_*` and `meraki_ms_power_*` series disappear after upgrading; this
+is the intended correction. Update alerts or dashboards that previously depended on those leaked
+series, or include the network in the filter. Network inventory, device collection, and endpoint
+group cost calculations now use the same filtered network set.
+
+### Self-observability metric semantics
+
+- `meraki_exporter_api_requests_total{endpoint,method,status_code}` counts outbound SDK request
+  **attempts**, including retries. `method` is derived from the SDK operation. `status_code` contains
+  HTTP status values only; calls that fail without an HTTP response are represented by
+  `meraki_exporter_api_request_attempts_total{operation,status="exception"}` instead of placing an
+  exception name in `status_code`. A facade-owned 429 retry increments
+  `meraki_exporter_api_retry_total` once per retry.
+- Endpoint-group last-success and scheduler-run state advance only after the owning endpoint group
+  succeeds. A group with no applicable work is neither a success nor an endpoint failure, while an
+  attempted group with no explicit success remains fail-closed. This can make old false-success
+  timestamps stop advancing.
+- The shared task-admission metrics `meraki_exporter_tasks_active`,
+  `meraki_exporter_tasks_pending`, `meraki_exporter_task_queue_wait_seconds`, and
+  `meraki_exporter_task_expired_before_start_total` use bounded `phase` values:
+  `collector_admission` for whole collector runs and `task_group` for bounded child work. They
+  describe exporter scheduling pressure, not Meraki endpoint failures.
+- Reverse-DNS timeouts increment `meraki_exporter_client_dns_lookups_timeout_total`; other resolver
+  failures increment `meraki_exporter_client_dns_lookups_failed_total`, never both for one lookup.
+  `meraki_exporter_client_dns_queue_depth` is the peak producer backlog from the most recently
+  started completed batch, with overlapping older batches prevented from overwriting newer data.
+
 `meraki_exporter_cardinality_product_series` now counts only `meraki_*` product-data samples.
 Exporter instrumentation and Python/process runtime samples move to the new
 `meraki_exporter_cardinality_exporter_series` bucket; the cardinality monitor's own samples remain
 in `meraki_exporter_cardinality_self_series`. The three buckets still reconcile exactly to
 `meraki_exporter_cardinality_exposed_series` and the compatibility alias
 `meraki_exporter_total_series`.
+
+Webhook metrics now separate authenticated deliveries from unique accepted alerts:
+`meraki_webhook_delivery_attempts_total` includes Meraki retries,
+`meraki_webhook_unique_alerts_total` counts first acceptance, and
+`meraki_webhook_replays_rejected_total` counts TTL-cache duplicates. Deliveries outside the
+configured freshness window are acknowledged without applying device state and increment
+`meraki_webhook_stale_rejected_total`. The bounded replay cache is per process, so deduplication is
+not shared between replicas or retained across restarts.
 
 ## Breaking changes at 1.0
 

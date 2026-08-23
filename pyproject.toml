@@ -45,7 +45,6 @@ dev = [
   "pytest-timeout>=2.3",
   "ruff>=0.12.2",
   "ty>=0.0.1a13",
-  "zensical>=0.0.14",
 ]
 
 [tool.ruff]
@@ -116,6 +115,7 @@ markers = [
   "slow: marks tests as slow (deselect with '-m \"not slow\"')",
   "fleet_scheduled: scale presets selected by scheduled CI",
   "fleet_on_demand: scale presets selected by workflow dispatch",
+  "strict_facade_limiter: disables the shared immediate limiter to test fail-closed pacing",
 ]
 testpaths = [ "tests", "tools/apidrift/tests" ]
 python_files = [ "test_*.py", "*_test.py" ]

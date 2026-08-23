@@ -123,13 +123,11 @@ async def test_mt_get_org_name_fallback_acquires() -> None:
 
 
 async def test_mt_get_org_name_standalone_no_limiter() -> None:
-    """Standalone MT (parent=None) must not crash resolving the rate limiter."""
+    """Standalone MT can use the shared test limiter without a production parent graph."""
     api = MagicMock()
     api.organizations.getOrganization = MagicMock(return_value={"name": "StandaloneOrg"})
     collector = MTCollector.as_standalone(api, MagicMock())
 
-    # parent is None -> no limiter reachable; the guarded getattr must skip acquire
-    # rather than raise, and the direct SDK call still returns the org name.
     name = await collector._get_org_name("123456")
 
     assert name == "StandaloneOrg"

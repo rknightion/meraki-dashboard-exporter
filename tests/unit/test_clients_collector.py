@@ -7,7 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from structlog.testing import capture_logs
 
+import meraki_dashboard_exporter.collectors.clients as clients_module
 from meraki_dashboard_exporter.collectors.clients import ClientsCollector
+from meraki_dashboard_exporter.core.api_models import NetworkClient
 from meraki_dashboard_exporter.core.org_health import OrgHealthTracker
 from meraki_dashboard_exporter.services.inventory import OrganizationInventory
 from tests.helpers.base import BaseCollectorTest
@@ -19,7 +21,9 @@ class TestClientsCollectorOrgHealthGating(BaseCollectorTest):
 
     collector_class = ClientsCollector
 
-    def _build_collector(self, mock_api_builder, settings, isolated_registry, tracker):
+    def _build_collector(
+        self, mock_api_builder, settings, isolated_registry, tracker, rate_limiter
+    ):
         """Build a clients-enabled collector over a two-org mock API."""
         settings.clients.enabled = True
         org_backed = OrganizationFactory.create(org_id="BACKED", name="Backed Org")
@@ -33,25 +37,30 @@ class TestClientsCollectorOrgHealthGating(BaseCollectorTest):
             .with_networks([net_h], org_id="HEALTHY")
             .build()
         )
-        inventory = OrganizationInventory(api, settings)
+        inventory = OrganizationInventory(api, settings, rate_limiter=rate_limiter)
         collector = ClientsCollector(
             api=api,
             settings=settings,
             registry=isolated_registry,
             inventory=inventory,
             org_health_tracker=tracker,
+            rate_limiter=rate_limiter,
         )
         collector.api_helper.api = api
         return collector
 
-    async def test_backed_off_org_is_skipped(self, mock_api_builder, settings, isolated_registry):
+    async def test_backed_off_org_is_skipped(
+        self, mock_api_builder, settings, isolated_registry, rate_limiter
+    ):
         """A backed-off org is skipped in the per-org loop; a healthy org is processed."""
         tracker = OrgHealthTracker()
         for _ in range(tracker.max_consecutive_failures):
             tracker.record_failure("BACKED", "Backed Org")
         assert tracker.should_collect("BACKED") is False
 
-        collector = self._build_collector(mock_api_builder, settings, isolated_registry, tracker)
+        collector = self._build_collector(
+            mock_api_builder, settings, isolated_registry, tracker, rate_limiter
+        )
         processed: list[str] = []
 
         async def _spy(org_id: str, org_name: str, networks: list) -> None:
@@ -62,9 +71,13 @@ class TestClientsCollectorOrgHealthGating(BaseCollectorTest):
         await collector._collect_impl()
         assert processed == ["HEALTHY"]
 
-    async def test_none_tracker_collects_all(self, mock_api_builder, settings, isolated_registry):
+    async def test_none_tracker_collects_all(
+        self, mock_api_builder, settings, isolated_registry, rate_limiter
+    ):
         """With no tracker wired in, every org is processed (backward compatible)."""
-        collector = self._build_collector(mock_api_builder, settings, isolated_registry, None)
+        collector = self._build_collector(
+            mock_api_builder, settings, isolated_registry, None, rate_limiter
+        )
         assert collector.org_health_tracker is None
         processed: list[str] = []
 
@@ -94,10 +107,13 @@ class TestClientsCollector(BaseCollectorTest):
         return settings
 
     @pytest.fixture
-    def collector(self, mock_api, settings_with_clients_enabled, isolated_registry):
+    def collector(self, mock_api, settings_with_clients_enabled, isolated_registry, rate_limiter):
         """Create the collector instance with clients enabled."""
         return self.collector_class(
-            api=mock_api, settings=settings_with_clients_enabled, registry=isolated_registry
+            api=mock_api,
+            settings=settings_with_clients_enabled,
+            registry=isolated_registry,
+            rate_limiter=rate_limiter,
         )
 
     async def test_collect_when_disabled(self, mock_api, settings, isolated_registry):
@@ -111,6 +127,18 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Should not make any API calls when disabled
         mock_api.organizations.getOrganizations.assert_not_called()
+
+    async def test_empty_organization_scope_is_not_an_endpoint_failure(self, collector):
+        """An admitted clients group with no organizations is explicitly inapplicable."""
+        collector._should_run_group = MagicMock(return_value=True)  # type: ignore[method-assign]
+        collector._mark_group_not_applicable = MagicMock()  # type: ignore[method-assign]
+        collector.api_helper.get_organizations = AsyncMock(return_value=[])
+
+        await collector._collect_impl()
+
+        collector._mark_group_not_applicable.assert_called_once_with(
+            clients_module.EndpointGroupName.CLIENTS_LIST
+        )
 
     def test_windowed_metric_help_states_window(self, collector, metrics):
         """MET-09: HELP text for windowed client metrics must state the data window.
@@ -496,6 +524,56 @@ class TestClientsCollector(BaseCollectorTest):
 
         # Verify wired client was skipped (should have 2 calls, not 3)
         assert api.wireless.getNetworkWirelessSignalQualityHistory.call_count == 2
+
+    async def test_signal_quality_failure_log_omits_client_identifiers(
+        self, collector, monkeypatch
+    ):
+        """Client-specific failures retain only a safe operation and error type above DEBUG."""
+
+        collector.settings.clients.signal_quality_enabled = True
+        client = NetworkClient.model_validate(
+            ClientFactory.create(
+                client_id="private-client-id",
+                ip="198.51.100.77",
+                mac="aa:bb:cc:dd:ee:77",
+                description="private client description",
+                recentDeviceConnection="Wireless",
+                ssid="private-ssid",
+            )
+        )
+
+        class FailingFacade:
+            async def call(self, *args, **kwargs):
+                raise RuntimeError(
+                    "private-client-id 198.51.100.77 aa:bb:cc:dd:ee:77 private client description "
+                    "private-hostname private-ssid"
+                )
+
+        monkeypatch.setattr(clients_module, "facade_for", lambda _collector: FailingFacade())
+
+        with capture_logs() as captured:
+            await collector._collect_wireless_signal_quality(
+                "org", "Organization", "network", "Network", [client]
+            )
+
+        failure_events = [
+            event for event in captured if event["event"] == "Failed to fetch client signal quality"
+        ]
+        assert failure_events
+        protected_values = {
+            "private-client-id",
+            "198.51.100.77",
+            "aa:bb:cc:dd:ee:77",
+            "private client description",
+            "private-hostname",
+            "private-ssid",
+        }
+        assert all(
+            value not in str(event)
+            for event in captured
+            if event["log_level"] in {"info", "warning", "error"}
+            for value in protected_values
+        )
 
     async def test_application_name_sanitization(self, collector):
         """Test sanitization of various application names."""
@@ -1120,7 +1198,7 @@ class TestClientsCollector(BaseCollectorTest):
         metrics.assert_metric_not_set("meraki_wireless_client_rssi")
 
     async def test_client_metrics_are_expiration_tracked(
-        self, mock_api_builder, settings, isolated_registry
+        self, mock_api_builder, settings, isolated_registry, rate_limiter
     ):
         """Client metric families route through _set_metric for expiration tracking (#533)."""
         settings.clients.enabled = True
@@ -1152,6 +1230,7 @@ class TestClientsCollector(BaseCollectorTest):
             settings=settings,
             registry=isolated_registry,
             expiration_manager=expiration_manager,
+            rate_limiter=rate_limiter,
         )
         collector.api_helper.api = api
 
@@ -1179,10 +1258,13 @@ class TestClientsCollectorMemoryAndDNSMetrics(BaseCollectorTest):
         return settings
 
     @pytest.fixture
-    def collector(self, mock_api, settings_with_clients_enabled, isolated_registry):
+    def collector(self, mock_api, settings_with_clients_enabled, isolated_registry, rate_limiter):
         """Build a clients-enabled collector on the isolated registry."""
         return self.collector_class(
-            api=mock_api, settings=settings_with_clients_enabled, registry=isolated_registry
+            api=mock_api,
+            settings=settings_with_clients_enabled,
+            registry=isolated_registry,
+            rate_limiter=rate_limiter,
         )
 
     def _update_collector_api(self, collector: ClientsCollector, api: MagicMock) -> None:

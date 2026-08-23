@@ -12,7 +12,7 @@ from typing import cast
 
 import structlog
 
-from ..core.async_utils import AsyncRetry, shutdown_executor, with_timeout
+from ..core.async_utils import AsyncRetry, shutdown_executor
 from ..core.config import Settings
 
 logger = structlog.get_logger(__name__)
@@ -26,6 +26,14 @@ class CacheEntry:
     timestamp: float
     client_id: str | None = None
     description: str | None = None
+
+
+@dataclass(frozen=True)
+class _LookupResult:
+    """Private reverse-DNS result preserving whether the deadline expired."""
+
+    hostname: str | None
+    timed_out: bool = False
 
 
 class DNSResolver:
@@ -80,6 +88,11 @@ class DNSResolver:
             "queue_peak_depth": 0,
             "lookup_timeouts": 0,
         }
+        # ``resolve_multiple`` can overlap when callers collect networks in
+        # parallel. Sequence completed batches so an older one cannot publish
+        # its backlog measurement after a newer one has finished.
+        self._next_resolution_batch_id = 0
+        self._last_published_batch_id = 0
         self._closed = False
         self._close_lock = asyncio.Lock()
         self._executor_drained: bool | None = None
@@ -208,17 +221,30 @@ class DNSResolver:
         # Perform reverse DNS lookup with retry, timing the actual resolution
         # (cache hits above are excluded) for the resolution-seconds counter (#319).
         lookup_start = time.perf_counter()
-        hostname = await self._retry.execute(
+        lookup_result = await self._retry.execute(
             lambda: self._perform_lookup(ip),
-            operation=f"DNS lookup for {ip}",
+            operation="reverse DNS lookup",
         )
         self._total_resolution_time += time.perf_counter() - lookup_start
+
+        # Keep compatibility with tests and integrations that replace the
+        # private fetcher with a simple ``str | None`` coroutine.
+        timed_out = isinstance(lookup_result, _LookupResult) and lookup_result.timed_out
+        hostname = (
+            lookup_result.hostname
+            if isinstance(lookup_result, _LookupResult)
+            else cast(str | None, lookup_result)
+        )
 
         # Track success/failure
         if hostname:
             self._stats["successful_lookups"] += 1
             # Extract short hostname (remove domain)
             hostname = hostname.split(".")[0]
+        elif timed_out:
+            # Deadline expiry is not a resolver failure. Keep the two existing
+            # bounded outcome counters mutually exclusive.
+            self._stats["lookup_timeouts"] += 1
         else:
             self._stats["failed_lookups"] += 1
 
@@ -291,7 +317,7 @@ class DNSResolver:
             oldest_key = next(iter(self._client_tracking))
             del self._client_tracking[oldest_key]
 
-    async def _perform_lookup(self, ip: str) -> str | None:
+    async def _perform_lookup(self, ip: str) -> _LookupResult:
         """Perform the actual DNS lookup.
 
         Parameters
@@ -305,23 +331,18 @@ class DNSResolver:
             Full hostname or None if resolution fails.
 
         """
-        timeout_sentinel = object()
         try:
-            # Reverse DNS via the system resolver, always bounded by the
-            # configured dns_timeout (F-076).
-            result = await with_timeout(
-                self._system_dns_lookup(ip),
-                timeout=self.timeout,
-                operation="reverse DNS lookup",
-                default=timeout_sentinel,
-            )
-            if result is timeout_sentinel:
-                self._stats["lookup_timeouts"] += 1
-                return None
-            return cast(str | None, result)
-        except Exception as e:
-            logger.debug("DNS lookup failed", ip=ip, error=str(e))
-            return None
+            # Do not use ``with_timeout`` here: it returns its default for
+            # both deadline expiry and arbitrary exceptions. DNS accounting
+            # must expose those outcomes separately.
+            hostname = await asyncio.wait_for(self._system_dns_lookup(ip), timeout=self.timeout)
+            return _LookupResult(hostname)
+        except TimeoutError:
+            logger.warning("Reverse DNS lookup timed out", timeout_seconds=self.timeout)
+            return _LookupResult(None, timed_out=True)
+        except Exception as exc:
+            logger.debug("DNS lookup failed", error_type=type(exc).__name__)
+            return _LookupResult(None)
 
     async def _system_dns_lookup(self, ip: str) -> str | None:
         """Perform DNS lookup using system resolver.
@@ -345,8 +366,8 @@ class DNSResolver:
             hostname, _, _ = await loop.run_in_executor(self._executor, socket.gethostbyaddr, ip)
             logger.debug("Resolved hostname", ip=ip, hostname=hostname)
             return hostname
-        except (socket.herror, socket.gaierror, OSError) as e:
-            logger.debug("System DNS lookup failed", ip=ip, error=str(e))
+        except (socket.herror, socket.gaierror, OSError) as exc:
+            logger.debug("System DNS lookup failed", ip=ip, error_type=type(exc).__name__)
             return None
 
     async def resolve_multiple(
@@ -385,15 +406,19 @@ class DNSResolver:
         if not ips_to_resolve:
             return {}
 
+        self._next_resolution_batch_id += 1
+        batch_id = self._next_resolution_batch_id
+        # The bounded handoff queue is an implementation detail. Its qsize
+        # saturates at the worker cap, whereas this records all producer work
+        # pending at the start of the batch and therefore distinguishes an
+        # ordinary batch from a fleet-sized one.
+        batch_peak_backlog = len(ips_to_resolve)
+
         logger.info(
             "Starting DNS resolution",
             total_clients=len(clients),
             ips_to_resolve=len(ips_to_resolve),
         )
-
-        # This gauge reports the batch high-water mark, rather than retaining
-        # an obsolete peak after a later, smaller batch.
-        self._stats["queue_peak_depth"] = 0
 
         # A bounded queue means only one producer plus ``max_concurrent_lookups``
         # workers exist, even for the 25,000-client cap. A semaphore around a
@@ -407,9 +432,6 @@ class DNSResolver:
         async def produce() -> None:
             for client_id, ip in ips_to_resolve:
                 await queue.put((client_id, ip, time.perf_counter()))
-                self._stats["queue_peak_depth"] = max(
-                    self._stats["queue_peak_depth"], queue.qsize()
-                )
             for _ in range(self.max_concurrent_lookups):
                 await queue.put(None)
 
@@ -431,6 +453,13 @@ class DNSResolver:
         producer = asyncio.create_task(produce())
         workers = [asyncio.create_task(worker()) for _ in range(self.max_concurrent_lookups)]
         await asyncio.gather(producer, *workers)
+
+        # Publish the most recently started completed batch only. An older
+        # overlapping batch may finish later, but it must not reset the newer
+        # batch's measurement.
+        if batch_id >= self._last_published_batch_id:
+            self._stats["queue_peak_depth"] = batch_peak_backlog
+            self._last_published_batch_id = batch_id
 
         # Build result dictionary
         resolved = {}
@@ -483,6 +512,8 @@ class DNSResolver:
             "queue_peak_depth": 0,
             "lookup_timeouts": 0,
         }
+        self._next_resolution_batch_id = 0
+        self._last_published_batch_id = 0
         self._total_resolution_time = 0.0
         logger.info("DNS cache cleared", entries_cleared=old_size)
 

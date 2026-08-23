@@ -17,7 +17,9 @@ The pod must outlive one logical API fetch plus a fixed shutdown-drain margin.
 The config value is chart-managed so this relationship is render-time verifiable.
 */}}
 {{- define "meraki-dashboard-exporter.validateShutdownGrace" -}}
+{{/* >>> BEGIN generated shutdown validation default (scripts/generate_helm_config.py) >>> */}}
 {{- $deadline := int (default 120 .Values.config.apiPerFetchDeadlineSeconds) -}}
+{{/* <<< END generated shutdown validation default <<< */}}
 {{- $minimumGrace := add $deadline 30 -}}
 {{- if lt (int .Values.terminationGracePeriodSeconds) $minimumGrace }}
 {{- fail (printf "terminationGracePeriodSeconds must be at least config.apiPerFetchDeadlineSeconds + 30 (%d); got %d" $minimumGrace (int .Values.terminationGracePeriodSeconds)) }}

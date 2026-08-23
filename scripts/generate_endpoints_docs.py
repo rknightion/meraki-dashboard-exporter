@@ -101,7 +101,15 @@ def extract_endpoints(file_path: Path, repo_root: Path) -> list[Endpoint]:
 
 def generate_markdown(endpoints: list[Endpoint]) -> str:
     """Generate markdown documentation for endpoints."""
-    lines = ["# HTTP Endpoints", ""]
+    lines = [
+        "---",
+        "title: HTTP Endpoints",
+        "description: Reference the Meraki Dashboard Exporter health, metrics, webhook, cardinality, and authenticated control endpoints.",
+        "---",
+        "",
+        "# HTTP Endpoints",
+        "",
+    ]
     lines.append("This page lists HTTP endpoints exposed by the exporter.")
     lines.append("")
 
@@ -120,9 +128,7 @@ def generate_markdown(endpoints: list[Endpoint]) -> str:
     lines.append("- `/metrics` and `/health` are always available.")
     lines.append("- The client UI and DNS cache endpoint are gated by client collection.")
     lines.append("- The webhook endpoint returns 404 when webhooks are disabled.")
-    lines.append("")
-
-    return "\n".join(lines)
+    return "\n".join(lines) + "\n"
 
 
 def validate_endpoint_notes(endpoints: list[Endpoint]) -> None:
@@ -153,7 +159,7 @@ def main() -> None:
 
     output_file = repo_root / "docs" / "reference" / "endpoints.md"
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    output_file.write_text(generate_markdown(list(deduped.values())) + "\n", encoding="utf-8")
+    output_file.write_text(generate_markdown(list(deduped.values())), encoding="utf-8")
 
     print(f"Endpoint documentation written to {output_file}")
 

@@ -109,8 +109,8 @@ class TestApiUsageCompleteness(BaseCollectorTest):
         assert call.kwargs["perPage"] == 1000
         assert call.kwargs["total_pages"] == "all"
 
-    async def test_deadline_cut_bulk_fetch_emits_failure_signal(self, collector) -> None:
-        """A partial bulk result leaves the group failed and exposes its category."""
+    async def test_deadline_cut_enrichment_preserves_overview_success(self, collector) -> None:
+        """A timed-out enrichment is observable without failing the fresh overview."""
         subcollector = collector.api_usage_collector
         subcollector._fetch_api_requests_overview = AsyncMock(  # type: ignore[method-assign]
             return_value={"responseCodeCounts": {"200": 1}}
@@ -123,6 +123,5 @@ class TestApiUsageCompleteness(BaseCollectorTest):
 
         assert await subcollector.collect("org-1", "Org") is True
 
-        collector._mark_group_ran.assert_not_called()
+        collector._mark_group_ran.assert_called_once_with(EndpointGroupName.ORG_API_USAGE)
         collector._track_error.assert_called_once_with(ErrorCategory.TIMEOUT)
-        assert collector._should_run_group(EndpointGroupName.ORG_API_USAGE) is True

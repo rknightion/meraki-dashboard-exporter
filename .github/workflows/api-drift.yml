@@ -31,7 +31,7 @@ jobs:
           enable-cache: true
 
       - name: Install project (incl. dev extras)
-        run: uv sync
+        run: uv sync --locked
 
       - name: Fetch live Meraki OpenAPI spec
         run: |

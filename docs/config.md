@@ -35,7 +35,7 @@ Core Meraki API configuration
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_MERAKI__API_KEY` | `SecretStr` | `_(required)_` | Meraki Dashboard API key |
-| `MERAKI_EXPORTER_MERAKI__ORG_ID` | `str | None` | `_(none)_` | Meraki organization ID. For v1 the single-organization contract applies (one poller instance = one organization): when the API key sees exactly one org it is auto-selected and org_id may be omitted; when the key sees several orgs, set org_id explicitly (startup fails fast on an ambiguous multi-org key). See discovery.py/app startup. |
+| `MERAKI_EXPORTER_MERAKI__ORG_ID` | `str \| None` | `_(none)_` | Meraki organization ID. For v1 the single-organization contract applies (one poller instance = one organization): when the API key sees exactly one org it is auto-selected and org_id may be omitted; when the key sees several orgs, set org_id explicitly (startup fails fast on an ambiguous multi-org key). See discovery.py/app startup. |
 | `MERAKI_EXPORTER_MERAKI__API_BASE_URL` | `str` | `https://api.meraki.com/api/v1` | Meraki API base URL (use regional endpoints if needed) |
 | `MERAKI_EXPORTER_MERAKI__ALLOW_CUSTOM_API_BASE_URL` | `bool` | `False` | Explicitly allow an HTTPS Meraki API base URL outside the known regional origins |
 
@@ -65,8 +65,8 @@ Configuration for Meraki API interactions
 | `MERAKI_EXPORTER_API__RATE_LIMIT_RETRY_WAIT` | `int` | `5` | Wait time in seconds when rate limited (min: 1, max: 60) |
 | `MERAKI_EXPORTER_API__ACTION_BATCH_RETRY_WAIT` | `int` | `10` | Wait time for action batch retries (min: 1, max: 60) |
 | `MERAKI_EXPORTER_API__VALIDATE_KWARGS` | `bool` | `False` | When True, the Meraki SDK logs warnings if API methods are called with unrecognized kwargs. Recommended for dev/CI; off by default in production. |
-| `MERAKI_EXPORTER_API__REQUESTS_PROXY` | `str | None` | `_(none)_` | HTTPS proxy URL for Meraki API requests (SDK requests_proxy); when unset the requests HTTPS_PROXY/NO_PROXY env vars still apply. |
-| `MERAKI_EXPORTER_API__CERTIFICATE_PATH` | `str | None` | `_(none)_` | Path to a custom CA bundle for verifying the Meraki API TLS cert (SDK certificate_path); mount into read-only containers as a volume. |
+| `MERAKI_EXPORTER_API__REQUESTS_PROXY` | `str \| None` | `_(none)_` | HTTPS proxy URL for Meraki API requests (SDK requests_proxy); when unset the requests HTTPS_PROXY/NO_PROXY env vars still apply. |
+| `MERAKI_EXPORTER_API__CERTIFICATE_PATH` | `str \| None` | `_(none)_` | Path to a custom CA bundle for verifying the Meraki API TLS cert (SDK certificate_path); mount into read-only containers as a volume. |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_ENABLED` | `bool` | `True` | Enable client-side rate limiting to smooth API calls |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_REQUESTS_PER_SECOND` | `float` | `10.0` | Target requests per second per organization (min: 1.0, max: 50.0) |
 | `MERAKI_EXPORTER_API__RATE_LIMIT_BURST` | `int` | `10` | Token bucket burst capacity per organization. Defaults to Meraki's documented +10 first-second allowance; refill supplies the sustained rate separately. (min: 1, max: 100) |
@@ -94,7 +94,7 @@ HTTP server configuration for the metrics endpoint
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_SERVER__HOST` | `str` | `0.0.0.0` | Host to bind the exporter to |
 | `MERAKI_EXPORTER_SERVER__PORT` | `int` | `9099` | Port to bind the exporter to (min: 1, max: 65535) |
-| `MERAKI_EXPORTER_SERVER__API_TOKEN` | `SecretStr | None` | `_(none)_` | Bearer token required to enable state-changing POST control endpoints (/api/collectors/trigger, /api/clients/clear-dns-cache). When unset (default) these endpoints fail closed with HTTP 401 and their UI controls are disabled. When set, the browser controls are hidden and requests must present 'Authorization: Bearer <token>'. |
+| `MERAKI_EXPORTER_SERVER__API_TOKEN` | `SecretStr \| None` | `_(none)_` | Bearer token required to enable state-changing POST control endpoints (/api/collectors/trigger, /api/clients/clear-dns-cache). When unset (default) these endpoints fail closed with HTTP 401 and their UI controls are disabled. When set, the browser controls are hidden and requests must present 'Authorization: Bearer <token>'. |
 | `MERAKI_EXPORTER_SERVER__UI_ENABLED` | `bool` | `True` | When false, sensitive GET UI/status endpoints return 404 (metrics/health/ready stay open). |
 
 ## Webhook Settings
@@ -104,7 +104,7 @@ Webhook receiver configuration
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_WEBHOOKS__ENABLED` | `bool` | `False` | Enable webhook receiver endpoint |
-| `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET` | `SecretStr | None` | `_(none)_` | Shared secret for webhook validation (recommended) |
+| `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET` | `SecretStr \| None` | `_(none)_` | Shared secret for webhook validation (recommended) |
 | `MERAKI_EXPORTER_WEBHOOKS__REQUIRE_SECRET` | `bool` | `True` | Require shared secret validation (disable for testing only) |
 | `MERAKI_EXPORTER_WEBHOOKS__ALLOW_INSECURE` | `bool` | `False` | Explicit opt-in to run the webhook receiver enabled without require_secret; startup refuses the insecure combo unless this is true. |
 | `MERAKI_EXPORTER_WEBHOOKS__MAX_PAYLOAD_SIZE` | `int` | `1048576` | Maximum webhook payload size in bytes (min: 1024, max: 10485760) |
@@ -121,27 +121,27 @@ OpenTelemetry observability configuration
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_OTEL__ENABLED` | `bool` | `False` | Enable OpenTelemetry tracing |
-| `MERAKI_EXPORTER_OTEL__ENDPOINT` | `str | None` | `_(none)_` | OpenTelemetry collector endpoint (OTLP gRPC) |
+| `MERAKI_EXPORTER_OTEL__ENDPOINT` | `str \| None` | `_(none)_` | OpenTelemetry collector endpoint (OTLP gRPC) |
 | `MERAKI_EXPORTER_OTEL__INSECURE` | `bool` | `True` | Send OTLP traces over an insecure (non-TLS) channel. Set False to use TLS/system-trust-store transport to the collector endpoint. |
 | `MERAKI_EXPORTER_OTEL__SERVICE_NAME` | `str` | `meraki-dashboard-exporter` | Service name for OpenTelemetry tracing |
 | `MERAKI_EXPORTER_OTEL__SAMPLING_RATE` | `float` | `0.1` | Trace sampling rate (0.0-1.0). 0 disables sampling, 1 samples every trace, values in between use ratio-based parent sampling. (min: 0.0, max: 1.0) |
 | `MERAKI_EXPORTER_OTEL__RESOURCE_ATTRIBUTES` | `dict[str, str]` | `{}` | Additional resource attributes for OpenTelemetry |
 | `MERAKI_EXPORTER_OTEL__LOGS` | `OTelLogsSettings` | `enabled=False endpoint=None insecure=None include_identifiers=False events=None` | OTLP data-log emitter settings (#622); independent of tracing. |
 | `MERAKI_EXPORTER_OTEL__LOGS__ENABLED` | `bool` | `False` | Enable the OTLP data-log emitter for high-cardinality per-entity product data. Independent of otel.enabled (tracing). Off by default. |
-| `MERAKI_EXPORTER_OTEL__LOGS__ENDPOINT` | `str | None` | `_(none)_` | OTLP gRPC endpoint for data logs. When None, falls back to otel.endpoint. An endpoint must resolve (own or inherited) when logs.enabled is True. |
-| `MERAKI_EXPORTER_OTEL__LOGS__INSECURE` | `bool | None` | `_(none)_` | Send OTLP data logs over an insecure (non-TLS) channel. When None, inherits otel.insecure. |
+| `MERAKI_EXPORTER_OTEL__LOGS__ENDPOINT` | `str \| None` | `_(none)_` | OTLP gRPC endpoint for data logs. When None, falls back to otel.endpoint. An endpoint must resolve (own or inherited) when logs.enabled is True. |
+| `MERAKI_EXPORTER_OTEL__LOGS__INSECURE` | `bool \| None` | `_(none)_` | Send OTLP data logs over an insecure (non-TLS) channel. When None, inherits otel.insecure. |
 | `MERAKI_EXPORTER_OTEL__LOGS__INCLUDE_IDENTIFIERS` | `bool` | `False` | PII opt-in. When False (default), the emitter drops identifier attributes (client.mac / client.hostname / client.description) from every record; only stable IDs (client.id) are emitted. Set True to include the human-readable identifiers. |
-| `MERAKI_EXPORTER_OTEL__LOGS__EVENTS` | `list[str] | None` | `_(none)_` | Per-data-class allowlist of built-in data-log event names (see DataLogEvent in core/otel_data_logs.py, e.g. "meraki.wireless.client.packet_loss"). None (default) enables all built-in events; an explicit list enables only the named events. Env: JSON array. |
+| `MERAKI_EXPORTER_OTEL__LOGS__EVENTS` | `list[str] \| None` | `_(none)_` | Per-data-class allowlist of built-in data-log event names (see DataLogEvent in core/otel_data_logs.py, e.g. "meraki.wireless.client.packet_loss"). None (default) enables all built-in events; an explicit list enables only the named events. Env: JSON array. |
 | `MERAKI_EXPORTER_OTEL__METRICS` | `OTelMetricsSettings` | `enabled=False endpoint=None insecure=None export_interval_seconds=60 include='all' temporality='cumulative'` | OTLP metrics bridge settings (#313/#339); independent of tracing. |
 | `MERAKI_EXPORTER_OTEL__METRICS__ENABLED` | `bool` | `False` | Enable the OTLP metrics bridge (push a periodic snapshot of the Prometheus registry via OTLP gRPC). Independent of otel.enabled (tracing) and otel.logs.enabled. Off by default; the /metrics scrape is unchanged either way. |
-| `MERAKI_EXPORTER_OTEL__METRICS__ENDPOINT` | `str | None` | `_(none)_` | OTLP gRPC endpoint for metrics. When None, falls back to otel.endpoint. Must resolve (own or inherited) when metrics.enabled is True. |
-| `MERAKI_EXPORTER_OTEL__METRICS__INSECURE` | `bool | None` | `_(none)_` | Send OTLP metrics over an insecure (non-TLS) channel. When None, inherits otel.insecure. |
+| `MERAKI_EXPORTER_OTEL__METRICS__ENDPOINT` | `str \| None` | `_(none)_` | OTLP gRPC endpoint for metrics. When None, falls back to otel.endpoint. Must resolve (own or inherited) when metrics.enabled is True. |
+| `MERAKI_EXPORTER_OTEL__METRICS__INSECURE` | `bool \| None` | `_(none)_` | Send OTLP metrics over an insecure (non-TLS) channel. When None, inherits otel.insecure. |
 | `MERAKI_EXPORTER_OTEL__METRICS__EXPORT_INTERVAL_SECONDS` | `int` | `60` | Seconds between registry snapshots pushed via OTLP. (min: 10, max: 3600) |
-| `MERAKI_EXPORTER_OTEL__METRICS__INCLUDE` | `product | self | all` | `all` | Which telemetry plane to push, keyed on the metric-name prefix split: "product" = meraki_* excluding meraki_exporter_*; "self" = everything else (meraki_exporter_* plus the process/python runtime families); "all" = both. |
+| `MERAKI_EXPORTER_OTEL__METRICS__INCLUDE` | `product \| self \| all` | `all` | Which telemetry plane to push, keyed on the metric-name prefix split: "product" = meraki_* excluding meraki_exporter_*; "self" = everything else (meraki_exporter_* plus the process/python runtime families); "all" = both. |
 | `MERAKI_EXPORTER_OTEL__METRICS__TEMPORALITY` | `cumulative` | `cumulative` | Counter/histogram temporality. v1 accepts only 'cumulative' (Grafana Cloud expects cumulative; prometheus_client counters are cumulative-since-start, so this is the only faithful translation). |
-| `MERAKI_EXPORTER_OTEL__CA_CERT_PATH` | `str | None` | `_(none)_` | Path to a CA certificate (PEM) used to verify the OTLP collector's TLS certificate, shared by all three OTLP channels (traces, data logs, metrics). Paths only - no inline PEM material (#314). |
-| `MERAKI_EXPORTER_OTEL__CLIENT_CERT_PATH` | `str | None` | `_(none)_` | Path to a client certificate (PEM) for mTLS to the OTLP collector, shared by all three OTLP channels. Must be set together with client_key_path (#314). |
-| `MERAKI_EXPORTER_OTEL__CLIENT_KEY_PATH` | `str | None` | `_(none)_` | Path to a client private key (PEM) for mTLS to the OTLP collector, shared by all three OTLP channels. Must be set together with client_cert_path (#314). |
+| `MERAKI_EXPORTER_OTEL__CA_CERT_PATH` | `str \| None` | `_(none)_` | Path to a CA certificate (PEM) used to verify the OTLP collector's TLS certificate, shared by all three OTLP channels (traces, data logs, metrics). Paths only - no inline PEM material (#314). |
+| `MERAKI_EXPORTER_OTEL__CLIENT_CERT_PATH` | `str \| None` | `_(none)_` | Path to a client certificate (PEM) for mTLS to the OTLP collector, shared by all three OTLP channels. Must be set together with client_key_path (#314). |
+| `MERAKI_EXPORTER_OTEL__CLIENT_KEY_PATH` | `str \| None` | `_(none)_` | Path to a client private key (PEM) for mTLS to the OTLP collector, shared by all three OTLP channels. Must be set together with client_cert_path (#314). |
 
 ## Monitoring Settings
 
@@ -162,7 +162,7 @@ Enable/disable specific metric collectors
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_COLLECTORS__PROFILE` | `availability | standard | full | None` | `_(none)_` | Collection profile controlling which endpoint priorities run: availability includes priority 1, standard includes priorities 1-3, and full includes all priorities. When unset, the full surface is preserved if the solved full-plan demand fits the adaptive scheduler's budget target; above that threshold, startup requires an explicit profile choice. Fixed scheduler mode does not apply this gate. |
+| `MERAKI_EXPORTER_COLLECTORS__PROFILE` | `availability \| standard \| full \| None` | `_(none)_` | Collection profile controlling which endpoint priorities run: availability includes priority 1, standard includes priorities 1-3, and full includes all priorities. When unset, the full surface is preserved if the solved full-plan demand fits the adaptive scheduler's budget target; above that threshold, startup requires an explicit profile choice. Fixed scheduler mode does not apply this gate. |
 | `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set[str]` | `["alerts", "clients", "config", "device", "insight", "mtsensor", "mtsensoralerts", "networkhealth", "organization"]` | Enabled collector names |
 | `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` | `set[str]` | `[]` | Explicitly disabled collectors (overrides enabled) |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` | `int` | `240` | Timeout for individual collector runs in seconds (min: 30, max: 600) |
@@ -199,7 +199,7 @@ Metric cardinality guard (series-per-family caps and shedding)
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
 | `MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY` | `int` | `50000` | Maximum number of active time series permitted per metric family (metric name). When a family exceeds this, ``action`` decides what happens. (min: 100, max: 10000000) |
-| `MERAKI_EXPORTER_CARDINALITY__ACTION` | `warn | drop` | `warn` | What to do when a metric family exceeds max_series_per_family: 'warn' logs and keeps emitting; 'drop' stops emitting new series for that family. |
+| `MERAKI_EXPORTER_CARDINALITY__ACTION` | `warn \| drop` | `warn` | What to do when a metric family exceeds max_series_per_family: 'warn' logs and keeps emitting; 'drop' stops emitting new series for that family. |
 | `MERAKI_EXPORTER_CARDINALITY__DISABLED_METRICS` | `set[str]` | `[]` | Metric family names to disable entirely (never emitted). Accepts a comma-separated string or a JSON array via env (MERAKI_EXPORTER_CARDINALITY__DISABLED_METRICS=a,b,c). |
 | `MERAKI_EXPORTER_CARDINALITY__MONITOR_INTERVAL_SECONDS` | `int` | `300` | How often (seconds) the cardinality monitor samples the registry. (min: 10, max: 3600) |
 | `MERAKI_EXPORTER_CARDINALITY__MONITOR_MAX_LABEL_VALUES` | `int` | `100` | Maximum distinct values retained per label when the cardinality monitor tracks label-value breakdowns, bounding the monitor's own memory. (min: 1, max: 100000) |
@@ -210,7 +210,7 @@ Adaptive budget-aware endpoint scheduler (AIMD, stretch, resolve cadence)
 
 | Environment Variable | Type | Default | Description |
 |---------------------|------|---------|-------------|
-| `MERAKI_EXPORTER_SCHEDULER__MODE` | `adaptive | fixed` | `adaptive` | 'adaptive' (default): solver stretches endpoint-group intervals to fit the API budget. 'fixed': floors/pins only, no stretching, no AIMD (transition fallback). |
+| `MERAKI_EXPORTER_SCHEDULER__MODE` | `adaptive \| fixed` | `adaptive` | 'adaptive' (default): solver stretches endpoint-group intervals to fit the API budget. 'fixed': floors/pins only, no stretching, no AIMD (transition fallback). |
 | `MERAKI_EXPORTER_SCHEDULER__TARGET_UTILIZATION` | `float` | `0.7` | Fraction of the effective budget the solver plans to; headroom absorbs bursts. (min: 0.1, max: 1.0) |
 | `MERAKI_EXPORTER_SCHEDULER__MAX_STRETCH_FACTOR` | `float` | `4.0` | Per-group interval cap as a multiple of its volatility floor. (min: 1.0, max: 16.0) |
 | `MERAKI_EXPORTER_SCHEDULER__MAX_INTERVAL_SECONDS` | `int` | `3600` | Absolute per-group interval cap. (min: 300, max: 86400) |

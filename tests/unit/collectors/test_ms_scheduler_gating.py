@@ -14,8 +14,9 @@ tests drive a real ``DeviceCollector`` with a controllable fake scheduler.
 from __future__ import annotations
 
 import time
+from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -76,6 +77,10 @@ class _MSGatingBase(BaseCollectorTest):
             settings=settings,
             registry=isolated_registry,
             inventory=inventory,
+            rate_limiter=SimpleNamespace(
+                acquire=AsyncMock(return_value=0.0),
+                record_throttle_event=MagicMock(),
+            ),
             scheduler=scheduler,  # type: ignore[arg-type]
         )
 

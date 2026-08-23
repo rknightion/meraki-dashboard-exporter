@@ -12,7 +12,6 @@ meraki_network_info gauge
   labels: network_id,network_name,org_id
 meraki_org info
   help: Organization information
-  labels: api_enabled,org_id,org_name,url
   labels: org_id,org_name
 meraki_org_adaptive_policy_acls gauge
   help: Number of adaptive policy custom ACLs in the organization
