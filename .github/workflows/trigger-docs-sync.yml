@@ -28,6 +28,11 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
       # Mints a GitHub App installation token carrying contents:write on the docs
       # hub ONLY, replacing DOCS_SYNC_PAT. Nothing durable is stored in this repo.
       # contents:write really is what the dispatch endpoint wants -- actions:write
@@ -37,7 +42,7 @@ jobs:
       # hub's daily 06:00 UTC cron rebuild remains the backstop if this fails.
       - name: Mint a scoped docs-sync token
         id: bao
-        uses: rknightion/.github/.github/actions/broker-token@1cd0af4cdb0f46266b34f3b981543e32e7c98b4a
+        uses: rknightion/.github/.github/actions/broker-token@3eccd1b2f86c998fde32790f370da41d10a4c89b # v1.9.1
         with:
           permission-set: docs-sync
           # One shared permission set, but a role per repo to pin repository_id --

@@ -14,13 +14,17 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     permissions:
-      contents: write       # create release + tag
-      pull-requests: write  # open/maintain the release PR
+      contents: read
       id-token: write # exchanged for a tailnet identity and an OpenBao token
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
       # Mints a short-lived GitHub App installation token scoped to THIS repo,
       # replacing RELEASE_PLEASE_TOKEN -- a PAT scoped across every rknightion repo.
       # Nothing durable is stored here to leak. The release PR's author becomes the
@@ -32,9 +36,10 @@ jobs:
       # failure here is infrastructure, not the commit.
       - name: Mint a scoped release token
         id: bao
-        uses: rknightion/.github/.github/actions/broker-token@b9ab5f80961f2c29c47a8d7d5dff112b6551169c
+        uses: rknightion/.github/.github/actions/broker-token@3eccd1b2f86c998fde32790f370da41d10a4c89b # v1.9.1
         with:
           permission-set: release-please-meraki-dashboard-exporter
+          role: release-please-meraki-dashboard-exporter
           tailscale-client-id: ${{ secrets.TS_WIF_CLIENT_ID }}
           tailscale-audience: ${{ secrets.TS_WIF_AUDIENCE }}
 

@@ -89,6 +89,11 @@ jobs:
       contents: read
       id-token: write # exchanged for a tailnet identity and an OpenBao token
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.head_ref }}
@@ -105,9 +110,10 @@ jobs:
       # plus this exact workflow_ref instead.
       - name: Mint a scoped push token
         id: bao
-        uses: rknightion/.github/.github/actions/broker-token@b9ab5f80961f2c29c47a8d7d5dff112b6551169c
+        uses: rknightion/.github/.github/actions/broker-token@3eccd1b2f86c998fde32790f370da41d10a4c89b # v1.9.1
         with:
           permission-set: lockfile-meraki-dashboard-exporter
+          role: lockfile-meraki-dashboard-exporter
           tailscale-client-id: ${{ secrets.TS_WIF_CLIENT_ID }}
           tailscale-audience: ${{ secrets.TS_WIF_AUDIENCE }}
 
