@@ -368,11 +368,14 @@ debugging/transition fallback, not a recommended steady-state choice.
 | `meraki_exporter_scheduler_budget_utilization_ratio` | Fraction of the effective budget the solver is currently planning to use; at/above `target_utilization` for long periods means groups are being stretched |
 | `meraki_exporter_scheduler_interval_seconds{group}` | Live solved interval per endpoint group — compare against its floor to see how much it has stretched |
 | `meraki_exporter_collector_cadence_seconds{collector}` | Live effective cadence per collector (smallest solved interval among its own groups) |
+| `meraki_exporter_collection_utilization_ratio{collector}` | Collector body execution time divided by cadence; admission queue wait is excluded |
+| `meraki_exporter_task_queue_wait_seconds{phase="collector_admission"}` | Distribution of time collector runs wait for the bounded execution slots |
+| `meraki_exporter_task_expired_before_start_total{phase="collector_admission"}` | Exporter saturation: runs whose single wall-clock budget expired in the admission queue; these do not count as collector endpoint failures |
 | `meraki_exporter_api_rate_limiter_throttled_total` | Client-side rate-limit pressure (rising = over budget; also drives AIMD backoff) |
 | `meraki_exporter_api_rate_limiter_tokens` | Remaining tokens in the per-org bucket |
 | `meraki_exporter_cardinality_limit_reached_total` | Metric shedding is active (cardinality cap hit) |
 | `meraki_exporter_org_collection_status` | Per-org collection health (`0` = every sub-collection failed) |
-| `meraki_exporter_collector_duration_seconds` | How long each collection run takes vs. that collector's cadence |
+| `meraki_exporter_collector_duration_seconds` | How long the admitted collector body executes; it excludes admission queue wait |
 | `meraki_network_filter_networks` | How many networks survive the filter (verify your cuts landed) |
 
 ## Troubleshooting

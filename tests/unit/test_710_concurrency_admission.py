@@ -130,11 +130,10 @@ async def test_collector_admission_expiry_is_distinct_from_upstream_timeout() ->
     await manager._run_collector_with_timeout(collector, timeout=0)
 
     collector.collect.assert_not_awaited()
-    collection_errors.labels.assert_called_with(
-        collector=collector_name,
-        error_type="TaskExpiredBeforeStartError",
-    )
-    assert manager.collector_health[collector_name]["total_failures"] == 1
+    collection_errors.labels.assert_not_called()
+    assert manager.collector_health[collector_name]["total_runs"] == 0
+    assert manager.collector_health[collector_name]["total_failures"] == 0
+    assert manager.collector_health[collector_name]["failure_streak"] == 0
     assert not manager._collector_locks[collector_name].locked()
 
     manager._collector_semaphore.release()
@@ -143,9 +142,11 @@ async def test_collector_admission_expiry_is_distinct_from_upstream_timeout() ->
         await asyncio.sleep(1)
 
     collector.collect.side_effect = slow_collection
-    await manager._run_collector_with_timeout(collector, timeout=0)
+    await manager._run_collector_with_timeout(collector, timeout=0.01)
 
-    assert collection_errors.labels.call_args_list[-1].kwargs == {
-        "collector": collector_name,
-        "error_type": "TimeoutError",
-    }
+    collection_errors.labels.assert_called_once_with(
+        collector=collector_name,
+        error_type="TimeoutError",
+    )
+    assert manager.collector_health[collector_name]["total_runs"] == 1
+    assert manager.collector_health[collector_name]["total_failures"] == 1

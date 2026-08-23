@@ -205,8 +205,8 @@ class CollectorManager:
         # Gauge for collection utilization ratio (actual_duration / collector cadence)
         self._collection_utilization = Gauge(
             CollectorMetricName.EXPORTER_COLLECTION_UTILIZATION_RATIO.value,
-            "Fraction of the collector's cadence consumed by actual collection "
-            "(0=instant, 1=full cadence)",
+            "Fraction of the collector's cadence consumed by collector execution, "
+            "excluding admission queue wait (0=instant, 1=full cadence)",
             labelnames=[
                 LabelName.COLLECTOR.value,
             ],
@@ -782,7 +782,7 @@ class CollectorManager:
     async def _run_collector_with_timeout(
         self,
         collector: MetricCollector,
-        timeout: int,
+        timeout: float,
         *,
         force: bool = False,
     ) -> None:
@@ -805,6 +805,8 @@ class CollectorManager:
 
         """
         collector_name = collector.__class__.__name__
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
         # #646: label the shared "collect.collector" root span so it is
         # identifiable (and groupable) without descending into the child
         # collect.<Collector> span -- all collectors share this literal name.
@@ -826,7 +828,13 @@ class CollectorManager:
         # cannot queue another full run in the check/acquire gap (#695).
         await collector_lock.acquire()
         try:
-            await self._admit_collector(collector, collector_name, timeout, force=force)
+            await self._admit_collector(
+                collector,
+                collector_name,
+                timeout,
+                deadline,
+                force=force,
+            )
         finally:
             collector_lock.release()
 
@@ -834,7 +842,8 @@ class CollectorManager:
         self,
         collector: MetricCollector,
         collector_name: str,
-        timeout: int,
+        timeout: float,
+        deadline: float,
         *,
         force: bool,
     ) -> None:
@@ -847,66 +856,63 @@ class CollectorManager:
         queued_at = loop.time()
         self._task_metrics.pending.labels(phase=_COLLECTOR_ADMISSION_PHASE).inc()
         admitted = False
+        active = False
         try:
             try:
-                async with asyncio.timeout(timeout):
+                async with asyncio.timeout_at(deadline):
                     await self._collector_semaphore.acquire()
                 admitted = True
             except TimeoutError:
                 wait_seconds = loop.time() - queued_at
-                error = TaskExpiredBeforeStartError(collector_name, wait_seconds)
-                logger.error(
-                    "Collector expired before execution started",
-                    collector=collector_name,
-                    timeout_seconds=timeout,
-                    queue_wait_seconds=round(wait_seconds, 3),
-                )
-                self._task_metrics.expired_before_start.labels(
-                    phase=_COLLECTOR_ADMISSION_PHASE
-                ).inc()
-                self._collection_errors.labels(
-                    collector=collector_name,
-                    error_type=type(error).__name__,
-                ).inc()
-                self._mark_span_error(error)
-                self._record_pre_start_failure(collector_name)
+                self._record_admission_expiry(collector_name, timeout, wait_seconds)
                 return
             finally:
                 self._task_metrics.pending.labels(phase=_COLLECTOR_ADMISSION_PHASE).dec()
 
             wait_seconds = loop.time() - queued_at
+            remaining_seconds = deadline - loop.time()
+            if remaining_seconds <= 0:
+                self._record_admission_expiry(collector_name, timeout, wait_seconds)
+                return
             self._task_metrics.queue_wait_seconds.labels(phase=_COLLECTOR_ADMISSION_PHASE).observe(
                 wait_seconds
             )
             self._task_metrics.active.labels(phase=_COLLECTOR_ADMISSION_PHASE).inc()
+            active = True
             await self._execute_admitted_collector(
                 collector,
                 collector_name,
-                timeout,
+                deadline,
                 force=force,
             )
         finally:
             if admitted:
                 self._collector_semaphore.release()
+            if active:
                 self._task_metrics.active.labels(phase=_COLLECTOR_ADMISSION_PHASE).dec()
 
-    def _record_pre_start_failure(self, collector_name: str) -> None:
-        """Account for an attempted collector run that could not begin in time."""
-        health = self.collector_health.get(collector_name)
-        if health is None:
-            return
-        health["total_runs"] += 1
-        health["failure_streak"] += 1
-        health["total_failures"] += 1
-        self._collector_failure_streak.labels(collector=collector_name).set(
-            health["failure_streak"]
+    def _record_admission_expiry(
+        self, collector_name: str, timeout: float, wait_seconds: float
+    ) -> None:
+        """Record exporter saturation without attributing an endpoint failure."""
+        error = TaskExpiredBeforeStartError(collector_name, wait_seconds)
+        logger.error(
+            "Collector expired before execution started",
+            collector=collector_name,
+            timeout_seconds=timeout,
+            queue_wait_seconds=round(wait_seconds, 3),
         )
+        self._task_metrics.queue_wait_seconds.labels(phase=_COLLECTOR_ADMISSION_PHASE).observe(
+            wait_seconds
+        )
+        self._task_metrics.expired_before_start.labels(phase=_COLLECTOR_ADMISSION_PHASE).inc()
+        self._mark_span_error(error)
 
     async def _execute_admitted_collector(
         self,
         collector: MetricCollector,
         collector_name: str,
-        timeout: int,
+        deadline: float,
         *,
         force: bool,
     ) -> None:
@@ -928,7 +934,7 @@ class CollectorManager:
             if force:
                 collector._force_run = True
             try:
-                async with asyncio.timeout(timeout):
+                async with asyncio.timeout_at(deadline):
                     await collector.collect()
                 logger.debug("Collector completed successfully", collector=collector_name)
                 success = True
@@ -936,7 +942,7 @@ class CollectorManager:
                 logger.error(
                     "Collector timeout",
                     collector=collector_name,
-                    timeout_seconds=timeout,
+                    deadline_exceeded=True,
                 )
                 self._collection_errors.labels(
                     collector=collector_name,

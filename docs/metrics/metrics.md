@@ -488,7 +488,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | Metric | Type | Labels | Description | Notes |
 |--------|------|--------|-------------|-------|
 | `meraki_exporter_collection_errors_total` | counter | `collector`, `error_type` | Total number of collection errors by collector and phase |  |
-| `meraki_exporter_collection_utilization_ratio` | gauge | `collector` | Fraction of the collector's cadence consumed by actual collection (0=instant, 1=full cadence) |  |
+| `meraki_exporter_collection_utilization_ratio` | gauge | `collector` | Fraction of the collector's cadence consumed by collector execution, excluding admission queue wait (0=instant, 1=full cadence) |  |
 | `meraki_exporter_collections_active` | gauge | `collector` | Number of parallel organization collections currently active |  |
 | `meraki_exporter_collector_cadence_seconds` | gauge | `collector` | Effective cadence of a collector (smallest solved interval of its enabled endpoint groups) |  |
 | `meraki_exporter_collector_failure_streak` | gauge | `collector` | Consecutive failures for each collector since last success |  |
