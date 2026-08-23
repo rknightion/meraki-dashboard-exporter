@@ -1,9 +1,10 @@
 ---
 id: MDE-0004
 title: 'MV: migrate off the deprecated camera analytics endpoints'
-status: To Do
+status: Parked
 assignee: []
 created_date: '2026-08-14 15:57'
+updated_date: '2026-08-23 18:18'
 labels:
   - 'area:mv'
   - enhancement
@@ -92,7 +93,7 @@ exploratory failure into an unbounded probe loop; never make a mutating request.
 - [ ] #4 The zones half migrated: getDeviceCameraAnalyticsZones replaced by the boundaries ops, the per-camera loop removed, meraki_mv_analytics_zones and meraki_mv_zone_info preserved
 - [ ] #5 Pydantic models carry __meraki_op__ for whichever new ops land
 - [ ] #6 If occupancy semantics change, the metric is renamed rather than silently redefined, and grafana/ queries plus docs/upgrading.md are updated
-- [ ] #7 If live verification is not possible, this task is Parked with the exact missing capability named — no guessed request shape, no fabricated fixture
+- [x] #7 If live verification is not possible, this task is Parked with the exact missing capability named — no guessed request shape, no fabricated fixture
 <!-- AC:END -->
 
 ## Definition of Done
@@ -101,3 +102,21 @@ exploratory failure into an unbounded probe loop; never make a mutating request.
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Root capability gate first: verify the configured key and a capable MV organization with read-only calls; only then record A/B/C and commission code. If the capability gate cannot establish the undocumented ranges/cap contract, park without guessed shapes.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Current Cisco documentation and installed SDK 4.4.0 confirm the three successor operations and required boundaryIds/ranges arguments, but do not define the ranges item shape or boundaryIds request cap. Root attempted the required read-only capability gate on 2026-08-23 using the configured .env key without printing any identifiers. Direct network reachability returned the expected unauthenticated 401, but the configured SDK request returned None internally and raised AttributeError before an HTTP status/organization list could be established. A second attempt using the repository client settings had the same result. Therefore key validity, an MV-capable organization, boundary response shapes, ranges, counterMode, and ID caps remain unproven. No A/B/C implementation decision was recorded because AC1 makes it conditional on live evidence and AC7 forbids guessed shapes.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Parked at the task-defined live-capability boundary. Current docs and SDK signatures remain insufficient for the undocumented detections request contract, and the configured read-only capability probe could not establish a valid organization response. No code, guessed request, fabricated fixture, or live mutation was made. Resume when a valid key and an organization with an MV camera plus configured boundary are available.
+<!-- SECTION:FINAL_SUMMARY:END -->

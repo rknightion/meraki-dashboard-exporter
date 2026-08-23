@@ -1,9 +1,10 @@
 ---
 id: MDE-0016
 title: Align client identifier logging with the privacy contract
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 16:42'
+updated_date: '2026-08-23 18:49'
 labels:
   - 'area:privacy'
   - 'source:pr733'
@@ -24,10 +25,10 @@ PR #735 demoted one DNS change log and removed an IP from with_timeout, but PR #
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 INFO, WARNING, and ERROR logs never contain client IP, ID, MAC, hostname, or description values
-- [ ] #2 Timeout and retry messages use stable non-identifying operation names
-- [ ] #3 Any identifier values intentionally retained at DEBUG are listed in docs/privacy.md
-- [ ] #4 Tests capture representative logger events rather than checking source strings only
+- [x] #1 INFO, WARNING, and ERROR logs never contain client IP, ID, MAC, hostname, or description values
+- [x] #2 Timeout and retry messages use stable non-identifying operation names
+- [x] #3 Any identifier values intentionally retained at DEBUG are listed in docs/privacy.md
+- [x] #4 Tests capture representative logger events rather than checking source strings only
 <!-- AC:END -->
 
 ## Definition of Done
@@ -36,3 +37,15 @@ PR #735 demoted one DNS change log and removed an IP from with_timeout, but PR #
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 1 L5: audit and correct client identifier logging together with MDE-0020 under one DNS/client file owner; root integrates and finalizes.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and verified in 7327153. High-severity client logs avoid identifiers and the DEBUG boundary is documented; full gates passed.
+<!-- SECTION:FINAL_SUMMARY:END -->

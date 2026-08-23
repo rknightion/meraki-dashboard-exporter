@@ -1,9 +1,10 @@
 ---
 id: MDE-0002
 title: Size the Helm resource defaults from a measured MEDIUM-class fleet
-status: To Do
+status: Parked
 assignee: []
 created_date: '2026-08-14 15:56'
+updated_date: '2026-08-23 18:32'
 labels:
   - 'area:deploy'
   - 'area:docs'
@@ -64,7 +65,7 @@ LARGE, from stale evidence. **Both figures rest on assumed fleet mixes**, which 
 - [ ] #3 F-L4-01 — the LARGE series projection is replaced by a measured DENSE-SWITCH figure, and the stale 0.6-1.1m estimate corrected everywhere it appears
 - [ ] #4 Scrape render time and payload size measured at DENSE-SWITCH, and checked against a typical Prometheus scrape timeout and the two-thread serving executor
 - [ ] #5 If dense port families must be opt-out to stay viable, that switch exists and is documented
-- [ ] #6 Calibration reconciles HOMELAB against the 148.19 MiB / 4835-series anchor before any default moves; if it cannot, defaults are unchanged and the missing product decision is recorded here instead
+- [x] #6 Calibration reconciles HOMELAB against the 148.19 MiB / 4835-series anchor before any default moves; if it cannot, defaults are unchanged and the missing product decision is recorded here instead
 <!-- AC:END -->
 
 ## Definition of Done
@@ -73,3 +74,15 @@ LARGE, from stale evidence. **Both figures rest on assumed fleet mixes**, which 
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Replacement lane L11: use the full exporter runtime measurement path with generated HOMELAB, BRANCH-RETAIL, and DENSE-SWITCH fixtures; first prove whether BRANCH-RETAIL is the D11 MEDIUM shape and reconcile HOMELAB to its live anchor. Change resource defaults/docs only if calibrated evidence satisfies the task; otherwise return the contractual unchanged-default Parked boundary.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-08-23 calibration stop: D2 has no frozen literal MEDIUM preset and the durable archive explicitly says BRANCH-RETAIL is not MEDIUM. The retained four-route corpus cannot populate the full collector, registry, and cache path; HOMELAB produces 4,627 samples rather than reconciling to the 4,835-series / 148.19 MiB live anchor; DENSE-SWITCH lacks live MS port routes and has 96,000 ports, making guessed materialization unsafe. Defaults remain unchanged. Resume after a product decision freezes a literal MEDIUM topology and provenance-bearing complete HOMELAB MR/MS/MT plus DENSE-SWITCH MS response corpora exist, then run a fresh-process full ExporterApp benchmark with a shared no-delay limiter, external RSS, and actual HTTP /metrics payload and render timing.
+<!-- SECTION:NOTES:END -->

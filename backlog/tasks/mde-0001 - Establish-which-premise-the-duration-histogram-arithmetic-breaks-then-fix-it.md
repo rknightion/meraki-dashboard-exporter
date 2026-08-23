@@ -1,9 +1,10 @@
 ---
 id: MDE-0001
 title: 'Establish which premise the duration-histogram arithmetic breaks, then fix it'
-status: To Do
+status: Parked
 assignee: []
 created_date: '2026-08-14 15:56'
+updated_date: '2026-08-23 18:32'
 labels:
   - 'area:observability'
   - 'priority:medium'
@@ -74,3 +75,15 @@ magnitude, but the audit noted a residual ~2x discrepancy it could not explain.
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 1 L8: observe the duration contradiction in the disposable harness, then fix the proven cause alongside explicit group verdict work; root integrates and finalizes.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-08-23 harness result: one Device wrapper produced exactly one duration observation, one run and one success with about 10.5539 seconds duration, ruling out duplicate observation in that path. The retained harness then failed its post-boundary corpus gate on unrecorded MS packet/STP requests and did not reproduce or explain the historical ClientsCollector residual. No timing fix is justified. Resume with a bounded Clients harness corpus plus the missing MS packet/STP routes, or equivalent retained single-process evidence that reproduces the discrepancy.
+<!-- SECTION:NOTES:END -->

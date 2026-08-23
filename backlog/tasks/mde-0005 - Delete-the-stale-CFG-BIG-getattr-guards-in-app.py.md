@@ -1,9 +1,10 @@
 ---
 id: MDE-0005
 title: Delete the stale CFG-BIG getattr guards in app.py
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-14 15:57'
+updated_date: '2026-08-23 18:49'
 labels:
   - 'area:core'
   - tech-debt
@@ -61,10 +62,10 @@ failure mode that is wrong.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 app.py:232 uses self.settings.webhooks.allow_insecure directly and the TODO(CFG-BIG) comment is gone
-- [ ] #2 app.py:926 uses self.settings.server.ui_enabled directly and the TODO(CFG-BIG) comment is gone
-- [ ] #3 No TODO(CFG-BIG) remains anywhere: rg 'CFG-BIG' returns zero hits
-- [ ] #4 Existing tests covering enforce_webhook_security and ui_guard_decision still pass, and a rename of either settings field is now a mypy error rather than a silent default
+- [x] #1 app.py:232 uses self.settings.webhooks.allow_insecure directly and the TODO(CFG-BIG) comment is gone
+- [x] #2 app.py:926 uses self.settings.server.ui_enabled directly and the TODO(CFG-BIG) comment is gone
+- [x] #3 No TODO(CFG-BIG) remains anywhere: rg 'CFG-BIG' returns zero hits
+- [x] #4 Existing tests covering enforce_webhook_security and ui_guard_decision still pass, and a rename of either settings field is now a mypy error rather than a silent default
 <!-- AC:END -->
 
 ## Definition of Done
@@ -73,3 +74,15 @@ failure mode that is wrong.
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 1 L1: bounded direct-settings cleanup in app.py; child owns local edits and focused validation, root owns integration and final gate.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and verified in 7327153. make docgen and make check passed; 2,785 tests passed.
+<!-- SECTION:FINAL_SUMMARY:END -->

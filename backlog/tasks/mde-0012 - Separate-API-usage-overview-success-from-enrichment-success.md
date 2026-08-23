@@ -1,9 +1,10 @@
 ---
 id: MDE-0012
 title: Separate API-usage overview success from enrichment success
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 16:42'
+updated_date: '2026-08-23 18:49'
 labels:
   - 'area:organization'
   - 'source:pr733'
@@ -24,10 +25,10 @@ PR #733 P2.10 remains in collectors/organization_collectors/api_usage.py:215-350
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Primary overview success refreshes the success signal used by its metrics and alert
-- [ ] #2 Enrichment failure is separately observable and does not force the overview onto failure retry cadence
-- [ ] #3 A regression test covers successful overview plus timed-out enrichment
-- [ ] #4 Endpoint cost and cadence remain represented in the scheduler model
+- [x] #1 Primary overview success refreshes the success signal used by its metrics and alert
+- [x] #2 Enrichment failure is separately observable and does not force the overview onto failure retry cadence
+- [x] #3 A regression test covers successful overview plus timed-out enrichment
+- [x] #4 Endpoint cost and cadence remain represented in the scheduler model
 <!-- AC:END -->
 
 ## Definition of Done
@@ -36,3 +37,15 @@ PR #733 P2.10 remains in collectors/organization_collectors/api_usage.py:215-350
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 1 L3: split overview and enrichment endpoint-group outcomes with regression coverage; root integrates and finalizes.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and verified in 7327153. API-usage overview success is independent of optional enrichment failure; full gates passed.
+<!-- SECTION:FINAL_SUMMARY:END -->

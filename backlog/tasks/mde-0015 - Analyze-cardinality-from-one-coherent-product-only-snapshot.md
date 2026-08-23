@@ -1,9 +1,10 @@
 ---
 id: MDE-0015
 title: Analyze cardinality from one coherent product-only snapshot
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 16:42'
+updated_date: '2026-08-23 18:49'
 labels:
   - 'area:observability'
   - 'source:pr733'
@@ -24,10 +25,10 @@ PR #733 P2.12, P2.13, and P3.8 remain in core/cardinality.py:32-503 and the card
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 One registry snapshot drives product, exporter, monitor-self, exposed, drill-down, and label results
-- [ ] #2 The three buckets reconcile exactly and self_series cannot become negative under concurrent mutation
-- [ ] #3 Product-only drill-down pages exclude exporter, runtime, and CardinalityMonitor families
-- [ ] #4 CardinalityMonitor metric names use the project metric enums without hardcoded literals
+- [x] #1 One registry snapshot drives product, exporter, monitor-self, exposed, drill-down, and label results
+- [x] #2 The three buckets reconcile exactly and self_series cannot become negative under concurrent mutation
+- [x] #3 Product-only drill-down pages exclude exporter, runtime, and CardinalityMonitor families
+- [x] #4 CardinalityMonitor metric names use the project metric enums without hardcoded literals
 <!-- AC:END -->
 
 ## Definition of Done
@@ -36,3 +37,15 @@ PR #733 P2.12, P2.13, and P3.8 remain in core/cardinality.py:32-503 and the card
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 1 L4: materialize and classify one registry snapshot, then derive every cardinality view from it; root integrates and finalizes.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and verified in 7327153. Cardinality analysis now uses one coherent snapshot and enum-owned monitor names; full gates passed.
+<!-- SECTION:FINAL_SUMMARY:END -->

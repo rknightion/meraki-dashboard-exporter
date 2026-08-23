@@ -1,9 +1,10 @@
 ---
 id: MDE-0024
 title: Complete the 1.1 upgrade and metric-surface notes
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 16:42'
+updated_date: '2026-08-23 18:49'
 labels:
   - 'area:docs'
   - 'source:pr733'
@@ -24,10 +25,10 @@ PR #735 documented most configuration compatibility changes from PR #733, but th
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Every retained 1.1 startup or configuration incompatibility is listed once with operator action
-- [ ] #2 NetworkFilter users are told that excluded-switch port and power series are removed by the fix
-- [ ] #3 New or behavior-changed self-observability metrics and their label semantics are documented
-- [ ] #4 The notes match the final D6, D9, concurrency, and webhook behavior after their dependent tasks land
+- [x] #1 Every retained 1.1 startup or configuration incompatibility is listed once with operator action
+- [x] #2 NetworkFilter users are told that excluded-switch port and power series are removed by the fix
+- [x] #3 New or behavior-changed self-observability metrics and their label semantics are documented
+- [x] #4 The notes match the final D6, D9, concurrency, and webhook behavior after their dependent tasks land
 <!-- AC:END -->
 
 ## Definition of Done
@@ -36,3 +37,16 @@ PR #735 documented most configuration compatibility changes from PR #733, but th
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+- Reconcile the hand-written 1.1 upgrade notes against the final integrated D6, D9, concurrency, webhook, NetworkFilter, facade, endpoint-verdict, and self-observability behavior.
+- Validate documentation and repository gates; do not edit release-please-owned docs/changelog.md.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Completed in 7327153. The 1.1 upgrade notes reconcile startup refusals, NetworkFilter series removal, D6/D9, concurrency, webhook, and self-observability semantics.
+<!-- SECTION:FINAL_SUMMARY:END -->

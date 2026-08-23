@@ -1,9 +1,10 @@
 ---
 id: MDE-0021
 title: Avoid false MAC redaction in structured data logs
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 16:42'
+updated_date: '2026-08-23 18:49'
 labels:
   - 'area:otel'
   - 'source:pr733'
@@ -24,10 +25,10 @@ PR #733 P3.9 remains in core/otel_data_logs.py:70-110 and emit filtering. The ba
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Separated or colon-delimited MAC strings remain redacted when identifiers are disabled
-- [ ] #2 Unrelated names and IDs containing twelve hexadecimal characters are preserved
-- [ ] #3 Bare MAC values are redacted only in MAC-plausible keys or explicitly documented contexts
-- [ ] #4 Tests cover bodies, identifier keys, non-identifier attributes, and include_identifiers=true
+- [x] #1 Separated or colon-delimited MAC strings remain redacted when identifiers are disabled
+- [x] #2 Unrelated names and IDs containing twelve hexadecimal characters are preserved
+- [x] #3 Bare MAC values are redacted only in MAC-plausible keys or explicitly documented contexts
+- [x] #4 Tests cover bodies, identifier keys, non-identifier attributes, and include_identifiers=true
 <!-- AC:END -->
 
 ## Definition of Done
@@ -36,3 +37,15 @@ PR #733 P3.9 remains in core/otel_data_logs.py:70-110 and emit filtering. The ba
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 1 L6: make bare-MAC redaction context-sensitive while retaining delimiter-form scrubbing; root integrates and finalizes.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and verified in 7327153. MAC redaction is context-aware without weakening separated-form protection; full gates passed.
+<!-- SECTION:FINAL_SUMMARY:END -->

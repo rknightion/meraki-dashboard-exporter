@@ -1,9 +1,10 @@
 ---
 id: MDE-0013
 title: Preserve organization-keyed pacing at every facade owner
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 16:42'
+updated_date: '2026-08-23 18:49'
 labels:
   - 'area:api'
   - 'source:pr733'
@@ -24,10 +25,10 @@ PR #735 made facade_for walk owner and parent links, but PR #733 P2.1/P2.11 are 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Every production facade owner resolves a non-None rate limiter or fails loudly before an unpaced call
-- [ ] #2 MS DHCP-security and link-aggregation calls acquire the configured organization bucket
-- [ ] #3 Network IDs cannot be inferred as organization IDs from string length
-- [ ] #4 A tree-level regression check covers facade routing without relying on one fragile AST spelling
+- [x] #1 Every production facade owner resolves a non-None rate limiter or fails loudly before an unpaced call
+- [x] #2 MS DHCP-security and link-aggregation calls acquire the configured organization bucket
+- [x] #3 Network IDs cannot be inferred as organization IDs from string length
+- [x] #4 A tree-level regression check covers facade routing without relying on one fragile AST spelling
 <!-- AC:END -->
 
 ## Definition of Done
@@ -36,3 +37,15 @@ PR #735 made facade_for walk owner and parent links, but PR #733 P2.1/P2.11 are 
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 1 L2: jointly resolve explicit organization pacing with MDE-0014 across the API facade seam; child owns local edits and focused validation, root owns integration and final gate.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and verified in 7327153. Facade pacing fails closed and preserves explicit organization scope; full gates passed.
+<!-- SECTION:FINAL_SUMMARY:END -->

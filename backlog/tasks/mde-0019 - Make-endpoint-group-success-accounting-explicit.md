@@ -1,9 +1,10 @@
 ---
 id: MDE-0019
 title: Make endpoint-group success accounting explicit
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 16:42'
+updated_date: '2026-08-23 18:49'
 labels:
   - 'area:scheduler'
   - 'source:pr733'
@@ -24,10 +25,10 @@ PR #733 P3.5 remains in core/collector.py:210-255 and scheduler group call sites
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Benign empty or not-applicable groups do not increment failure counters
-- [ ] #2 Swallowed endpoint failures still increment the correct group failure exactly once
-- [ ] #3 Every admitted group finishes a cycle with an explicit verdict
-- [ ] #4 Regression tests cover empty scope, partial success, and a real failure
+- [x] #1 Benign empty or not-applicable groups do not increment failure counters
+- [x] #2 Swallowed endpoint failures still increment the correct group failure exactly once
+- [x] #3 Every admitted group finishes a cycle with an explicit verdict
+- [x] #4 Regression tests cover empty scope, partial success, and a real failure
 <!-- AC:END -->
 
 ## Definition of Done
@@ -36,3 +37,17 @@ PR #733 P3.5 remains in core/collector.py:210-255 and scheduler group call sites
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 1 L8: implement explicit endpoint-group verdicts in the single-owned collector/manager seam alongside MDE-0001 diagnosis; root integrates and finalizes.
+
+Ownership correction: clients.py is L5-owned. After the shared verdict API landed, add explicit CLIENTS_LIST not-applicable verdicts for zero organizations and for a completed cycle with no applicable networks while preserving retry behavior for real failures.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and verified in 7327153. Every admitted endpoint group now closes with an explicit fail-closed verdict; full gates passed.
+<!-- SECTION:FINAL_SUMMARY:END -->

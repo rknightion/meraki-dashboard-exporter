@@ -1,9 +1,10 @@
 ---
 id: MDE-0020
 title: Make DNS failure and queue metrics truthful
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 16:42'
+updated_date: '2026-08-23 18:49'
 labels:
   - 'area:clients'
   - 'source:pr733'
@@ -24,10 +25,10 @@ PR #733 P3.6/P3.7 remain in services/dns_resolver.py:285-525 and collectors/clie
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Only actual deadline expiry increments the DNS timeout counter
-- [ ] #2 Resolver exceptions have a separate bounded outcome signal
-- [ ] #3 Queue or backlog metrics distinguish a small batch from a fleet-sized pending batch
-- [ ] #4 Concurrent resolve_multiple calls cannot reset or corrupt each others measurements
+- [x] #1 Only actual deadline expiry increments the DNS timeout counter
+- [x] #2 Resolver exceptions have a separate bounded outcome signal
+- [x] #3 Queue or backlog metrics distinguish a small batch from a fleet-sized pending batch
+- [x] #4 Concurrent resolve_multiple calls cannot reset or corrupt each others measurements
 <!-- AC:END -->
 
 ## Definition of Done
@@ -36,3 +37,15 @@ PR #733 P3.6/P3.7 remain in services/dns_resolver.py:285-525 and collectors/clie
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 1 L5: separate DNS failure causes and concurrency-safe backlog accounting alongside the privacy audit; root integrates and finalizes.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and verified in 7327153. DNS timeout/failure and producer backlog signals are exclusive and overlap-safe; full gates passed.
+<!-- SECTION:FINAL_SUMMARY:END -->

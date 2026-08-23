@@ -1,9 +1,10 @@
 ---
 id: MDE-0003
 title: Gate merges on change-scoped scanners and publication on severity
-status: To Do
+status: Parked
 assignee: []
 created_date: '2026-08-14 15:56'
+updated_date: '2026-08-23 18:18'
 labels:
   - 'area:ci'
   - security
@@ -57,7 +58,7 @@ worse than not having the gate.
 - [ ] #6 .whitesource, .safety-project.ini and .codacy.yaml are each confirmed to be running, or deleted as vestigial
 - [ ] #7 Codecov and Codacy uploads are confirmed either required or explicitly best-effort — they are currently token-gated and silently no-op
 - [ ] #8 docs/security.md documents the gate and the exception policy
-- [ ] #9 Any change needed in rknightion/.github is either authorised by Rob and landed, or written up here as an exact plan with this task Parked — no local-only partial gate ships
+- [x] #9 Any change needed in rknightion/.github is either authorised by Rob and landed, or written up here as an exact plan with this task Parked — no local-only partial gate ships
 <!-- AC:END -->
 
 ## Definition of Done
@@ -66,3 +67,21 @@ worse than not having the gate.
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Replacement lane L12: inspect local and shared workflow repositories read-only, map every D14 acceptance criterion to exact files and changes, and return the contractual Parked handoff; no local-only partial gate will ship.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Read-only mapping completed 2026-08-23. Live ruleset requires only ci-success; local ci-success aggregates test, docker-build-test, and Helm validation, while zizmor, actionlint, and dependency review remain independent. The shared container publication workflow pushes architecture digests and signs/attests before its non-gating Trivy scan; CodeQL is separate. Signing, provenance, both SBOM formats, and SARIF already exist and must be preserved. Exact authorized implementation: in the shared workflow repository add pre-push Trivy HIGH/CRITICAL and publication-scoped CodeQL gates, validate a committed identifier/reason/ISO-expiry exception file (expired entries fail), upload SARIF with always semantics, then permit push/sign/attest/SBOM/chart. Locally pass the new inputs, aggregate the three deterministic scanner checks into ci-success, make coverage uploads explicitly best-effort, remove the two proven-unreferenced legacy scanner configs, decide the externally-managed Codacy config from live integration state, document policy, and update the ruleset after observing exact check names. Verification must prove expired exception failure, unexcepted severe finding failure before any publication, preserved security artifacts, workflow lint, and make check. Resume boundary: explicit authority to edit/commit/push the shared workflow repository and mutate this repository ruleset; without that, AC1-AC8 cannot ship coherently and no local partial gate is permitted.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Parked at the explicit cross-repository authority boundary. A read-only current-state audit produced the exact shared/local workflow, exception-policy, documentation, ruleset, and verification sequence; no partial local gate or external mutation was made.
+<!-- SECTION:FINAL_SUMMARY:END -->

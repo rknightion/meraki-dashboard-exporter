@@ -1,9 +1,10 @@
 ---
 id: MDE-0023
 title: Derive Helm shutdown validation from the config schema
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-23 16:42'
+updated_date: '2026-08-23 18:49'
 labels:
   - 'area:deploy'
   - 'source:pr733'
@@ -24,9 +25,9 @@ PR #733 P3.15 remains in charts/meraki-dashboard-exporter/templates/_validation.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The chart shutdown-grace validator has no independently hardcoded copy of the API deadline default
-- [ ] #2 A schema default change propagates to the rendered validation contract through make docgen
-- [ ] #3 Helm tests cover the default, a valid override, an invalid override, and forbidden extraEnv bypass
+- [x] #1 The chart shutdown-grace validator has no independently hardcoded copy of the API deadline default
+- [x] #2 A schema default change propagates to the rendered validation contract through make docgen
+- [x] #3 Helm tests cover the default, a valid override, an invalid override, and forbidden extraEnv bypass
 <!-- AC:END -->
 
 ## Definition of Done
@@ -35,3 +36,16 @@ PR #733 P3.15 remains in charts/meraki-dashboard-exporter/templates/_validation.
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+- Generate the Helm shutdown validator fallback from the schema-derived API deadline knob.
+- Pin default, override, rejection, and forbidden extraEnv behavior with Helm render tests; root runs shared gates and finalizes.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented and verified in 7327153. Helm shutdown validation is schema-derived and covered by render tests; full gates passed.
+<!-- SECTION:FINAL_SUMMARY:END -->
