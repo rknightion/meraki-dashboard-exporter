@@ -1,3 +1,8 @@
+---
+title: Release Process
+description: Release Meraki Dashboard Exporter with release-please, GitHub Actions, container images, and Helm chart publishing.
+---
+
 # Release Process
 
 Releases are automated with **release-please** and GitHub Actions.

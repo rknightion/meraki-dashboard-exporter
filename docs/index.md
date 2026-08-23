@@ -1,6 +1,6 @@
 ---
 title: Meraki Dashboard Exporter
-description: High level overview and quick links
+description: Monitor Cisco Meraki networks with a Prometheus exporter that collects device, client, health, and environmental metrics.
 image: assets/social-card.png
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: Getting Started
-description: Install and run the exporter
+description: Install Meraki Dashboard Exporter with Docker, configure API access, and verify your first Prometheus scrape.
 ---
 
 # Getting Started

@@ -1,6 +1,6 @@
 ---
 title: Extending Collectors
-description: How to add new metric collectors
+description: Add a Meraki metric collector, register its module, choose endpoint groups, and test its scheduled collection path.
 ---
 
 # Extending the Collector System

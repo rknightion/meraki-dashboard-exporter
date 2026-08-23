@@ -1,6 +1,6 @@
 ---
 title: Integration & Dashboards
-description: Connect the exporter to Prometheus and Grafana
+description: Connect Meraki Dashboard Exporter to Prometheus and Grafana, configure scraping, and import the supplied dashboards.
 ---
 
 # Integration & Dashboards

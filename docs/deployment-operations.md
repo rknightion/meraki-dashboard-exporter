@@ -1,6 +1,6 @@
 ---
 title: Deployment & Operations
-description: Running the exporter in production
+description: Run Meraki Dashboard Exporter in production with containers or Helm, health checks, upgrades, and operational safeguards.
 ---
 
 # Deployment & Operations

@@ -1,3 +1,8 @@
+---
+title: Changelog
+description: Review Meraki Dashboard Exporter releases, including new collectors, metric changes, fixes, and dependency updates.
+---
+
 # Changelog
 
 ## [1.0.2](https://github.com/rknightion/meraki-dashboard-exporter/compare/v1.0.1...v1.0.2) (2026-07-20)

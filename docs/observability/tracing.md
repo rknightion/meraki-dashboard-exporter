@@ -1,6 +1,6 @@
 ---
 title: Tracing
-description: Distributed tracing for Meraki API calls and HTTP endpoints
+description: Trace Meraki Dashboard API calls and exporter HTTP endpoints with OpenTelemetry spans, attributes, and sampling controls.
 tags:
   - opentelemetry
   - tracing
