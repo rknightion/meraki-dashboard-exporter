@@ -12,7 +12,11 @@ from pydantic import SecretStr
 import meraki_dashboard_exporter.core.webhook_handler as webhook_handler_module
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings, WebhookSettings
-from meraki_dashboard_exporter.core.webhook_handler import WebhookHandler
+from meraki_dashboard_exporter.core.webhook_handler import (
+    WebhookFailureReason,
+    WebhookHandler,
+    WebhookOutcome,
+)
 
 
 @pytest.fixture
@@ -147,11 +151,12 @@ class TestWebhookHandlerProcessing:
         """Test processing a valid webhook payload."""
         result = webhook_handler.process_webhook(valid_payload)
 
-        assert result is not None
-        assert result.version == "1.0"
-        assert result.organization_id == "org_123"
-        assert result.alert_type == "settings_changed"
-        assert result.device_serial == "Q2XX-XXXX-XXXX"
+        assert result.outcome is WebhookOutcome.ACCEPTED
+        assert result.payload is not None
+        assert result.payload.version == "1.0"
+        assert result.payload.organization_id == "org_123"
+        assert result.payload.alert_type == "settings_changed"
+        assert result.payload.device_serial == "Q2XX-XXXX-XXXX"
 
         # Metric labels are bounded (SEC-03 / #561): the payload org "org_123"
         # is not the configured org ("123456") so it buckets to "other"; the
@@ -177,7 +182,8 @@ class TestWebhookHandlerProcessing:
         valid_payload["sharedSecret"] = "wrong_secret"
         result = webhook_handler.process_webhook(valid_payload)
 
-        assert result is None
+        assert result.outcome is WebhookOutcome.REJECTED
+        assert result.failure_reason is WebhookFailureReason.AUTHENTICATION
 
     def test_process_webhook_missing_required_fields(self, webhook_handler: WebhookHandler) -> None:
         """Test processing webhook with missing required fields."""
@@ -188,7 +194,8 @@ class TestWebhookHandlerProcessing:
         }
 
         result = webhook_handler.process_webhook(invalid_payload)
-        assert result is None
+        assert result.outcome is WebhookOutcome.REJECTED
+        assert result.failure_reason is WebhookFailureReason.VALIDATION
 
         # Check that validation failure was tracked
         validation_metric = REGISTRY.get_sample_value(
@@ -221,11 +228,12 @@ class TestWebhookHandlerProcessing:
         result = webhook_handler.process_webhook(payload)
 
         # Should succeed even without optional fields
-        assert result is not None
-        assert result.organization_id == "org_123"
-        assert result.alert_type is None
-        assert result.network_id is None
-        assert result.device_serial is None
+        assert result.outcome is WebhookOutcome.ACCEPTED
+        assert result.payload is not None
+        assert result.payload.organization_id == "org_123"
+        assert result.payload.alert_type is None
+        assert result.payload.network_id is None
+        assert result.payload.device_serial is None
 
         # Should track with bounded labels: unknown org -> "other", missing
         # alert_type -> "unknown".
@@ -263,7 +271,8 @@ class TestWebhookHandlerProcessing:
         }
 
         result = webhook_handler.process_webhook(invalid_payload)
-        assert result is None
+        assert result.outcome is WebhookOutcome.REJECTED
+        assert result.failure_reason is WebhookFailureReason.VALIDATION
 
         # Check that failed event was tracked (bounded error_type label only)
         failed_metric = REGISTRY.get_sample_value(
@@ -358,7 +367,8 @@ class TestWebhookHandlerEdgeCases:
     def test_empty_payload(self, webhook_handler: WebhookHandler) -> None:
         """Test processing an empty payload."""
         result = webhook_handler.process_webhook({})
-        assert result is None
+        assert result.outcome is WebhookOutcome.REJECTED
+        assert result.failure_reason is WebhookFailureReason.AUTHENTICATION
 
     def test_payload_with_extra_fields(
         self, webhook_handler: WebhookHandler, valid_payload: dict
@@ -370,8 +380,9 @@ class TestWebhookHandlerEdgeCases:
         result = webhook_handler.process_webhook(valid_payload)
 
         # Should succeed and ignore extra fields
-        assert result is not None
-        assert result.organization_id == "org_123"
+        assert result.outcome is WebhookOutcome.ACCEPTED
+        assert result.payload is not None
+        assert result.payload.organization_id == "org_123"
 
     def test_payload_with_null_optional_fields(self, webhook_handler: WebhookHandler) -> None:
         """Test payload with explicit null values for optional fields."""
@@ -391,12 +402,13 @@ class TestWebhookHandlerEdgeCases:
         }
 
         result = webhook_handler.process_webhook(payload)
-        assert result is not None
-        assert result.organization_id == "org_123"
-        assert result.network_id is None
-        assert result.device_serial is None
-        assert result.alert_type is None
-        assert result.alert_data == {}  # Should use default empty dict
+        assert result.outcome is WebhookOutcome.ACCEPTED
+        assert result.payload is not None
+        assert result.payload.organization_id == "org_123"
+        assert result.payload.network_id is None
+        assert result.payload.device_serial is None
+        assert result.payload.alert_type is None
+        assert result.payload.alert_data == {}  # Should use default empty dict
 
     def test_very_long_organization_name(
         self, webhook_handler: WebhookHandler, valid_payload: dict
@@ -405,8 +417,9 @@ class TestWebhookHandlerEdgeCases:
         valid_payload["organizationName"] = "A" * 1000
 
         result = webhook_handler.process_webhook(valid_payload)
-        assert result is not None
-        assert len(result.organization_name) == 1000
+        assert result.outcome is WebhookOutcome.ACCEPTED
+        assert result.payload is not None
+        assert len(result.payload.organization_name) == 1000
 
     def test_special_characters_in_alert_type(
         self, webhook_handler: WebhookHandler, valid_payload: dict
@@ -415,8 +428,9 @@ class TestWebhookHandlerEdgeCases:
         valid_payload["alertType"] = "test/alert-type_with.special:chars"
 
         result = webhook_handler.process_webhook(valid_payload)
-        assert result is not None
-        assert result.alert_type == "test/alert-type_with.special:chars"
+        assert result.outcome is WebhookOutcome.ACCEPTED
+        assert result.payload is not None
+        assert result.payload.alert_type == "test/alert-type_with.special:chars"
 
 
 class TestWebhookHandlerSecurity:
@@ -517,6 +531,19 @@ class _StubApplier:
         return self._verdict
 
 
+class _FailOnceApplier:
+    """Raise on the first state application, then succeed on retry."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def apply_webhook_device_state(self, serial: str, up: bool) -> bool:
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("transient state failure")
+        return True
+
+
 def _device_down_payload() -> dict:
     """A valid device_down webhook payload with a device serial."""
     return {
@@ -554,6 +581,36 @@ class TestWebhookDeviceStateFastPath:
             {"direction": "down", "result": "applied"},
         )
         assert counter == 1
+
+    def test_processing_failure_does_not_poison_delivery_deduplication(
+        self, settings_with_secret: Settings
+    ) -> None:
+        """A failed state application leaves the same delivery eligible for retry."""
+        applier = _FailOnceApplier()
+        handler = WebhookHandler(settings_with_secret, device_state_applier=applier)
+        payload = _device_down_payload()
+
+        failed = handler.process_webhook(payload)
+        retried = handler.process_webhook(payload)
+        duplicate = handler.process_webhook(payload)
+
+        assert failed.outcome is WebhookOutcome.FAILED
+        assert failed.failure_reason is WebhookFailureReason.PROCESSING
+        assert retried.outcome is WebhookOutcome.ACCEPTED
+        assert duplicate.outcome is WebhookOutcome.DUPLICATE
+        assert applier.calls == 2
+
+    def test_naive_sent_at_is_normalized_to_utc(self, settings_with_secret: Settings) -> None:
+        """Freshness for a naive Meraki timestamp is independent of host timezone."""
+        handler = WebhookHandler(settings_with_secret)
+        payload = _device_down_payload()
+        payload["sentAt"] = datetime.now(UTC).replace(tzinfo=None).isoformat()
+
+        result = handler.process_webhook(payload)
+
+        assert result.outcome is WebhookOutcome.ACCEPTED
+        assert result.payload is not None
+        assert result.payload.sent_at.tzinfo is UTC
 
     def test_unknown_serial_counts_unknown_serial(self, settings_with_secret: Settings) -> None:
         """Test 4: unknown serial still counts (result=unknown_serial) + events."""

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class WebhookPayload(BaseModel):
@@ -93,5 +93,13 @@ class WebhookPayload(BaseModel):
         alias="alertData",
         description="Alert-specific data",
     )
+
+    @field_validator("sent_at")
+    @classmethod
+    def normalize_sent_at_to_utc(cls, value: datetime) -> datetime:
+        """Treat timezone-naive Meraki timestamps as UTC, then normalize aware values."""
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
     model_config = {"populate_by_name": True}

@@ -7,6 +7,8 @@ import hmac
 import json
 import time
 from collections import OrderedDict
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
 
 from prometheus_client import Counter, Histogram
@@ -21,6 +23,33 @@ if TYPE_CHECKING:
     from .config import Settings
 
 logger = get_logger(__name__)
+
+
+class WebhookOutcome(StrEnum):
+    """Closed set of webhook processing outcomes returned to the HTTP route."""
+
+    ACCEPTED = "accepted"
+    DUPLICATE = "duplicate"
+    STALE = "stale"
+    REJECTED = "rejected"
+    FAILED = "failed"
+
+
+class WebhookFailureReason(StrEnum):
+    """Bounded failure reasons safe for response mapping and metric labels."""
+
+    AUTHENTICATION = "authentication_error"
+    VALIDATION = "validation_error"
+    PROCESSING = "processing_error"
+
+
+@dataclass(frozen=True)
+class WebhookProcessResult:
+    """Explicit result of one webhook delivery attempt."""
+
+    outcome: WebhookOutcome
+    payload: WebhookPayload | None = None
+    failure_reason: WebhookFailureReason | None = None
 
 
 class DeviceStateApplier(Protocol):
@@ -195,8 +224,9 @@ def enforce_webhook_security(*, enabled: bool, require_secret: bool, allow_insec
 class WebhookHandler:
     """Handler for processing Meraki webhook events with metrics tracking.
 
-    Replay protection is in-memory and per-process. Deployments with multiple
-    replicas therefore apply each alert at most once per replica.
+    Delivery deduplication is in-memory and per-process. It suppresses Meraki
+    retries after successful processing; it is not an anti-replay boundary.
+    Restarts clear it and multiple replicas deduplicate independently.
 
     Parameters
     ----------
@@ -307,13 +337,13 @@ class WebhookHandler:
 
         self.replays_rejected = Counter(
             WebhookMetricName.WEBHOOK_REPLAYS_REJECTED_TOTAL.value,
-            "Authenticated webhook replay deliveries rejected by the per-process cache",
+            "Authenticated duplicate webhook deliveries suppressed by the per-process cache",
             [LabelName.ORG_ID.value, LabelName.ALERT_TYPE.value],
         )
 
         self.stale_rejected = Counter(
             WebhookMetricName.WEBHOOK_STALE_REJECTED_TOTAL.value,
-            "Authenticated webhook deliveries rejected outside the freshness window",
+            "Authenticated webhook deliveries acknowledged outside the freshness window",
             [LabelName.ORG_ID.value, LabelName.ALERT_TYPE.value],
         )
 
@@ -408,8 +438,8 @@ class WebhookHandler:
         age_seconds = time.time() - payload.sent_at.timestamp()
         return abs(age_seconds) > self.settings.webhooks.freshness_window_seconds, age_seconds
 
-    def _is_replay(self, payload: WebhookPayload) -> bool:
-        """Record a unique alert in the bounded TTL cache or identify a replay."""
+    def _is_duplicate(self, payload: WebhookPayload) -> bool:
+        """Return whether a successfully processed delivery key is still cached."""
         now = time.monotonic()
         while self._replay_cache:
             _key, expires_at = next(iter(self._replay_cache.items()))
@@ -418,15 +448,17 @@ class WebhookHandler:
             self._replay_cache.popitem(last=False)
 
         cache_key = self._replay_cache_key(payload)
-        if cache_key in self._replay_cache:
-            return True
+        return cache_key in self._replay_cache
 
+    def _remember_delivery(self, payload: WebhookPayload) -> None:
+        """Commit one successfully processed delivery to the bounded TTL cache."""
+        now = time.monotonic()
+        cache_key = self._replay_cache_key(payload)
         self._replay_cache[cache_key] = now + self.settings.webhooks.replay_cache_ttl_seconds
         if len(self._replay_cache) > self.settings.webhooks.replay_cache_max_entries:
             self._replay_cache.popitem(last=False)
-        return False
 
-    def process_webhook(self, payload_data: dict[str, Any]) -> WebhookPayload | None:
+    def process_webhook(self, payload_data: dict[str, Any]) -> WebhookProcessResult:
         """Process a webhook event.
 
         Parameters
@@ -436,8 +468,8 @@ class WebhookHandler:
 
         Returns
         -------
-        WebhookPayload | None
-            Validated webhook payload, or None if validation fails.
+        WebhookProcessResult
+            Explicit accepted, duplicate, stale, rejected, or failed outcome.
 
         """
         start_time = time.time()
@@ -450,7 +482,10 @@ class WebhookHandler:
                 # receiver-health signal, without inspecting payload fields.
                 self.events_failed.labels(error_type="authentication_error").inc()
                 self._events_failed_total += 1
-                return None
+                return WebhookProcessResult(
+                    WebhookOutcome.REJECTED,
+                    failure_reason=WebhookFailureReason.AUTHENTICATION,
+                )
 
             # Parse and validate the authenticated payload.
             payload = WebhookPayload.model_validate(payload_data)
@@ -481,18 +516,16 @@ class WebhookHandler:
                     age_seconds=age_seconds,
                     freshness_window_seconds=self.settings.webhooks.freshness_window_seconds,
                 )
-                return None
+                return WebhookProcessResult(WebhookOutcome.STALE, payload=payload)
 
-            if self._is_replay(payload):
+            if self._is_duplicate(payload):
                 self.replays_rejected.labels(org_id=org_id, alert_type=alert_type).inc()
                 logger.warning(
-                    "Rejected replayed webhook delivery",
+                    "Suppressed duplicate webhook delivery",
                     org_id=org_id,
                     alert_type=alert_type,
                 )
-                return None
-
-            self.unique_alerts.labels(org_id=org_id, alert_type=alert_type).inc()
+                return WebhookProcessResult(WebhookOutcome.DUPLICATE, payload=payload)
 
             # Log the event (bounded label values only).
             logger.info(
@@ -552,7 +585,9 @@ class WebhookHandler:
             self._last_alert_type = alert_type
             self._events_by_type[alert_type] = self._events_by_type.get(alert_type, 0) + 1
 
-            return payload
+            self.unique_alerts.labels(org_id=org_id, alert_type=alert_type).inc()
+            self._remember_delivery(payload)
+            return WebhookProcessResult(WebhookOutcome.ACCEPTED, payload=payload)
 
         except ValidationError as e:
             # SECURITY (F-166): never log raw error input. Pydantic embeds the ENTIRE
@@ -578,13 +613,19 @@ class WebhookHandler:
             self.events_failed.labels(error_type="validation_error").inc()
             self._events_failed_total += 1
 
-            return None
+            return WebhookProcessResult(
+                WebhookOutcome.REJECTED,
+                failure_reason=WebhookFailureReason.VALIDATION,
+            )
 
-        except Exception as e:
+        except Exception:
             logger.exception("Unexpected error processing webhook")
 
             # SECURITY (F-051): bounded error_type label only.
-            self.events_failed.labels(error_type=type(e).__name__).inc()
+            self.events_failed.labels(error_type=WebhookFailureReason.PROCESSING.value).inc()
             self._events_failed_total += 1
 
-            return None
+            return WebhookProcessResult(
+                WebhookOutcome.FAILED,
+                failure_reason=WebhookFailureReason.PROCESSING,
+            )

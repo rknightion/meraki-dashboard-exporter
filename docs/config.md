@@ -109,8 +109,8 @@ Webhook receiver configuration
 | `MERAKI_EXPORTER_WEBHOOKS__ALLOW_INSECURE` | `bool` | `False` | Explicit opt-in to run the webhook receiver enabled without require_secret; startup refuses the insecure combo unless this is true. |
 | `MERAKI_EXPORTER_WEBHOOKS__MAX_PAYLOAD_SIZE` | `int` | `1048576` | Maximum webhook payload size in bytes (min: 1024, max: 10485760) |
 | `MERAKI_EXPORTER_WEBHOOKS__FRESHNESS_WINDOW_SECONDS` | `int` | `300` | Maximum accepted webhook clock skew in seconds (min: 30, max: 3600) |
-| `MERAKI_EXPORTER_WEBHOOKS__REPLAY_CACHE_TTL_SECONDS` | `int` | `3600` | TTL in seconds for processed-webhook replay protection entries (min: 60, max: 86400) |
-| `MERAKI_EXPORTER_WEBHOOKS__REPLAY_CACHE_MAX_ENTRIES` | `int` | `10000` | Maximum processed-webhook replay protection entries (min: 100, max: 1000000) |
+| `MERAKI_EXPORTER_WEBHOOKS__REPLAY_CACHE_TTL_SECONDS` | `int` | `3600` | TTL in seconds for successful-delivery deduplication entries (min: 60, max: 86400) |
+| `MERAKI_EXPORTER_WEBHOOKS__REPLAY_CACHE_MAX_ENTRIES` | `int` | `10000` | Maximum successful-delivery deduplication entries (min: 100, max: 1000000) |
 
 Webhooks are received on `POST /api/webhooks/meraki` when enabled.
 

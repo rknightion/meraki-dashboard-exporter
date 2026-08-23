@@ -850,13 +850,13 @@ class WebhookSettings(BaseModel):
         3600,
         ge=60,
         le=86400,
-        description="TTL in seconds for processed-webhook replay protection entries",
+        description="TTL in seconds for successful-delivery deduplication entries",
     )
     replay_cache_max_entries: int = Field(
         10000,
         ge=100,
         le=1000000,
-        description="Maximum processed-webhook replay protection entries",
+        description="Maximum successful-delivery deduplication entries",
     )
 
 

@@ -587,8 +587,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_webhook_events_processed_total` | counter | — | Total webhook events successfully processed | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_events_received_total` | counter | — | Total webhook events received by the active WebhookHandler request pipeline (POST /api/webhooks/meraki), labeled by org_id and alert_type | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_processing_duration_seconds` | histogram | — | Time spent processing webhook events | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
-| `meraki_webhook_replays_rejected_total` | counter | — | Authenticated webhook replay deliveries rejected by the per-process cache | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
-| `meraki_webhook_stale_rejected_total` | counter | — | Authenticated webhook deliveries rejected outside the freshness window | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_replays_rejected_total` | counter | — | Authenticated duplicate webhook deliveries suppressed by the per-process cache | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
+| `meraki_webhook_stale_rejected_total` | counter | — | Authenticated webhook deliveries acknowledged outside the freshness window | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_unique_alerts_total` | counter | — | Unique authenticated webhook alerts accepted for processing | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 | `meraki_webhook_validation_failures_total` | counter | — | Total webhook validation failures | Requires MERAKI_EXPORTER_WEBHOOKS__ENABLED=true |
 

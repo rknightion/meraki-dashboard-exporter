@@ -78,6 +78,18 @@ The optional Meraki webhook receiver accepts JSON POSTs at `/api/webhooks/meraki
 | `MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET` | — | Must match the value set in your Meraki Dashboard webhook configuration. |
 | `MERAKI_EXPORTER_WEBHOOKS__MAX_PAYLOAD_SIZE` | `1 MB` | Payloads larger than this are rejected. |
 
+Authenticated deliveries are freshness-checked and deduplicated only to make Meraki retries
+idempotent. A successfully processed alert key is kept in a bounded, in-memory TTL cache; duplicate
+and stale authenticated deliveries are acknowledged with HTTP 2xx so Meraki does not retry them
+forever, but they do not reapply device state. Failed processing returns 5xx and does not commit the
+key, so the same delivery can succeed on a later retry. A timezone-naive `sentAt` is interpreted as
+UTC before the freshness check.
+
+This is **delivery deduplication, not an anti-replay security boundary**. The cache is local to one
+process, is cleared by restart, and is not coordinated between replicas. A caller that knows the
+shared secret can also create new valid delivery identities. Keep the receiver singleton and protect
+the shared secret; the cache only suppresses ordinary duplicate delivery within its configured TTL.
+
 ### API key handling
 
 API keys are loaded as Pydantic `SecretStr` values and are not logged or

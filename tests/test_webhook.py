@@ -189,6 +189,69 @@ def test_webhook_endpoint_valid_payload(
     assert "processed" in response.json()["message"].lower()
 
 
+def test_webhook_endpoint_duplicate_is_idempotent_success(
+    webhook_enabled_settings: Settings, valid_webhook_payload: dict
+) -> None:
+    """An authenticated delivery retry is acknowledged without reprocessing."""
+    exporter = ExporterApp(webhook_enabled_settings)
+    client = TestClient(exporter.create_app())
+
+    first = client.post("/api/webhooks/meraki", json=valid_webhook_payload)
+    duplicate = client.post("/api/webhooks/meraki", json=valid_webhook_payload)
+
+    assert first.status_code == 200
+    assert duplicate.status_code == 200
+    assert duplicate.json()["status"] == "duplicate"
+
+
+def test_webhook_endpoint_stale_authenticated_delivery_is_acknowledged(
+    webhook_enabled_settings: Settings, valid_webhook_payload: dict
+) -> None:
+    """A stale authenticated delivery cannot become fresh by being retried."""
+    exporter = ExporterApp(webhook_enabled_settings)
+    client = TestClient(exporter.create_app())
+    payload = {**valid_webhook_payload, "sentAt": "2020-01-01T00:00:00+00:00"}
+
+    response = client.post("/api/webhooks/meraki", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "stale"
+
+
+def test_webhook_endpoint_processing_failure_is_retryable(
+    webhook_enabled_settings: Settings, valid_webhook_payload: dict
+) -> None:
+    """A 5xx processing failure leaves the delivery eligible for a successful retry."""
+
+    class FailOnceApplier:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def apply_webhook_device_state(self, serial: str, up: bool) -> bool:
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("transient state failure")
+            return True
+
+    exporter = ExporterApp(webhook_enabled_settings)
+    assert exporter.webhook_handler is not None
+    applier = FailOnceApplier()
+    exporter.webhook_handler._device_state_applier = applier
+    client = TestClient(exporter.create_app())
+    payload = {**valid_webhook_payload, "alertType": "device_down"}
+
+    failed = client.post("/api/webhooks/meraki", json=payload)
+    retried = client.post("/api/webhooks/meraki", json=payload)
+    duplicate = client.post("/api/webhooks/meraki", json=payload)
+
+    assert failed.status_code == 500
+    assert retried.status_code == 200
+    assert retried.json()["status"] == "success"
+    assert duplicate.status_code == 200
+    assert duplicate.json()["status"] == "duplicate"
+    assert applier.calls == 2
+
+
 def test_webhook_enabled_without_secret_fails_fast(
     webhook_enabled_settings: Settings,
 ) -> None:
@@ -228,5 +291,5 @@ def test_webhook_endpoint_missing_required_fields(
         headers={"Content-Type": "application/json"},
     )
 
-    assert response.status_code == 401
+    assert response.status_code == 400
     # Validation should fail due to missing required fields

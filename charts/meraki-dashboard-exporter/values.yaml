@@ -231,9 +231,9 @@ config: {}
   # webhooksMaxPayloadSize: "1048576"
   # -- Maximum accepted webhook clock skew in seconds (min: 30, max: 3600)
   # webhooksFreshnessWindowSeconds: "300"
-  # -- TTL in seconds for processed-webhook replay protection entries (min: 60, max: 86400)
+  # -- TTL in seconds for successful-delivery deduplication entries (min: 60, max: 86400)
   # webhooksReplayCacheTtlSeconds: "3600"
-  # -- Maximum processed-webhook replay protection entries (min: 100, max: 1000000)
+  # -- Maximum successful-delivery deduplication entries (min: 100, max: 1000000)
   # webhooksReplayCacheMaxEntries: "10000"
   # -- Enable OpenTelemetry tracing
   # otelEnabled: "false"

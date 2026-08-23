@@ -10,7 +10,7 @@ from pydantic import SecretStr
 
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings, WebhookSettings
-from meraki_dashboard_exporter.core.webhook_handler import WebhookHandler
+from meraki_dashboard_exporter.core.webhook_handler import WebhookHandler, WebhookOutcome
 
 
 class _RecordingApplier:
@@ -64,8 +64,8 @@ def test_replayed_alert_records_two_deliveries_but_applies_device_state_once() -
     handler = WebhookHandler(_settings(), device_state_applier=applier)
     payload = _device_down_payload()
 
-    assert handler.process_webhook(payload) is not None
-    assert handler.process_webhook(payload) is None
+    assert handler.process_webhook(payload).outcome is WebhookOutcome.ACCEPTED
+    assert handler.process_webhook(payload).outcome is WebhookOutcome.DUPLICATE
     assert applier.calls == [("Q2XX-XXXX-XXXX", False)]
     assert (
         REGISTRY.get_sample_value(
@@ -102,7 +102,7 @@ def test_out_of_window_alert_is_rejected_before_applying_device_state(offset: in
         UTC,
     ).isoformat()
 
-    assert handler.process_webhook(payload) is None
+    assert handler.process_webhook(payload).outcome is WebhookOutcome.STALE
     assert applier.calls == []
     assert (
         REGISTRY.get_sample_value(
@@ -127,8 +127,8 @@ def test_alert_without_id_is_deduplicated_by_body_fingerprint() -> None:
     payload = _device_down_payload()
     payload.pop("alertId")
 
-    assert handler.process_webhook(payload) is not None
-    assert handler.process_webhook(payload) is None
+    assert handler.process_webhook(payload).outcome is WebhookOutcome.ACCEPTED
+    assert handler.process_webhook(payload).outcome is WebhookOutcome.DUPLICATE
     assert applier.calls == [("Q2XX-XXXX-XXXX", False)]
 
 
@@ -143,11 +143,11 @@ def test_replay_cache_entry_expires_after_its_ttl(monkeypatch: pytest.MonkeyPatc
         "meraki_dashboard_exporter.core.webhook_handler.time.monotonic",
         lambda: monotonic_time,
     )
-    assert handler.process_webhook(payload) is not None
-    assert handler.process_webhook(payload) is None
+    assert handler.process_webhook(payload).outcome is WebhookOutcome.ACCEPTED
+    assert handler.process_webhook(payload).outcome is WebhookOutcome.DUPLICATE
 
     monotonic_time += handler.settings.webhooks.replay_cache_ttl_seconds + 1
-    assert handler.process_webhook(payload) is not None
+    assert handler.process_webhook(payload).outcome is WebhookOutcome.ACCEPTED
     assert applier.calls == [
         ("Q2XX-XXXX-XXXX", False),
         ("Q2XX-XXXX-XXXX", False),

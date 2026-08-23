@@ -40,7 +40,9 @@ from .core.otel_metrics import OTelMetricsBridge
 from .core.otel_tracing import TracingConfig
 from .core.webhook_handler import (
     DeviceStateApplier,
+    WebhookFailureReason,
     WebhookHandler,
+    WebhookOutcome,
     enforce_webhook_security,
 )
 from .services.status import StatusService, build_effective_config
@@ -1372,14 +1374,22 @@ class ExporterApp:
                 ) from e
 
             # Process webhook
-            payload = exporter.webhook_handler.process_webhook(payload_data)
+            result = exporter.webhook_handler.process_webhook(payload_data)
 
-            if payload is None:
-                # Processing failed (validation or secret mismatch)
+            if result.outcome is WebhookOutcome.REJECTED:
+                status_code = (
+                    401 if result.failure_reason is WebhookFailureReason.AUTHENTICATION else 400
+                )
                 raise HTTPException(
-                    status_code=401,
+                    status_code=status_code,
                     detail="Webhook validation failed",
                 )
+            if result.outcome is WebhookOutcome.FAILED:
+                raise HTTPException(status_code=500, detail="Webhook processing failed")
+            if result.outcome is WebhookOutcome.DUPLICATE:
+                return {"status": "duplicate", "message": "Webhook already processed"}
+            if result.outcome is WebhookOutcome.STALE:
+                return {"status": "stale", "message": "Stale webhook acknowledged"}
 
             # Return success
             return {"status": "success", "message": "Webhook processed"}
