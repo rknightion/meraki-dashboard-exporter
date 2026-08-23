@@ -427,8 +427,12 @@ class EndpointScheduler:
         )
 
     def requires_explicit_profile(self) -> bool:
-        """Return false: an over-budget plan is observable but not startup-fatal."""
-        return False
+        """Whether adaptive mode's implicit full plan exceeds its budget target."""
+        if str(self._sched("mode")) != "adaptive" or self.configured_profile() is not None:
+            return False
+        return self._profile_threshold_demand_rps > (
+            (self._budget_used_at_last_solve or 0.0) * float(self._sched("target_utilization"))
+        )
 
     def configured_budget_rps(self) -> float:
         """Configured API budget: requests_per_second × shared_fraction."""
@@ -495,8 +499,8 @@ class EndpointScheduler:
         effective_budget = self._effective_budget_rps()
         solve_budget = math.inf if mode == "fixed" else effective_budget
 
-        standard = solve_intervals(
-            self._groups_for_profile("standard"),
+        implicit = solve_intervals(
+            self._groups_for_profile("full"),
             shape,
             solve_budget,
             target_utilization,
@@ -504,7 +508,7 @@ class EndpointScheduler:
             float(self._sched("max_stretch_factor")),
             float(self._sched("max_interval_seconds")),
         )
-        self._profile_threshold_demand_rps = sum(item.demand_rps for item in standard.values())
+        self._profile_threshold_demand_rps = sum(item.demand_rps for item in implicit.values())
         profile = self.active_profile()
         solved = solve_intervals(
             self._groups_for_profile(profile),

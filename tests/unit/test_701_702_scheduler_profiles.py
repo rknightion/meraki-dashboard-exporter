@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -18,6 +19,7 @@ from meraki_dashboard_exporter.collectors.mt_sensor import MTSensorCollector
 from meraki_dashboard_exporter.collectors.network_health import NetworkHealthCollector
 from meraki_dashboard_exporter.collectors.organization import OrganizationCollector
 from meraki_dashboard_exporter.core.config import Settings
+from meraki_dashboard_exporter.core.error_handling import StartupConfigurationError
 from meraki_dashboard_exporter.core.scheduler import (
     EndpointGroup,
     EndpointGroupName,
@@ -49,13 +51,15 @@ def _shape(*, networks: int, devices: int) -> OrgShape:
     )
 
 
-def _settings(profile: str | None = None, *, rps: float = 1.0) -> SimpleNamespace:
+def _settings(
+    profile: str | None = None, *, rps: float = 1.0, mode: str = "adaptive"
+) -> SimpleNamespace:
     return SimpleNamespace(
         api=SimpleNamespace(rate_limit_requests_per_second=rps, rate_limit_shared_fraction=1.0),
         monitoring=SimpleNamespace(metric_ttl_multiplier=2.0),
         collectors=SimpleNamespace(profile=profile),
         scheduler=SimpleNamespace(
-            mode="adaptive",
+            mode=mode,
             target_utilization=0.7,
             max_stretch_factor=4.0,
             max_interval_seconds=3600,
@@ -152,8 +156,46 @@ def test_threshold_is_solved_plan_demand_not_network_count(
     scheduler = EndpointScheduler(_settings(rps=0.5), _Limiter(0.5))  # type: ignore[arg-type]
     scheduler.register_groups(_fixture_groups())
     scheduler.resolve(_fixture_shape(preset))
-    assert scheduler.requires_explicit_profile() is False
+    assert scheduler.requires_explicit_profile() is True
     assert scheduler.diagnostics()["profile"]["threshold_demand_rps"] > 0.35
+
+
+def test_fixed_mode_never_requires_an_explicit_profile() -> None:
+    """D6 is an adaptive-scheduler guard, not a fixed-mode startup gate."""
+    scheduler = EndpointScheduler(_settings(rps=0.5, mode="fixed"), _Limiter(0.5))  # type: ignore[arg-type]
+    scheduler.register_groups(_fixture_groups())
+    scheduler.resolve(_fixture_shape(FleetPreset.BRANCH_RETAIL))
+
+    assert scheduler.diagnostics()["profile"]["threshold_demand_rps"] > 0.35
+    assert scheduler.requires_explicit_profile() is False
+
+
+def test_unset_profile_keeps_full_surface_below_threshold() -> None:
+    """An affordable implicit profile preserves every endpoint priority."""
+    scheduler = EndpointScheduler(_settings(rps=100.0), _Limiter(100.0))  # type: ignore[arg-type]
+    scheduler.register_groups(_groups())
+    scheduler.resolve(_shape(networks=1, devices=1))
+
+    assert scheduler.requires_explicit_profile() is False
+    assert scheduler.active_profile() == "full"
+    assert scheduler.profile_allows(EndpointGroupName.CONFIG_ORG)
+
+
+def test_implicit_full_plan_gates_when_standard_would_fit() -> None:
+    """The threshold measures the plan that an unset profile would actually run."""
+    groups = [
+        EndpointGroup(EndpointGroupName.DEVICE_AVAILABILITY, 1, 60, lambda _: 12.0),
+        EndpointGroup(EndpointGroupName.NH_DATA_RATES, 3, 60, lambda _: 12.0),
+        EndpointGroup(EndpointGroupName.CONFIG_ORG, 4, 60, lambda _: 120.0),
+    ]
+    scheduler = EndpointScheduler(_settings(rps=1.0), _Limiter(1.0))  # type: ignore[arg-type]
+    scheduler.register_groups(groups)
+    scheduler.resolve(_shape(networks=1, devices=1))
+
+    standard = solve_intervals(groups[:2], _shape(networks=1, devices=1), 1.0, 0.7, {}, 4.0, 3600)
+    assert sum(item.demand_rps for item in standard.values()) <= 0.7
+    assert scheduler.diagnostics()["profile"]["threshold_demand_rps"] > 0.7
+    assert scheduler.requires_explicit_profile() is True
 
 
 def test_profile_sheds_only_lower_priorities_and_exports_group_lifecycle() -> None:
@@ -205,12 +247,14 @@ def test_shed_skip_counter_records_only_due_execution_opportunities() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unset_over_budget_profile_does_not_block_startup() -> None:
-    """Budget pressure remains observable without crash-looping the exporter."""
+async def test_unset_over_budget_profile_fails_the_startup_preflight() -> None:
+    """An ambiguous over-budget plan raises before the server lifespan yields."""
     manager = object.__new__(CollectorManager)
-    manager.settings = SimpleNamespace(collectors=SimpleNamespace(profile=None))
+    manager.settings = SimpleNamespace(
+        collectors=SimpleNamespace(profile=None, collector_timeout=1.0)
+    )
     manager.inventory = SimpleNamespace(warm_cache=AsyncMock())
-    manager._resolve_and_log_schedule = AsyncMock()  # type: ignore[method-assign]
+    manager._resolve_and_log_schedule = AsyncMock(return_value=True)  # type: ignore[method-assign]
     manager.scheduler = MagicMock()
     manager.scheduler.requires_explicit_profile.return_value = True
     manager.scheduler.diagnostics.return_value = {
@@ -219,17 +263,64 @@ async def test_unset_over_budget_profile_does_not_block_startup() -> None:
         "target_utilization": 0.7,
     }
 
+    with pytest.raises(
+        StartupConfigurationError,
+        match=r"2\.500 rps.*0\.700 rps.*availability.*standard.*full",
+    ):
+        await manager.validate_profile_selection()
+
+    manager.inventory.warm_cache.assert_awaited_once()
+    manager._resolve_and_log_schedule.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_explicit_profile_is_solved_before_startup() -> None:
+    """Choosing a profile triggers an honest pre-yield solve rather than a no-op return."""
+    manager = object.__new__(CollectorManager)
+    manager.settings = SimpleNamespace(
+        collectors=SimpleNamespace(profile="availability", collector_timeout=1.0)
+    )
+    manager.inventory = SimpleNamespace(warm_cache=AsyncMock())
+    manager._resolve_and_log_schedule = AsyncMock(return_value=True)  # type: ignore[method-assign]
+    manager.scheduler = MagicMock()
+    manager.scheduler.requires_explicit_profile.return_value = False
+
     await manager.validate_profile_selection()
 
-    manager.inventory.warm_cache.assert_not_awaited()
+    manager.inventory.warm_cache.assert_awaited_once()
+    manager._resolve_and_log_schedule.assert_awaited_once()
+    manager.scheduler.requires_explicit_profile.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_profile_preflight_has_one_wall_clock_bound() -> None:
+    """A stuck inventory warm is cancelled and deferred to normal collection."""
+    manager = object.__new__(CollectorManager)
+    manager.settings = SimpleNamespace(
+        collectors=SimpleNamespace(profile=None, collector_timeout=0.01)
+    )
+
+    async def wait_forever() -> None:
+        await asyncio.Event().wait()
+
+    manager.inventory = SimpleNamespace(warm_cache=AsyncMock(side_effect=wait_forever))
+    manager._resolve_and_log_schedule = AsyncMock(return_value=True)  # type: ignore[method-assign]
+    manager.scheduler = MagicMock()
+
+    await manager.validate_profile_selection()
+
+    manager.inventory.warm_cache.assert_awaited_once()
     manager._resolve_and_log_schedule.assert_not_awaited()
+    manager.scheduler.requires_explicit_profile.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_unset_profile_defers_decision_when_startup_shape_cannot_be_verified() -> None:
     """Transient inventory failure remains startup-tolerant and makes no profile decision."""
     manager = object.__new__(CollectorManager)
-    manager.settings = SimpleNamespace(collectors=SimpleNamespace(profile=None))
+    manager.settings = SimpleNamespace(
+        collectors=SimpleNamespace(profile=None, collector_timeout=1.0)
+    )
     manager.inventory = SimpleNamespace(warm_cache=AsyncMock())
     manager._resolve_and_log_schedule = AsyncMock(return_value=False)  # type: ignore[method-assign]
     manager.scheduler = MagicMock()

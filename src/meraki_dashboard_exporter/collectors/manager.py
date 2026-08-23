@@ -616,8 +616,38 @@ class CollectorManager:
         the server lifespan yields so an implicit over-budget profile cannot be
         logged and swallowed by the background initial-collection task.
         """
-        # Budget pressure is reported by the scheduler warning and gauge. Do not
-        # make API availability a prerequisite for binding the health endpoint.
+        timeout_seconds = float(self.settings.collectors.collector_timeout)
+        try:
+            async with asyncio.timeout(timeout_seconds):
+                await self.inventory.warm_cache()
+                # D10 keeps transient Meraki unavailability startup-tolerant. If the
+                # shape cannot be verified, make no profile decision; a later resolver
+                # pass will solve once inventory recovers.
+                if not await self._resolve_and_log_schedule():
+                    return
+        except TimeoutError:
+            logger.warning(
+                "Collection-profile preflight timed out; deferring the profile decision",
+                timeout_seconds=timeout_seconds,
+            )
+            return
+        except Exception:
+            logger.exception("Collection-profile preflight failed; deferring the profile decision")
+            return
+
+        if not self.scheduler.requires_explicit_profile():
+            return
+        diagnostics = self.scheduler.diagnostics()
+        profile = diagnostics["profile"]
+        budget_target = diagnostics["effective_budget_rps"] * diagnostics["target_utilization"]
+        raise StartupConfigurationError(
+            "The solved full collection plan requires an explicit "
+            "MERAKI_EXPORTER_COLLECTORS__PROFILE choice: estimated demand "
+            f"{profile['threshold_demand_rps']:.3f} rps exceeds the budget target "
+            f"{budget_target:.3f} rps. Choose availability (priority 1), standard "
+            "(priorities 1-3), or full (all priorities); the selected profile is "
+            "solved independently and may still report over-budget demand."
+        )
 
     async def _resolve_and_log_schedule(self) -> bool:
         """Compute the org shape and resolve endpoint-group intervals (#617).

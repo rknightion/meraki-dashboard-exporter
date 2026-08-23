@@ -63,11 +63,15 @@ refused or behave differently:
   shipped `api.executor_workers=10` and `api.concurrency_limit=5`, the effective cap is 2.
 - The two control POST endpoints require `server.api_token`, as detailed below.
 
-An unset collection profile continues to collect the full endpoint-group surface, preserving
-1.0.2 behavior. Explicit `availability` and `standard` profiles remain opt-in reductions. A solved
-plan that exceeds its API-budget target now starts with a prominent warning and exports the
-`meraki_exporter_scheduler_over_budget` gauge instead of aborting startup; select a smaller profile
-or tune the budget when this occurs.
+In adaptive scheduler mode, an unset collection profile continues to collect the full endpoint-group
+surface while the solved `full` plan fits the effective API-budget target. Above that
+shape-aware threshold, startup refuses to proceed until
+`MERAKI_EXPORTER_COLLECTORS__PROFILE` is set explicitly to `availability` (priority 1), `standard`
+(priorities 1–3), or `full` (all priorities). The error reports the estimated demand and budget
+target. The selected profile is then solved honestly: if it still exceeds budget, priorities 1 and 2
+keep their volatility floors while lower-priority groups are shed, and
+`meraki_exporter_scheduler_over_budget` remains alertable. Fixed scheduler mode never applies this
+adaptive profile-selection gate.
 
 `meraki_exporter_cardinality_product_series` now counts only `meraki_*` product-data samples.
 Exporter instrumentation and Python/process runtime samples move to the new

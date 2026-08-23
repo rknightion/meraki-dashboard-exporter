@@ -111,7 +111,7 @@ If **demand > budget**, the scheduler stretches only priority 3/4 groups (up to
 groups keep their floors. If the solved plan remains over budget, it defers lower-priority groups
 and exposes `meraki_exporter_scheduler_over_budget` plus the shed group labels. Set
 `MERAKI_EXPORTER_COLLECTORS__PROFILE` explicitly to `availability`, `standard`, or `full` above
-the computed standard-plan threshold; the threshold is calculated from the actual solved plan and
+the computed full-plan threshold; the threshold is calculated from the actual implicit plan and
 inventory shape, never a raw network count. Separately, if network-health's *own single run* needs more calls than the budget can drain
 inside 240 s, that collector's run will not finish before `collector_timeout` regardless of how
 the scheduler paces the *next* run — see the LARGE example below.

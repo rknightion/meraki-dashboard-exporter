@@ -41,8 +41,9 @@ estate naturally produces larger cost estimates and, if the budget is tight, mor
    unpinned, gated group chosen by `(-priority, stretch_factor, name)` — lowest-priority class
    first, then the least-already-stretched group within that class, name as a deterministic
    tiebreak — multiplying its interval by 1.5 each round, capped at
-   `min(floor × max_stretch_factor, max_interval_seconds)`. It stops once demand fits, or once
-   every group has hit its cap (logged as `over_budget`).
+   `min(floor × max_stretch_factor, max_interval_seconds)`. Priority 1 and 2 groups are never
+   stretched; they retain their volatility floors. It stops once demand fits, or once every
+   eligible priority 3/4 group has hit its cap (logged as `over_budget`).
 5. Identical inputs always produce identical output — this is why it can run as a pure function
    in tests without a clock or network.
 
@@ -67,6 +68,23 @@ Prometheus gauges (`meraki_exporter_scheduler_interval_seconds{group}`,
 groups stretched and by how much). It runs
 periodically at `scheduler.resolve_interval_seconds` (default 900s, matching the inventory TTL)
 so a growing/shrinking estate or a persistent throttle event is picked up without a restart.
+
+## Collection profiles and the startup threshold
+
+Profiles bound the priorities included in the solved plan: `availability` includes priority 1,
+`standard` includes priorities 1–3, and `full` includes every group. An explicitly selected profile
+is always solved before startup completes; selecting one does not merely silence a warning. If the
+selected profile is still over budget, the scheduler sheds due priority 3/4 groups while preserving
+priority 1/2 floors and exposes the result through diagnostics and metrics.
+
+When no profile is configured, an affordable deployment preserves the full endpoint-group surface.
+Before the server lifespan yields, adaptive mode computes the organization shape and solves the
+implicit `full` plan as a shape-aware threshold. If that plan exceeds
+`effective_budget_rps × target_utilization`, startup fails with the measured demand, budget target,
+and the three profile choices rather than guessing which signal classes the operator intended to
+keep. Fixed mode never applies this adaptive-only gate. The preflight uses one
+`collectors.collector_timeout` wall-clock bound; a timeout or transient inventory failure defers the
+decision to normal collection rather than leaving an unbounded startup task.
 
 ## Per-collector group-clocked loops
 
