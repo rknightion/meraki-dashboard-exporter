@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
@@ -189,7 +190,7 @@ class TestAsyncMerakiClientShutdown:
         executor = ordered.executor
         client._executor = executor
 
-        await client.close()
+        assert await client.close() is True
 
         executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
         session.close.assert_called_once_with()
@@ -198,6 +199,51 @@ class TestAsyncMerakiClientShutdown:
             call.session.close(),
         ]
         assert client._api is None
+
+    @pytest.mark.asyncio
+    async def test_close_bounds_blocked_worker_without_freezing_loop(
+        self, mock_settings: Settings
+    ) -> None:
+        """A stuck SDK thread is abandoned after the deadline while asyncio keeps running."""
+        client = AsyncMerakiClient(mock_settings)
+        release = threading.Event()
+        started = threading.Event()
+        session = MagicMock()
+        client._api = SimpleNamespace(_session=session)  # type: ignore[assignment]
+
+        def blocked_sdk_call() -> None:
+            started.set()
+            release.wait()
+
+        worker = client.executor.submit(blocked_sdk_call)
+        assert started.wait(timeout=1.0)
+        heartbeat_ticks = 0
+
+        async def heartbeat() -> None:
+            nonlocal heartbeat_ticks
+            while True:
+                heartbeat_ticks += 1
+                await asyncio.sleep(0.005)
+
+        heartbeat_task = asyncio.create_task(heartbeat())
+        loop = asyncio.get_running_loop()
+        started_at = loop.time()
+        try:
+            assert await client.close(timeout_seconds=0.05) is False
+            assert await client.close(timeout_seconds=0.05) is False
+            assert loop.time() - started_at < 0.15
+            assert heartbeat_ticks >= 3
+            session.close.assert_not_called()
+        finally:
+            heartbeat_task.cancel()
+            release.set()
+            await asyncio.to_thread(worker.result, 1.0)
+
+        for _ in range(100):
+            if session.close.called:
+                break
+            await asyncio.sleep(0.005)
+        session.close.assert_called_once_with()
 
 
 class TestProxyAndCustomCA:

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -37,11 +39,15 @@ async def test_shutdown_drains_dependencies_before_sdk_and_serving_pools() -> No
     exporter.tracing = SimpleNamespace(shutdown=lambda: events.append("tracing"))
     exporter.otel_logging = SimpleNamespace(shutdown=lambda: events.append("logging"))
     exporter.data_log_emitter = SimpleNamespace(shutdown=lambda: events.append("data-log"))
-    resolver = SimpleNamespace(close=lambda: events.append("dns"))
+    resolver = SimpleNamespace(
+        close=AsyncMock(side_effect=lambda **_: events.append("dns") or True)
+    )
     exporter.collector_manager = SimpleNamespace(
         collectors=[SimpleNamespace(dns_resolver=resolver)]
     )
-    exporter.client = SimpleNamespace(close=AsyncMock(side_effect=lambda: events.append("sdk")))
+    exporter.client = SimpleNamespace(
+        close=AsyncMock(side_effect=lambda **_: events.append("sdk") or True)
+    )
     exporter._serving_executor = MagicMock()
     exporter._serving_executor.shutdown.side_effect = lambda **_: events.append("serving")
 
@@ -59,6 +65,67 @@ async def test_shutdown_drains_dependencies_before_sdk_and_serving_pools() -> No
         "serving",
     ]
     exporter._serving_executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
+
+
+@pytest.mark.asyncio
+async def test_executor_drains_share_one_bound_and_keep_loop_responsive() -> None:
+    """Blocked executor cleanup cannot multiply the app-level shutdown deadline."""
+    exporter: Any = object.__new__(ExporterApp)
+    exporter._shutdown_lock = asyncio.Lock()
+    exporter._shutdown_complete = False
+    exporter._shutdown_event = asyncio.Event()
+    exporter._background_tasks = set()
+    exporter._expiration_started = False
+    exporter.settings = SimpleNamespace(otel=SimpleNamespace(enabled=False))
+    exporter.otel_metrics_bridge = SimpleNamespace(stop=AsyncMock())
+    exporter.tracing = SimpleNamespace(shutdown=MagicMock())
+    exporter.data_log_emitter = SimpleNamespace(shutdown=MagicMock())
+    resolver_close = AsyncMock()
+    client_close = AsyncMock(return_value=False)
+
+    async def consume_remaining_budget(*, timeout_seconds: float) -> bool:
+        await asyncio.sleep(timeout_seconds)
+        return False
+
+    resolver_close.side_effect = consume_remaining_budget
+    exporter.collector_manager = SimpleNamespace(
+        collectors=[SimpleNamespace(dns_resolver=SimpleNamespace(close=resolver_close))]
+    )
+    exporter.client = SimpleNamespace(close=client_close)
+    exporter._serving_executor = ThreadPoolExecutor(max_workers=1)
+    release = threading.Event()
+    started = threading.Event()
+
+    def blocked_serving_work() -> None:
+        started.set()
+        release.wait()
+
+    worker = exporter._serving_executor.submit(blocked_serving_work)
+    assert started.wait(timeout=1.0)
+    heartbeat_ticks = 0
+
+    async def heartbeat() -> None:
+        nonlocal heartbeat_ticks
+        while True:
+            heartbeat_ticks += 1
+            await asyncio.sleep(0.005)
+
+    heartbeat_task = asyncio.create_task(heartbeat())
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
+    try:
+        with patch("meraki_dashboard_exporter.app.EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS", 0.05):
+            await exporter._shutdown()
+            await exporter._shutdown()
+        assert loop.time() - started_at < 0.15
+        assert heartbeat_ticks >= 3
+        resolver_close.assert_awaited_once()
+        client_close.assert_awaited_once()
+        assert client_close.call_args.kwargs["timeout_seconds"] < 0.01
+    finally:
+        heartbeat_task.cancel()
+        release.set()
+        await asyncio.to_thread(worker.result, 1.0)
 
 
 @pytest.mark.asyncio

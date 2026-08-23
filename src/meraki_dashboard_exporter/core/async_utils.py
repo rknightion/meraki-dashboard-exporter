@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from collections.abc import AsyncIterator, Callable, Coroutine
+from concurrent.futures import Executor
 from contextlib import asynccontextmanager
 from contextvars import copy_context
 from dataclasses import dataclass
@@ -26,6 +28,63 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 _TASK_GROUP_PHASE = "task_group"
+
+
+async def shutdown_executor(
+    executor: Executor,
+    *,
+    timeout_seconds: float,
+    thread_name: str,
+    on_drained: Callable[[], None] | None = None,
+) -> bool:
+    """Drain an executor off-loop, returning ``False`` when its deadline expires.
+
+    Python cannot interrupt a running executor worker. A daemon coordinator owns
+    the blocking join so the event loop remains responsive; after timeout the
+    coordinator keeps waiting in the background and runs ``on_drained`` only
+    once every worker has actually stopped.
+
+    Parameters
+    ----------
+    executor : Executor
+        Executor whose queued work should be cancelled and running work joined.
+    timeout_seconds : float
+        Maximum wall-clock time to await the join from the event loop.
+    thread_name : str
+        Diagnostic name for the daemon join coordinator.
+    on_drained : Callable[[], None] | None
+        Optional synchronous cleanup that is unsafe until workers have stopped.
+
+    Returns
+    -------
+    bool
+        ``True`` when the executor drained inside the deadline, otherwise ``False``.
+
+    """
+    completed = threading.Event()
+    failure: list[Exception] = []
+
+    def drain() -> None:
+        try:
+            executor.shutdown(wait=True, cancel_futures=True)
+            if on_drained is not None:
+                on_drained()
+        except Exception as exc:
+            failure.append(exc)
+            logger.exception("Executor drain failed", thread_name=thread_name)
+        finally:
+            completed.set()
+
+    threading.Thread(target=drain, name=thread_name, daemon=True).start()
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + max(0.0, timeout_seconds)
+    while not completed.is_set():
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            return False
+        await asyncio.sleep(min(0.01, remaining))
+
+    return not failure
 
 
 @dataclass(frozen=True)

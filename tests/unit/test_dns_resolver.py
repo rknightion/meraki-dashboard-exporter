@@ -2,6 +2,8 @@
 
 # ruff: noqa: S101
 
+import asyncio
+import threading
 from unittest.mock import MagicMock
 
 import pytest
@@ -135,15 +137,50 @@ async def test_system_dns_lookup_uses_dedicated_executor(monkeypatch, resolver):
     assert thread_names[0].startswith("dns-resolver")
 
 
-def test_close_drains_dedicated_lookup_executor(resolver):
+@pytest.mark.asyncio
+async def test_close_drains_dedicated_lookup_executor(resolver):
     """Shutdown joins reverse-DNS workers before the process exits."""
     executor = MagicMock()
     resolver._executor = executor
 
-    resolver.close()
-    resolver.close()
+    assert await resolver.close() is True
+    assert await resolver.close() is True
 
     executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
+
+
+@pytest.mark.asyncio
+async def test_close_bounds_blocked_lookup_without_freezing_loop(resolver):
+    """A stuck resolver thread is abandoned after the deadline while asyncio keeps running."""
+    release = threading.Event()
+    started = threading.Event()
+
+    def blocked_lookup() -> None:
+        started.set()
+        release.wait()
+
+    worker = resolver._executor.submit(blocked_lookup)
+    assert started.wait(timeout=1.0)
+    heartbeat_ticks = 0
+
+    async def heartbeat() -> None:
+        nonlocal heartbeat_ticks
+        while True:
+            heartbeat_ticks += 1
+            await asyncio.sleep(0.005)
+
+    heartbeat_task = asyncio.create_task(heartbeat())
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
+    try:
+        assert await resolver.close(timeout_seconds=0.05) is False
+        assert await resolver.close(timeout_seconds=0.05) is False
+        assert loop.time() - started_at < 0.15
+        assert heartbeat_ticks >= 3
+    finally:
+        heartbeat_task.cancel()
+        release.set()
+        await asyncio.to_thread(worker.result, 1.0)
 
 
 @pytest.mark.asyncio

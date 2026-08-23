@@ -24,6 +24,7 @@ from starlette.requests import Request
 from .__version__ import __version__
 from .api.client import AsyncMerakiClient
 from .collectors.manager import CollectorManager
+from .core.async_utils import shutdown_executor
 from .core.build_info import register_build_info
 from .core.cardinality import CardinalityMonitor, setup_cardinality_endpoint
 from .core.config import Settings
@@ -53,6 +54,10 @@ logger = get_logger(__name__)
 # (see ExporterApp._resource_metrics_loop). Deliberately NOT a full collector
 # tier - just a cheap psutil read on a fixed interval.
 RESOURCE_METRICS_INTERVAL_SECONDS = 30.0
+# One absolute budget shared by the DNS, SDK, and serving executor drains.
+# Running Python threads cannot be interrupted; after this bound the stateless
+# process relies on its orchestrator's existing force-kill grace boundary.
+EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS = 5.0
 
 
 # SECURITY (SEC-01 / #558): sensitive GET UIs that leak PII (client MAC/IP/
@@ -320,17 +325,42 @@ class ExporterApp:
             self.data_log_emitter.shutdown()
             logger.info("Shutdown phase complete", phase="data_log_stopped")
 
+            loop = asyncio.get_running_loop()
+            executor_deadline = loop.time() + EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS
+
+            def remaining_executor_time() -> float:
+                return max(0.0, executor_deadline - loop.time())
+
             # DNS has a separate executor owned by the optional clients collector.
+            dns_drained = True
             for collector in self.collector_manager.collectors:
                 resolver = getattr(collector, "dns_resolver", None)
                 if resolver is not None:
-                    resolver.close()
-            logger.info("Shutdown phase complete", phase="dns_executor_drained")
+                    dns_drained = (
+                        await resolver.close(timeout_seconds=remaining_executor_time())
+                        and dns_drained
+                    )
+            logger.info(
+                "Shutdown phase complete",
+                phase="dns_executor_drained" if dns_drained else "dns_executor_deferred",
+            )
 
-            await self.client.close()
-            logger.info("Shutdown phase complete", phase="sdk_client_closed")
-            self._serving_executor.shutdown(wait=True, cancel_futures=True)
-            logger.info("Shutdown phase complete", phase="serving_executor_drained")
+            sdk_drained = await self.client.close(timeout_seconds=remaining_executor_time())
+            logger.info(
+                "Shutdown phase complete",
+                phase="sdk_client_closed" if sdk_drained else "sdk_client_shutdown_deferred",
+            )
+            serving_drained = await shutdown_executor(
+                self._serving_executor,
+                timeout_seconds=remaining_executor_time(),
+                thread_name="registry-serve-shutdown",
+            )
+            logger.info(
+                "Shutdown phase complete",
+                phase=(
+                    "serving_executor_drained" if serving_drained else "serving_executor_deferred"
+                ),
+            )
             self._shutdown_complete = True
             logger.info("Shutdown complete")
 

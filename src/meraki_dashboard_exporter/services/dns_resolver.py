@@ -12,7 +12,7 @@ from typing import cast
 
 import structlog
 
-from ..core.async_utils import AsyncRetry, with_timeout
+from ..core.async_utils import AsyncRetry, shutdown_executor, with_timeout
 from ..core.config import Settings
 
 logger = structlog.get_logger(__name__)
@@ -81,13 +81,26 @@ class DNSResolver:
             "lookup_timeouts": 0,
         }
         self._closed = False
+        self._close_lock = asyncio.Lock()
+        self._executor_drained: bool | None = None
 
-    def close(self) -> None:
-        """Cancel queued reverse-DNS work and join active resolver threads."""
-        if self._closed:
-            return
-        self._closed = True
-        self._executor.shutdown(wait=True, cancel_futures=True)
+    async def close(self, *, timeout_seconds: float = 5.0) -> bool:
+        """Cancel queued DNS work and bound the off-loop join of active threads."""
+        async with self._close_lock:
+            if self._closed:
+                return bool(self._executor_drained)
+            self._closed = True
+            self._executor_drained = await shutdown_executor(
+                self._executor,
+                timeout_seconds=timeout_seconds,
+                thread_name="dns-resolver-shutdown",
+            )
+            if not self._executor_drained:
+                logger.warning(
+                    "DNS executor did not drain before shutdown deadline; cleanup continues",
+                    timeout_seconds=timeout_seconds,
+                )
+            return self._executor_drained
 
     def track_client(self, client_id: str, ip: str | None, description: str | None) -> bool:
         """Track client information to detect changes.

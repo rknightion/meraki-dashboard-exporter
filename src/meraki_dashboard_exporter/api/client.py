@@ -14,6 +14,7 @@ import meraki
 from prometheus_client import Counter
 
 from ..core.api_facade import MerakiApiFacade
+from ..core.async_utils import shutdown_executor
 from ..core.constants.metrics_constants import CollectorMetricName
 from ..core.logging import get_logger
 from ..core.metrics import LabelName
@@ -99,6 +100,7 @@ class AsyncMerakiClient:
         self._api: meraki.DashboardAPI | None = None
         self._api_lock = asyncio.Lock()
         self._closed = False
+        self._executor_drained: bool | None = None
         self._api_call_count = 0
 
         # #544: dedicated, sized executor for synchronous SDK calls. app.py
@@ -331,24 +333,40 @@ class AsyncMerakiClient:
                     total += sample.value
         return int(total)
 
-    async def close(self) -> None:
+    async def close(self, *, timeout_seconds: float = 5.0) -> bool:
         """Close the API client and shut down the dedicated SDK executor.
 
-        Terminal: queued SDK futures are cancelled, running SDK work is joined,
-        and the SDK's private HTTP session is closed afterwards.  DashboardAPI
-        4.4.0 has no public close method; its ``_session`` is a RestSession with
-        the synchronous close method that owns the underlying HTTP client.
+        Terminal: queued SDK futures are cancelled and running SDK work is
+        joined off the event loop. The SDK's private HTTP session closes only
+        after those workers drain. If the deadline expires, the coordinator
+        continues that cleanup in the background while process shutdown moves on.
         """
         logger.debug("Closing AsyncMerakiClient")
         async with self._api_lock:
             if self._closed:
-                return
+                return bool(self._executor_drained)
             self._closed = True
             api = self._api
             self._api = None
-        self._executor.shutdown(wait=True, cancel_futures=True)
-        logger.info("Shutdown phase complete", phase="sdk_executor_drained")
-        session = getattr(api, "_session", None)
-        if session is not None:
-            session.close()
-            logger.info("Shutdown phase complete", phase="sdk_session_closed")
+
+            session = getattr(api, "_session", None)
+
+            def close_session() -> None:
+                if session is not None:
+                    session.close()
+                    logger.info("Shutdown phase complete", phase="sdk_session_closed")
+
+            self._executor_drained = await shutdown_executor(
+                self._executor,
+                timeout_seconds=timeout_seconds,
+                thread_name="meraki-sdk-shutdown",
+                on_drained=close_session,
+            )
+            if self._executor_drained:
+                logger.info("Shutdown phase complete", phase="sdk_executor_drained")
+            else:
+                logger.warning(
+                    "SDK executor did not drain before shutdown deadline; cleanup continues",
+                    timeout_seconds=timeout_seconds,
+                )
+            return self._executor_drained

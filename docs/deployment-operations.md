@@ -73,9 +73,12 @@ override of that environment variable so the relationship cannot be bypassed.
 
 That render-time rule prevents a known contradictory configuration; it is not a hard process-exit
 guarantee. An SDK pagination call or operating-system DNS lookup already running in a thread cannot
-observe coroutine cancellation and may outlive the deadline. The exporter joins those threads and
-closes their sessions during orderly shutdown, but Kubernetes can still send SIGKILL at the grace
-boundary if an underlying call does not return.
+observe coroutine cancellation and may outlive the deadline. During orderly shutdown, DNS, SDK and
+registry-serving executors share one **5-second** drain budget. Their blocking joins run on daemon
+coordinator threads, so the asyncio event loop and uvicorn shutdown stay responsive. Queued work is
+cancelled immediately; the SDK HTTP session closes only after its running workers actually stop. If
+the shared budget expires, cleanup remains deferred in the background and the stateless pod relies
+on Kubernetes' existing `SIGKILL` grace boundary rather than freezing the event loop indefinitely.
 
 ## Endpoints
 The exporter exposes endpoints for metrics (`/metrics`), liveness (`/health`),
