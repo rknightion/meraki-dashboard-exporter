@@ -4,7 +4,7 @@ title: Bound registry-serving admission instead of queueing scrapes
 status: Done
 assignee: []
 created_date: '2026-08-29 13:05'
-updated_date: '2026-08-29 13:06'
+updated_date: '2026-08-29 13:20'
 labels:
   - 'area:core'
 milestone: m-0
@@ -46,6 +46,8 @@ app.py offloads every full-registry walk (generate_latest for /metrics, _get_met
 
 <!-- SECTION:NOTES:BEGIN -->
 Chose a BoundedSemaphore admission gate over a bounded work queue: the pool already serialises the expensive part, so the only thing worth bounding is how many callers may be admitted at once, and rejecting is more useful to a scraper than a late answer. Slot release moved to the future's done-callback after reasoning through disconnect: releasing on cancellation would let a new walk start while the cancelled one's thread was still holding a worker, which is the overload the change exists to prevent. Verified with two blocked-thread regressions (a third concurrent scrape rejected 503 while both workers are occupied; a cancelled waiter still holding its slot until the thread completes), 6 app-offload tests, 233 app/metrics/cardinality tests, CodeRabbit paid-plan review on both files (0 findings), and make check (2,787 passed). make docgen re-run and produced no drift; no metric or label name changed, so Grafana queries were not affected.
+
+Follow-up correction (2026-08-29): the review nit claiming a cancelled request leaves asyncio logging 'Future exception was never retrieved' was WRONG. CPython 3.14's asyncio.shield installs _log_on_exception on the inner future when the outer is cancelled (tasks.py:914), which calls loop.call_exception_handler with '<Exc> exception in shielded future' regardless of whether the exception was already retrieved. Retrieving it in the release callback therefore suppresses nothing, and suppression is not wanted anyway: an orphaned registry walk that starts failing must not go quiet because the scraper disconnected first. The attempted fix was reverted; app.py is unchanged from b5bbbbe. Added test_orphaned_registry_walk_failure_is_surfaced_not_swallowed instead, pinning that the failure reaches the loop exception handler exactly once and the slot is still released. Mutation-checked: removing asyncio.shield makes it fail, so it is not vacuous. Note the app sets no custom loop exception handler, so these reports land on the default asyncio logger rather than the app's structlog pipeline.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
