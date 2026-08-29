@@ -110,7 +110,7 @@ jobs:
       # plus this exact workflow_ref instead.
       - name: Mint a scoped push token
         id: bao
-        uses: rknightion/.github/.github/actions/broker-token@0e56520d848f5fda8cbfa0bda17797ef41f2a5a7 # v1.9.8
+        uses: rknightion/.github/.github/actions/broker-token@414aeb877c157ce559592551b222bbd90db61ce7 # v1.9.9
         with:
           permission-set: lockfile-meraki-dashboard-exporter
           role: lockfile-meraki-dashboard-exporter
