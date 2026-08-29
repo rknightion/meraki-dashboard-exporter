@@ -12,7 +12,7 @@
 # "-acknowledged" suffix) — it stays in the report so the accepted risk stays
 # visible, it just stops gating the build. INFO findings are unaffected.
 #
-# This is the narrow lever. Re-vendoring the baseline (make refresh-meraki-spec)
+# This is the narrow lever. Re-vendoring the baseline (just refresh-spec)
 # silences everything at once, including drift nobody has looked at yet; an entry
 # here silences exactly one known, decided thing. Prefer this, and say WHY in a
 # comment above each entry so the next person knows whether it still applies.

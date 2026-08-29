@@ -27,18 +27,17 @@ jobs:
         with:
           python-version: "3.14"
           activate-environment: true
+      - name: Set up just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: '1.58.0'
       - run: uv sync --locked
       - name: Build local exporter image
-        run: docker build --pull=false --tag meraki-dashboard-exporter:failure-harness .
+        run: just harness-image
       - name: Run selected replay
         env:
           HARNESS_MODE: ${{ inputs.mode }}
-        run: |
-          if [ "$HARNESS_MODE" = all ]; then
-            uv run python -m tests.harness.runner run --all-modes
-          else
-            uv run python -m tests.harness.runner run --mode "$HARNESS_MODE"
-          fi
+        run: just harness-run "${HARNESS_MODE}"
       - name: Upload redacted failure-harness artifacts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

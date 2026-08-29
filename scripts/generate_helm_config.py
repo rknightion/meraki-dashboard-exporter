@@ -13,7 +13,7 @@ The shutdown-grace validation fallback is also generated into
 Friendly names are algorithmic (camelCase of the env-var suffix) with a small
 override map for the handful of legacy names that predate the convention, so no
 per-knob name table has to be maintained and existing values overrides keep
-working. Run via ``make docgen``.
+working. Run via ``just gen``.
 """
 
 from __future__ import annotations

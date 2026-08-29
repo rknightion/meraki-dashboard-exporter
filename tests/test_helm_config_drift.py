@@ -3,10 +3,10 @@
 ``scripts/generate_helm_config.py`` templates every non-secret ``MERAKI_EXPORTER_*``
 tuning knob from the Pydantic ``Settings`` schema into the chart's ``values.yaml`` and
 ``templates/configmap.yaml`` (between BEGIN/END markers). These tests fail if the chart
-has drifted from the schema (a new/removed/renamed setting without a ``make docgen``
+has drifted from the schema (a new/removed/renamed setting without a ``just gen``
 run) or if a secret-typed field ever leaks into the plaintext ConfigMap.
 
-Run ``make docgen`` (or ``python scripts/generate_helm_config.py``) to fix a drift
+Run ``just gen`` (or ``just docs-helm``) to fix a drift
 failure.
 """
 
@@ -71,7 +71,7 @@ def test_values_block_not_drifted() -> None:
     """The generated values.yaml knob block matches the current schema."""
     gen = _load_generator()
     block = gen.render_values_block(gen.collect_knobs())
-    assert block in VALUES.read_text(), "values.yaml config knobs drifted — run `make docgen`"
+    assert block in VALUES.read_text(), "values.yaml config knobs drifted — run `just gen`"
 
 
 def test_configmap_block_not_drifted() -> None:
@@ -79,7 +79,7 @@ def test_configmap_block_not_drifted() -> None:
     gen = _load_generator()
     block = gen.render_configmap_block(gen.collect_knobs())
     assert block in CONFIGMAP.read_text(), (
-        "templates/configmap.yaml config knobs drifted — run `make docgen`"
+        "templates/configmap.yaml config knobs drifted — run `just gen`"
     )
 
 

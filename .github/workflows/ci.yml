@@ -48,51 +48,18 @@ jobs:
           activate-environment: true
           enable-cache: true
 
+      - name: Set up just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: '1.58.0'
+
       - name: Install project (incl. dev extras)
         # --locked: fail if uv.lock is stale vs pyproject.toml (e.g. a version bump that
         # forgot to re-lock). release-please-lock.yml keeps the release PR's lock in sync.
         run: uv sync --locked
 
-      - name: Lint (ruff)
-        run: |
-          uv run ruff check .
-          uv run ruff format --check .
-
-      - name: Type-check (mypy)
-        run: uv run mypy .
-
-      # Four pages under docs/ are generated from the code by scripts/generate_*.py
-      # and committed. Nothing enforced that, and the generators overwrite with no
-      # "DO NOT EDIT" banner, so a config or collector change that skipped
-      # `make docgen` shipped documentation describing the previous release —
-      # silently, and on the pages readers and answer engines trust most.
-      # The generators are deterministic (no timestamps), so a diff here is drift.
-      - name: Docs are in sync with the code
-        run: |
-          ./scripts/generate-docs.sh
-          if ! git diff --quiet; then
-            echo "::error::Generated docs are stale. Run 'make docgen' and commit the result."
-            git diff --stat
-            git diff
-            exit 1
-          fi
-
-      - name: Meraki model conformance (offline, vs vendored spec)
-        env:
-          PYTHONPATH: src:tools
-        run: |
-          uv run python -m apidrift \
-            --baseline spec/meraki-openapi.json.gz \
-            --live spec/meraki-openapi.json.gz \
-            --ignore spec/apidrift-ignore.txt \
-            --src src --conformance-only --format md
-
-      - name: Run tests
-        env:
-          PYTHONPATH: src
-        run: >-
-          uv run pytest -m "not fleet_scheduled and not fleet_on_demand"
-          --cov=meraki_dashboard_exporter --cov-report=xml --cov-fail-under=80
+      - name: Gate
+        run: just check
 
       - name: Upload coverage
         if: success() && env.HAS_CODECOV_TOKEN == 'true'
@@ -121,6 +88,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: '1.58.0'
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
@@ -139,35 +111,7 @@ jobs:
             GIT_COMMIT=${{ github.sha }}
 
       - name: Test Docker image startup
-        env:
-          MERAKI_EXPORTER_MERAKI__API_KEY: "00000000000000000000000000000000deadbeef"
-        run: |
-          # Test that the image can start and show help
-          docker run --rm -e MERAKI_EXPORTER_MERAKI__API_KEY meraki-dashboard-exporter:test --help
-
-          # Test image metadata
-          docker inspect meraki-dashboard-exporter:test | jq '.[0].Config.Labels'
-
-          # Verify non-root user. Overrides the image ENTRYPOINT (which is
-          # `python docker-entrypoint.py`, so a bare trailing `whoami` arg
-          # would otherwise just be ignored and never actually run) so this
-          # genuinely execs `whoami` and asserts an exact match on the
-          # expected runtime user, instead of grepping startup log output
-          # for the substring "exporter" (which passes even when running as
-          # root, since the exporter's own package/module paths contain it).
-          actual_user="$(docker run --rm --entrypoint whoami meraki-dashboard-exporter:test)"
-          if [ "${actual_user}" != "exporter" ]; then
-            echo "::error::Container runs as '${actual_user}', expected non-root user 'exporter'"
-            exit 1
-          fi
-          echo "Verified container runs as non-root user: ${actual_user}"
-
-          # Cross-check against the image's declared config user too.
-          configured_user="$(docker inspect -f '{{.Config.User}}' meraki-dashboard-exporter:test)"
-          if [ "${configured_user}" != "exporter" ]; then
-            echo "::error::Image Config.User is '${configured_user}', expected 'exporter'"
-            exit 1
-          fi
+        run: just image-verify meraki-dashboard-exporter:test
 
       - name: Install container-structure-test
         run: |
@@ -180,46 +124,10 @@ jobs:
           echo "${RUNNER_TEMP}/bin" >> "${GITHUB_PATH}"
 
       - name: Container structure test (entrypoint, port, non-root user, required files)
-        run: |
-          container-structure-test test \
-            --image meraki-dashboard-exporter:test \
-            --config .github/container-structure-test.yaml
+        run: just image-structure meraki-dashboard-exporter:test
 
       - name: Serve smoke test (container up, GET /health + /metrics respond)
-        env:
-          MERAKI_EXPORTER_MERAKI__API_KEY: "00000000000000000000000000000000deadbeef"
-          # Pin an org so startup skips the single-org auto-select getOrganizations
-          # call (#585); an unpinned key would fail-fast at boot without live API.
-          MERAKI_EXPORTER_MERAKI__ORG_ID: "123456"
-        run: |
-          container_id="$(docker run -d --rm -p 9099:9099 -e MERAKI_EXPORTER_MERAKI__API_KEY -e MERAKI_EXPORTER_MERAKI__ORG_ID meraki-dashboard-exporter:test)"
-          echo "Started container ${container_id}"
-
-          cleanup() {
-            echo "::group::container logs"
-            docker logs "${container_id}" || true
-            echo "::endgroup::"
-            docker stop "${container_id}" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-
-          check_endpoint() {
-            path="$1"
-            status=000
-            for attempt in $(seq 1 30); do
-              status="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:9099${path}" || echo 000)"
-              if [ "${status}" = "200" ]; then
-                echo "${path} responded 200 on attempt ${attempt}"
-                return 0
-              fi
-              sleep 2
-            done
-            echo "::error::${path} did not return 200 after retries (last status: ${status})"
-            return 1
-          }
-
-          check_endpoint "/health"
-          check_endpoint "/metrics"
+        run: just smoke meraki-dashboard-exporter:test
 
   # Chart validation moved to the shared reusable. Two things change vs the
   # hand-rolled job it replaces: kubeconform is now verified against the
@@ -260,10 +168,14 @@ jobs:
           allow-prereleases: true
       - name: Install uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - name: Set up just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: '1.58.0'
       - name: Install dependencies
         run: uv sync --all-extras --locked
       - name: Run scheduled fleet presets
-        run: uv run pytest -m fleet_scheduled -v -s --timeout=300
+        run: just test-fleet-scheduled
 
   on-demand-fleet-tests:
     runs-on: ubuntu-latest
@@ -279,10 +191,14 @@ jobs:
           allow-prereleases: true
       - name: Install uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - name: Set up just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: '1.58.0'
       - name: Install dependencies
         run: uv sync --all-extras --locked
       - name: Run on-demand fleet presets
-        run: uv run pytest -m fleet_on_demand -v -s --timeout=300
+        run: just test-fleet-on-demand
 
   # Single required status check (the branch ruleset requires only this). if: always() + an explicit
   # failure check so a failed/cancelled leg fails the gate; the optional fleet jobs aren't

@@ -13,7 +13,7 @@ data:
   MERAKI_EXPORTER_SERVER__PORT: {{ .Values.service.port | quote }}
 
   # Every config.* knob below is generated from the Pydantic config schema by
-  # scripts/generate_helm_config.py (run `make docgen`). Each renders only when the
+  # scripts/generate_helm_config.py (run `just gen`). Each renders only when the
   # operator sets its values key, so an unset/all-default `config` emits nothing here
   # and the application falls back to its own defaults. Do NOT hand-edit this region.
   # >>> BEGIN generated config knobs (scripts/generate_helm_config.py) >>>

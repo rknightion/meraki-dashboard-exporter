@@ -42,7 +42,7 @@ avoid a cost that this measurement does not show for model subtypes.
    - `ManagedTaskGroup` with `settings.api.concurrency_limit` for bounded parallelism.
    - `_set_metric()` to ensure metric expiration tracking is applied.
 6. Add metric enums to `core/constants/metrics_constants.py` and tests under `tests/`.
-7. Regenerate docs with `scripts/generate-docs.sh` (or the individual generators).
+7. Regenerate docs with `just gen` (or an individual `just docs-*` recipe).
 
 ```python
 @register_collector

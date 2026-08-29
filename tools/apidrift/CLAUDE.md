@@ -8,13 +8,13 @@ sibling tailscale2otel repo's apidrift tool; exit-code contract is intentionally
 
 <critical_notes>
 - **Separate import root**: this package lives under `tools/`, not `src/`, and is invoked with
-  `PYTHONPATH=src:tools uv run python -m apidrift ...` (see Makefile / CI) so `apidrift` resolves
+  `PYTHONPATH=src:tools uv run python -m apidrift ...` (see the root `justfile` / CI) so `apidrift` resolves
   while still being able to `import meraki_dashboard_exporter` for `models.conformance_models()`.
-- **`spec/apidrift-ignore.txt` is the narrow acknowledge lever** (`--ignore`, wired into both `make`
-  targets and both workflows). Case-insensitive substring match against a finding's `kind|op|detail`.
+- **`spec/apidrift-ignore.txt` is the narrow acknowledge lever** (`--ignore`, wired into both `just`
+  recipes and both workflows). Case-insensitive substring match against a finding's `kind|op|detail`.
   A matched BREAKING/WARNING is **downgraded to `INFO <kind>-acknowledged`, never dropped** — an
   accepted risk that disappears from the report is an accepted risk nobody remembers. Prefer it over
-  `make refresh-meraki-spec`, which silences *everything* including drift nobody has reviewed. INFO
+  `just refresh-spec`, which silences *everything* including drift nobody has reviewed. INFO
   findings are unaffected (acknowledging is purely about gating).
 - **The tracking issue's BODY is the current state; a COMMENT means it changed.** `report-drift`
   fingerprints the report (`<!-- drift-fingerprint: sha256 -->` in the body) and on an unchanged
@@ -44,7 +44,7 @@ sibling tailscale2otel repo's apidrift tool; exit-code contract is intentionally
 - **`--coverage` reports annotation coverage.** `apidrift --coverage` (offline, no spec fetch,
   always exit 0) prints a mapped/derived/unmapped summary of all `conformance_models()` via
   `conformance.coverage()` + `report.render_coverage_{markdown,json}`. Drive `unmapped` to zero for
-  real top-level API-response models. (No `make` target wired yet — invoke directly with
+  real top-level API-response models. (No dedicated `just` recipe is wired yet — invoke directly with
   `PYTHONPATH=src:tools uv run python -m apidrift --coverage`.)
 - **Beta-spec blind spot (`__meraki_beta__`).** apidrift pulls a single fixed **GA** spec channel;
   beta-tagged operations (`liveTools`, radio-status/overrides, AFC, `getDeviceWirelessHealthScores`,
@@ -114,14 +114,14 @@ sibling tailscale2otel repo's apidrift tool; exit-code contract is intentionally
 </file_map>
 
 <paved_path>
-## Running locally (Makefile targets, see repo root `Makefile`)
-- `make api-drift` - full drift check against the **live** spec (`--live-url`, SSRF-guarded), scanning `src/`,
+## Running locally (recipes, see the root `justfile`)
+- `just api-drift` - full drift check against the **live** spec (`--live-url`, SSRF-guarded), scanning `src/`,
   with `--ignore spec/apidrift-ignore.txt` applied.
-- `make api-conformance` - offline: runs `--conformance-only` with the **vendored baseline** as both
+- `just api-conformance` - offline: runs `--conformance-only` with the **vendored baseline** as both
   `--baseline` and `--live` (i.e. "do our models still parse the spec we already vendored" — this is
   also what `ci.yml`'s "Meraki model conformance" step runs on every PR, so it never depends on network access).
-- `make api-suggest` - `--suggest`: prints a Markdown table of candidate source ops for unmapped models.
-- `make refresh-meraki-spec` - re-vendors `spec/meraki-openapi.json.gz` from upstream and prints the new
+- `just api-suggest` - `--suggest`: prints a Markdown table of candidate source ops for unmapped models.
+- `just refresh-spec` - re-vendors `spec/meraki-openapi.json.gz` from upstream and prints the new
   `info.version` (you must then hand-update the version note in `spec/README.md`).
 
 ## CI usage
@@ -138,14 +138,14 @@ sibling tailscale2otel repo's apidrift tool; exit-code contract is intentionally
 2. If a new Pydantic model backs it, add `__meraki_op__ = "operationId"` (or a list, for models
    aggregating multiple endpoints) as an own class attribute — or `__meraki_derived__ = True` if it's
    computed/no single upstream response.
-3. Run `make api-conformance` locally to confirm no new WARNING findings.
+3. Run `just api-conformance` locally to confirm no new WARNING findings.
 </paved_path>
 
 <fatal_implications>
 - **NEVER weaken the `--live-url` validation** back to a prefix/substring check on the raw string —
   it must stay `urlparse` + strict `scheme == "https"` + non-empty `hostname` + rebuild-before-`urlopen`.
 - **NEVER pass unvalidated user/CI input straight to `urllib.request.urlopen`** anywhere in this tool.
-- **NEVER hand-edit `spec/meraki-openapi.json.gz`** — regenerate via `make refresh-meraki-spec`.
+- **NEVER hand-edit `spec/meraki-openapi.json.gz`** — regenerate via `just refresh-spec`.
 - **NEVER treat fetched live-spec content or the rendered drift report as trusted/executable** — it is
   upstream/external data (see `report-drift` action's explicit untrusted-data framing for Claude enrichment).
 </fatal_implications>

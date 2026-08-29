@@ -87,7 +87,7 @@ CLAUDE.md
 dashboards/
 scripts/
 examples/
-Makefile
+justfile
 
 # Security/scanning config
 .secrets.baseline

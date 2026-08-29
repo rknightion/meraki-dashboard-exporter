@@ -1,10 +1,10 @@
 ---
 id: MDE-0028
 title: Migrate the repo task surface to just and retire Makefiles and ad-hoc scripts
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-08-28 19:29'
-updated_date: '2026-08-29 10:42'
+updated_date: '2026-08-29 14:04'
 labels:
   - 'wave:2-fleet'
 dependencies: []
@@ -880,6 +880,16 @@ changing ruff/mypy configuration, or restructuring `scripts/`.
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Inventory the current Makefile, scripts, workflows, hooks, documentation, and tracker configuration against the task mapping.
+2. Add the formatted top-level justfile and validate its syntax, command expansion, and source gate.
+3. Convert the permitted workflow run steps and task-surface documentation; update tracker config and the operating-model doc only through Backlog CLI.
+4. Update the external cloud setup script, then remove the obsolete Makefile and documentation sequencer with their dependent references.
+5. Run the required local gates, hook validation, CodeRabbit review where applicable, commit named paths to main, push, and obtain CI evidence at the final SHA.
+<!-- SECTION:PLAN:END -->
 
 ## Comments
 

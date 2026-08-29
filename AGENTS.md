@@ -28,7 +28,7 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - `tests/` - Test suite and patterns - See `tests/CLAUDE.md`
 - `pyproject.toml` - Project dependencies and configuration
 - `grafana/` - Grafana **v2-schema** dashboards (`grafana/dashboards/`, 6 consolidated tabbed dashboards) + alerting/recording rules (`grafana/alerts/`). Authored via the `gcx` CLI and deployed to Grafana (folder "Meraki Dashboard Exporter"); rules deploy via `gcx`/Mimir ruler. This replaced the old classic-schema `dashboards/*.json` (removed 2026-07 after the rebuild). See `grafana/CLAUDE.md`.
-- `docs/` - Zensical documentation site (NOT MkDocs, despite Make target names) - See `docs/CLAUDE.md`
+- `docs/` - Zensical documentation site (NOT MkDocs) - See `docs/CLAUDE.md`
 - `scripts/` - Code generation and documentation scripts - See `scripts/CLAUDE.md`
 - `charts/meraki-dashboard-exporter/` - Helm chart - See `charts/meraki-dashboard-exporter/CLAUDE.md`
 - `tools/apidrift/` - Standalone Meraki API drift-detection CLI - See `tools/apidrift/CLAUDE.md`
@@ -75,10 +75,24 @@ Meraki Dashboard Exporter - A production-ready Prometheus exporter that collects
 - `uv run pytest` - Run tests
 - `uv run pytest -v -k test_name` - Run specific test
 - `uv add package_name` - Add new dependency
-- `make check` - Run all checks (lint, typecheck, test)
-- `make docgen` - Generate all documentation
-- `make docker-compose-up` - Start with Docker
-- `make run-dev` - Run with auto-reload for development
+
+## Task interface
+
+This repo's task surface is a `justfile`. Discover it, don't guess it:
+
+    just --list                        # human-readable
+    just --dump --dump-format json     # machine-readable
+    just --show <recipe>               # what a recipe actually runs
+
+- `just check` is the full source-tree gate and is exactly what the CI `test` job enforces. It must
+  pass before you commit. `just ci` adds the Docker-backed legs of `ci-success` and needs Docker and
+  container-structure-test; chart validation remains a shared reusable workflow in CI.
+- Prefer `just <recipe>` over the underlying tool. If you are typing `pytest`, you want `just test`.
+- Run `just` with stdin from /dev/null. Recipes marked `[confirm]` are destructive — stop and ask
+  before running one; never pass `--yes` or `JUST_YES=1`.
+- If a task you need does not exist, add a recipe with a `#` doc comment and a `[group(...)]`
+  rather than running a bare command.
+
 - `backlog task list --plain` - The queue. `-m v1.1-hardening` filters to that programme
 - `backlog task view <id> --plain` - One task's full spec, criteria and gate
 - `backlog doc list --plain` / `backlog doc view <id> --plain` - The durable docs, loaded on demand
@@ -209,7 +223,7 @@ Tracker rules, each of which exists because the upstream behaviour is silent and
 
 ### 4. Verify & finalize
 - The `definition_of_done` gate in `backlog/config.yml` must have been **run and its output seen** —
-  `make check` always, `make docgen` when its inputs changed, and the `grafana/` queries checked when a
+  `just check` always, `just gen` when its inputs changed, and the `grafana/` queries checked when a
   metric or label name moved. Evidence, not assertion.
 - Commit straight to `main`, one commit per deliverable, Conventional Commits (release-please and
   Renovate parse the subject). Cite the task ID in the commit.

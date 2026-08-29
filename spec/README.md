@@ -6,7 +6,7 @@ upstream API drift on the operations this exporter consumes.
 
 - **Source:** <https://raw.githubusercontent.com/meraki/openapi/master/openapi/spec3.json>
 - **Vendored version (`info.version`):** 1.73.0
-- **Do not hand-edit.** Refresh with `make refresh-meraki-spec`, then update the version above.
+- **Do not hand-edit.** Refresh with `just refresh-spec`, then update the version above.
 
 ## How drift detection uses this
 
@@ -20,7 +20,7 @@ upstream API drift on the operations this exporter consumes.
 
 When the daily `api-drift` job flags a breaking change, either:
 
-1. **Fix + re-vendor** — update the affected collectors/models, run `make refresh-meraki-spec`,
+1. **Fix + re-vendor** — update the affected collectors/models, run `just refresh-spec`,
    and update the version note above, **or**
 2. **Defer** — add a line to `oasdiff-ignore.txt` describing the change to suppress it until
    you're ready to address it.

@@ -143,7 +143,7 @@ meraki:
 #
 # GENERATED region: the block between the BEGIN/END markers is written by
 # scripts/generate_helm_config.py from the Pydantic config schema. Do NOT hand-edit
-# it -- run `make docgen` to refresh after a config change. Add non-generated
+# it -- run `just gen` to refresh after a config change. Add non-generated
 # overrides (if ever needed) OUTSIDE the markers.
 config: {}
   # >>> BEGIN generated config knobs (scripts/generate_helm_config.py) >>>

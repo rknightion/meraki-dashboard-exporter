@@ -14,9 +14,10 @@ fixture has a matching SHA-256 and `LIVE-VERIFIED` provenance. Synthetic unit-te
 explicitly `SHAPE-ASSUMED` and cannot drive a run.
 
 ```console
-make failure-harness-validate
-make failure-harness-run MODE=baseline
-uv run python -m tests.harness.runner --build-exporter run --all-modes
+just harness-validate
+just harness-image
+just harness-run baseline
+just harness-run all
 uv run python -m tests.harness.runner --build-exporter --target-operation getOrganizationDevices run --mode slow_valid
 uv run python -m tests.harness.runner --build-exporter observe-duration
 uv run python -m tests.harness.runner --build-exporter observe-shutdown
@@ -132,4 +133,4 @@ sanitize_capture_set({
 It rejects missing required operations and credential fields, replaces MACs with locally administered
 stable values and IPs with RFC 5737/RFC 3849 values, and redacts location/user-controlled strings.
 Review output, calculate fixture digests, record the capture provenance, then run
-`make failure-harness-validate` before committing only sanitized JSON.
+`just harness-validate` before committing only sanitized JSON.

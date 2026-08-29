@@ -39,9 +39,9 @@ container image — the chart is a recent addition (started publishing per the
 - **The `config:` knobs are GENERATED, not hand-maintained.** Both the `config: {}` block in
   `values.yaml` and the `MERAKI_EXPORTER_*` mapping in `configmap.yaml` are written between
   `# >>> BEGIN generated config knobs ... >>>` / `# <<< END ... <<<` markers by
-  `scripts/generate_helm_config.py` (run via `make docgen`). Every non-secret `Settings` leaf is
+  `scripts/generate_helm_config.py` (run via `just gen`). Every non-secret `Settings` leaf is
   exposed as a friendly camelCase `config.*` key, commented at its schema default. **Do NOT hand-edit
-  inside the markers** — a config-schema change plus a `make docgen` run is the whole workflow; the
+  inside the markers** — a config-schema change plus a `just gen` run is the whole workflow; the
   `values.yaml` key and `configmap.yaml` line are generated together, never separately. Each knob is
   `hasKey`-guarded and wrapped in `{{- with .Values.config }}`, so an unset/all-default `config`
   emits nothing and the app falls back to its own defaults. `tests/test_helm_config_drift.py` fails
@@ -127,8 +127,8 @@ set — that's the validation working, not a broken default).
 
 ## Adding a new `config.*` setting
 The `config:` knobs are generated — you do **not** hand-edit the chart. Add the field to the Pydantic
-`Settings` model (`core/config_models.py`), then run `make docgen` (or
-`python scripts/generate_helm_config.py`). Both the `values.yaml` knob and the `configmap.yaml` env
+`Settings` model (`core/config_models.py`), then run `just gen` (or
+`just docs-helm`). Both the `values.yaml` knob and the `configmap.yaml` env
 line appear automatically. Secret-typed (`SecretStr`) fields are intentionally excluded — expose those
 via `extraEnv` from a Secret. `tests/test_helm_config_drift.py` fails if you forget to regenerate.
 </paved_path>
