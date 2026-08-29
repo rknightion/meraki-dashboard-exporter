@@ -207,6 +207,59 @@ class TestServingPoolIsolation:
             release_worker.set()
             assert await asyncio.to_thread(worker_finished.wait, 1.0)
 
+    async def test_orphaned_registry_walk_failure_is_surfaced_not_swallowed(
+        self, exporter: ExporterApp
+    ) -> None:
+        """A walk that fails after its caller went away must still be reported.
+
+        Shielding the executor future means a cancelled caller stops awaiting
+        it, so nothing raises the failure into a request. asyncio hands the
+        orphaned exception to the loop's exception handler instead, and that is
+        the behaviour to keep: an exporter whose registry walk started failing
+        must not go quiet just because the scraper disconnected first.
+        """
+        exporter._registry_work_slots = asyncio.BoundedSemaphore(1)
+        loop = asyncio.get_running_loop()
+        worker_started = asyncio.Event()
+        release_worker = threading.Event()
+        reported: list[dict[str, Any]] = []
+        walk_failure = RuntimeError("registry walk failed after the caller went away")
+
+        previous_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: reported.append(context))
+        try:
+
+            def failing_registry_work() -> None:
+                loop.call_soon_threadsafe(worker_started.set)
+                release_worker.wait(timeout=5.0)
+                raise walk_failure
+
+            request = asyncio.create_task(
+                exporter._run_registry_work(failing_registry_work, wait_for_slot=False)
+            )
+            await asyncio.wait_for(worker_started.wait(), timeout=1.0)
+            request.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await request
+
+            release_worker.set()
+            # The slot returning proves the walk finished and its future resolved.
+            for _ in range(500):
+                if not exporter._registry_work_slots.locked():
+                    break
+                await asyncio.sleep(0.01)
+            assert not exporter._registry_work_slots.locked(), (
+                "a failing orphaned walk leaked its registry slot"
+            )
+            await asyncio.sleep(0)
+        finally:
+            release_worker.set()
+            loop.set_exception_handler(previous_handler)
+
+        assert [context["exception"] for context in reported] == [walk_failure], (
+            f"the orphaned walk's failure was not surfaced exactly once: {reported}"
+        )
+
     def test_serving_executor_distinct_from_sdk_executor(self, exporter: ExporterApp) -> None:
         """Registry serving work and SDK calls run on different pools."""
         assert exporter._serving_executor is not exporter.client.executor
