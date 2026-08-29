@@ -6,7 +6,7 @@ import asyncio
 import hmac
 import json
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -60,6 +60,12 @@ RESOURCE_METRICS_INTERVAL_SECONDS = 30.0
 # Running Python threads cannot be interrupted; after this bound the stateless
 # process relies on its orchestrator's existing force-kill grace boundary.
 EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS = 5.0
+REGISTRY_WORKER_COUNT = 2
+REGISTRY_RETRY_AFTER_SECONDS = "1"
+
+
+class RegistryWorkSaturatedError(RuntimeError):
+    """Raised when fail-fast registry work has no immediately available slot."""
 
 
 # SECURITY (SEC-01 / #558): sensitive GET UIs that leak PII (client MAC/IP/
@@ -187,9 +193,10 @@ class ExporterApp:
         # DEFAULT executor in lifespan, so this separate pool guarantees scrapes
         # never queue behind blocked SDK threads during a 429 storm (RES-04).
         self._serving_executor = ThreadPoolExecutor(
-            max_workers=2,
+            max_workers=REGISTRY_WORKER_COUNT,
             thread_name_prefix="registry-serve",
         )
+        self._registry_work_slots = asyncio.BoundedSemaphore(REGISTRY_WORKER_COUNT)
 
         # Register the static build-info gauge (MET-10): constant value 1 with
         # version/commit labels identifying the running build.
@@ -478,6 +485,40 @@ class ExporterApp:
             "metric_count": metric_count,
             "timeseries_count": timeseries_count,
         }
+
+    async def _run_registry_work[T](
+        self,
+        func: Callable[..., T],
+        /,
+        *args: Any,
+        wait_for_slot: bool = True,
+    ) -> T:
+        """Run one registry walk without creating an executor backlog.
+
+        HTTP request handlers use fail-fast admission so excess callers cannot
+        accumulate queued full-registry serializations. The single background
+        cardinality task may wait because its producer is already bounded.
+
+        The slot is released by the executor future's completion callback rather
+        than the awaiting task. This keeps a cancelled request's still-running
+        thread admitted until the registry walk actually finishes.
+        """
+        if not wait_for_slot and self._registry_work_slots.locked():
+            raise RegistryWorkSaturatedError
+
+        await self._registry_work_slots.acquire()
+        try:
+            future = asyncio.get_running_loop().run_in_executor(
+                self._serving_executor,
+                func,
+                *args,
+            )
+        except BaseException:
+            self._registry_work_slots.release()
+            raise
+
+        future.add_done_callback(lambda _future: self._registry_work_slots.release())
+        return await asyncio.shield(future)
 
     @asynccontextmanager
     async def lifespan(self, app: FastAPI) -> AsyncIterator[None]:
@@ -776,9 +817,7 @@ class ExporterApp:
                     # Run cardinality analysis off the event loop - it iterates
                     # the whole registry synchronously (F-026) - on the serving
                     # pool, isolated from blocked SDK threads (#544).
-                    await asyncio.get_running_loop().run_in_executor(
-                        self._serving_executor, self.cardinality_monitor.analyze_cardinality
-                    )
+                    await self._run_registry_work(self.cardinality_monitor.analyze_cardinality)
                 except Exception:
                     logger.exception("Error during cardinality analysis")
 
@@ -1029,9 +1068,17 @@ class ExporterApp:
 
             # Get real-time metrics stats. This iterates the whole registry
             # synchronously, so offload it to the serving pool (F-026/#544).
-            metrics_stats = await asyncio.get_running_loop().run_in_executor(
-                exporter._serving_executor, exporter._get_metrics_stats
-            )
+            try:
+                metrics_stats = await exporter._run_registry_work(
+                    exporter._get_metrics_stats,
+                    wait_for_slot=False,
+                )
+            except RegistryWorkSaturatedError:
+                return HTMLResponse(
+                    content="Registry work is temporarily saturated",
+                    status_code=503,
+                    headers={"Retry-After": REGISTRY_RETRY_AFTER_SECONDS},
+                )
             scheduling = exporter.collector_manager.get_scheduling_diagnostics()
 
             context = {
@@ -1095,9 +1142,19 @@ class ExporterApp:
             # the default executor is the bounded meraki-sdk pool).
             # prometheus_client's registry is thread-safe.
             exporter = app.state.exporter
-            data = await asyncio.get_running_loop().run_in_executor(
-                exporter._serving_executor, generate_latest, REGISTRY
-            )
+            try:
+                data = await exporter._run_registry_work(
+                    generate_latest,
+                    REGISTRY,
+                    wait_for_slot=False,
+                )
+            except RegistryWorkSaturatedError:
+                return Response(
+                    content="Registry work is temporarily saturated",
+                    status_code=503,
+                    media_type="text/plain",
+                    headers={"Retry-After": REGISTRY_RETRY_AFTER_SECONDS},
+                )
 
             return Response(
                 content=data,
