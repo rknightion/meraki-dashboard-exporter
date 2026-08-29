@@ -1,10 +1,10 @@
 ---
 id: MDE-0028
 title: Migrate the repo task surface to just and retire Makefiles and ad-hoc scripts
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-08-28 19:29'
-updated_date: '2026-08-29 14:04'
+updated_date: '2026-08-29 14:34'
 labels:
   - 'wave:2-fleet'
 dependencies: []
@@ -862,15 +862,15 @@ changing ruff/mypy configuration, or restructuring `scripts/`.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A top-level justfile exists defining all seven mandatory recipes (default, setup, fmt, fmt-check, lint, test, check); 'just --groups' prints exactly build, check, dev, gen, infra, release; only default and setup are ungrouped.
-- [ ] #2 'just --dry-run check' expands to ruff format --check, ruff check, mypy, the eight scripts/generate_*.py runs plus the generated-path drift diff, the offline apidrift --conformance-only run, and pytest -m "not fleet_scheduled and not fleet_on_demand" --cov=meraki_dashboard_exporter --cov-report=xml --cov-fail-under=80 - step for step what the ci.yml 'test' job enforces.
-- [ ] #3 'just check < /dev/null' exits 0 twice in a row on a clean tree, and 'just gen && git diff --stat' produces no diff (gen is idempotent).
-- [ ] #4 'just --fmt --check' exits 0 and 'just --dump --dump-format json' exits 0, proving canonical formatting and that no unstable just feature is in the file.
-- [ ] #5 'just --list' shows a # doc comment and a [group(...)] for every public recipe; image-push and clean-docker carry [confirm]; helpers are [private] or _-prefixed.
-- [ ] #6 Makefile and scripts/generate-docs.sh are deleted from the index, .dockerignore names justfile instead of Makefile, and tests/unit/test_failure_harness_713.py asserts 'harness-validate' in justfile rather than 'failure-harness-validate' in Makefile.
-- [ ] #7 scripts/cloud-environment-setup.sh survives as a file, installs a pinned just, and ends by naming 'just check'; every KEEP program (the eight scripts/generate_*.py, validate_documented_env_vars.py, tools/apidrift, tests/harness/runner) is reachable through a named recipe.
+- [x] #1 A top-level justfile exists defining all seven mandatory recipes (default, setup, fmt, fmt-check, lint, test, check); 'just --groups' prints exactly build, check, dev, gen, infra, release; only default and setup are ungrouped.
+- [x] #2 'just --dry-run check' expands to ruff format --check, ruff check, mypy, the eight scripts/generate_*.py runs plus the generated-path drift diff, the offline apidrift --conformance-only run, and pytest -m "not fleet_scheduled and not fleet_on_demand" --cov=meraki_dashboard_exporter --cov-report=xml --cov-fail-under=80 - step for step what the ci.yml 'test' job enforces.
+- [x] #3 'just check < /dev/null' exits 0 twice in a row on a clean tree, and 'just gen && git diff --stat' produces no diff (gen is idempotent).
+- [x] #4 'just --fmt --check' exits 0 and 'just --dump --dump-format json' exits 0, proving canonical formatting and that no unstable just feature is in the file.
+- [x] #5 'just --list' shows a # doc comment and a [group(...)] for every public recipe; image-push and clean-docker carry [confirm]; helpers are [private] or _-prefixed.
+- [x] #6 Makefile and scripts/generate-docs.sh are deleted from the index, .dockerignore names justfile instead of Makefile, and tests/unit/test_failure_harness_713.py asserts 'harness-validate' in justfile rather than 'failure-harness-validate' in Makefile.
+- [x] #7 scripts/cloud-environment-setup.sh survives as a file, installs a pinned just, and ends by naming 'just check'; every KEEP program (the eight scripts/generate_*.py, validate_documented_env_vars.py, tools/apidrift, tests/harness/runner) is reachable through a named recipe.
 - [ ] #8 .github/workflows/ci.yml jobs test, docker-build-test, helm-lint-kubeconform, scheduled-fleet-tests and on-demand-fleet-tests each carry a SHA-pinned extractions/setup-just step with just-version '1.58.0' and call just recipes; failure-harness.yml calls 'just harness-run'; the ci-success job name, if: always() and needs: [test, docker-build-test, helm-lint-kubeconform] are unchanged.
-- [ ] #9 git grep -n -E '\\bmake [a-z]|generate-docs\\.sh' excluding uv.lock, archive/, docs/changelog.md and evidence/ returns nothing; AGENTS.md carries the Task interface section from the standard and does not paste the recipe list.
+- [x] #9 git grep -n -E '\\bmake [a-z]|generate-docs\\.sh' excluding uv.lock, archive/, docs/changelog.md and evidence/ returns nothing; AGENTS.md carries the Task interface section from the standard and does not paste the recipe list.
 - [ ] #10 backlog/config.yml definition_of_done names 'just check' and 'just gen' (set through the backlog CLI, not hand-edited), and backlog doc-0002 no longer tells agents to run 'make docgen'.
 <!-- AC:END -->
 
@@ -878,7 +878,7 @@ changing ruff/mypy configuration, or restructuring `scripts/`.
 <!-- DOD:BEGIN -->
 - [ ] #1 make check (uv run ruff check . && uv run ruff format --check . && uv run mypy . && uv run pytest -v)
 - [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
-- [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
+- [x] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -890,6 +890,18 @@ changing ruff/mypy configuration, or restructuring `scripts/`.
 4. Update the external cloud setup script, then remove the obsolete Makefile and documentation sequencer with their dependent references.
 5. Run the required local gates, hook validation, CodeRabbit review where applicable, commit named paths to main, push, and obtain CI evidence at the final SHA.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Validated the authorised migration at commit f731df4a72b5824caa72074c70fcc260354850d5: isolated just check passed (2,783 passed, 5 deselected, 91.13% coverage); just formatting, dump, groups, dry-run, and generated-artifact idempotence passed; Docker build, non-root image verification, smoke endpoints, Helm lint, and strict kubeconform render passed locally; exact-head CI run 33257801463 completed success with ci-success green. Code review completed with zero findings.
+
+AC 8 remains unchecked by design: its literal request to add a setup step to the Helm reusable job conflicts with campaign authority to preserve that shared reusable. The equivalent Helm lint/template/kubeconform job passed in exact-head CI.
+
+AC 10 remains unchecked by design: its request to change the operating-model document is outside the authorised scope, and its instruction to set list-valued tracker configuration through the CLI conflicts with the tracker policy that config.yml is the hand-edited exception. The committed config now names just check and just gen.
+
+DOD 1 and 2 remain unchecked because they name retired make targets; the current project Definition of Done is the committed just-based configuration. DOD 3 is satisfied because no metric or label source changed.
+<!-- SECTION:NOTES:END -->
 
 ## Comments
 
@@ -934,3 +946,9 @@ Eleven of the 42 lanes arrived at this shape independently before it was ratifie
 **If this repo has no such legs, it has no `ci` recipe at all** and `check` is the whole gate. Do not add an empty one.
 ---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Migrated the developer and CI task surface to a top-level justfile, retired the Makefile and documentation sequencer, and updated the permitted workflows, generators, documentation, cloud setup, and task configuration. Verified locally and by exact-head CI run 33257801463 (ci-success green). Two superseded acceptance criteria and two retired Makefile Definition-of-Done entries remain explicitly unchecked with their authority boundaries recorded in implementation notes.
+<!-- SECTION:FINAL_SUMMARY:END -->
