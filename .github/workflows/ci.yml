@@ -12,6 +12,11 @@ permissions:
   contents: read
   pull-requests: read
 
+# Cancel a superseded run on the same ref (rapid pushes / PR updates) to free runners.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
