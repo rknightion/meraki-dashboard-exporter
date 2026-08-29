@@ -221,55 +221,21 @@ jobs:
           check_endpoint "/health"
           check_endpoint "/metrics"
 
+  # Chart validation moved to the shared reusable. Two things change vs the
+  # hand-rolled job it replaces: kubeconform is now verified against the
+  # release's own CHECKSUMS file (this job previously verified nothing at all),
+  # and -ignore-missing-schemas is off, so an unschema'd kind fails instead of
+  # being silently skipped. The render is core-API-only — serviceMonitor.enabled
+  # defaults to false — so nothing here needs a CRD schema.
   helm-lint-kubeconform:
-    name: helm-lint-kubeconform
-    runs-on: ubuntu-latest
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
-        with:
-          egress-policy: audit
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Install Helm
-        run: |
-          # renovate: datasource=github-releases depName=helm/helm
-          HELM_VERSION=4.2.2
-          mkdir -p "${RUNNER_TEMP}/bin"
-          curl -sSfL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz
-          tar -xzf /tmp/helm.tar.gz -C /tmp
-          install -m 0755 /tmp/linux-amd64/helm "${RUNNER_TEMP}/bin/helm"
-          echo "${RUNNER_TEMP}/bin" >> "${GITHUB_PATH}"
-
-      - name: Install kubeconform
-        run: |
-          # renovate: datasource=github-releases depName=yannh/kubeconform
-          KUBECONFORM_VERSION=0.8.0
-          mkdir -p "${RUNNER_TEMP}/bin" /tmp/kubeconform
-          curl -sSfL "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
-            -o /tmp/kubeconform.tar.gz
-          tar -xzf /tmp/kubeconform.tar.gz -C /tmp/kubeconform
-          install -m 0755 /tmp/kubeconform/kubeconform "${RUNNER_TEMP}/bin/kubeconform"
-          echo "${RUNNER_TEMP}/bin" >> "${GITHUB_PATH}"
-
-      - name: Helm lint
-        run: helm lint charts/meraki-dashboard-exporter --set meraki.apiKey=dummy
-
-      - name: Render chart templates
-        # serviceMonitor.enabled defaults to false, so the rendered set is core-API-only
-        # (Deployment/Service/ConfigMap/Secret/ServiceAccount) — no Prometheus Operator CRD
-        # schema is needed for kubeconform below.
-        run: |
-          helm template test-release charts/meraki-dashboard-exporter \
-            --set meraki.apiKey=dummy \
-            > "${RUNNER_TEMP}/rendered-manifests.yaml"
-
-      - name: kubeconform validate rendered manifests
-        run: |
-          kubeconform -summary -strict -ignore-missing-schemas "${RUNNER_TEMP}/rendered-manifests.yaml"
+    permissions:
+      contents: read
+    uses: rknightion/.github/.github/workflows/helm-validate.yml@97f4a7ad0cd1ddd83562a30b9061ef8295242405 # v1.14.0
+    with:
+      chart-path: charts/meraki-dashboard-exporter
+      release-name: test-release
+      lint-args: --set meraki.apiKey=dummy
+      permutations: --set meraki.apiKey=dummy
 
   scheduled-fleet-tests:
     runs-on: ubuntu-latest
