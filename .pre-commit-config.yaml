@@ -89,9 +89,13 @@ default_stages: [pre-commit, pre-push]
 # check-added-large-files (--maxkb=1000) and detect-secrets flags its 40-hex Action pins as
 # high-entropy; end-of-file-fixer and trailing-whitespace would rewrite it. It is an immutable
 # historical record, not source — see archive/README.md.
+# `design/` is the vendored Claude Design export (design canvases + viewer bundle): detect-secrets
+# flags the bundle's embedded asset hashes as high-entropy and end-of-file-fixer rewrites its
+# generated JSON. It is a design artifact, not source.
 exclude: |-
   (?x)^(
     archive/|
+    design/|
     .*\.egg-info/|
     \.git/|
     \.mypy_cache/|
