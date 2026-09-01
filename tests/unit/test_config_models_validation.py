@@ -65,6 +65,61 @@ class TestCollectorCsv:
         assert s.disable_collectors == set()
 
 
+class TestStartupConfigurationBoundaries:
+    """Pin validation boundaries that participate in startup safety."""
+
+    @pytest.mark.parametrize("profile", [None, "availability", "standard", "full"])
+    def test_collector_profile_accepts_supported_values(self, profile: str | None) -> None:
+        """Every documented profile, plus the implicit choice, parses."""
+        assert CollectorSettings(profile=profile).profile == profile
+
+    def test_collector_profile_rejects_unknown_value(self) -> None:
+        """An unknown profile cannot silently select a collection surface."""
+        with pytest.raises(ValidationError):
+            CollectorSettings(profile="fast")  # type: ignore[arg-type]
+
+    def test_server_api_token_is_trimmed(self) -> None:
+        """A configured control token is normalized before comparison."""
+        token = ServerSettings(api_token="  control-token  ").api_token
+        assert token is not None
+        assert token.get_secret_value() == "control-token"
+
+    @pytest.mark.parametrize(
+        ("field", "minimum", "maximum"),
+        [
+            ("freshness_window_seconds", 30, 3600),
+            ("replay_cache_ttl_seconds", 60, 86400),
+            ("replay_cache_max_entries", 100, 1000000),
+        ],
+    )
+    def test_webhook_bounds_accept_endpoints(self, field: str, minimum: int, maximum: int) -> None:
+        """Both documented endpoints of each replay boundary are accepted."""
+        assert getattr(WebhookSettings(**{field: minimum}), field) == minimum
+        assert getattr(WebhookSettings(**{field: maximum}), field) == maximum
+
+    @pytest.mark.parametrize(
+        ("field", "invalid"),
+        [
+            ("freshness_window_seconds", 29),
+            ("freshness_window_seconds", 3601),
+            ("replay_cache_ttl_seconds", 59),
+            ("replay_cache_ttl_seconds", 86401),
+            ("replay_cache_max_entries", 99),
+            ("replay_cache_max_entries", 1000001),
+        ],
+    )
+    def test_webhook_bounds_reject_adjacent_values(self, field: str, invalid: int) -> None:
+        """The adjacent value outside each documented boundary is rejected."""
+        with pytest.raises(ValidationError):
+            WebhookSettings(**{field: invalid})
+
+    @pytest.mark.parametrize("override", [0, -1])
+    def test_scheduler_rejects_non_positive_group_override(self, override: int) -> None:
+        """Invalid pins fail at configuration validation before startup."""
+        with pytest.raises(ValidationError, match="greater than 0"):
+            SchedulerSettings(group_interval_overrides={"nh_data_rates": override})
+
+
 class TestLogLevel:
     """#598 - case-insensitive log levels normalised to upper-case."""
 

@@ -13,8 +13,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import generate_config_docs as gcd  # noqa: E402
 import generate_env_example as gee  # noqa: E402
 
-ENV_VAR_RE = re.compile(r"\bMERAKI_EXPORTER_[A-Z][A-Z0-9_]*(?:__[A-Z][A-Z0-9_]*)+\b")
+ENV_VAR_CANDIDATE_RE = re.compile(r"\bMERAKI_EXPORTER_[A-Z0-9_]+\b")
+ENV_PREFIX = "MERAKI_EXPORTER_"
 EXCLUDED_FILES = {"docs/config.md", "docs/changelog.md"}
+
+
+def extract_leaf_candidates(text: str) -> set[str]:
+    """Extract exact nested environment-variable examples using linear matching."""
+    candidates: set[str] = set()
+    for variable in ENV_VAR_CANDIDATE_RE.findall(text):
+        segments = variable.removeprefix(ENV_PREFIX).split("__")
+        if len(segments) < 2 or any(
+            not segment or not segment[0].isalpha() for segment in segments
+        ):
+            continue
+        candidates.add(variable)
+    return candidates
 
 
 def settings_leaf_vars(repo_root: Path) -> set[str]:
@@ -53,7 +67,7 @@ def validate_documented_env_vars(paths: list[Path], valid_vars: set[str]) -> Non
     """Fail when an exact documented leaf variable is not present in Settings."""
     unknown: list[str] = []
     for path in paths:
-        for variable in ENV_VAR_RE.findall(path.read_text(encoding="utf-8")):
+        for variable in extract_leaf_candidates(path.read_text(encoding="utf-8")):
             if variable not in valid_vars:
                 unknown.append(f"{path}: {variable}")
     if unknown:

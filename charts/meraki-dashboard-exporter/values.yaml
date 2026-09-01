@@ -295,7 +295,7 @@ config: {}
   # collectorsDisableCollectors: ""
   # -- Timeout for individual collector runs in seconds (min: 30, max: 600)
   # collectorTimeout: "240"
-  # -- Max number of collectors whose group-clocked loops may be executing a run concurrently, GLOBALLY (single shared semaphore; replaces the old per-tier concurrency knobs). This bounds how many collectors run at once; it is distinct from api.concurrency_limit, which bounds the fan-out breadth INSIDE one collector. The two compose: up to max_concurrent_collectors collectors run, each fanning out up to api.concurrency_limit sub-requests (#636). (min: 1, max: 50)
+  # -- Configured ceiling for collector runs admitted concurrently, GLOBALLY. The effective limit is min(max_concurrent_collectors, api.executor_workers // api.concurrency_limit), with a floor of 1, so nested collector fan-out cannot create an invisible SDK executor queue. This is distinct from api.concurrency_limit, which bounds fan-out inside one collector; shipped defaults therefore admit 2 collectors (#636/#710). (min: 1, max: 50)
   # collectorsMaxConcurrentCollectors: "5"
   # -- Collect per-AP wireless signal quality (RSSI/SNR). Costs ONE API call per selected AP per cycle (hourly cadence; no bulk endpoint exists). Scope the fan-out with ap_signal_quality_tags, or disable entirely.
   # collectorsCollectApSignalQuality: "true"
@@ -373,7 +373,7 @@ config: {}
   # schedulerAimdRecoveryRpsPerMinute: "0.1"
   # -- (min: 0.05, max: 1.0)
   # schedulerAimdResolveHysteresis: "0.2"
-  # -- Per-group interval pins, e.g. {"nh_connection_stats": 900}. Pinned groups are excluded from solver stretching. Env: JSON object.
+  # -- Per-group interval pins, e.g. {"nh_connection_stats": 900}. Every interval must be greater than zero. Pinned groups are excluded from solver stretching. Env: JSON object.
   # schedulerGroupIntervalOverrides: ""
   # <<< END generated config knobs <<<
 

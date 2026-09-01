@@ -111,7 +111,9 @@ the solver stretches groups above their floor under budget pressure.
 `device.py`, per-device-type) work through `core/async_utils.py::ManagedTaskGroup`, bounded by
 `settings.api.concurrency_limit` — never spawn raw unbounded `asyncio.gather`/tasks in a
 coordinator's `_collect_impl()`. Separately, `settings.collectors.max_concurrent_collectors`
-(default 5) bounds how many collectors' own group-clocked loops may be mid-run at once, globally.
+(default 5) is the configured global ceiling. The effective collector admission limit is also
+bounded by `api.executor_workers // api.concurrency_limit` (floor 1), so shipped defaults admit 2
+collectors without queueing nested fan-out behind the SDK executor.
 
 ## METRIC OWNERSHIP
 - **Device-specific metrics**: Owned by respective device collectors (MR, MS, etc.)

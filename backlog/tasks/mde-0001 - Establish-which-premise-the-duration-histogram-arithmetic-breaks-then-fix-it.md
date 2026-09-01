@@ -4,7 +4,7 @@ title: 'Establish which premise the duration-histogram arithmetic breaks, then f
 status: Parked
 assignee: []
 created_date: '2026-08-14 15:56'
-updated_date: '2026-08-23 18:32'
+updated_date: '2026-09-01 22:55'
 labels:
   - 'area:observability'
   - 'priority:medium'
@@ -66,7 +66,7 @@ magnitude, but the audit noted a residual ~2x discrepancy it could not explain.
 - [ ] #2 The underlying defect fixed, or recorded as correct-with-a-misleading-metric-name and the metric renamed or re-documented
 - [ ] #3 rate(duration_sum)/rate(duration_count) yields a mean an operator can trust for capacity work, or the metric stops implying that it does
 - [ ] #4 The residual ClientsCollector ~2x discrepancy is explained, or shown to be the same cause
-- [ ] #5 A regression test pins whatever the correct observation count per run turns out to be
+- [x] #5 A regression test pins whatever the correct observation count per run turns out to be
 <!-- AC:END -->
 
 ## Definition of Done
@@ -80,10 +80,20 @@ magnitude, but the audit noted a residual ~2x discrepancy it could not explain.
 
 <!-- SECTION:PLAN:BEGIN -->
 Wave 1 L8: observe the duration contradiction in the disposable harness, then fix the proven cause alongside explicit group verdict work; root integrates and finalizes.
+
+Wave 1 L3: use the retained fault-injection harness and bounded corpus to establish the duration premise by observation, explain the ClientsCollector residual if possible, and return either verified fixes/tests or a sharper evidence-backed Parked boundary.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-08-23 harness result: one Device wrapper produced exactly one duration observation, one run and one success with about 10.5539 seconds duration, ruling out duplicate observation in that path. The retained harness then failed its post-boundary corpus gate on unrecorded MS packet/STP requests and did not reproduce or explain the historical ClientsCollector residual. No timing fix is justified. Resume with a bounded Clients harness corpus plus the missing MS packet/STP routes, or equivalent retained single-process evidence that reproduces the discrepancy.
+
+2026-09-01 harness observation produced exactly one duration observation for one successful Device wrapper run (10.598551 seconds), but the retained corpus then failed closed on one STP route, two device-specific packet-status routes, and lacks a non-empty Clients route. No production defect was established.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Parked after bounded harness observation. AC5 is proven; AC1-AC4 remain unproven. Resume with sanitized live-verified captures for the three missing MS routes and a non-empty getNetworkClients response, extend corpus identity to method/path/query, then rerun isolated Device and Clients observations.
+<!-- SECTION:FINAL_SUMMARY:END -->

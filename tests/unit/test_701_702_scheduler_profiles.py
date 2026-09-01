@@ -227,6 +227,47 @@ def test_profile_sheds_only_lower_priorities_and_exports_group_lifecycle() -> No
     assert "meraki_exporter_scheduler_group_success_timestamp_seconds" in exposition
 
 
+@pytest.mark.parametrize(
+    ("profile", "allowed", "shed"),
+    [
+        ("availability", {EndpointGroupName.DEVICE_AVAILABILITY}, set()),
+        (
+            "standard",
+            {
+                EndpointGroupName.DEVICE_AVAILABILITY,
+                EndpointGroupName.MT_SENSOR_READINGS,
+                EndpointGroupName.NH_DATA_RATES,
+            },
+            {EndpointGroupName.NH_DATA_RATES},
+        ),
+        (
+            "full",
+            {
+                EndpointGroupName.DEVICE_AVAILABILITY,
+                EndpointGroupName.MT_SENSOR_READINGS,
+                EndpointGroupName.NH_DATA_RATES,
+                EndpointGroupName.CONFIG_ORG,
+            },
+            {EndpointGroupName.NH_DATA_RATES, EndpointGroupName.CONFIG_ORG},
+        ),
+    ],
+)
+def test_explicit_profiles_apply_d6_surface_and_shedding(
+    profile: str,
+    allowed: set[EndpointGroupName],
+    shed: set[EndpointGroupName],
+) -> None:
+    """An explicit profile selects its surface, then sheds only priority 3/4."""
+    scheduler = EndpointScheduler(_settings(profile), _Limiter())  # type: ignore[arg-type]
+    scheduler.register_groups(_groups())
+    scheduler.resolve(_shape(networks=750, devices=4500))
+
+    assert scheduler.requires_explicit_profile() is False
+    for group in (declared.name for declared in _groups()):
+        assert scheduler.profile_allows(group) is (group in allowed)
+        assert scheduler.is_shed(group) is (group in shed)
+
+
 def test_shed_skip_counter_records_only_due_execution_opportunities() -> None:
     """Heartbeat consultations before the next due time are not skipped runs."""
     scheduler = EndpointScheduler(_settings("full"), _Limiter())  # type: ignore[arg-type]

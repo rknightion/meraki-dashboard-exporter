@@ -6,7 +6,7 @@ import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from types import MethodType
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Final, cast
 from urllib.parse import urlsplit
 
 import httpx
@@ -24,9 +24,17 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+MERAKI_API_HOST_SUFFIXES: Final[tuple[str, ...]] = (
+    "meraki.com",
+    "meraki.ca",
+    "meraki.cn",
+    "meraki.in",
+    "gov-meraki.com",
+)
+
 
 def _install_redirect_auth_boundary(api: Any) -> None:
-    """Strip Bearer credentials from every SDK request off the configured origin.
+    """Keep credentials within the configured or Meraki-owned HTTPS boundary.
 
     The Meraki SDK follows redirects manually and intentionally uses one
     persistent ``httpx.Client``.  Its default Authorization header would
@@ -43,7 +51,10 @@ def _install_redirect_auth_boundary(api: Any) -> None:
     original_send = session._send_request
 
     def send_with_auth_boundary(self: Any, method: str, url: str, **kwargs: Any) -> httpx.Response:
-        if _origin(url) == configured_origin:
+        target_origin = _origin(url)
+        if target_origin == configured_origin or (
+            _is_meraki_api_origin(configured_origin) and _is_meraki_api_origin(target_origin)
+        ):
             return cast(httpx.Response, original_send(method, url, **kwargs))
 
         request = self._client.build_request(method, url, **kwargs)
@@ -61,6 +72,14 @@ def _origin(url: str) -> tuple[str, str, int | None]:
     if port is None:
         port = 443 if scheme == "https" else 80 if scheme == "http" else None
     return (scheme, (parsed.hostname or "").lower(), port)
+
+
+def _is_meraki_api_origin(origin: tuple[str, str, int | None]) -> bool:
+    """Return whether an origin is an HTTPS Meraki-owned API host."""
+    scheme, host, port = origin
+    if scheme != "https" or port != 443:
+        return False
+    return any(host == suffix or host.endswith(f".{suffix}") for suffix in MERAKI_API_HOST_SUFFIXES)
 
 
 class AsyncMerakiClient:

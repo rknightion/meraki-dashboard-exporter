@@ -493,11 +493,12 @@ class SchedulerSettings(BaseModel):
     aimd_backoff_multiplier: float = Field(0.5, ge=0.1, le=0.9)
     aimd_recovery_rps_per_minute: float = Field(0.1, ge=0.01, le=5.0)
     aimd_resolve_hysteresis: float = Field(0.2, ge=0.05, le=1.0)
-    group_interval_overrides: dict[str, int] = Field(
+    group_interval_overrides: dict[str, Annotated[int, Field(gt=0)]] = Field(
         default_factory=dict,
         description=(
             'Per-group interval pins, e.g. {"nh_connection_stats": 900}. '
-            "Pinned groups are excluded from solver stretching. Env: JSON object."
+            "Every interval must be greater than zero. Pinned groups are excluded from solver "
+            "stretching. Env: JSON object."
         ),
     )
 
@@ -907,12 +908,12 @@ class CollectorSettings(BaseModel):
         ge=1,
         le=50,
         description=(
-            "Max number of collectors whose group-clocked loops may be executing a run "
-            "concurrently, GLOBALLY (single shared semaphore; replaces the old per-tier "
-            "concurrency knobs). This bounds how many collectors run at once; it is "
-            "distinct from api.concurrency_limit, which bounds the fan-out breadth INSIDE "
-            "one collector. The two compose: up to max_concurrent_collectors collectors "
-            "run, each fanning out up to api.concurrency_limit sub-requests (#636)."
+            "Configured ceiling for collector runs admitted concurrently, GLOBALLY. The "
+            "effective limit is min(max_concurrent_collectors, "
+            "api.executor_workers // api.concurrency_limit), with a floor of 1, so nested "
+            "collector fan-out cannot create an invisible SDK executor queue. This is "
+            "distinct from api.concurrency_limit, which bounds fan-out inside one "
+            "collector; shipped defaults therefore admit 2 collectors (#636/#710)."
         ),
     )
     collect_ap_signal_quality: bool = Field(

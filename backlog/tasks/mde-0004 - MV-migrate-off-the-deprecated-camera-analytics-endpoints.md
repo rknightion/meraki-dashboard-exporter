@@ -4,7 +4,7 @@ title: 'MV: migrate off the deprecated camera analytics endpoints'
 status: Parked
 assignee: []
 created_date: '2026-08-14 15:57'
-updated_date: '2026-08-23 18:18'
+updated_date: '2026-09-01 23:12'
 labels:
   - 'area:mv'
   - enhancement
@@ -113,10 +113,16 @@ Root capability gate first: verify the configured key and a capable MV organizat
 
 <!-- SECTION:NOTES:BEGIN -->
 Current Cisco documentation and installed SDK 4.4.0 confirm the three successor operations and required boundaryIds/ranges arguments, but do not define the ranges item shape or boundaryIds request cap. Root attempted the required read-only capability gate on 2026-08-23 using the configured .env key without printing any identifiers. Direct network reachability returned the expected unauthenticated 401, but the configured SDK request returned None internally and raised AttributeError before an HTTP status/organization list could be established. A second attempt using the repository client settings had the same result. Therefore key validity, an MV-capable organization, boundary response shapes, ranges, counterMode, and ID caps remain unproven. No A/B/C implementation decision was recorded because AC1 makes it conditional on live evidence and AC7 forbids guessed shapes.
+
+2026-09-01 live capability evidence: the available organisation contains MR x1, MS x2, and MT x16, with no MV hardware. This is a structural capability gap for this organisation, not a transient probe failure. No A/B/C decision was taken because AC1 makes that decision conditional on live evidence from a capable organisation. Resume only after acquiring MV hardware with a configured boundary, or Cisco announces a sunset date.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Parked at the task-defined live-capability boundary. Current docs and SDK signatures remain insufficient for the undocumented detections request contract, and the configured read-only capability probe could not establish a valid organization response. No code, guessed request, fabricated fixture, or live mutation was made. Resume when a valid key and an organization with an MV camera plus configured boundary are available.
+
+Parked permanently on live structural evidence: the available organisation has no MV hardware, so AC2 and AC3 cannot be satisfied here without guessing. No implementation decision or code change was made. Resume only after acquiring MV hardware with a configured boundary, or Cisco announces a sunset date.
+
+Authoritative 2026-09-01 disposition, superseding the earlier temporary-probe summaries: Parked permanently at the task-defined live-capability boundary. The available organisation has no MV hardware, so AC2 and AC3 cannot be satisfied here without guessing; no A/B/C decision or code change was made because AC1 requires live evidence from a capable organisation. Resume only after acquiring MV hardware with a configured boundary, or Cisco announces a sunset date.
 <!-- SECTION:FINAL_SUMMARY:END -->

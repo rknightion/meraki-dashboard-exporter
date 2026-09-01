@@ -162,13 +162,13 @@ class OrganizationInventory:
     ) -> list[dict[str, Any]]:
         """Apply the configured network filter unless ``unfiltered`` is True.
 
-        Returns a new list when filtering is active so callers can mutate
-        safely; returns the original list otherwise to avoid copies on the
-        hot path.
+        Returns per-record shallow copies on every path so a collector cannot
+        enrich the shared raw cache observed by another consumer.
         """
-        if unfiltered or self._network_filter is None or not self._network_filter.is_active:
-            return networks
-        return self._network_filter.apply(networks)
+        selected = networks
+        if not unfiltered and self._network_filter is not None and self._network_filter.is_active:
+            selected = self._network_filter.apply(networks)
+        return [dict(network) for network in selected]
 
     def _resolved_network_ids(self, org_id: str) -> set[str] | None:
         """Return the set of allowed network IDs for ``org_id``, or None.

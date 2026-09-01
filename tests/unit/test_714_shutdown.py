@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from pydantic import SecretStr
@@ -180,3 +181,49 @@ async def test_lifespan_cleans_resources_for_startup_configuration_error() -> No
             pytest.fail("lifespan yielded after configuration failure")
 
     assert exporter._shutdown_complete is True
+
+
+@pytest.mark.asyncio
+async def test_background_startup_configuration_error_becomes_unhealthy() -> None:
+    """The real lifespan callback retains a post-yield startup configuration failure."""
+    settings = Settings(
+        meraki=MerakiSettings(
+            api_key=SecretStr("test_api_key_at_least_30_characters_long"),
+            org_id="123456",
+        ),
+    )
+    exporter = ExporterApp(settings)
+    app = exporter.create_app()
+
+    with (
+        patch("meraki_dashboard_exporter.app.resolve_org_id", AsyncMock()),
+        patch.object(
+            exporter.collector_manager,
+            "validate_startup_configuration",
+            AsyncMock(),
+        ),
+        patch.object(exporter.collector_manager, "validate_profile_selection", AsyncMock()),
+        patch(
+            "meraki_dashboard_exporter.app.DiscoveryService.run_discovery",
+            AsyncMock(return_value={}),
+        ),
+        patch.object(
+            exporter.collector_manager,
+            "collect_initial",
+            AsyncMock(side_effect=StartupConfigurationError("late configuration failure")),
+        ),
+    ):
+        async with exporter.lifespan(app):
+            for _ in range(5):
+                await asyncio.sleep(0)
+                if exporter._startup_configuration_error is not None:
+                    break
+
+            assert str(exporter._startup_configuration_error) == "late configuration failure"
+            assert exporter._liveness_check() == (True, "startup configuration failed")
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                response = await client.get("/health")
+            assert response.status_code == 503

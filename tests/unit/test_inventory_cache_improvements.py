@@ -100,6 +100,21 @@ class TestTTLJitter:
             assert inventory._is_expired(at_max_expired, ttl)
 
 
+async def test_network_cache_records_are_isolated_from_caller_mutation(
+    inventory: OrganizationInventory, mock_api: MagicMock
+) -> None:
+    """One caller cannot enrich the raw network cache seen by later callers."""
+    mock_api.organizations.getOrganizationNetworks.return_value = [
+        {"id": "network_1", "name": "Branch", "tags": []}
+    ]
+
+    first = await inventory.get_networks("org_1")
+    first[0]["orgName"] = "caller-owned"
+    second = await inventory.get_networks("org_1")
+
+    assert "orgName" not in second[0]
+
+
 class TestWarmCache:
     """Test that warm_cache pre-populates organizations, networks, and devices."""
 

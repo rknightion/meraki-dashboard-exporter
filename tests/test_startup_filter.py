@@ -93,6 +93,17 @@ async def test_collector_timeout_below_fetch_deadline_refuses_startup() -> None:
         await manager.validate_startup_configuration()
 
 
+async def test_collector_timeout_equal_to_fetch_deadline_is_valid() -> None:
+    """Equality is the supported boundary; only a shorter collector budget fails."""
+    manager = CollectorManager.__new__(CollectorManager)
+    manager.collectors = [MagicMock()]
+    manager.settings = MagicMock()
+    manager.settings.collectors.collector_timeout = 120
+    manager.settings.api.per_fetch_deadline_seconds = 120
+
+    await manager.validate_startup_configuration()
+
+
 async def test_filter_resolving_to_zero_in_one_org_logs_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
