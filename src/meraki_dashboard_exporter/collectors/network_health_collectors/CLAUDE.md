@@ -5,11 +5,14 @@ Network health collectors for Meraki Dashboard Exporter - Handles network-level 
 <critical_notes>
 - **Inherit from `BaseNetworkHealthCollector`** (in `base.py`) for the shared `parent`/`api`/`settings` wiring. The base class defines **no metrics itself** — every gauge is created once in the parent `NetworkHealthCollector._initialize_metrics()` (`../network_health.py`); sub-collectors only call `self._set_metric_value("_gauge_attr_name", labels, value)` (from `SubCollectorMixin`), which delegates to the parent's attribute of that name.
 - **No fixed tier**: `NetworkHealthCollector` is `@register_collector` (no-arg); its endpoint groups floor independently by volatility (`nh_channel_utilization`/`nh_data_rates`/`nh_bluetooth` at 300s, `nh_connection_stats` at 1800s, `nh_failed_connections`/`nh_latency_stats`/`nh_air_marshal`/`nh_mesh` at 3600s) and are stretched further by the adaptive scheduler under budget pressure (see `docs/observability/scheduler.md`).
-- **Manual registration**: all 7 sub-collectors are instantiated in `NetworkHealthCollector.__init__` (`rf_health_collector`, `connection_stats_collector`, `data_rates_collector`, `bluetooth_collector`, `ssid_performance_collector`, `latency_stats_collector`, `air_marshal_collector`) and invoked per-network from `_collect_network_health_bundle`.
+- **Manual registration**: all 8 sub-collectors are instantiated in `NetworkHealthCollector.__init__`
+  (`rf_health_collector`, `connection_stats_collector`, `data_rates_collector`,
+  `bluetooth_collector`, `ssid_performance_collector`, `latency_stats_collector`,
+  `air_marshal_collector`, `mesh_collector`) and invoked per-network from the bundle.
 - **Wireless-only filtering happens once, upstream**: `NetworkHealthCollector._collect_org_network_health` filters the org's networks down to `ProductType.WIRELESS in network["productTypes"]` *before* dispatching to any sub-collector — individual `collect()` methods do not (and don't need to) re-check `product_types`.
 - **Network list via inventory (mandatory)**: `NetworkHealthCollector._fetch_networks_for_health` calls `await self.inventory.get_networks(org_id)` — never call `getOrganizationNetworks` directly.
 - **`RFHealthCollector` also reads devices via inventory**: it calls `self.parent.inventory.get_devices(org_id, network_id=network_id)` to resolve AP serial → name for labels, falling back to a direct `getOrganizationDevices` call only when `inventory` is unset.
-- **Wrap fetcher responses** with `validate_response_format` from `core.error_handling` (all 7 sub-collectors do this on their SDK call).
+- **Wrap fetcher responses** with `validate_response_format` from `core.error_handling` (all 8 sub-collectors do this on their SDK call).
 </critical_notes>
 
 <file_map>
@@ -22,6 +25,8 @@ Network health collectors for Meraki Dashboard Exporter - Handles network-level 
 - `ssid_performance.py` - `SSIDPerformanceCollector`: per-SSID failed connection counts by failure step (assoc/auth/dhcp/dns) via `getNetworkWirelessFailedConnections`
 - `latency_stats.py` - `LatencyStatsCollector`: per-AP-device latency stats via `getNetworkWirelessDevicesLatencyStats`, plus network-wide client latency stats via `getNetworkWirelessClientsLatencyStats`. Per-client rows are never labeled directly (bounded label sets only).
 - `air_marshal.py` - `AirMarshalCollector`: Air Marshal rogue AP/SSID-spoofing detection counts (rogue SSID entries seen, total BSSIDs, contained BSSIDs, wired-detection entries) via `getNetworkWirelessAirMarshal`.
+- `mesh.py` - `MeshCollector`: repeater/mesh route health from network wireless device
+  connection-status data, with stale-series expiry tied to the solved `nh_mesh` interval.
 </file_map>
 
 <paved_path>
@@ -35,9 +40,15 @@ from .base import BaseNetworkHealthCollector
 
 class MyNetworkHealthCollector(BaseNetworkHealthCollector):
     @log_api_call("getNetworkSomeEndpoint")
-    async def _fetch_something(self, network_id: str) -> list[dict[str, Any]]:
-        response = await asyncio.to_thread(
-            self.api.wireless.getNetworkSomeEndpoint, network_id, timespan=3600
+    async def _fetch_something(
+        self, network_id: str, org_id: str | None
+    ) -> list[dict[str, Any]]:
+        response = await facade_for(self).call(
+            "getNetworkSomeEndpoint",
+            self.api.wireless.getNetworkSomeEndpoint,
+            network_id,
+            org_id=org_id,
+            timespan=3600,
         )
         return validate_response_format(
             response, expected_type=list, operation="getNetworkSomeEndpoint"
@@ -45,7 +56,7 @@ class MyNetworkHealthCollector(BaseNetworkHealthCollector):
 
     async def collect(self, network: dict[str, Any]) -> None:
         network_id = network["id"]
-        data = await self._fetch_something(network_id)
+        data = await self._fetch_something(network_id, network.get("orgId"))
         labels = create_network_labels(
             network, org_id=network.get("orgId", ""), org_name=network.get("orgName", "")
         )
@@ -54,14 +65,14 @@ class MyNetworkHealthCollector(BaseNetworkHealthCollector):
 The gauge (`self._my_gauge_attr` in this example) is defined once in
 `NetworkHealthCollector._initialize_metrics()`, not in the sub-collector.
 
-## ERROR HANDLING IS NOT UNIFORM ACROSS ALL 7
+## ERROR HANDLING IS NOT UNIFORM ACROSS ALL 8
 The original 5 (`bluetooth.py`, `connection_stats.py`, `data_rates.py`, `rf_health.py`,
 `ssid_performance.py`) wrap `collect()` in `try/except Exception as e` and inspect `str(e)` for
 `"400"`, `"404"`, `"Bad Request"`, or `"rate limit"` (case-insensitive) to distinguish "API not
 available for this network" (logged at `debug`, collection continues) from a real failure
 (`logger.exception`). Only `BluetoothCollector` additionally sets its gauge to `0` in the
-not-available case; the others simply skip setting a value for that network. The two newer
-sub-collectors, `latency_stats.py` and `air_marshal.py`, do **not** follow this string-inspection
+not-available case; the others simply skip setting a value for that network. The three newer
+sub-collectors, `latency_stats.py`, `air_marshal.py`, and `mesh.py`, do **not** follow this string-inspection
 pattern at all — their fetcher methods are wrapped in `@with_error_handling(continue_on_error=True,
 ...)` instead, delegating categorization to the shared decorator (see `core/error_handling.py`).
 </paved_path>

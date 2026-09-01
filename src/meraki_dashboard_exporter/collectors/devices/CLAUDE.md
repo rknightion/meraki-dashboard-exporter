@@ -18,6 +18,8 @@ Device-specific collectors for Meraki Dashboard Exporter - Handles metrics colle
 - `mr/` - MR (Wireless APs) - **nested coordinator pattern; the only device type split into its own subpackage** because it covers RF/radio, ethernet/power, packet loss, CPU, and SSID usage in one device type. See `mr/CLAUDE.md` for the sub-collector split.
 - `ms.py` - `MSCollector` (MS Switches) - Port status/traffic/usage/client-count, per-port + switch-total PoE wattage, STP priority (`collect_stp_priorities`), packet counters + rates by type (total/broadcast/multicast/CRC-errors/fragments/collisions/topology-changes, 5-min window), org-wide port overview (active/inactive counts by media + link speed). No cable-diagnostics collection exists (older revisions of this doc claimed otherwise).
 - `ms_stack.py` - `MSStackCollector` - Switch stack membership and per-member status/count metrics per network; PSU/fan/temperature hardware health is explicitly deferred (per its docstring) pending Meraki API investigation.
+- `ms_power.py` - `MSPowerCollector` - org-wide per-slot rackmount switch PSU module status via
+  `getOrganizationDevicesPowerModulesStatusesByDevice`, filtered to allowed MS devices.
 - `mx.py` - `MXCollector` (MX Security Appliances) - Coordinator owning `vpn_collector`/`firewall_collector`, and itself also collects per-appliance uplink status (`collect_uplink_statuses`, org-level `getOrganizationApplianceUplinkStatuses`; clears the gauge's prior label series each cycle so stale `status` label values don't stick around after a transition).
 - `mx_firewall.py` - `MXFirewallCollector` - L3/L7 user-defined firewall rule counts (excludes the built-in default rule) and default L3 policy (allow/deny), per network. `mx_firewall_config` group, 900s floor.
 - `mx_vpn.py` - `MXVpnCollector` - Site-to-site VPN peer status and performance (latency, jitter, loss) via org-level `getOrganizationApplianceVpnStatuses`; combines Meraki + third-party peers (third-party peers keyed by public IP, no `networkId`).
@@ -25,8 +27,12 @@ Device-specific collectors for Meraki Dashboard Exporter - Handles metrics colle
 - `mx_uplink_usage.py` - `MXUplinkUsageCollector` - Per-(device, uplink) rolling 5-minute sent/received byte totals, org-wide via `getOrganizationApplianceUplinksUsageByNetwork`. `mx_uplink_usage` group, 300s floor. Instantiated by `DeviceCollector.__init__` as `mx_uplink_usage_collector`, not owned by `mx.py`.
 - `mx_uplink_health.py` - `MXUplinkHealthCollector` - Latest per-(device, uplink) loss/latency sample, org-wide via `getOrganizationDevicesUplinksLossAndLatency`. `mx_uplink_health` group, 300s floor. Instantiated by `DeviceCollector.__init__` as `mx_uplink_health_collector`, not owned by `mx.py`.
 - `mt.py` - `MTCollector` (MT Sensors) - `mt_sensor_readings` group, ~60s floor; can run as a `DeviceCollector` sub-collector (`MTCollector.as_subcollector`) or fully standalone (`MTCollector.as_standalone`, used by `collectors/mt_sensor.py`). Handles ~18 sensor metric types (temperature, humidity, door, water, CO2/TVOC/PM2.5, noise, battery, indoor air quality, voltage/current/power/power-factor/frequency, downstream power, remote lockout).
-- `mg.py` - `MGCollector` (MG Cellular Gateways) - per-device `collect()` is a deliberate no-op (only the common `device_up`/`status_info`/uptime metrics apply there), but `collect_uplink_statuses()` (org-wide, via `getOrganizationCellularGatewayUplinkStatuses`, `NetworkFilter`-aware) is fully implemented and emits real per-uplink status/signal(RSRP/RSRQ)/roaming gauges. Not a stub.
-- `mv.py` - `MVCollector` (MV Security Cameras) - fully implemented per-device `collect()` covering analytics zones, live-analytics counts, and video quality/retention settings (`getDeviceCameraAnalyticsZones`/`getDeviceCameraAnalyticsLive`/`getDeviceCameraQualityAndRetention`), `mv_analytics` group, 900s floor. Not a stub.
+- `mg.py` - `MGCollector` (MG Cellular Gateways) - org-wide uplink, band-configuration,
+  serving-cell, signal-quality-history, and connectivity metrics. Models for hardware-unavailable
+  surfaces remain deliberately lenient and marked for live verification.
+- `mv.py` - `MVCollector` (MV Security Cameras) - analytics zones/recent counts, quality and
+  retention, Sense configuration, onboarding status, and video-link health. MV-only response
+  contracts that cannot be exercised by the available hardware remain explicitly unverified.
 </file_map>
 
 <paved_path>
@@ -50,10 +56,12 @@ class MyDeviceCollector(BaseDeviceCollector):
 
 ## API INTERACTION
 ```python
-# Always use asyncio.to_thread for Meraki SDK calls
-channel_data = await asyncio.to_thread(
+# Always use the shared facade for Meraki SDK calls
+channel_data = await facade_for(self).call(
+    "getOrganizationWirelessDevicesChannelUtilization",
     self.api.wireless.getOrganizationWirelessDevicesChannelUtilization,
     org_id,
+    org_id=org_id,
     total_pages="all",
     timespan=3600,
 )

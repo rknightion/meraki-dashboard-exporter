@@ -87,10 +87,11 @@ sibling tailscale2otel repo's apidrift tool; exit-code contract is intentionally
 <file_map>
 - `__main__.py` - CLI entrypoint (`python -m apidrift`). Argument parsing, `_load_live` (incl. the
   SSRF-hardened URL loader), orchestrates scan -> reduce -> conformance -> report, exit code logic.
-- `scanner.py` - AST-scans `src/` for consumed Meraki SDK operationIds. Matches two call shapes:
-  direct `self.api.<controller>.<method>(...)` / `asyncio.to_thread(self.api.<controller>.<method>, ...)`,
-  and the `AsyncMerakiClient` wrapper form `self._request("opId", api_client.<controller>.<method>, ...)`.
-  Both must be matched or consumed ops are undercounted.
+- `scanner.py` - AST-scans `src/` for consumed Meraki SDK operationIds by recognizing any
+  `<receiver>.<known-controller>.<operation>` attribute chain. That covers current
+  `facade_for(...).call("operation", self.api.<controller>.<operation>, ...)` call sites as well as
+  direct/`to_thread` references in negative fixtures. It also retains the legacy `_request("opId",
+  ...)` string-literal strategy so historical wrapper code cannot become a scanner blind spot.
 - `spec.py` - Loads (optionally gzipped) OpenAPI JSON from a file or raw bytes; local `$ref` resolver.
 - `reducer.py` - `index_operations()` maps operationId -> (path, method); `reduce_spec()` builds a
   minimal sub-spec (ops + transitively-referenced `#/components/...`) for fast oasdiff comparison.

@@ -1,5 +1,5 @@
 <system_context>
-CI/CD for the repo: 12 workflows + 2 composite actions implementing an elaborate but consistent
+CI/CD for the repo: 16 workflows + 2 composite actions implementing an elaborate but consistent
 security/release pipeline — release automation, container + Helm chart publishing, three
 independent security scanners (CodeQL, zizmor, docker-security), dependency-review,
 OSSF Scorecard, and a scheduled Meraki-API-drift lane. Most security-scanner workflows are thin
@@ -78,6 +78,11 @@ from memory of an earlier version of this doc.
   per-run OpenBao broker GitHub App token so `uv sync --locked` passes on the release PR; idempotent.
 - `trigger-docs-sync.yml` - cross-repo `repository_dispatch` on changes to `docs/**`, `docs.toml`,
   or `scripts/**`.
+- `arm-automerge.yml` / `auto-rc.yml` - thin callers for release-PR auto-merge arming and
+  exact-CI-head release-candidate creation/publication.
+- `ghcr-cleanup.yml` - weekly shared-workflow caller for image/chart retention, plus manual dry-run.
+- `failure-harness.yml` - manual, redacted fault-injection replay against the retained harness
+  corpus; builds a local image and uploads artifacts even when the selected replay fails closed.
 
 ## Composite actions (`.github/actions/`)
 - `report-drift/action.yml` - deterministically upserts a labelled tracking issue from a Markdown

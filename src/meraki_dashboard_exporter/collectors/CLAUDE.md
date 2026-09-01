@@ -136,7 +136,8 @@ collectors without queueing nested fan-out behind the SDK executor.
 - **NEVER implement collection logic in `__init__`** - use `_collect_impl()`
 - **NEVER skip error handling** for API calls - use decorators
 - **NEVER forget to register collectors** - use decorator or manual registration
-- **NEVER block the event loop** - use `asyncio.to_thread()` for sync operations
+- **NEVER bypass `MerakiApiFacade` for SDK calls** - use `facade_for(self).call(...)`; use
+  `asyncio.to_thread()` only for unrelated synchronous work that has no project-specific facade
 - **NEVER call `self.api.organizations.getOrganizationNetworks` directly** - always go through `self.inventory.get_networks(org_id)` so `NetworkFilter` is enforced. `core/discovery.py::DiscoveryService` is the only sanctioned *unfiltered* bypass (audit-only, startup diagnostics); `alerts.py::AlertsCollector._fetch_networks_direct` and `core/api_helpers.py::APIHelper._fetch_networks_direct` are sanctioned *filtered* fallbacks for when `self.inventory` is unavailable (each manually reapplies `NetworkFilter`), not bypasses.
 - **NEVER iterate org-wide SDK responses without filtering by `get_allowed_network_ids`** - rows referencing networks outside the filter must be skipped.
 </fatal_implications>
