@@ -13,13 +13,13 @@ from memory of an earlier version of this doc.
 - **Action-pinning policy (strict, repo-wide): every third-party `uses:` — including the shared
   `rknightion/.github/.github/workflows/*.yml` reusables — is pinned to a full 40-char commit SHA
   with a trailing `# vX.Y.Z` comment**, e.g.
-  `uses: rknightion/.github/.github/workflows/zizmor.yml@7be903bd193f76b1a590cbe54943a9bf9592ce45 # v1.18.0`.
+  `uses: rknightion/.github/.github/workflows/zizmor.yml@ff43f62eaec9f41d49b9a208d86b2eb932c97056 # v1.18.1`.
   Never pin to a mutable tag/branch (`@v1`, `@main`). `renovate.json` has a `github-actions`
   manager package rule (`rebaseWhen: conflicted`) so Renovate is what bumps these SHAs — a new
   workflow should follow the same SHA+comment style so Renovate can track it. Local same-repo
   references (`uses: ./.github/workflows/publish.yml`, `uses: ./.github/actions/report-drift`)
   are the only unpinned `uses:` and that's correct/expected — they can't be SHA-pinned.
-  Verified current shared-reusable ref: `7be903bd193f76b1a590cbe54943a9bf9592ce45 # v1.18.0`
+  Verified current shared-reusable ref: `ff43f62eaec9f41d49b9a208d86b2eb932c97056 # v1.18.1`
   (git log shows this gets bumped repo-wide in one commit when rknightion/.github cuts a release —
   keep all `rknightion/.github` refs in this repo on the *same* pinned version).
 - **Release-please mints a short-lived GitHub App installation token per run through the OpenBao
@@ -94,7 +94,7 @@ from memory of an earlier version of this doc.
 2. Set workflow-level `permissions: {}` and grant narrower `permissions:` per job.
 3. If it should block merges, add its job name to `ci.yml`'s `ci-success` `needs:` list.
 4. If it wraps `rknightion/.github`, use the same pinned SHA as the other shared-reusable
-   workflows in this repo (currently `7be903bd193f76b1a590cbe54943a9bf9592ce45 # v1.18.0`) —
+   workflows in this repo (currently `ff43f62eaec9f41d49b9a208d86b2eb932c97056 # v1.18.1`) —
    don't introduce a second, different pin.
 </paved_path>
 
