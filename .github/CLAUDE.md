@@ -13,13 +13,13 @@ from memory of an earlier version of this doc.
 - **Action-pinning policy (strict, repo-wide): every third-party `uses:` — including the shared
   `rknightion/.github/.github/workflows/*.yml` reusables — is pinned to a full 40-char commit SHA
   with a trailing `# vX.Y.Z` comment**, e.g.
-  `uses: rknightion/.github/.github/workflows/zizmor.yml@f31690684f4292d1fe8e528618f7c8306fe27d9a # v1.3.1`.
+  `uses: rknightion/.github/.github/workflows/zizmor.yml@7be903bd193f76b1a590cbe54943a9bf9592ce45 # v1.18.0`.
   Never pin to a mutable tag/branch (`@v1`, `@main`). `renovate.json` has a `github-actions`
   manager package rule (`rebaseWhen: conflicted`) so Renovate is what bumps these SHAs — a new
   workflow should follow the same SHA+comment style so Renovate can track it. Local same-repo
   references (`uses: ./.github/workflows/publish.yml`, `uses: ./.github/actions/report-drift`)
   are the only unpinned `uses:` and that's correct/expected — they can't be SHA-pinned.
-  Verified current shared-reusable ref: `f31690684f4292d1fe8e528618f7c8306fe27d9a # v1.3.1`
+  Verified current shared-reusable ref: `7be903bd193f76b1a590cbe54943a9bf9592ce45 # v1.18.0`
   (git log shows this gets bumped repo-wide in one commit when rknightion/.github cuts a release —
   keep all `rknightion/.github` refs in this repo on the *same* pinned version).
 - **Release-please mints a short-lived GitHub App installation token per run through the OpenBao
@@ -36,11 +36,12 @@ from memory of an earlier version of this doc.
   without blocking — it is not currently a hard allowlist gate. When adding a new job that runs
   third-party actions, add `harden-runner` to that job specifically, don't assume workflow-level
   coverage.
-- **`ci.yml`'s `ci-success` job is the single required status check** the branch ruleset gates on
+- **`ci.yml`'s `ci-success` job is the aggregate required status check**
   (`if: always()` + explicit `contains(needs.*.result, 'failure'|'cancelled')` check over
   `[test, docker-build-test, helm-lint-kubeconform]`). `slow-tests` (schedule-only) is deliberately
-  NOT in that `needs` list so it doesn't block PRs. When adding a new required CI job, add it to
-  `ci-success`'s `needs:`, or it silently won't gate merges/Renovate automerge.
+  NOT in that `needs` list so it doesn't block PRs. The ruleset separately requires actionlint,
+  zizmor, and dependency review. When adding an aggregate CI job, add it to `ci-success`'s `needs:`;
+  when adding an independent scanner, update the ruleset after observing its exact live check name.
 - **`trigger-docs-sync.yml`** fires a `repository_dispatch` to a *different* repo
   (`m7kni/m7kni-net-site`) on `docs/**`/`docs.toml`/`scripts/**` changes. It authenticates with a
   short-lived GitHub App installation token minted per run through the OpenBao broker, scoped to
@@ -51,15 +52,16 @@ from memory of an earlier version of this doc.
 <file_map>
 ## Workflows (`.github/workflows/`)
 - `ci.yml` - main gate: mypy, offline apidrift conformance check, pytest (`--cov-fail-under=80`,
-  uploads to Codecov + Codacy), a Docker build+startup smoke test (asserts non-root `exporter`
+  best-effort reporting to Codecov + Codacy), a Docker build+startup smoke test (asserts non-root `exporter`
   user), a schedule-only `slow-tests` job, and the `ci-success` required-check aggregator.
 - `release-please.yml` - cuts releases using the per-run OpenBao broker token described above; on
   `release_created`, prepends a "limited testing" hardware-coverage warning to the GitHub release notes, then calls
   `publish.yml` (release build). On non-release pushes to `main`, calls `publish.yml` again for an
   `:main` edge build + edge Helm chart. `release_created` gates the two `publish.yml` calls so they
   never both fire on one push. Uses `release-please-config.json` / `.release-please-manifest.json`.
-- `publish.yml` - reusable (`workflow_call` + `workflow_dispatch` + `merge_group`); wraps the shared
-  `rknightion/.github` `container-publish.yml` reusable, passing
+- `publish.yml` - reusable (`workflow_call` + `workflow_dispatch` + `merge_group`); validates the
+  expiring Trivy exception policy, runs publication-scoped HIGH-severity CodeQL, then wraps the shared
+  `rknightion/.github` pre-push Trivy `container-publish.yml` reusable, passing
   `helm-chart-path: charts/meraki-dashboard-exporter` (chart is published alongside the image) and
   `build-args: PY_VERSION=3.14`. The `merge_group` trigger is a build-only (no push) arch-validation
   gate on the merge queue.
@@ -92,7 +94,7 @@ from memory of an earlier version of this doc.
 2. Set workflow-level `permissions: {}` and grant narrower `permissions:` per job.
 3. If it should block merges, add its job name to `ci.yml`'s `ci-success` `needs:` list.
 4. If it wraps `rknightion/.github`, use the same pinned SHA as the other shared-reusable
-   workflows in this repo (currently `f31690684f4292d1fe8e528618f7c8306fe27d9a # v1.3.1`) —
+   workflows in this repo (currently `7be903bd193f76b1a590cbe54943a9bf9592ce45 # v1.18.0`) —
    don't introduce a second, different pin.
 </paved_path>
 

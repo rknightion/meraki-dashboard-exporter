@@ -18,7 +18,7 @@ Releases are automated with **release-please** and GitHub Actions.
    - `.release-please-manifest.json` (current released version)
 3. **Merging the release PR** creates a Git tag (format `vX.Y.Z`) and GitHub
    Release.
-4. **Docker images and the Helm chart are built, signed, and published** by
+4. **Docker images and the Helm chart are security-gated, built, signed, and published** by
    `.github/workflows/publish.yml`, a reusable workflow that wraps the shared
    `rknightion/.github` `container-publish.yml` workflow. `release-please.yml`
    calls it two ways, gated by `release_created` so only one runs per push:
@@ -27,6 +27,11 @@ Releases are automated with **release-please** and GitHub Actions.
    - `release_created != true` (an ordinary push to `main`): the `edge` job
      calls `publish.yml` with no tag, publishing a `:main` edge image and a
      `0.0.0-main.*` snapshot Helm chart.
+
+   Before any image reaches GHCR, publication-scoped CodeQL rejects HIGH/CRITICAL findings, the
+   committed Trivy exception file is validated, and each native OCI archive is scanned for
+   HIGH/CRITICAL vulnerabilities. Only the exact scanned architecture digests proceed to manifest
+   creation, signing, provenance, SBOM generation, and Helm publication.
 
    Images go to `ghcr.io/<owner>/<repo>` with semver, branch, and PR tags; the
    chart is published to `ghcr.io/<owner>/charts/<chart-name>`. See
@@ -61,9 +66,12 @@ CI deliberately covers additional checks that are not part of `just check`:
 - Helm lint plus a rendered-manifest kubeconform validation;
 - Docker image build and startup smoke tests, including the non-root runtime
   assertion and HTTP endpoint checks;
-- zizmor, actionlint, and dependency review, which currently run outside the
-  repository's required `ci-success` merge gate; and
+- zizmor, actionlint, and dependency review, which are independently required by the `main`
+  ruleset alongside `ci-success`; and
 - the separate CodeQL, Docker-security, and Scorecard workflows.
+
+Codecov and Codacy uploads are best-effort reporting. A provider outage does not replace or fail the
+repository-owned 80% pytest coverage floor enforced by `just check`.
 
 CI does not currently run `git diff --check`; use it locally when reviewing a
 patch that may have whitespace errors. `just check` intentionally remains a

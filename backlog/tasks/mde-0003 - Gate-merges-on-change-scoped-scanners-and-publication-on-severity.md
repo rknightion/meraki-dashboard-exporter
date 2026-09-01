@@ -1,10 +1,10 @@
 ---
 id: MDE-0003
 title: Gate merges on change-scoped scanners and publication on severity
-status: Parked
+status: In Progress
 assignee: []
 created_date: '2026-08-14 15:56'
-updated_date: '2026-08-23 18:18'
+updated_date: '2026-09-01 21:51'
 labels:
   - 'area:ci'
   - security
@@ -72,6 +72,8 @@ worse than not having the gate.
 
 <!-- SECTION:PLAN:BEGIN -->
 Replacement lane L12: inspect local and shared workflow repositories read-only, map every D14 acceptance criterion to exact files and changes, and return the contractual Parked handoff; no local-only partial gate will ship.
+
+Wave 1 L5 maps an exact cross-repository security change set read-only; root will apply both shared and local halves together, observe real check names, update the ruleset, and verify the full gate.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes

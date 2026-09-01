@@ -36,7 +36,7 @@ jobs:
       # failure here is infrastructure, not the commit.
       - name: Mint a scoped release token
         id: bao
-        uses: rknightion/.github/.github/actions/broker-token@79a72d215e806c12876526ff30fbd524250e1bf9 # v1.17.1
+        uses: rknightion/.github/.github/actions/broker-token@7be903bd193f76b1a590cbe54943a9bf9592ce45 # v1.18.0
         with:
           permission-set: release-please-meraki-dashboard-exporter
           role: release-please-meraki-dashboard-exporter
@@ -55,6 +55,7 @@ jobs:
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
     steps:
       - name: Prepend limited-testing warning to release notes
@@ -77,6 +78,7 @@ jobs:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     permissions:
+      actions: read
       contents: write
       packages: write
       id-token: write
@@ -102,6 +104,7 @@ jobs:
     needs: release-please
     if: ${{ !cancelled() && needs.release-please.outputs.release_created != 'true' }}
     permissions:
+      actions: read
       contents: write
       packages: write
       id-token: write
