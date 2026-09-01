@@ -40,9 +40,7 @@ from .base import BaseNetworkHealthCollector
 
 class MyNetworkHealthCollector(BaseNetworkHealthCollector):
     @log_api_call("getNetworkSomeEndpoint")
-    async def _fetch_something(
-        self, network_id: str, org_id: str | None
-    ) -> list[dict[str, Any]]:
+    async def _fetch_something(self, network_id: str, org_id: str | None) -> list[dict[str, Any]]:
         response = await facade_for(self).call(
             "getNetworkSomeEndpoint",
             self.api.wireless.getNetworkSomeEndpoint,
