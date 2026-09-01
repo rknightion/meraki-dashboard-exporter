@@ -12,6 +12,7 @@ from pydantic import SecretStr
 from meraki_dashboard_exporter.app import ExporterApp
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
+from meraki_dashboard_exporter.core.error_handling import StartupConfigurationError
 
 # Scheduling diagnostics shape returned by CollectorManager.get_scheduling_diagnostics
 # after the #631 de-tiering: a flat per-collector cadence list plus the adaptive
@@ -84,7 +85,9 @@ def exporter_with_mock_manager(
     }
     mock_manager.skipped_collectors = []
     mock_manager.is_collector_running.return_value = False
+    mock_manager.has_attempted_collection.return_value = False
     mock_manager.get_scheduling_diagnostics.return_value = _SCHEDULING_DIAGNOSTICS
+    mock_manager.get_readiness_status.return_value = {"ready": True}
     exporter.collector_manager = mock_manager
     return exporter, mock_manager
 
@@ -132,6 +135,21 @@ class TestRootEndpoint:
         response = client_with_mock_manager.get("/")
         assert response.status_code == 200
         assert "Meraki Dashboard Exporter" in response.text
+
+    def test_root_reports_startup_configuration_failure(
+        self, exporter_with_mock_manager: tuple[ExporterApp, MagicMock]
+    ) -> None:
+        """The landing page must not advertise health after startup validation fails."""
+        exporter, _ = exporter_with_mock_manager
+        exporter._startup_configuration_error = StartupConfigurationError("invalid startup config")
+        client = TestClient(exporter.create_app(), raise_server_exceptions=True)
+
+        response = client.get("/")
+
+        assert response.status_code == 200
+        assert "HEALTH CHECK FAILED" in response.text
+        assert "startup configuration failed" in response.text
+        assert "HEALTH CHECK OK" not in response.text
 
     def test_root_contains_collector_info(self, client_with_mock_manager: TestClient) -> None:
         """Test that root page renders collector data."""
@@ -251,6 +269,7 @@ class TestRootEndpoint:
         mock_manager.collectors = []
         mock_manager.collector_health = {}
         mock_manager.skipped_collectors = []
+        mock_manager.has_attempted_collection.return_value = False
         mock_manager.get_scheduling_diagnostics.return_value = {
             "collectors": [],
             "smoothing": {

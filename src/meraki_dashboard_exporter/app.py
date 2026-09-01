@@ -16,12 +16,13 @@ import psutil  # type: ignore[import-untyped]
 from fastapi import FastAPI, HTTPException, Response
 from fastapi import Request as FastAPIRequest
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, Gauge, generate_latest
 from pydantic import BaseModel
 from starlette.requests import Request
 
-from .__version__ import __version__
+from .__version__ import __version__, get_commit
 from .api.client import AsyncMerakiClient
 from .collectors.manager import CollectorManager
 from .core.async_utils import shutdown_executor
@@ -281,7 +282,10 @@ class ExporterApp:
 
         # Setup Jinja2 templates
         template_dir = Path(__file__).parent / "templates"
-        self.templates = Jinja2Templates(directory=str(template_dir))
+        self.templates = Jinja2Templates(
+            directory=str(template_dir),
+            context_processors=[self._ui_template_context],
+        )
 
         # Setup cardinality monitor
         self.cardinality_monitor = CardinalityMonitor(
@@ -290,6 +294,24 @@ class ExporterApp:
             critical_threshold=10000,
             settings=self.settings,
         )
+
+    def _ui_template_context(self, request: Request) -> dict[str, Any]:
+        """Return chrome metadata shared by every server-rendered page."""
+        page_by_path = {
+            "/": "index",
+            "/clients": "clients",
+            "/status": "status",
+            "/cardinality": "cardinality",
+            "/cardinality/all-metrics": "cardinality_all_metrics",
+            "/cardinality/all-labels": "cardinality_all_labels",
+        }
+        return {
+            "page": page_by_path.get(request.url.path, ""),
+            "port": self.settings.server.port,
+            "version": __version__,
+            "uptime": self._format_uptime(),
+            "commit": get_commit(),
+        }
 
     def _handle_shutdown(self) -> None:
         """Handle shutdown request."""
@@ -967,6 +989,9 @@ class ExporterApp:
             lifespan=self.lifespan,
         )
 
+        static_dir = Path(__file__).parent / "static"
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
         # Instrument FastAPI with tracing
         self.tracing.instrument_fastapi(app)
 
@@ -1080,6 +1105,7 @@ class ExporterApp:
                     headers={"Retry-After": REGISTRY_RETRY_AFTER_SECONDS},
                 )
             scheduling = exporter.collector_manager.get_scheduling_diagnostics()
+            health_failed, health_reason = exporter._liveness_check()
 
             context = {
                 "version": __version__,
@@ -1093,6 +1119,8 @@ class ExporterApp:
                 "org_id": exporter.settings.meraki.org_id,
                 "scheduling": scheduling,
                 "control_api_enabled": exporter.settings.server.api_token is not None,
+                "health_failed": health_failed,
+                "health_reason": health_reason,
             }
 
             return app.state.templates.TemplateResponse(request, "index.html", context=context)  # type: ignore[no-any-return]

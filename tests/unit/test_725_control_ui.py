@@ -48,6 +48,7 @@ def _manager() -> MagicMock:
     }
     manager.skipped_collectors = []
     manager.is_collector_running.return_value = False
+    manager.has_attempted_collection.return_value = False
     manager.get_scheduling_diagnostics.return_value = {
         "collectors": [],
         "smoothing": {},

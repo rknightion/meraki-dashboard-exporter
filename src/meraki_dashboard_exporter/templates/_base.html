@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ theme_default | default('') }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Meraki Dashboard Exporter{% endblock %}</title>
+  <script>try { var t = localStorage.getItem("mde-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}</script>
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/app.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="brandbar">
+    <span class="mark" aria-hidden="true"></span><b class="name">Meraki Dashboard Exporter</b><span class="chip">v{{ version }}</span>
+    <span class="right"><span class="meta">uptime {{ uptime }}</span><span class="meta">{{ commit }}</span><button class="btn" id="theme-toggle" type="button" aria-live="polite">{% include "_icons/moon.svg" %}<span>Dark</span></button></span>
+  </div>
+  <nav class="nav" aria-label="Primary navigation">
+    <a href="/" {% if page == 'index' %}aria-current="page"{% endif %}>{% include "_icons/gauge.svg" %}Overview</a>
+    <a href="/clients" {% if page == 'clients' %}aria-current="page"{% endif %}>{% include "_icons/users-three.svg" %}Clients</a>
+    <a href="/status" {% if page == 'status' %}aria-current="page"{% endif %}>{% include "_icons/pulse.svg" %}Status</a>
+    <a href="/cardinality" {% if page.startswith('cardinality') %}aria-current="page"{% endif %}>{% include "_icons/tag.svg" %}Cardinality</a>
+    <span class="port">:{{ port }}</span>
+  </nav>
+  {% if page.startswith('cardinality') %}
+  <div class="subnav" aria-label="Cardinality navigation"><span class="microlabel group">Cardinality</span>
+    <a href="/cardinality" {% if page == 'cardinality' %}aria-current="page"{% endif %}>Overview</a>
+    <a href="/cardinality/all-metrics" {% if page == 'cardinality_all_metrics' %}aria-current="page"{% endif %}>All metrics</a>
+    <a href="/cardinality/all-labels" {% if page == 'cardinality_all_labels' %}aria-current="page"{% endif %}>All labels</a>
+    <a class="count" href="/cardinality/export/json" download="cardinality_export.json">{% include "_icons/download-simple.svg" %}Export JSON</a>
+  </div>
+  {% endif %}
+  <div class="pagehead"><div><h1>{% block h1 %}{% endblock %}</h1><p>{% block lede %}{% endblock %}</p></div><div class="right">{% block headmeta %}{% endblock %}</div></div>
+  <div class="content">{% block content %}{% endblock %}</div>
+  <script src="/static/js/ui.js" defer></script>{% block scripts %}{% endblock %}
+</body>
+</html>
