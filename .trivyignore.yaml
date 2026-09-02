@@ -1,3 +1,127 @@
 {
-  "vulnerabilities": []
+  "vulnerabilities": [
+    {
+      "id": "CVE-2026-13221",
+      "purls": [
+        "pkg:deb/debian/perl-base"
+      ],
+      "statement": "perl-base. No fixed version is available in Debian 13 (trixie); the package is part of the python:3.14-slim-trixie base image and cannot be remediated by this repository. Re-evaluate when Debian publishes a fix or the base image moves.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    },
+    {
+      "id": "CVE-2026-42496",
+      "purls": [
+        "pkg:deb/debian/perl-base"
+      ],
+      "statement": "perl-base. No fixed version is available in Debian 13 (trixie); the package is part of the python:3.14-slim-trixie base image and cannot be remediated by this repository. Re-evaluate when Debian publishes a fix or the base image moves.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    },
+    {
+      "id": "CVE-2026-8376",
+      "purls": [
+        "pkg:deb/debian/perl-base"
+      ],
+      "statement": "perl-base. No fixed version is available in Debian 13 (trixie); the package is part of the python:3.14-slim-trixie base image and cannot be remediated by this repository. Re-evaluate when Debian publishes a fix or the base image moves.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    },
+    {
+      "id": "CVE-2026-42497",
+      "purls": [
+        "pkg:deb/debian/perl-base"
+      ],
+      "statement": "perl-base. No fixed version is available in Debian 13 (trixie); the package is part of the python:3.14-slim-trixie base image and cannot be remediated by this repository. Re-evaluate when Debian publishes a fix or the base image moves.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    },
+    {
+      "id": "CVE-2026-48962",
+      "purls": [
+        "pkg:deb/debian/perl-base"
+      ],
+      "statement": "perl-base. No fixed version is available in Debian 13 (trixie); the package is part of the python:3.14-slim-trixie base image and cannot be remediated by this repository. Re-evaluate when Debian publishes a fix or the base image moves.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    },
+    {
+      "id": "CVE-2026-57432",
+      "purls": [
+        "pkg:deb/debian/perl-base"
+      ],
+      "statement": "perl-base. No fixed version is available in Debian 13 (trixie); the package is part of the python:3.14-slim-trixie base image and cannot be remediated by this repository. Re-evaluate when Debian publishes a fix or the base image moves.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    },
+    {
+      "id": "CVE-2026-57433",
+      "purls": [
+        "pkg:deb/debian/perl-base"
+      ],
+      "statement": "perl-base. No fixed version is available in Debian 13 (trixie); the package is part of the python:3.14-slim-trixie base image and cannot be remediated by this repository. Re-evaluate when Debian publishes a fix or the base image moves.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    },
+    {
+      "id": "CVE-2026-9538",
+      "purls": [
+        "pkg:deb/debian/perl-base"
+      ],
+      "statement": "perl-base. No fixed version is available in Debian 13 (trixie); the package is part of the python:3.14-slim-trixie base image and cannot be remediated by this repository. Re-evaluate when Debian publishes a fix or the base image moves.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    },
+    {
+      "id": "CVE-2026-11822",
+      "purls": [
+        "pkg:deb/debian/libsqlite3-0"
+      ],
+      "statement": "libsqlite3-0. No fixed version is available in Debian 13 (trixie); the package is part of the python:3.14-slim-trixie base image and cannot be remediated by this repository. Re-evaluate when Debian publishes a fix or the base image moves.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    },
+    {
+      "id": "CVE-2026-11824",
+      "purls": [
+        "pkg:deb/debian/libsqlite3-0"
+      ],
+      "statement": "libsqlite3-0. No fixed version is available in Debian 13 (trixie); the package is part of the python:3.14-slim-trixie base image and cannot be remediated by this repository. Re-evaluate when Debian publishes a fix or the base image moves.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    },
+    {
+      "id": "CVE-2025-69720",
+      "purls": [
+        "pkg:deb/debian/libncursesw6",
+        "pkg:deb/debian/libtinfo6",
+        "pkg:deb/debian/ncurses-base",
+        "pkg:deb/debian/ncurses-bin"
+      ],
+      "statement": "libncursesw6. No fixed version is available in Debian 13 (trixie); the package is part of the python:3.14-slim-trixie base image and cannot be remediated by this repository. Re-evaluate when Debian publishes a fix or the base image moves.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    },
+    {
+      "id": "CVE-2026-41992",
+      "purls": [
+        "pkg:deb/debian/gzip"
+      ],
+      "statement": "gzip. No fixed version is available in Debian 13 (trixie); the package is part of the python:3.14-slim-trixie base image and cannot be remediated by this repository. Re-evaluate when Debian publishes a fix or the base image moves.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    },
+    {
+      "id": "CVE-2026-54369",
+      "purls": [
+        "pkg:deb/debian/libacl1"
+      ],
+      "statement": "libacl1. No fixed version is available in Debian 13 (trixie); the package is part of the python:3.14-slim-trixie base image and cannot be remediated by this repository. Re-evaluate when Debian publishes a fix or the base image moves.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    },
+    {
+      "id": "CVE-2025-47273",
+      "purls": [
+        "pkg:pypi/setuptools"
+      ],
+      "statement": "setuptools. Reported from the base image's SBOM attestation only. Verified absent from the built runtime filesystem on 2026-09-02: no setuptools or msgpack directory exists under /app/.venv/lib/python3.14/site-packages or /usr/local/lib/python3.14/site-packages, and neither package appears in uv.lock. Not reachable in this image.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    },
+    {
+      "id": "GHSA-6v7p-g79w-8964",
+      "purls": [
+        "pkg:pypi/msgpack"
+      ],
+      "statement": "msgpack. Reported from the base image's SBOM attestation only. Verified absent from the built runtime filesystem on 2026-09-02: no setuptools or msgpack directory exists under /app/.venv/lib/python3.14/site-packages or /usr/local/lib/python3.14/site-packages, and neither package appears in uv.lock. Not reachable in this image.",
+      "expired_at": "2026-12-01T00:00:00Z"
+    }
+  ]
 }
