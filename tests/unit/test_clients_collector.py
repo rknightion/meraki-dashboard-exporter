@@ -1168,6 +1168,38 @@ class TestClientsCollector(BaseCollectorTest):
 
         metrics.assert_gauge_value("meraki_exporter_clients_over_cap", 1, network_id="N_123")
 
+    async def test_truncated_client_fetch_marks_store_snapshot_incomplete(
+        self, collector, mock_api_builder, metrics
+    ):
+        """The store retains membership when the collector deliberately caps a fetch."""
+        collector.settings.clients.max_clients_per_network = 1
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+        clients = [
+            ClientFactory.create(client_id="c1", mac="aa:bb:cc:dd:ee:01"),
+            ClientFactory.create(client_id="c2", mac="aa:bb:cc:dd:ee:02"),
+        ]
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_custom_response("getNetworkClients", clients)
+            .build()
+        )
+        self._update_collector_api(collector, api)
+
+        with (
+            patch.object(collector.dns_resolver, "resolve_multiple", return_value={}),
+            patch.object(
+                collector.client_store,
+                "update_clients",
+                wraps=collector.client_store.update_clients,
+            ) as store_update,
+        ):
+            await self.run_collector(collector)
+
+        assert store_update.call_args.kwargs["complete_snapshot"] is False
+
     async def test_signal_quality_default_off(self, collector, mock_api_builder, metrics):
         """#533: signal quality collection is disabled by default (opt-in)."""
         org = OrganizationFactory.create(org_id="123", name="Test Org")

@@ -1,10 +1,10 @@
 ---
 id: MDE-0042
 title: Reconcile client-store membership and refresh API-owned fields
-status: Parked
+status: In Progress
 assignee: []
 created_date: '2026-09-01 22:45'
-updated_date: '2026-09-01 22:55'
+updated_date: '2026-09-02 06:04'
 labels:
   - 'area:clients'
   - needs-triage
@@ -34,6 +34,12 @@ Wave 3 found successful client snapshots only upsert IDs and never remove depart
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 2 L1: freeze complete_snapshot=True only after every selected network fetch succeeds without truncation; add failing churn and field-refresh tests first; reconcile membership before cap admission only for complete snapshots; preserve derived DNS state; run focused checks and return evidence without tracker or external writes.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 

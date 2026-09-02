@@ -1,10 +1,10 @@
 ---
 id: MDE-0041
 title: Timestamp inventory cache entries when successful writes commit
-status: Parked
+status: In Progress
 assignee: []
 created_date: '2026-09-01 22:45'
-updated_date: '2026-09-01 22:55'
+updated_date: '2026-09-02 06:04'
 labels:
   - 'area:inventory'
   - needs-triage
@@ -33,6 +33,12 @@ Wave 3 found inventory cache timestamps captured before lock wait and upstream f
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 2 L2: add failing table-driven lock-wait, slow-fetch, and failed-fetch tests first across all six inventory cache families; timestamp only successful cache commits; run focused checks and return evidence without tracker or external writes.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 

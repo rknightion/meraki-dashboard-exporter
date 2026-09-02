@@ -1,10 +1,10 @@
 ---
 id: MDE-0044
 title: Make DNS cache clear linearizable with in-flight resolution
-status: Parked
+status: In Progress
 assignee: []
 created_date: '2026-09-01 22:45'
-updated_date: '2026-09-01 22:55'
+updated_date: '2026-09-02 06:04'
 labels:
   - 'area:dns'
   - needs-triage
@@ -32,6 +32,12 @@ Wave 3 found clear_cache resets cache and counters while in-flight resolver work
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 2 L3: add a failing blocked-lookup-across-clear test first; capture a generation token per resolution batch and reject cache and metric publication after a clear; run focused checks and return evidence without tracker or external writes.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 

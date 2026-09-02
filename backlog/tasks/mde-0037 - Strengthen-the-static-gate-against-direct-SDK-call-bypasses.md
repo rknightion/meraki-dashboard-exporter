@@ -1,10 +1,10 @@
 ---
 id: MDE-0037
 title: Strengthen the static gate against direct SDK call bypasses
-status: Parked
+status: In Progress
 assignee: []
 created_date: '2026-09-01 22:45'
-updated_date: '2026-09-01 22:55'
+updated_date: '2026-09-02 06:04'
 labels:
   - 'area:tests'
   - 'area:api'
@@ -34,6 +34,12 @@ Wave 3 found that the current AST gate detects only a restricted asyncio.to_thre
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 2 L4 phase 1: inventory every production self.api controller-method reference, freeze the documented exemption list, add failing run_in_executor and alias bypass fixtures first, then strengthen the AST gate and run focused checks.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 

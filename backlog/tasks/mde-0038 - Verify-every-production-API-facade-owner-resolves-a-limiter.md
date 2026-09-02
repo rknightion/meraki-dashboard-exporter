@@ -1,10 +1,10 @@
 ---
 id: MDE-0038
 title: Verify every production API facade owner resolves a limiter
-status: Parked
+status: In Progress
 assignee: []
 created_date: '2026-09-01 22:45'
-updated_date: '2026-09-01 22:55'
+updated_date: '2026-09-02 06:04'
 labels:
   - 'area:tests'
   - 'area:api'
@@ -34,6 +34,12 @@ Wave 3 found that limiter resolution is tested only with an artificial parent ch
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 2 L4 phase 2 after MDE-0037: add a failing production facade-owner inventory test, construct each owner family, prove every non-exempt ownership chain resolves a limiter, enumerate justified exceptions, and run focused checks.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 

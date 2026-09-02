@@ -1260,7 +1260,19 @@ class ExporterApp:
         async def status(request: Request, format: str | None = None) -> Response:  # noqa: A002
             """Exporter self-health status dashboard."""
             exporter = app.state.exporter
-            snapshot = exporter.status_service.get_snapshot()
+            try:
+                network_filter = await exporter._run_registry_work(
+                    exporter.status_service.get_network_filter_status,
+                    wait_for_slot=False,
+                )
+            except RegistryWorkSaturatedError:
+                return Response(
+                    content="Registry work is temporarily saturated",
+                    status_code=503,
+                    media_type="text/plain",
+                    headers={"Retry-After": REGISTRY_RETRY_AFTER_SECONDS},
+                )
+            snapshot = exporter.status_service.get_snapshot(network_filter=network_filter)
 
             if format == "json":
                 return JSONResponse(content=snapshot.to_dict())

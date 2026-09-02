@@ -14,6 +14,10 @@ from ..core.domain_models import ClientData
 
 logger = structlog.get_logger(__name__)
 
+_API_OWNED_CLIENT_FIELDS = frozenset(ClientData.model_fields) & frozenset(
+    NetworkClient.model_fields
+)
+
 
 class ClientStore:
     """In-memory store for client data with TTL support."""
@@ -51,6 +55,7 @@ class ClientStore:
         network_name: str | None = None,
         org_id: str | None = None,
         hostnames: dict[str, str | None] | None = None,
+        complete_snapshot: bool = False,
     ) -> None:
         """Update clients for a network.
 
@@ -66,11 +71,14 @@ class ClientStore:
             Organization ID.
         hostnames : dict[str, str | None] | None
             Resolved hostnames by IP address.
+        complete_snapshot : bool
+            Whether ``clients`` is the complete API result for this network.
+            Only complete snapshots may remove clients absent from the result.
 
         """
-        if network_name:
+        if network_name is not None:
             self._network_names[network_id] = network_name
-        if org_id:
+        if org_id is not None:
             self._network_orgs[network_id] = org_id
 
         # Initialize network store if needed
@@ -93,6 +101,19 @@ class ClientStore:
                 limit=self.max_clients_per_network,
             )
 
+        # The store itself must also regard a per-network cap as incomplete,
+        # even if a caller mistakenly marks it complete. Reconcile before
+        # calculating global capacity so departed records free their slots for
+        # replacement clients in this same update.
+        snapshot_complete = complete_snapshot and len(clients_to_process) == len(clients)
+        removed_count = 0
+        if snapshot_complete:
+            current_client_ids = {client.id for client in clients_to_process}
+            departed_client_ids = network_clients.keys() - current_client_ids
+            removed_count = len(departed_client_ids)
+            for client_id in departed_client_ids:
+                del network_clients[client_id]
+
         # Global cap (#533): computed once up-front so it is stable across the
         # whole call even though new clients are added to the store as we go.
         global_total = sum(len(clients_in_network) for clients_in_network in self._clients.values())
@@ -110,35 +131,29 @@ class ClientStore:
             # Calculate the hostname that will be used in metrics
             # This follows the same logic as ClientsCollector._determine_hostname
             calculated_hostname = hostname or client.description or client.ip or "unknown"
+            api_owned_values = {
+                field_name: getattr(client, field_name) for field_name in _API_OWNED_CLIENT_FIELDS
+            }
 
             # Create or update client data
             if client_id in network_clients:
-                # Update existing client
+                # Preserve DNS-derived state, but replace every value owned by
+                # getNetworkClients so display and identity data cannot go stale.
                 existing = network_clients[client_id]
-                existing.ip = client.ip
-                existing.ip6 = client.ip6
-                existing.ip6Local = client.ip6Local
-                existing.user = client.user
-                existing.hostname = hostname or existing.hostname
-                existing.calculatedHostname = calculated_hostname
-                existing.lastSeen = client.lastSeen
-                existing.status = client.status
-                existing.usage = client.usage
-                existing.ssid = client.ssid
-                existing.vlan = client.vlan
-                existing.switchport = client.switchport
-                existing.deviceTypePrediction = client.deviceTypePrediction
-                existing.recentDeviceSerial = client.recentDeviceSerial
-                existing.recentDeviceName = client.recentDeviceName
-                existing.recentDeviceMac = client.recentDeviceMac
-                existing.recentDeviceConnection = client.recentDeviceConnection
-                existing.notes = client.notes
-                existing.groupPolicy8021x = client.groupPolicy8021x
-                existing.adaptivePolicyGroup = client.adaptivePolicyGroup
-                existing.smInstalled = client.smInstalled
-                existing.namedVlan = client.namedVlan
-                existing.pskGroup = client.pskGroup
-                existing.wirelessCapabilities = client.wirelessCapabilities
+                network_clients[client_id] = existing.model_copy(
+                    update={
+                        **api_owned_values,
+                        "hostname": hostname or existing.hostname,
+                        "calculatedHostname": calculated_hostname,
+                        "networkId": network_id,
+                        "networkName": (
+                            network_name if network_name is not None else existing.networkName
+                        ),
+                        "organizationId": (
+                            org_id if org_id is not None else existing.organizationId
+                        ),
+                    }
+                )
                 updated_count += 1
             else:
                 # Global cap reached: skip creating new clients, but existing
@@ -150,36 +165,9 @@ class ClientStore:
 
                 # Add new client
                 network_clients[client_id] = ClientData(
-                    id=client.id,
-                    mac=client.mac,
-                    description=client.description,
+                    **api_owned_values,
                     hostname=hostname,
                     calculatedHostname=calculated_hostname,
-                    ip=client.ip,
-                    ip6=client.ip6,
-                    ip6Local=client.ip6Local,
-                    user=client.user,
-                    firstSeen=client.firstSeen,
-                    lastSeen=client.lastSeen,
-                    manufacturer=client.manufacturer,
-                    os=client.os,
-                    deviceTypePrediction=client.deviceTypePrediction,
-                    recentDeviceSerial=client.recentDeviceSerial,
-                    recentDeviceName=client.recentDeviceName,
-                    recentDeviceMac=client.recentDeviceMac,
-                    recentDeviceConnection=client.recentDeviceConnection,
-                    ssid=client.ssid,
-                    vlan=client.vlan,
-                    switchport=client.switchport,
-                    status=client.status,
-                    usage=client.usage,
-                    notes=client.notes,
-                    groupPolicy8021x=client.groupPolicy8021x,
-                    adaptivePolicyGroup=client.adaptivePolicyGroup,
-                    smInstalled=client.smInstalled,
-                    namedVlan=client.namedVlan,
-                    pskGroup=client.pskGroup,
-                    wirelessCapabilities=client.wirelessCapabilities,
                     networkId=network_id,
                     networkName=network_name,
                     organizationId=org_id,
@@ -206,6 +194,7 @@ class ClientStore:
             network_name=network_name,
             new_clients=new_count,
             updated_clients=updated_count,
+            removed_clients=removed_count,
             total_clients=len(network_clients),
         )
 

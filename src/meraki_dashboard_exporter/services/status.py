@@ -366,8 +366,29 @@ class StatusService:
         self._webhook_handler = webhook_handler
         self._data_log_emitter = data_log_emitter
 
-    def get_snapshot(self) -> StatusSnapshot:
-        """Build and return a point-in-time health snapshot of the exporter."""
+    def get_network_filter_status(self) -> NetworkFilterStatus:
+        """Read the NetworkFilter status backed by the Prometheus registry.
+
+        The application route runs this synchronous full-registry walk through
+        its bounded serving executor before passing the result to
+        :meth:`get_snapshot`.
+        """
+        return build_network_filter_status(self._settings)
+
+    def get_snapshot(
+        self,
+        *,
+        network_filter: NetworkFilterStatus | None = None,
+    ) -> StatusSnapshot:
+        """Build and return a point-in-time health snapshot of the exporter.
+
+        Parameters
+        ----------
+        network_filter : NetworkFilterStatus | None
+            Precomputed registry-backed status supplied by the async HTTP
+            route. Direct callers retain the synchronous fallback.
+
+        """
         now = time.time()
 
         # Build collector statuses (per-collector cadence; no tiers, #631)
@@ -462,7 +483,8 @@ class StatusService:
         )
 
         # Effective NetworkFilter state (#311) and webhook receiver health (#317).
-        network_filter = build_network_filter_status(self._settings)
+        if network_filter is None:
+            network_filter = self.get_network_filter_status()
         webhook = build_webhook_status(self._webhook_handler, self._settings, now)
 
         # Adaptive scheduler diagnostics (#617). The manager funnels the

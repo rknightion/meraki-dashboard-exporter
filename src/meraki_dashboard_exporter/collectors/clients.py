@@ -630,7 +630,9 @@ class ClientsCollector(MetricCollector):
 
         # Apply the per-network/global emission cap (#533) BEFORE DNS resolution
         # so the DNS fan-out (and the store/metrics work below) is also bounded.
+        fetched_client_count = len(clients)
         clients = self._apply_emission_cap(org_id, network_id, network_name, clients)
+        complete_snapshot = len(clients) == fetched_client_count
 
         # Prepare client data for DNS resolution
         client_data = [(c.id, c.ip, c.description) for c in clients]
@@ -650,6 +652,7 @@ class ClientsCollector(MetricCollector):
             network_name=network_name,
             org_id=org_id,
             hostnames=hostnames,
+            complete_snapshot=complete_snapshot,
         )
 
         # Update metrics

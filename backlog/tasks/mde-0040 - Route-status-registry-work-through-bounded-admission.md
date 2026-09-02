@@ -1,10 +1,10 @@
 ---
 id: MDE-0040
 title: Route status registry work through bounded admission
-status: Parked
+status: In Progress
 assignee: []
 created_date: '2026-09-01 22:45'
-updated_date: '2026-09-01 22:55'
+updated_date: '2026-09-02 06:04'
 labels:
   - 'area:web'
   - 'area:observability'
@@ -34,6 +34,12 @@ Wave 3 found that building NetworkFilter status iterates the full Prometheus reg
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 2: add failing status-route concurrency tests first; route status registry collection through the existing bounded registry semaphore and established overload response; verify blocked work and cancellation, then run focused checks before root integration.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 

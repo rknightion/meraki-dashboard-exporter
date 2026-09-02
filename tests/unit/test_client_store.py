@@ -129,6 +129,83 @@ def test_global_cap_blocks_new_clients_but_updates_existing(store):
     assert retrieved.status == "Offline"
 
 
+def test_complete_snapshot_reclaims_departed_clients_before_global_cap(store):
+    """A complete replacement snapshot frees departed IDs before admitting new ones."""
+
+    store.settings.clients.max_clients_total = 2
+    store.max_clients_total = 2
+
+    c1 = _make_client("c1", "10.0.0.1")
+    c2 = _make_client("c2", "10.0.0.2")
+    store.update_clients("N1", [c1, c2], complete_snapshot=True)
+
+    c3 = _make_client("c3", "10.0.0.3")
+    store.update_clients("N1", [c2, c3], complete_snapshot=True)
+
+    assert {client.id for client in store.get_network_clients("N1")} == {"c2", "c3"}
+
+
+def test_incomplete_snapshot_retains_departed_clients(store):
+    """A failed or capped partial result must not erase retained membership."""
+
+    c1 = _make_client("c1", "10.0.0.1")
+    c2 = _make_client("c2", "10.0.0.2")
+    store.update_clients("N1", [c1, c2], complete_snapshot=True)
+
+    store.update_clients("N1", [c2], complete_snapshot=False)
+
+    assert {client.id for client in store.get_network_clients("N1")} == {"c1", "c2"}
+
+
+def test_existing_client_refreshes_api_owned_identity_and_display_fields(store):
+    """Existing records refresh API data while retaining a prior DNS-derived hostname."""
+
+    original = _make_client("c1", "10.0.0.1").model_copy(
+        update={
+            "description": "Old description",
+            "manufacturer": "Old manufacturer",
+            "os": "Old OS",
+        }
+    )
+    store.update_clients(
+        "N1",
+        [original],
+        network_name="Old network",
+        org_id="old-org",
+        hostnames={"10.0.0.1": "old-host.example"},
+        complete_snapshot=True,
+    )
+
+    refreshed = _make_client("c1", "10.0.0.2").model_copy(
+        update={
+            "mac": "ff:ee:dd:cc:bb:aa",
+            "description": "New description",
+            "manufacturer": "New manufacturer",
+            "os": "New OS",
+        }
+    )
+    store.update_clients(
+        "N1",
+        [refreshed],
+        network_name="Renamed network",
+        org_id="new-org",
+        hostnames={},
+        complete_snapshot=True,
+    )
+
+    client = store.get_client("N1", "c1")
+    assert client is not None
+    assert client.mac == "ff:ee:dd:cc:bb:aa"
+    assert client.description == "New description"
+    assert client.manufacturer == "New manufacturer"
+    assert client.os == "New OS"
+    assert client.networkName == "Renamed network"
+    assert client.organizationId == "new-org"
+    assert client.hostname == "old-host.example"
+    assert client.calculatedHostname == "New description"
+    assert store.get_network_names() == {"N1": "Renamed network"}
+
+
 def test_get_statistics(store):
     """Check that statistics reporting aggregates correctly."""
 

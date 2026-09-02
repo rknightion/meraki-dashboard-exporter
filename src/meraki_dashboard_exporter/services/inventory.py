@@ -367,7 +367,7 @@ class OrganizationInventory:
 
             # Update cache
             self._organizations = organizations
-            self._org_timestamp = current_time
+            self._org_timestamp = time.time()
             self._cache_size.labels(org_id="global", cache_type="organizations").set(
                 len(organizations)
             )
@@ -451,7 +451,7 @@ class OrganizationInventory:
 
             # Update cache (full, unfiltered list — filter applies on read)
             self._networks[org_id] = networks
-            self._network_timestamps[org_id] = current_time
+            self._network_timestamps[org_id] = time.time()
             self._cache_size.labels(org_id=org_id, cache_type="networks").set(len(networks))
             self._emit_filter_metrics(org_id, networks)
 
@@ -574,7 +574,7 @@ class OrganizationInventory:
 
                     # Update cache
                     self._devices[org_id] = devices
-                    self._device_timestamps[org_id] = current_time
+                    self._device_timestamps[org_id] = time.time()
                     self._cache_size.labels(org_id=org_id, cache_type="devices").set(len(devices))
 
                     logger.info(
@@ -687,7 +687,7 @@ class OrganizationInventory:
 
             # Update cache (full, unfiltered list — filter applies on read)
             self._device_availabilities[org_id] = availabilities
-            self._availability_timestamps[org_id] = current_time
+            self._availability_timestamps[org_id] = time.time()
             self._cache_size.labels(org_id=org_id, cache_type="availabilities").set(
                 len(availabilities)
             )
@@ -1012,7 +1012,7 @@ class OrganizationInventory:
 
                 # Update cache
                 self._licenses_overview[org_id] = overview
-                self._license_timestamps[org_id] = current_time
+                self._license_timestamps[org_id] = time.time()
 
                 logger.info(
                     "Updated licenses overview cache",
@@ -1105,7 +1105,7 @@ class OrganizationInventory:
 
                 # Update cache
                 self._licenses[org_id] = licenses
-                self._license_list_timestamps[org_id] = current_time
+                self._license_list_timestamps[org_id] = time.time()
 
                 logger.info(
                     "Updated licenses cache",

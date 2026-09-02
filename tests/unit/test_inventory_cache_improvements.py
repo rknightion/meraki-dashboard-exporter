@@ -2,13 +2,88 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from meraki_dashboard_exporter.services.inventory import OrganizationInventory
 from tests.helpers.factories import DeviceFactory, NetworkFactory, OrganizationFactory
+
+_CACHE_CASES = (
+    (
+        "organizations",
+        "get_organizations",
+        "getOrganizations",
+        "_org_timestamp",
+        [{"id": "ORG"}],
+    ),
+    (
+        "networks",
+        "get_networks",
+        "getOrganizationNetworks",
+        "_network_timestamps",
+        [{"id": "NET"}],
+    ),
+    (
+        "devices",
+        "get_devices",
+        "getOrganizationDevices",
+        "_device_timestamps",
+        [{"serial": "SERIAL"}],
+    ),
+    (
+        "availabilities",
+        "get_device_availabilities",
+        "getOrganizationDevicesAvailabilities",
+        "_availability_timestamps",
+        [{"serial": "SERIAL", "status": "online"}],
+    ),
+    (
+        "license overview",
+        "get_licenses_overview",
+        "getOrganizationLicensesOverview",
+        "_license_timestamps",
+        {"status": "OK"},
+    ),
+    (
+        "licenses",
+        "get_licenses",
+        "getOrganizationLicenses",
+        "_license_list_timestamps",
+        [{"deviceSerial": "SERIAL"}],
+    ),
+)
+
+
+class _FakeClock:
+    """Clock isolated to the inventory module for deterministic cache timing."""
+
+    def __init__(self, now: float = 100.0, first_read: asyncio.Event | None = None) -> None:
+        self.now = now
+        self.first_read = first_read
+
+    def time(self) -> float:
+        """Return the current fake wall-clock time and signal the first read."""
+        if self.first_read is not None:
+            self.first_read.set()
+            self.first_read = None
+        return self.now
+
+
+async def _fetch_cache(
+    inventory: OrganizationInventory,
+    method_name: str,
+    *,
+    force_refresh: bool = False,
+) -> object:
+    """Call one cache family using its common organization-scoped shape."""
+    method = getattr(inventory, method_name)
+    if method_name == "get_organizations":
+        return await method(force_refresh=force_refresh)
+    return await method("ORG", force_refresh=force_refresh)
 
 
 @pytest.fixture
@@ -19,6 +94,9 @@ def mock_api():
     api.organizations.getOrganizations = MagicMock()
     api.organizations.getOrganizationNetworks = MagicMock()
     api.organizations.getOrganizationDevices = MagicMock()
+    api.organizations.getOrganizationDevicesAvailabilities = MagicMock()
+    api.organizations.getOrganizationLicensesOverview = MagicMock()
+    api.organizations.getOrganizationLicenses = MagicMock()
     return api
 
 
@@ -113,6 +191,130 @@ async def test_network_cache_records_are_isolated_from_caller_mutation(
     second = await inventory.get_networks("org_1")
 
     assert "orgName" not in second[0]
+
+
+@pytest.mark.parametrize(
+    ("family", "method_name", "api_method", "timestamp_store", "response"),
+    _CACHE_CASES,
+    ids=[case[0] for case in _CACHE_CASES],
+)
+async def test_successful_cache_write_timestamp_is_after_slow_fetch(
+    inventory: OrganizationInventory,
+    mock_api: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+    family: str,
+    method_name: str,
+    api_method: str,
+    timestamp_store: str,
+    response: object,
+) -> None:
+    """A slow successful fetch starts the TTL when its data becomes available."""
+    from meraki_dashboard_exporter.services import inventory as inventory_module
+
+    clock = _FakeClock()
+    monkeypatch.setattr(inventory_module, "time", SimpleNamespace(time=clock.time))
+    fetcher = getattr(mock_api.organizations, api_method)
+
+    def slow_fetch(*args: object, **kwargs: object) -> object:
+        # This exceeds the availability TTL even at its maximum jitter, while
+        # avoiding a real 150-second test. The other cache families have longer TTLs.
+        clock.now += OrganizationInventory.TTL_AVAILABILITY * 1.25
+        return response
+
+    fetcher.side_effect = slow_fetch
+
+    await _fetch_cache(inventory, method_name)
+
+    timestamp = getattr(inventory, timestamp_store)
+    if isinstance(timestamp, dict):
+        timestamp = timestamp["ORG"]
+    assert timestamp == OrganizationInventory.TTL_AVAILABILITY * 1.25 + 100.0, family
+
+    # An early timestamp would make availability stale immediately after the
+    # slow fetch and trigger a second request; a commit-time timestamp is a hit.
+    await _fetch_cache(inventory, method_name)
+    assert fetcher.call_count == 1
+
+
+@pytest.mark.parametrize(
+    ("family", "method_name", "api_method", "timestamp_store", "response"),
+    _CACHE_CASES,
+    ids=[case[0] for case in _CACHE_CASES],
+)
+async def test_successful_cache_write_timestamp_is_after_lock_wait(
+    inventory: OrganizationInventory,
+    mock_api: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+    family: str,
+    method_name: str,
+    api_method: str,
+    timestamp_store: str,
+    response: object,
+) -> None:
+    """A successful write starts the TTL after waiting for the cache lock."""
+    from meraki_dashboard_exporter.services import inventory as inventory_module
+
+    first_read = asyncio.Event()
+    clock = _FakeClock(first_read=first_read)
+    monkeypatch.setattr(inventory_module, "time", SimpleNamespace(time=clock.time))
+    fetcher = getattr(mock_api.organizations, api_method)
+    fetcher.return_value = response
+
+    await inventory._lock.acquire()
+    pending = asyncio.create_task(_fetch_cache(inventory, method_name))
+    await asyncio.wait_for(first_read.wait(), timeout=1.0)
+    clock.now = 200.0
+    inventory._lock.release()
+    await pending
+
+    timestamp = getattr(inventory, timestamp_store)
+    if isinstance(timestamp, dict):
+        timestamp = timestamp["ORG"]
+    assert timestamp == 200.0, family
+
+
+@pytest.mark.parametrize(
+    ("family", "method_name", "api_method", "timestamp_store", "response"),
+    _CACHE_CASES,
+    ids=[case[0] for case in _CACHE_CASES],
+)
+async def test_failed_fetch_does_not_refresh_cache_timestamp(
+    inventory: OrganizationInventory,
+    mock_api: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+    family: str,
+    method_name: str,
+    api_method: str,
+    timestamp_store: str,
+    response: object,
+) -> None:
+    """A failed refresh leaves the last successful timestamp unchanged."""
+    from meraki_dashboard_exporter.services import inventory as inventory_module
+
+    clock = _FakeClock()
+    monkeypatch.setattr(inventory_module, "time", SimpleNamespace(time=clock.time))
+    fetcher = getattr(mock_api.organizations, api_method)
+    fetcher.return_value = response
+
+    await _fetch_cache(inventory, method_name)
+    timestamp = getattr(inventory, timestamp_store)
+    if isinstance(timestamp, dict):
+        timestamp = timestamp["ORG"]
+
+    clock.now = 200.0
+    fetcher.reset_mock()
+    fetcher.side_effect = RuntimeError("upstream failed")
+
+    if method_name in {"get_licenses_overview", "get_licenses"}:
+        assert await _fetch_cache(inventory, method_name, force_refresh=True) is None
+    else:
+        with pytest.raises(RuntimeError, match="upstream failed"):
+            await _fetch_cache(inventory, method_name, force_refresh=True)
+
+    updated_timestamp = getattr(inventory, timestamp_store)
+    if isinstance(updated_timestamp, dict):
+        updated_timestamp = updated_timestamp["ORG"]
+    assert updated_timestamp == timestamp, family
 
 
 class TestWarmCache:
