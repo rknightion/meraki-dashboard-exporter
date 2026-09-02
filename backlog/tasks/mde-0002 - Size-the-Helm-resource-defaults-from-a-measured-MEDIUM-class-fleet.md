@@ -4,7 +4,7 @@ title: Size the Helm resource defaults from a measured MEDIUM-class fleet
 status: Parked
 assignee: []
 created_date: '2026-08-14 15:56'
-updated_date: '2026-09-02 15:28'
+updated_date: '2026-09-02 15:57'
 labels:
   - 'area:deploy'
   - 'area:docs'
@@ -61,11 +61,8 @@ LARGE, from stale evidence. **Both figures rest on assumed fleet mixes**, which 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 F-L7-01 — shipped defaults cover a measured MEDIUM fleet, with the source measurement cited in the values.yaml comment
-- [ ] #2 LARGE guidance kept in docs/scaling-guide.md and the chart comments, and made consistent with the measurement
-- [ ] #3 F-L4-01 — the LARGE series projection is replaced by a measured DENSE-SWITCH figure, and the stale 0.6-1.1m estimate corrected everywhere it appears
-- [ ] #4 Scrape render time and payload size measured at DENSE-SWITCH, and checked against a typical Prometheus scrape timeout and the two-thread serving executor
-- [ ] #5 If dense port families must be opt-out to stay viable, that switch exists and is documented
-- [x] #6 Calibration reconciles HOMELAB against the 148.19 MiB / 4835-series anchor before any default moves; if it cannot, defaults are unchanged and the missing product decision is recorded here instead
+- [ ] #2 F-L4-01 — the LARGE series projection is replaced by a measured DENSE-SWITCH figure, and the stale 0.6-1.1m estimate corrected everywhere it appears
+- [x] #3 Calibration reconciles HOMELAB against the 148.19 MiB / 4835-series anchor before any default moves; if it cannot, defaults are unchanged and the missing product decision is recorded here instead
 <!-- AC:END -->
 
 ## Definition of Done
@@ -103,6 +100,12 @@ The gate requires a cold, fresh-process replay to reconcile with the 148.19 MiB 
 Independently, AC1 and AC3 require a genuine multi-network MEDIUM topology and a genuine dense-MS topology. The only available live organisation has 1 MR, 2 MS and 16 MT, so neither exists and neither can be acquired. Those two criteria are unmeasurable, not merely unmeasured.
 
 AC2, AC4 and AC5 do not depend on either missing topology and remain achievable: the chart ships a 256Mi/512Mi default while its own comment says 512Mi is SMALL-only and will OOMKill at scale, and the scaling guide's LARGE figures rest on the same stale 0.6-1.1m estimate the task set out to replace. That shipped self-contradiction can be resolved honestly without inventing a MEDIUM number.
+
+2026-09-02 split, operator-approved. Three acceptance criteria moved to MDE-0047 because they do not depend on either missing topology: the old AC2 (LARGE guidance kept consistent between the scaling guide and the chart comments), old AC4 (scrape render time and payload size, reworded there to the largest fixture the harness can actually populate), and old AC5 (a dense-port-family opt-out switch). MDE-0047 carries them.
+
+What remains here is exactly the unmeasurable part: a MEDIUM-fleet resource default (AC1) and a measured DENSE-SWITCH series figure (AC2, renumbered). Both require topologies no reachable organisation has and none can be acquired, so this task is PERMANENTLY Parked and is exempt from the v2 ship gate on the same structural grounds as MDE-0004. It is not exempt from being fixed if the hardware situation ever changes.
+
+Resume condition, unchanged in substance but now the only thing left: a genuine multi-network MEDIUM topology and a genuine dense-MS topology become measurable, at which point rerun the retained fresh-process full-ExporterApp HTTP/RSS benchmark against them. Do not close this by relabelling a synthetic preset.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
