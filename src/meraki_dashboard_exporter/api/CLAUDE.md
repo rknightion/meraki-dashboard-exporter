@@ -36,7 +36,7 @@ Meraki API Client - Provides authenticated access to Cisco Meraki Dashboard API 
   executor, compatibility metrics, and bounded shutdown. `app.py` creates one per process and passes
   its raw `.api` handle to collectors; collectors pass SDK method objects to `MerakiApiFacade`, which
   is responsible for executing them.
-- Official Meraki SDK controllers actually exercised via `self.api.<controller>...` in collectors today: `organizations`, `networks`, `wireless` (MR), `switch` (MS), `appliance` (MX), `sensor` (MT), `cellularGateway` (MG, via `mg.py::collect_uplink_statuses`), `camera` (MV, via `mv.py`'s zones/live-analytics/quality-retention calls). MG/MV are fully implemented, not stubs — see `collectors/devices/CLAUDE.md`.
+- Official Meraki SDK controllers actually exercised via `self.api.<controller>...` in collectors today: `organizations`, `networks`, `wireless` (MR), `switch` (MS), `appliance` (MX), `sensor` (MT), `cellularGateway` (MG, via `mg.py::collect_uplink_statuses`), `camera` (MV, via `mv.py`'s zones/live-analytics/quality-retention calls), and `insight` (the disabled-by-default `InsightCollector`). MG/MV are fully implemented, not stubs — see `collectors/devices/CLAUDE.md`.
 </file_map>
 
 <paved_path>

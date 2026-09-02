@@ -1,5 +1,5 @@
 <system_context>
-Network health collectors for Meraki Dashboard Exporter - Handles network-level wireless performance and health metrics: RF channel utilization, connection statistics, data rates, Bluetooth client detection, and per-SSID failed connections.
+Network health collectors for Meraki Dashboard Exporter - Handles eight network-level wireless performance and health domains: RF channel utilization, connection statistics, data rates, Bluetooth client detection, per-SSID failed connections, latency statistics, Air Marshal, and mesh status.
 </system_context>
 
 <critical_notes>
@@ -31,9 +31,10 @@ Network health collectors for Meraki Dashboard Exporter - Handles network-level 
 
 <paved_path>
 ## NETWORK HEALTH COLLECTOR PATTERN
-Every sub-collector implements a single `collect(self, network: dict[str, Any]) -> None` entry
-point called per-network from the coordinator's bundle — there is no `_initialize_metrics()` or
-per-network-ID signature at the sub-collector level:
+Seven bundle sub-collectors implement a `collect(self, network: dict[str, Any]) -> None` entry point
+called per-network from the coordinator. `RFHealthCollector` instead implements
+`collect_org(org_id, org_name, networks)` because its channel-utilization fetch is org-wide. There is
+no `_initialize_metrics()` at the sub-collector level:
 ```python
 from .base import BaseNetworkHealthCollector
 
@@ -96,7 +97,8 @@ pattern at all — their fetcher methods are wrapped in `@with_error_handling(co
   per-collector check that could silently diverge from that filter.
 - **NEVER aggregate metrics across different network types** without proper labeling
 - **NEVER ignore timespan constraints** for network health endpoints (see `api_quirks` above)
-- **NEVER call `getOrganizationNetworks` or `getOrganizationDevices` directly** - use
-  `self.inventory.get_networks(org_id)` / `self.parent.inventory.get_devices(org_id, ...)` so
-  `NetworkFilter` is enforced
+- **NEVER call `getOrganizationNetworks` directly** - use `self.inventory.get_networks(org_id)` so
+  `NetworkFilter` is enforced. Device reads normally use
+  `self.parent.inventory.get_devices(org_id, ...)`; RF health retains an inventory-unavailable
+  direct-device fallback and filters its org-wide rows against the coordinator-supplied networks.
 </fatal_implications>

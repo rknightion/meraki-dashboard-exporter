@@ -1,5 +1,5 @@
 <system_context>
-Organization-level collectors for Meraki Dashboard Exporter - Handles metrics that apply to entire organizations: API usage, license consumption, and client overview statistics.
+Organization-level collectors for Meraki Dashboard Exporter - Handles eight organization-scoped domains: API usage, licensing, client overview, firmware, device availability history, top usage, webhook logs, and early access.
 </system_context>
 
 <critical_notes>
@@ -28,10 +28,10 @@ Organization-level collectors for Meraki Dashboard Exporter - Handles metrics th
   each exposes `collect(org_id, org_name)`, called from the coordinator's `_collect_api_metrics` /
   `_collect_license_metrics` / `_collect_client_overview` / firmware+availability-history
   equivalents.
-- **None of the 8 sub-collectors *fetch* networks/devices** — they only call org-scoped endpoints
-  (`getOrganizationApiRequestsOverview`, `getOrganizationClientsOverview`,
-  `getOrganizationLicensesOverview`/`getOrganizationLicenses`, `getOrganizationFirmwareUpgrades`,
-  `getOrganizationDevicesAvailabilitiesChangeHistory`). But two of them **do apply the
+- **The 8 sub-collectors use organization-scoped endpoint families** for API request detail/overview,
+  clients overview, license detail/overview, firmware upgrades and per-device firmware state,
+  device-availability history, bounded top-usage aggregates, webhook logs, and early-access opt-ins.
+  Firmware compliance also reads cached inventory devices. Two sub-collectors **apply the
   `get_allowed_network_ids` allow-list** to *filter response rows* whose `network.id` falls outside
   the configured `NetworkFilter`: `firmware.py` and `device_availability_history.py` (both resolve
   `self.inventory.get_allowed_network_ids(org_id)` and skip excluded networks — the same row-filter
@@ -42,9 +42,9 @@ Organization-level collectors for Meraki Dashboard Exporter - Handles metrics th
   prefers `self.inventory.get_licenses_overview(org_id)` (30-minute TTL, since license data
   rarely changes), falling back to a direct `getOrganizationLicensesOverview` call only when
   `inventory` is unset.
-- **Wrap fetcher responses** with `validate_response_format` from `core.error_handling`
-  (`api_usage.py`, `license.py`, and `client_overview.py` — the latter now wraps its raw dict so an
-  SDK exhausted-retry error shape raises instead of poisoning the stale-zero cache with zeros).
+- **Wrap fetcher responses** with `validate_response_format` from `core.error_handling`; all eight
+  sub-collectors do so. `client_overview.py` notably wraps its raw dict so an SDK exhausted-retry
+  error shape raises instead of poisoning the stale-zero cache with zeros.
 </critical_notes>
 
 <file_map>

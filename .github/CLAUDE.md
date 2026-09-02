@@ -31,15 +31,16 @@ from memory of an earlier version of this doc.
 - **`harden-runner` (step-security) is applied per-job, in `egress-policy: audit` mode** — it is
   NOT blanket-applied to every job in a workflow, only to specific jobs that run
   untrusted/third-party steps. In `ci.yml` it's on `test` and `docker-build-test` but deliberately
-  absent from `slow-tests` (schedule-only, not part of the `ci-success` required-check surface); it
+  absent from `scheduled-fleet-tests` and `on-demand-fleet-tests` (schedule/dispatch-only, not part
+  of the `ci-success` required-check surface); it
   is also present in `api-drift.yml` and `release-please-lock.yml` (and, for Scorecard, inside the shared `rknightion/.github` reusable rather than the local wrapper). Audit mode logs egress
   without blocking — it is not currently a hard allowlist gate. When adding a new job that runs
   third-party actions, add `harden-runner` to that job specifically, don't assume workflow-level
   coverage.
 - **`ci.yml`'s `ci-success` job is the aggregate required status check**
   (`if: always()` + explicit `contains(needs.*.result, 'failure'|'cancelled')` check over
-  `[test, docker-build-test, helm-lint-kubeconform]`). `slow-tests` (schedule-only) is deliberately
-  NOT in that `needs` list so it doesn't block PRs. The ruleset separately requires actionlint,
+  `[test, docker-build-test, helm-lint-kubeconform]`). `scheduled-fleet-tests` and
+  `on-demand-fleet-tests` are deliberately NOT in that `needs` list so they don't block PRs. The ruleset separately requires actionlint,
   zizmor, and dependency review. When adding an aggregate CI job, add it to `ci-success`'s `needs:`;
   when adding an independent scanner, update the ruleset after observing its exact live check name.
 - **`trigger-docs-sync.yml`** fires a `repository_dispatch` to a *different* repo
@@ -53,7 +54,8 @@ from memory of an earlier version of this doc.
 ## Workflows (`.github/workflows/`)
 - `ci.yml` - main gate: mypy, offline apidrift conformance check, pytest (`--cov-fail-under=80`,
   best-effort reporting to Codecov + Codacy), a Docker build+startup smoke test (asserts non-root `exporter`
-  user), a schedule-only `slow-tests` job, and the `ci-success` required-check aggregator.
+  user), schedule-only `scheduled-fleet-tests` and dispatch-only `on-demand-fleet-tests` jobs, and
+  the `ci-success` required-check aggregator.
 - `release-please.yml` - cuts releases using the per-run OpenBao broker token described above; on
   `release_created`, prepends a "limited testing" hardware-coverage warning to the GitHub release notes, then calls
   `publish.yml` (release build). On non-release pushes to `main`, calls `publish.yml` again for an

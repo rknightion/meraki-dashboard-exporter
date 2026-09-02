@@ -1,10 +1,10 @@
 ---
 id: MDE-0003
 title: Gate merges on change-scoped scanners and publication on severity
-status: Parked
+status: Done
 assignee: []
 created_date: '2026-08-14 15:56'
-updated_date: '2026-09-02 05:37'
+updated_date: '2026-09-02 08:06'
 labels:
   - 'area:ci'
   - security
@@ -54,7 +54,7 @@ worse than not having the gate.
 - [x] #2 Publication blocks on HIGH/CRITICAL from Trivy and CodeQL, with the scan moved BEFORE push, sign and attest
 - [x] #3 A committed exception file carries, per accepted CVE: identifier, reason, and an expiry date, so an acceptance resurfaces rather than becoming permanent
 - [x] #4 An expired exception fails the publish gate
-- [ ] #5 Signing, SBOM and SARIF upload are all preserved
+- [x] #5 Signing, SBOM and SARIF upload are all preserved
 - [x] #6 .whitesource, .safety-project.ini and .codacy.yaml are each confirmed to be running, or deleted as vestigial
 - [x] #7 Codecov and Codacy uploads are confirmed either required or explicitly best-effort — they are currently token-gated and silently no-op
 - [x] #8 docs/security.md documents the gate and the exception policy
@@ -64,8 +64,8 @@ worse than not having the gate.
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [x] #1 make check (uv run ruff check . && uv run ruff format --check . && uv run mypy . && uv run pytest -v)
-- [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
-- [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
+- [x] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
+- [x] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -90,10 +90,14 @@ The latest publication evidence supersedes the earlier authority-boundary Final 
 2026-09-02 main-thread unblock (commits a3b131e, 3b311fe): the AC3 exception file existed but was empty, so publication failed closed on every push and no image could reach the registry. Base image moved to Debian 13 trixie, cutting built-image HIGH/CRITICAL from 28 to 15. All 15 populated in .trivyignore.yaml with identifier, package binding, reason and a 2026-12-01 expiry: 13 trixie base packages with no fixed version, plus setuptools and msgpack which come from the base image SBOM attestation and were verified absent from the runtime filesystem and uv.lock. Two mechanism defects were fixed in the same pass. The validator required a bare YYYY-MM-DD expiry, the one format Trivy cannot parse from a JSON-shaped ignore file; the contract is now RFC3339 UTC. Exceptions carried no package binding, so an accepted base CVE would also have suppressed the same identifier in a first-party dependency; purls is now required and non-empty. Verified locally: trivy exits 0 with zero findings using this file, just check green at 2833 tests. AC5 is still unproven because signing, provenance, both SBOM formats and chart signing have never run downstream of the new gate. Resume by confirming publication now completes at exact head and proving those five artifacts.
 
 2026-09-02 publication verified green at main 3b311fe. Release Please run 33594716832 passed edge/policy, both architecture builds, 'edge / image / merge + sign + sbom' and 'edge / image / helm publish'; auto-rc 33594854197 also succeeded. The :main tag resolves to sha256:5ee10d7f9b9ab0d4d74cca09d4566106e0b7409d522d48e1103e85e5d0bf3d11 and the soak host pulled it automatically, now running that revision healthy. AC5 is therefore satisfiable and largely demonstrated; what remains is naming each of image signing, provenance, both SBOM formats and chart signing against a run at the final head.
+
+2026-09-02 final-head publication proof at 747731fb1cc86e9806d1ae6d68a809e308f7c65b: Release Please run 33606019000 completed successfully. Both architecture jobs passed Upload Trivy SARIF before publication. The merge job then passed Sign the published image, Generate build-provenance attestation, and Generate SBOM (SPDX + CycloneDX); the Helm job passed Sign the chart. Attach-to-release steps were correctly skipped for the edge publication because no release was created; the signed image, provenance, both generated SBOM formats, SARIF uploads, and signed chart were preserved downstream of the blocking security gate.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Parked at the explicit cross-repository authority boundary. A read-only current-state audit produced the exact shared/local workflow, exception-policy, documentation, ruleset, and verification sequence; no partial local gate or external mutation was made.
+
+Finalized from exact-head publication evidence: run 33606019000 at 747731fb passed both pre-publication SARIF uploads, image signing, provenance, SPDX and CycloneDX SBOM generation, and chart signing. The change-scoped merge gate and severity-blocked publication path are now fully proven.
 <!-- SECTION:FINAL_SUMMARY:END -->
