@@ -5,9 +5,9 @@
   "cloud": {
     "region": {
       "host": {
-        "name": "org_name_001"
+        "name": "org_name_002"
       },
-      "name": "org_name_001"
+      "name": "org_name_002"
     }
   },
   "id": "org_001",
@@ -17,12 +17,12 @@
   "management": {
     "details": [
       {
-        "name": "org_name_002",
+        "name": "org_name_003",
         "value": "value_001"
       }
     ]
   },
-  "name": "org_name_003",
+  "name": "org_name_001",
   "privacy": {
     "byDefault": {
       "enabled": false

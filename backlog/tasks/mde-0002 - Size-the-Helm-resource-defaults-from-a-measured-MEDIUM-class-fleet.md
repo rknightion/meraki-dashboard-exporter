@@ -4,7 +4,7 @@ title: Size the Helm resource defaults from a measured MEDIUM-class fleet
 status: Parked
 assignee: []
 created_date: '2026-08-14 15:56'
-updated_date: '2026-09-01 23:12'
+updated_date: '2026-09-02 07:54'
 labels:
   - 'area:deploy'
   - 'area:docs'
@@ -81,6 +81,8 @@ LARGE, from stale evidence. **Both figures rest on assumed fleet mixes**, which 
 Replacement lane L11: use the full exporter runtime measurement path with generated HOMELAB, BRANCH-RETAIL, and DENSE-SWITCH fixtures; first prove whether BRANCH-RETAIL is the D11 MEDIUM shape and reconcile HOMELAB to its live anchor. Change resource defaults/docs only if calibrated evidence satisfies the task; otherwise return the contractual unchanged-default Parked boundary.
 
 Wave 1 L4: freeze and justify a literal MEDIUM topology under the 2026-09-01 authority, exercise the full ExporterApp runtime, reconcile HOMELAB first, and update measured sizing guidance only when the calibration contract holds.
+
+Wave 2: consume the same complete live-verified HOMELAB corpus, require calibration materially closer to the 148.19 MiB and 4,835-series anchor, then measure a measurement-defined MEDIUM and DENSE-SWITCH only if that prerequisite holds; otherwise keep defaults and park on named missing routes.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -91,10 +93,14 @@ Wave 1 L4: freeze and justify a literal MEDIUM topology under the 2026-09-01 aut
 2026-09-01 measurement: froze MEDIUM as the existing BRANCH-RETAIL preset, one organisation with 750 networks, 4,500 devices, 18,000 switch ports, 3,000 SSIDs and 7,500 clients. It is the only D2 many-network representative and avoids inventing an eighth preset. A full ExporterApp replay of the retained HOMELAB corpus returned HTTP 200, 103.04 MiB RSS, 164 scrape samples, 49,330 bytes and 0.077433 seconds. That is 30.47% below the 148.19 MiB anchor and 96.61% below the 4,835-series anchor, so calibration failed and defaults remain unchanged. Resume after adding provenance-bearing full-profile HOMELAB routes and MS port-status plus other enabled-route corpus needed for BRANCH-RETAIL and DENSE-SWITCH.
 
 The 2026-09-01 operator run contract explicitly authorised root to freeze a literal MEDIUM topology and review it the next morning. That authority supersedes the 2026-08-23 archive position for this measurement only; BRANCH-RETAIL was selected because it is the existing many-network preset, and the failed HOMELAB calibration kept every default unchanged.
+
+2026-09-02 Wave 2 full-runtime HOMELAB replay: HTTP 200, 112803840-byte RSS, 3688 total samples, 2253 product samples, 513757-byte payload, 0.075662 s render. This is materially closer than the prior 103.04 MiB / 164-sample replay but remains 27.41% below the 148.19 MiB RSS anchor and 23.72% below the 4835-sample anchor. MEDIUM remains undefined and DENSE-SWITCH lacks a genuine dense topology; defaults and guidance therefore remain unchanged. Resume with live-verified full-profile captures from an explicitly frozen multi-network MEDIUM topology and an actual dense MS topology, including data-bearing device and switch-port status/packet routes, then rerun this fresh-process HTTP/RSS benchmark.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Parked after freezing the literal MEDIUM topology and landing a repeatable full-runtime measurement path. The retained corpus materially failed HOMELAB calibration, so no resource default, scaling guidance or dense-family opt-out decision can be justified. Resume with provenance-bearing full-profile HOMELAB and dense MS route captures, then measure BRANCH-RETAIL and DENSE-SWITCH through the same harness.
+
+Wave 2: parked at a sharper topology-and-route boundary. The complete HOMELAB corpus materially improved reconciliation but still leaves about one quarter of RSS and samples unexplained, so D11 cannot justify MEDIUM defaults or DENSE-SWITCH guidance without genuine measured topologies.
 <!-- SECTION:FINAL_SUMMARY:END -->

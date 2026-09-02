@@ -5,21 +5,93 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Final
+from urllib.parse import parse_qsl, urlencode
 
 LIVE_VERIFIED: Final = "LIVE-VERIFIED"
 SHAPE_ASSUMED: Final = "SHAPE-ASSUMED"
 REQUIRED_OPERATIONS: Final = frozenset({
+    "getDeviceSwitchPortsStatuses",
+    "getDeviceSwitchPortsStatusesPackets",
+    "getNetworkBluetoothClients",
+    "getNetworkClients",
+    "getNetworkClientsApplicationUsage",
+    "getNetworkSensorAlertsCurrentOverviewByMetric",
+    "getNetworkSensorAlertsOverviewByMetric",
+    "getNetworkSensorAlertsProfiles",
+    "getNetworkSensorRelationships",
+    "getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice",
+    "getNetworkSwitchDhcpV4ServersSeen",
+    "getNetworkSwitchLinkAggregations",
+    "getNetworkSwitchStacks",
+    "getNetworkSwitchStp",
+    "getNetworkWirelessAirMarshal",
+    "getNetworkWirelessClientsLatencyStats",
+    "getNetworkWirelessConnectionStats",
+    "getNetworkWirelessDataRateHistory",
+    "getNetworkWirelessDevicesConnectionStats",
+    "getNetworkWirelessDevicesLatencyStats",
+    "getNetworkWirelessFailedConnections",
+    "getNetworkWirelessMeshStatuses",
+    "getNetworkWirelessSignalQualityHistory",
+    "getNetworkWirelessSsids",
     "getOrganization",
+    "getOrganizationAdaptivePolicyOverview",
+    "getOrganizationAdmins",
+    "getOrganizationApiRequests",
+    "getOrganizationApiRequestsOverview",
+    "getOrganizationAssuranceAlerts",
+    "getOrganizationClientsOverview",
+    "getOrganizationConfigTemplates",
+    "getOrganizationConfigurationChanges",
     "getOrganizationNetworks",
     "getOrganizationDevices",
     "getOrganizationDevicesAvailabilities",
+    "getOrganizationDevicesAvailabilitiesChangeHistory",
+    "getOrganizationDevicesOverviewByModel",
+    "getOrganizationDevicesPacketCaptureCaptures",
+    "getOrganizationDevicesPowerModulesStatusesByDevice",
+    "getOrganizationDevicesSystemMemoryUsageHistoryByInterval",
+    "getOrganizationEarlyAccessFeaturesOptIns",
+    "getOrganizationFirmwareUpgrades",
+    "getOrganizationFirmwareUpgradesByDevice",
+    "getOrganizationLicensesOverview",
+    "getOrganizationLoginSecurity",
+    "getOrganizationSaml",
+    "getOrganizationSensorGatewaysConnectionsLatest",
+    "getOrganizationSensorReadingsLatest",
+    "getOrganizationSummarySwitchPowerHistory",
+    "getOrganizationSummaryTopApplicationsCategoriesByUsage",
+    "getOrganizationSummaryTopClientsByUsage",
+    "getOrganizationSummaryTopClientsManufacturersByUsage",
+    "getOrganizationSummaryTopSsidsByUsage",
+    "getOrganizationSwitchPortsOverview",
+    "getOrganizationSwitchPortsStatusesBySwitch",
+    "getOrganizationWebhooksLogs",
+    "getOrganizationWirelessClientsOverviewByDevice",
+    "getOrganizationWirelessDevicesChannelUtilizationByDevice",
+    "getOrganizationWirelessDevicesChannelUtilizationByNetwork",
+    "getOrganizationWirelessDevicesEthernetStatuses",
+    "getOrganizationWirelessDevicesPacketLossByDevice",
+    "getOrganizationWirelessDevicesPacketLossByNetwork",
+    "getOrganizationWirelessDevicesPowerModeHistory",
+    "getOrganizationWirelessDevicesSystemCpuLoadHistory",
+    "getOrganizationWirelessDevicesWirelessControllersByDevice",
+    "getOrganizationWirelessRfProfilesAssignmentsByDevice",
+    "getOrganizationWirelessSsidsStatusesByDevice",
+    "getOrganizations",
 })
 
 
 class CorpusError(ValueError):
     """Raised when a replay corpus is absent, unsafe, or unverifiable."""
+
+
+def canonical_query(query: str) -> str:
+    """Return the stable semantic identity of a query string."""
+    return urlencode(sorted(parse_qsl(query, keep_blank_values=True)))
 
 
 @dataclass(frozen=True)
@@ -31,6 +103,8 @@ class Fixture:
     path: str
     query: str
     sdk_operation: str
+    status_code: int
+    captured_at_utc: str
 
 
 @dataclass(frozen=True)
@@ -48,7 +122,7 @@ def load_manifest(manifest_path: Path, *, require_real: bool) -> Corpus:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as error:
         raise CorpusError(f"invalid manifest JSON: {error}") from error
-    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 2:
         raise CorpusError("unsupported manifest schema_version")
     rows = manifest.get("fixtures")
     if not isinstance(rows, list) or not rows:
@@ -73,8 +147,10 @@ def load_manifest(manifest_path: Path, *, require_real: bool) -> Corpus:
                 file=fixture_path,
                 method=row["method"],
                 path=row["path"],
-                query=row.get("query", ""),
+                query=canonical_query(row.get("query", "")),
                 sdk_operation=row["sdk_operation"],
+                status_code=row["status_code"],
+                captured_at_utc=row["captured_at_utc"],
             )
         )
     if require_real:
@@ -83,16 +159,11 @@ def load_manifest(manifest_path: Path, *, require_real: bool) -> Corpus:
 
 
 def _validate_real_corpus_contract(fixtures: list[Fixture]) -> None:
-    """Require the one complete, route-unique capture set accepted by the runner."""
-    operations = [fixture.sdk_operation for fixture in fixtures]
-    duplicate_operations = sorted({
-        operation for operation in operations if operations.count(operation) > 1
-    })
-    if duplicate_operations:
-        raise CorpusError(f"duplicate sdk_operation: {', '.join(duplicate_operations)}")
-    if set(operations) != REQUIRED_OPERATIONS:
-        missing = sorted(REQUIRED_OPERATIONS - set(operations))
-        unexpected = sorted(set(operations) - REQUIRED_OPERATIONS)
+    """Require the complete enabled-profile operation set and unique HTTP routes."""
+    operations = {fixture.sdk_operation for fixture in fixtures}
+    if operations != REQUIRED_OPERATIONS:
+        missing = sorted(REQUIRED_OPERATIONS - operations)
+        unexpected = sorted(operations - REQUIRED_OPERATIONS)
         detail = ", ".join(
             part
             for part in (
@@ -111,7 +182,7 @@ def _validate_row(row: dict[str, object], index: int, require_real: bool) -> Non
     required_strings = (
         "fixture",
         "sha256",
-        "capture_date_utc",
+        "captured_at_utc",
         "product_family",
         "method",
         "path",
@@ -139,3 +210,16 @@ def _validate_row(row: dict[str, object], index: int, require_real: bool) -> Non
         raise CorpusError(f"fixture row {index} path must start with /")
     if not str(row["method"]).isupper():
         raise CorpusError(f"fixture row {index} method must be uppercase")
+    status_code = row.get("status_code")
+    if (
+        isinstance(status_code, bool)
+        or not isinstance(status_code, int)
+        or not 100 <= status_code < 600
+    ):
+        raise CorpusError(f"fixture row {index} has invalid status_code")
+    try:
+        captured_at = datetime.fromisoformat(str(row["captured_at_utc"]))
+    except ValueError as error:
+        raise CorpusError(f"fixture row {index} has invalid captured_at_utc") from error
+    if captured_at.tzinfo is None:
+        raise CorpusError(f"fixture row {index} captured_at_utc must be timezone-aware")

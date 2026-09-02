@@ -66,6 +66,13 @@ def measure_homelab(
             "HARNESS_TARGET_OPERATION": "",
             "HARNESS_ORIGIN_HOST": decision.origin_host,
             "HARNESS_TRUSTED_CA": "trusted-ca.pem",
+            "HARNESS_PROFILE": "full",
+            "HARNESS_ENABLED_COLLECTORS": (
+                "alerts,clients,config,device,mtsensor,mtsensoralerts,"
+                "networkhealth,organization,insight"
+            ),
+            "HARNESS_CLIENTS_ENABLED": "true",
+            "HARNESS_EXECUTOR_WORKERS": "25",
         }
         command = [
             "docker",
@@ -86,7 +93,12 @@ def measure_homelab(
                 environment,
                 runtime,
                 FaultMode.BASELINE,
-                {fixture.path for fixture in corpus.fixtures},
+                {
+                    (fixture.method, fixture.path, fixture.query): fixture.status_code
+                    for fixture in corpus.fixtures
+                    if fixture.sdk_operation != "getOrganizations"
+                },
+                timeout_seconds=180,
             )
             result = _run(
                 [

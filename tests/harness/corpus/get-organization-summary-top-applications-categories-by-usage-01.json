@@ -1,0 +1,114 @@
+[
+  {
+    "category": "value_490",
+    "downstream": 217322.2283964157,
+    "percentage": 99.17758988731975,
+    "total": 513071.115981102,
+    "upstream": 295748.8875846863
+  },
+  {
+    "category": "value_491",
+    "downstream": 1956.8140258789062,
+    "percentage": 0.38438814418909395,
+    "total": 1988.5384826660156,
+    "upstream": 31.724456787109375
+  },
+  {
+    "category": "value_492",
+    "downstream": 1294.088638305664,
+    "percentage": 0.2552732732343676,
+    "total": 1320.5941314697266,
+    "upstream": 26.5054931640625
+  },
+  {
+    "category": "value_493",
+    "downstream": 227.73239135742188,
+    "percentage": 0.09330233997462371,
+    "total": 482.67694091796875,
+    "upstream": 254.94454956054688
+  },
+  {
+    "category": "value_494",
+    "downstream": 343.1615295410156,
+    "percentage": 0.07357160698836203,
+    "total": 380.60479736328125,
+    "upstream": 37.443267822265625
+  },
+  {
+    "category": "value_495",
+    "downstream": 33.64979553222656,
+    "percentage": 0.0066432759148738595,
+    "total": 34.36737060546875,
+    "upstream": 0.7175750732421875
+  },
+  {
+    "category": "value_496",
+    "downstream": 24.401138305664062,
+    "percentage": 0.004898671962733601,
+    "total": 25.342086791992188,
+    "upstream": 0.940948486328125
+  },
+  {
+    "category": "value_497",
+    "downstream": 14.469833374023438,
+    "percentage": 0.00301908471397731,
+    "total": 15.618499755859375,
+    "upstream": 1.1486663818359375
+  },
+  {
+    "category": "value_498",
+    "downstream": 3.7537841796875,
+    "percentage": 0.0008388643800975826,
+    "total": 4.33966064453125,
+    "upstream": 0.58587646484375
+  },
+  {
+    "category": "value_499",
+    "downstream": 1.268218994140625,
+    "percentage": 0.0002691289204709632,
+    "total": 1.39227294921875,
+    "upstream": 0.124053955078125
+  },
+  {
+    "category": "value_500",
+    "downstream": 0.184356689453125,
+    "percentage": 5.9793317651433154e-05,
+    "total": 0.309326171875,
+    "upstream": 0.124969482421875
+  },
+  {
+    "category": "value_501",
+    "downstream": 0.148040771484375,
+    "percentage": 5.7386483239260235e-05,
+    "total": 0.296875,
+    "upstream": 0.148834228515625
+  },
+  {
+    "category": "value_502",
+    "downstream": 0.113861083984375,
+    "percentage": 4.76942554471031e-05,
+    "total": 0.246734619140625,
+    "upstream": 0.13287353515625
+  },
+  {
+    "category": "value_503",
+    "downstream": 0.091552734375,
+    "percentage": 1.982688838066958e-05,
+    "total": 0.102569580078125,
+    "upstream": 0.011016845703125
+  },
+  {
+    "category": "value_504",
+    "downstream": 0.0902099609375,
+    "percentage": 1.921633112169924e-05,
+    "total": 0.0994110107421875,
+    "upstream": 0.0092010498046875
+  },
+  {
+    "category": "value_505",
+    "downstream": 0.00616455078125,
+    "percentage": 1.8051258091296907e-06,
+    "total": 0.00933837890625,
+    "upstream": 0.003173828125
+  }
+]

@@ -1,0 +1,132 @@
+[
+  {
+    "clients": {
+      "counts": {
+        "total": 25
+      }
+    },
+    "name": "client_name_012",
+    "usage": {
+      "downstream": 142285.8994140625,
+      "total": 340111.9658203125,
+      "upstream": 197826.06640625
+    }
+  },
+  {
+    "clients": {
+      "counts": {
+        "total": 2
+      }
+    },
+    "name": "client_name_013",
+    "usage": {
+      "downstream": 52711.3984375,
+      "total": 111954.21875,
+      "upstream": 59242.8203125
+    }
+  },
+  {
+    "clients": {
+      "counts": {
+        "total": 12
+      }
+    },
+    "name": "client_name_014",
+    "usage": {
+      "downstream": 59437.0810546875,
+      "total": 98870.296875,
+      "upstream": 39433.2158203125
+    }
+  },
+  {
+    "clients": {
+      "counts": {
+        "total": 6
+      }
+    },
+    "name": "client_name_015",
+    "usage": {
+      "downstream": 57884.6953125,
+      "total": 83643.5771484375,
+      "upstream": 25758.8818359375
+    }
+  },
+  {
+    "clients": {
+      "counts": {
+        "total": 2
+      }
+    },
+    "name": "client_name_016",
+    "usage": {
+      "downstream": 935.8291015625,
+      "total": 55331.435546875,
+      "upstream": 54395.6064453125
+    }
+  },
+  {
+    "clients": {
+      "counts": {
+        "total": 1
+      }
+    },
+    "name": "client_name_017",
+    "usage": {
+      "downstream": 2695.5537109375,
+      "total": 42941.4619140625,
+      "upstream": 40245.908203125
+    }
+  },
+  {
+    "clients": {
+      "counts": {
+        "total": 1
+      }
+    },
+    "name": "client_name_018",
+    "usage": {
+      "downstream": 20252.9912109375,
+      "total": 22069.0078125,
+      "upstream": 1816.0166015625
+    }
+  },
+  {
+    "clients": {
+      "counts": {
+        "total": 16
+      }
+    },
+    "name": "client_name_019",
+    "usage": {
+      "downstream": 10377.298828125,
+      "total": 15637.82421875,
+      "upstream": 5260.525390625
+    }
+  },
+  {
+    "clients": {
+      "counts": {
+        "total": 1
+      }
+    },
+    "name": "client_name_020",
+    "usage": {
+      "downstream": 274.7919921875,
+      "total": 7784.595703125,
+      "upstream": 7509.8037109375
+    }
+  },
+  {
+    "clients": {
+      "counts": {
+        "total": 1
+      }
+    },
+    "name": "client_name_021",
+    "usage": {
+      "downstream": 1933.9609375,
+      "total": 2013.2607421875,
+      "upstream": 79.2998046875
+    }
+  }
+]

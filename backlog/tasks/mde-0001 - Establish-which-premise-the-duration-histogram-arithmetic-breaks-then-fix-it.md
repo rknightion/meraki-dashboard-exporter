@@ -4,7 +4,7 @@ title: 'Establish which premise the duration-histogram arithmetic breaks, then f
 status: Parked
 assignee: []
 created_date: '2026-08-14 15:56'
-updated_date: '2026-09-01 22:55'
+updated_date: '2026-09-02 07:54'
 labels:
   - 'area:observability'
   - 'priority:medium'
@@ -82,6 +82,8 @@ magnitude, but the audit noted a residual ~2x discrepancy it could not explain.
 Wave 1 L8: observe the duration contradiction in the disposable harness, then fix the proven cause alongside explicit group verdict work; root integrates and finalizes.
 
 Wave 1 L3: use the retained fault-injection harness and bounded corpus to establish the duration premise by observation, explain the ClientsCollector residual if possible, and return either verified fixes/tests or a sharper evidence-backed Parked boundary.
+
+Wave 2: root captures and sanitizes the missing live GET corpus, validates a materially closer full ExporterApp replay, then a REVIEW lane observes the duration and ClientsCollector premises; fix only the premise disproven by retained evidence.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -90,10 +92,14 @@ Wave 1 L3: use the retained fault-injection harness and bounded corpus to establ
 2026-08-23 harness result: one Device wrapper produced exactly one duration observation, one run and one success with about 10.5539 seconds duration, ruling out duplicate observation in that path. The retained harness then failed its post-boundary corpus gate on unrecorded MS packet/STP requests and did not reproduce or explain the historical ClientsCollector residual. No timing fix is justified. Resume with a bounded Clients harness corpus plus the missing MS packet/STP routes, or equivalent retained single-process evidence that reproduces the discrepancy.
 
 2026-09-01 harness observation produced exactly one duration observation for one successful Device wrapper run (10.598551 seconds), but the retained corpus then failed closed on one STP route, two device-specific packet-status routes, and lacks a non-empty Clients route. No production defect was established.
+
+2026-09-02 Wave 2 retained replay: 73 fixtures / 69 operations. Device produced exactly one duration observation for one run and one success (10.583334 s mean inside a 57.410482 s observation window); full-profile startup produced one Device and one Clients observation, so current behavior does not reproduce double counting. The historical Clients 1 Hz excess is explained by the already-fixed disabled child-group loop, but the residual 1.97 Hz cannot be assigned without the deleted process identity/lifecycle provenance. Resume with a native Clients duration observation retaining process identity and injected competing same-collector admission; do not alter production timing without a reproduced false premise.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Parked after bounded harness observation. AC5 is proven; AC1-AC4 remain unproven. Resume with sanitized live-verified captures for the three missing MS routes and a non-empty getNetworkClients response, extend corpus identity to method/path/query, then rerun isolated Device and Clients observations.
+
+Wave 2: parked at a sharper provenance boundary after the expanded retained corpus showed one duration observation per successful Device and Clients wrapper. Current code does not reproduce the historical contradiction; resolving the residual requires process-identity-aware Clients and competing-admission observations, not a speculative timing change.
 <!-- SECTION:FINAL_SUMMARY:END -->

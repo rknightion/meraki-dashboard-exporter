@@ -1,0 +1,32 @@
+{
+  "counts": [
+    {
+      "model": "MT20",
+      "total": 2
+    },
+    {
+      "model": "MS120-8LP",
+      "total": 1
+    },
+    {
+      "model": "MT14",
+      "total": 6
+    },
+    {
+      "model": "MT15",
+      "total": 2
+    },
+    {
+      "model": "MR56",
+      "total": 1
+    },
+    {
+      "model": "MT40",
+      "total": 6
+    },
+    {
+      "model": "MS250-24P",
+      "total": 1
+    }
+  ]
+}

@@ -1,0 +1,983 @@
+[
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "door": {
+          "open": false
+        },
+        "metric": "value_008",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "battery": {
+          "percentage": 91
+        },
+        "metric": "value_009",
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_004"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "door": {
+          "open": false
+        },
+        "metric": "value_008",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "battery": {
+          "percentage": 82
+        },
+        "metric": "value_009",
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_005"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "metric": "value_013",
+        "ts": "2026-01-01T00:00:00Z",
+        "tvoc": {
+          "concentration": 58
+        }
+      },
+      {
+        "metric": "value_015",
+        "noise": {
+          "ambient": {
+            "level": 56
+          }
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "humidity": {
+          "relativePercentage": 65
+        },
+        "metric": "value_012",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_547",
+        "rawTemperature": {
+          "celsius": 22.11,
+          "fahrenheit": 71.8
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_011",
+        "temperature": {
+          "celsius": 22.11,
+          "fahrenheit": 71.8
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "indoorAirQuality": {
+          "score": 97
+        },
+        "metric": "value_016",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "battery": {
+          "percentage": 96
+        },
+        "metric": "value_009",
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_006"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "metric": "value_547",
+        "rawTemperature": {
+          "celsius": 22.28,
+          "fahrenheit": 72.1
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "humidity": {
+          "relativePercentage": 62
+        },
+        "metric": "value_012",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_011",
+        "temperature": {
+          "celsius": 22.28,
+          "fahrenheit": 72.1
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "indoorAirQuality": {
+          "score": 98
+        },
+        "metric": "value_016",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_013",
+        "ts": "2026-01-01T00:00:00Z",
+        "tvoc": {
+          "concentration": 46
+        }
+      },
+      {
+        "metric": "value_015",
+        "noise": {
+          "ambient": {
+            "level": 33
+          }
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "battery": {
+          "percentage": 96
+        },
+        "metric": "value_009",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_014",
+        "pm25": {
+          "concentration": 3
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_007"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "metric": "value_013",
+        "ts": "2026-01-01T00:00:00Z",
+        "tvoc": {
+          "concentration": 38
+        }
+      },
+      {
+        "indoorAirQuality": {
+          "score": 98
+        },
+        "metric": "value_016",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_014",
+        "pm25": {
+          "concentration": 3
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_547",
+        "rawTemperature": {
+          "celsius": 21.89,
+          "fahrenheit": 71.4
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "humidity": {
+          "relativePercentage": 64
+        },
+        "metric": "value_012",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_011",
+        "temperature": {
+          "celsius": 21.89,
+          "fahrenheit": 71.4
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_015",
+        "noise": {
+          "ambient": {
+            "level": 39
+          }
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "battery": {
+          "percentage": 98
+        },
+        "metric": "value_009",
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_008"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "metric": "value_015",
+        "noise": {
+          "ambient": {
+            "level": 41
+          }
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_013",
+        "ts": "2026-01-01T00:00:00Z",
+        "tvoc": {
+          "concentration": 27
+        }
+      },
+      {
+        "indoorAirQuality": {
+          "score": 82
+        },
+        "metric": "value_016",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_547",
+        "rawTemperature": {
+          "celsius": 27.33,
+          "fahrenheit": 81.2
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "humidity": {
+          "relativePercentage": 45
+        },
+        "metric": "value_012",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_011",
+        "temperature": {
+          "celsius": 27.33,
+          "fahrenheit": 81.2
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_014",
+        "pm25": {
+          "concentration": 2
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "battery": {
+          "percentage": 100
+        },
+        "metric": "value_009",
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_009"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "metric": "value_015",
+        "noise": {
+          "ambient": {
+            "level": 34
+          }
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_547",
+        "rawTemperature": {
+          "celsius": 22.22,
+          "fahrenheit": 72.0
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_011",
+        "temperature": {
+          "celsius": 22.22,
+          "fahrenheit": 72.0
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_013",
+        "ts": "2026-01-01T00:00:00Z",
+        "tvoc": {
+          "concentration": 40
+        }
+      },
+      {
+        "indoorAirQuality": {
+          "score": 98
+        },
+        "metric": "value_016",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "humidity": {
+          "relativePercentage": 62
+        },
+        "metric": "value_012",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "battery": {
+          "percentage": 94
+        },
+        "metric": "value_009",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_014",
+        "pm25": {
+          "concentration": 0
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_010"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "metric": "value_013",
+        "ts": "2026-01-01T00:00:00Z",
+        "tvoc": {
+          "concentration": 19
+        }
+      },
+      {
+        "metric": "value_011",
+        "temperature": {
+          "celsius": 18.06,
+          "fahrenheit": 64.5
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "humidity": {
+          "relativePercentage": 65
+        },
+        "metric": "value_012",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_547",
+        "rawTemperature": {
+          "celsius": 18.06,
+          "fahrenheit": 64.5
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_015",
+        "noise": {
+          "ambient": {
+            "level": 35
+          }
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "indoorAirQuality": {
+          "score": 85
+        },
+        "metric": "value_016",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_014",
+        "pm25": {
+          "concentration": 7
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "battery": {
+          "percentage": 95
+        },
+        "metric": "value_009",
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_011"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "metric": "value_024",
+        "remoteLockoutSwitch": {
+          "locked": false
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "downstreamPower": {
+          "enabled": true
+        },
+        "metric": "value_023",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_017",
+        "ts": "2026-01-01T00:00:00Z",
+        "voltage": {
+          "level": 239.4
+        }
+      },
+      {
+        "frequency": {
+          "level": 50.1
+        },
+        "metric": "value_019",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_020",
+        "realPower": {
+          "draw": 39.0
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_022",
+        "powerFactor": {
+          "percentage": 56
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "current": {
+          "draw": 0.29
+        },
+        "metric": "value_018",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "apparentPower": {
+          "draw": 69.4
+        },
+        "metric": "value_021",
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_012"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "downstreamPower": {
+          "enabled": true
+        },
+        "metric": "value_023",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_024",
+        "remoteLockoutSwitch": {
+          "locked": false
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "frequency": {
+          "level": 50.0
+        },
+        "metric": "value_019",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "current": {
+          "draw": 0.35
+        },
+        "metric": "value_018",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_022",
+        "powerFactor": {
+          "percentage": 27
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "apparentPower": {
+          "draw": 84.5
+        },
+        "metric": "value_021",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_017",
+        "ts": "2026-01-01T00:00:00Z",
+        "voltage": {
+          "level": 241.5
+        }
+      },
+      {
+        "metric": "value_020",
+        "realPower": {
+          "draw": 23.2
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_013"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "metric": "value_024",
+        "remoteLockoutSwitch": {
+          "locked": false
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "downstreamPower": {
+          "enabled": true
+        },
+        "metric": "value_023",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "frequency": {
+          "level": 50.2
+        },
+        "metric": "value_019",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_022",
+        "powerFactor": {
+          "percentage": 69
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "apparentPower": {
+          "draw": 281.7
+        },
+        "metric": "value_021",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_020",
+        "realPower": {
+          "draw": 197.4
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "current": {
+          "draw": 1.18
+        },
+        "metric": "value_018",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_017",
+        "ts": "2026-01-01T00:00:00Z",
+        "voltage": {
+          "level": 240.6
+        }
+      }
+    ],
+    "serial": "device_014"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "downstreamPower": {
+          "enabled": true
+        },
+        "metric": "value_023",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_024",
+        "remoteLockoutSwitch": {
+          "locked": false
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_020",
+        "realPower": {
+          "draw": 133.9
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "frequency": {
+          "level": 50.2
+        },
+        "metric": "value_019",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "current": {
+          "draw": 0.76
+        },
+        "metric": "value_018",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_017",
+        "ts": "2026-01-01T00:00:00Z",
+        "voltage": {
+          "level": 240.4
+        }
+      },
+      {
+        "metric": "value_022",
+        "powerFactor": {
+          "percentage": 73
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "apparentPower": {
+          "draw": 182.7
+        },
+        "metric": "value_021",
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_015"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "metric": "value_024",
+        "remoteLockoutSwitch": {
+          "locked": false
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "downstreamPower": {
+          "enabled": true
+        },
+        "metric": "value_023",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_022",
+        "powerFactor": {
+          "percentage": 82
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_017",
+        "ts": "2026-01-01T00:00:00Z",
+        "voltage": {
+          "level": 240.0
+        }
+      },
+      {
+        "current": {
+          "draw": 1.64
+        },
+        "metric": "value_018",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "apparentPower": {
+          "draw": 393.6
+        },
+        "metric": "value_021",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "frequency": {
+          "level": 50.0
+        },
+        "metric": "value_019",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_020",
+        "realPower": {
+          "draw": 324.0
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_016"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "downstreamPower": {
+          "enabled": true
+        },
+        "metric": "value_023",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_024",
+        "remoteLockoutSwitch": {
+          "locked": false
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "current": {
+          "draw": 0.24
+        },
+        "metric": "value_018",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_020",
+        "realPower": {
+          "draw": 28.6
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_017",
+        "ts": "2026-01-01T00:00:00Z",
+        "voltage": {
+          "level": 239.9
+        }
+      },
+      {
+        "frequency": {
+          "level": 50.1
+        },
+        "metric": "value_019",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "apparentPower": {
+          "draw": 57.5
+        },
+        "metric": "value_021",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_022",
+        "powerFactor": {
+          "percentage": 49
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_017"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "metric": "value_014",
+        "pm25": {
+          "concentration": 1
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_015",
+        "noise": {
+          "ambient": {
+            "level": 44
+          }
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "indoorAirQuality": {
+          "score": 98
+        },
+        "metric": "value_016",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_013",
+        "ts": "2026-01-01T00:00:00Z",
+        "tvoc": {
+          "concentration": 15
+        }
+      },
+      {
+        "co2": {
+          "concentration": 472
+        },
+        "metric": "value_025",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_547",
+        "rawTemperature": {
+          "celsius": 24.83,
+          "fahrenheit": 76.7
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_011",
+        "temperature": {
+          "celsius": 24.83,
+          "fahrenheit": 76.7
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "humidity": {
+          "relativePercentage": 54
+        },
+        "metric": "value_012",
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_018"
+  },
+  {
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "readings": [
+      {
+        "metric": "value_015",
+        "noise": {
+          "ambient": {
+            "level": 33
+          }
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "indoorAirQuality": {
+          "score": 100
+        },
+        "metric": "value_016",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_014",
+        "pm25": {
+          "concentration": 2
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_013",
+        "ts": "2026-01-01T00:00:00Z",
+        "tvoc": {
+          "concentration": 16
+        }
+      },
+      {
+        "metric": "value_011",
+        "temperature": {
+          "celsius": 23.89,
+          "fahrenheit": 75.0
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "metric": "value_547",
+        "rawTemperature": {
+          "celsius": 23.89,
+          "fahrenheit": 75.0
+        },
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "humidity": {
+          "relativePercentage": 57
+        },
+        "metric": "value_012",
+        "ts": "2026-01-01T00:00:00Z"
+      },
+      {
+        "co2": {
+          "concentration": 486
+        },
+        "metric": "value_025",
+        "ts": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "serial": "device_019"
+  }
+]

@@ -38,7 +38,9 @@ def _sdk_call_violations(source_paths: tuple[Path, ...] | None = None) -> list[s
             tree = ast.parse(path.read_text(), filename=str(path))
             parents = _parent_nodes(tree)
             for node in ast.walk(tree):
-                if _is_sdk_method(node) and not _is_approved_sdk_argument(node, parents, path):
+                if _is_self_api_alias(node):
+                    violations.append(f"{_display_path(path)}:{node.lineno}")
+                elif _is_sdk_method(node) and not _is_approved_sdk_argument(node, parents, path):
                     violations.append(f"{_display_path(path)}:{node.lineno}")
     return violations
 
@@ -52,6 +54,17 @@ def _is_sdk_method(node: ast.expr) -> bool:
         and node.value.value.attr == "api"
         and isinstance(node.value.value.value, ast.Name)
         and node.value.value.value.id == "self"
+    )
+
+
+def _is_self_api_alias(node: ast.AST) -> bool:
+    """Whether an assignment exposes ``self.api`` through a local alias."""
+    return (
+        isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.Attribute)
+        and node.value.attr == "api"
+        and isinstance(node.value.value, ast.Name)
+        and node.value.value.id == "self"
     )
 
 
@@ -132,3 +145,15 @@ def test_698_rejects_local_sdk_method_alias_bypass(tmp_path: Path) -> None:
     )
 
     assert _sdk_call_violations((source,)) == ["alias_bypass.py:2"]
+
+
+def test_698_rejects_local_api_root_alias_bypass(tmp_path: Path) -> None:
+    """The gate rejects aliases of ``self.api`` before a controller lookup."""
+    source = tmp_path / "api_root_alias_bypass.py"
+    source.write_text(
+        "async def fetch(self):\n"
+        "    api = self.api\n"
+        "    return await asyncio.to_thread(api.organizations.getOrganizationDevices, 'org-id')\n"
+    )
+
+    assert _sdk_call_violations((source,)) == ["api_root_alias_bypass.py:2"]

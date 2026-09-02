@@ -1,0 +1,131 @@
+[
+  {
+    "applicationUsage": [],
+    "clientId": "client_105",
+    "clientIp": "value_1057",
+    "clientMac": "value_1058"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_944",
+        "received": 49,
+        "sent": 9
+      },
+      {
+        "application": "value_861",
+        "received": 5568,
+        "sent": 141
+      },
+      {
+        "application": "value_867",
+        "received": 83359,
+        "sent": 674
+      },
+      {
+        "application": "value_856",
+        "received": 24502,
+        "sent": 47228
+      }
+    ],
+    "clientId": "client_013",
+    "clientIp": "value_1059",
+    "clientMac": "value_1060"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_857",
+        "received": 125,
+        "sent": 174
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 555
+      },
+      {
+        "application": "value_888",
+        "received": 628,
+        "sent": 4492
+      },
+      {
+        "application": "value_859",
+        "received": 153,
+        "sent": 143
+      }
+    ],
+    "clientId": "client_106",
+    "clientIp": "value_064",
+    "clientMac": "value_1061"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_107",
+    "clientIp": "value_1062",
+    "clientMac": "value_1063"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_108",
+    "clientIp": "value_1064",
+    "clientMac": "value_1065"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_109",
+    "clientIp": "value_1066",
+    "clientMac": "value_1067"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_110",
+    "clientIp": "value_1068",
+    "clientMac": "value_1069"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_857",
+        "received": 296,
+        "sent": 289
+      }
+    ],
+    "clientId": "client_111",
+    "clientIp": "value_1070",
+    "clientMac": "value_1071"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_112",
+    "clientIp": "value_1072",
+    "clientMac": "value_1073"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 0,
+        "sent": 3
+      },
+      {
+        "application": "value_855",
+        "received": 116,
+        "sent": 204
+      },
+      {
+        "application": "value_858",
+        "received": 15,
+        "sent": 49
+      },
+      {
+        "application": "value_859",
+        "received": 18,
+        "sent": 21
+      }
+    ],
+    "clientId": "client_113",
+    "clientIp": "value_1074",
+    "clientMac": "value_1075"
+  }
+]

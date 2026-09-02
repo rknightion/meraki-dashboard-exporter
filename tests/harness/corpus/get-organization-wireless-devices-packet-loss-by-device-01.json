@@ -1,0 +1,23 @@
+[
+  {
+    "device": {
+      "mac": "02:00:00:00:00:03",
+      "name": "device_name_005",
+      "serial": "device_003"
+    },
+    "downstream": {
+      "lossPercentage": null,
+      "lost": 0,
+      "total": 0
+    },
+    "network": {
+      "id": "network_001",
+      "name": "device_name_024"
+    },
+    "upstream": {
+      "lossPercentage": null,
+      "lost": 0,
+      "total": 0
+    }
+  }
+]

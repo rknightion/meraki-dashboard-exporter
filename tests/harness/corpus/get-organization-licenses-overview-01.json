@@ -1,0 +1,13 @@
+{
+  "expirationDate": "value_484",
+  "licensedDeviceCounts": {
+    "MR-ADV": 3,
+    "MS120-8LP": 1,
+    "MS220-8P": 2,
+    "MS250-24P": 1,
+    "MT": 8,
+    "MV": 2,
+    "SM": 10
+  },
+  "status": "OK"
+}

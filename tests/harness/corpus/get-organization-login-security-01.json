@@ -1,0 +1,23 @@
+{
+  "accountLockoutAttempts": null,
+  "apiAuthentication": {
+    "ipRestrictionsForKeys": {
+      "enabled": false,
+      "ranges": [
+        "value_1106"
+      ]
+    }
+  },
+  "enforceAccountLockout": false,
+  "enforceDifferentPasswords": true,
+  "enforceIdleTimeout": false,
+  "enforceLoginIpRanges": false,
+  "enforcePasswordExpiration": false,
+  "enforceStrongPasswords": true,
+  "enforceTwoFactorAuth": false,
+  "idleTimeoutMinutes": null,
+  "loginIpRanges": [],
+  "minimumPasswordLength": 8,
+  "numDifferentPasswords": 2,
+  "passwordExpirationDays": null
+}

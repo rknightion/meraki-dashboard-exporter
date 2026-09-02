@@ -1,0 +1,27 @@
+{
+  "items": [
+    {
+      "cpuCount": 4,
+      "mac": "02:00:00:00:00:03",
+      "model": "MR56-HW",
+      "name": "device_name_005",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "serial": "device_003",
+      "series": [
+        {
+          "cpuLoad5": 26112,
+          "ts": "2026-01-01T00:00:00Z"
+        }
+      ],
+      "tags": [
+        "tags_value_001"
+      ]
+    }
+  ]
+}

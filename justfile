@@ -287,6 +287,11 @@ harness-image:
 harness-run mode="baseline":
     uv run python -m tests.harness.runner run {{ if mode == "all" { "--all-modes" } else { "--mode " + quote(mode) } }}
 
+# measure the retained HOMELAB corpus through a full exporter process
+[group('dev')]
+harness-measure-homelab:
+    uv run python -m tests.fixtures.fleet_measurement
+
 # write the HTML coverage report to htmlcov/ and open it
 [group('dev')]
 coverage-report:

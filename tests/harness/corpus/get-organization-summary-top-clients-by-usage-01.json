@@ -1,0 +1,152 @@
+[
+  {
+    "id": "client_004",
+    "mac": "02:00:00:00:00:1f",
+    "name": "client_name_001",
+    "network": {
+      "id": "network_001",
+      "name": "client_name_002"
+    },
+    "usage": {
+      "downstream": 135349.771484375,
+      "percentage": 17.895695954258624,
+      "total": 140105.4560546875,
+      "upstream": 4755.6845703125
+    }
+  },
+  {
+    "id": "client_005",
+    "mac": "02:00:00:00:00:20",
+    "name": "client_name_003",
+    "network": {
+      "id": "network_001",
+      "name": "client_name_002"
+    },
+    "usage": {
+      "downstream": 50983.1796875,
+      "percentage": 11.411355812266065,
+      "total": 89339.5380859375,
+      "upstream": 38356.3583984375
+    }
+  },
+  {
+    "id": "client_006",
+    "mac": "02:00:00:00:00:21",
+    "name": "client_name_004",
+    "network": {
+      "id": "network_001",
+      "name": "client_name_002"
+    },
+    "usage": {
+      "downstream": 935.806640625,
+      "percentage": 7.067477212822563,
+      "total": 55331.2998046875,
+      "upstream": 54395.4931640625
+    }
+  },
+  {
+    "id": "client_007",
+    "mac": "02:00:00:00:00:22",
+    "name": "client_name_005",
+    "network": {
+      "id": "network_001",
+      "name": "client_name_002"
+    },
+    "usage": {
+      "downstream": 51894.6767578125,
+      "percentage": 6.662572398629445,
+      "total": 52161.298828125,
+      "upstream": 266.6220703125
+    }
+  },
+  {
+    "id": "client_008",
+    "mac": "02:00:00:00:00:23",
+    "name": "client_name_006",
+    "network": {
+      "id": "network_001",
+      "name": "client_name_002"
+    },
+    "usage": {
+      "downstream": 1360.103515625,
+      "percentage": 5.684755040571173,
+      "total": 44505.9638671875,
+      "upstream": 43145.8603515625
+    }
+  },
+  {
+    "id": "client_009",
+    "mac": "02:00:00:00:00:24",
+    "name": "client_name_007",
+    "network": {
+      "id": "network_001",
+      "name": "client_name_002"
+    },
+    "usage": {
+      "downstream": 2695.5537109375,
+      "percentage": 5.484920915181793,
+      "total": 42941.4619140625,
+      "upstream": 40245.908203125
+    }
+  },
+  {
+    "id": "client_010",
+    "mac": "02:00:00:00:00:25",
+    "name": "client_name_008",
+    "network": {
+      "id": "network_001",
+      "name": "client_name_002"
+    },
+    "usage": {
+      "downstream": 951.162109375,
+      "percentage": 4.870849688888434,
+      "total": 38133.896484375,
+      "upstream": 37182.734375
+    }
+  },
+  {
+    "id": "client_011",
+    "mac": "02:00:00:00:00:26",
+    "name": "client_name_009",
+    "network": {
+      "id": "network_001",
+      "name": "client_name_002"
+    },
+    "usage": {
+      "downstream": 22999.5673828125,
+      "percentage": 4.416048773971083,
+      "total": 34573.2587890625,
+      "upstream": 11573.69140625
+    }
+  },
+  {
+    "id": "client_012",
+    "mac": "02:00:00:00:00:27",
+    "name": "client_name_010",
+    "network": {
+      "id": "network_001",
+      "name": "client_name_002"
+    },
+    "usage": {
+      "downstream": 15005.810546875,
+      "percentage": 4.05204418815804,
+      "total": 31723.4658203125,
+      "upstream": 16717.6552734375
+    }
+  },
+  {
+    "id": "client_013",
+    "mac": "02:00:00:00:00:28",
+    "name": "client_name_011",
+    "network": {
+      "id": "network_001",
+      "name": "client_name_002"
+    },
+    "usage": {
+      "downstream": 20151.8447265625,
+      "percentage": 3.9692348625073115,
+      "total": 31075.1513671875,
+      "upstream": 10923.306640625
+    }
+  }
+]

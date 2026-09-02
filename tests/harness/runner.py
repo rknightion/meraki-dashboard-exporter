@@ -30,6 +30,14 @@ SHUTDOWN_BARRIER_TIMEOUT_SECONDS: Final = 40
 SHUTDOWN_RUNNING_PROOF_SECONDS: Final = 0.5
 SHUTDOWN_EXIT_TIMEOUT_SECONDS: Final = 30
 SHUTDOWN_GRACE_PERIOD_SECONDS: Final = 150
+AVAILABILITY_OPERATIONS: Final = {
+    "getOrganization",
+    "getOrganizationNetworks",
+    "getOrganizationDevices",
+    "getOrganizationDevicesAvailabilities",
+}
+type RouteKey = tuple[str, str, str]
+type ExpectedRoutes = dict[RouteKey, int] | set[str]
 
 
 class HarnessError(RuntimeError):
@@ -92,12 +100,16 @@ class HarnessRunner:
         self.artifacts.mkdir(parents=True, exist_ok=True)
         exporter_id, proxy_id = self._build_images()
         evidence: list[dict[str, object]] = []
-        expected_paths = {fixture.path for fixture in corpus.fixtures}
+        expected_routes = {
+            (fixture.method, fixture.path, fixture.query): fixture.status_code
+            for fixture in corpus.fixtures
+            if fixture.sdk_operation in AVAILABILITY_OPERATIONS
+        }
         for mode in modes:
             try:
                 evidence.append(
                     self._run_mode(
-                        mode, exporter_id, proxy_id, len(corpus.fixtures), expected_paths
+                        mode, exporter_id, proxy_id, len(corpus.fixtures), expected_routes
                     )
                 )
             except Exception as error:
@@ -116,7 +128,11 @@ class HarnessRunner:
         corpus = load_manifest(self.manifest, require_real=True)
         self.artifacts.mkdir(parents=True, exist_ok=True)
         exporter_id, proxy_id = self._build_images()
-        expected_paths = {fixture.path for fixture in corpus.fixtures}
+        expected_routes = {
+            (fixture.method, fixture.path, fixture.query): fixture.status_code
+            for fixture in corpus.fixtures
+            if fixture.sdk_operation in AVAILABILITY_OPERATIONS
+        }
         with tempfile.TemporaryDirectory(prefix="duration-observation-") as temporary:
             runtime = Path(temporary)
             shutil.copytree(self.manifest.parent, runtime / "corpus")
@@ -153,7 +169,7 @@ class HarnessRunner:
             try:
                 _run([*command, "up", "--detach", "--no-build"], env=env)
                 self._probe_exporter(command, env)
-                pre = self._wait_for_duration_baseline(command, env, runtime, expected_paths)
+                pre = self._wait_for_duration_baseline(command, env, runtime, expected_routes)
                 journal_before = (runtime / "journal.jsonl").read_text(encoding="utf-8")
                 logs_before = _duration_logs(command, env)
                 boundary = len(journal_before.splitlines())
@@ -527,7 +543,7 @@ class HarnessRunner:
         command: list[str],
         env: dict[str, str],
         runtime: Path,
-        expected_paths: set[str],
+        expected_routes: dict[RouteKey, int],
     ) -> dict[str, object]:
         """Wait for a completed, stable baseline replay before observing the next wrapper."""
         deadline = time.monotonic() + DURATION_OBSERVATION_TIMEOUT_SECONDS
@@ -543,7 +559,7 @@ class HarnessRunner:
             logs_first = _duration_logs(command, env)
             if (
                 _status_from_snapshot(first)["is_running"]
-                or not _baseline_fixture_evidence(journal, expected_paths)
+                or not _baseline_fixture_evidence(journal, expected_routes)
                 or not _baseline_cache_evidence(_parse_json_logs(logs_first.splitlines()))
                 or not _product_metric_evidence(first["metrics_raw"])
             ):
@@ -641,7 +657,7 @@ class HarnessRunner:
         exporter_id: str,
         proxy_id: str,
         fixture_count: int,
-        expected_paths: set[str],
+        expected_routes: dict[RouteKey, int],
     ) -> dict[str, object]:
         with tempfile.TemporaryDirectory(prefix="failure-harness-") as temporary:
             runtime = Path(temporary)
@@ -691,7 +707,7 @@ class HarnessRunner:
                 _run([*command, "up", "--detach", "--no-build"], env=env)
                 probe = self._probe_exporter(command, env)
                 journal, logs, observation_seconds = self._wait_for_observation(
-                    command, env, runtime, mode, expected_paths
+                    command, env, runtime, mode, expected_routes
                 )
                 self._write_mode_artifacts(mode, journal, logs, probe)
                 result = {
@@ -875,20 +891,34 @@ class HarnessRunner:
         env: dict[str, str],
         runtime: Path,
         mode: FaultMode,
-        expected_paths: set[str],
+        expected_routes: ExpectedRoutes,
+        *,
+        timeout_seconds: float = 40,
     ) -> tuple[str, str, float]:
         started = time.monotonic()
-        deadline = started + 40
+        deadline = started + timeout_seconds
         journal = ""
         logs = ""
         while time.monotonic() < deadline:
             journal = (runtime / "journal.jsonl").read_text(encoding="utf-8")
-            logs = _run([*command, "logs", "--no-color"], env=env).stdout
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                logs = _run(
+                    [*command, "logs", "--no-color"],
+                    env=env,
+                    timeout=remaining,
+                ).stdout
+            except subprocess.TimeoutExpired:
+                break
             elapsed = time.monotonic() - started
-            if _mode_observed(mode, journal, logs, expected_paths, elapsed=elapsed):
+            if _mode_observed(mode, journal, logs, expected_routes, elapsed=elapsed):
                 return journal, logs, elapsed
             time.sleep(0.25)
-        raise HarnessError(f"mode {mode.value!r} produced no expected evidence within 40 seconds")
+        raise HarnessError(
+            f"mode {mode.value!r} produced no expected evidence within {timeout_seconds:g} seconds"
+        )
 
 
 def _run(
@@ -1074,9 +1104,9 @@ def _duration_observation(
     }
 
 
-def _has_verified_paths(journal: str, expected_paths: set[str]) -> bool:
-    """Check that all fixed corpus paths have a verified fixture match."""
-    return _baseline_fixture_evidence(journal, expected_paths)
+def _has_verified_paths(journal: str, expected_routes: ExpectedRoutes) -> bool:
+    """Check that all fixed corpus routes have their verified response."""
+    return _baseline_fixture_evidence(journal, expected_routes)
 
 
 def _post_boundary_verified_paths(
@@ -1136,24 +1166,43 @@ def _parse_json_logs(lines: list[str]) -> list[dict[str, object]]:
     return parsed
 
 
-def _baseline_fixture_evidence(journal: str, expected_paths: set[str]) -> bool:
-    """Require matched verified fixtures and a separate HTTP 200 response for each route."""
+def _baseline_fixture_evidence(journal: str, expected_routes: ExpectedRoutes) -> bool:
+    """Require a verified match and captured-status response for each exact route."""
     entries = _journal_entries(journal)
-    matched = {
-        str(entry["path"])
+    matched_routes = {
+        _journal_route(entry)
         for entry in entries
         if entry.get("reason") == "matched"
         and entry.get("evidence") == "verified fixture"
-        and isinstance(entry.get("path"), str)
+        and _journal_route(entry) is not None
     }
-    responded = {
-        str(entry["path"])
+    response_evidence = {
+        (_journal_route(entry), entry.get("evidence"))
         for entry in entries
-        if entry.get("reason") == "response:sent"
-        and entry.get("evidence") == "HTTP 200 response sent"
-        and isinstance(entry.get("path"), str)
+        if entry.get("reason") == "response:sent" and _journal_route(entry) is not None
     }
-    return expected_paths <= matched and expected_paths <= responded
+    if isinstance(expected_routes, set):
+        matched_paths = {route[1] for route in matched_routes if route is not None}
+        responded_paths = {
+            route[1]
+            for route, evidence in response_evidence
+            if route is not None and evidence == "HTTP 200 response sent"
+        }
+        return expected_routes <= matched_paths and expected_routes <= responded_paths
+    return all(
+        route in matched_routes
+        and (route, f"HTTP {status_code} response sent") in response_evidence
+        for route, status_code in expected_routes.items()
+    )
+
+
+def _journal_route(entry: dict[str, object]) -> RouteKey | None:
+    method = entry.get("method")
+    path = entry.get("path")
+    query = entry.get("query")
+    if not all(isinstance(value, str) for value in (method, path, query)):
+        return None
+    return method, path, query
 
 
 def _journal_entries(journal: str) -> list[dict[str, object]]:
@@ -1423,7 +1472,7 @@ def _mode_observed(
     mode: FaultMode,
     journal: str,
     logs: str,
-    expected_paths: set[str],
+    expected_routes: ExpectedRoutes,
     *,
     elapsed: float,
 ) -> bool:
@@ -1437,8 +1486,12 @@ def _mode_observed(
         if isinstance(value, dict):
             entries.append(value)
     if mode in {FaultMode.BASELINE, FaultMode.TRUSTED_TLS}:
-        matched = {entry.get("path") for entry in entries if entry.get("reason") == "matched"}
-        return expected_paths <= matched
+        return _baseline_fixture_evidence(journal, expected_routes)
+    expected_paths = (
+        expected_routes
+        if isinstance(expected_routes, set)
+        else {route[1] for route in expected_routes}
+    )
     lowered_logs = logs.lower()
     if mode == FaultMode.TLS_FAILURE:
         return any(

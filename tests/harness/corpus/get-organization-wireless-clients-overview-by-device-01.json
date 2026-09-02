@@ -1,0 +1,23 @@
+{
+  "items": [
+    {
+      "counts": {
+        "byStatus": {
+          "online": 0
+        }
+      },
+      "network": {
+        "id": "network_001"
+      },
+      "serial": "device_003"
+    }
+  ],
+  "meta": {
+    "counts": {
+      "items": {
+        "remaining": 0,
+        "total": 1
+      }
+    }
+  }
+}

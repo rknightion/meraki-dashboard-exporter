@@ -1,0 +1,28 @@
+[
+  {
+    "mac": "02:00:00:00:00:02",
+    "name": "device_name_004",
+    "network": {
+      "id": "network_001"
+    },
+    "productType": "switch",
+    "serial": "device_002",
+    "slots": [
+      {
+        "model": "PWR-MS320-640WAC",
+        "number": 1,
+        "serial": "device_028",
+        "status": "powering"
+      },
+      {
+        "model": null,
+        "number": 2,
+        "serial": null,
+        "status": "not connected"
+      }
+    ],
+    "tags": [
+      "tags_value_001"
+    ]
+  }
+]

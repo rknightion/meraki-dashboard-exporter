@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from cryptography import x509
@@ -35,8 +36,13 @@ def _manifest(tmp_path: Path, *, evidence_status: str = "LIVE-VERIFIED") -> Path
             "/api/v1/organizations/org_001/devices/availabilities",
         ),
     }
+    for index, operation in enumerate(sorted(REQUIRED_OPERATIONS - fixtures.keys()), start=1):
+        fixtures[operation] = (
+            f"profile-{index:03d}.json",
+            f"/api/v1/harness/profile/{index:03d}",
+        )
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "fixtures": [],
     }
     for operation, (name, path) in fixtures.items():
@@ -45,10 +51,11 @@ def _manifest(tmp_path: Path, *, evidence_status: str = "LIVE-VERIFIED") -> Path
         manifest["fixtures"].append({
             "fixture": name,
             "sha256": hashlib.sha256(payload_path.read_bytes()).hexdigest(),
-            "capture_date_utc": "2026-08-14",
+            "captured_at_utc": "2026-08-14T12:34:56+00:00",
             "product_family": "organizations",
             "method": "GET",
             "path": path,
+            "status_code": 200,
             "sdk_operation": operation,
             "sanitizer": {
                 "name": "failure-harness",
@@ -76,10 +83,10 @@ def test_manifest_requires_live_provenance_and_matching_digest(tmp_path: Path) -
         load_manifest(manifest, require_real=True)
 
 
-def test_real_manifest_requires_the_exact_four_unique_operations_and_routes(
+def test_real_manifest_requires_the_full_profile_but_allows_multiple_routes_per_operation(
     tmp_path: Path,
 ) -> None:
-    """The runnable corpus is a fixed, route-unique four-operation contract."""
+    """The runnable corpus is operation-complete and route-unique, not operation-unique."""
     manifest = _manifest(tmp_path)
     data = json.loads(manifest.read_text())
     assert {row["sdk_operation"] for row in data["fixtures"]} == REQUIRED_OPERATIONS
@@ -91,26 +98,40 @@ def test_real_manifest_requires_the_exact_four_unique_operations_and_routes(
 
     manifest = _manifest(tmp_path)
     data = json.loads(manifest.read_text())
-    data["fixtures"][-1]["sdk_operation"] = "getOrganization"
+    duplicate = dict(data["fixtures"][0])
+    duplicate["fixture"] = "organization-second-route.json"
+    duplicate["path"] = "/api/v1/organizations/org_002"
+    payload = tmp_path / duplicate["fixture"]
+    payload.write_text('{"id":"org_002"}')
+    duplicate["sha256"] = hashlib.sha256(payload.read_bytes()).hexdigest()
+    data["fixtures"].append(duplicate)
     manifest.write_text(json.dumps(data))
-    with pytest.raises(CorpusError, match="duplicate sdk_operation"):
-        load_manifest(manifest, require_real=True)
+    loaded = load_manifest(manifest, require_real=True)
+    assert sum(item.sdk_operation == "getOrganization" for item in loaded.fixtures) == 2
 
-    manifest = _manifest(tmp_path)
-    data = json.loads(manifest.read_text())
-    data["fixtures"][-1].update({
-        field: data["fixtures"][0][field]
-        for field in ("method", "path", "query")
-        if field in data["fixtures"][0]
-    })
+    data["fixtures"][-1]["path"] = data["fixtures"][0]["path"]
     manifest.write_text(json.dumps(data))
     with pytest.raises(CorpusError, match="duplicate method/path/query route"):
         load_manifest(manifest, require_real=True)
 
 
+def test_manifest_preserves_route_timestamp_and_captured_status(tmp_path: Path) -> None:
+    manifest = _manifest(tmp_path)
+    data = json.loads(manifest.read_text())
+    data["fixtures"][0]["status_code"] = 404
+    manifest.write_text(json.dumps(data))
+
+    corpus = load_manifest(manifest, require_real=True)
+    fixture = corpus.fixtures[0]
+    assert fixture.captured_at_utc == "2026-08-14T12:34:56+00:00"
+    assert fixture.status_code == 404
+    app = ReplayApplication(corpus, mode=FaultMode.BASELINE)
+    assert app.route("GET", "/api/v1/organizations/org_001", "")[0] == 404
+
+
 def test_sanitizer_shares_operation_aware_references_and_replaces_embedded_values() -> None:
-    """Four synthetic shapes retain joins without retaining raw identifying values."""
-    captures = {
+    """Payload, path, and query retain joins without retaining identifying values."""
+    payloads = {
         "getOrganization": {
             "id": "123",
             "name": "HQ",
@@ -126,6 +147,9 @@ def test_sanitizer_shares_operation_aware_references_and_replaces_embedded_value
                 "alertProfileIds": [676102894059091620],
             }
         ],
+        "getNetworkClients": [{"id": "C_1", "networkId": "N_1"}],
+        "getNetworkClientsApplicationUsage": [],
+        "getDeviceSwitchPortsStatuses": [{"cdp": {"version": "raw source fingerprint"}}],
         "getNetwork": {
             "id": "N_1",
             "name": "HQ LAN",
@@ -136,14 +160,73 @@ def test_sanitizer_shares_operation_aware_references_and_replaces_embedded_value
             "productTypes": ["wireless", "switch"],
         },
     }
-    sanitized = sanitize_capture_set(captures)
-    organization = cast(dict[str, str], sanitized["getOrganization"])
-    networks = cast(list[dict[str, str]], sanitized["getOrganizationNetworks"])
-    devices = cast(list[dict[str, str]], sanitized["getOrganizationDevices"])
-    availabilities = cast(
-        list[dict[str, object]], sanitized["getOrganizationDevicesAvailabilities"]
+    captures = [
+        {
+            "operation": operation,
+            "captured_at_utc": "2026-08-14T12:34:56+00:00",
+            "method": "GET",
+            "path": f"/api/v1/organizations/123/{operation}",
+            "query": "",
+            "status_code": 200,
+            "payload": payload,
+        }
+        for operation, payload in payloads.items()
+    ]
+    captures.extend(
+        {
+            "operation": operation,
+            "captured_at_utc": "2026-08-14T12:34:56+00:00",
+            "method": "GET",
+            "path": f"/api/v1/harness/{index:03d}",
+            "query": "",
+            "status_code": 200,
+            "payload": [],
+        }
+        for index, operation in enumerate(sorted(REQUIRED_OPERATIONS - payloads.keys()), start=1)
     )
-    network = cast(dict[str, str], sanitized["getNetwork"])
+    next(row for row in captures if row["operation"] == "getOrganizationDevicesAvailabilities")[
+        "path"
+    ] = "/api/v1/organizations/123/devices/availabilities"
+    next(row for row in captures if row["operation"] == "getNetworkClientsApplicationUsage")[
+        "query"
+    ] = "clients=C_1&timespan=86400"
+    api_requests = next(row for row in captures if row["operation"] == "getOrganizationApiRequests")
+    api_requests.update({
+        "path": "/api/v1/organizations/123/apiRequests",
+        "query": "timespan=3600&perPage=1000",
+        "payload": [{"operationId": "first"}],
+    })
+    captures.append({
+        **api_requests,
+        "captured_at_utc": "2026-08-14T12:34:58+00:00",
+        "query": "endingBefore=cursor&timespan=3600&perPage=1000",
+        "payload": [{"operationId": "second"}],
+    })
+    captures.append({
+        "operation": "getNetwork",
+        "captured_at_utc": "2026-08-14T12:34:57+00:00",
+        "method": "GET",
+        "path": "/api/v1/organizations/123/networks/N_1/devices/Q2XX-AAAA-BBBB",
+        "query": "networkId=N_1&serial=Q2XX-AAAA-BBBB",
+        "status_code": 200,
+        "payload": payloads["getNetwork"],
+    })
+    captures.append({
+        **captures[0],
+        "captured_at_utc": "2026-08-14T12:35:00+00:00",
+        "payload": {"id": "999", "name": "later duplicate"},
+    })
+    sanitized = sanitize_capture_set(captures)
+    assert sum(row["operation"] == "getOrganization" for row in sanitized) == 1
+    by_operation = {str(row["operation"]): row for row in sanitized}
+    organization = cast(dict[str, str], by_operation["getOrganization"]["payload"])
+    networks = cast(list[dict[str, str]], by_operation["getOrganizationNetworks"]["payload"])
+    devices = cast(list[dict[str, str]], by_operation["getOrganizationDevices"]["payload"])
+    availabilities = cast(
+        list[dict[str, object]], by_operation["getOrganizationDevicesAvailabilities"]["payload"]
+    )
+    network_row = by_operation["getNetwork"]
+    network = cast(dict[str, str], network_row["payload"])
     assert organization["id"] == "org_001"
     assert networks[0]["organizationId"] == "org_001"
     assert networks[0]["id"] == "network_001"
@@ -164,16 +247,107 @@ def test_sanitizer_shares_operation_aware_references_and_replaces_embedded_value
     assert network["lng"] == 0.0
     assert network["productTypes"] == ["wireless", "switch"]
     assert "10.0.0.1" not in json.dumps(sanitized)
+    assert urlsplit(str(network_row["path"])).path.endswith(
+        "/organizations/org_001/networks/network_001/devices/device_001"
+    )
+    assert parse_qs(str(network_row["query"])) == {
+        "networkId": ["network_001"],
+        "serial": ["device_001"],
+    }
+    clients = cast(list[dict[str, str]], by_operation["getNetworkClients"]["payload"])
+    application_usage = by_operation["getNetworkClientsApplicationUsage"]
+    assert clients[0]["id"] == "client_001"
+    assert parse_qs(str(application_usage["query"])) == {
+        "clients": ["client_001"],
+        "timespan": ["86400"],
+    }
+    api_usage = [row for row in sanitized if row["operation"] == "getOrganizationApiRequests"]
+    assert len(api_usage) == 1
+    assert len(cast(list[object], api_usage[0]["payload"])) == 2
+    assert api_usage[0]["source_route_count"] == 2
+    availability_row = next(
+        row for row in sanitized if row["operation"] == "getOrganizationDevicesAvailabilities"
+    )
+    assert str(availability_row["path"]).endswith("/organizations/org_001/devices/availabilities")
+    switch_status = by_operation["getDeviceSwitchPortsStatuses"]
+    switch_payload = cast(list[dict[str, dict[str, str]]], switch_status["payload"])
+    assert switch_payload[0]["cdp"]["version"] != "raw source fingerprint"
 
 
 def test_sanitizer_rejects_credentials() -> None:
     with pytest.raises(SanitizationError, match="credential"):
-        sanitize_capture_set({"getOrganization": {"X-Cisco-Meraki-API-Key": "secret"}})
+        sanitize_capture_set([
+            {
+                "operation": "getOrganization",
+                "captured_at_utc": "2026-08-14T12:34:56+00:00",
+                "method": "GET",
+                "path": "/api/v1/organizations/123",
+                "query": "",
+                "status_code": 200,
+                "payload": {"X-Cisco-Meraki-API-Key": "secret"},
+            }
+        ])
+
+
+def test_sanitizer_never_reuses_a_raw_identifier_as_its_placeholder() -> None:
+    """A live value resembling the placeholder namespace is still replaced."""
+    captures = [
+        {
+            "operation": operation,
+            "captured_at_utc": "2026-08-14T12:34:56+00:00",
+            "method": "GET",
+            "path": f"/api/v1/harness/{index:03d}",
+            "query": "",
+            "status_code": 200,
+            "payload": ([{"mac": "02:00:00:00:00:01"}] if operation == "getNetworkClients" else []),
+        }
+        for index, operation in enumerate(sorted(REQUIRED_OPERATIONS), start=1)
+    ]
+
+    sanitized = sanitize_capture_set(captures)
+
+    clients = next(row for row in sanitized if row["operation"] == "getNetworkClients")
+    assert clients["payload"] != [{"mac": "02:00:00:00:00:01"}]
+
+
+def test_sanitizer_rejects_unmapped_identifier_path_segments() -> None:
+    """A known identifier may not pass through an unknown path-parameter position."""
+    captures = [
+        {
+            "operation": operation,
+            "captured_at_utc": "2026-08-14T12:34:56+00:00",
+            "method": "GET",
+            "path": (
+                "/api/v1/networks/N_1/clients/C_1"
+                if operation == "getNetworkClients"
+                else f"/api/v1/harness/{index:03d}"
+            ),
+            "query": "",
+            "status_code": 200,
+            "payload": (
+                [{"id": "C_1", "networkId": "N_1"}] if operation == "getNetworkClients" else []
+            ),
+        }
+        for index, operation in enumerate(sorted(REQUIRED_OPERATIONS), start=1)
+    ]
+
+    with pytest.raises(SanitizationError, match="unmapped identifier path segment"):
+        sanitize_capture_set(captures)
 
 
 def test_sanitizer_requires_the_refresh_contract_operations() -> None:
     with pytest.raises(SanitizationError, match="missing required operations"):
-        sanitize_capture_set({"getOrganization": {"id": "123"}})
+        sanitize_capture_set([
+            {
+                "operation": "getOrganization",
+                "captured_at_utc": "2026-08-14T12:34:56+00:00",
+                "method": "GET",
+                "path": "/api/v1/organizations/123",
+                "query": "",
+                "status_code": 200,
+                "payload": {"id": "123"},
+            }
+        ])
 
 
 def test_every_fault_has_an_externally_checkable_decision(tmp_path: Path) -> None:
@@ -210,8 +384,27 @@ def test_every_fault_has_an_externally_checkable_decision(tmp_path: Path) -> Non
 
 def test_runner_requires_external_evidence_for_each_mode() -> None:
     paths = {"/api/v1/organizations/org_001", "/api/v1/organizations/org_001/networks"}
-    complete = "\n".join(json.dumps({"path": path, "reason": "matched"}) for path in sorted(paths))
-    partial = json.dumps({"path": next(iter(paths)), "reason": "matched"})
+    complete = "\n".join(
+        json.dumps(entry)
+        for path in sorted(paths)
+        for entry in (
+            {
+                "method": "GET",
+                "path": path,
+                "query": "",
+                "reason": "matched",
+                "evidence": "verified fixture",
+            },
+            {
+                "method": "GET",
+                "path": path,
+                "query": "",
+                "reason": "response:sent",
+                "evidence": "HTTP 200 response sent",
+            },
+        )
+    )
+    partial = "\n".join(complete.splitlines()[:2])
     assert _mode_observed(FaultMode.BASELINE, complete, "", paths, elapsed=1)
     assert not _mode_observed(FaultMode.BASELINE, partial, "", paths, elapsed=1)
     assert _mode_observed(
@@ -373,6 +566,8 @@ async def test_faults_are_fail_closed_and_only_apply_to_selected_operation(tmp_p
             "/api/v1/organizations/org_001",
             "",
             "getOrganization",
+            200,
+            "2026-08-14T12:34:56+00:00",
         ),
         Fixture(
             network,
@@ -380,6 +575,8 @@ async def test_faults_are_fail_closed_and_only_apply_to_selected_operation(tmp_p
             "/api/v1/organizations/org_001/networks",
             "",
             "getOrganizationNetworks",
+            200,
+            "2026-08-14T12:34:56+00:00",
         ),
     ))
     app = ReplayApplication(
@@ -456,6 +653,36 @@ def test_runner_resolves_exact_ids_and_always_tears_down(
     )
     runner.run([FaultMode.BASELINE])
     assert any(command[-2:] == ("down", "--volumes") for command in calls)
+
+
+def test_runner_bounds_compose_log_reads_by_the_observation_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stuck Compose log read cannot outlive the observation timeout."""
+    (tmp_path / "journal.jsonl").touch()
+    timeouts: list[object] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
+        timeouts.append(kwargs.get("timeout"))
+        raise subprocess.TimeoutExpired(command, 1)
+
+    runner = HarnessRunner(
+        _manifest(tmp_path), tmp_path / "artifacts", exporter_image="exporter:local"
+    )
+    monkeypatch.setattr("tests.harness.runner._run", fake_run)
+
+    with pytest.raises(HarnessError, match="produced no expected evidence"):
+        runner._wait_for_observation(
+            ["docker", "compose"],
+            {},
+            tmp_path,
+            FaultMode.BASELINE,
+            {},
+            timeout_seconds=1,
+        )
+
+    assert timeouts and all(isinstance(timeout, int | float) for timeout in timeouts)
+    assert all(0 < cast(float, timeout) <= 1 for timeout in timeouts)
 
 
 def test_runner_falls_back_to_bounded_exact_project_cleanup(
@@ -772,17 +999,17 @@ def test_compose_has_exact_env_keys_and_immutable_images() -> None:
     compose = Path("tests/harness/compose.yml").read_text(encoding="utf-8")
     for key in (
         "MERAKI_EXPORTER_MERAKI__API_KEY",
-        "MERAKI_EXPORTER_MERAKI__ORG_ID",
+        "MERAKI_EXPORTER_MERAKI__ORG_ID=${HARNESS_ORG_ID:-org_001}",
         "MERAKI_EXPORTER_MERAKI__API_BASE_URL",
         "MERAKI_EXPORTER_MERAKI__ALLOW_CUSTOM_API_BASE_URL",
-        "MERAKI_EXPORTER_COLLECTORS__PROFILE=availability",
-        "MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS=device",
+        "MERAKI_EXPORTER_COLLECTORS__PROFILE=${HARNESS_PROFILE:-availability}",
+        "MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS=${HARNESS_ENABLED_COLLECTORS:-device}",
+        "MERAKI_EXPORTER_CLIENTS__ENABLED=${HARNESS_CLIENTS_ENABLED:-false}",
         "MERAKI_EXPORTER_API__TIMEOUT",
         "MERAKI_EXPORTER_API__MAX_RETRIES",
         "MERAKI_EXPORTER_SERVER__PORT=9099",
     ):
         assert key in compose
-    assert "MERAKI_EXPORTER_MERAKI__ORG_ID=org_001" in compose
     assert "MERAKI_EXPORTER_API__MAX_RETRIES=1" in compose
     assert compose.count("pull_policy: never") == 2
     assert compose.count('com.centurylinklabs.watchtower.enable: "false"') == 2

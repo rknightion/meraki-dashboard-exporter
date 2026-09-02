@@ -1,0 +1,715 @@
+[
+  {
+    "client": {
+      "id": "network_004",
+      "name": "network_name_020",
+      "url": "url_value_024"
+    },
+    "clientId": "client_001",
+    "ipv4": {
+      "address": "address_value_011",
+      "gateway": null,
+      "subnet": "value_109"
+    },
+    "isAllowed": true,
+    "isConfigured": false,
+    "lastAck": {
+      "ipv4": {
+        "address": "address_value_012"
+      },
+      "ts": "2026-01-01T00:00:00Z"
+    },
+    "lastPacket": {
+      "destination": {
+        "ipv4": {
+          "address": "address_value_012"
+        },
+        "mac": "02:00:00:00:00:15",
+        "port": 68
+      },
+      "ethernet": {
+        "type": "0x0800"
+      },
+      "fields": {
+        "chaddr": "value_114",
+        "ciaddr": "value_112",
+        "flags": "value_111",
+        "giaddr": "value_113",
+        "hlen": 6,
+        "hops": 0,
+        "htype": 1,
+        "magicCookie": "value_115",
+        "op": 2,
+        "options": [
+          {
+            "name": "network_name_021",
+            "value": "value_116"
+          },
+          {
+            "name": "network_name_022",
+            "value": "value_117"
+          },
+          {
+            "name": "network_name_023",
+            "value": "value_118"
+          },
+          {
+            "name": "network_name_024",
+            "value": "value_119"
+          },
+          {
+            "name": "network_name_025",
+            "value": "value_120"
+          },
+          {
+            "name": "network_name_026",
+            "value": "value_051"
+          },
+          {
+            "name": "network_name_027",
+            "value": "value_121"
+          },
+          {
+            "name": "network_name_028",
+            "value": "value_051"
+          },
+          {
+            "name": "network_name_029",
+            "value": "value_122"
+          },
+          {
+            "name": "network_name_030",
+            "value": "value_123"
+          },
+          {
+            "name": "network_name_031",
+            "value": "value_124"
+          },
+          {
+            "name": "network_name_032",
+            "value": "value_125"
+          },
+          {
+            "name": "network_name_033",
+            "value": "value_126"
+          },
+          {
+            "name": "network_name_034",
+            "value": "value_127"
+          }
+        ],
+        "secs": 0,
+        "siaddr": "value_051",
+        "sname": "value_051",
+        "xid": "x_id_001",
+        "yiaddr": "value_112"
+      },
+      "ip": {
+        "dscp": {
+          "ecn": 0,
+          "tag": 0
+        },
+        "headerLength": 5,
+        "id": "network_005",
+        "length": 505,
+        "protocol": 17,
+        "ttl": 64,
+        "version": 4
+      },
+      "source": {
+        "ipv4": {
+          "address": "address_value_007"
+        },
+        "mac": "02:00:00:00:00:14",
+        "port": 67
+      },
+      "type": "ACK",
+      "udp": {
+        "checksum": "value_110",
+        "length": 485
+      }
+    },
+    "lastSeenAt": "2026-01-01T00:00:00Z",
+    "mac": "02:00:00:00:00:14",
+    "seenBy": [
+      {
+        "name": "network_name_018",
+        "serial": "device_001",
+        "url": "url_value_022"
+      },
+      {
+        "name": "network_name_019",
+        "serial": "device_002",
+        "url": "url_value_023"
+      }
+    ],
+    "type": "discovered",
+    "vlan": 1
+  },
+  {
+    "client": {
+      "id": "network_006",
+      "name": "network_name_020",
+      "url": "url_value_025"
+    },
+    "clientId": "client_002",
+    "ipv4": {
+      "address": "address_value_013",
+      "gateway": null,
+      "subnet": "value_128"
+    },
+    "isAllowed": true,
+    "isConfigured": false,
+    "lastAck": {
+      "ipv4": {
+        "address": "address_value_014"
+      },
+      "ts": "2026-01-01T00:00:00Z"
+    },
+    "lastPacket": {
+      "destination": {
+        "ipv4": {
+          "address": "address_value_016"
+        },
+        "mac": "02:00:00:00:00:17",
+        "port": 68
+      },
+      "ethernet": {
+        "type": "0x0800"
+      },
+      "fields": {
+        "chaddr": "value_132",
+        "ciaddr": "value_130",
+        "flags": "value_111",
+        "giaddr": "value_113",
+        "hlen": 6,
+        "hops": 0,
+        "htype": 1,
+        "magicCookie": "value_115",
+        "op": 2,
+        "options": [
+          {
+            "name": "network_name_021",
+            "value": "value_116"
+          },
+          {
+            "name": "network_name_022",
+            "value": "value_117"
+          },
+          {
+            "name": "network_name_023",
+            "value": "value_118"
+          },
+          {
+            "name": "network_name_024",
+            "value": "value_119"
+          },
+          {
+            "name": "network_name_025",
+            "value": "value_133"
+          },
+          {
+            "name": "network_name_026",
+            "value": "value_131"
+          },
+          {
+            "name": "network_name_027",
+            "value": "value_121"
+          },
+          {
+            "name": "network_name_035",
+            "value": "value_134"
+          },
+          {
+            "name": "network_name_028",
+            "value": "value_131"
+          },
+          {
+            "name": "network_name_036",
+            "value": "value_135"
+          },
+          {
+            "name": "network_name_029",
+            "value": "value_122"
+          },
+          {
+            "name": "network_name_030",
+            "value": "value_123"
+          },
+          {
+            "name": "network_name_031",
+            "value": "value_124"
+          },
+          {
+            "name": "network_name_032",
+            "value": "value_125"
+          },
+          {
+            "name": "network_name_033",
+            "value": "value_136"
+          }
+        ],
+        "secs": 23540,
+        "siaddr": "value_131",
+        "sname": "value_131",
+        "xid": "x_id_002",
+        "yiaddr": "value_130"
+      },
+      "ip": {
+        "dscp": {
+          "ecn": 0,
+          "tag": 0
+        },
+        "headerLength": 5,
+        "id": "network_007",
+        "length": 592,
+        "protocol": 17,
+        "ttl": 64,
+        "version": 4
+      },
+      "source": {
+        "ipv4": {
+          "address": "address_value_015"
+        },
+        "mac": "02:00:00:00:00:16",
+        "port": 67
+      },
+      "type": "ACK",
+      "udp": {
+        "checksum": "value_129",
+        "length": 572
+      }
+    },
+    "lastSeenAt": "2026-01-01T00:00:00Z",
+    "mac": "02:00:00:00:00:16",
+    "seenBy": [
+      {
+        "name": "network_name_018",
+        "serial": "device_001",
+        "url": "url_value_022"
+      },
+      {
+        "name": "network_name_019",
+        "serial": "device_002",
+        "url": "url_value_023"
+      }
+    ],
+    "type": "discovered",
+    "vlan": 50
+  },
+  {
+    "client": {
+      "id": null,
+      "name": null,
+      "url": null
+    },
+    "clientId": null,
+    "ipv4": {
+      "address": "address_value_017",
+      "gateway": null,
+      "subnet": "value_137"
+    },
+    "isAllowed": true,
+    "isConfigured": false,
+    "lastAck": {
+      "ipv4": {
+        "address": "address_value_018"
+      },
+      "ts": "2026-01-01T00:00:00Z"
+    },
+    "lastPacket": {
+      "destination": {
+        "ipv4": {
+          "address": "address_value_018"
+        },
+        "mac": "02:00:00:00:00:1a",
+        "port": 68
+      },
+      "ethernet": {
+        "type": "0x0800"
+      },
+      "fields": {
+        "chaddr": "value_141",
+        "ciaddr": "value_139",
+        "flags": "value_111",
+        "giaddr": "value_113",
+        "hlen": 6,
+        "hops": 0,
+        "htype": 1,
+        "magicCookie": "value_115",
+        "op": 2,
+        "options": [
+          {
+            "name": "network_name_021",
+            "value": "value_116"
+          },
+          {
+            "name": "network_name_022",
+            "value": "value_117"
+          },
+          {
+            "name": "network_name_023",
+            "value": "value_118"
+          },
+          {
+            "name": "network_name_024",
+            "value": "value_119"
+          },
+          {
+            "name": "network_name_025",
+            "value": "value_142"
+          },
+          {
+            "name": "network_name_026",
+            "value": "value_140"
+          },
+          {
+            "name": "network_name_028",
+            "value": "value_140"
+          },
+          {
+            "name": "network_name_030",
+            "value": "value_123"
+          },
+          {
+            "name": "network_name_031",
+            "value": "value_124"
+          },
+          {
+            "name": "network_name_032",
+            "value": "value_125"
+          },
+          {
+            "name": "network_name_033",
+            "value": "value_126"
+          },
+          {
+            "name": "network_name_034",
+            "value": "value_127"
+          }
+        ],
+        "secs": 0,
+        "siaddr": "value_140",
+        "sname": "value_140",
+        "xid": "x_id_003",
+        "yiaddr": "value_139"
+      },
+      "ip": {
+        "dscp": {
+          "ecn": 0,
+          "tag": 0
+        },
+        "headerLength": 5,
+        "id": "network_008",
+        "length": 412,
+        "protocol": 17,
+        "ttl": 64,
+        "version": 4
+      },
+      "source": {
+        "ipv4": {
+          "address": "address_value_019"
+        },
+        "mac": "02:00:00:00:00:18",
+        "port": 67
+      },
+      "type": "ACK",
+      "udp": {
+        "checksum": "value_138",
+        "length": 392
+      }
+    },
+    "lastSeenAt": "2026-01-01T00:00:00Z",
+    "mac": "02:00:00:00:00:18",
+    "seenBy": [
+      {
+        "name": "network_name_018",
+        "serial": "device_001",
+        "url": "url_value_022"
+      },
+      {
+        "name": "network_name_019",
+        "serial": "device_002",
+        "url": "url_value_023"
+      }
+    ],
+    "type": "discovered",
+    "vlan": 25
+  },
+  {
+    "client": {
+      "id": "network_009",
+      "name": "network_name_037",
+      "url": "url_value_026"
+    },
+    "clientId": "client_003",
+    "ipv4": {
+      "address": "address_value_020",
+      "gateway": null,
+      "subnet": "value_143"
+    },
+    "isAllowed": true,
+    "isConfigured": false,
+    "lastAck": {
+      "ipv4": {
+        "address": "address_value_021"
+      },
+      "ts": "2026-01-01T00:00:00Z"
+    },
+    "lastPacket": {
+      "destination": {
+        "ipv4": {
+          "address": "address_value_021"
+        },
+        "mac": "02:00:00:00:00:1c",
+        "port": 68
+      },
+      "ethernet": {
+        "type": "0x0800"
+      },
+      "fields": {
+        "chaddr": "value_147",
+        "ciaddr": "value_145",
+        "flags": "value_111",
+        "giaddr": "value_113",
+        "hlen": 6,
+        "hops": 0,
+        "htype": 1,
+        "magicCookie": "value_115",
+        "op": 2,
+        "options": [
+          {
+            "name": "network_name_021",
+            "value": "value_116"
+          },
+          {
+            "name": "network_name_022",
+            "value": "value_117"
+          },
+          {
+            "name": "network_name_023",
+            "value": "value_118"
+          },
+          {
+            "name": "network_name_024",
+            "value": "value_119"
+          },
+          {
+            "name": "network_name_025",
+            "value": "value_148"
+          },
+          {
+            "name": "network_name_026",
+            "value": "value_146"
+          },
+          {
+            "name": "network_name_027",
+            "value": "value_149"
+          },
+          {
+            "name": "network_name_035",
+            "value": "value_150"
+          },
+          {
+            "name": "network_name_028",
+            "value": "value_146"
+          },
+          {
+            "name": "network_name_030",
+            "value": "value_123"
+          },
+          {
+            "name": "network_name_038",
+            "value": "value_151"
+          },
+          {
+            "name": "network_name_031",
+            "value": "value_124"
+          },
+          {
+            "name": "network_name_032",
+            "value": "value_125"
+          },
+          {
+            "name": "network_name_033",
+            "value": "value_126"
+          },
+          {
+            "name": "network_name_034",
+            "value": "value_127"
+          }
+        ],
+        "secs": 0,
+        "siaddr": "value_146",
+        "sname": "value_146",
+        "xid": "x_id_004",
+        "yiaddr": "value_145"
+      },
+      "ip": {
+        "dscp": {
+          "ecn": 0,
+          "tag": 0
+        },
+        "headerLength": 5,
+        "id": "network_010",
+        "length": 465,
+        "protocol": 17,
+        "ttl": 64,
+        "version": 4
+      },
+      "source": {
+        "ipv4": {
+          "address": "address_value_022"
+        },
+        "mac": "02:00:00:00:00:1b",
+        "port": 67
+      },
+      "type": "ACK",
+      "udp": {
+        "checksum": "value_144",
+        "length": 445
+      }
+    },
+    "lastSeenAt": "2026-01-01T00:00:00Z",
+    "mac": "02:00:00:00:00:1b",
+    "seenBy": [
+      {
+        "name": "network_name_019",
+        "serial": "device_002",
+        "url": "url_value_023"
+      }
+    ],
+    "type": "discovered",
+    "vlan": 100
+  },
+  {
+    "client": {
+      "id": null,
+      "name": null,
+      "url": null
+    },
+    "clientId": null,
+    "ipv4": {
+      "address": "address_value_023",
+      "gateway": null,
+      "subnet": "value_152"
+    },
+    "isAllowed": true,
+    "isConfigured": false,
+    "lastAck": {
+      "ipv4": {
+        "address": "address_value_024"
+      },
+      "ts": "2026-01-01T00:00:00Z"
+    },
+    "lastPacket": {
+      "destination": {
+        "ipv4": {
+          "address": "address_value_024"
+        },
+        "mac": "02:00:00:00:00:1e",
+        "port": 68
+      },
+      "ethernet": {
+        "type": "0x0800"
+      },
+      "fields": {
+        "chaddr": "value_156",
+        "ciaddr": "value_113",
+        "flags": "value_111",
+        "giaddr": "value_113",
+        "hlen": 6,
+        "hops": 0,
+        "htype": 1,
+        "magicCookie": "value_115",
+        "op": 2,
+        "options": [
+          {
+            "name": "network_name_021",
+            "value": "value_116"
+          },
+          {
+            "name": "network_name_022",
+            "value": "value_117"
+          },
+          {
+            "name": "network_name_023",
+            "value": "value_118"
+          },
+          {
+            "name": "network_name_024",
+            "value": "value_119"
+          },
+          {
+            "name": "network_name_025",
+            "value": "value_157"
+          },
+          {
+            "name": "network_name_028",
+            "value": "value_158"
+          },
+          {
+            "name": "network_name_030",
+            "value": "value_123"
+          },
+          {
+            "name": "network_name_031",
+            "value": "value_124"
+          },
+          {
+            "name": "network_name_032",
+            "value": "value_125"
+          },
+          {
+            "name": "network_name_033",
+            "value": "value_126"
+          },
+          {
+            "name": "network_name_034",
+            "value": "value_127"
+          }
+        ],
+        "secs": 3,
+        "siaddr": "value_155",
+        "sname": "value_155",
+        "xid": "x_id_005",
+        "yiaddr": "value_154"
+      },
+      "ip": {
+        "dscp": {
+          "ecn": 0,
+          "tag": 0
+        },
+        "headerLength": 5,
+        "id": "network_011",
+        "length": 410,
+        "protocol": 17,
+        "ttl": 64,
+        "version": 4
+      },
+      "source": {
+        "ipv4": {
+          "address": "address_value_025"
+        },
+        "mac": "02:00:00:00:00:1d",
+        "port": 67
+      },
+      "type": "ACK",
+      "udp": {
+        "checksum": "value_153",
+        "length": 390
+      }
+    },
+    "lastSeenAt": "2026-01-01T00:00:00Z",
+    "mac": "02:00:00:00:00:1d",
+    "seenBy": [
+      {
+        "name": "network_name_019",
+        "serial": "device_002",
+        "url": "url_value_023"
+      }
+    ],
+    "type": "discovered",
+    "vlan": 90
+  }
+]

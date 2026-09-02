@@ -1,0 +1,35 @@
+[
+  {
+    "byBand": [
+      {
+        "band": "value_1076",
+        "nonWifi": {
+          "percentage": 4.42
+        },
+        "total": {
+          "percentage": 20.47
+        },
+        "wifi": {
+          "percentage": 16.05
+        }
+      },
+      {
+        "band": "value_688",
+        "nonWifi": {
+          "percentage": 4.26
+        },
+        "total": {
+          "percentage": 7.18
+        },
+        "wifi": {
+          "percentage": 2.92
+        }
+      }
+    ],
+    "mac": "02:00:00:00:00:03",
+    "network": {
+      "id": "network_001"
+    },
+    "serial": "device_003"
+  }
+]

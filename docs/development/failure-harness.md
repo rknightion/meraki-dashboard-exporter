@@ -21,6 +21,7 @@ just harness-run all
 uv run python -m tests.harness.runner --build-exporter --target-operation getOrganizationDevices run --mode slow_valid
 uv run python -m tests.harness.runner --build-exporter observe-duration
 uv run python -m tests.harness.runner --build-exporter observe-shutdown
+just harness-measure-homelab
 ```
 
 The runner builds the proxy from the local exporter tag with pulls disabled, records the resolved
@@ -74,8 +75,9 @@ both clocks independently and never compares their epochs.
 ## DeviceCollector duration observation
 
 `observe-duration` is a separate native replay command, not a fault mode. It starts a clean
-baseline replay, requires every manifest route to have a verified-fixture match and HTTP 200 response,
-and requires non-empty organization, network, device, and availability cache-population evidence. It
+availability-profile replay, requires every route used by that profile to have a verified-fixture
+match and its captured HTTP response, and requires non-empty organization, network, device, and
+availability cache-population evidence. It
 then takes two idle snapshots at least 250 ms apart. Their histogram, collector status,
 `device_availability` scheduler state, journal length, and exporter-log length must be identical.
 The disposable Compose environment alone enables JSON DEBUG logging so the proof can inspect
@@ -83,8 +85,8 @@ structured inventory-cache events; it does not alter production logging.
 
 The runner records wall-clock and monotonic observation boundaries and captures raw `/metrics` plus
 authenticated `/status?format=json`. It then waits for the next natural scheduler wrapper invocation;
-it deliberately does not use the manual force endpoint, because force bypasses the selected profile
-and would call product-family routes absent from the four-route corpus. The disposable Compose
+it deliberately does not use the manual force endpoint because force bypasses the selected profile.
+The disposable Compose
 environment supplies a fixed explicitly non-secret token solely for the protected status request.
 
 It writes redacted `duration-observation.json` with the pre/post raw responses, histogram count and
@@ -110,6 +112,15 @@ The command fails closed if a newly due endpoint group reaches a route that is a
 LIVE-VERIFIED corpus. Capture and sanitise that route under an explicit read-only evidence grant;
 never relax the journal gate or invent a response merely to make the observation pass.
 
+## Full-runtime HOMELAB measurement
+
+`tests.fixtures.fleet_measurement` starts a fresh full-profile `ExporterApp` against the complete
+retained corpus, waits for every expected route and captured status, then performs one timed HTTP
+`/metrics` scrape. It prints a body-free JSON record containing process RSS, total and product sample
+counts, payload bytes, render time, and the replayed operation inventory. The result is calibration
+evidence only for the captured HOMELAB topology. It must not be scaled by duplicating responses or by
+substituting generated fleet shapes for live-verified routes.
+
 The GitHub Actions workflow is manual-only. In **Actions → Failure harness → Run workflow**, provide
 `all` to exercise every mode, or provide one of the mode names above to run only that replay. Its
 redacted `.failure-harness-artifacts` upload is attempted even when the selected run fails.
@@ -119,18 +130,28 @@ redacted `.failure-harness-artifacts` upload is attempted even when the selected
 Only a separately authorised capture may refresh it. Capture into an untracked temporary directory;
 never commit raw responses, keys, certificates, addresses, contact details, or credentials. Run
 `sanitize_capture_set` once for the complete required operation set so its shared placeholder state
-preserves organization/network/device joins:
+preserves organization, network, device, and client joins across payloads, paths, and queries. Each
+capture row includes the exact SDK operation, timezone-aware capture timestamp, GET path and query,
+captured status code, and decoded payload:
 
 ```python
-sanitize_capture_set({
-    "getOrganization": organization,
-    "getOrganizationNetworks": networks,
-    "getOrganizationDevices": devices,
-    "getOrganizationDevicesAvailabilities": availabilities,
-})
+sanitize_capture_set([
+    {
+        "operation": "getOrganization",
+        "captured_at_utc": "2026-01-01T12:00:00+00:00",
+        "method": "GET",
+        "path": "/api/v1/organizations/123",
+        "query": "",
+        "status_code": 200,
+        "payload": organization,
+    },
+    # Include every required full-profile route in the same call.
+])
 ```
 
-It rejects missing required operations and credential fields, replaces MACs with locally administered
-stable values and IPs with RFC 5737/RFC 3849 values, and redacts location/user-controlled strings.
-Review output, calculate fixture digests, record the capture provenance, then run
+It rejects missing required operations, non-GET rows, and credential fields; keeps the earliest exact
+route; coalesces captured cursor pages; replaces MACs with locally administered stable values and IPs
+with RFC 5737/RFC 3849 values; and redacts location/user-controlled strings. The committed manifest
+may contain multiple exact routes for one SDK operation and records each route's status and capture
+time. Review output, calculate fixture digests, record the capture provenance, then run
 `just harness-validate` before committing only sanitized JSON.

@@ -1,0 +1,17 @@
+{
+  "counts": {
+    "allowPolicies": 0,
+    "customAcls": 0,
+    "customGroups": 0,
+    "denyPolicies": 0,
+    "groups": 2,
+    "policies": 0,
+    "policyObjects": 0
+  },
+  "limits": {
+    "aclsInAPolicy": 7,
+    "groups": 60,
+    "policyObjects": 8000,
+    "rulesInAnAcl": 16
+  }
+}

@@ -2,6 +2,7 @@
   {
     "details": null,
     "enrollmentString": "enrollmentstring_value_001",
+    "group": null,
     "id": "network_001",
     "isBoundToConfigTemplate": false,
     "isVirtual": false,
@@ -14,9 +15,9 @@
       "wireless"
     ],
     "tags": [
-      "tags_value_001"
+      "tags_value_002"
     ],
-    "timeZone": "value_002",
-    "url": "url_value_002"
+    "timeZone": "value_026",
+    "url": "url_value_021"
   }
 ]

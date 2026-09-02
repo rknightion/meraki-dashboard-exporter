@@ -14,7 +14,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
-from .corpus import Corpus, Fixture, load_manifest
+from .corpus import Corpus, Fixture, canonical_query, load_manifest
 
 STALL_HOLD_SECONDS: Final = 0.25
 
@@ -132,11 +132,12 @@ class ReplayApplication:
         fixture = self._match(method, path, query)
         if fixture is not None:
             self._record(method, path, query, "matched", "verified fixture")
-            return 200, fixture.file.read_bytes()
+            return fixture.status_code, fixture.file.read_bytes()
         self._record(method, path, query, "unexpected_request", "not in manifest")
         return 404, b""
 
     def _match(self, method: str, path: str, query: str) -> Fixture | None:
+        query = canonical_query(query)
         return next(
             (
                 fixture
@@ -155,7 +156,7 @@ class ReplayApplication:
             return 404, {}, b""
         if self._target_operation and fixture.sdk_operation != self._target_operation:
             self._record(method, path, query, "matched", "verified non-target fixture")
-            return 200, {}, fixture.file.read_bytes()
+            return fixture.status_code, {}, fixture.file.read_bytes()
         decision = fault_decision(self._mode)
         if self._mode in {FaultMode.BASELINE, FaultMode.TRUSTED_TLS}:
             status, payload = self.route(method, path, query)
@@ -213,7 +214,9 @@ class ReplayApplication:
         evidence: str,
         headers: dict[str, str] | None = None,
     ) -> None:
-        entry = JournalEntry(time.monotonic(), method, path, query, reason, evidence, headers)
+        entry = JournalEntry(
+            time.monotonic(), method, path, canonical_query(query), reason, evidence, headers
+        )
         self.journal.append(entry)
         if self._journal_path:
             with self._journal_path.open("a", encoding="utf-8") as journal:
