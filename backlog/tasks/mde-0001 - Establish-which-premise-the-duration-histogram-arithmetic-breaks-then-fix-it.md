@@ -4,7 +4,7 @@ title: 'Establish which premise the duration-histogram arithmetic breaks, then f
 status: Parked
 assignee: []
 created_date: '2026-08-14 15:56'
-updated_date: '2026-09-02 07:54'
+updated_date: '2026-09-02 15:27'
 labels:
   - 'area:observability'
   - 'priority:medium'
@@ -94,6 +94,17 @@ Wave 2: root captures and sanitizes the missing live GET corpus, validates a mat
 2026-09-01 harness observation produced exactly one duration observation for one successful Device wrapper run (10.598551 seconds), but the retained corpus then failed closed on one STP route, two device-specific packet-status routes, and lacks a non-empty Clients route. No production defect was established.
 
 2026-09-02 Wave 2 retained replay: 73 fixtures / 69 operations. Device produced exactly one duration observation for one run and one success (10.583334 s mean inside a 57.410482 s observation window); full-profile startup produced one Device and one Clients observation, so current behavior does not reproduce double counting. The historical Clients 1 Hz excess is explained by the already-fixed disabled child-group loop, but the residual 1.97 Hz cannot be assigned without the deleted process identity/lifecycle provenance. Resume with a native Clients duration observation retaining process identity and injected competing same-collector admission; do not alter production timing without a reproduced false premise.
+
+2026-09-02 main-thread timeline analysis (no new measurement): the historical contradiction is attributable to two defects that were BOTH live during the observation window and BOTH fixed afterwards, which is why three successive harness runs could not reproduce it.
+
+Timeline, read from git and the issue archive:
+- Issue #717 was filed 2026-08-12T20:33Z, reporting a container with ~55,200 s (15.3 h) uptime. That container therefore started ~2026-08-12T05:00Z and ran unchanged through the observation.
+- 40e24f8 'fix(control): fail closed and serialize forced runs' (#695) landed 2026-08-12T21:36Z — AFTER the observation. It is the commit that made admission atomic: manager.py now acquires the per-collector lock BEFORE awaiting global capacity, with the comment 'Admission must be atomic with the running check ... so a second forced request cannot queue another full run in the check/acquire gap (#695)'. Before it, run_collector_once tested collector_lock.locked() and then awaited the semaphore, leaving exactly the check/acquire gap that lets two runs of the same collector execute concurrently.
+- fd5cb69 'fix(clients): schedule only enabled child groups' (#703) landed 2026-08-12T23:51Z — also AFTER the observation. This is the already-credited cause of the ClientsCollector 1 Hz excess.
+
+Consequence for the three premises: premise 2 ('the lock actually serialises') was FALSE in the observed build and is true in current code. That accounts for both the 1.96x oversubscription and, with #703, the ClientsCollector count. No current-code defect is implied, which is consistent with every harness observation to date showing exactly one duration observation per successful run per collector.
+
+This closes the archaeology: process-identity provenance for the deleted container is not needed and must not be pursued further. Remaining work to satisfy AC1-AC4 is bounded and offline: pin the serialisation invariant with a regression that fails against the pre-40e24f8 admission shape, confirm no other observation path can double-count, and settle AC2/AC3 by documenting what the duration metric measures (per-run wall clock excluding lock and admission wait) rather than by changing production timing.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

@@ -4,7 +4,7 @@ title: Size the Helm resource defaults from a measured MEDIUM-class fleet
 status: Parked
 assignee: []
 created_date: '2026-08-14 15:56'
-updated_date: '2026-09-02 07:54'
+updated_date: '2026-09-02 15:28'
 labels:
   - 'area:deploy'
   - 'area:docs'
@@ -95,6 +95,14 @@ Wave 2: consume the same complete live-verified HOMELAB corpus, require calibrat
 The 2026-09-01 operator run contract explicitly authorised root to freeze a literal MEDIUM topology and review it the next morning. That authority supersedes the 2026-08-23 archive position for this measurement only; BRANCH-RETAIL was selected because it is the existing many-network preset, and the failed HOMELAB calibration kept every default unchanged.
 
 2026-09-02 Wave 2 full-runtime HOMELAB replay: HTTP 200, 112803840-byte RSS, 3688 total samples, 2253 product samples, 513757-byte payload, 0.075662 s render. This is materially closer than the prior 103.04 MiB / 164-sample replay but remains 27.41% below the 148.19 MiB RSS anchor and 23.72% below the 4835-sample anchor. MEDIUM remains undefined and DENSE-SWITCH lacks a genuine dense topology; defaults and guidance therefore remain unchanged. Resume with live-verified full-profile captures from an explicitly frozen multi-network MEDIUM topology and an actual dense MS topology, including data-bearing device and switch-port status/packet routes, then rerun this fresh-process HTTP/RSS benchmark.
+
+2026-09-02 main-thread scope review (no new measurement): three successive runs have failed AC6's calibration gate, and the reason is structural rather than a measurement error.
+
+The gate requires a cold, fresh-process replay to reconcile with the 148.19 MiB / 4,835-series anchor, but that anchor was read from a long-running live process which had accumulated inventory cache, client store, DNS cache and metric label sets over hours. A cold single-cycle replay is expected to sit below it. The Wave 2 result (112.80 MiB RSS, 3,688 samples, 27.41% and 23.72% below) is the closest yet and may already represent the ceiling of what a cold replay can reach, so tightening the corpus further may never satisfy AC6 as written.
+
+Independently, AC1 and AC3 require a genuine multi-network MEDIUM topology and a genuine dense-MS topology. The only available live organisation has 1 MR, 2 MS and 16 MT, so neither exists and neither can be acquired. Those two criteria are unmeasurable, not merely unmeasured.
+
+AC2, AC4 and AC5 do not depend on either missing topology and remain achievable: the chart ships a 256Mi/512Mi default while its own comment says 512Mi is SMALL-only and will OOMKill at scale, and the scaling guide's LARGE figures rest on the same stale 0.6-1.1m estimate the task set out to replace. That shipped self-contradiction can be resolved honestly without inventing a MEDIUM number.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
