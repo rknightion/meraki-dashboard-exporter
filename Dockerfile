@@ -8,9 +8,11 @@ ARG PY_VERSION=3.14
 # manager natively tracks `FROM image:${ARG}@sha256:digest` (expands the ARG default to
 # resolve the tag, then keeps the digest in sync with that tag) — no custom regex manager
 # needed. The uv `COPY --from` pin below rides on the same built-in manager (#661).
-# Pinned digest resolves to python:3.14-slim-bookworm (3.14.6-slim-bookworm, multi-arch
-# index incl. linux/amd64 + linux/arm64) as of 2026-07-02.
-FROM python:${PY_VERSION}-slim-bookworm@sha256:9ab8d9c8514b44f90cf0029dd42fdd7e9e211e639c8b995304cc04568dee900f AS builder
+# Pinned digest resolves to python:3.14-slim-trixie (3.14.7-slim-trixie, multi-arch
+# index incl. linux/amd64 + linux/arm64) as of 2026-09-02. Debian 13 replaced bookworm
+# because the publication gate blocks on HIGH/CRITICAL findings and bookworm shipped
+# no fix for zlib1g, libsqlite3-0, perl-base or ncurses-bin.
+FROM python:${PY_VERSION}-slim-trixie@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6 AS builder
 
 # Install system deps with cache mounts for faster rebuilds
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -54,7 +56,7 @@ COPY src/meraki_dashboard_exporter ./meraki_dashboard_exporter
 # --------------------------------------------------------------------------- #
 # Same digest pin as the builder stage above (#562) — both stages must resolve to the
 # identical base image.
-FROM python:${PY_VERSION}-slim-bookworm@sha256:9ab8d9c8514b44f90cf0029dd42fdd7e9e211e639c8b995304cc04568dee900f AS runtime
+FROM python:${PY_VERSION}-slim-trixie@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6 AS runtime
 
 # Install runtime dependencies and create non-root user
 RUN apt-get update -qq \
