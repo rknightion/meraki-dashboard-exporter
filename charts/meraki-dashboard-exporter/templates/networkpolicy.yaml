@@ -46,8 +46,9 @@ spec:
         - protocol: TCP
           port: 443
     {{- end }}
-    {{- if and (eq (.Values.config.otelEnabled | toString) "true") .Values.networkPolicy.egress.otlpPort }}
-    # OTLP collector (tracing)
+    {{- $otlpEnabled := or (eq (.Values.config.otelEnabled | toString) "true") (eq (.Values.config.otelLogsEnabled | toString) "true") (eq (.Values.config.otelMetricsEnabled | toString) "true") }}
+    {{- if and $otlpEnabled .Values.networkPolicy.egress.otlpPort }}
+    # OTLP collector (tracing, data logs, or metrics)
     - ports:
         - protocol: TCP
           port: {{ .Values.networkPolicy.egress.otlpPort }}
