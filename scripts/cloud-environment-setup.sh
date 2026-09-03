@@ -8,7 +8,7 @@ set -euo pipefail
 readonly BACKLOG_VERSION="1.50.1"
 readonly JUST_VERSION="1.58.0"
 readonly PYTHON_VERSION="3.14.7"
-readonly UV_VERSION="0.12.5"
+readonly UV_VERSION="0.12.9"
 readonly USER_BIN="${HOME}/.local/bin"
 
 repo_root="$(git rev-parse --show-toplevel)"
