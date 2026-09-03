@@ -330,7 +330,10 @@ class TestServingPoolIsolation:
         )
 
     def test_serving_executor_distinct_from_sdk_executor(self, exporter: ExporterApp) -> None:
-        """Registry serving work and SDK calls run on different pools."""
+        """Registry, client-page, and SDK work run on distinct bounded pools."""
         assert exporter._serving_executor is not exporter.client.executor
+        assert exporter._client_page_executor is not exporter.client.executor
+        assert exporter._client_page_executor is not exporter._serving_executor
         assert exporter._serving_executor._thread_name_prefix == "registry-serve"
+        assert exporter._client_page_executor._thread_name_prefix == "client-page"
         assert exporter.client.executor._thread_name_prefix == "meraki-sdk"

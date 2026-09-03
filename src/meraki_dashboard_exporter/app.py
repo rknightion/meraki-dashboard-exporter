@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import psutil  # type: ignore[import-untyped]
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi import Request as FastAPIRequest
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -63,10 +63,17 @@ RESOURCE_METRICS_INTERVAL_SECONDS = 30.0
 EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS = 5.0
 REGISTRY_WORKER_COUNT = 2
 REGISTRY_RETRY_AFTER_SECONDS = "1"
+CLIENT_PAGE_WORKER_COUNT = 1
+CLIENTS_DEFAULT_PAGE_SIZE = 250
+CLIENTS_MAX_PAGE_SIZE = 1000
 
 
 class RegistryWorkSaturatedError(RuntimeError):
     """Raised when fail-fast registry work has no immediately available slot."""
+
+
+class ClientPageWorkSaturatedError(RuntimeError):
+    """Raised when a client-page traversal is already in progress."""
 
 
 # SECURITY (SEC-01 / #558): sensitive GET UIs that leak PII (client MAC/IP/
@@ -198,6 +205,15 @@ class ExporterApp:
             thread_name_prefix="registry-serve",
         )
         self._registry_work_slots = asyncio.BoundedSemaphore(REGISTRY_WORKER_COUNT)
+
+        # Client-page snapshots traverse a separately locked mutable cache. A
+        # dedicated single-worker pool prevents this optional UI from consuming
+        # the SDK pool or queuing unbounded concurrent O(n) traversals.
+        self._client_page_executor = ThreadPoolExecutor(
+            max_workers=CLIENT_PAGE_WORKER_COUNT,
+            thread_name_prefix="client-page",
+        )
+        self._client_page_work_slots = asyncio.BoundedSemaphore(CLIENT_PAGE_WORKER_COUNT)
 
         # Register the static build-info gauge (MET-10): constant value 1 with
         # version/commit labels identifying the running build.
@@ -379,6 +395,19 @@ class ExporterApp:
                 "Shutdown phase complete",
                 phase="sdk_client_closed" if sdk_drained else "sdk_client_shutdown_deferred",
             )
+            client_page_drained = await shutdown_executor(
+                self._client_page_executor,
+                timeout_seconds=remaining_executor_time(),
+                thread_name="client-page-shutdown",
+            )
+            logger.info(
+                "Shutdown phase complete",
+                phase=(
+                    "client_page_executor_drained"
+                    if client_page_drained
+                    else "client_page_executor_deferred"
+                ),
+            )
             serving_drained = await shutdown_executor(
                 self._serving_executor,
                 timeout_seconds=remaining_executor_time(),
@@ -540,6 +569,25 @@ class ExporterApp:
             raise
 
         future.add_done_callback(lambda _future: self._registry_work_slots.release())
+        return await asyncio.shield(future)
+
+    async def _run_client_page_work[T](self, func: Callable[..., T], /, *args: Any) -> T:
+        """Run one client-store traversal with fail-fast bounded admission."""
+        if self._client_page_work_slots.locked():
+            raise ClientPageWorkSaturatedError
+
+        await self._client_page_work_slots.acquire()
+        try:
+            future = asyncio.get_running_loop().run_in_executor(
+                self._client_page_executor,
+                func,
+                *args,
+            )
+        except BaseException:
+            self._client_page_work_slots.release()
+            raise
+
+        future.add_done_callback(lambda _future: self._client_page_work_slots.release())
         return await asyncio.shield(future)
 
     @asynccontextmanager
@@ -1193,7 +1241,15 @@ class ExporterApp:
         setup_cardinality_endpoint(app, self.cardinality_monitor)
 
         @app.get("/clients", response_class=HTMLResponse)
-        async def clients(request: Request) -> HTMLResponse:
+        async def clients(
+            request: Request,
+            page: int = Query(default=1, ge=1),
+            page_size: int = Query(
+                default=CLIENTS_DEFAULT_PAGE_SIZE,
+                ge=1,
+                le=CLIENTS_MAX_PAGE_SIZE,
+            ),
+        ) -> HTMLResponse:
             """Client data visualization endpoint."""
             # Get exporter instance from app state
             exporter = app.state.exporter
@@ -1222,22 +1278,32 @@ class ExporterApp:
                     status_code=500,
                 )
 
-            # Get all clients
-            all_clients = client_store.get_all_clients()
+            # The store traversal and aggregate statistics are O(n), so keep
+            # them off the event loop and out of both the SDK and registry
+            # pools. Admission is fail-fast so repeated UI requests cannot
+            # accumulate an executor queue.
+            try:
+                snapshot = await exporter._run_client_page_work(
+                    lambda: client_store.get_page_snapshot(page=page, page_size=page_size)
+                )
+            except ClientPageWorkSaturatedError:
+                return HTMLResponse(
+                    content="Client page generation is busy; retry shortly.",
+                    status_code=503,
+                    headers={"Retry-After": REGISTRY_RETRY_AFTER_SECONDS},
+                )
 
-            # Sort by network and then by description/hostname
-            all_clients.sort(key=lambda c: (c.networkName or "", c.display_name))
+            # Sort and group only the capped page, never the full client cache.
+            page_clients = snapshot.clients
+            page_clients.sort(key=lambda c: (c.networkName or "", c.display_name))
 
             # Group by network
             clients_by_network: dict[str, list[Any]] = {}
-            for client in all_clients:
+            for client in page_clients:
                 network_key = f"{client.networkName or 'Unknown'} ({client.networkId or 'Unknown'})"
                 if network_key not in clients_by_network:
                     clients_by_network[network_key] = []
                 clients_by_network[network_key].append(client)
-
-            # Get statistics
-            stats = client_store.get_statistics()
 
             # Get DNS cache statistics
             dns_cache_stats = dns_resolver.get_cache_stats() if dns_resolver else {}
@@ -1245,10 +1311,17 @@ class ExporterApp:
             context = {
                 "version": __version__,
                 "clients_by_network": clients_by_network,
-                "total_clients": stats["total_clients"],
-                "online_clients": stats["online_clients"],
-                "offline_clients": stats["offline_clients"],
-                "network_count": stats["total_networks"],
+                "total_clients": snapshot.total_clients,
+                "online_clients": snapshot.online_clients,
+                "offline_clients": snapshot.total_clients - snapshot.online_clients,
+                "network_count": snapshot.network_count,
+                "current_page": snapshot.page,
+                "total_pages": snapshot.total_pages,
+                "page_size": page_size,
+                "has_previous": snapshot.page > 1,
+                "has_next": snapshot.page < snapshot.total_pages,
+                "previous_page": snapshot.page - 1,
+                "next_page": snapshot.page + 1,
                 "cache_ttl": exporter.settings.clients.cache_ttl,
                 "dns_cache_stats": dns_cache_stats,
                 "control_api_enabled": exporter.settings.server.api_token is not None,

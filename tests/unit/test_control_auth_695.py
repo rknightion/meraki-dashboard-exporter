@@ -15,6 +15,7 @@ from meraki_dashboard_exporter.api.client import AsyncMerakiClient
 from meraki_dashboard_exporter.app import ExporterApp
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
+from meraki_dashboard_exporter.services.client_store import ClientPageSnapshot
 
 CONTROL_DISABLED_TOOLTIP = "Configure server.api_token to enable manual controls."
 
@@ -219,13 +220,14 @@ def test_clients_page_disables_dns_clear_without_api_token(
     exporter = exporter_factory()
     manager = _mock_manager()
     client_store = MagicMock()
-    client_store.get_all_clients.return_value = []
-    client_store.get_statistics.return_value = {
-        "total_clients": 0,
-        "online_clients": 0,
-        "offline_clients": 0,
-        "total_networks": 0,
-    }
+    client_store.get_page_snapshot.return_value = ClientPageSnapshot(
+        clients=[],
+        total_clients=0,
+        online_clients=0,
+        network_count=0,
+        page=1,
+        total_pages=1,
+    )
     dns_resolver = MagicMock()
     dns_resolver.get_cache_stats.return_value = {
         "total_entries": 0,
