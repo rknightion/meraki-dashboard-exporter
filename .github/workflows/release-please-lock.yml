@@ -108,14 +108,28 @@ jobs:
       # PULL_REQUEST-triggered consumer: its OpenBao role cannot bind
       # ref=refs/heads/main like the others, so it binds event_name=pull_request
       # plus this exact workflow_ref instead.
+      #
+      # It needs its own TAILSCALE identity for the same reason, and that is why
+      # TS_WIF_PR_* appears here and nowhere else. The shared per-owner
+      # credential pins customClaimRules.ref to refs/heads/main; a pull_request
+      # OIDC token carries ref=refs/pull/<n>/merge, so the exchange 403s at
+      # `tailscale up` before OpenBao is contacted at all. From this workflow's
+      # introduction until 2026-09-03 that made this job fail on every run that
+      # had work to do -- silently, because a run whose relock finds uv.lock
+      # already in sync skips this job and still reports success. TS_WIF_PR_* is
+      # a second federated identity scoped to this repository id and this exact
+      # workflow_ref glob, which is narrower than the shared one in every
+      # dimension. Do NOT "simplify" this back to TS_WIF_CLIENT_ID, and do not
+      # relax the shared credential's ref rule to make it work -- that would
+      # grant a tailnet join to every pull request on every rknightion repo.
       - name: Mint a scoped push token
         id: bao
         uses: rknightion/.github/.github/actions/broker-token@ff43f62eaec9f41d49b9a208d86b2eb932c97056 # v1.18.1
         with:
           permission-set: lockfile-meraki-dashboard-exporter
           role: lockfile-meraki-dashboard-exporter
-          tailscale-client-id: ${{ secrets.TS_WIF_CLIENT_ID }}
-          tailscale-audience: ${{ secrets.TS_WIF_AUDIENCE }}
+          tailscale-client-id: ${{ secrets.TS_WIF_PR_CLIENT_ID }}
+          tailscale-audience: ${{ secrets.TS_WIF_PR_AUDIENCE }}
 
       - name: Commit and push lockfile
         env:
