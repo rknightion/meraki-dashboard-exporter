@@ -127,6 +127,67 @@ async def test_racing_forced_runs_produce_one_duration_observation(
 
 
 @pytest.mark.asyncio
+async def test_active_trace_produces_one_duration_observation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Attaching trace context must not record the collector duration twice (#717)."""
+    registry = CollectorRegistry()
+    monkeypatch.setattr("meraki_dashboard_exporter.core.collector.REGISTRY", registry)
+    monkeypatch.setattr(MetricCollector, "_metrics_initialized", False)
+    monkeypatch.setattr(MetricCollector, "_collector_duration", None)
+    monkeypatch.setattr(MetricCollector, "_collector_errors", None)
+    monkeypatch.setattr(MetricCollector, "_collector_last_success", None)
+    monkeypatch.setattr(MetricCollector, "_collector_api_calls", None)
+
+    class RecordingSpan:
+        def __enter__(self) -> RecordingSpan:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def is_recording(self) -> bool:
+            return True
+
+        def get_span_context(self) -> object:
+            return type(
+                "SpanContext",
+                (),
+                {"trace_id": 1, "span_id": 2, "is_valid": True},
+            )()
+
+        def set_attribute(self, *_args: object) -> None:
+            return None
+
+        def set_status(self, *_args: object) -> None:
+            return None
+
+    span = RecordingSpan()
+
+    class RecordingTracer:
+        def start_as_current_span(self, _name: str) -> RecordingSpan:
+            return span
+
+    monkeypatch.setattr(
+        "meraki_dashboard_exporter.core.collector.trace.get_tracer",
+        lambda _name: RecordingTracer(),
+    )
+    monkeypatch.setattr(
+        "meraki_dashboard_exporter.core.exemplars.trace.get_current_span",
+        lambda: span,
+    )
+
+    collector = DeviceCollector(api=MagicMock(), settings=_settings(), registry=registry)
+    await collector.collect()
+
+    count = registry.get_sample_value(
+        f"{CollectorMetricName.COLLECTOR_DURATION_SECONDS.value}_count",
+        {"collector": "DeviceCollector"},
+    )
+    assert count == 1
+
+
+@pytest.mark.asyncio
 async def test_queued_collector_expiry_is_saturation_not_endpoint_failure() -> None:
     """A concurrent queue expiry never starts or poisons the queued collector."""
     manager = _bare_manager(1)

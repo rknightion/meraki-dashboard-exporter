@@ -4,7 +4,7 @@ title: 'Establish which premise the duration-histogram arithmetic breaks, then f
 status: In Progress
 assignee: []
 created_date: '2026-08-14 15:56'
-updated_date: '2026-09-03 13:18'
+updated_date: '2026-09-03 13:55'
 labels:
   - 'area:observability'
   - 'priority:medium'
@@ -109,6 +109,8 @@ Consequence for the three premises: premise 2 ('the lock actually serialises') w
 This closes the archaeology: process-identity provenance for the deleted container is not needed and must not be pursued further. Remaining work to satisfy AC1-AC4 is bounded and offline: pin the serialisation invariant with a regression that fails against the pre-40e24f8 admission shape, confirm no other observation path can double-count, and settle AC2/AC3 by documenting what the duration metric measures (per-run wall clock excluding lock and admission wait) rather than by changing production timing.
 
 Wave 3 implementation proof: git history establishes that the historical soak image predated both atomic per-collector admission (#695, commit 40e24f8) and removal of the disabled child-group loop (#703, commit fd5cb69), so premise 2 was false in the observed build and is true now. A regression using the real MetricCollector path failed against the pre-40e24f8 admission shape with two duration observations (expected one) and passes current source. Source review found one production duration observation, only on registered top-level collectors; sub-collectors do not inherit MetricCollector. The metric help and operator-generated metrics reference now define admitted collector-body wall clock per logical run, excluding per-collector lock and global-capacity wait. Focused gate: 30 passed for forced_admission_695 or collector_base; integrated focused gate: 183 passed covering admission, MS opt-out, config and generators.
+
+Wave 3 live correction: the deployed candidate with tracing enabled exposed a current double-observation path that the no-op-tracer regression did not exercise. For every completed collector, meraki_exporter_collector_duration_seconds_count was exactly 2x the manager total_successes (for example 1,108 versus 554), while the container had one Python process and zero restarts. The mechanism was core/collector.py recording the histogram or counter directly and then calling add_exemplar, while core/exemplars.py implemented add_exemplar by observing or incrementing the same metric again. The historical pre-40e24f8 admission race therefore remains a real cause, but it was only a partial attribution. A new active-trace regression failed with duration count 2 instead of 1. The implementation now performs one metric update through the exemplar helper and passes trace_id/span_id on that same Counter.inc or Histogram.observe call; duration, error and API-call instrumentation no longer double-count when tracing records.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

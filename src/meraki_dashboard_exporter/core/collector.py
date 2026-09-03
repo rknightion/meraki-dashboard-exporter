@@ -217,13 +217,7 @@ class MetricCollector(ABC):
 
                 # Always try to record metrics (they should be initialized)
                 if MetricCollector._collector_duration is not None:
-                    # Record the metric value
-                    MetricCollector._collector_duration.labels(
-                        collector=collector_name,
-                    ).observe(duration)
-
-                    # Also try to add exemplar to link metric to trace
-                    # Note: This is a no-op if no trace is active
+                    # Record once, attaching trace context as an exemplar when active.
                     add_exemplar(
                         MetricCollector._collector_duration,
                         value=duration,
@@ -261,14 +255,7 @@ class MetricCollector(ABC):
 
                 # Always try to record metrics (they should be initialized)
                 if MetricCollector._collector_errors is not None:
-                    # Record the error
-                    MetricCollector._collector_errors.labels(
-                        collector=collector_name,
-                        error_type=type(e).__name__,
-                    ).inc()
-
-                    # Also try to add exemplar to link error metric to trace
-                    # Note: This is a no-op if no trace is active
+                    # Record once, attaching trace context as an exemplar when active.
                     add_exemplar(
                         MetricCollector._collector_errors,
                         value=1,
@@ -472,14 +459,7 @@ class MetricCollector(ABC):
 
         # Always try to track (metrics should be initialized)
         if MetricCollector._collector_api_calls is not None:
-            # Record the API call
-            MetricCollector._collector_api_calls.labels(
-                collector=self.__class__.__name__,
-                endpoint=endpoint,
-            ).inc()
-
-            # Also try to add exemplar to link API call metric to trace
-            # Note: This is a no-op if no trace is active
+            # Record once, attaching trace context as an exemplar when active.
             add_exemplar(
                 MetricCollector._collector_api_calls,
                 value=1,
@@ -501,14 +481,7 @@ class MetricCollector(ABC):
 
         """
         if MetricCollector._collector_errors is not None:
-            # Record the error
-            MetricCollector._collector_errors.labels(
-                collector=self.__class__.__name__,
-                error_type=category.value,
-            ).inc()
-
-            # Also try to add exemplar to link error metric to trace
-            # Note: This is a no-op if no trace is active
+            # Record once, attaching trace context as an exemplar when active.
             add_exemplar(
                 MetricCollector._collector_errors,
                 value=1,
