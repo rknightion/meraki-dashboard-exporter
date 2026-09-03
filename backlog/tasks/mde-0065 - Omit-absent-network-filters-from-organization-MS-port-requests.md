@@ -1,0 +1,34 @@
+---
+id: MDE-0065
+title: Omit absent network filters from organization MS port requests
+status: To Do
+assignee: []
+created_date: '2026-09-03 19:58'
+labels:
+  - 'area:ms'
+  - needs-triage
+dependencies: []
+priority: medium
+type: bug
+ordinal: 65000
+---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+The post-v2 live soak confirmed a default-path API accounting and fallback defect. `OrganizationInventory.get_allowed_network_ids()` returns `None` when filtering is inactive (`src/meraki_dashboard_exporter/services/inventory.py:187-218`), but both organization-wide MS port paths always pass that value as `networkIds` (`src/meraki_dashboard_exporter/collectors/devices/ms.py:926-939` and `1491-1505`). The installed SDK serializes the keyword and the live API rejects it as an invalid network ID, so each due cycle spends failed calls and falls back to per-device collection even though no filter was requested. During an observed healthy soak, the manager still reported successful DeviceCollector cycles while its `api_client_error` series rose from 1 to 6. `tests/unit/collectors/test_ms_collector.py:41` configures the inactive-filter result but its mocks accept arbitrary keywords and no test asserts that the absent filter is omitted. This is a live medium-severity defect: collection recovers, but the preferred bulk path is unusable, API budget is wasted, and health hides the repeated endpoint failure.
+<!-- SECTION:DESCRIPTION:END -->
+
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [ ] #1 With no active NetworkFilter, neither organization-wide MS port endpoint receives a networkIds keyword and both calls can complete without the current invalid-filter response
+- [ ] #2 With an active non-empty filter, the resolved network IDs are still passed; an active filter resolving to zero networks still makes no API call
+- [ ] #3 Focused regressions cover status and usage paths for absent, non-empty and empty filters and reconcile API-call and fallback behavior
+<!-- AC:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [ ] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
+- [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
+- [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
+<!-- DOD:END -->
