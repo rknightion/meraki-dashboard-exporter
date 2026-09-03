@@ -4,6 +4,7 @@ title: Repair the MS per-device port-usage fallback after ID-only labels
 status: To Do
 assignee: []
 created_date: '2026-09-03 19:58'
+updated_date: '2026-09-03 23:06'
 labels:
   - 'area:ms'
   - needs-triage
@@ -32,3 +33,11 @@ The post-v2 live soak confirmed that the per-device port-usage fallback fails be
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-04 main thread. Failing-first evidence: driving collect_device_port_usage_metrics directly raised KeyError: 'name' at ms.py:1279 inside the LogContext construction, before getDeviceSwitchPortsStatuses ran — exactly the reported mechanism. After sourcing the display name from the device input with device.get('name', ''), the same regression showed the API call completing, the response validating with name=sw1 in the log context, and meraki_ms_port_traffic_bytes_per_second emitted with ID-only labels and no name label.
+
+Metric labels are unchanged: create_device_labels still omits the display name per #534, and only the logging context reads it. Focused result: 49 passed for the MS module. Full gate: just check 2945 passed, 5 deselected, 91.49% coverage. CodeRabbit reported 0 findings.
+<!-- SECTION:NOTES:END -->

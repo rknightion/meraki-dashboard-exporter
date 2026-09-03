@@ -4,6 +4,7 @@ title: Omit absent network filters from organization MS port requests
 status: To Do
 assignee: []
 created_date: '2026-09-03 19:58'
+updated_date: '2026-09-03 23:06'
 labels:
   - 'area:ms'
   - needs-triage
@@ -32,3 +33,13 @@ The post-v2 live soak confirmed a default-path API accounting and fallback defec
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-04 main thread. Failing-first evidence: the two omit-keyword regressions failed with networkIds present and set to None, while the non-empty-filter and empty-filter regressions passed unchanged, confirming the defect is specific to the inactive-filter case.
+
+The audit found a THIRD call site the task description did not name: getOrganizationSwitchPortsClientsOverviewByDevice inside collect_port_usage_by_switch shared the same network_ids variable and therefore the same defect. All three now build a filter_kwargs mapping that is empty when get_allowed_network_ids returns None and carries sorted IDs otherwise, so the keyword is omitted rather than serialized as null. The zero-match short circuit is untouched.
+
+Focused result after the fix: 49 passed for the whole MS collector module, including the two collateral usage-path tests that broke mid-change. Full gate: just check 2945 passed, 5 deselected, 91.49% coverage. CodeRabbit reported 0 findings across both changed files.
+<!-- SECTION:NOTES:END -->

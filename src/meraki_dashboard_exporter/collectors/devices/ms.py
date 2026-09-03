@@ -927,14 +927,20 @@ class MSCollector(BaseDeviceCollector):
         if allowed_network_ids is not None and not allowed_network_ids:
             # Filter active but resolves to zero networks — nothing to collect.
             return True
-        network_ids = sorted(allowed_network_ids) if allowed_network_ids is not None else None
+        # MDE-0065: an inactive filter must OMIT the keyword, not send None. The SDK
+        # serializes an explicit networkIds=None and the API rejects it as an invalid
+        # network ID, which fails this bulk path on every cycle of an unfiltered
+        # deployment while the manager still records a top-level success.
+        filter_kwargs: dict[str, Any] = (
+            {"networkIds": sorted(allowed_network_ids)} if allowed_network_ids is not None else {}
+        )
 
         with LogContext(org_id=org_id):
             response = await facade_for(self).call(
                 "getOrganizationSwitchPortsStatusesBySwitch",
                 self.api.switch.getOrganizationSwitchPortsStatusesBySwitch,
                 org_id,
-                networkIds=network_ids,
+                **filter_kwargs,
                 perPage=20,
                 total_pages="all",
             )
@@ -1276,7 +1282,10 @@ class MSCollector(BaseDeviceCollector):
         # MS_PORT_USAGE solved TTL onto every emission.
         usage_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_PORT_USAGE)
 
-        with LogContext(serial=device_labels["serial"], name=device_labels["name"]):
+        # MDE-0066: the display name comes from the device input, never from the label
+        # map — create_device_labels deliberately omits it (#534), so reading it here
+        # raised KeyError before the API call and silently emptied this fallback.
+        with LogContext(serial=device_labels["serial"], name=device.get("name", "")):
             port_statuses = await facade_for(self).call(
                 "getDeviceSwitchPortsStatuses",
                 self.api.switch.getDeviceSwitchPortsStatuses,
@@ -1492,14 +1501,17 @@ class MSCollector(BaseDeviceCollector):
         if allowed_network_ids is not None and not allowed_network_ids:
             # Filter active but resolves to zero networks — nothing to collect.
             return True
-        network_ids = sorted(allowed_network_ids) if allowed_network_ids is not None else None
+        # MDE-0065: see the matching comment on the status path — omit, never send None.
+        filter_kwargs: dict[str, Any] = (
+            {"networkIds": sorted(allowed_network_ids)} if allowed_network_ids is not None else {}
+        )
 
         with LogContext(org_id=org_id):
             usage_response = await facade_for(self).call(
                 "getOrganizationSwitchPortsUsageHistoryByDeviceByInterval",
                 self.api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval,
                 org_id,
-                networkIds=network_ids,
+                **filter_kwargs,
                 timespan=3600,
                 perPage=50,
                 total_pages="all",
@@ -1514,7 +1526,7 @@ class MSCollector(BaseDeviceCollector):
                 "getOrganizationSwitchPortsClientsOverviewByDevice",
                 self.api.switch.getOrganizationSwitchPortsClientsOverviewByDevice,
                 org_id,
-                networkIds=network_ids,
+                **filter_kwargs,
                 timespan=3600,
                 perPage=20,
                 total_pages="all",

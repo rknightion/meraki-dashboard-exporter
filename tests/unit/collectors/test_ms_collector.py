@@ -2148,3 +2148,158 @@ class TestMSCollector:
             )
             == 1.0
         )
+
+    # ------------------------------------------------------------------
+    # MDE-0065: an inactive NetworkFilter must not reach the API at all.
+    #
+    # ``OrganizationInventory.get_allowed_network_ids`` returns ``None`` when no
+    # filter is configured. The SDK serializes an explicit ``networkIds=None`` and
+    # the live API rejects it as an invalid network ID, so the preferred org-wide
+    # bulk path failed on every cycle of an unfiltered deployment and silently
+    # degraded to per-device collection while top-level health stayed green.
+    # ------------------------------------------------------------------
+
+    @pytest.fixture
+    def filter_devices(self) -> list[dict[str, str]]:
+        """One switch, enough to get past the empty-device short circuit."""
+        return [{"serial": "Q2XX-0001", "networkId": "net1", "name": "sw1", "model": "MS250-48"}]
+
+    async def test_port_status_omits_network_ids_when_no_filter_is_configured(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        filter_devices: list[dict[str, str]],
+    ) -> None:
+        """No filter ⇒ the keyword is absent, not present and None."""
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value=None)
+        mock_api.switch.getOrganizationSwitchPortsStatusesBySwitch = MagicMock(return_value=[])
+
+        await ms_collector.collect_port_statuses_by_switch("org1", "Org", filter_devices)
+
+        kwargs = mock_api.switch.getOrganizationSwitchPortsStatusesBySwitch.call_args.kwargs
+        assert "networkIds" not in kwargs
+
+    async def test_port_usage_omits_network_ids_when_no_filter_is_configured(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        filter_devices: list[dict[str, str]],
+    ) -> None:
+        """The usage path has the same defect and needs the same guarantee."""
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value=None)
+        mock_api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval = MagicMock(
+            return_value=[]
+        )
+
+        await ms_collector.collect_port_usage_by_switch("org1", "Org", filter_devices)
+
+        call = mock_api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval.call_args
+        assert "networkIds" not in call.kwargs
+
+    async def test_port_status_passes_a_non_empty_filter(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        filter_devices: list[dict[str, str]],
+    ) -> None:
+        """An active filter is still sent, sorted."""
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"net2", "net1"})
+        mock_api.switch.getOrganizationSwitchPortsStatusesBySwitch = MagicMock(return_value=[])
+
+        await ms_collector.collect_port_statuses_by_switch("org1", "Org", filter_devices)
+
+        kwargs = mock_api.switch.getOrganizationSwitchPortsStatusesBySwitch.call_args.kwargs
+        assert kwargs["networkIds"] == ["net1", "net2"]
+
+    async def test_port_usage_passes_a_non_empty_filter(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        filter_devices: list[dict[str, str]],
+    ) -> None:
+        """Same guarantee on the usage path."""
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"net2", "net1"})
+        mock_api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval = MagicMock(
+            return_value=[]
+        )
+
+        await ms_collector.collect_port_usage_by_switch("org1", "Org", filter_devices)
+
+        call = mock_api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval.call_args
+        assert call.kwargs["networkIds"] == ["net1", "net2"]
+
+    async def test_an_empty_filter_still_short_circuits_both_bulk_paths(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+        filter_devices: list[dict[str, str]],
+    ) -> None:
+        """A filter resolving to zero networks means no call, not an unfiltered call."""
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value=set())
+        mock_api.switch.getOrganizationSwitchPortsStatusesBySwitch = MagicMock(return_value=[])
+        mock_api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval = MagicMock(
+            return_value=[]
+        )
+
+        assert (
+            await ms_collector.collect_port_statuses_by_switch("org1", "Org", filter_devices)
+            is True
+        )
+        assert (
+            await ms_collector.collect_port_usage_by_switch("org1", "Org", filter_devices) is True
+        )
+
+        mock_api.switch.getOrganizationSwitchPortsStatusesBySwitch.assert_not_called()
+        mock_api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # MDE-0066: the per-device usage fallback must not read a removed label key.
+    #
+    # ``create_device_labels`` deliberately omits the device display name (#534),
+    # but the fallback read ``device_labels["name"]`` for its LogContext. That
+    # raised KeyError before the API call, so the fallback emitted nothing while
+    # DeviceCollector still recorded a top-level success.
+    # ------------------------------------------------------------------
+
+    async def test_per_device_usage_fallback_completes_with_id_only_labels(
+        self,
+        ms_collector: MSCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Driving the fallback directly must reach the API and emit."""
+        mock_api.switch.getDeviceSwitchPortsStatuses = MagicMock(
+            return_value=[{"portId": "1", "trafficInKbps": {"recv": 8.0, "sent": 16.0}}]
+        )
+        device = {
+            "serial": "Q2XX-0001",
+            "networkId": "net1",
+            "name": "sw1",
+            "model": "MS250-48",
+            "orgId": "org1",
+            "orgName": "Org",
+        }
+
+        await ms_collector.collect_device_port_usage_metrics(device)
+
+        mock_api.switch.getDeviceSwitchPortsStatuses.assert_called_once()
+        assert (
+            REGISTRY.get_sample_value(
+                "meraki_ms_port_traffic_bytes_per_second",
+                {
+                    "org_id": "org1",
+                    "network_id": "net1",
+                    "serial": "Q2XX-0001",
+                    "model": "MS250-48",
+                    "device_type": "MS",
+                    "port_id": "1",
+                    "direction": "rx",
+                },
+            )
+            is not None
+        )
