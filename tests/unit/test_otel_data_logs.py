@@ -26,22 +26,30 @@ from meraki_dashboard_exporter.core.otel_data_logs import (
 PACKET_LOSS = DataLogEvent.WIRELESS_CLIENT_PACKET_LOSS.value
 
 
-def _make_settings(**logs: object) -> Settings:
+def _make_settings(
+    *, resource_attributes: dict[str, str] | None = None, **logs: object
+) -> Settings:
     """Build Settings with the given otel.logs sub-block (api key stubbed)."""
     otel: dict[str, object] = {}
     if logs:
         otel["logs"] = logs
+    if resource_attributes is not None:
+        otel["resource_attributes"] = resource_attributes
     return Settings(meraki={"api_key": "a" * 40}, otel=otel)
 
 
 def _make_emitter(
     exporter: InMemoryLogRecordExporter | None = None,
     registry: CollectorRegistry | None = None,
+    *,
+    resource_attributes: dict[str, str] | None = None,
     **logs: object,
 ) -> tuple[DataLogEmitter, InMemoryLogRecordExporter, CollectorRegistry]:
     exp = exporter or InMemoryLogRecordExporter()
     reg = registry or CollectorRegistry()
-    emitter = DataLogEmitter(_make_settings(**logs), registry=reg, exporter=exp)
+    emitter = DataLogEmitter(
+        _make_settings(resource_attributes=resource_attributes, **logs), registry=reg, exporter=exp
+    )
     return emitter, exp, reg
 
 
@@ -69,7 +77,11 @@ class TestDataLogEmitterEnabled:
 
     def test_resource_attributes_present(self) -> None:
         """Resource attributes present."""
-        emitter, exp, _ = _make_emitter(enabled=True, endpoint="http://otel:4317")
+        emitter, exp, _ = _make_emitter(
+            enabled=True,
+            endpoint="http://otel:4317",
+            resource_attributes={"cloud.region": "eu-west-2", "environment": "staging"},
+        )
         emitter.emit(PACKET_LOSS, {"org.id": "1"})
 
         rec = exp.get_finished_logs()[0]
@@ -77,7 +89,8 @@ class TestDataLogEmitterEnabled:
         assert res["service.name"] == "meraki-dashboard-exporter"
         assert res["service.version"] == get_version()
         assert "service.instance.id" in res
-        assert "deployment.environment" in res
+        assert res["cloud.region"] == "eu-west-2"
+        assert res["deployment.environment"] == "staging"
 
     def test_enabled_property_true(self) -> None:
         """Enabled property true."""
