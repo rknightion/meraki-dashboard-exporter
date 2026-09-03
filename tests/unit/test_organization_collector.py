@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -16,6 +16,7 @@ from meraki_dashboard_exporter.core.error_handling import (
     ErrorCategory,
     NothingCollectedError,
 )
+from meraki_dashboard_exporter.core.scheduler import EndpointGroupName
 from tests.helpers.base import BaseCollectorTest
 from tests.helpers.factories import (
     NetworkFactory,
@@ -409,6 +410,88 @@ class TestOrganizationCollector(BaseCollectorTest):
             org_id="111",
             category="software_and_anti_virus_updates",
         )
+
+    async def test_application_usage_categories_expire_and_retained_categories_refresh(
+        self, mock_api, settings, isolated_registry, inventory, metrics
+    ):
+        """Application category series use the group TTL and retire when absent.
+
+        A later successful response that omits a category must leave its four
+        gauge series stale for expiration, while a retained category refreshes
+        all four series and remains exposed.
+        """
+        from meraki_dashboard_exporter.core.metric_expiration import MetricExpirationManager
+
+        ttl_seconds = 120.0
+        scheduler = MagicMock()
+        scheduler.should_run.return_value = True
+        scheduler.ttl_seconds_for.return_value = ttl_seconds
+        manager = MetricExpirationManager(settings=settings)
+        collector = OrganizationCollector(
+            api=mock_api,
+            settings=settings,
+            registry=isolated_registry,
+            inventory=inventory,
+            expiration_manager=manager,
+            scheduler=scheduler,
+        )
+
+        org_id, org_name = "org-application-expiry", "Application Expiry Org"
+        collector.api.organizations.getOrganizationSummaryTopApplicationsCategoriesByUsage.return_value = [
+            {"category": "Retained", "total": 10, "downstream": 6, "upstream": 4, "percentage": 60},
+            {"category": "Stale", "total": 8, "downstream": 3, "upstream": 5, "percentage": 40},
+        ]
+
+        base_time = 1_000_000.0
+        with patch(
+            "meraki_dashboard_exporter.core.metric_expiration.time.time", return_value=base_time
+        ):
+            await collector._collect_application_usage_metrics(org_id, org_name)
+
+        expected_metric_names = {
+            OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES.value,
+            OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_BYTES.value,
+            OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_BYTES.value,
+            OrgMetricName.ORG_APPLICATION_USAGE_PERCENT.value,
+        }
+        stale_entries = {
+            metric_name: entry
+            for (_, metric_name, labels), entry in manager._metric_timestamps.items()
+            if "category=stale" in labels
+        }
+        assert set(stale_entries) == expected_metric_names
+        assert {entry.ttl_seconds for entry in stale_entries.values()} == {ttl_seconds}
+        assert scheduler.ttl_seconds_for.call_args_list == [call(EndpointGroupName.ORG_APP_USAGE)]
+
+        refresh_time = base_time + ttl_seconds + 1
+        collector.api.organizations.getOrganizationSummaryTopApplicationsCategoriesByUsage.return_value = [
+            {"category": "Retained", "total": 20, "downstream": 14, "upstream": 6, "percentage": 70}
+        ]
+        with patch(
+            "meraki_dashboard_exporter.core.metric_expiration.time.time", return_value=refresh_time
+        ):
+            await collector._collect_application_usage_metrics(org_id, org_name)
+            await manager._cleanup_expired_metrics()
+
+        for metric_name in expected_metric_names:
+            metrics.assert_metric_not_set(metric_name, org_id=org_id, category="stale")
+        metrics.assert_gauge_value(
+            OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES,
+            20_000_000,
+            org_id=org_id,
+            category="retained",
+        )
+        retained_entries = {
+            metric_name: entry
+            for (_, metric_name, labels), entry in manager._metric_timestamps.items()
+            if "category=retained" in labels
+        }
+        assert set(retained_entries) == expected_metric_names
+        assert all(entry.ts == refresh_time for entry in retained_entries.values())
+        assert scheduler.ttl_seconds_for.call_args_list == [
+            call(EndpointGroupName.ORG_APP_USAGE),
+            call(EndpointGroupName.ORG_APP_USAGE),
+        ]
 
     async def test_category_name_sanitization(self, collector):
         """Test sanitization of various category names."""
