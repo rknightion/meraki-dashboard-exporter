@@ -134,6 +134,37 @@ class TestMSPortStatusGate(_MSGatingBase):
         assert EndpointGroupName.MS_PORT_STATUS in sched.marked
         assert 777.0 in ttls
 
+    async def test_dense_port_opt_out_skips_fetches_but_keeps_overview(
+        self, mock_api, settings, isolated_registry, inventory
+    ) -> None:
+        """Disabling dense port series suppresses their fetches, not the bounded overview."""
+        settings.api.ms_port_metrics_enabled = False
+        sched = _FakeScheduler()
+        dc = self._device_collector(mock_api, settings, isolated_registry, inventory, sched)
+        devices = [{"serial": "Q2XX-1", "networkId": "net1", "name": "sw1"}]
+
+        status_result = await dc.ms_collector.collect_port_statuses_by_switch(
+            "org1", "Org", devices
+        )
+        usage_result = await dc.ms_collector.collect_port_usage_by_switch("org1", "Org", devices)
+        await dc.ms_collector._collect_packet_statistics(devices[0])
+        mock_api.switch.getOrganizationSwitchPortsOverview.return_value = {"counts": {}}
+        await dc.ms_collector.collect_port_overview("org1", "Org")
+
+        assert status_result is True
+        assert usage_result is True
+        mock_api.switch.getOrganizationSwitchPortsStatusesBySwitch.assert_not_called()
+        mock_api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval.assert_not_called()
+        mock_api.switch.getOrganizationSwitchPortsClientsOverviewByDevice.assert_not_called()
+        mock_api.switch.getDeviceSwitchPortsStatusesPackets.assert_not_called()
+        mock_api.switch.getOrganizationSwitchPortsOverview.assert_called_once()
+        assert set(sched.marked) == {
+            EndpointGroupName.MS_PORT_STATUS,
+            EndpointGroupName.MS_PORT_USAGE,
+            EndpointGroupName.MS_PACKET_STATS,
+            EndpointGroupName.MS_PORT_OVERVIEW,
+        }
+
 
 class TestMSPortUsageGate(_MSGatingBase):
     """MS_PORT_USAGE org-endpoint gate and per-serial interval sourcing."""

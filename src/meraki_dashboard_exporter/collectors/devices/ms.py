@@ -546,6 +546,8 @@ class MSCollector(BaseDeviceCollector):
             )
 
     def _should_collect_port_usage(self, serial: str) -> bool:
+        if not self.settings.api.ms_port_metrics_enabled:
+            return False
         # Interval sourced from the scheduler's solved MS_PORT_USAGE interval
         # (#617): floor 600s, stretchable, pinnable via ms_port_usage_interval.
         interval: float = self.parent._group_interval(EndpointGroupName.MS_PORT_USAGE)
@@ -558,6 +560,8 @@ class MSCollector(BaseDeviceCollector):
         self._last_port_usage[serial] = time.time()
 
     def _should_collect_packet_stats(self, serial: str) -> bool:
+        if not self.settings.api.ms_port_metrics_enabled:
+            return False
         # Interval sourced from the scheduler's solved MS_PACKET_STATS interval
         # (#617): floor 600s, stretchable, pinnable via ms_packet_stats_interval.
         interval: float = self.parent._group_interval(EndpointGroupName.MS_PACKET_STATS)
@@ -883,6 +887,18 @@ class MSCollector(BaseDeviceCollector):
         devices: list[dict[str, Any]],
     ) -> bool:
         """Collect port status metrics using the org-level switch endpoint."""
+        if not self.settings.api.ms_port_metrics_enabled:
+            # The coordinator treats ``False`` as an org-endpoint failure and
+            # falls back to the per-switch dense collection path. Mark the
+            # disabled groups as handled instead, so readiness does not wait
+            # for intentionally suppressed work.
+            for group_name in (
+                EndpointGroupName.MS_PORT_STATUS,
+                EndpointGroupName.MS_PORT_USAGE,
+                EndpointGroupName.MS_PACKET_STATS,
+            ):
+                self.parent._mark_group_ran(group_name)
+            return True
         # #617 gate: skip when MS_PORT_STATUS is not due this cycle. Return True
         # (not a failure) so the coordinator does not fall back to per-device.
         if not self.parent._should_run_group(EndpointGroupName.MS_PORT_STATUS):
@@ -1000,6 +1016,18 @@ class MSCollector(BaseDeviceCollector):
             Switch device data.
 
         """
+        if not self.settings.api.ms_port_metrics_enabled:
+            # This is the fallback when the org status endpoint is disabled.
+            # Keep its scheduler groups satisfied without issuing the
+            # per-switch calls that would recreate the disabled port series.
+            for group_name in (
+                EndpointGroupName.MS_PORT_STATUS,
+                EndpointGroupName.MS_PORT_USAGE,
+                EndpointGroupName.MS_PACKET_STATS,
+            ):
+                self.parent._mark_group_ran(group_name)
+            return
+
         # Extract org info from device data
         org_id = device.get("orgId", "")
         org_name = device.get("orgName", org_id)
@@ -1227,6 +1255,8 @@ class MSCollector(BaseDeviceCollector):
     )
     async def collect_device_port_usage_metrics(self, device: dict[str, Any]) -> None:
         """Collect per-port usage and POE metrics for a switch."""
+        if not self.settings.api.ms_port_metrics_enabled:
+            return
         serial = device.get("serial")
         if not serial:
             return
@@ -1429,6 +1459,8 @@ class MSCollector(BaseDeviceCollector):
             the coordinator to fall back to the per-device loop.
 
         """
+        if not self.settings.api.ms_port_metrics_enabled:
+            return True
         # #617 gate: skip when MS_PORT_USAGE is not due this cycle. Return True
         # (not a failure) so the coordinator does not fall back to per-device.
         if not self.parent._should_run_group(EndpointGroupName.MS_PORT_USAGE):
@@ -1857,6 +1889,8 @@ class MSCollector(BaseDeviceCollector):
             Switch device data.
 
         """
+        if not self.settings.api.ms_port_metrics_enabled:
+            return
         # Extract org info from device data
         org_id = device.get("orgId", "")
         org_name = device.get("orgName", org_id)

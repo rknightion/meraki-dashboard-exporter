@@ -32,7 +32,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(meraki_network_wireless_connection_stats_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "(meraki_network_wireless_connection_stats_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "legendFormat": "{{network_name}} - {{stat_type}}",
                         "range": true
                       }
@@ -92,7 +92,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(meraki_network_wireless_download_bytes_per_second{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "(meraki_network_wireless_download_bytes_per_second{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "legendFormat": "{{network_name}} - download",
                         "range": true
                       }
@@ -112,7 +112,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(meraki_network_wireless_upload_bytes_per_second{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "(meraki_network_wireless_upload_bytes_per_second{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "legendFormat": "{{network_name}} - upload",
                         "range": true
                       }
@@ -232,7 +232,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "((meraki_mr_network_packets_lost_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"} / clamp_min(meraki_mr_network_packets_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}, 1)) * 100) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "((meraki_mr_network_packets_lost_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"} / clamp_min(meraki_mr_network_packets_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}, 1)) * 100) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "legendFormat": "{{network_name}}",
                         "range": true
                       }
@@ -292,7 +292,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(meraki_clients_per_ssid_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "(meraki_clients_per_ssid_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "legendFormat": "{{network_name}} - {{ssid}}",
                         "range": true
                       }
@@ -415,7 +415,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(meraki_clients_per_ssid_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "(meraki_clients_per_ssid_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "instant": true,
                         "legendFormat": "{{network_name}} - {{ssid}}"
                       }
@@ -469,7 +469,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(meraki_mr_air_marshal_ssids_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "(meraki_mr_air_marshal_ssids_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "legendFormat": "{{network_name}}",
                         "range": true
                       }
@@ -529,7 +529,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(meraki_network_bluetooth_clients_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "(meraki_network_bluetooth_clients_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "legendFormat": "{{network_name}}",
                         "range": true
                       }
@@ -652,7 +652,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(meraki_network_bluetooth_clients_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "(meraki_network_bluetooth_clients_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "instant": true,
                         "legendFormat": "{{network_name}}"
                       }
@@ -769,7 +769,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(meraki_network_wireless_connection_stats_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "(meraki_network_wireless_connection_stats_count{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "instant": true,
                         "legendFormat": "{{network_name}} - {{stat_type}}"
                       }
@@ -823,7 +823,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(meraki_ap_channel_utilization_2_4ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "(meraki_ap_channel_utilization_2_4ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "legendFormat": "{{network_name}} - {{serial}}",
                         "range": true
                       }
@@ -883,7 +883,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(meraki_ap_channel_utilization_5ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "(meraki_ap_channel_utilization_5ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "legendFormat": "{{network_name}} - {{serial}}",
                         "range": true
                       }
@@ -943,7 +943,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(meraki_network_channel_utilization_2_4ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "(meraki_network_channel_utilization_2_4ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "legendFormat": "{{network_name}} - 2.4GHz",
                         "range": true
                       }
@@ -963,7 +963,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(meraki_network_channel_utilization_5ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "(meraki_network_channel_utilization_5ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "legendFormat": "{{network_name}} - 5GHz",
                         "range": true
                       }
@@ -1023,7 +1023,7 @@
                       "kind": "prometheus",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "(meraki_ap_channel_utilization_6ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\"}) * on(network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\"}",
+                        "expr": "(meraki_ap_channel_utilization_6ghz_percent{job=\"meraki_dashboard\", org_id=~\"$organization\", network_id=~\"$network\", utilization_type=\"total\"}) * on(org_id, network_id) group_left(network_name) meraki_network_info{job=\"meraki_dashboard\", org_id=~\"$organization\"}",
                         "legendFormat": "{{network_name}} - {{serial}}",
                         "range": true
                       }

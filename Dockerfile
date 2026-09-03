@@ -8,21 +8,20 @@ ARG PY_VERSION=3.14
 # manager natively tracks `FROM image:${ARG}@sha256:digest` (expands the ARG default to
 # resolve the tag, then keeps the digest in sync with that tag) — no custom regex manager
 # needed. The uv `COPY --from` pin below rides on the same built-in manager (#661).
-# Pinned digest resolves to python:3.14-slim-trixie (3.14.7-slim-trixie, multi-arch
-# index incl. linux/amd64 + linux/arm64) as of 2026-09-02. Debian 13 replaced bookworm
-# because the publication gate blocks on HIGH/CRITICAL findings and bookworm shipped
-# no fix for zlib1g, libsqlite3-0, perl-base or ncurses-bin.
-FROM python:${PY_VERSION}-slim-trixie@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6 AS builder
+# Pinned digest resolves to python:3.14-alpine3.23 (3.14.7-alpine3.23, multi-arch
+# index incl. linux/amd64 + linux/arm64) as of 2026-09-03. Alpine avoids shipping
+# Debian's libsystemd0/libudev1 runtime packages; their source package is affected by
+# CVE-2026-16742 and Debian 13 has no fixed version.
+FROM python:${PY_VERSION}-alpine3.23@sha256:8caa2adfeb414dfe68d8b257f7aea9e205a400521c2b13b2d2e5e731fb8e70e5 AS builder
 
 # Install system deps with cache mounts for faster rebuilds
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
-        build-essential \
+RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+    apk add --no-cache \
+        build-base \
         ca-certificates \
         libffi-dev \
         git \
-        pkg-config
+        pkgconf
 
 WORKDIR /app
 
@@ -52,17 +51,15 @@ RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
 COPY src/meraki_dashboard_exporter ./meraki_dashboard_exporter
 
 # --------------------------------------------------------------------------- #
-# Runtime stage - minimal Debian-based Python image
+# Runtime stage - minimal Alpine-based Python image
 # --------------------------------------------------------------------------- #
 # Same digest pin as the builder stage above (#562) — both stages must resolve to the
 # identical base image.
-FROM python:${PY_VERSION}-slim-trixie@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6 AS runtime
+FROM python:${PY_VERSION}-alpine3.23@sha256:8caa2adfeb414dfe68d8b257f7aea9e205a400521c2b13b2d2e5e731fb8e70e5 AS runtime
 
 # Install runtime dependencies and create non-root user
-RUN apt-get update -qq \
-    && apt-get install -y --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd -m -u 1000 -s /bin/false exporter
+RUN apk add --no-cache ca-certificates \
+    && adduser -D -u 1000 -s /sbin/nologin exporter
 
 # Labels for container metadata (consolidated for single layer)
 LABEL org.opencontainers.image.source="https://github.com/rknightion/meraki-dashboard-exporter" \

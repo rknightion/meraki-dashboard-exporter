@@ -201,6 +201,8 @@ config: {}
   # apiSmoothingMaxBatchDelay: "15.0"
   # -- Use org-level switch port status endpoint for MS status metrics
   # apiMsPortStatusUseOrgEndpoint: "true"
+  # -- Collect dense per-port MS series (status, errors/warnings, usage/PoE/client count, packets, STP/802.1X, neighbours, and port-info). Disable to suppress about 74 observed meraki_ms_* samples per observed port; org-level port overview, switch-level STP, stack, and other MS metrics remain enabled.
+  # apiMsPortMetricsEnabled: "true"
   # -- Minimum seconds between per-switch port usage/POE refreshes (min: 0, max: 3600)
   # apiMsPortUsageInterval: "600"
   # -- Minimum seconds between per-switch packet stats refreshes (min: 0, max: 3600)
@@ -385,17 +387,22 @@ config: {}
 # request / 512Mi limit) are sized for a SMALL deployment only
 # (~1 org / ~10 networks / ~100 devices, registry ~20-50k series, RSS < 256Mi).
 # The old "512Mi is enough" advice is WRONG at scale and will OOMKill the pod.
+# The install NOTES repeat this SMALL-only scope for operators who do not read
+# values comments. No resource default moves without a cited measurement.
 #
-# Rough tiers (single org; clients collector OFF; from evidence/scale-and-capacity.md):
-#   SMALL   (~100 devices,   ~10 nets):  requests 100m / 256Mi,  limits 500m / 512Mi
-#   MEDIUM  (~1,000 devices, ~50 nets):  requests 250m / 512Mi,  limits 1    / 1Gi
-#   LARGE   (~5,000 devices, ~500 nets): requests 500m / 1.5Gi,  limits 2    / 3Gi+
+# Rough tiers (single org; clients collector OFF):
+#   SMALL   (~100 devices / ~10 networks):    requests 100m / 256Mi, limits 500m / 512Mi;
+#           registry ~20-50k series, RSS < 256Mi
+#   MEDIUM  (~1,000 devices / ~50 networks):  requests 250m / 512Mi, limits 1 / 1Gi
+#   LARGE   (~5,000 devices / ~500 networks): requests 500m / 1.5Gi, limits 2 / 3Gi+
 # LARGE also exceeds the per-org API budget with current defaults (~178% of 10 req/s)
 # and needs NetworkFilter + interval tuning regardless of pod size -- more memory does
-# not fix rate-limit starvation. Registry can hold 0.6-1.1M series at LARGE, so set the
-# limit from observed RSS (watch `process_resident_memory_bytes` / container memory) and
-# leave generous headroom rather than trusting these estimates. Turning the clients
-# collector ON raises cardinality and memory substantially -- size up further.
+# not fix rate-limit starvation. LARGE per-port MS projection (not a measurement):
+# 700 MS switches x assumed 30 observed ports/switch x measured 2,225 meraki_ms_* samples
+# / 30 observed ports (=74.17 samples/port) = 1,557,500 per-port MS series. This projects
+# only dense per-port MS families, not the total registry. Set limits from observed RSS
+# (watch `process_resident_memory_bytes` / container memory) with generous headroom. Turning
+# the clients collector ON raises cardinality and memory substantially -- size up further.
 resources:
   requests:
     cpu: 100m

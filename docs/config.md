@@ -77,6 +77,7 @@ Configuration for Meraki API interactions
 | `MERAKI_EXPORTER_API__SMOOTHING_MIN_BATCH_DELAY` | `float` | `1.0` | Minimum delay between batches when smoothing (min: 0.0, max: 60.0) |
 | `MERAKI_EXPORTER_API__SMOOTHING_MAX_BATCH_DELAY` | `float` | `15.0` | Maximum delay between batches when smoothing (min: 0.0, max: 300.0) |
 | `MERAKI_EXPORTER_API__MS_PORT_STATUS_USE_ORG_ENDPOINT` | `bool` | `True` | Use org-level switch port status endpoint for MS status metrics |
+| `MERAKI_EXPORTER_API__MS_PORT_METRICS_ENABLED` | `bool` | `True` | Collect dense per-port MS series (status, errors/warnings, usage/PoE/client count, packets, STP/802.1X, neighbours, and port-info). Disable to suppress about 74 observed meraki_ms_* samples per observed port; org-level port overview, switch-level STP, stack, and other MS metrics remain enabled. |
 | `MERAKI_EXPORTER_API__MS_PORT_USAGE_INTERVAL` | `int` | `600` | Minimum seconds between per-switch port usage/POE refreshes (min: 0, max: 3600) |
 | `MERAKI_EXPORTER_API__MS_PACKET_STATS_INTERVAL` | `int` | `600` | Minimum seconds between per-switch packet stats refreshes (min: 0, max: 3600) |
 | `MERAKI_EXPORTER_API__CLIENT_APP_USAGE_INTERVAL` | `int` | `600` | Minimum seconds between client application usage refreshes (min: 0, max: 3600) |

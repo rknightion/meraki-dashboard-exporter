@@ -1,10 +1,10 @@
 ---
 id: MDE-0001
 title: 'Establish which premise the duration-histogram arithmetic breaks, then fix it'
-status: Parked
+status: In Progress
 assignee: []
 created_date: '2026-08-14 15:56'
-updated_date: '2026-09-02 15:27'
+updated_date: '2026-09-03 13:18'
 labels:
   - 'area:observability'
   - 'priority:medium'
@@ -84,6 +84,8 @@ Wave 1 L8: observe the duration contradiction in the disposable harness, then fi
 Wave 1 L3: use the retained fault-injection harness and bounded corpus to establish the duration premise by observation, explain the ClientsCollector residual if possible, and return either verified fixes/tests or a sharper evidence-backed Parked boundary.
 
 Wave 2: root captures and sanitizes the missing live GET corpus, validates a materially closer full ExporterApp replay, then a REVIEW lane observes the duration and ClientsCollector premises; fix only the premise disproven by retained evidence.
+
+Wave 3 bounded closeout: add a concurrent regression that proves forced-run admission is atomic in current code and fails against the pre-40e24f8 shape; audit every duration observation path including sub-collectors sharing a label; document that duration is per-run wall clock excluding collector-lock and global-capacity wait; then verify AC1-AC4 without changing timing semantics.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -105,6 +107,8 @@ Timeline, read from git and the issue archive:
 Consequence for the three premises: premise 2 ('the lock actually serialises') was FALSE in the observed build and is true in current code. That accounts for both the 1.96x oversubscription and, with #703, the ClientsCollector count. No current-code defect is implied, which is consistent with every harness observation to date showing exactly one duration observation per successful run per collector.
 
 This closes the archaeology: process-identity provenance for the deleted container is not needed and must not be pursued further. Remaining work to satisfy AC1-AC4 is bounded and offline: pin the serialisation invariant with a regression that fails against the pre-40e24f8 admission shape, confirm no other observation path can double-count, and settle AC2/AC3 by documenting what the duration metric measures (per-run wall clock excluding lock and admission wait) rather than by changing production timing.
+
+Wave 3 implementation proof: git history establishes that the historical soak image predated both atomic per-collector admission (#695, commit 40e24f8) and removal of the disabled child-group loop (#703, commit fd5cb69), so premise 2 was false in the observed build and is true now. A regression using the real MetricCollector path failed against the pre-40e24f8 admission shape with two duration observations (expected one) and passes current source. Source review found one production duration observation, only on registered top-level collectors; sub-collectors do not inherit MetricCollector. The metric help and operator-generated metrics reference now define admitted collector-body wall clock per logical run, excluding per-collector lock and global-capacity wait. Focused gate: 30 passed for forced_admission_695 or collector_base; integrated focused gate: 183 passed covering admission, MS opt-out, config and generators.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

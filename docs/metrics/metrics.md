@@ -538,7 +538,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 |--------|------|--------|-------------|-------|
 | `meraki_exporter_collection_smoothing_window_seconds` | gauge | `collector` | Configured smoothing window for collector runs |  |
 | `meraki_exporter_collector_api_calls_total` | counter | `collector`, `endpoint` | Total number of API calls made by collectors |  |
-| `meraki_exporter_collector_duration_seconds` | histogram | `collector` | Time spent collecting metrics |  |
+| `meraki_exporter_collector_duration_seconds` | histogram | `collector` | Per-run wall-clock time spent executing the admitted collector body; excludes per-collector lock and global-capacity admission wait |  |
 | `meraki_exporter_collector_errors_total` | counter | `collector`, `error_type` | Total number of collector errors |  |
 | `meraki_exporter_collector_start_offset_seconds` | gauge | `collector` | Configured collector start offset within smoothing window |  |
 | `meraki_exporter_collector_success_timestamp_seconds` | gauge | `collector` | Unix timestamp of last successful collection |  |

@@ -173,7 +173,13 @@ class MetricCollector(ABC):
         ...
 
     async def collect(self) -> None:
-        """Collect metrics from the Meraki API with performance tracking and tracing."""
+        """Collect metrics from the Meraki API with performance tracking and tracing.
+
+        The duration observation is per logical run and starts only after the
+        manager has acquired both the per-collector lock and global admission
+        capacity. It therefore measures collector-body wall clock and excludes
+        lock/admission queue wait.
+        """
         collector_name = self.__class__.__name__
         start_time = time.time()
         self._endpoint_group_verdicts = {}
@@ -978,7 +984,10 @@ class MetricCollector(ABC):
             # Create metrics and assign to class attributes
             duration_metric = Histogram(
                 CollectorMetricName.COLLECTOR_DURATION_SECONDS.value,
-                "Time spent collecting metrics",
+                (
+                    "Per-run wall-clock time spent executing the admitted collector body; "
+                    "excludes per-collector lock and global-capacity admission wait"
+                ),
                 labelnames=["collector"],
                 buckets=tuple(buckets) if buckets else cls._DEFAULT_DURATION_BUCKETS,
                 registry=REGISTRY,

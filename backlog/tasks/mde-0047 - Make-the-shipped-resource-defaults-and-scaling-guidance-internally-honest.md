@@ -1,10 +1,10 @@
 ---
 id: MDE-0047
 title: Make the shipped resource defaults and scaling guidance internally honest
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-02 15:56'
-updated_date: '2026-09-02 15:57'
+updated_date: '2026-09-03 13:18'
 labels:
   - 'area:deploy'
   - 'area:docs'
@@ -55,8 +55,16 @@ Setting a MEDIUM resource default from measurement, and producing a measured DEN
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
 
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Wave 3: add the frozen API setting ms_port_metrics_enabled (bool, default true; env MERAKI_EXPORTER_API__MS_PORT_METRICS_ENABLED), gate dense per-port MS series while preserving bounded switch-level signals, replace stale LARGE numbers with explicitly labelled projections from stated measured inputs, surface SMALL default scope at install/startup, and report the largest populated fixture render measurement without moving resource defaults.
+<!-- SECTION:PLAN:END -->
+
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Split out of MDE-0002 on 2026-09-02. Inherits its old AC2, AC4 and AC5. MDE-0002 keeps only the two criteria that need topologies no reachable organisation has, and is permanently Parked on them. See MDE-0002's notes for the split record and for why its AC6 calibration gate (cold replay compared against a warm long-running anchor) may be unsatisfiable as written.
+
+Wave 3 implementation proof: kept the 256Mi request / 512Mi limit unchanged because no MEDIUM or dense-switch measurement supports moving it. Replaced the stale LARGE estimate with an explicitly labelled 1,557,500-series per-port-MS projection whose inputs are stated inline: 700 switches times assumed 30 observed ports times measured 2,225 meraki_ms_* samples divided by 30 observed ports. Added the default-true MERAKI_EXPORTER_API__MS_PORT_METRICS_ENABLED opt-out; false suppresses dense per-port status, error/warning, usage/PoE/client-count, packet, STP/802.1X, neighbour and port-info paths while leaving bounded overview, switch-level STP, stack and other switch signals active. The HOMELAB full replay remains labelled as a fixture measurement, not MEDIUM evidence. Focused integrated gate: 183 passed.
 <!-- SECTION:NOTES:END -->

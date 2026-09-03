@@ -244,6 +244,15 @@ class APISettings(BaseModel):
         True,
         description="Use org-level switch port status endpoint for MS status metrics",
     )
+    ms_port_metrics_enabled: bool = Field(
+        True,
+        description=(
+            "Collect dense per-port MS series (status, errors/warnings, usage/PoE/client count, "
+            "packets, STP/802.1X, neighbours, and port-info). Disable to suppress about 74 "
+            "observed meraki_ms_* samples per observed port; org-level port overview, switch-level "
+            "STP, stack, and other MS metrics remain enabled."
+        ),
+    )
     ms_port_usage_interval: int = Field(
         600,
         ge=0,
