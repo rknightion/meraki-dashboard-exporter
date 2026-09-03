@@ -1,10 +1,10 @@
 ---
 id: MDE-0001
 title: 'Establish which premise the duration-histogram arithmetic breaks, then fix it'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-08-14 15:56'
-updated_date: '2026-09-03 13:55'
+updated_date: '2026-09-03 14:28'
 labels:
   - 'area:observability'
   - 'priority:medium'
@@ -62,18 +62,18 @@ magnitude, but the audit noted a residual ~2x discrepancy it could not explain.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Which of the three facts is false, established by observation on the #713 harness, not by argument
-- [ ] #2 The underlying defect fixed, or recorded as correct-with-a-misleading-metric-name and the metric renamed or re-documented
-- [ ] #3 rate(duration_sum)/rate(duration_count) yields a mean an operator can trust for capacity work, or the metric stops implying that it does
-- [ ] #4 The residual ClientsCollector ~2x discrepancy is explained, or shown to be the same cause
+- [x] #1 Which of the three facts is false, established by observation on the #713 harness, not by argument
+- [x] #2 The underlying defect fixed, or recorded as correct-with-a-misleading-metric-name and the metric renamed or re-documented
+- [x] #3 rate(duration_sum)/rate(duration_count) yields a mean an operator can trust for capacity work, or the metric stops implying that it does
+- [x] #4 The residual ClientsCollector ~2x discrepancy is explained, or shown to be the same cause
 - [x] #5 A regression test pins whatever the correct observation count per run turns out to be
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 make check (uv run ruff check . && uv run ruff format --check . && uv run mypy . && uv run pytest -v)
-- [ ] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
-- [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
+- [x] #1 make check (uv run ruff check . && uv run ruff format --check . && uv run mypy . && uv run pytest -v)
+- [x] #2 make docgen, when metrics, config, endpoints or collectors changed — CI fails the build on generated-docs drift
+- [x] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -119,4 +119,6 @@ Wave 3 live correction: the deployed candidate with tracing enabled exposed a cu
 Parked after bounded harness observation. AC5 is proven; AC1-AC4 remain unproven. Resume with sanitized live-verified captures for the three missing MS routes and a non-empty getNetworkClients response, extend corpus identity to method/path/query, then rerun isolated Device and Clients observations.
 
 Wave 2: parked at a sharper provenance boundary after the expanded retained corpus showed one duration observation per successful Device and Clients wrapper. Current code does not reproduce the historical contradiction; resolving the residual requires process-identity-aware Clients and competing-admission observations, not a speculative timing change.
+
+Completed in 2844a98 and 9eacf8a. Historical premise 2 was false before atomic collector admission; current active tracing also made premise 1 false because the exemplar helper performed a second metric update. The active-trace regression failed with duration count 2 instead of 1 before the fix and now passes. just check passed with 2916 tests, 5 deselected and 91.21% coverage; just ci passed the image build, seven structure tests and health/metrics smoke checks; exact-head CI run 33764588407 passed. On the live soak host, every enabled collector advanced across 14:17:14Z to 14:28:00Z with duration counts exactly equal to manager successes, zero manager failures and zero restarts. The disabled child-group loop fixed by #703 plus the exemplar double update explains the historical ClientsCollector excess; the generated metric reference defines the trusted per-run wall-clock mean.
 <!-- SECTION:FINAL_SUMMARY:END -->

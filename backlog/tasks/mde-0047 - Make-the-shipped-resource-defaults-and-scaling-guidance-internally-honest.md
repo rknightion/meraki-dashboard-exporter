@@ -1,10 +1,10 @@
 ---
 id: MDE-0047
 title: Make the shipped resource defaults and scaling guidance internally honest
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-02 15:56'
-updated_date: '2026-09-03 13:18'
+updated_date: '2026-09-03 14:28'
 labels:
   - 'area:deploy'
   - 'area:docs'
@@ -40,19 +40,19 @@ Setting a MEDIUM resource default from measurement, and producing a measured DEN
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The shipped chart default is unambiguous at install time about the fleet size it covers: an operator who never reads values.yaml comments still learns, at install or at startup, that the default is SMALL-scoped
-- [ ] #2 The 0.6-1.1M LARGE series figure is replaced everywhere it appears with a projection derived from the measured per-entity cardinality, with its inputs and fleet-shape assumptions stated inline and labelled a projection rather than a measurement
-- [ ] #3 docs/scaling-guide.md and the chart sizing comments agree with each other on every tier, with no figure present in one and absent or different in the other
-- [ ] #4 A documented setting exists that disables the dense per-port MS series families while leaving the rest of the MS collector working, with its cardinality effect stated
-- [ ] #5 Scrape render time and payload size are reported for the largest fixture the harness can actually populate, checked against a typical Prometheus scrape timeout and the two-thread serving executor, and labelled with the fixture that produced them
-- [ ] #6 No resource default is changed on the basis of an unmeasured or invented number; if a default moves, its source measurement is cited inline at the point of change
+- [x] #1 The shipped chart default is unambiguous at install time about the fleet size it covers: an operator who never reads values.yaml comments still learns, at install or at startup, that the default is SMALL-scoped
+- [x] #2 The 0.6-1.1M LARGE series figure is replaced everywhere it appears with a projection derived from the measured per-entity cardinality, with its inputs and fleet-shape assumptions stated inline and labelled a projection rather than a measurement
+- [x] #3 docs/scaling-guide.md and the chart sizing comments agree with each other on every tier, with no figure present in one and absent or different in the other
+- [x] #4 A documented setting exists that disables the dense per-port MS series families while leaving the rest of the MS collector working, with its cardinality effect stated
+- [x] #5 Scrape render time and payload size are reported for the largest fixture the harness can actually populate, checked against a typical Prometheus scrape timeout and the two-thread serving executor, and labelled with the fixture that produced them
+- [x] #6 No resource default is changed on the basis of an unmeasured or invented number; if a default moves, its source measurement is cited inline at the point of change
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
-- [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
-- [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
+- [x] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
+- [x] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
+- [x] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -68,3 +68,9 @@ Split out of MDE-0002 on 2026-09-02. Inherits its old AC2, AC4 and AC5. MDE-0002
 
 Wave 3 implementation proof: kept the 256Mi request / 512Mi limit unchanged because no MEDIUM or dense-switch measurement supports moving it. Replaced the stale LARGE estimate with an explicitly labelled 1,557,500-series per-port-MS projection whose inputs are stated inline: 700 switches times assumed 30 observed ports times measured 2,225 meraki_ms_* samples divided by 30 observed ports. Added the default-true MERAKI_EXPORTER_API__MS_PORT_METRICS_ENABLED opt-out; false suppresses dense per-port status, error/warning, usage/PoE/client-count, packet, STP/802.1X, neighbour and port-info paths while leaving bounded overview, switch-level STP, stack and other switch signals active. The HOMELAB full replay remains labelled as a fixture measurement, not MEDIUM evidence. Focused integrated gate: 183 passed.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Completed in 2844a98 without moving the 256Mi request or 512Mi limit. Helm install NOTES now state the default is SMALL-only; chart and scaling guidance use the same explicitly labelled 1,557,500-series projection from 700 switches, 30 assumed observed ports per switch and the measured 2,225 samples across 30 observed ports. The default-true MS port metrics setting suppresses dense per-port families while retaining bounded switch signals. The largest populated HOMELAB replay is labelled as a fixture measurement: 112,803,840-byte RSS, 3,688 samples, 513,757-byte payload and 0.075662-second render against the typical 10-second timeout and two-thread serving executor. just gen produced no drift; just check passed with 2916 tests, 5 deselected and 91.21% coverage; just ci and exact-head CI run 33764588407 passed. No metric or label name changed, so no further Grafana update was required.
+<!-- SECTION:FINAL_SUMMARY:END -->
