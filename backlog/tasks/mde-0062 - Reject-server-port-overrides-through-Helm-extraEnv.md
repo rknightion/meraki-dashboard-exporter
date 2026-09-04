@@ -1,10 +1,10 @@
 ---
 id: MDE-0062
 title: Reject server-port overrides through Helm extraEnv
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-03 18:46'
-updated_date: '2026-09-04 05:53'
+updated_date: '2026-09-04 06:27'
 labels:
   - 'area:helm'
 dependencies: []
@@ -21,16 +21,16 @@ Audit dimension 4 confirmed preventive chart hardening at the v2.0.0 release tre
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Helm rendering rejects MERAKI_EXPORTER_SERVER__PORT in extraEnv and directs operators to service.port
-- [ ] #2 A focused render regression preserves ordinary extraEnv entries and rejects the conflicting port entry
-- [ ] #3 The application listener, named container port, Service and both probes remain derived from one chart value
+- [x] #1 Helm rendering rejects MERAKI_EXPORTER_SERVER__PORT in extraEnv and directs operators to service.port
+- [x] #2 A focused render regression preserves ordinary extraEnv entries and rejects the conflicting port entry
+- [x] #3 The application listener, named container port, Service and both probes remain derived from one chart value
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
-- [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
-- [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
+- [x] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
+- [x] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
+- [x] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -38,3 +38,9 @@ Audit dimension 4 confirmed preventive chart hardening at the v2.0.0 release tre
 <!-- SECTION:PLAN:BEGIN -->
 Add a failing Helm render regression for MERAKI_EXPORTER_SERVER__PORT in extraEnv, reject it with service.port guidance, and retain ordinary extraEnv plus the single-value listener/service/probe derivation.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added Helm validation that rejects conflicting listener overrides, including mixed-case environment-variable names. The intended regressions failed before their fixes; chart tests, just check, and just ci passed at 5e8d9c23b76a2f2edd531c15c776cbfbcc9134fa; exact-head CI 33843833956 and publication 33843966820 succeeded.
+<!-- SECTION:FINAL_SUMMARY:END -->

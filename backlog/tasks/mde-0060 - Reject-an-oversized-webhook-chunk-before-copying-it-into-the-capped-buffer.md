@@ -1,10 +1,10 @@
 ---
 id: MDE-0060
 title: Reject an oversized webhook chunk before copying it into the capped buffer
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-03 14:43'
-updated_date: '2026-09-04 05:53'
+updated_date: '2026-09-04 06:27'
 labels:
   - 'area:http'
 dependencies: []
@@ -21,16 +21,16 @@ Audit dimension 2 confirmed a live defensive-resource defect at the v2.0.0 relea
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A chunk larger than the remaining byte budget is rejected before it is copied into the application buffer
-- [ ] #2 A focused regression supplies one oversized ASGI chunk and proves the accumulator never grows beyond the configured cap
-- [ ] #3 Valid under-cap chunked requests and validation-failure accounting remain unchanged
+- [x] #1 A chunk larger than the remaining byte budget is rejected before it is copied into the application buffer
+- [x] #2 A focused regression supplies one oversized ASGI chunk and proves the accumulator never grows beyond the configured cap
+- [x] #3 Valid under-cap chunked requests and validation-failure accounting remain unchanged
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
-- [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
-- [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
+- [x] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
+- [x] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
+- [x] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -38,3 +38,9 @@ Audit dimension 2 confirmed a live defensive-resource defect at the v2.0.0 relea
 <!-- SECTION:PLAN:BEGIN -->
 Write an oversized single-chunk regression that instruments maximum accumulator size; compare each chunk with remaining capacity before extending while preserving under-cap and validation-failure behavior.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Rejected oversized webhook chunks before copying into the bounded buffer. Both intended regressions failed before the fix; just check and just ci passed at 5e8d9c23b76a2f2edd531c15c776cbfbcc9134fa; exact-head CI 33843833956 and publication 33843966820 succeeded.
+<!-- SECTION:FINAL_SUMMARY:END -->

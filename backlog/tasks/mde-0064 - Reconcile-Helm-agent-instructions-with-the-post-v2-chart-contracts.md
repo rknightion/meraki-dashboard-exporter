@@ -1,10 +1,10 @@
 ---
 id: MDE-0064
 title: Reconcile Helm agent instructions with the post-v2 chart contracts
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-03 19:43'
-updated_date: '2026-09-04 05:53'
+updated_date: '2026-09-04 06:27'
 labels:
   - 'area:helm'
   - needs-triage
@@ -22,16 +22,16 @@ The Wave 5 fallback reconciliation found two stale operational claims in charts/
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The NetworkPolicy instruction states that any enabled tracing, logs, or metrics channel emits the shared chart OTLP port and explains the existing extraEgress route for distinct ports
-- [ ] #2 The resource-sizing instruction no longer endorses unsupported scale-tier quantities and points to the representative-measurement contract tracked by MDE-0063 without adding a new estimate
-- [ ] #3 All other claims in the touched Helm instruction paragraphs are checked against the current templates and values before the task is finalized
+- [x] #1 The NetworkPolicy instruction states that any enabled tracing, logs, or metrics channel emits the shared chart OTLP port and explains the existing extraEgress route for distinct ports
+- [x] #2 The resource-sizing instruction no longer endorses unsupported scale-tier quantities and points to the representative-measurement contract tracked by MDE-0063 without adding a new estimate
+- [x] #3 All other claims in the touched Helm instruction paragraphs are checked against the current templates and values before the task is finalized
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
-- [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
-- [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
+- [x] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
+- [x] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
+- [x] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -39,3 +39,9 @@ The Wave 5 fallback reconciliation found two stale operational claims in charts/
 <!-- SECTION:PLAN:BEGIN -->
 Reconcile the touched Helm instruction paragraphs with current OTel NetworkPolicy behavior and the measurement-only resource contract, then verify every remaining claim in those paragraphs against templates and values.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Reconciled Helm agent instructions with the post-v2 chart contracts. Documentation and chart validation, just check, and just ci passed at 5e8d9c23b76a2f2edd531c15c776cbfbcc9134fa; exact-head CI 33843833956 and publication 33843966820 succeeded.
+<!-- SECTION:FINAL_SUMMARY:END -->
