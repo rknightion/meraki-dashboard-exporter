@@ -26,22 +26,30 @@ from meraki_dashboard_exporter.core.otel_data_logs import (
 PACKET_LOSS = DataLogEvent.WIRELESS_CLIENT_PACKET_LOSS.value
 
 
-def _make_settings(**logs: object) -> Settings:
+def _make_settings(
+    *, resource_attributes: dict[str, str] | None = None, **logs: object
+) -> Settings:
     """Build Settings with the given otel.logs sub-block (api key stubbed)."""
     otel: dict[str, object] = {}
     if logs:
         otel["logs"] = logs
+    if resource_attributes is not None:
+        otel["resource_attributes"] = resource_attributes
     return Settings(meraki={"api_key": "a" * 40}, otel=otel)
 
 
 def _make_emitter(
     exporter: InMemoryLogRecordExporter | None = None,
     registry: CollectorRegistry | None = None,
+    *,
+    resource_attributes: dict[str, str] | None = None,
     **logs: object,
 ) -> tuple[DataLogEmitter, InMemoryLogRecordExporter, CollectorRegistry]:
     exp = exporter or InMemoryLogRecordExporter()
     reg = registry or CollectorRegistry()
-    emitter = DataLogEmitter(_make_settings(**logs), registry=reg, exporter=exp)
+    emitter = DataLogEmitter(
+        _make_settings(resource_attributes=resource_attributes, **logs), registry=reg, exporter=exp
+    )
     return emitter, exp, reg
 
 
@@ -69,7 +77,11 @@ class TestDataLogEmitterEnabled:
 
     def test_resource_attributes_present(self) -> None:
         """Resource attributes present."""
-        emitter, exp, _ = _make_emitter(enabled=True, endpoint="http://otel:4317")
+        emitter, exp, _ = _make_emitter(
+            enabled=True,
+            endpoint="http://otel:4317",
+            resource_attributes={"cloud.region": "eu-west-2", "environment": "staging"},
+        )
         emitter.emit(PACKET_LOSS, {"org.id": "1"})
 
         rec = exp.get_finished_logs()[0]
@@ -77,7 +89,8 @@ class TestDataLogEmitterEnabled:
         assert res["service.name"] == "meraki-dashboard-exporter"
         assert res["service.version"] == get_version()
         assert "service.instance.id" in res
-        assert "deployment.environment" in res
+        assert res["cloud.region"] == "eu-west-2"
+        assert res["deployment.environment"] == "staging"
 
     def test_enabled_property_true(self) -> None:
         """Enabled property true."""
@@ -120,11 +133,48 @@ class TestDataLogEmitterAllowlist:
     def test_event_not_in_allowlist_is_skipped(self) -> None:
         """Event not in allowlist is skipped."""
         emitter, exp, _ = _make_emitter(
-            enabled=True, endpoint="http://otel:4317", events=["some.other.event"]
+            enabled=True,
+            endpoint="http://otel:4317",
+            events=[DataLogEvent.ORG_WEBHOOK_DELIVERY.value],
         )
         assert emitter.is_event_enabled(PACKET_LOSS) is False
         emitter.emit(PACKET_LOSS, {"org.id": "1"})
         assert len(exp.get_finished_logs()) == 0
+
+    def test_unknown_event_is_rejected_before_observability_state(self) -> None:
+        """Unknown configured events cannot create records, status or counter series."""
+        unknown_event = "some.other.event"
+        emitter, exp, registry = _make_emitter(
+            enabled=True,
+            endpoint="http://otel:4317",
+            events=[unknown_event],
+        )
+
+        assert unknown_event not in BUILT_IN_EVENTS
+        assert emitter.is_event_enabled(unknown_event) is False
+
+        emitter.emit(unknown_event, {"org.id": "1"})
+
+        assert len(exp.get_finished_logs()) == 0
+        assert emitter.stats() == {
+            "enabled": True,
+            "total_emitted": 0,
+            "total_dropped": 0,
+            "emitted_by_event": {},
+            "dropped_by_event": {},
+        }
+        assert (
+            registry.get_sample_value(
+                "meraki_exporter_data_log_records_emitted_total", {"event": unknown_event}
+            )
+            is None
+        )
+        assert (
+            registry.get_sample_value(
+                "meraki_exporter_data_log_records_dropped_total", {"event": unknown_event}
+            )
+            is None
+        )
 
     def test_event_in_allowlist_is_emitted(self) -> None:
         """Event in allowlist is emitted."""

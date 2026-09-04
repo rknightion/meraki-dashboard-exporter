@@ -1,7 +1,7 @@
 <system_context>
 Helm chart for deploying the exporter to Kubernetes. `apiVersion: v2`, `type: application`,
 chart `version: 0.1.0` (static in-repo; the publish workflow overrides it to the release tag at
-package time. `appVersion` tracks the exporter release via release-please — don't trust any
+package time). `appVersion` tracks the exporter release via release-please — don't trust any
 pinned value written here to stay current). Published via the shared `container-publish.yml` reusable workflow
 (`.github/workflows/publish.yml`, `helm-chart-path: charts/meraki-dashboard-exporter`) alongside the
 container image — the chart is a recent addition (started publishing per the
@@ -12,8 +12,8 @@ container image — the chart is a recent addition (started publishing per the
 - **API key handling is validated at render time, not defaulted.** `values.yaml` defaults
   `meraki.apiKey` and `meraki.existingSecret` to `""` — there is **no insecure default value**.
   `templates/_validation.tpl`'s `validateApiKey` template `fail`s the render unless **exactly one**
-  of `meraki.apiKey` / `meraki.existingSecret` is set. It is invoked from a single call site at the
-  top of `templates/deployment.yaml` (line 1) — that is sufficient because `helm install/upgrade`
+  of `meraki.apiKey` / `meraki.existingSecret` is set. It is invoked with the OTel and shutdown
+  validators at the top of `templates/deployment.yaml` — that is sufficient because `helm install/upgrade`
   renders every template in the release, but a `--show-only` render of a different template alone
   would skip it. Don't add a second call site; don't remove the existing one.
 - **FIXED (was a confirmed bug) — the chart-managed-Secret path now wires the key into the
@@ -50,7 +50,9 @@ container image — the chart is a recent addition (started publishing per the
     `meraki.organizationId`) and `SERVER__PORT` (from `service.port`). The API key
     (`MERAKI__API_KEY`) is a Secret (see above), and **secret-typed settings are excluded from the
     ConfigMap entirely** — e.g. `WEBHOOKS__SHARED_SECRET` / `SERVER__API_TOKEN` must be injected via
-    `extraEnv` from a Secret, never templated into the plaintext ConfigMap.
+    `extraEnv` from a Secret, never templated into the plaintext ConfigMap. `SERVER__PORT` is
+    chart-owned: `extraEnv` may not override it; use `service.port` so the listener, Service, and
+    probes stay aligned.
 - **Pod restart on config/secret change** is via `checksum/config` + `checksum/secret` annotations
   in `deployment.yaml`, computed by hashing the *rendered* configmap.yaml/secret.yaml templates —
   standard Helm pattern, but note `secret.yaml` renders to an empty string when
@@ -71,10 +73,10 @@ container image — the chart is a recent addition (started publishing per the
   `autoscaling.enabled` the Deployment omits its static `replicas` so the HPA owns it (with
   `maxReplicas` capped at 1). Don't relax these guards or switch to `RollingUpdate` without adding
   leader election first.
-- **Resource sizing is scale-dependent and heavily commented in `values.yaml`.** The 256Mi/512Mi
-  default is SMALL-scale only; memory scales with cardinality (device/network count). See the
-  `resources:` block comments and `evidence/scale-and-capacity.md` — do not restore any "512Mi is
-  enough" claim.
+- **Resource sizing requires representative measurements.** The unchanged 100m/256Mi request and
+  500m/512Mi limit are a bootable default, not a supported scale tier. Memory scales with
+  cardinality (device/network count); use the evidence labels in the `resources:` block and
+  `docs/scaling-guide.md`, and do not restore unsupported tier recommendations.
 - **Webhook receiver needs external TLS.** Meraki delivers webhooks (`POST /api/webhooks/meraki`)
   HTTPS-only; the exporter serves HTTP. The optional Ingress (or an external nginx/Traefik) is the
   TLS-termination point — see `docs/deployment-operations.md`. The webhook shared secret is NOT a
@@ -88,10 +90,12 @@ container image — the chart is a recent addition (started publishing per the
 - `.helmignore` - standard VCS/editor-artifact excludes, nothing project-specific.
 - `templates/_helpers.tpl` - naming helpers (`name`, `fullname`, `chart`, `labels`,
   `selectorLabels`, `serviceAccountName`) plus the API-key `secretName`/`secretKey` resolvers.
-- `templates/_validation.tpl` - `validateApiKey`: fails the render on a misconfigured API key (see
-  above). The only validation template in the chart.
-- `templates/deployment.yaml` - the Deployment; single call site for `validateApiKey`; wires
-  ConfigMap via `envFrom`, conditionally wires `existingSecret` via `secretKeyRef`, checksum
+- `templates/_validation.tpl` - `validateApiKey`, `validateShutdownGrace`, and `validateOtel`:
+  fail rendering on an invalid secret selection, an insufficient termination grace period, an
+  `extraEnv` override of a chart-owned validated setting, or an enabled OTel exporter without an
+  endpoint.
+- `templates/deployment.yaml` - the Deployment; invokes all three validation templates; wires
+  ConfigMap via `envFrom`, always wires the API key through a helper-resolved `secretKeyRef`, checksum
   annotations, probes, resources, the `/tmp` emptyDir.
 - `templates/configmap.yaml` - env-var mapping for all non-secret settings (see above).
 - `templates/secret.yaml` - chart-managed API key Secret; only renders when `meraki.apiKey` is set.
@@ -103,13 +107,14 @@ container image — the chart is a recent addition (started publishing per the
 - `templates/ingress.yaml` - optional `Ingress` (guarded by `ingress.enabled`); TLS-termination
   point for the HTTPS-only Meraki webhook receiver, backends the Service http port.
 - `templates/networkpolicy.yaml` - optional `NetworkPolicy` (guarded by `networkPolicy.enabled`);
-  ingress on the http port, egress DNS + 443 + (when `config.otelEnabled`) the OTLP port.
+  ingress on the http port, egress DNS + 443 + the shared OTLP port when tracing, data logs, or
+  metrics is enabled. Use `networkPolicy.egress.extraEgress` for a channel using a distinct port.
 - `templates/hpa.yaml` - optional `HorizontalPodAutoscaler` (guarded by `autoscaling.enabled`);
   manages the single pod, `maxReplicas` capped at 1 (no leader election).
 - `README.md` - human-facing chart docs (install, singleton contract, sizing table, optional
   resources). Not auto-generated — keep in sync with `values.yaml` by hand.
-- `templates/NOTES.txt` - post-install help text (port-forward + curl examples, warns if no API
-  key is configured). Readiness hint is `/ready`, matching the chart's default
+- `templates/NOTES.txt` - post-install help text (port-forward + curl examples; its no-key warning
+  is only defensive because a normal full render fails first). Readiness hint is `/ready`, matching the chart's default
   `readinessProbe.httpGet.path` (also `/ready` as of `8639c1b` / #243 — `/health` is always `200`,
   which made the readiness gate a no-op, so don't point `readinessProbe` back at it; `livenessProbe`
   is the one that stays on `/health`). Still worth cross-checking `values.yaml` if this file looks

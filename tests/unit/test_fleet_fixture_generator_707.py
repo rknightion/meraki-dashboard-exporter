@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from tests.fixtures.fleet import (
+    MEDIUM_FLEET_PRESET,
     FleetCITier,
     FleetParameters,
     FleetPreset,
@@ -39,6 +40,18 @@ def test_homelab_reproduces_the_frozen_live_baseline() -> None:
     assert fleet.baseline.solved_rps == 0.5341667
     assert fleet.baseline.meraki_ms_samples == 2225
     assert fleet.baseline.demand_formula == (1141, 1176)
+
+
+def test_branch_retail_is_the_frozen_literal_medium_topology() -> None:
+    """D11's MEDIUM class is the representative many-network fleet, not a size label."""
+    assert MEDIUM_FLEET_PRESET is FleetPreset.BRANCH_RETAIL
+
+    fleet = build_fleet(MEDIUM_FLEET_PRESET)
+    assert fleet.parameters.networks_per_org == 750
+    assert fleet.parameters.devices_per_network == {"MX": 2, "MS": 1, "MR": 3}
+    assert fleet.parameters.ports_per_switch == 24
+    assert fleet.parameters.ssids_per_network == 4
+    assert fleet.parameters.clients_per_network == 10
 
 
 @pytest.mark.slow

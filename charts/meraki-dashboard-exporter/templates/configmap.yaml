@@ -99,6 +99,9 @@ data:
   {{- if hasKey . "apiMsPortStatusUseOrgEndpoint" }}
   MERAKI_EXPORTER_API__MS_PORT_STATUS_USE_ORG_ENDPOINT: {{ .apiMsPortStatusUseOrgEndpoint | quote }}
   {{- end }}
+  {{- if hasKey . "apiMsPortMetricsEnabled" }}
+  MERAKI_EXPORTER_API__MS_PORT_METRICS_ENABLED: {{ .apiMsPortMetricsEnabled | quote }}
+  {{- end }}
   {{- if hasKey . "apiMsPortUsageInterval" }}
   MERAKI_EXPORTER_API__MS_PORT_USAGE_INTERVAL: {{ .apiMsPortUsageInterval | quote }}
   {{- end }}

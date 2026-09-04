@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Annotated
 
 import pytest
+from pydantic import Field
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
@@ -17,6 +19,13 @@ import generate_env_example as gee  # noqa: E402
 import generate_metrics_docs as gcd_metrics  # noqa: E402
 import generate_scaling_capacity_docs as gscd  # noqa: E402
 import validate_documented_env_vars as vdev  # noqa: E402
+
+
+def test_config_type_formatter_hides_nested_validation_metadata() -> None:
+    """Nested value constraints remain prose, not part of the displayed type."""
+    annotation = dict[str, Annotated[int, Field(gt=0)]]
+
+    assert gcd_config._format_type(annotation) == "dict[str, int]"
 
 
 def test_metrics_scan_fails_on_unparseable_source(tmp_path: Path) -> None:
@@ -110,3 +119,19 @@ def test_720_documented_env_validation_accepts_real_webhook_secret(tmp_path: Pat
     example = tmp_path / "example.md"
     example.write_text("MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET=value\n", encoding="utf-8")
     vdev.validate_documented_env_vars([example], {"MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET"})
+
+
+def test_documented_env_candidate_extraction_keeps_only_exact_leaf_examples() -> None:
+    """Prefix and wildcard prose are not leaf settings, while nested examples are."""
+    text = " ".join((
+        "MERAKI_EXPORTER_WEBHOOKS",
+        "MERAKI_EXPORTER_WEBHOOKS__",
+        "MERAKI_EXPORTER_WEBHOOKS__*",
+        "MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET",
+        "MERAKI_EXPORTER_API__RETRY__MAX_ATTEMPTS",
+    ))
+
+    assert vdev.extract_leaf_candidates(text) == {
+        "MERAKI_EXPORTER_API__RETRY__MAX_ATTEMPTS",
+        "MERAKI_EXPORTER_WEBHOOKS__SHARED_SECRET",
+    }

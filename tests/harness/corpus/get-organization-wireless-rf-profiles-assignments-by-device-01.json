@@ -1,0 +1,27 @@
+{
+  "items": [
+    {
+      "mac": "02:00:00:00:00:03",
+      "model": "MR56",
+      "name": "device_name_005",
+      "network": {
+        "id": "network_001"
+      },
+      "rfProfile": {
+        "id": "device_027",
+        "isIndoorDefault": true,
+        "isOutdoorDefault": false,
+        "name": "device_name_026"
+      },
+      "serial": "device_003"
+    }
+  ],
+  "meta": {
+    "counts": {
+      "items": {
+        "remaining": 0,
+        "total": 1
+      }
+    }
+  }
+}

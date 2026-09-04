@@ -234,6 +234,11 @@ class FleetMeasuredReport:
 
 HOMELAB_BASELINE: Final[HomelabBaseline] = HomelabBaseline()
 
+# D11's literal MEDIUM class is the representative many-network topology.  The
+# name describes its sizing role; BRANCH-RETAIL remains one of D2's seven
+# stable presets, so no eighth synthetic "MEDIUM" preset is introduced.
+MEDIUM_FLEET_PRESET: Final[FleetPreset] = FleetPreset.BRANCH_RETAIL
+
 PRESET_PARAMETERS: Final[dict[FleetPreset, FleetParameters]] = {
     FleetPreset.HOMELAB: FleetParameters(
         networks_per_org=1,

@@ -1,73 +1,1321 @@
 {
-  "schema_version": 1,
   "fixtures": [
     {
-      "fixture": "organization.json",
-      "sha256": "1dae2ce0fcca39220e6d1689efe273c18e4535a57363097de21851d3e8010bed",
-      "capture_date_utc": "2026-08-14",
-      "product_family": "organization metadata",
+      "captured_at_utc": "2026-09-02T06:54:15.428727+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organizations-01.json",
       "method": "GET",
-      "path": "/api/v1/organizations/org_001",
+      "path": "/api/v1/organizations",
+      "product_family": "organizations",
       "query": "",
-      "sdk_operation": "getOrganization",
       "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
         "name": "failure-harness",
-        "version": "3",
-        "method": "operation-and-path-aware stable placeholders"
+        "version": "4"
       },
-      "evidence_source": "authorised read-only homelab capture for GitHub issue #713",
-      "evidence_status": "LIVE-VERIFIED"
+      "sdk_operation": "getOrganizations",
+      "sha256": "fdd5c74889166c02971c2efacae89a4aacb183ec6191abc3740bfd7de3a7a73f",
+      "status_code": 200
     },
     {
-      "fixture": "networks.json",
-      "sha256": "e3f971cf15937254a28aae756b47317437c595fde728abfd935151caacdd03b9",
-      "capture_date_utc": "2026-08-14",
-      "product_family": "sensor,switch,wireless",
-      "method": "GET",
-      "path": "/api/v1/organizations/org_001/networks",
-      "query": "",
-      "sdk_operation": "getOrganizationNetworks",
-      "sanitizer": {
-        "name": "failure-harness",
-        "version": "3",
-        "method": "operation-and-path-aware stable placeholders"
-      },
-      "evidence_source": "authorised read-only homelab capture for GitHub issue #713",
-      "evidence_status": "LIVE-VERIFIED"
-    },
-    {
-      "fixture": "devices.json",
-      "sha256": "0ac23cf232b22063e7a7350af5fa20cdbd6b1aacc92c389ecd0b9d3caf97603f",
-      "capture_date_utc": "2026-08-14",
-      "product_family": "sensor,switch,wireless",
+      "captured_at_utc": "2026-09-02T06:54:15.952032+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-devices-01.json",
       "method": "GET",
       "path": "/api/v1/organizations/org_001/devices",
+      "product_family": "organizations",
       "query": "",
-      "sdk_operation": "getOrganizationDevices",
       "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
         "name": "failure-harness",
-        "version": "3",
-        "method": "operation-and-path-aware stable placeholders"
+        "version": "4"
       },
-      "evidence_source": "authorised read-only homelab capture for GitHub issue #713",
-      "evidence_status": "LIVE-VERIFIED"
+      "sdk_operation": "getOrganizationDevices",
+      "sha256": "72a4c6dc89d1fe3a28017b0f98878512c168ee85340945261fdc91696ed6bbac",
+      "status_code": 200
     },
     {
-      "fixture": "device-availabilities.json",
-      "sha256": "9d887974b5db0ff9cce025dcbb2e7c0054ba05eff009a68525df87dfb2f2c244",
-      "capture_date_utc": "2026-08-14",
-      "product_family": "sensor,switch,wireless",
+      "captured_at_utc": "2026-09-02T06:54:16.045306+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001",
+      "product_family": "organizations",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganization",
+      "sha256": "4bad315534f7ccf896b83ffadf1ff83038f51379ca324a316dadd20a3274e41b",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:16.160371+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-networks-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/networks",
+      "product_family": "organizations",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationNetworks",
+      "sha256": "452d5a16cd29f21ffd5b9e4977cecbba154325ff4751b8eab27937d4bf97d803",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:16.290347+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-assurance-alerts-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/assurance/alerts",
+      "product_family": "organizations",
+      "query": "perPage=300",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationAssuranceAlerts",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:16.480088+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-sensor-alerts-overview-by-metric-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/sensor/alerts/overview/byMetric",
+      "product_family": "sensor",
+      "query": "timespan=3600&interval=3600",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkSensorAlertsOverviewByMetric",
+      "sha256": "0110a6c1a98b55e9d9cf6e99fd35661465b47f263213367219b18bc7b5072552",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:17.628781+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-devices-availabilities-01.json",
       "method": "GET",
       "path": "/api/v1/organizations/org_001/devices/availabilities",
+      "product_family": "organizations",
       "query": "",
-      "sdk_operation": "getOrganizationDevicesAvailabilities",
       "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
         "name": "failure-harness",
-        "version": "3",
-        "method": "operation-and-path-aware stable placeholders"
+        "version": "4"
       },
-      "evidence_source": "authorised read-only homelab capture for GitHub issue #713",
-      "evidence_status": "LIVE-VERIFIED"
+      "sdk_operation": "getOrganizationDevicesAvailabilities",
+      "sha256": "bf166a7c0f3280eb16e88e6b731db24b41bec73d633a59efe49d06fbc0b79d01",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:17.756894+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-switch-ports-statuses-by-switch-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/switch/ports/statuses/bySwitch",
+      "product_family": "switch",
+      "query": "perPage=20&networkIds%5B%5D=",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationSwitchPortsStatusesBySwitch",
+      "sha256": "0ec4c6c1cc43dd3e762b540371455bc3b999a1f41360ffc744c2bd7bcb91ef14",
+      "status_code": 400
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:36.244831+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-device-switch-ports-statuses-01.json",
+      "method": "GET",
+      "path": "/api/v1/devices/device_002/switch/ports/statuses",
+      "product_family": "switch",
+      "query": "timespan=3600",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getDeviceSwitchPortsStatuses",
+      "sha256": "10a16d568885d79e3244052ce8ce924147fb689086c360adb0eb6135b0cbf615",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:36.277807+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-device-switch-ports-statuses-02.json",
+      "method": "GET",
+      "path": "/api/v1/devices/device_001/switch/ports/statuses",
+      "product_family": "switch",
+      "query": "timespan=3600",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getDeviceSwitchPortsStatuses",
+      "sha256": "fa65218bf90625e2f2202592b1bb7214ca42a0b8da0e2313d6d79e4c2a11c18c",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:36.613922+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-device-switch-ports-statuses-packets-01.json",
+      "method": "GET",
+      "path": "/api/v1/devices/device_001/switch/ports/statuses/packets",
+      "product_family": "switch",
+      "query": "timespan=300",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getDeviceSwitchPortsStatusesPackets",
+      "sha256": "5e310f157a80757d49453d2a65d68f0ce7bf21943b92460e42e46cc58c6b194e",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:36.646193+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-device-switch-ports-statuses-packets-02.json",
+      "method": "GET",
+      "path": "/api/v1/devices/device_002/switch/ports/statuses/packets",
+      "product_family": "switch",
+      "query": "timespan=300",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getDeviceSwitchPortsStatusesPackets",
+      "sha256": "e79ee41f276623df75675f901e9152e2a6f53c34d4876127834da2a5b84a407a",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:36.806812+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-summary-switch-power-history-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/summary/switch/power/history",
+      "product_family": "switch",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationSummarySwitchPowerHistory",
+      "sha256": "51c489a40d07f6c05f5ee5b410431b79ddb425070a8e87b88da25ad1a2876c39",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:36.938116+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-switch-ports-overview-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/switch/ports/overview",
+      "product_family": "switch",
+      "query": "timespan=43200",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationSwitchPortsOverview",
+      "sha256": "75a6a3f67570f35938202e87058c1908f4a8b4d23797d1277b81e1f1ab321d5f",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:37.111864+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-devices-system-memory-usage-history-by-interval-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/devices/system/memory/usage/history/byInterval",
+      "product_family": "organizations",
+      "query": "timespan=300&interval=300&perPage=20",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationDevicesSystemMemoryUsageHistoryByInterval",
+      "sha256": "4ca97a7ac0dba6d01f42d44cb11200bff90d061bea13f6c8e06331e8981a32d9",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:37.231596+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-wireless-clients-overview-by-device-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/wireless/clients/overview/byDevice",
+      "product_family": "wireless",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationWirelessClientsOverviewByDevice",
+      "sha256": "bb31335504acb64d29eafeac03cf368898681daefaf27ff51cd6ed596e4b80b8",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:37.341978+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-wireless-devices-connection-stats-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/wireless/devices/connectionStats",
+      "product_family": "wireless",
+      "query": "timespan=1800",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkWirelessDevicesConnectionStats",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:37.675375+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-wireless-ssids-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/wireless/ssids",
+      "product_family": "wireless",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkWirelessSsids",
+      "sha256": "4a9a9039fa99617d9a8da66a20b2f7e10fcf97ff74b527f5bdf8d94e2d40f912",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:37.811852+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-wireless-devices-ethernet-statuses-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/wireless/devices/ethernet/statuses",
+      "product_family": "wireless",
+      "query": "perPage=1000",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationWirelessDevicesEthernetStatuses",
+      "sha256": "a888a256ec501d361dfaadb1fc3b29d939a0426a617eeada64571dbf9c587d28",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:37.972335+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-wireless-devices-power-mode-history-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/wireless/devices/power/mode/history",
+      "product_family": "wireless",
+      "query": "timespan=86400",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationWirelessDevicesPowerModeHistory",
+      "sha256": "82a8fafeccdf8875d00cd54d2c5ba7f977e1395068856b19548e7df02359105e",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:38.177759+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-wireless-devices-packet-loss-by-network-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/wireless/devices/packetLoss/byNetwork",
+      "product_family": "wireless",
+      "query": "timespan=300",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationWirelessDevicesPacketLossByNetwork",
+      "sha256": "a3c3544092b69c775eb1a420f0bc5935baedbe4cfed8744f92c9327baac76cde",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:38.301443+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-wireless-devices-packet-loss-by-device-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/wireless/devices/packetLoss/byDevice",
+      "product_family": "wireless",
+      "query": "timespan=300",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationWirelessDevicesPacketLossByDevice",
+      "sha256": "39684af96b978cefab38f011f8011cc5830a4084a15896655b16358b7d09ed0e",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:38.496370+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-wireless-devices-system-cpu-load-history-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/wireless/devices/system/cpu/load/history",
+      "product_family": "wireless",
+      "query": "timespan=300&perPage=20&serials%5B%5D=device_003",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationWirelessDevicesSystemCpuLoadHistory",
+      "sha256": "be6f257d82b35588b6d84d9c222d96d4dbaef6f438e6cb4c890fbce2c0af222b",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:38.641983+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-wireless-signal-quality-history-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/wireless/signalQualityHistory",
+      "product_family": "wireless",
+      "query": "deviceSerial=device_003&timespan=7200&resolution=3600&autoResolution=false",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkWirelessSignalQualityHistory",
+      "sha256": "771c1454ef7387f40f804bde3742359e06a122770db10cd88a68fd822682ea08",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:39.024536+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-wireless-ssids-statuses-by-device-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/wireless/ssids/statuses/byDevice",
+      "product_family": "wireless",
+      "query": "perPage=500",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationWirelessSsidsStatusesByDevice",
+      "sha256": "fb54a8a76574d64df33c7df3aa394eee6efa3cfaf6e73d52ae929b0cc8053e99",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:39.191846+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-wireless-rf-profiles-assignments-by-device-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/wireless/rfProfiles/assignments/byDevice",
+      "product_family": "wireless",
+      "query": "perPage=1000",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationWirelessRfProfilesAssignmentsByDevice",
+      "sha256": "5e7d76c88bcb67f24ec5fa6f061103da6d9440c185bf0059df2c8f4c5eafcaba",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:39.305358+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-wireless-devices-wireless-controllers-by-device-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/wireless/devices/wirelessControllers/byDevice",
+      "product_family": "wireless",
+      "query": "perPage=1000",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationWirelessDevicesWirelessControllersByDevice",
+      "sha256": "766db2d188428a7bbe3ed8436376985b5f2d5af3ef337e030cfb51da27fc13c6",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:39.421964+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-summary-top-ssids-by-usage-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/summary/top/ssids/byUsage",
+      "product_family": "organizations",
+      "query": "quantity=50",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationSummaryTopSsidsByUsage",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:39.661011+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-switch-dhcp-v4-servers-seen-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/switch/dhcp/v4/servers/seen",
+      "product_family": "switch",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkSwitchDhcpV4ServersSeen",
+      "sha256": "1afc6130d9da2ddc61c95e7278dc5e3148faa771fcaf4384c4fb085d39741a19",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:39.808168+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-switch-dhcp-server-policy-arp-inspection-warnings-by-device-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/switch/dhcpServerPolicy/arpInspection/warnings/byDevice",
+      "product_family": "switch",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkSwitchDhcpServerPolicyArpInspectionWarningsByDevice",
+      "sha256": "9bfedcc31b324dc6c515fc1fef7ab96c2db1947a97f6f86855e26941e840dc28",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:40.072405+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-switch-link-aggregations-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/switch/linkAggregations",
+      "product_family": "switch",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkSwitchLinkAggregations",
+      "sha256": "4c8ed09914cfb795a95c65bbf5a7e9ecdd51b5ed54dbeacc67175c24bc05600a",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:40.190019+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-switch-stp-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/switch/stp",
+      "product_family": "switch",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkSwitchStp",
+      "sha256": "566606b0f0ca03aa443676a4f42f78f870df2d07199d5c4be269e13d6038f9e7",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:40.384816+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-switch-stacks-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/switch/stacks",
+      "product_family": "switch",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkSwitchStacks",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:40.592212+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-devices-power-modules-statuses-by-device-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/devices/powerModules/statuses/byDevice",
+      "product_family": "organizations",
+      "query": "productTypes%5B%5D=switch",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationDevicesPowerModulesStatusesByDevice",
+      "sha256": "6e29146942d3b9c4b1f531f72f1767730f6c954951d21e04e8b9b2cdcf30acda",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:41.725788+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-api-requests-overview-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/apiRequests/overview",
+      "product_family": "organizations",
+      "query": "timespan=3600",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationApiRequestsOverview",
+      "sha256": "92eefbcff24ded99ae1fb113b4ee2e96f9091cc3a3f08887a9f654799d7e2d5f",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:42.173856+00:00",
+      "captured_through_utc": "2026-09-02T06:54:42.962875+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-api-requests-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/apiRequests",
+      "product_family": "organizations",
+      "query": "timespan=3600&perPage=1000",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationApiRequests",
+      "sha256": "b4fbbc6e4cb5145f37d66a0971673db28284c6df1757d4903017b44a3039b68d",
+      "source_route_count": 2,
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:43.098656+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-devices-overview-by-model-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/devices/overview/byModel",
+      "product_family": "organizations",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationDevicesOverviewByModel",
+      "sha256": "f2c7985d2fd18747467b4aea1eb440550eb2239e7d75f4a6d3720bf6101910cc",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:43.231565+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-devices-availabilities-change-history-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/devices/availabilities/changeHistory",
+      "product_family": "organizations",
+      "query": "timespan=300",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationDevicesAvailabilitiesChangeHistory",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:43.558028+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-firmware-upgrades-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/firmware/upgrades",
+      "product_family": "organizations",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationFirmwareUpgrades",
+      "sha256": "546654dfcdcaee6e160cc550a9ef496100b8e1a0b2f6a5780fe22e7f1b8169fd",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:43.737912+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-licenses-overview-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/licenses/overview",
+      "product_family": "organizations",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationLicensesOverview",
+      "sha256": "c0563d2c33fd81c1e39eefbc3cee5d47b3f1116baa9c0fbf4a7bbb88f8c407c2",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:43.847861+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-clients-overview-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/clients/overview",
+      "product_family": "clients",
+      "query": "timespan=3600",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationClientsOverview",
+      "sha256": "7571b6e249a4b67160aced7119ea3987ec5831a131dbf72dfeba9197d640722c",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:43.994706+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-devices-packet-capture-captures-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/devices/packetCapture/captures",
+      "product_family": "organizations",
+      "query": "perPage=3",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationDevicesPacketCaptureCaptures",
+      "sha256": "833f8f4a1b9138f1983f2340970cd63a952f6a0974d1e19c5add50bec92b3020",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:44.421771+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-summary-top-applications-categories-by-usage-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/summary/top/applications/categories/byUsage",
+      "product_family": "organizations",
+      "query": "quantity=50",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationSummaryTopApplicationsCategoriesByUsage",
+      "sha256": "c3d6caedaf9ecdcf88986d51f7a6c8530153fc2a347330319191ebce449e1cfe",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:44.506855+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-config-templates-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/configTemplates",
+      "product_family": "organizations",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationConfigTemplates",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:44.619634+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-adaptive-policy-overview-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/adaptivePolicy/overview",
+      "product_family": "organizations",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationAdaptivePolicyOverview",
+      "sha256": "1604f78c3949cb59eefe3b557ce3a36c1da0e820cf7761c6e39771b392a56033",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:44.838405+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-summary-top-clients-by-usage-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/summary/top/clients/byUsage",
+      "product_family": "clients",
+      "query": "quantity=10",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationSummaryTopClientsByUsage",
+      "sha256": "8480f0241637b59c902e1690996523a4636d51c7e118538a0b090fc78f02badb",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:44.935947+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-summary-top-ssids-by-usage-02.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/summary/top/ssids/byUsage",
+      "product_family": "organizations",
+      "query": "quantity=10",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationSummaryTopSsidsByUsage",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:45.064027+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-summary-top-clients-manufacturers-by-usage-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/summary/top/clients/manufacturers/byUsage",
+      "product_family": "clients",
+      "query": "quantity=10",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationSummaryTopClientsManufacturersByUsage",
+      "sha256": "3e952a736c38994309c370fc505fe71ac374213cc995056e129c6e06d0cdc260",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:45.182737+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-webhooks-logs-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/webhooks/logs",
+      "product_family": "organizations",
+      "query": "timespan=3600",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationWebhooksLogs",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:46.196092+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-firmware-upgrades-by-device-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/firmware/upgrades/byDevice",
+      "product_family": "organizations",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationFirmwareUpgradesByDevice",
+      "sha256": "cd6db9c90354529f1dd84b87877cb373909b79f6d1c76511cae2fee4c2e820f0",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:46.363422+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-early-access-features-opt-ins-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/earlyAccess/features/optIns",
+      "product_family": "organizations",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationEarlyAccessFeaturesOptIns",
+      "sha256": "10738b66a5ff88cd4023205ca78980c05e6342909be60072d2fb85298358d7df",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:47.539989+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-sensor-alerts-current-overview-by-metric-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/sensor/alerts/current/overview/byMetric",
+      "product_family": "sensor",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkSensorAlertsCurrentOverviewByMetric",
+      "sha256": "b8e51cc1ecb6e7e262059f7ce557db49b6cf81dc0e6824dd62e9702219f13e58",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:47.692694+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-sensor-alerts-profiles-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/sensor/alerts/profiles",
+      "product_family": "sensor",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkSensorAlertsProfiles",
+      "sha256": "458aa55f4864ef94f71cf3ca034064574cad459b75935ad5ea8dd815eda722c7",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:47.787151+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-sensor-relationships-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/sensor/relationships",
+      "product_family": "sensor",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkSensorRelationships",
+      "sha256": "4a3d776fe4063549b4944195f5f263f16be74506db7ab38fd2a6a51e141dae24",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:48.982134+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-sensor-readings-latest-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/sensor/readings/latest",
+      "product_family": "sensor",
+      "query": "perPage=1000",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationSensorReadingsLatest",
+      "sha256": "3460c3236f0d176a093310c89430c7955591304eda06518df108b0590383f199",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:49.181845+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-sensor-gateways-connections-latest-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/sensor/gateways/connections/latest",
+      "product_family": "sensor",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationSensorGatewaysConnectionsLatest",
+      "sha256": "52c2b9713198414f24fca18f6d78dc7d42ee1bd058ea0161511490fa0cadb8a1",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:51.300637+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-clients-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/clients",
+      "product_family": "clients",
+      "query": "timespan=3600&perPage=5000",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkClients",
+      "sha256": "5a975d1b424de61f982484cb6b99fa0616e5a7d1b34e9d06711b0ba17b22a47c",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:54:58.185550+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-clients-application-usage-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/clients/applicationUsage",
+      "product_family": "clients",
+      "query": "timespan=3600&perPage=1000&clients=client_014%2Cclient_015%2Cclient_016%2Cclient_017%2Cclient_018%2Cclient_019%2Cclient_020%2Cclient_009%2Cclient_021%2Cclient_022%2Cclient_023%2Cclient_024%2Cclient_025%2Cclient_026%2Cclient_007%2Cclient_027%2Cclient_028%2Cclient_029%2Cclient_030%2Cclient_031%2Cclient_032%2Cclient_033%2Cclient_034%2Cclient_035%2Cclient_036%2Cclient_037%2Cclient_038%2Cclient_039%2Cclient_040%2Cclient_041%2Cclient_012%2Cclient_042%2Cclient_043%2Cclient_044%2Cclient_045%2Cclient_046%2Cclient_047%2Cclient_048%2Cclient_049%2Cclient_050%2Cclient_011%2Cclient_051%2Cclient_052%2Cclient_004%2Cclient_053%2Cclient_054%2Cclient_055%2Cclient_056%2Cclient_057%2Cclient_058%2Cclient_059%2Cclient_060%2Cclient_061%2Cclient_062%2Cclient_063%2Cclient_064%2Cclient_065%2Cclient_066%2Cclient_067%2Cclient_068%2Cclient_069%2Cclient_070%2Cclient_071%2Cclient_072%2Cclient_073%2Cclient_074%2Cclient_075%2Cclient_010%2Cclient_076%2Cclient_077%2Cclient_078%2Cclient_005%2Cclient_079%2Cclient_080%2Cclient_081%2Cclient_082%2Cclient_083%2Cclient_084%2Cclient_085%2Cclient_006%2Cclient_086%2Cclient_087%2Cclient_088%2Cclient_089%2Cclient_090%2Cclient_091%2Cclient_092%2Cclient_093%2Cclient_094%2Cclient_095%2Cclient_096%2Cclient_097%2Cclient_098%2Cclient_008%2Cclient_099%2Cclient_100%2Cclient_101%2Cclient_102%2Cclient_103%2Cclient_104",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkClientsApplicationUsage",
+      "sha256": "9b9adde42d8a2d37cb4e39f3482a7faad5201feb5cb2f16b5f5eee5fef404ca2",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:00.327711+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-clients-application-usage-02.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/clients/applicationUsage",
+      "product_family": "clients",
+      "query": "timespan=3600&perPage=1000&clients=client_105%2Cclient_013%2Cclient_106%2Cclient_107%2Cclient_108%2Cclient_109%2Cclient_110%2Cclient_111%2Cclient_112%2Cclient_113",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkClientsApplicationUsage",
+      "sha256": "134b8a0810cf6abacd4ff41ba3b4fc8a12421b70ff8acf51ac9e0488212fde2a",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:01.475390+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-wireless-devices-channel-utilization-by-device-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/wireless/devices/channelUtilization/byDevice",
+      "product_family": "wireless",
+      "query": "timespan=600&interval=600&perPage=1000",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationWirelessDevicesChannelUtilizationByDevice",
+      "sha256": "29d726b9ff4e6632d678b2587d6f4e0818e3c5b3cd3161e5f9ea78803fcd4026",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:01.880127+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-wireless-devices-channel-utilization-by-network-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/wireless/devices/channelUtilization/byNetwork",
+      "product_family": "wireless",
+      "query": "timespan=600&interval=600&perPage=1000",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationWirelessDevicesChannelUtilizationByNetwork",
+      "sha256": "e33c4f9d506e00c14531e3bc3903fa4812964e6da1f0d106d8f53ce18df0fa10",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:18.730790+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-wireless-connection-stats-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/wireless/connectionStats",
+      "product_family": "wireless",
+      "query": "timespan=1800",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkWirelessConnectionStats",
+      "sha256": "477bf36c7eb38d6e23807f3253e788df1cefd031fad66b21a88c74733295600f",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:18.868328+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-wireless-data-rate-history-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/wireless/dataRateHistory",
+      "product_family": "wireless",
+      "query": "timespan=300&resolution=300",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkWirelessDataRateHistory",
+      "sha256": "0e6556e9200607d15fc79277ae6d80077d7a5ce94380bc325025895158403713",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:19.123214+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-bluetooth-clients-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/bluetoothClients",
+      "product_family": "bluetooth",
+      "query": "timespan=300&perPage=1000",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkBluetoothClients",
+      "sha256": "cbfbfdd98417b51398dda97570d0f67b03c935ecd42939b1b662dd517001828c",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:19.276381+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-wireless-failed-connections-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/wireless/failedConnections",
+      "product_family": "wireless",
+      "query": "timespan=3600",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkWirelessFailedConnections",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:19.398917+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-wireless-devices-latency-stats-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/wireless/devices/latencyStats",
+      "product_family": "wireless",
+      "query": "timespan=3600&fields=avg",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkWirelessDevicesLatencyStats",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:19.517417+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-wireless-clients-latency-stats-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/wireless/clients/latencyStats",
+      "product_family": "wireless",
+      "query": "timespan=3600&fields=avg",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkWirelessClientsLatencyStats",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:19.647273+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-wireless-air-marshal-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/wireless/airMarshal",
+      "product_family": "wireless",
+      "query": "timespan=3600",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkWirelessAirMarshal",
+      "sha256": "f3f53116bec00cf30580ac924dd20491029aa826c938fac724d6f4b1ddab8b07",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:19.810440+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-network-wireless-mesh-statuses-01.json",
+      "method": "GET",
+      "path": "/api/v1/networks/network_001/wireless/meshStatuses",
+      "product_family": "wireless",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getNetworkWirelessMeshStatuses",
+      "sha256": "a8f7dd44d156a21a0b7d57f96b68d8661a388927c120a108e387dde980aa888d",
+      "status_code": 404
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:20.963199+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-login-security-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/loginSecurity",
+      "product_family": "organizations",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationLoginSecurity",
+      "sha256": "2b833e05b5a01d1616677bd9f76952597c087a05671e39ec419ef38f8276525a",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:21.069042+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-admins-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/admins",
+      "product_family": "organizations",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationAdmins",
+      "sha256": "b28290e7fb413329ecf8b003b2f11fb9aeb14bb431519dbd597bfc9f5c486797",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:21.770229+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-saml-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/saml",
+      "product_family": "organizations",
+      "query": "",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationSaml",
+      "sha256": "46a1e9eb3b4580ea092d6c0296fe9dc5b62b93837247b8df0d23f1362779ef0f",
+      "status_code": 200
+    },
+    {
+      "captured_at_utc": "2026-09-02T06:55:21.884463+00:00",
+      "evidence_source": "authorised read-only live HOMELAB GET capture, 2026-09-02",
+      "evidence_status": "LIVE-VERIFIED",
+      "fixture": "get-organization-configuration-changes-01.json",
+      "method": "GET",
+      "path": "/api/v1/organizations/org_001/configurationChanges",
+      "product_family": "organizations",
+      "query": "timespan=86400",
+      "sanitizer": {
+        "method": "shared payload-path-query placeholders with raw-value collision avoidance",
+        "name": "failure-harness",
+        "version": "4"
+      },
+      "sdk_operation": "getOrganizationConfigurationChanges",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "status_code": 200
     }
-  ]
+  ],
+  "schema_version": 2
 }

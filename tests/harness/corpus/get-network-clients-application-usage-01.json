@@ -1,0 +1,1791 @@
+[
+  {
+    "applicationUsage": [
+      {
+        "application": "value_854",
+        "received": 34,
+        "sent": 31
+      },
+      {
+        "application": "value_855",
+        "received": 51,
+        "sent": 47
+      },
+      {
+        "application": "value_856",
+        "received": 58,
+        "sent": 248
+      },
+      {
+        "application": "value_857",
+        "received": 0,
+        "sent": 173
+      },
+      {
+        "application": "value_858",
+        "received": 502,
+        "sent": 300
+      },
+      {
+        "application": "value_859",
+        "received": 27,
+        "sent": 41
+      }
+    ],
+    "clientId": "client_014",
+    "clientIp": "value_852",
+    "clientMac": "value_853"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 2,
+        "sent": 42
+      },
+      {
+        "application": "value_861",
+        "received": 80,
+        "sent": 50
+      },
+      {
+        "application": "value_862",
+        "received": 24,
+        "sent": 23
+      },
+      {
+        "application": "value_856",
+        "received": 51,
+        "sent": 17
+      },
+      {
+        "application": "value_863",
+        "received": 374,
+        "sent": 450
+      },
+      {
+        "application": "value_858",
+        "received": 258,
+        "sent": 47
+      },
+      {
+        "application": "value_859",
+        "received": 73,
+        "sent": 63
+      },
+      {
+        "application": "value_864",
+        "received": 768,
+        "sent": 62
+      }
+    ],
+    "clientId": "client_015",
+    "clientIp": "value_112",
+    "clientMac": "value_114"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 1997,
+        "sent": 848
+      },
+      {
+        "application": "value_867",
+        "received": 165,
+        "sent": 56
+      },
+      {
+        "application": "value_855",
+        "received": 123,
+        "sent": 313
+      },
+      {
+        "application": "value_856",
+        "received": 142,
+        "sent": 362
+      },
+      {
+        "application": "value_858",
+        "received": 390,
+        "sent": 311
+      },
+      {
+        "application": "value_859",
+        "received": 95,
+        "sent": 643
+      }
+    ],
+    "clientId": "client_016",
+    "clientIp": "value_865",
+    "clientMac": "value_866"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_017",
+    "clientIp": "value_868",
+    "clientMac": "value_869"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 0,
+        "sent": 3
+      },
+      {
+        "application": "value_855",
+        "received": 117,
+        "sent": 76
+      },
+      {
+        "application": "value_858",
+        "received": 20,
+        "sent": 83
+      },
+      {
+        "application": "value_859",
+        "received": 22,
+        "sent": 25
+      }
+    ],
+    "clientId": "client_018",
+    "clientIp": "value_870",
+    "clientMac": "value_871"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_019",
+    "clientIp": null,
+    "clientMac": "value_872"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_020",
+    "clientIp": "value_873",
+    "clientMac": "value_874"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_856",
+        "received": 33123,
+        "sent": 642511
+      },
+      {
+        "application": "value_863",
+        "received": 31810,
+        "sent": 729316
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 87670
+      },
+      {
+        "application": "value_877",
+        "received": 3737,
+        "sent": 112801
+      }
+    ],
+    "clientId": "client_009",
+    "clientIp": "value_875",
+    "clientMac": "value_876"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_021",
+    "clientIp": "value_878",
+    "clientMac": "value_879"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_022",
+    "clientIp": "value_880",
+    "clientMac": "value_881"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_867",
+        "received": 1913,
+        "sent": 931
+      },
+      {
+        "application": "value_855",
+        "received": 25887,
+        "sent": 143
+      },
+      {
+        "application": "value_856",
+        "received": 308518,
+        "sent": 79145
+      },
+      {
+        "application": "value_882",
+        "received": 20,
+        "sent": 1614
+      }
+    ],
+    "clientId": "client_023",
+    "clientIp": "value_130",
+    "clientMac": "value_132"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_854",
+        "received": 0,
+        "sent": 23
+      },
+      {
+        "application": "value_867",
+        "received": 154,
+        "sent": 522
+      },
+      {
+        "application": "value_855",
+        "received": 52,
+        "sent": 16
+      },
+      {
+        "application": "value_856",
+        "received": 250,
+        "sent": 1160
+      },
+      {
+        "application": "value_859",
+        "received": 13,
+        "sent": 13
+      }
+    ],
+    "clientId": "client_024",
+    "clientIp": "value_883",
+    "clientMac": "value_884"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_025",
+    "clientIp": "value_885",
+    "clientMac": "value_886"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_855",
+        "received": 117,
+        "sent": 2029
+      },
+      {
+        "application": "value_888",
+        "received": 3,
+        "sent": 86
+      }
+    ],
+    "clientId": "client_026",
+    "clientIp": "value_127",
+    "clientMac": "value_887"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 771,
+        "sent": 4544
+      },
+      {
+        "application": "value_891",
+        "received": 961,
+        "sent": 183
+      }
+    ],
+    "clientId": "client_007",
+    "clientIp": "value_889",
+    "clientMac": "value_890"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_027",
+    "clientIp": "value_892",
+    "clientMac": "value_893"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_028",
+    "clientIp": "value_894",
+    "clientMac": "value_895"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_029",
+    "clientIp": "value_896",
+    "clientMac": "value_897"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 0,
+        "sent": 22
+      }
+    ],
+    "clientId": "client_030",
+    "clientIp": "value_898",
+    "clientMac": "value_899"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 109,
+        "sent": 761
+      },
+      {
+        "application": "value_856",
+        "received": 922,
+        "sent": 14932
+      },
+      {
+        "application": "value_863",
+        "received": 4,
+        "sent": 0
+      }
+    ],
+    "clientId": "client_031",
+    "clientIp": "value_900",
+    "clientMac": "value_901"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_032",
+    "clientIp": "value_902",
+    "clientMac": "value_903"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_856",
+        "received": 197,
+        "sent": 299
+      },
+      {
+        "application": "value_859",
+        "received": 0,
+        "sent": 59
+      }
+    ],
+    "clientId": "client_033",
+    "clientIp": "value_904",
+    "clientMac": "value_905"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 38032,
+        "sent": 600625
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 106
+      },
+      {
+        "application": "value_891",
+        "received": 1,
+        "sent": 80
+      }
+    ],
+    "clientId": "client_034",
+    "clientIp": "value_906",
+    "clientMac": "value_907"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_035",
+    "clientIp": "value_908",
+    "clientMac": "value_909"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_857",
+        "received": 53,
+        "sent": 50
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 172
+      },
+      {
+        "application": "value_888",
+        "received": 140,
+        "sent": 667
+      },
+      {
+        "application": "value_859",
+        "received": 61,
+        "sent": 92
+      }
+    ],
+    "clientId": "client_036",
+    "clientIp": "value_910",
+    "clientMac": "value_911"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 42727,
+        "sent": 1146667
+      }
+    ],
+    "clientId": "client_037",
+    "clientIp": "value_912",
+    "clientMac": "value_913"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 0,
+        "sent": 275
+      },
+      {
+        "application": "value_861",
+        "received": 0,
+        "sent": 46
+      },
+      {
+        "application": "value_856",
+        "received": 53,
+        "sent": 0
+      },
+      {
+        "application": "value_857",
+        "received": 86,
+        "sent": 78
+      },
+      {
+        "application": "value_863",
+        "received": 6,
+        "sent": 0
+      },
+      {
+        "application": "value_858",
+        "received": 477,
+        "sent": 0
+      },
+      {
+        "application": "value_864",
+        "received": 39,
+        "sent": 4
+      }
+    ],
+    "clientId": "client_038",
+    "clientIp": "value_914",
+    "clientMac": "value_915"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 0,
+        "sent": 287
+      },
+      {
+        "application": "value_861",
+        "received": 14,
+        "sent": 91
+      },
+      {
+        "application": "value_856",
+        "received": 65,
+        "sent": 0
+      },
+      {
+        "application": "value_863",
+        "received": 47,
+        "sent": 0
+      },
+      {
+        "application": "value_858",
+        "received": 810,
+        "sent": 6
+      },
+      {
+        "application": "value_859",
+        "received": 0,
+        "sent": 13
+      },
+      {
+        "application": "value_864",
+        "received": 39,
+        "sent": 0
+      }
+    ],
+    "clientId": "client_039",
+    "clientIp": "value_916",
+    "clientMac": "value_917"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_854",
+        "received": 378,
+        "sent": 10
+      },
+      {
+        "application": "value_856",
+        "received": 52,
+        "sent": 0
+      }
+    ],
+    "clientId": "client_040",
+    "clientIp": "value_918",
+    "clientMac": "value_919"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_041",
+    "clientIp": "value_920",
+    "clientMac": "value_921"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_861",
+        "received": 41,
+        "sent": 3
+      },
+      {
+        "application": "value_856",
+        "received": 94518,
+        "sent": 77603
+      },
+      {
+        "application": "value_858",
+        "received": 5165,
+        "sent": 116263
+      },
+      {
+        "application": "value_882",
+        "received": 3954,
+        "sent": 44
+      }
+    ],
+    "clientId": "client_012",
+    "clientIp": "value_922",
+    "clientMac": "value_923"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_856",
+        "received": 64046,
+        "sent": 775716
+      }
+    ],
+    "clientId": "client_042",
+    "clientIp": "value_924",
+    "clientMac": "value_925"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 0,
+        "sent": 389
+      },
+      {
+        "application": "value_861",
+        "received": 109,
+        "sent": 19
+      },
+      {
+        "application": "value_856",
+        "received": 96,
+        "sent": 9
+      },
+      {
+        "application": "value_857",
+        "received": 0,
+        "sent": 43
+      },
+      {
+        "application": "value_863",
+        "received": 0,
+        "sent": 4
+      },
+      {
+        "application": "value_858",
+        "received": 1002,
+        "sent": 9
+      },
+      {
+        "application": "value_859",
+        "received": 9,
+        "sent": 77
+      },
+      {
+        "application": "value_864",
+        "received": 39,
+        "sent": 0
+      }
+    ],
+    "clientId": "client_043",
+    "clientIp": "value_926",
+    "clientMac": "value_927"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_044",
+    "clientIp": "value_928",
+    "clientMac": "value_929"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_855",
+        "received": 52,
+        "sent": 93
+      },
+      {
+        "application": "value_858",
+        "received": 29,
+        "sent": 70
+      },
+      {
+        "application": "value_859",
+        "received": 15,
+        "sent": 32
+      }
+    ],
+    "clientId": "client_045",
+    "clientIp": "value_930",
+    "clientMac": "value_931"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 0,
+        "sent": 567
+      }
+    ],
+    "clientId": "client_046",
+    "clientIp": "value_932",
+    "clientMac": "value_933"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_047",
+    "clientIp": "value_934",
+    "clientMac": "value_935"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 28875,
+        "sent": 794128
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 125
+      },
+      {
+        "application": "value_891",
+        "received": 5,
+        "sent": 107
+      }
+    ],
+    "clientId": "client_048",
+    "clientIp": "value_936",
+    "clientMac": "value_937"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_857",
+        "received": 21,
+        "sent": 45
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 172
+      },
+      {
+        "application": "value_888",
+        "received": 67,
+        "sent": 759
+      },
+      {
+        "application": "value_859",
+        "received": 87,
+        "sent": 66
+      }
+    ],
+    "clientId": "client_049",
+    "clientIp": "value_938",
+    "clientMac": "value_939"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_855",
+        "received": 116,
+        "sent": 206
+      },
+      {
+        "application": "value_858",
+        "received": 20,
+        "sent": 65
+      },
+      {
+        "application": "value_859",
+        "received": 7,
+        "sent": 5
+      }
+    ],
+    "clientId": "client_050",
+    "clientIp": "value_940",
+    "clientMac": "value_941"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_944",
+        "received": 2,
+        "sent": 0
+      },
+      {
+        "application": "value_861",
+        "received": 11634,
+        "sent": 1646
+      },
+      {
+        "application": "value_867",
+        "received": 86388,
+        "sent": 2280
+      },
+      {
+        "application": "value_856",
+        "received": 21374,
+        "sent": 37241
+      },
+      {
+        "application": "value_858",
+        "received": 1576,
+        "sent": 1039
+      }
+    ],
+    "clientId": "client_011",
+    "clientIp": "value_942",
+    "clientMac": "value_943"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_856",
+        "received": 24483,
+        "sent": 54803
+      },
+      {
+        "application": "value_858",
+        "received": 83,
+        "sent": 18
+      }
+    ],
+    "clientId": "client_051",
+    "clientIp": "value_945",
+    "clientMac": "value_946"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 34,
+        "sent": 20
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 73
+      }
+    ],
+    "clientId": "client_052",
+    "clientIp": "value_139",
+    "clientMac": "value_141"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_856",
+        "received": 380,
+        "sent": 7709
+      },
+      {
+        "application": "value_863",
+        "received": 5429629,
+        "sent": 166156
+      }
+    ],
+    "clientId": "client_004",
+    "clientIp": "value_947",
+    "clientMac": "value_948"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_053",
+    "clientIp": "value_949",
+    "clientMac": "value_950"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_054",
+    "clientIp": "value_951",
+    "clientMac": "value_952"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_055",
+    "clientIp": "value_953",
+    "clientMac": "value_954"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_056",
+    "clientIp": "value_955",
+    "clientMac": "value_956"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_854",
+        "received": 3,
+        "sent": 5
+      },
+      {
+        "application": "value_867",
+        "received": 0,
+        "sent": 47
+      },
+      {
+        "application": "value_863",
+        "received": 162,
+        "sent": 317
+      }
+    ],
+    "clientId": "client_057",
+    "clientIp": "value_957",
+    "clientMac": "value_958"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 0,
+        "sent": 168
+      },
+      {
+        "application": "value_861",
+        "received": 48,
+        "sent": 7
+      },
+      {
+        "application": "value_856",
+        "received": 75,
+        "sent": 0
+      },
+      {
+        "application": "value_863",
+        "received": 53,
+        "sent": 7
+      },
+      {
+        "application": "value_858",
+        "received": 776,
+        "sent": 12
+      },
+      {
+        "application": "value_859",
+        "received": 0,
+        "sent": 7
+      },
+      {
+        "application": "value_864",
+        "received": 0,
+        "sent": 78
+      }
+    ],
+    "clientId": "client_058",
+    "clientIp": "value_959",
+    "clientMac": "value_960"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_059",
+    "clientIp": "value_961",
+    "clientMac": "value_962"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_856",
+        "received": 10917,
+        "sent": 17539
+      },
+      {
+        "application": "value_863",
+        "received": 35558,
+        "sent": 803663
+      }
+    ],
+    "clientId": "client_060",
+    "clientIp": "value_963",
+    "clientMac": "value_964"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_858",
+        "received": 148539,
+        "sent": 2753
+      }
+    ],
+    "clientId": "client_061",
+    "clientIp": "value_965",
+    "clientMac": "value_966"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_062",
+    "clientIp": "value_967",
+    "clientMac": "value_968"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_063",
+    "clientIp": "value_969",
+    "clientMac": "value_970"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 2185,
+        "sent": 29554
+      }
+    ],
+    "clientId": "client_064",
+    "clientIp": "value_971",
+    "clientMac": "value_972"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_065",
+    "clientIp": "value_154",
+    "clientMac": "value_156"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_856",
+        "received": 6,
+        "sent": 47
+      }
+    ],
+    "clientId": "client_066",
+    "clientIp": "value_973",
+    "clientMac": "value_974"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_067",
+    "clientIp": "value_975",
+    "clientMac": "value_976"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_857",
+        "received": 2548,
+        "sent": 0
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 4774
+      }
+    ],
+    "clientId": "client_068",
+    "clientIp": "value_977",
+    "clientMac": "value_978"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_855",
+        "received": 148,
+        "sent": 172
+      },
+      {
+        "application": "value_858",
+        "received": 20,
+        "sent": 57
+      },
+      {
+        "application": "value_859",
+        "received": 9,
+        "sent": 7
+      }
+    ],
+    "clientId": "client_069",
+    "clientIp": "value_979",
+    "clientMac": "value_980"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_070",
+    "clientIp": "value_981",
+    "clientMac": "value_982"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_856",
+        "received": 106,
+        "sent": 194
+      }
+    ],
+    "clientId": "client_071",
+    "clientIp": "value_983",
+    "clientMac": "value_984"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 337,
+        "sent": 1270
+      },
+      {
+        "application": "value_856",
+        "received": 755026,
+        "sent": 64951
+      },
+      {
+        "application": "value_857",
+        "received": 65,
+        "sent": 76
+      }
+    ],
+    "clientId": "client_072",
+    "clientIp": "value_985",
+    "clientMac": "value_986"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_855",
+        "received": 94,
+        "sent": 55
+      },
+      {
+        "application": "value_856",
+        "received": 915,
+        "sent": 384
+      },
+      {
+        "application": "value_857",
+        "received": 21,
+        "sent": 27
+      },
+      {
+        "application": "value_858",
+        "received": 308,
+        "sent": 4551
+      }
+    ],
+    "clientId": "client_073",
+    "clientIp": "value_987",
+    "clientMac": "value_988"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_855",
+        "received": 47,
+        "sent": 2
+      },
+      {
+        "application": "value_856",
+        "received": 381,
+        "sent": 98
+      }
+    ],
+    "clientId": "client_074",
+    "clientIp": "value_989",
+    "clientMac": "value_990"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 0,
+        "sent": 74
+      },
+      {
+        "application": "value_855",
+        "received": 86,
+        "sent": 334
+      },
+      {
+        "application": "value_858",
+        "received": 26,
+        "sent": 75
+      },
+      {
+        "application": "value_859",
+        "received": 31,
+        "sent": 5
+      }
+    ],
+    "clientId": "client_075",
+    "clientIp": "value_991",
+    "clientMac": "value_992"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 35746,
+        "sent": 1606039
+      }
+    ],
+    "clientId": "client_010",
+    "clientIp": "value_993",
+    "clientMac": "value_994"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_857",
+        "received": 71,
+        "sent": 56
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 95
+      },
+      {
+        "application": "value_888",
+        "received": 146,
+        "sent": 1131
+      },
+      {
+        "application": "value_859",
+        "received": 66,
+        "sent": 76
+      }
+    ],
+    "clientId": "client_076",
+    "clientIp": "value_145",
+    "clientMac": "value_147"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_077",
+    "clientIp": "value_995",
+    "clientMac": "value_996"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_857",
+        "received": 24,
+        "sent": 53
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 307
+      },
+      {
+        "application": "value_888",
+        "received": 358,
+        "sent": 2907
+      },
+      {
+        "application": "value_859",
+        "received": 80,
+        "sent": 54
+      }
+    ],
+    "clientId": "client_078",
+    "clientIp": "value_997",
+    "clientMac": "value_998"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_867",
+        "received": 4029,
+        "sent": 3109
+      },
+      {
+        "application": "value_856",
+        "received": 397290,
+        "sent": 801367
+      },
+      {
+        "application": "value_863",
+        "received": 1099168,
+        "sent": 42813
+      },
+      {
+        "application": "value_858",
+        "received": 45015,
+        "sent": 0
+      },
+      {
+        "application": "value_882",
+        "received": 10007,
+        "sent": 8360
+      }
+    ],
+    "clientId": "client_005",
+    "clientIp": "value_999",
+    "clientMac": "value_1000"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 28,
+        "sent": 99
+      }
+    ],
+    "clientId": "client_079",
+    "clientIp": "value_1001",
+    "clientMac": "value_1002"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 40135,
+        "sent": 1095176
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 138
+      },
+      {
+        "application": "value_891",
+        "received": 11,
+        "sent": 130
+      }
+    ],
+    "clientId": "client_080",
+    "clientIp": "value_1003",
+    "clientMac": "value_1004"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_857",
+        "received": 83,
+        "sent": 101
+      },
+      {
+        "application": "value_863",
+        "received": 0,
+        "sent": 4
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 158
+      },
+      {
+        "application": "value_888",
+        "received": 66,
+        "sent": 743
+      },
+      {
+        "application": "value_859",
+        "received": 88,
+        "sent": 40
+      }
+    ],
+    "clientId": "client_081",
+    "clientIp": "value_057",
+    "clientMac": "value_1005"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_867",
+        "received": 203,
+        "sent": 434
+      },
+      {
+        "application": "value_856",
+        "received": 2282,
+        "sent": 10756
+      }
+    ],
+    "clientId": "client_082",
+    "clientIp": "value_1006",
+    "clientMac": "value_1007"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_854",
+        "received": 44,
+        "sent": 34
+      },
+      {
+        "application": "value_855",
+        "received": 7,
+        "sent": 133
+      },
+      {
+        "application": "value_856",
+        "received": 66,
+        "sent": 416
+      },
+      {
+        "application": "value_857",
+        "received": 0,
+        "sent": 150
+      },
+      {
+        "application": "value_858",
+        "received": 439,
+        "sent": 280
+      },
+      {
+        "application": "value_859",
+        "received": 11,
+        "sent": 48
+      }
+    ],
+    "clientId": "client_083",
+    "clientIp": "value_1008",
+    "clientMac": "value_1009"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_084",
+    "clientIp": "value_1010",
+    "clientMac": "value_1011"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_854",
+        "received": 40,
+        "sent": 18
+      },
+      {
+        "application": "value_855",
+        "received": 29,
+        "sent": 132
+      },
+      {
+        "application": "value_856",
+        "received": 35,
+        "sent": 55
+      },
+      {
+        "application": "value_858",
+        "received": 273,
+        "sent": 278
+      },
+      {
+        "application": "value_859",
+        "received": 7,
+        "sent": 17
+      }
+    ],
+    "clientId": "client_085",
+    "clientIp": "value_1012",
+    "clientMac": "value_1013"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_856",
+        "received": 3953,
+        "sent": 81137
+      },
+      {
+        "application": "value_863",
+        "received": 4589,
+        "sent": 796
+      },
+      {
+        "application": "value_888",
+        "received": 3153,
+        "sent": 426
+      }
+    ],
+    "clientId": "client_006",
+    "clientIp": "value_1014",
+    "clientMac": "value_1015"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 40,
+        "sent": 154
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 55
+      }
+    ],
+    "clientId": "client_086",
+    "clientIp": "value_1016",
+    "clientMac": "value_1017"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 25,
+        "sent": 0
+      },
+      {
+        "application": "value_856",
+        "received": 1279,
+        "sent": 997
+      },
+      {
+        "application": "value_857",
+        "received": 28,
+        "sent": 31
+      },
+      {
+        "application": "value_858",
+        "received": 311,
+        "sent": 4854
+      }
+    ],
+    "clientId": "client_087",
+    "clientIp": "value_1018",
+    "clientMac": "value_1019"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_854",
+        "received": 38,
+        "sent": 46
+      },
+      {
+        "application": "value_855",
+        "received": 54,
+        "sent": 40
+      },
+      {
+        "application": "value_856",
+        "received": 43,
+        "sent": 192
+      },
+      {
+        "application": "value_857",
+        "received": 0,
+        "sent": 160
+      },
+      {
+        "application": "value_858",
+        "received": 549,
+        "sent": 213
+      },
+      {
+        "application": "value_859",
+        "received": 24,
+        "sent": 30
+      }
+    ],
+    "clientId": "client_088",
+    "clientIp": "value_1020",
+    "clientMac": "value_1021"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 0,
+        "sent": 2
+      }
+    ],
+    "clientId": "client_089",
+    "clientIp": "value_1022",
+    "clientMac": "value_1023"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_856",
+        "received": 20558,
+        "sent": 63753
+      },
+      {
+        "application": "value_858",
+        "received": 3699,
+        "sent": 5537
+      }
+    ],
+    "clientId": "client_090",
+    "clientIp": "value_1024",
+    "clientMac": "value_1025"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_091",
+    "clientIp": "value_1026",
+    "clientMac": "value_1027"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 18055,
+        "sent": 588458
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 97
+      }
+    ],
+    "clientId": "client_092",
+    "clientIp": "value_1028",
+    "clientMac": "value_1029"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_093",
+    "clientIp": "value_1030",
+    "clientMac": "value_1031"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 0,
+        "sent": 7
+      }
+    ],
+    "clientId": "client_094",
+    "clientIp": "value_1032",
+    "clientMac": "value_1033"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_095",
+    "clientIp": "value_1034",
+    "clientMac": "value_1035"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_856",
+        "received": 1189,
+        "sent": 423
+      }
+    ],
+    "clientId": "client_096",
+    "clientIp": "value_1036",
+    "clientMac": "value_1037"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_097",
+    "clientIp": "value_1038",
+    "clientMac": "value_1039"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_856",
+        "received": 796,
+        "sent": 14093
+      },
+      {
+        "application": "value_863",
+        "received": 384,
+        "sent": 396
+      },
+      {
+        "application": "value_858",
+        "received": 274,
+        "sent": 241
+      },
+      {
+        "application": "value_888",
+        "received": 194,
+        "sent": 1525
+      }
+    ],
+    "clientId": "client_098",
+    "clientIp": "value_1040",
+    "clientMac": "value_1041"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 49110,
+        "sent": 1544379
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 104
+      }
+    ],
+    "clientId": "client_008",
+    "clientIp": "value_1042",
+    "clientMac": "value_1043"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 90,
+        "sent": 60
+      }
+    ],
+    "clientId": "client_099",
+    "clientIp": "value_1044",
+    "clientMac": "value_1045"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_860",
+        "received": 0,
+        "sent": 266
+      },
+      {
+        "application": "value_861",
+        "received": 10,
+        "sent": 3
+      },
+      {
+        "application": "value_856",
+        "received": 105,
+        "sent": 95
+      },
+      {
+        "application": "value_863",
+        "received": 11,
+        "sent": 21
+      },
+      {
+        "application": "value_858",
+        "received": 838,
+        "sent": 58
+      },
+      {
+        "application": "value_864",
+        "received": 68,
+        "sent": 42
+      }
+    ],
+    "clientId": "client_100",
+    "clientIp": "value_1046",
+    "clientMac": "value_1047"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_857",
+        "received": 42,
+        "sent": 63
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 357
+      },
+      {
+        "application": "value_888",
+        "received": 364,
+        "sent": 2673
+      },
+      {
+        "application": "value_859",
+        "received": 94,
+        "sent": 84
+      }
+    ],
+    "clientId": "client_101",
+    "clientIp": "value_1048",
+    "clientMac": "value_1049"
+  },
+  {
+    "applicationUsage": [],
+    "clientId": "client_102",
+    "clientIp": "value_1050",
+    "clientMac": "value_1051"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_863",
+        "received": 29,
+        "sent": 21
+      },
+      {
+        "application": "value_858",
+        "received": 0,
+        "sent": 23
+      }
+    ],
+    "clientId": "client_103",
+    "clientIp": "value_1052",
+    "clientMac": "value_1053"
+  },
+  {
+    "applicationUsage": [
+      {
+        "application": "value_1056",
+        "received": 94,
+        "sent": 92
+      },
+      {
+        "application": "value_867",
+        "received": 3,
+        "sent": 105
+      },
+      {
+        "application": "value_856",
+        "received": 71,
+        "sent": 117
+      },
+      {
+        "application": "value_858",
+        "received": 26,
+        "sent": 0
+      }
+    ],
+    "clientId": "client_104",
+    "clientIp": "value_1054",
+    "clientMac": "value_1055"
+  }
+]

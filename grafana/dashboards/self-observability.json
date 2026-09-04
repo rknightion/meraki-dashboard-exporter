@@ -93,7 +93,7 @@
                       "spec": {
                         "editorMode": "code",
                         "expr": "meraki_exporter_api_rate_limiter_tokens{job=\"meraki_dashboard\", instance=~\"$instance\"}",
-                        "legendFormat": "{{instance}}",
+                        "legendFormat": "{{org_id}}",
                         "range": true
                       }
                     },

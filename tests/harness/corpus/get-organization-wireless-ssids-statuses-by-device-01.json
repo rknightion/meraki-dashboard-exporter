@@ -1,0 +1,21 @@
+{
+  "items": [
+    {
+      "basicServiceSets": [],
+      "name": "device_name_005",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024"
+      },
+      "serial": "device_003"
+    }
+  ],
+  "meta": {
+    "counts": {
+      "items": {
+        "remaining": 0,
+        "total": 1
+      }
+    }
+  }
+}

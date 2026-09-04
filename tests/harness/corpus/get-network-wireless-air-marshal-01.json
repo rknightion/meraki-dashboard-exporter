@@ -1,0 +1,2035 @@
+[
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_001",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 19
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_002",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 26
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_003",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 18
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_004",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 38
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_005",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 22
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_006",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 12
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_007",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 19
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_008",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 7
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_009",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 12
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_010",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 21
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_011",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 30
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_012",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 9
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_013",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 7
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_014",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 5
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_015",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 11
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_016",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 23
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_017",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 23
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_018",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 15
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_019",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 6
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_020",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 17
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_021",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 15
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_022",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 6
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_023",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 24
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_024",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 17
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_025",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 18
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_026",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 14
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_027",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 12
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_028",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 11
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1,
+      2,
+      6,
+      7,
+      9,
+      11,
+      40,
+      48,
+      64,
+      100,
+      104,
+      112
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1724258646,
+    "lastSeen": 1788332047,
+    "manufacturers": [
+      "value_632",
+      "value_1084"
+    ],
+    "ssid": "ss_id_001",
+    "types": [
+      "value_1086"
+    ],
+    "wiredLastSeen": 1788332047,
+    "wiredMacs": [
+      "value_1061",
+      "value_998"
+    ],
+    "wiredVlans": [
+      0,
+      100
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_029",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 13
+          }
+        ]
+      }
+    ],
+    "channels": [
+      6
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1771859113,
+    "lastSeen": 1788332047,
+    "manufacturers": [
+      "value_1087"
+    ],
+    "ssid": "ss_id_002",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_030",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 18
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_031",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 7
+          }
+        ]
+      }
+    ],
+    "channels": [
+      6,
+      100
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1787571947,
+    "lastSeen": 1788332047,
+    "manufacturers": [
+      "value_1088"
+    ],
+    "ssid": "ss_id_003",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_032",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 26
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_033",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 11
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_034",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 19
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_035",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 27
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_036",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 12
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_037",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 8
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_038",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 8
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_039",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 17
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_040",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 19
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_041",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 18
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_042",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 7
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_043",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 19
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1,
+      6,
+      11,
+      100,
+      104
+    ],
+    "encryption": null,
+    "firstSeen": 1724258698,
+    "lastSeen": 1788332047,
+    "manufacturers": [],
+    "ssid": "ss_id_004",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_044",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 6
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_045",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 31
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1,
+      48
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1724258698,
+    "lastSeen": 1788332047,
+    "manufacturers": [
+      "value_1088"
+    ],
+    "ssid": "ss_id_005",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_046",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 35
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_047",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 11
+          }
+        ]
+      }
+    ],
+    "channels": [
+      40,
+      64
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1787940301,
+    "lastSeen": 1788332047,
+    "manufacturers": [
+      "value_632"
+    ],
+    "ssid": "ss_id_006",
+    "types": [],
+    "wiredLastSeen": 1787944018,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_048",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 37
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_049",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 65
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_050",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 42
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_051",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 32
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_052",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 12
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1,
+      7,
+      13,
+      40,
+      64
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1782415127,
+    "lastSeen": 1788332047,
+    "manufacturers": [
+      "value_632"
+    ],
+    "ssid": "ss_id_007",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_053",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 35
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_054",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 66
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_055",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 44
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_056",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 32
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_057",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 14
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1,
+      7,
+      13,
+      40,
+      64
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1782415127,
+    "lastSeen": 1788332047,
+    "manufacturers": [],
+    "ssid": "ss_id_008",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_058",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 19
+          }
+        ]
+      }
+    ],
+    "channels": [
+      6
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1725725410,
+    "lastSeen": 1788332047,
+    "manufacturers": [
+      "value_1089"
+    ],
+    "ssid": "ss_id_009",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_059",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 26
+          }
+        ]
+      }
+    ],
+    "channels": [
+      11
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1724258698,
+    "lastSeen": 1788332047,
+    "manufacturers": [
+      "value_1089"
+    ],
+    "ssid": "ss_id_010",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_060",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 38
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_061",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 30
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1,
+      112
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1780867456,
+    "lastSeen": 1788332047,
+    "manufacturers": [
+      "value_1088"
+    ],
+    "ssid": "ss_id_011",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_062",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 13
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_063",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 8
+          }
+        ]
+      }
+    ],
+    "channels": [
+      11,
+      104
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1764055540,
+    "lastSeen": 1788332047,
+    "manufacturers": [
+      "value_1089"
+    ],
+    "ssid": "ss_id_012",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_064",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 22
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_065",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 4
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1,
+      36
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1769601326,
+    "lastSeen": 1788332047,
+    "manufacturers": [
+      "value_1090"
+    ],
+    "ssid": "ss_id_013",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_066",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 20
+          }
+        ]
+      },
+      {
+        "bssid": "bss_id_067",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 11
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1,
+      104
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1724258496,
+    "lastSeen": 1788332047,
+    "manufacturers": [
+      "value_1088"
+    ],
+    "ssid": "ss_id_014",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_068",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 23
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1767340760,
+    "lastSeen": 1788332047,
+    "manufacturers": [
+      "value_1089"
+    ],
+    "ssid": "ss_id_015",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_069",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 22
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1784900273,
+    "lastSeen": 1788332046,
+    "manufacturers": [
+      "value_1091"
+    ],
+    "ssid": "ss_id_016",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_070",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 24
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1783336031,
+    "lastSeen": 1788332046,
+    "manufacturers": [
+      "value_1092"
+    ],
+    "ssid": "ss_id_017",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_071",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 23
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1784881260,
+    "lastSeen": 1788332045,
+    "manufacturers": [
+      "value_1093"
+    ],
+    "ssid": "ss_id_018",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_072",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 5
+          }
+        ]
+      }
+    ],
+    "channels": [
+      11
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1786698610,
+    "lastSeen": 1788332041,
+    "manufacturers": [
+      "value_1092"
+    ],
+    "ssid": "ss_id_019",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_073",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 11
+          }
+        ]
+      }
+    ],
+    "channels": [
+      6
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1781349620,
+    "lastSeen": 1788332041,
+    "manufacturers": [
+      "value_1088"
+    ],
+    "ssid": "ss_id_020",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_074",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 21
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1785832025,
+    "lastSeen": 1788332041,
+    "manufacturers": [],
+    "ssid": "ss_id_021",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_075",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 18
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1783336019,
+    "lastSeen": 1788332041,
+    "manufacturers": [
+      "value_1091"
+    ],
+    "ssid": "ss_id_022",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_076",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 20
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1786343483,
+    "lastSeen": 1788332039,
+    "manufacturers": [
+      "value_1089"
+    ],
+    "ssid": "ss_id_023",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_077",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 16
+          }
+        ]
+      }
+    ],
+    "channels": [
+      9
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1776688513,
+    "lastSeen": 1788332038,
+    "manufacturers": [
+      "value_1092"
+    ],
+    "ssid": "ss_id_024",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_078",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 19
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1784833241,
+    "lastSeen": 1788332038,
+    "manufacturers": [
+      "value_1089"
+    ],
+    "ssid": "ss_id_025",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_079",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 19
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1772771413,
+    "lastSeen": 1788332035,
+    "manufacturers": [],
+    "ssid": "ss_id_026",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_080",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 24
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1784881343,
+    "lastSeen": 1788332034,
+    "manufacturers": [
+      "value_1094"
+    ],
+    "ssid": "ss_id_027",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_081",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 10
+          }
+        ]
+      }
+    ],
+    "channels": [
+      11
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1778415448,
+    "lastSeen": 1788332033,
+    "manufacturers": [
+      "value_1089"
+    ],
+    "ssid": "ss_id_028",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_082",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 25
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1784881513,
+    "lastSeen": 1788332031,
+    "manufacturers": [
+      "value_1089"
+    ],
+    "ssid": "ss_id_029",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_083",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 17
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": null,
+    "firstSeen": 1786941875,
+    "lastSeen": 1788332015,
+    "manufacturers": [
+      "value_1095"
+    ],
+    "ssid": "ss_id_030",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_084",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 11
+          }
+        ]
+      }
+    ],
+    "channels": [
+      104
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1787723390,
+    "lastSeen": 1788332013,
+    "manufacturers": [
+      "value_1096"
+    ],
+    "ssid": "ss_id_031",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_085",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 6
+          }
+        ]
+      }
+    ],
+    "channels": [
+      36
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1788331621,
+    "lastSeen": 1788332010,
+    "manufacturers": [
+      "value_1097"
+    ],
+    "ssid": "ss_id_032",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_086",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 23
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1782914510,
+    "lastSeen": 1788331995,
+    "manufacturers": [
+      "value_1089"
+    ],
+    "ssid": "ss_id_033",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_087",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 14
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1,
+      11
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1745488711,
+    "lastSeen": 1788331974,
+    "manufacturers": [
+      "value_1087"
+    ],
+    "ssid": "ss_id_034",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_088",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 22
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1776318762,
+    "lastSeen": 1788331925,
+    "manufacturers": [
+      "value_1098"
+    ],
+    "ssid": "ss_id_035",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_089",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 17
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": null,
+    "firstSeen": 1775578719,
+    "lastSeen": 1788331920,
+    "manufacturers": [
+      "value_1099"
+    ],
+    "ssid": "ss_id_036",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_090",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 3
+          }
+        ]
+      }
+    ],
+    "channels": [
+      6
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1724257624,
+    "lastSeen": 1788331863,
+    "manufacturers": [
+      "value_1098"
+    ],
+    "ssid": "ss_id_037",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_091",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 21
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1769524320,
+    "lastSeen": 1788331570,
+    "manufacturers": [
+      "value_1088"
+    ],
+    "ssid": "ss_id_038",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_092",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 14
+          }
+        ]
+      }
+    ],
+    "channels": [
+      9
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1785869774,
+    "lastSeen": 1788331516,
+    "manufacturers": [
+      "value_1100"
+    ],
+    "ssid": "ss_id_039",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_093",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 6
+          }
+        ]
+      }
+    ],
+    "channels": [
+      44
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1783833132,
+    "lastSeen": 1788331303,
+    "manufacturers": [
+      "value_1101"
+    ],
+    "ssid": "ss_id_040",
+    "types": [
+      "value_1086"
+    ],
+    "wiredLastSeen": 1788331303,
+    "wiredMacs": [
+      "value_1071"
+    ],
+    "wiredVlans": [
+      0,
+      25
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_094",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 13
+          }
+        ]
+      }
+    ],
+    "channels": [
+      149
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1783802264,
+    "lastSeen": 1788331264,
+    "manufacturers": [
+      "value_1079"
+    ],
+    "ssid": "ss_id_041",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_095",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 12
+          }
+        ]
+      }
+    ],
+    "channels": [
+      11
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1788001315,
+    "lastSeen": 1788330967,
+    "manufacturers": [
+      "value_1102"
+    ],
+    "ssid": "ss_id_042",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_096",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 7
+          }
+        ]
+      }
+    ],
+    "channels": [
+      11
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1788330967,
+    "lastSeen": 1788330967,
+    "manufacturers": [
+      "value_1103"
+    ],
+    "ssid": "ss_id_043",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_097",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 12
+          }
+        ]
+      }
+    ],
+    "channels": [
+      8
+    ],
+    "encryption": null,
+    "firstSeen": 1771525206,
+    "lastSeen": 1788330803,
+    "manufacturers": [
+      "value_721"
+    ],
+    "ssid": "ss_id_044",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_098",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 24
+          }
+        ]
+      }
+    ],
+    "channels": [
+      1
+    ],
+    "encryption": null,
+    "firstSeen": 1787995837,
+    "lastSeen": 1788330644,
+    "manufacturers": [
+      "value_1104"
+    ],
+    "ssid": "ss_id_045",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_099",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 6
+          }
+        ]
+      }
+    ],
+    "channels": [
+      108
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1787229510,
+    "lastSeen": 1788330487,
+    "manufacturers": [
+      "value_1088"
+    ],
+    "ssid": "ss_id_046",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_100",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 4
+          }
+        ]
+      }
+    ],
+    "channels": [
+      11
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1776048681,
+    "lastSeen": 1788330137,
+    "manufacturers": [
+      "value_1098"
+    ],
+    "ssid": "ss_id_047",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_101",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 11
+          }
+        ]
+      }
+    ],
+    "channels": [
+      11
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1783180131,
+    "lastSeen": 1788329748,
+    "manufacturers": [],
+    "ssid": "ss_id_048",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  },
+  {
+    "bssids": [
+      {
+        "bssid": "bss_id_102",
+        "contained": false,
+        "detectedBy": [
+          {
+            "device": "value_1083",
+            "rssi": 16
+          }
+        ]
+      }
+    ],
+    "channels": [
+      6
+    ],
+    "encryption": "value_1085",
+    "firstSeen": 1786351985,
+    "lastSeen": 1788329615,
+    "manufacturers": [
+      "value_1098"
+    ],
+    "ssid": "ss_id_049",
+    "types": [],
+    "wiredLastSeen": 0,
+    "wiredMacs": [],
+    "wiredVlans": [
+      0
+    ]
+  }
+]

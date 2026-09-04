@@ -25,6 +25,9 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+type _FrozenLabels = tuple[tuple[str, str], ...]
+type _MetricKey = tuple[str, str, _FrozenLabels]
+
 
 class _TrackedSeries(NamedTuple):
     """Per-series tracking record stored in ``_metric_timestamps``.
@@ -90,14 +93,14 @@ class MetricExpirationManager:
         # Track last update time, owning collector, and optional per-series TTL.
         # Key: (collector_name, metric_name, frozen_labels)
         # Value: _TrackedSeries(ts, collector, ttl_seconds)
-        self._metric_timestamps: dict[tuple[str, str, str], _TrackedSeries] = {}
+        self._metric_timestamps: dict[_MetricKey, _TrackedSeries] = {}
 
         # Track the actual Gauge object and its label values per metric series so
         # expired/shed entries can be removed from the Prometheus registry (not just
         # from tracking bookkeeping).
         # Key: (collector_name, metric_name, frozen_labels)
         # Value: (Gauge object, ordered label values dict)
-        self._metric_series: dict[tuple[str, str, str], tuple[Gauge, dict[str, str]]] = {}
+        self._metric_series: dict[_MetricKey, tuple[Gauge, dict[str, str]]] = {}
 
         # Track metric count per collector
         self._metric_counts: defaultdict[str, int] = defaultdict(int)
@@ -186,7 +189,7 @@ class MetricExpirationManager:
         if metric is not None:
             self._metric_series[key] = (metric, dict(label_values))
 
-    def _remove_series(self, key: tuple[str, str, str]) -> None:
+    def _remove_series(self, key: _MetricKey) -> None:
         """Remove the actual Prometheus series for an expired/shed tracking key.
 
         Looks up the Gauge object recorded via ``track_metric_update`` and calls
@@ -196,7 +199,7 @@ class MetricExpirationManager:
 
         Parameters
         ----------
-        key : tuple[str, str, str]
+        key : _MetricKey
             The (collector_name, metric_name, frozen_labels) tracking key.
 
         """
@@ -213,8 +216,8 @@ class MetricExpirationManager:
             # Series already removed, or labels no longer match the gauge — nothing to do.
             pass
 
-    def _freeze_labels(self, labels: dict[str, str]) -> str:
-        """Convert label dict to frozen string representation.
+    def _freeze_labels(self, labels: dict[str, str]) -> _FrozenLabels:
+        """Convert label dict to a sorted immutable representation.
 
         Parameters
         ----------
@@ -223,11 +226,11 @@ class MetricExpirationManager:
 
         Returns
         -------
-        str
-            Frozen string representation for use as dict key.
+        tuple[tuple[str, str], ...]
+            Sorted immutable label pairs for use as a dict key.
 
         """
-        return "|".join(f"{k}={v}" for k, v in sorted(labels.items()))
+        return tuple(sorted(labels.items()))
 
     def _fallback_ttl(self, collector_name: str) -> float:
         """Fallback TTL for a series with no explicit ttl_seconds.
@@ -360,7 +363,7 @@ class MetricExpirationManager:
         """
         config = CardinalityConfig.from_settings(self.settings)
 
-        families: defaultdict[str, list[tuple[tuple[str, str, str], float]]] = defaultdict(list)
+        families: defaultdict[str, list[tuple[_MetricKey, float]]] = defaultdict(list)
         for key, entry in self._metric_timestamps.items():
             families[key[1]].append((key, entry.ts))
 
@@ -404,7 +407,7 @@ class MetricExpirationManager:
     def _alarm_and_maybe_shed(
         self,
         metric_name: str,
-        entries: list[tuple[tuple[str, str, str], float]],
+        entries: list[tuple[_MetricKey, float]],
         max_series: int,
         action: str,
     ) -> int:
@@ -414,7 +417,7 @@ class MetricExpirationManager:
         ----------
         metric_name : str
             The over-budget metric family.
-        entries : list[tuple[tuple[str, str, str], float]]
+        entries : list[tuple[_MetricKey, float]]
             The family's tracked ``(key, timestamp)`` entries.
         max_series : int
             The configured budget the family exceeded.

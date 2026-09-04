@@ -1,0 +1,508 @@
+{
+  "items": [
+    {
+      "free": {
+        "median": 326996
+      },
+      "intervals": [
+        {
+          "endTs": "2026-01-01T00:00:00Z",
+          "memory": {
+            "free": {
+              "maximum": 326996,
+              "median": 326996,
+              "minimum": 326996
+            },
+            "used": {
+              "maximum": 94268,
+              "median": 94268,
+              "minimum": 94268,
+              "percentages": {
+                "maximum": 18
+              }
+            }
+          },
+          "startTs": "2026-01-01T00:00:00Z"
+        }
+      ],
+      "mac": "02:00:00:00:00:01",
+      "model": "MS120-8LP-HW",
+      "name": "device_name_001",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": 513316,
+      "serial": "device_001",
+      "tags": [
+        "tags_value_001"
+      ],
+      "used": {
+        "median": 94268
+      }
+    },
+    {
+      "free": {
+        "median": 727036
+      },
+      "intervals": [
+        {
+          "endTs": "2026-01-01T00:00:00Z",
+          "memory": {
+            "free": {
+              "maximum": 727036,
+              "median": 727036,
+              "minimum": 727036
+            },
+            "used": {
+              "maximum": 157444,
+              "median": 157444,
+              "minimum": 157444,
+              "percentages": {
+                "maximum": 16
+              }
+            }
+          },
+          "startTs": "2026-01-01T00:00:00Z"
+        }
+      ],
+      "mac": "02:00:00:00:00:02",
+      "model": "MS250-24P-HW",
+      "name": "device_name_004",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": 1002020,
+      "serial": "device_002",
+      "tags": [
+        "tags_value_001"
+      ],
+      "used": {
+        "median": 157444
+      }
+    },
+    {
+      "free": {
+        "median": 1194848
+      },
+      "intervals": [
+        {
+          "endTs": "2026-01-01T00:00:00Z",
+          "memory": {
+            "free": {
+              "maximum": 1194848,
+              "median": 1194848,
+              "minimum": 1194848
+            },
+            "used": {
+              "maximum": 495052,
+              "median": 495052,
+              "minimum": 495052,
+              "percentages": {
+                "maximum": 26
+              }
+            }
+          },
+          "startTs": "2026-01-01T00:00:00Z"
+        }
+      ],
+      "mac": "02:00:00:00:00:03",
+      "model": "MR56-HW",
+      "name": "device_name_005",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": 1922820,
+      "serial": "device_003",
+      "tags": [
+        "tags_value_001"
+      ],
+      "used": {
+        "median": 495052
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:04",
+      "model": "MT20-HW",
+      "name": "device_name_006",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_004",
+      "tags": [
+        "tags_value_001"
+      ],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:05",
+      "model": "MT20-HW",
+      "name": "device_name_007",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_005",
+      "tags": [
+        "tags_value_001"
+      ],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:06",
+      "model": "MT14-HW",
+      "name": "device_name_008",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_006",
+      "tags": [],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:07",
+      "model": "MT14-HW",
+      "name": "device_name_009",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_007",
+      "tags": [],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:08",
+      "model": "MT14-HW",
+      "name": "device_name_010",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_008",
+      "tags": [
+        "tags_value_001"
+      ],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:09",
+      "model": "MT14-HW",
+      "name": "device_name_011",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_009",
+      "tags": [
+        "tags_value_001"
+      ],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:0a",
+      "model": "MT14-HW",
+      "name": "device_name_012",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_010",
+      "tags": [
+        "tags_value_001"
+      ],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:0b",
+      "model": "MT14-HW",
+      "name": "device_name_013",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_011",
+      "tags": [
+        "tags_value_001"
+      ],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:0c",
+      "model": "MT40-HW",
+      "name": "device_name_014",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_012",
+      "tags": [],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:0d",
+      "model": "MT40-HW",
+      "name": "device_name_015",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_013",
+      "tags": [],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:0e",
+      "model": "MT40-HW",
+      "name": "device_name_016",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_014",
+      "tags": [],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:0f",
+      "model": "MT40-HW",
+      "name": "device_name_017",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_015",
+      "tags": [],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:10",
+      "model": "MT40-HW",
+      "name": "device_name_018",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_016",
+      "tags": [],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:11",
+      "model": "MT40-HW",
+      "name": "device_name_019",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_017",
+      "tags": [],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:12",
+      "model": "MT15-HW",
+      "name": "device_name_020",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_018",
+      "tags": [],
+      "used": {
+        "median": null
+      }
+    },
+    {
+      "free": {
+        "median": null
+      },
+      "intervals": [],
+      "mac": "02:00:00:00:00:13",
+      "model": "MT15-HW",
+      "name": "device_name_021",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024",
+        "tags": [
+          "tags_value_002"
+        ]
+      },
+      "provisioned": null,
+      "serial": "device_019",
+      "tags": [],
+      "used": {
+        "median": null
+      }
+    }
+  ],
+  "meta": {
+    "counts": {
+      "items": {
+        "remaining": 0,
+        "total": 19
+      }
+    }
+  }
+}

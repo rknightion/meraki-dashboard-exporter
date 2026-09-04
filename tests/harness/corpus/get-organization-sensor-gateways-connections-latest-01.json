@@ -1,0 +1,316 @@
+{
+  "items": [
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -76,
+      "sensor": {
+        "mac": "02:00:00:00:00:12",
+        "name": "org_name_005",
+        "serial": "device_018"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -43,
+      "sensor": {
+        "mac": "02:00:00:00:00:13",
+        "name": "org_name_007",
+        "serial": "device_019"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -61,
+      "sensor": {
+        "mac": "02:00:00:00:00:0c",
+        "name": "org_name_008",
+        "serial": "device_012"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -80,
+      "sensor": {
+        "mac": "02:00:00:00:00:10",
+        "name": "org_name_009",
+        "serial": "device_016"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -52,
+      "sensor": {
+        "mac": "02:00:00:00:00:11",
+        "name": "org_name_010",
+        "serial": "device_017"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -74,
+      "sensor": {
+        "mac": "02:00:00:00:00:0d",
+        "name": "org_name_011",
+        "serial": "device_013"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -79,
+      "sensor": {
+        "mac": "02:00:00:00:00:0f",
+        "name": "org_name_012",
+        "serial": "device_015"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -84,
+      "sensor": {
+        "mac": "02:00:00:00:00:0a",
+        "name": "org_name_013",
+        "serial": "device_010"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -61,
+      "sensor": {
+        "mac": "02:00:00:00:00:05",
+        "name": "org_name_014",
+        "serial": "device_005"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -63,
+      "sensor": {
+        "mac": "02:00:00:00:00:04",
+        "name": "org_name_015",
+        "serial": "device_004"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -62,
+      "sensor": {
+        "mac": "02:00:00:00:00:07",
+        "name": "org_name_016",
+        "serial": "device_007"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -68,
+      "sensor": {
+        "mac": "02:00:00:00:00:06",
+        "name": "org_name_017",
+        "serial": "device_006"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -65,
+      "sensor": {
+        "mac": "02:00:00:00:00:08",
+        "name": "org_name_018",
+        "serial": "device_008"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -57,
+      "sensor": {
+        "mac": "02:00:00:00:00:0b",
+        "name": "org_name_019",
+        "serial": "device_011"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": "2026-01-01T00:00:00Z",
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -54,
+      "sensor": {
+        "mac": "02:00:00:00:00:09",
+        "name": "org_name_020",
+        "serial": "device_009"
+      }
+    },
+    {
+      "gateway": {
+        "mac": "02:00:00:00:00:03",
+        "name": "org_name_006",
+        "serial": "device_003"
+      },
+      "lastConnectedAt": null,
+      "lastReportedAt": "2026-01-01T00:00:00Z",
+      "network": {
+        "id": "network_001",
+        "name": "org_name_004"
+      },
+      "rssi": -90,
+      "sensor": {
+        "mac": "02:00:00:00:00:0e",
+        "name": "org_name_021",
+        "serial": "device_014"
+      }
+    }
+  ],
+  "meta": {
+    "counts": {
+      "items": {
+        "remaining": 0,
+        "total": 16
+      }
+    }
+  }
+}

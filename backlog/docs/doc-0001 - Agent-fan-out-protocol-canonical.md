@@ -3,10 +3,10 @@ id: doc-0001
 title: Agent fan-out protocol (canonical)
 type: specification
 created_date: '2026-08-14 15:57'
-updated_date: '2026-09-04 19:47'
+updated_date: '2026-09-04 19:55'
 ---
 > **Generated file — do not edit this copy.** Rendered from `sources/fan-out-protocol.md` in
-> `m7kni/agent-docs` at commit `8a21467`. This copy is authoritative for `meraki-dashboard-exporter`, so an agent
+> `m7kni/agent-docs` at commit `cce8f64`. This copy is authoritative for `meraki-dashboard-exporter`, so an agent
 > with only this checkout has the whole document.
 >
 > **To change anything below, edit the source in `agent-docs` and re-render.** An edit made here is
@@ -67,7 +67,7 @@ Root role / resolved route: [role, plus the exact values the profile resolves it
 Launch rationale: [one sentence]
 Selected topology: solo | single auxiliary | campaign | campaign + security
 Topology rationale: [the independent bottleneck or risk that justifies this shape]
-Report destination: file at [exact codex/report path] | terminal after tracker reconciliation
+Report destination: file at [exact codex/report path] (default); terminal only when explicitly requested
 Run-end report: reconciliation first; the selected report is the final action, unprompted
 ```
 
@@ -215,10 +215,10 @@ codex/report-<date>-wave<N>.md    the run-end report the agent writes (§10)
 **Where a repository has adopted a real tracker, task state carries the durable per-item outcomes.**
 The goal may select work through a query, but freezes the selected task IDs and their current
 acceptance criteria before assigning lanes; a changing query must not silently widen the run.
-The report destination is an explicit run-contract choice (§10). Default to a terminal covering
-note after tracker reconciliation; an explicit file-report requirement in the goal or repository
-still wins. File reports supplement the tracker rather than replace it. Without a tracker, use a
-file report. The goal, launch message and any file report remain in `codex/`.
+The report destination is an explicit run-contract choice (§10). Default to a file report whether
+or not a tracker exists, followed by a short high-level summary and a clickable file link in chat.
+File reports supplement the tracker rather than replace it. Terminal-only reporting requires an
+explicit request. The goal, launch message and file report remain in `codex/`.
 
 Three reasons this beats a scratch path outside the repo. The artefacts sit next to the code they
 describe, so an agent given only the repository can find the last three waves' goals and reports
@@ -518,7 +518,7 @@ superseded file unless this goal explicitly points to it.
 - Launch rationale: [why the whole wave needs this route]
 - Selected topology: solo | single auxiliary | campaign | campaign + security
 - Topology rationale: [the independent bottleneck or risk that justifies this shape]
-- Report destination: file at [exact codex/report path] | terminal after tracker reconciliation
+- Report destination: file at [exact codex/report path] (default); terminal only when explicitly requested
 - Run-end report: reconciliation first; the selected report is the final action, unprompted
 
 ## 1. Outcome and success criteria
@@ -612,7 +612,8 @@ irreversible. One wrong constraint should cost one lane, not the run.
 
 Complete all verification and tracker reconciliation first. Producing the report is the **last action
 of the run** (§10), unprompted, using §0's destination. For a file report, write the exact path named
-in the goal and launch, then reply with its path and a short summary; run no further tool afterwards.
+in the goal and launch, then reply with a clickable file link and a short high-level summary; run no
+further tool afterwards. Do not paste the full report into chat.
 For a terminal report, emit the covering note only after durable findings and task outcomes are
 recorded. A partial run still produces a report with precise resume boundaries.
 
@@ -1052,11 +1053,11 @@ including any decisions needed", which is a question they should never have to t
 therefore say, in the run contract where it is read first and again in the report section, that
 emitting the report **is** the last unit of work.
 
-**Choose the destination once, in the run contract.** With a tracker, default to a terminal covering
-note after recording per-item outcomes and durable findings in the tracker. Without a tracker,
-default to a file at an exact `codex/report-<date>-<run-id>.md` path. An explicit file-report requirement
-in the goal or repository overrides the tracker default; it does not remove tracker reconciliation.
-Never infer the destination again at closeout. Both destinations cover cross-cutting findings,
+**Choose the destination once, in the run contract.** Default to a file at an exact
+`codex/report-<date>-<run-id>.md` path, followed by a short high-level summary and clickable file link
+in chat. A tracker does not change this default: record per-item outcomes and durable findings there
+before writing the report. Terminal-only reporting requires an explicit request; never infer it from
+the presence of a tracker or choose it again at closeout. Both destinations cover cross-cutting findings,
 verification, deviations, cuts and the front-loaded questions section. Nothing durable may live only
 in a terminal message. A required file report must be self-contained even when task state holds detail.
 
@@ -1075,10 +1076,10 @@ control back to the operator — do this before you hand back:
 1. Finish verification, reconcile task outcomes and record durable findings. Resolve anything the
    synthesis exposes before emitting the report.
 2. Use the report destination frozen in the run contract:
-   - file: write the full report to the exact named path, then reply with that path and a short
-     summary. Do not paste the report into chat. Writing the file is the final tool action; no
+   - file (default): write the full report to the exact named path, then reply with a clickable
+     file link and a short high-level summary. Do not paste the report into chat. Writing the file is the final tool action; no
      command, inspection or mutation follows it.
-   - terminal: emit the covering note after tracker reconciliation. Do not create an unsolicited
+   - terminal (only when explicitly requested): emit the covering note after tracker reconciliation. Do not create an unsolicited
      report file or leave durable findings only in the message.
 3. Hand control back. Do not begin more work after the report.
 

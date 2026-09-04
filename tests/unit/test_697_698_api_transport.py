@@ -103,13 +103,23 @@ def test_697_cross_origin_redirect_strips_authorization() -> None:
     assert "Authorization" not in response.request.headers
 
 
-def test_meraki_shard_redirect_loses_authorization() -> None:
-    """A Meraki-owned shard is still a distinct credential origin."""
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://n123.meraki.com/api/v1/organizations",
+        "https://n123.meraki.ca/api/v1/organizations",
+        "https://n123.meraki.cn/api/v1/organizations",
+        "https://n123.meraki.in/api/v1/organizations",
+        "https://n123.gov-meraki.com/api/v1/organizations",
+    ],
+)
+def test_meraki_owned_redirect_retains_authorization(url: str) -> None:
+    """Meraki-owned shard and regional redirects remain authenticated."""
     session = _session_for_redirect_test()
     client_module._install_redirect_auth_boundary(SimpleNamespace(_session=session))
-    response = session._send_request("GET", "https://n123.meraki.com/api/v1/organizations")
+    response = session._send_request("GET", url)
 
-    assert "Authorization" not in response.request.headers
+    assert response.request.headers["Authorization"] == "Bearer secret"
 
 
 def test_lookalike_meraki_host_loses_authorization() -> None:

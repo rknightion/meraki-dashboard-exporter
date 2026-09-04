@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from pydantic import SecretStr
@@ -50,6 +51,8 @@ async def test_shutdown_drains_dependencies_before_sdk_and_serving_pools() -> No
     )
     exporter._serving_executor = MagicMock()
     exporter._serving_executor.shutdown.side_effect = lambda **_: events.append("serving")
+    exporter._client_page_executor = MagicMock()
+    exporter._client_page_executor.shutdown.side_effect = lambda **_: events.append("client-page")
 
     await exporter._shutdown()
     await exporter._shutdown()
@@ -62,8 +65,10 @@ async def test_shutdown_drains_dependencies_before_sdk_and_serving_pools() -> No
         "data-log",
         "dns",
         "sdk",
+        "client-page",
         "serving",
     ]
+    exporter._client_page_executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
     exporter._serving_executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
 
 
@@ -93,6 +98,7 @@ async def test_executor_drains_share_one_bound_and_keep_loop_responsive() -> Non
     )
     exporter.client = SimpleNamespace(close=client_close)
     exporter._serving_executor = ThreadPoolExecutor(max_workers=1)
+    exporter._client_page_executor = ThreadPoolExecutor(max_workers=1)
     release = threading.Event()
     started = threading.Event()
 
@@ -152,6 +158,7 @@ async def test_lifespan_cleans_resources_when_startup_fails_before_yield() -> No
 
     assert exporter._shutdown_complete is True
     assert exporter.client.executor._shutdown is True
+    assert exporter._client_page_executor._shutdown is True
     assert exporter._serving_executor._shutdown is True
 
 
@@ -180,3 +187,49 @@ async def test_lifespan_cleans_resources_for_startup_configuration_error() -> No
             pytest.fail("lifespan yielded after configuration failure")
 
     assert exporter._shutdown_complete is True
+
+
+@pytest.mark.asyncio
+async def test_background_startup_configuration_error_becomes_unhealthy() -> None:
+    """The real lifespan callback retains a post-yield startup configuration failure."""
+    settings = Settings(
+        meraki=MerakiSettings(
+            api_key=SecretStr("test_api_key_at_least_30_characters_long"),
+            org_id="123456",
+        ),
+    )
+    exporter = ExporterApp(settings)
+    app = exporter.create_app()
+
+    with (
+        patch("meraki_dashboard_exporter.app.resolve_org_id", AsyncMock()),
+        patch.object(
+            exporter.collector_manager,
+            "validate_startup_configuration",
+            AsyncMock(),
+        ),
+        patch.object(exporter.collector_manager, "validate_profile_selection", AsyncMock()),
+        patch(
+            "meraki_dashboard_exporter.app.DiscoveryService.run_discovery",
+            AsyncMock(return_value={}),
+        ),
+        patch.object(
+            exporter.collector_manager,
+            "collect_initial",
+            AsyncMock(side_effect=StartupConfigurationError("late configuration failure")),
+        ),
+    ):
+        async with exporter.lifespan(app):
+            for _ in range(5):
+                await asyncio.sleep(0)
+                if exporter._startup_configuration_error is not None:
+                    break
+
+            assert str(exporter._startup_configuration_error) == "late configuration failure"
+            assert exporter._liveness_check() == (True, "startup configuration failed")
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app),
+                base_url="http://test",
+            ) as client:
+                response = await client.get("/health")
+            assert response.status_code == 503

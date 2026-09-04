@@ -1389,8 +1389,8 @@ class OrganizationCollector(MetricCollector):
             )
 
         # Fetch succeeded — record the group ran so gating stretches from here.
-        # (These gauges use direct .set(), not _set_metric, so no per-series TTL.)
         self._mark_group_ran(EndpointGroupName.ORG_APP_USAGE)
+        ttl_seconds = self._group_ttl_seconds(EndpointGroupName.ORG_APP_USAGE)
 
         # Process each category
         for category_data in response:
@@ -1414,16 +1414,40 @@ class OrganizationCollector(MetricCollector):
             )
 
             if self._application_usage_total_mb:
-                self._application_usage_total_mb.labels(**labels).set(total_mb)
+                self._set_metric(
+                    self._application_usage_total_mb,
+                    labels,
+                    total_mb,
+                    OrgMetricName.ORG_APPLICATION_USAGE_TOTAL_BYTES.value,
+                    ttl_seconds=ttl_seconds,
+                )
 
             if self._application_usage_downstream_mb:
-                self._application_usage_downstream_mb.labels(**labels).set(downstream_mb)
+                self._set_metric(
+                    self._application_usage_downstream_mb,
+                    labels,
+                    downstream_mb,
+                    OrgMetricName.ORG_APPLICATION_USAGE_DOWNSTREAM_BYTES.value,
+                    ttl_seconds=ttl_seconds,
+                )
 
             if self._application_usage_upstream_mb:
-                self._application_usage_upstream_mb.labels(**labels).set(upstream_mb)
+                self._set_metric(
+                    self._application_usage_upstream_mb,
+                    labels,
+                    upstream_mb,
+                    OrgMetricName.ORG_APPLICATION_USAGE_UPSTREAM_BYTES.value,
+                    ttl_seconds=ttl_seconds,
+                )
 
             if self._application_usage_percentage:
-                self._application_usage_percentage.labels(**labels).set(percentage)
+                self._set_metric(
+                    self._application_usage_percentage,
+                    labels,
+                    percentage,
+                    OrgMetricName.ORG_APPLICATION_USAGE_PERCENT.value,
+                    ttl_seconds=ttl_seconds,
+                )
 
         logger.debug(
             "Collected application usage metrics",

@@ -1,0 +1,38 @@
+[
+  {
+    "device": {
+      "name": "network_name_040",
+      "productType": "sensor",
+      "serial": "device_010"
+    },
+    "relationships": {
+      "livestream": {
+        "relatedDevices": []
+      }
+    }
+  },
+  {
+    "device": {
+      "name": "network_name_041",
+      "productType": "sensor",
+      "serial": "device_018"
+    },
+    "relationships": {
+      "livestream": {
+        "relatedDevices": []
+      }
+    }
+  },
+  {
+    "device": {
+      "name": "network_name_042",
+      "productType": "sensor",
+      "serial": "device_009"
+    },
+    "relationships": {
+      "livestream": {
+        "relatedDevices": []
+      }
+    }
+  }
+]

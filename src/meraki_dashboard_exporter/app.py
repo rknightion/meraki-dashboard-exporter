@@ -9,19 +9,21 @@ import time
 from collections.abc import AsyncIterator, Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import psutil  # type: ignore[import-untyped]
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi import Request as FastAPIRequest
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, Gauge, generate_latest
 from pydantic import BaseModel
 from starlette.requests import Request
 
-from .__version__ import __version__
+from .__version__ import __version__, get_commit
 from .api.client import AsyncMerakiClient
 from .collectors.manager import CollectorManager
 from .core.async_utils import shutdown_executor
@@ -62,10 +64,17 @@ RESOURCE_METRICS_INTERVAL_SECONDS = 30.0
 EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS = 5.0
 REGISTRY_WORKER_COUNT = 2
 REGISTRY_RETRY_AFTER_SECONDS = "1"
+CLIENT_PAGE_WORKER_COUNT = 1
+CLIENTS_DEFAULT_PAGE_SIZE = 250
+CLIENTS_MAX_PAGE_SIZE = 1000
 
 
 class RegistryWorkSaturatedError(RuntimeError):
     """Raised when fail-fast registry work has no immediately available slot."""
+
+
+class ClientPageWorkSaturatedError(RuntimeError):
+    """Raised when a client-page traversal is already in progress."""
 
 
 # SECURITY (SEC-01 / #558): sensitive GET UIs that leak PII (client MAC/IP/
@@ -198,6 +207,15 @@ class ExporterApp:
         )
         self._registry_work_slots = asyncio.BoundedSemaphore(REGISTRY_WORKER_COUNT)
 
+        # Client-page snapshots traverse a separately locked mutable cache. A
+        # dedicated single-worker pool prevents this optional UI from consuming
+        # the SDK pool or queuing unbounded concurrent O(n) traversals.
+        self._client_page_executor = ThreadPoolExecutor(
+            max_workers=CLIENT_PAGE_WORKER_COUNT,
+            thread_name_prefix="client-page",
+        )
+        self._client_page_work_slots = asyncio.BoundedSemaphore(CLIENT_PAGE_WORKER_COUNT)
+
         # Register the static build-info gauge (MET-10): constant value 1 with
         # version/commit labels identifying the running build.
         register_build_info()
@@ -229,6 +247,7 @@ class ExporterApp:
         )
 
         self._background_tasks: set[asyncio.Task[Any]] = set()
+        self._manual_collector_reservations: set[str] = set()
         self._shutdown_event = asyncio.Event()
         self._shutdown_lock = asyncio.Lock()
         self._shutdown_complete = False
@@ -281,7 +300,10 @@ class ExporterApp:
 
         # Setup Jinja2 templates
         template_dir = Path(__file__).parent / "templates"
-        self.templates = Jinja2Templates(directory=str(template_dir))
+        self.templates = Jinja2Templates(
+            directory=str(template_dir),
+            context_processors=[self._ui_template_context],
+        )
 
         # Setup cardinality monitor
         self.cardinality_monitor = CardinalityMonitor(
@@ -290,6 +312,24 @@ class ExporterApp:
             critical_threshold=10000,
             settings=self.settings,
         )
+
+    def _ui_template_context(self, request: Request) -> dict[str, Any]:
+        """Return chrome metadata shared by every server-rendered page."""
+        page_by_path = {
+            "/": "index",
+            "/clients": "clients",
+            "/status": "status",
+            "/cardinality": "cardinality",
+            "/cardinality/all-metrics": "cardinality_all_metrics",
+            "/cardinality/all-labels": "cardinality_all_labels",
+        }
+        return {
+            "page": page_by_path.get(request.url.path, ""),
+            "port": self.settings.server.port,
+            "version": __version__,
+            "uptime": self._format_uptime(),
+            "commit": get_commit(),
+        }
 
     def _handle_shutdown(self) -> None:
         """Handle shutdown request."""
@@ -356,6 +396,19 @@ class ExporterApp:
             logger.info(
                 "Shutdown phase complete",
                 phase="sdk_client_closed" if sdk_drained else "sdk_client_shutdown_deferred",
+            )
+            client_page_drained = await shutdown_executor(
+                self._client_page_executor,
+                timeout_seconds=remaining_executor_time(),
+                thread_name="client-page-shutdown",
+            )
+            logger.info(
+                "Shutdown phase complete",
+                phase=(
+                    "client_page_executor_drained"
+                    if client_page_drained
+                    else "client_page_executor_deferred"
+                ),
             )
             serving_drained = await shutdown_executor(
                 self._serving_executor,
@@ -518,6 +571,25 @@ class ExporterApp:
             raise
 
         future.add_done_callback(lambda _future: self._registry_work_slots.release())
+        return await asyncio.shield(future)
+
+    async def _run_client_page_work[T](self, func: Callable[..., T], /, *args: Any) -> T:
+        """Run one client-store traversal with fail-fast bounded admission."""
+        if self._client_page_work_slots.locked():
+            raise ClientPageWorkSaturatedError
+
+        await self._client_page_work_slots.acquire()
+        try:
+            future = asyncio.get_running_loop().run_in_executor(
+                self._client_page_executor,
+                func,
+                *args,
+            )
+        except BaseException:
+            self._client_page_work_slots.release()
+            raise
+
+        future.add_done_callback(lambda _future: self._client_page_work_slots.release())
         return await asyncio.shield(future)
 
     @asynccontextmanager
@@ -699,6 +771,28 @@ class ExporterApp:
             self._startup_configuration_error = error
             logger.error("Startup configuration validation failed", error=str(error))
 
+    async def _run_manual_collector(
+        self,
+        collector: MetricCollector,
+        collector_name: str,
+    ) -> None:
+        """Run one reserved manual collection without leaking background failures."""
+        try:
+            await self.collector_manager.run_collector_once(collector, force=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Manual collector run failed", collector=collector_name)
+
+    def _on_manual_collector_task_done(
+        self,
+        collector_name: str,
+        task: asyncio.Task[None],
+    ) -> None:
+        """Release manual-run state even when a task is cancelled before starting."""
+        self._manual_collector_reservations.discard(collector_name)
+        self._background_tasks.discard(task)
+
     async def _interruptible_sleep(self, seconds: float) -> None:
         """Sleep in 1s increments, waking early on shutdown."""
         remaining = float(seconds)
@@ -788,7 +882,13 @@ class ExporterApp:
             return
         try:
             scheduling = self.collector_manager.get_scheduling_diagnostics()
-            log_startup_summary(self.settings, self._discovery_summary, scheduling)
+            log_startup_summary(
+                self.settings,
+                self._discovery_summary,
+                scheduling,
+                active_collector_names=self.collector_manager.active_collector_names(),
+                disabled_collector_names=self.collector_manager.skipped_collector_names(),
+            )
             self._startup_summary_logged = True
         except Exception:
             logger.exception("Failed to log startup summary")
@@ -967,6 +1067,9 @@ class ExporterApp:
             lifespan=self.lifespan,
         )
 
+        static_dir = Path(__file__).parent / "static"
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
         # Instrument FastAPI with tracing
         self.tracing.instrument_fastapi(app)
 
@@ -1080,6 +1183,7 @@ class ExporterApp:
                     headers={"Retry-After": REGISTRY_RETRY_AFTER_SECONDS},
                 )
             scheduling = exporter.collector_manager.get_scheduling_diagnostics()
+            health_failed, health_reason = exporter._liveness_check()
 
             context = {
                 "version": __version__,
@@ -1093,6 +1197,8 @@ class ExporterApp:
                 "org_id": exporter.settings.meraki.org_id,
                 "scheduling": scheduling,
                 "control_api_enabled": exporter.settings.server.api_token is not None,
+                "health_failed": health_failed,
+                "health_reason": health_reason,
             }
 
             return app.state.templates.TemplateResponse(request, "index.html", context=context)  # type: ignore[no-any-return]
@@ -1165,7 +1271,15 @@ class ExporterApp:
         setup_cardinality_endpoint(app, self.cardinality_monitor)
 
         @app.get("/clients", response_class=HTMLResponse)
-        async def clients(request: Request) -> HTMLResponse:
+        async def clients(
+            request: Request,
+            page: int = Query(default=1, ge=1),
+            page_size: int = Query(
+                default=CLIENTS_DEFAULT_PAGE_SIZE,
+                ge=1,
+                le=CLIENTS_MAX_PAGE_SIZE,
+            ),
+        ) -> HTMLResponse:
             """Client data visualization endpoint."""
             # Get exporter instance from app state
             exporter = app.state.exporter
@@ -1194,22 +1308,32 @@ class ExporterApp:
                     status_code=500,
                 )
 
-            # Get all clients
-            all_clients = client_store.get_all_clients()
+            # The store traversal and aggregate statistics are O(n), so keep
+            # them off the event loop and out of both the SDK and registry
+            # pools. Admission is fail-fast so repeated UI requests cannot
+            # accumulate an executor queue.
+            try:
+                snapshot = await exporter._run_client_page_work(
+                    lambda: client_store.get_page_snapshot(page=page, page_size=page_size)
+                )
+            except ClientPageWorkSaturatedError:
+                return HTMLResponse(
+                    content="Client page generation is busy; retry shortly.",
+                    status_code=503,
+                    headers={"Retry-After": REGISTRY_RETRY_AFTER_SECONDS},
+                )
 
-            # Sort by network and then by description/hostname
-            all_clients.sort(key=lambda c: (c.networkName or "", c.display_name))
+            # Sort and group only the capped page, never the full client cache.
+            page_clients = snapshot.clients
+            page_clients.sort(key=lambda c: (c.networkName or "", c.display_name))
 
             # Group by network
             clients_by_network: dict[str, list[Any]] = {}
-            for client in all_clients:
+            for client in page_clients:
                 network_key = f"{client.networkName or 'Unknown'} ({client.networkId or 'Unknown'})"
                 if network_key not in clients_by_network:
                     clients_by_network[network_key] = []
                 clients_by_network[network_key].append(client)
-
-            # Get statistics
-            stats = client_store.get_statistics()
 
             # Get DNS cache statistics
             dns_cache_stats = dns_resolver.get_cache_stats() if dns_resolver else {}
@@ -1217,10 +1341,17 @@ class ExporterApp:
             context = {
                 "version": __version__,
                 "clients_by_network": clients_by_network,
-                "total_clients": stats["total_clients"],
-                "online_clients": stats["online_clients"],
-                "offline_clients": stats["offline_clients"],
-                "network_count": stats["total_networks"],
+                "total_clients": snapshot.total_clients,
+                "online_clients": snapshot.online_clients,
+                "offline_clients": snapshot.total_clients - snapshot.online_clients,
+                "network_count": snapshot.network_count,
+                "current_page": snapshot.page,
+                "total_pages": snapshot.total_pages,
+                "page_size": page_size,
+                "has_previous": snapshot.page > 1,
+                "has_next": snapshot.page < snapshot.total_pages,
+                "previous_page": snapshot.page - 1,
+                "next_page": snapshot.page + 1,
                 "cache_ttl": exporter.settings.clients.cache_ttl,
                 "dns_cache_stats": dns_cache_stats,
                 "control_api_enabled": exporter.settings.server.api_token is not None,
@@ -1232,7 +1363,19 @@ class ExporterApp:
         async def status(request: Request, format: str | None = None) -> Response:  # noqa: A002
             """Exporter self-health status dashboard."""
             exporter = app.state.exporter
-            snapshot = exporter.status_service.get_snapshot()
+            try:
+                network_filter = await exporter._run_registry_work(
+                    exporter.status_service.get_network_filter_status,
+                    wait_for_slot=False,
+                )
+            except RegistryWorkSaturatedError:
+                return Response(
+                    content="Registry work is temporarily saturated",
+                    status_code=503,
+                    media_type="text/plain",
+                    headers={"Retry-After": REGISTRY_RETRY_AFTER_SECONDS},
+                )
+            snapshot = exporter.status_service.get_snapshot(network_filter=network_filter)
 
             if format == "json":
                 return JSONResponse(content=snapshot.to_dict())
@@ -1307,20 +1450,31 @@ class ExporterApp:
                     "message": f"Collector '{collector_name}' is disabled",
                 }
 
-            if exporter.collector_manager.is_collector_running(collector_name):
+            if (
+                collector_name in exporter._manual_collector_reservations
+                or exporter.collector_manager.is_collector_running(collector_name)
+            ):
                 return {
                     "status": "running",
                     "message": f"Collector '{collector_name}' is already running",
                 }
 
+            # There is no await between the check and this reservation, so
+            # concurrent requests cannot all report started before the new task
+            # reaches CollectorManager's own run lock.
+            exporter._manual_collector_reservations.add(collector_name)
             # force=True so a manual trigger fetches every group regardless of its
             # gate (otherwise in-window groups would silently no-op) — #631.
-            task = asyncio.create_task(
-                exporter.collector_manager.run_collector_once(collector, force=True),
-                name=f"manual_{collector_name}",
-            )
+            try:
+                task = asyncio.create_task(
+                    exporter._run_manual_collector(collector, collector_name),
+                    name=f"manual_{collector_name}",
+                )
+            except BaseException:
+                exporter._manual_collector_reservations.discard(collector_name)
+                raise
             exporter._background_tasks.add(task)
-            task.add_done_callback(exporter._background_tasks.discard)
+            task.add_done_callback(partial(exporter._on_manual_collector_task_done, collector_name))
 
             return {
                 "status": "started",
@@ -1402,11 +1556,11 @@ class ExporterApp:
 
             body = bytearray()
             async for chunk in request.stream():
-                body.extend(chunk)
-                if len(body) > max_size:
+                remaining = max_size - len(body)
+                if len(chunk) > remaining:
                     logger.warning(
                         "Webhook payload too large",
-                        size=len(body),
+                        size=len(body) + len(chunk),
                         max_size=max_size,
                     )
                     exporter.webhook_handler.record_validation_failure("payload_too_large")
@@ -1414,6 +1568,7 @@ class ExporterApp:
                         status_code=413,
                         detail=f"Payload too large (max: {max_size} bytes)",
                     )
+                body.extend(chunk)
 
             # Parse JSON body from the (size-capped) buffer.
             try:

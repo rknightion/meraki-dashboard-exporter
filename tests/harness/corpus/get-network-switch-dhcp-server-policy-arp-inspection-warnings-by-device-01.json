@@ -1,0 +1,16 @@
+[
+  {
+    "hasTrustedPort": false,
+    "name": "network_name_018",
+    "serial": "device_001",
+    "supportsInspection": true,
+    "url": "url_value_027"
+  },
+  {
+    "hasTrustedPort": false,
+    "name": "network_name_019",
+    "serial": "device_002",
+    "supportsInspection": true,
+    "url": "url_value_028"
+  }
+]

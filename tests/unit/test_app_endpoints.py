@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
 import time
-from unittest.mock import MagicMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 
 from meraki_dashboard_exporter.app import ExporterApp
+from meraki_dashboard_exporter.core.api_models import NetworkClient
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
+from meraki_dashboard_exporter.core.domain_models import ClientData
+from meraki_dashboard_exporter.core.error_handling import StartupConfigurationError
+from meraki_dashboard_exporter.services.client_store import ClientPageSnapshot, ClientStore
 
 # Scheduling diagnostics shape returned by CollectorManager.get_scheduling_diagnostics
 # after the #631 de-tiering: a flat per-collector cadence list plus the adaptive
@@ -84,7 +92,9 @@ def exporter_with_mock_manager(
     }
     mock_manager.skipped_collectors = []
     mock_manager.is_collector_running.return_value = False
+    mock_manager.has_attempted_collection.return_value = False
     mock_manager.get_scheduling_diagnostics.return_value = _SCHEDULING_DIAGNOSTICS
+    mock_manager.get_readiness_status.return_value = {"ready": True}
     exporter.collector_manager = mock_manager
     return exporter, mock_manager
 
@@ -132,6 +142,21 @@ class TestRootEndpoint:
         response = client_with_mock_manager.get("/")
         assert response.status_code == 200
         assert "Meraki Dashboard Exporter" in response.text
+
+    def test_root_reports_startup_configuration_failure(
+        self, exporter_with_mock_manager: tuple[ExporterApp, MagicMock]
+    ) -> None:
+        """The landing page must not advertise health after startup validation fails."""
+        exporter, _ = exporter_with_mock_manager
+        exporter._startup_configuration_error = StartupConfigurationError("invalid startup config")
+        client = TestClient(exporter.create_app(), raise_server_exceptions=True)
+
+        response = client.get("/")
+
+        assert response.status_code == 200
+        assert "HEALTH CHECK FAILED" in response.text
+        assert "startup configuration failed" in response.text
+        assert "HEALTH CHECK OK" not in response.text
 
     def test_root_contains_collector_info(self, client_with_mock_manager: TestClient) -> None:
         """Test that root page renders collector data."""
@@ -251,6 +276,7 @@ class TestRootEndpoint:
         mock_manager.collectors = []
         mock_manager.collector_health = {}
         mock_manager.skipped_collectors = []
+        mock_manager.has_attempted_collection.return_value = False
         mock_manager.get_scheduling_diagnostics.return_value = {
             "collectors": [],
             "smoothing": {
@@ -530,32 +556,147 @@ class TestTriggerCollectorEndpoint:
     def test_trigger_collector_success(
         self, trigger_client: tuple[TestClient, MagicMock, ExporterApp]
     ) -> None:
-        """Test successfully triggering a collector.
-
-        The endpoint creates an asyncio.Task for the background run. In the
-        TestClient synchronous context there is no running event loop, so we
-        patch asyncio.create_task to avoid the RuntimeError while still
-        exercising the full function body.
-        """
-        from unittest.mock import patch
-
+        """Test successfully triggering a collector."""
         client, mock_manager, _ = trigger_client
         active_collector = MagicMock()
         active_collector.__class__.__name__ = "DeviceCollector"
         active_collector.is_active = True
         mock_manager.get_collector_by_name.return_value = active_collector
         mock_manager.is_collector_running.return_value = False
+        mock_manager.run_collector_once = AsyncMock()
 
-        mock_task = MagicMock()
-        with patch("asyncio.create_task", return_value=mock_task):
-            response = client.post(
-                "/api/collectors/trigger",
-                json={"collector": "DeviceCollector"},
-            )
+        response = client.post(
+            "/api/collectors/trigger",
+            json={"collector": "DeviceCollector"},
+        )
         assert response.status_code == 200
         body = response.json()
         assert body["status"] == "started"
         assert "triggered" in body["message"]
+
+    @pytest.mark.asyncio
+    async def test_concurrent_triggers_reserve_one_collector(self, test_settings: Settings) -> None:
+        """Concurrent requests reserve synchronously and schedule exactly one run."""
+        test_settings.server.api_token = SecretStr("trigger-test-token")
+        exporter = ExporterApp(test_settings)
+        mock_manager = MagicMock()
+        active_collector = MagicMock()
+        active_collector.__class__.__name__ = "DeviceCollector"
+        active_collector.is_active = True
+        mock_manager.get_collector_by_name.return_value = active_collector
+        mock_manager.is_collector_running.return_value = False
+        run_started = asyncio.Event()
+        release_run = asyncio.Event()
+
+        async def blocked_run(*_args: object, **_kwargs: object) -> None:
+            run_started.set()
+            await release_run.wait()
+
+        mock_manager.run_collector_once = AsyncMock(side_effect=blocked_run)
+        exporter.collector_manager = mock_manager
+        transport = ASGITransport(app=exporter.create_app())
+        headers = {"Authorization": "Bearer trigger-test-token"}
+
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            first_request = asyncio.create_task(
+                client.post(
+                    "/api/collectors/trigger",
+                    json={"collector": "DeviceCollector"},
+                    headers=headers,
+                )
+            )
+            await asyncio.wait_for(run_started.wait(), timeout=1.0)
+            duplicate = await client.post(
+                "/api/collectors/trigger",
+                json={"collector": "DeviceCollector"},
+                headers=headers,
+            )
+            first = await first_request
+
+        assert first.json()["status"] == "started"
+        assert duplicate.json()["status"] == "running"
+        assert mock_manager.run_collector_once.await_count == 1
+
+        release_run.set()
+        await asyncio.wait_for(
+            asyncio.gather(*tuple(exporter._background_tasks), return_exceptions=True),
+            timeout=1.0,
+        )
+        assert exporter._manual_collector_reservations == set()
+        assert exporter._background_tasks == set()
+
+    @pytest.mark.asyncio
+    async def test_failed_manual_run_clears_reservation(self, test_settings: Settings) -> None:
+        """A failed run releases its reservation and retained task."""
+        test_settings.server.api_token = SecretStr("trigger-test-token")
+        exporter = ExporterApp(test_settings)
+        mock_manager = MagicMock()
+        active_collector = MagicMock()
+        active_collector.__class__.__name__ = "DeviceCollector"
+        active_collector.is_active = True
+        mock_manager.get_collector_by_name.return_value = active_collector
+        mock_manager.is_collector_running.return_value = False
+        run_failed = asyncio.Event()
+
+        async def failed_run(*_args: object, **_kwargs: object) -> None:
+            run_failed.set()
+            raise RuntimeError("manual run failed")
+
+        mock_manager.run_collector_once = AsyncMock(side_effect=failed_run)
+        exporter.collector_manager = mock_manager
+        transport = ASGITransport(app=exporter.create_app())
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/api/collectors/trigger",
+                json={"collector": "DeviceCollector"},
+                headers={"Authorization": "Bearer trigger-test-token"},
+            )
+
+        assert response.json()["status"] == "started"
+        await asyncio.wait_for(run_failed.wait(), timeout=1.0)
+        await asyncio.sleep(0)
+        assert exporter._manual_collector_reservations == set()
+        assert exporter._background_tasks == set()
+
+    @pytest.mark.asyncio
+    async def test_cancelled_manual_run_clears_reservation(self, test_settings: Settings) -> None:
+        """Cancelling a retained manual task releases its reservation."""
+        test_settings.server.api_token = SecretStr("trigger-test-token")
+        exporter = ExporterApp(test_settings)
+        mock_manager = MagicMock()
+        active_collector = MagicMock()
+        active_collector.__class__.__name__ = "DeviceCollector"
+        active_collector.is_active = True
+        mock_manager.get_collector_by_name.return_value = active_collector
+        mock_manager.is_collector_running.return_value = False
+        run_started = asyncio.Event()
+
+        async def blocked_run(*_args: object, **_kwargs: object) -> None:
+            run_started.set()
+            await asyncio.Event().wait()
+
+        mock_manager.run_collector_once = AsyncMock(side_effect=blocked_run)
+        exporter.collector_manager = mock_manager
+        transport = ASGITransport(app=exporter.create_app())
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/api/collectors/trigger",
+                json={"collector": "DeviceCollector"},
+                headers={"Authorization": "Bearer trigger-test-token"},
+            )
+
+        assert response.json()["status"] == "started"
+        await asyncio.wait_for(run_started.wait(), timeout=1.0)
+        manual_task = next(
+            task
+            for task in exporter._background_tasks
+            if task.get_name() == "manual_DeviceCollector"
+        )
+        manual_task.cancel()
+        await asyncio.gather(manual_task, return_exceptions=True)
+        await asyncio.sleep(0)
+        assert exporter._manual_collector_reservations == set()
+        assert exporter._background_tasks == set()
 
 
 # ---------------------------------------------------------------------------
@@ -584,6 +725,47 @@ class TestHandleShutdown:
 class TestClientsEndpoint:
     """Tests for the GET /clients endpoint."""
 
+    @staticmethod
+    def _page_snapshot(*, page: int = 2) -> ClientPageSnapshot:
+        now = datetime.now(UTC)
+        clients = [
+            ClientData(
+                id="client-1",
+                mac="aa:bb:cc:dd:ee:01",
+                description="First client",
+                firstSeen=now,
+                lastSeen=now,
+                networkId="network-1",
+                networkName="Network one",
+            ),
+            ClientData(
+                id="client-2",
+                mac="aa:bb:cc:dd:ee:02",
+                description="Second client",
+                firstSeen=now,
+                lastSeen=now,
+                networkId="network-2",
+                networkName="Network two",
+            ),
+        ]
+        return ClientPageSnapshot(
+            clients=clients,
+            total_clients=5,
+            online_clients=3,
+            network_count=2,
+            page=page,
+            total_pages=3,
+        )
+
+    @staticmethod
+    def _clients_collector(snapshot: ClientPageSnapshot) -> MagicMock:
+        collector = MagicMock()
+        collector.__class__ = type("ClientsCollector", (), {})
+        collector.is_active = True
+        collector.client_store.get_page_snapshot.return_value = snapshot
+        collector.dns_resolver = None
+        return collector
+
     def test_clients_disabled(
         self, exporter_with_mock_manager: tuple[ExporterApp, MagicMock]
     ) -> None:
@@ -611,6 +793,184 @@ class TestClientsEndpoint:
         response = client.get("/clients")
         assert response.status_code == 500
         assert "not found" in response.text.lower()
+
+    def test_clients_page_uses_bounded_snapshot_and_shows_navigation(
+        self, exporter_with_mock_manager: tuple[ExporterApp, MagicMock]
+    ) -> None:
+        """The client page renders only its requested bounded page and navigation."""
+        exporter, mock_manager = exporter_with_mock_manager
+        exporter.settings.clients.enabled = True
+        clients_collector = self._clients_collector(self._page_snapshot())
+        mock_manager.get_collector_by_class_name.return_value = clients_collector
+        client = TestClient(exporter.create_app(), raise_server_exceptions=True)
+
+        response = client.get("/clients?page=2&page_size=2")
+
+        assert response.status_code == 200
+        clients_collector.client_store.get_page_snapshot.assert_called_once_with(
+            page=2, page_size=2
+        )
+        assert "Page 2 of 3" in response.text
+        assert "?page=1&amp;page_size=2" in response.text
+        assert "?page=3&amp;page_size=2" in response.text
+        assert response.text.count("<tbody>") == 2
+
+    def test_clients_defaults_to_first_page_of_250_clients(
+        self, exporter_with_mock_manager: tuple[ExporterApp, MagicMock]
+    ) -> None:
+        """The unparameterized route requests only the bounded default page."""
+        exporter, mock_manager = exporter_with_mock_manager
+        exporter.settings.clients.enabled = True
+        clients_collector = self._clients_collector(self._page_snapshot(page=1))
+        mock_manager.get_collector_by_class_name.return_value = clients_collector
+        client = TestClient(exporter.create_app(), raise_server_exceptions=True)
+
+        response = client.get("/clients")
+
+        assert response.status_code == 200
+        clients_collector.client_store.get_page_snapshot.assert_called_once_with(
+            page=1,
+            page_size=250,
+        )
+
+    @pytest.mark.parametrize("query", ("page=0", "page_size=0", "page_size=1001"))
+    def test_clients_rejects_invalid_page_parameters(
+        self,
+        exporter_with_mock_manager: tuple[ExporterApp, MagicMock],
+        query: str,
+    ) -> None:
+        """FastAPI rejects nonpositive and oversized client page parameters."""
+        exporter, mock_manager = exporter_with_mock_manager
+        exporter.settings.clients.enabled = True
+        mock_manager.get_collector_by_class_name.return_value = self._clients_collector(
+            self._page_snapshot()
+        )
+        client = TestClient(exporter.create_app(), raise_server_exceptions=True)
+
+        response = client.get(f"/clients?{query}")
+
+        assert response.status_code == 422
+
+    async def test_health_completes_while_client_snapshot_waits(
+        self, exporter_with_mock_manager: tuple[ExporterApp, MagicMock]
+    ) -> None:
+        """A slow page snapshot must not hold the event loop needed by /health."""
+        exporter, mock_manager = exporter_with_mock_manager
+        exporter.settings.clients.enabled = True
+        clients_collector = self._clients_collector(self._page_snapshot(page=1))
+        mock_manager.get_collector_by_class_name.return_value = clients_collector
+        loop = asyncio.get_running_loop()
+        snapshot_started = asyncio.Event()
+        release_snapshot = threading.Event()
+
+        def delayed_snapshot(*, page: int, page_size: int) -> ClientPageSnapshot:
+            loop.call_soon_threadsafe(snapshot_started.set)
+            release_snapshot.wait(timeout=2.0)
+            return self._page_snapshot(page=page)
+
+        clients_collector.client_store.get_page_snapshot.side_effect = delayed_snapshot
+        transport = ASGITransport(app=exporter.create_app())
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            page_request = asyncio.create_task(client.get("/clients"))
+            try:
+                await asyncio.wait_for(snapshot_started.wait(), timeout=1.0)
+                health = await asyncio.wait_for(client.get("/health"), timeout=0.25)
+                assert health.status_code == 200
+            finally:
+                release_snapshot.set()
+                await page_request
+
+    async def test_real_store_update_does_not_delay_health_during_page_walk(
+        self, exporter_with_mock_manager: tuple[ExporterApp, MagicMock]
+    ) -> None:
+        """A stable real-store snapshot cannot make an update stall the event loop."""
+        exporter, mock_manager = exporter_with_mock_manager
+        exporter.settings.clients.enabled = True
+        store = ClientStore(exporter.settings)
+        now = datetime.now(UTC)
+        store.update_clients(
+            "network-1",
+            [
+                NetworkClient(
+                    id="client-1",
+                    mac="aa:bb:cc:dd:ee:01",
+                    firstSeen=now,
+                    lastSeen=now,
+                    status="Online",
+                )
+            ],
+        )
+        snapshot_started = threading.Event()
+        release_snapshot = threading.Event()
+
+        class BlockingValuesDict(dict):
+            def values(self):
+                snapshot_started.set()
+                assert release_snapshot.wait(timeout=1.0)
+                return super().values()
+
+        store._clients["network-1"] = BlockingValuesDict(store._clients["network-1"])
+        clients_collector = self._clients_collector(self._page_snapshot(page=1))
+        clients_collector.client_store = store
+        mock_manager.get_collector_by_class_name.return_value = clients_collector
+        transport = ASGITransport(app=exporter.create_app())
+
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            page_request = asyncio.create_task(client.get("/clients"))
+            try:
+                assert await asyncio.to_thread(snapshot_started.wait, 1.0)
+                update_started = time.monotonic()
+                store.update_clients(
+                    "network-1",
+                    [
+                        NetworkClient(
+                            id="client-2",
+                            mac="aa:bb:cc:dd:ee:02",
+                            firstSeen=now,
+                            lastSeen=now,
+                            status="Online",
+                        )
+                    ],
+                )
+                health = await asyncio.wait_for(client.get("/health"), timeout=0.25)
+                assert health.status_code == 200
+                assert time.monotonic() - update_started < 0.25
+            finally:
+                release_snapshot.set()
+                await page_request
+
+    async def test_clients_page_fails_fast_while_worker_is_busy(
+        self, exporter_with_mock_manager: tuple[ExporterApp, MagicMock]
+    ) -> None:
+        """Concurrent page traversals cannot accumulate behind the single worker."""
+        exporter, mock_manager = exporter_with_mock_manager
+        exporter.settings.clients.enabled = True
+        clients_collector = self._clients_collector(self._page_snapshot(page=1))
+        mock_manager.get_collector_by_class_name.return_value = clients_collector
+        loop = asyncio.get_running_loop()
+        snapshot_started = asyncio.Event()
+        release_snapshot = threading.Event()
+
+        def delayed_snapshot(*, page: int, page_size: int) -> ClientPageSnapshot:
+            loop.call_soon_threadsafe(snapshot_started.set)
+            release_snapshot.wait(timeout=2.0)
+            return self._page_snapshot(page=page)
+
+        clients_collector.client_store.get_page_snapshot.side_effect = delayed_snapshot
+        transport = ASGITransport(app=exporter.create_app())
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            first_request = asyncio.create_task(client.get("/clients"))
+            try:
+                await asyncio.wait_for(snapshot_started.wait(), timeout=1.0)
+                saturated = await asyncio.wait_for(client.get("/clients"), timeout=0.25)
+                assert saturated.status_code == 503
+                assert saturated.headers["retry-after"] == "1"
+                assert clients_collector.client_store.get_page_snapshot.call_count == 1
+            finally:
+                release_snapshot.set()
+                first_response = await first_request
+
+        assert first_response.status_code == 200
 
 
 # ---------------------------------------------------------------------------

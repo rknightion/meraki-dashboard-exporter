@@ -14,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+import meraki_dashboard_exporter.app as app_module
 from meraki_dashboard_exporter.app import ExporterApp
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings, WebhookSettings
@@ -75,6 +76,28 @@ class TestWebhookBodySizeCap:
         )
         assert response.status_code == 413
         assert "too large" in response.json()["detail"].lower()
+
+    def test_oversized_chunk_is_rejected_before_buffer_copy(
+        self, webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """One oversized ASGI chunk never makes the accumulator exceed the cap."""
+        observed_lengths: list[int] = []
+
+        class TrackingBytearray(bytearray):
+            def extend(self, chunk: bytes) -> None:
+                super().extend(chunk)
+                observed_lengths.append(len(self))
+
+        monkeypatch.setattr(app_module, "bytearray", TrackingBytearray, raising=False)
+
+        response = webhook_client.post(
+            "/api/webhooks/meraki",
+            content=iter((b"x" * 4096,)),
+            headers={"Content-Type": "application/json"},
+        )
+
+        assert response.status_code == 413
+        assert max(observed_lengths, default=0) <= 1024
 
     def test_chunked_body_over_cap_has_no_content_length(self, webhook_client: TestClient) -> None:
         """Sanity: the guard fires even though the request omits Content-Length.

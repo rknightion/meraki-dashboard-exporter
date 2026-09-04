@@ -14,9 +14,11 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 ## CORE COMPONENTS
 ### Configuration
 - `config.py` - `Settings` class (Pydantic BaseSettings) with nested config models
-- `config_models.py` - Nested config models (`APISettings` including `validate_kwargs` for Meraki SDK 3.2.0, `CollectorSettings` with default `collector_timeout=240`, `OTelSettings`, `NetworkFilterSettings`, etc.)
+- `config_models.py` - Nested config models (`APISettings` including `validate_kwargs` for the
+  exactly pinned Meraki SDK 4.5.0, `CollectorSettings` with default `collector_timeout=240`,
+  `OTelSettings`, `NetworkFilterSettings`, etc.)
 - `config_logger.py` - Configuration-aware logging setup
-- `network_filter.py` - `NetworkFilter` resolver for include/exclude rules across name (glob), id, and tag. Pure logic; applied at the inventory read path in `services/inventory.py`. `discovery.py::DiscoveryService` is the documented exception that bypasses the filter.
+- `network_filter.py` - `NetworkFilter` resolver for include/exclude rules across name (glob), id, and tag. Pure logic; applied at the inventory read path in `services/inventory.py`. `discovery.py::DiscoveryService` audits the full inventory, while `CollectorManager._validate_network_filter()` compares unfiltered and resolved network sets during startup validation.
 
 ### Logging
 - `logging.py` - Structured logging setup (`get_logger()`)
@@ -43,6 +45,10 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 - `batch_processing.py` - Batch operation helpers
 
 ### API Helpers
+- `api_facade.py` - `MerakiApiFacade` and `facade_for(owner)`, the only production crossing into
+  synchronous Dashboard SDK operations. It inherits settings/rate limiter through owner/parent,
+  paces every attempt, meters outcomes, applies deadlines and bounded 429 retry, and runs the SDK
+  method on the bounded executor.
 - `api_helpers.py` - `APIHelper` class (`create_api_helper(collector)` factory) wrapping common per-collector API call patterns. `get_organization_networks()` prefers `self.collector.inventory.get_networks(org_id)` but falls back to `_fetch_networks_direct()` (a direct `getOrganizationNetworks` call that manually reapplies `NetworkFilter`) when `inventory` is `None` — a third sanctioned bypass site alongside `discovery.py` and `collectors/alerts.py`, reachable from production via `collectors/organization.py` and `collectors/clients.py`.
 - `rate_limiter.py` - `OrgRateLimiter`: per-organization client-side token-bucket rate limiting. AIMD feedback (`record_throttle_event`) multiplicatively decreases the *effective* budget on a real 429/`Retry-After`, floored at 0.5 rps and cooled down to at most one halving per 30s; `effective_rate_per_second()` feeds directly into the scheduler's next resolve.
 - `scheduler.py` - `EndpointScheduler` + the pure `solve_intervals` solver (#617/#631): every API fetch is declared as an `EndpointGroup` (name, priority 1-4, `floor_seconds`, `cost_fn`, optional `gated`/`setting_pin`/`enabled_fn`) on the owning collector; the solver starts every group at its floor and only stretches unpinned, gated groups (lowest-priority, least-stretched first) when total demand exceeds `budget_rps × target_utilization`. `should_run`/`next_due`/`seconds_until_due` gate and pace each collector's own loop (`app.py::ExporterApp._collector_loop`); `mark_ran` only on success. See `docs/observability/scheduler.md` for the full mechanism.
@@ -55,12 +61,12 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 
 ### Other
 - `cardinality.py` - `CardinalityMonitor` + `setup_cardinality_endpoint(app, monitor)`: metric cardinality tracking and its endpoints (`/api/metrics/cardinality`, `/cardinality` HTML, `/cardinality/all-metrics`, `/cardinality/all-labels`, `/cardinality/export/json`, `/cardinality/label-values/{metric_name}`) — these are top-level routes, not nested under `/status`.
-- `discovery.py` - `DiscoveryService`: one-time startup environment audit (`run_discovery()`). Deliberately bypasses `NetworkFilter` (calls `getOrganizationNetworks` directly) so operators see the full pre-filter inventory in startup diagnostics. This is the only sanctioned *unfiltered* bypass; `collectors/alerts.py::AlertsCollector._fetch_networks_direct` and `api_helpers.py::APIHelper._fetch_networks_direct` are two further sanctioned *filtered* fallbacks (see below), used only when `self.inventory` is unavailable.
+- `discovery.py` - `DiscoveryService`: one-time startup environment audit (`run_discovery()`). Deliberately bypasses `NetworkFilter` (calls `getOrganizationNetworks` directly) so operators see the full pre-filter inventory in startup diagnostics. `CollectorManager._validate_network_filter()` also requests the unfiltered inventory through `OrganizationInventory` to compare it with the resolved set. `collectors/alerts.py::AlertsCollector._fetch_networks_direct` and `api_helpers.py::APIHelper._fetch_networks_direct` are two further sanctioned *filtered* network fallbacks, used only when `self.inventory` is unavailable. Existing inventory-unavailable availability fallbacks live in `collectors/device.py` and `collectors/organization.py`.
 - `webhook_handler.py` - `WebhookHandler`: webhook event processing and validation
 - `org_health.py` - `OrgHealthTracker`/`OrgHealth`: per-organization exponential-backoff tracker for graceful degradation. After N consecutive failures (default 5) an org is backed off (default 60s, capped at 3600s) while collection continues normally for healthy orgs; used by `collectors/organization.py` and `collectors/manager.py`, surfaced on `/status` via `services/status.py`.
 
 ### Constants (`constants/` subdirectory)
-- `metrics_constants.py` - Domain-specific metric enums: `OrgMetricName`, `DeviceMetricName`, `NetworkMetricName`, `MSMetricName`, `MRMetricName`, `MXMetricName`, `MVMetricName`, `MTMetricName`, `MGMetricName`, `AlertMetricName`, `ConfigMetricName`, `NetworkHealthMetricName`, `ClientMetricName`, `CollectorMetricName`, `WebhookMetricName`. Two prefix families: `meraki_*` for Meraki network/device data, `meraki_exporter_*` for the exporter's own instrumentation (`CollectorMetricName`). `ConfigMetricName` is currently an empty enum (`pass`) - config-change metrics live under `OrgMetricName`; don't assume it needs populating.
+- `metrics_constants.py` - Domain-specific metric enums: `OrgMetricName`, `DeviceMetricName`, `NetworkMetricName`, `MSMetricName`, `MRMetricName`, `MXMetricName`, `MVMetricName`, `MTMetricName`, `MGMetricName`, `AlertMetricName`, `ConfigMetricName`, `InsightMetricName`, `NetworkHealthMetricName`, `ClientMetricName`, `CollectorMetricName`, `WebhookMetricName`. Two prefix families: `meraki_*` for Meraki network/device data, `meraki_exporter_*` for the exporter's own instrumentation (`CollectorMetricName`). `ConfigMetricName` is currently an empty enum (`pass`) - config-change metrics live under `OrgMetricName`; don't assume it needs populating.
 - `api_constants.py` - `APIField` (common response field-name enum), `APITimespan`, `LicenseState`, `PortState`, `RFBand`
 - `config_constants.py` - `APIConfig`/`RegionalURLs`/`MerakiAPIConfig` dataclasses and derived `MERAKI_API_BASE_URL*` constants (legacy; prefer `Settings`/`APISettings` in `config.py`/`config_models.py` for runtime config)
 - `device_constants.py` - `DeviceType`, `DeviceStatus`, `ProductType` enums (no `UpdateTier` — removed with the tier system, #631; see `core/scheduler.py::EndpointGroupName`/`EndpointGroup` for the replacement per-group model)
@@ -90,6 +96,7 @@ from ..core.error_handling import (
     validate_response_format,
     with_error_handling,
 )
+from ..core.api_facade import facade_for
 
 
 @with_error_handling(
@@ -98,8 +105,12 @@ from ..core.error_handling import (
     error_category=ErrorCategory.API_SERVER_ERROR,
 )
 async def _fetch_devices(self, org_id: str) -> list[Device] | None:
-    raw = await asyncio.to_thread(
-        self.api.organizations.getOrganizationDevices, org_id, total_pages="all"
+    raw = await facade_for(self).call(
+        "getOrganizationDevices",
+        self.api.organizations.getOrganizationDevices,
+        org_id,
+        org_id=org_id,
+        total_pages="all",
     )
     # Mandatory: normalize the SDK exhausted-retry error shape and unwrap
     # {"items": [...]} responses. Raises RetryableAPIError / DataValidationError
@@ -147,5 +158,6 @@ async def _fetch_devices(self, org_id: str) -> list[Device]:
 - **NEVER log sensitive data** - API keys, tokens, etc.
 - **NEVER ignore error handling** - use decorators for consistent behavior
 - **NEVER skip `validate_response_format`** for new fetchers - the SDK can return error-shaped dicts after retry exhaustion
-- **NEVER bypass `NetworkFilter` unfiltered** outside `core/discovery.py::DiscoveryService` - all collector network reads go through `OrganizationInventory.get_networks(org_id)`. Two sanctioned filtered fallbacks exist for when `inventory` is unavailable (`collectors/alerts.py::AlertsCollector._fetch_networks_direct`, `api_helpers.py::APIHelper._fetch_networks_direct`), each manually reapplying `NetworkFilter`.
+- **NEVER invoke a Dashboard SDK method outside `MerakiApiFacade`** - direct executor calls bypass pacing, metrics, deadlines, and retry ownership
+- **NEVER bypass `NetworkFilter` unfiltered** outside `core/discovery.py::DiscoveryService` and `CollectorManager._validate_network_filter()` - normal collector network reads go through `OrganizationInventory.get_networks(org_id)`. Two sanctioned filtered fallbacks exist for when `inventory` is unavailable (`collectors/alerts.py::AlertsCollector._fetch_networks_direct`, `api_helpers.py::APIHelper._fetch_networks_direct`), each manually reapplying `NetworkFilter`.
 </fatal_implications>

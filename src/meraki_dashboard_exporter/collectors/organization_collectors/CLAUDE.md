@@ -1,10 +1,11 @@
 <system_context>
-Organization-level collectors for Meraki Dashboard Exporter - Handles metrics that apply to entire organizations: API usage, license consumption, and client overview statistics.
+Organization-level collectors for Meraki Dashboard Exporter - Handles eight organization-scoped domains: API usage, licensing, client overview, firmware, device availability history, top usage, webhook logs, and early access.
 </system_context>
 
 <critical_notes>
-- **This directory holds 5 of the ~9 org-level metric domains.** `api_usage.py`,
-  `license.py`, `client_overview.py`, `firmware.py`, and `device_availability_history.py` are
+- **This directory holds 8 org-level sub-collector domains.** `api_usage.py`, `license.py`,
+  `client_overview.py`, `firmware.py`, `device_availability_history.py`, `top_usage.py`,
+  `webhooks.py`, and `early_access.py` are
   genuine `BaseOrganizationCollector` sub-collectors. Networks-total, devices-total,
   devices-by-model, packet captures, and application usage are still collected **directly inside
   the parent coordinator** `../organization.py::OrganizationCollector` (its
@@ -20,16 +21,17 @@ Organization-level collectors for Meraki Dashboard Exporter - Handles metrics th
   mostly floor at 300s (see `core/scheduler.py::EndpointGroupName` for the full list and
   `../../organization.py` for each group's declared `floor_seconds`/`priority`), stretched further
   by the adaptive scheduler under budget pressure.
-- **Manual registration**: the 5 sub-collectors are instantiated in
+- **Manual registration**: the 8 sub-collectors are instantiated in
   `OrganizationCollector.__init__` (`api_usage_collector`, `license_collector`,
-  `client_overview_collector`, `firmware_collector`, `device_availability_history_collector`) and
+  `client_overview_collector`, `firmware_collector`, `device_availability_history_collector`,
+  `top_usage_collector`, `webhook_logs_collector`, `early_access_collector`) and
   each exposes `collect(org_id, org_name)`, called from the coordinator's `_collect_api_metrics` /
   `_collect_license_metrics` / `_collect_client_overview` / firmware+availability-history
   equivalents.
-- **None of the 5 sub-collectors *fetch* networks/devices** — they only call org-scoped endpoints
-  (`getOrganizationApiRequestsOverview`, `getOrganizationClientsOverview`,
-  `getOrganizationLicensesOverview`/`getOrganizationLicenses`, `getOrganizationFirmwareUpgrades`,
-  `getOrganizationDevicesAvailabilitiesChangeHistory`). But two of them **do apply the
+- **The 8 sub-collectors use organization-scoped endpoint families** for API request detail/overview,
+  clients overview, license detail/overview, firmware upgrades and per-device firmware state,
+  device-availability history, bounded top-usage aggregates, webhook logs, and early-access opt-ins.
+  Firmware compliance also reads cached inventory devices. Two sub-collectors **apply the
   `get_allowed_network_ids` allow-list** to *filter response rows* whose `network.id` falls outside
   the configured `NetworkFilter`: `firmware.py` and `device_availability_history.py` (both resolve
   `self.inventory.get_allowed_network_ids(org_id)` and skip excluded networks — the same row-filter
@@ -40,9 +42,9 @@ Organization-level collectors for Meraki Dashboard Exporter - Handles metrics th
   prefers `self.inventory.get_licenses_overview(org_id)` (30-minute TTL, since license data
   rarely changes), falling back to a direct `getOrganizationLicensesOverview` call only when
   `inventory` is unset.
-- **Wrap fetcher responses** with `validate_response_format` from `core.error_handling`
-  (`api_usage.py`, `license.py`, and `client_overview.py` — the latter now wraps its raw dict so an
-  SDK exhausted-retry error shape raises instead of poisoning the stale-zero cache with zeros).
+- **Wrap fetcher responses** with `validate_response_format` from `core.error_handling`; all eight
+  sub-collectors do so. `client_overview.py` notably wraps its raw dict so an SDK exhausted-retry
+  error shape raises instead of poisoning the stale-zero cache with zeros.
 </critical_notes>
 
 <file_map>
@@ -65,6 +67,12 @@ Organization-level collectors for Meraki Dashboard Exporter - Handles metrics th
   group (`self.parent._group_interval(EndpointGroupName.ORG_AVAILABILITY_HISTORY)`, 300s floor,
   operator-visible via `meraki_exporter_scheduler_interval_seconds{group="org_availability_history"}`)
   rather than a hardcoded 300s
+- `top_usage.py` - `TopUsageCollector`: bounded org-wide top devices/networks/SSIDs usage surfaces,
+  gated by the `org_top_usage` endpoint group.
+- `webhooks.py` - `WebhookLogsCollector`: org-wide webhook delivery rows emitted through the bounded
+  OTel data-log channel, not as per-delivery Prometheus series.
+- `early_access.py` - `EarlyAccessCollector`: org early-access opt-in state from the org-scoped
+  early-access feature endpoint.
 </file_map>
 
 <paved_path>
@@ -77,8 +85,11 @@ class MyOrgCollector(BaseOrganizationCollector):
     @log_api_call("getOrganizationSomeEndpoint")
     async def _fetch_something(self, org_id: str) -> dict[str, Any]:
         self._track_api_call("getOrganizationSomeEndpoint")
-        response = await asyncio.to_thread(
-            self.api.organizations.getOrganizationSomeEndpoint, org_id
+        response = await facade_for(self).call(
+            "getOrganizationSomeEndpoint",
+            self.api.organizations.getOrganizationSomeEndpoint,
+            org_id,
+            org_id=org_id,
         )
         return validate_response_format(
             response, expected_type=dict, operation="getOrganizationSomeEndpoint"
@@ -119,7 +130,7 @@ intended, not a stale collector.
   `timespan=3600`.
 - **License pagination**: `getOrganizationLicenses` requires `total_pages="all"` to get the full
   per-device license list.
-- **404 handling is inconsistent across the 5 collectors**: `client_overview.py`, `license.py`,
+- **404 handling in the original five collectors is intentionally inconsistent**: `client_overview.py`, `license.py`,
   `firmware.py`, and `device_availability_history.py` all special-case `"404" in str(e)` as "not
   available for this org" (`debug` log, no exception raised/logged, re-raising only non-404
   errors for the decorator to handle); `api_usage.py` is the outlier with no such branch — it

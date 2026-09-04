@@ -3,7 +3,9 @@
 # ruff: noqa: S101
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from threading import Event
 
 import pytest
 from structlog.testing import capture_logs
@@ -129,6 +131,83 @@ def test_global_cap_blocks_new_clients_but_updates_existing(store):
     assert retrieved.status == "Offline"
 
 
+def test_complete_snapshot_reclaims_departed_clients_before_global_cap(store):
+    """A complete replacement snapshot frees departed IDs before admitting new ones."""
+
+    store.settings.clients.max_clients_total = 2
+    store.max_clients_total = 2
+
+    c1 = _make_client("c1", "10.0.0.1")
+    c2 = _make_client("c2", "10.0.0.2")
+    store.update_clients("N1", [c1, c2], complete_snapshot=True)
+
+    c3 = _make_client("c3", "10.0.0.3")
+    store.update_clients("N1", [c2, c3], complete_snapshot=True)
+
+    assert {client.id for client in store.get_network_clients("N1")} == {"c2", "c3"}
+
+
+def test_incomplete_snapshot_retains_departed_clients(store):
+    """A failed or capped partial result must not erase retained membership."""
+
+    c1 = _make_client("c1", "10.0.0.1")
+    c2 = _make_client("c2", "10.0.0.2")
+    store.update_clients("N1", [c1, c2], complete_snapshot=True)
+
+    store.update_clients("N1", [c2], complete_snapshot=False)
+
+    assert {client.id for client in store.get_network_clients("N1")} == {"c1", "c2"}
+
+
+def test_existing_client_refreshes_api_owned_identity_and_display_fields(store):
+    """Existing records refresh API data while retaining a prior DNS-derived hostname."""
+
+    original = _make_client("c1", "10.0.0.1").model_copy(
+        update={
+            "description": "Old description",
+            "manufacturer": "Old manufacturer",
+            "os": "Old OS",
+        }
+    )
+    store.update_clients(
+        "N1",
+        [original],
+        network_name="Old network",
+        org_id="old-org",
+        hostnames={"10.0.0.1": "old-host.example"},
+        complete_snapshot=True,
+    )
+
+    refreshed = _make_client("c1", "10.0.0.2").model_copy(
+        update={
+            "mac": "ff:ee:dd:cc:bb:aa",
+            "description": "New description",
+            "manufacturer": "New manufacturer",
+            "os": "New OS",
+        }
+    )
+    store.update_clients(
+        "N1",
+        [refreshed],
+        network_name="Renamed network",
+        org_id="new-org",
+        hostnames={},
+        complete_snapshot=True,
+    )
+
+    client = store.get_client("N1", "c1")
+    assert client is not None
+    assert client.mac == "ff:ee:dd:cc:bb:aa"
+    assert client.description == "New description"
+    assert client.manufacturer == "New manufacturer"
+    assert client.os == "New OS"
+    assert client.networkName == "Renamed network"
+    assert client.organizationId == "new-org"
+    assert client.hostname == "old-host.example"
+    assert client.calculatedHostname == "New description"
+    assert store.get_network_names() == {"N1": "Renamed network"}
+
+
 def test_get_statistics(store):
     """Check that statistics reporting aggregates correctly."""
 
@@ -140,3 +219,57 @@ def test_get_statistics(store):
     assert stats["total_clients"] == 2
     assert stats["online_clients"] == 1
     assert stats["offline_clients"] == 1
+
+
+def test_get_page_snapshot_bounds_copied_clients_and_preserves_insertion_order(store):
+    """A page snapshot walks the cache without materializing every client."""
+
+    clients = [_make_client(f"c{number}", f"10.0.0.{number}") for number in range(1, 6)]
+    store.update_clients("N1", clients, network_name="Net1")
+
+    snapshot = store.get_page_snapshot(page=2, page_size=2)
+
+    assert [client.id for client in snapshot.clients] == ["c3", "c4"]
+    assert len(snapshot.clients) == 2
+    assert snapshot.total_clients == 5
+    assert snapshot.online_clients == 5
+    assert snapshot.network_count == 1
+    assert snapshot.page == 2
+    assert snapshot.total_pages == 3
+
+
+def test_page_snapshot_is_stable_without_blocking_concurrent_store_mutation(store):
+    """A page walk uses published state while a concurrent update can complete."""
+
+    store.update_clients("N1", [_make_client("c1", "10.0.0.1")])
+    snapshot_entered = Event()
+    release_snapshot = Event()
+    mutation_finished = Event()
+
+    class BlockingValuesDict(dict):
+        def values(self):
+            snapshot_entered.set()
+            assert release_snapshot.wait(timeout=1.0)
+            return super().values()
+
+    store._clients["N1"] = BlockingValuesDict(store._clients["N1"])
+
+    def update_store() -> None:
+        store.update_clients("N1", [_make_client("c2", "10.0.0.2")])
+        mutation_finished.set()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        snapshot_future = executor.submit(store.get_page_snapshot, page=1, page_size=10)
+        assert snapshot_entered.wait(timeout=1.0)
+        update_future = executor.submit(update_store)
+        try:
+            assert mutation_finished.wait(timeout=0.05)
+        finally:
+            release_snapshot.set()
+
+        snapshot = snapshot_future.result(timeout=1.0)
+        update_future.result(timeout=1.0)
+
+    assert snapshot.total_clients == 1
+    assert [client.id for client in snapshot.clients] == ["c1"]
+    assert [client.id for client in store.get_network_clients("N1")] == ["c1", "c2"]

@@ -1,0 +1,590 @@
+[
+  {
+    "adminSplashUrl": "value_029",
+    "adultContentFilteringEnabled": false,
+    "authMode": "value_076",
+    "availabilityTags": [
+      "value_087"
+    ],
+    "availableOnAllAps": true,
+    "bandSelection": "value_086",
+    "dnsRewrite": {
+      "dnsCustomNameservers": [],
+      "enabled": false
+    },
+    "dot11r": {
+      "adaptive": false,
+      "enabled": false
+    },
+    "dot11w": {
+      "enabled": true,
+      "required": true
+    },
+    "enabled": false,
+    "encryptionMode": "value_078",
+    "ipAssignmentMode": "value_084",
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_002",
+    "namedVlans": {},
+    "number": 0,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "psk": "value_077",
+    "security": {
+      "encryption": {
+        "akms": [
+          "value_082",
+          "value_083"
+        ],
+        "ciphers": [
+          "value_080",
+          "value_081"
+        ]
+      }
+    },
+    "speedBurst": {
+      "enabled": false
+    },
+    "splashPage": "value_075",
+    "splashTimeout": "value_085",
+    "ssidAdminAccessible": false,
+    "visible": true,
+    "walledGardenEnabled": false,
+    "wpaEncryptionMode": "value_079"
+  },
+  {
+    "adminSplashUrl": null,
+    "adultContentFilteringEnabled": true,
+    "authMode": "value_089",
+    "availabilityTags": [
+      "value_093"
+    ],
+    "availableOnAllAps": true,
+    "bandSelection": "value_092",
+    "dnsRewrite": {
+      "dnsCustomNameservers": [],
+      "enabled": false
+    },
+    "dot11r": {
+      "adaptive": false,
+      "enabled": false
+    },
+    "dot11w": {
+      "enabled": true,
+      "required": true
+    },
+    "enabled": false,
+    "encryptionMode": "value_090",
+    "ipAssignmentMode": "value_084",
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_003",
+    "namedVlans": {},
+    "number": 1,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "security": {
+      "encryption": {
+        "akms": [
+          "value_082",
+          "value_083"
+        ],
+        "ciphers": [
+          "value_080",
+          "value_081"
+        ]
+      }
+    },
+    "speedBurst": {
+      "enabled": false
+    },
+    "splashGuestSponsorDomains": [
+      "value_091"
+    ],
+    "splashPage": "value_088",
+    "splashTimeout": "value_085",
+    "ssidAdminAccessible": false,
+    "visible": true,
+    "walledGardenEnabled": false,
+    "wpaEncryptionMode": "value_079"
+  },
+  {
+    "adultContentFilteringEnabled": true,
+    "authMode": "value_095",
+    "availabilityTags": [],
+    "availableOnAllAps": true,
+    "bandSelection": "value_092",
+    "dnsRewrite": {
+      "dnsCustomNameservers": [],
+      "enabled": false
+    },
+    "dot11r": {
+      "adaptive": false,
+      "enabled": false
+    },
+    "dot11w": {
+      "enabled": false,
+      "required": false
+    },
+    "enabled": false,
+    "encryptionMode": "value_096",
+    "ipAssignmentMode": "value_084",
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_004",
+    "namedVlans": {},
+    "number": 2,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "speedBurst": {
+      "enabled": true
+    },
+    "splashPage": "value_094",
+    "ssidAdminAccessible": false,
+    "visible": true,
+    "wpaEncryptionMode": "value_097"
+  },
+  {
+    "authMode": "value_098",
+    "availabilityTags": [],
+    "availableOnAllAps": true,
+    "bandSelection": "value_102",
+    "dot11r": {
+      "adaptive": true,
+      "enabled": true
+    },
+    "dot11w": {
+      "enabled": true,
+      "required": true
+    },
+    "enabled": false,
+    "encryptionMode": "value_096",
+    "ipAssignmentMode": "value_101",
+    "lanIsolationEnabled": false,
+    "ldap": {
+      "servers": []
+    },
+    "localAuthFallback": {
+      "cacheTimeout": "value_100",
+      "enabled": false,
+      "serverCaCertificate": {
+        "contents": null
+      }
+    },
+    "localRadius": {
+      "cacheTimeout": 86400,
+      "certificateAuthentication": {
+        "clientRootCaCertificate": {
+          "expirationDate": "2026-01-01T00:00:00Z",
+          "name": "network_name_006",
+          "serial": "device_026"
+        },
+        "enabled": true,
+        "useLdap": false,
+        "useOcsp": false
+      },
+      "passwordAuthentication": {
+        "enabled": false
+      }
+    },
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_005",
+    "namedVlans": {
+      "tagging": {
+        "enabled": false
+      }
+    },
+    "number": 3,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "radiusAccountingEnabled": false,
+    "radiusAttributeForGroupPolicies": "value_099",
+    "radiusAuthenticationNasId": "radiusauthenticationnas_id_001",
+    "radiusCalledStationId": "radiuscalledstation_id_001",
+    "radiusCoaEnabled": false,
+    "radiusFallbackEnabled": false,
+    "radiusOverride": false,
+    "radiusProxyEnabled": true,
+    "radiusServerAttemptsLimit": 3,
+    "radiusServerTimeout": 1,
+    "radiusTestingEnabled": false,
+    "speedBurst": {
+      "enabled": false
+    },
+    "splashPage": "value_094",
+    "ssidAdminAccessible": false,
+    "useVlanTagging": false,
+    "visible": true,
+    "wpaEncryptionMode": "value_097"
+  },
+  {
+    "authMode": "value_103",
+    "availabilityTags": [],
+    "availableOnAllAps": true,
+    "bandSelection": "value_102",
+    "dot11r": {
+      "adaptive": false,
+      "enabled": false
+    },
+    "dot11w": {
+      "enabled": true,
+      "required": true
+    },
+    "enabled": false,
+    "encryptionMode": "value_096",
+    "ipAssignmentMode": "value_101",
+    "lanIsolationEnabled": false,
+    "localAuthFallback": {
+      "cacheTimeout": "value_100",
+      "enabled": false,
+      "serverCaCertificate": {
+        "contents": null
+      }
+    },
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_007",
+    "namedVlans": {
+      "tagging": {
+        "enabled": false
+      }
+    },
+    "number": 4,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "radiusAccountingEnabled": true,
+    "radiusAccountingInterimInterval": 600,
+    "radiusAccountingServers": [
+      {
+        "caCertificate": "value_106",
+        "host": "value_105",
+        "id": "network_003",
+        "openRoamingCertificateId": 900000000000000001,
+        "port": 2083,
+        "radsecEnabled": true
+      }
+    ],
+    "radiusAccountingStartDelay": 0,
+    "radiusAccountingUpdateOnEvent": false,
+    "radiusAttributeForGroupPolicies": "value_099",
+    "radiusAuthenticationNasId": "radiusauthenticationnas_id_001",
+    "radiusCalledStationId": "radiuscalledstation_id_001",
+    "radiusCoaEnabled": false,
+    "radiusFallbackEnabled": false,
+    "radiusOverride": false,
+    "radiusProxyEnabled": true,
+    "radiusServerAttemptsLimit": 3,
+    "radiusServerTimeout": 1,
+    "radiusServers": [
+      {
+        "caCertificate": "value_106",
+        "host": "value_105",
+        "id": "network_002",
+        "openRoamingCertificateId": 900000000000000001,
+        "port": 2083,
+        "radsecEnabled": true
+      }
+    ],
+    "radiusTestingEnabled": false,
+    "speedBurst": {
+      "enabled": false
+    },
+    "splashPage": "value_094",
+    "ssidAdminAccessible": false,
+    "useVlanTagging": false,
+    "visible": true,
+    "wpaEncryptionMode": "value_104"
+  },
+  {
+    "adultContentFilteringEnabled": false,
+    "authMode": "value_090",
+    "availabilityTags": [],
+    "availableOnAllAps": true,
+    "bandSelection": "value_102",
+    "dnsRewrite": {
+      "dnsCustomNameservers": [],
+      "enabled": false
+    },
+    "enabled": false,
+    "ipAssignmentMode": "value_084",
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_008",
+    "namedVlans": {},
+    "number": 5,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "speedBurst": {
+      "enabled": false
+    },
+    "splashPage": "value_094",
+    "ssidAdminAccessible": false,
+    "visible": true
+  },
+  {
+    "adultContentFilteringEnabled": false,
+    "authMode": "value_090",
+    "availabilityTags": [],
+    "availableOnAllAps": true,
+    "bandSelection": "value_102",
+    "dnsRewrite": {
+      "dnsCustomNameservers": [],
+      "enabled": false
+    },
+    "enabled": false,
+    "ipAssignmentMode": "value_084",
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_009",
+    "namedVlans": {},
+    "number": 6,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "speedBurst": {
+      "enabled": false
+    },
+    "splashPage": "value_094",
+    "ssidAdminAccessible": false,
+    "visible": true
+  },
+  {
+    "adultContentFilteringEnabled": false,
+    "authMode": "value_090",
+    "availabilityTags": [],
+    "availableOnAllAps": true,
+    "bandSelection": "value_102",
+    "dnsRewrite": {
+      "dnsCustomNameservers": [],
+      "enabled": false
+    },
+    "enabled": false,
+    "ipAssignmentMode": "value_084",
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_010",
+    "namedVlans": {},
+    "number": 7,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "speedBurst": {
+      "enabled": false
+    },
+    "splashPage": "value_094",
+    "ssidAdminAccessible": false,
+    "visible": true
+  },
+  {
+    "adultContentFilteringEnabled": false,
+    "authMode": "value_090",
+    "availabilityTags": [],
+    "availableOnAllAps": true,
+    "bandSelection": "value_102",
+    "dnsRewrite": {
+      "dnsCustomNameservers": [],
+      "enabled": false
+    },
+    "enabled": false,
+    "ipAssignmentMode": "value_084",
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_011",
+    "namedVlans": {},
+    "number": 8,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "speedBurst": {
+      "enabled": false
+    },
+    "splashPage": "value_094",
+    "ssidAdminAccessible": false,
+    "visible": true
+  },
+  {
+    "adultContentFilteringEnabled": false,
+    "authMode": "value_090",
+    "availabilityTags": [],
+    "availableOnAllAps": true,
+    "bandSelection": "value_102",
+    "dnsRewrite": {
+      "dnsCustomNameservers": [],
+      "enabled": false
+    },
+    "enabled": false,
+    "ipAssignmentMode": "value_084",
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_012",
+    "namedVlans": {},
+    "number": 9,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "speedBurst": {
+      "enabled": false
+    },
+    "splashPage": "value_094",
+    "ssidAdminAccessible": false,
+    "visible": true
+  },
+  {
+    "adultContentFilteringEnabled": false,
+    "authMode": "value_090",
+    "availabilityTags": [],
+    "availableOnAllAps": true,
+    "bandSelection": "value_102",
+    "dnsRewrite": {
+      "dnsCustomNameservers": [],
+      "enabled": false
+    },
+    "enabled": false,
+    "ipAssignmentMode": "value_084",
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_013",
+    "namedVlans": {},
+    "number": 10,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "speedBurst": {
+      "enabled": false
+    },
+    "splashPage": "value_094",
+    "ssidAdminAccessible": false,
+    "visible": true
+  },
+  {
+    "adultContentFilteringEnabled": false,
+    "authMode": "value_090",
+    "availabilityTags": [],
+    "availableOnAllAps": true,
+    "bandSelection": "value_102",
+    "dnsRewrite": {
+      "dnsCustomNameservers": [],
+      "enabled": false
+    },
+    "enabled": false,
+    "ipAssignmentMode": "value_084",
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_014",
+    "namedVlans": {},
+    "number": 11,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "speedBurst": {
+      "enabled": false
+    },
+    "splashPage": "value_094",
+    "ssidAdminAccessible": false,
+    "visible": true
+  },
+  {
+    "adultContentFilteringEnabled": false,
+    "authMode": "value_090",
+    "availabilityTags": [],
+    "availableOnAllAps": true,
+    "bandSelection": "value_102",
+    "dnsRewrite": {
+      "dnsCustomNameservers": [],
+      "enabled": false
+    },
+    "enabled": false,
+    "ipAssignmentMode": "value_084",
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_015",
+    "namedVlans": {},
+    "number": 12,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "speedBurst": {
+      "enabled": false
+    },
+    "splashPage": "value_094",
+    "ssidAdminAccessible": false,
+    "visible": true
+  },
+  {
+    "adultContentFilteringEnabled": false,
+    "authMode": "value_090",
+    "availabilityTags": [],
+    "availableOnAllAps": true,
+    "bandSelection": "value_102",
+    "dnsRewrite": {
+      "dnsCustomNameservers": [],
+      "enabled": false
+    },
+    "enabled": false,
+    "ipAssignmentMode": "value_084",
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_016",
+    "namedVlans": {},
+    "number": 13,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "speedBurst": {
+      "enabled": false
+    },
+    "splashPage": "value_094",
+    "ssidAdminAccessible": false,
+    "visible": true
+  },
+  {
+    "adultContentFilteringEnabled": false,
+    "authMode": "value_090",
+    "availabilityTags": [],
+    "availableOnAllAps": true,
+    "bandSelection": "value_102",
+    "dnsRewrite": {
+      "dnsCustomNameservers": [],
+      "enabled": false
+    },
+    "enabled": false,
+    "ipAssignmentMode": "value_084",
+    "mandatoryDhcpEnabled": false,
+    "minBitrate": 11,
+    "name": "network_name_017",
+    "namedVlans": {},
+    "number": 14,
+    "perClientBandwidthLimitDown": 0,
+    "perClientBandwidthLimitUp": 0,
+    "perSsidBandwidthLimitDown": 0,
+    "perSsidBandwidthLimitUp": 0,
+    "speedBurst": {
+      "enabled": false
+    },
+    "splashPage": "value_094",
+    "ssidAdminAccessible": false,
+    "visible": true
+  }
+]

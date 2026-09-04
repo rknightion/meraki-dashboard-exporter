@@ -13,6 +13,7 @@ from meraki_dashboard_exporter.api.client import AsyncMerakiClient
 from meraki_dashboard_exporter.app import ExporterApp
 from meraki_dashboard_exporter.core.config import Settings
 from meraki_dashboard_exporter.core.config_models import MerakiSettings
+from meraki_dashboard_exporter.services.client_store import ClientPageSnapshot
 
 
 class _ControlButtonParser(HTMLParser):
@@ -48,6 +49,7 @@ def _manager() -> MagicMock:
     }
     manager.skipped_collectors = []
     manager.is_collector_running.return_value = False
+    manager.has_attempted_collection.return_value = False
     manager.get_scheduling_diagnostics.return_value = {
         "collectors": [],
         "smoothing": {},
@@ -61,13 +63,14 @@ def _manager() -> MagicMock:
 def _clients_collector() -> MagicMock:
     collector = MagicMock()
     collector.is_active = True
-    collector.client_store.get_all_clients.return_value = []
-    collector.client_store.get_statistics.return_value = {
-        "total_clients": 0,
-        "online_clients": 0,
-        "offline_clients": 0,
-        "total_networks": 0,
-    }
+    collector.client_store.get_page_snapshot.return_value = ClientPageSnapshot(
+        clients=[],
+        total_clients=0,
+        online_clients=0,
+        network_count=0,
+        page=1,
+        total_pages=1,
+    )
     collector.dns_resolver.get_cache_stats.return_value = {
         "total_entries": 0,
         "valid_entries": 0,

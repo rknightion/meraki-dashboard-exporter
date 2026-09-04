@@ -6,8 +6,14 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from prometheus_client import CollectorRegistry
+from pydantic import SecretStr
 
 from meraki_dashboard_exporter.collectors.manager import CollectorManager
+from meraki_dashboard_exporter.core.collector import MetricCollector
+from meraki_dashboard_exporter.core.config import Settings
+from meraki_dashboard_exporter.core.config_models import MerakiSettings
+from meraki_dashboard_exporter.core.constants.metrics_constants import CollectorMetricName
 
 
 def _bare_manager(limit: int) -> CollectorManager:
@@ -42,6 +48,27 @@ def _health() -> dict[str, float | int | None]:
     }
 
 
+class DeviceCollector(MetricCollector):
+    """Minimal real collector used to exercise the duration observation path."""
+
+    def _initialize_metrics(self) -> None:
+        pass
+
+    async def _collect_impl(self) -> None:
+        pass
+
+
+def _settings() -> Settings:
+    settings = Settings(
+        meraki=MerakiSettings(
+            api_key=SecretStr("test_api_key_at_least_30_characters_long"),
+            org_id="123456",
+        ),
+    )
+    settings.api.smoothing_enabled = False
+    return settings
+
+
 @pytest.mark.asyncio
 async def test_second_forced_run_is_rejected_before_first_gets_semaphore() -> None:
     """A queued admitted run owns the per-collector lock immediately."""
@@ -60,6 +87,104 @@ async def test_second_forced_run_is_rejected_before_first_gets_semaphore() -> No
     await first
     await second
     collector.collect.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_racing_forced_runs_produce_one_duration_observation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only the admitted logical run reaches MetricCollector.collect (#717)."""
+    registry = CollectorRegistry()
+    monkeypatch.setattr("meraki_dashboard_exporter.core.collector.REGISTRY", registry)
+    monkeypatch.setattr(MetricCollector, "_metrics_initialized", False)
+    monkeypatch.setattr(MetricCollector, "_collector_duration", None)
+    monkeypatch.setattr(MetricCollector, "_collector_errors", None)
+    monkeypatch.setattr(MetricCollector, "_collector_last_success", None)
+    monkeypatch.setattr(MetricCollector, "_collector_api_calls", None)
+
+    manager = _bare_manager(0)
+    collector = DeviceCollector(api=MagicMock(), settings=_settings(), registry=registry)
+
+    first = asyncio.create_task(manager._run_collector_with_timeout(collector, 30, force=True))
+    await asyncio.sleep(0)
+    second = asyncio.create_task(manager._run_collector_with_timeout(collector, 30, force=True))
+    for _ in range(10):
+        waiters = manager._collector_semaphore._waiters or ()  # noqa: SLF001
+        if second.done() or len(waiters) == 2:
+            break
+        await asyncio.sleep(0)
+    assert second.done() or len(waiters) == 2
+
+    manager._collector_semaphore.release()
+    await first
+    await second
+
+    count = registry.get_sample_value(
+        f"{CollectorMetricName.COLLECTOR_DURATION_SECONDS.value}_count",
+        {"collector": "DeviceCollector"},
+    )
+    assert count == 1
+
+
+@pytest.mark.asyncio
+async def test_active_trace_produces_one_duration_observation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Attaching trace context must not record the collector duration twice (#717)."""
+    registry = CollectorRegistry()
+    monkeypatch.setattr("meraki_dashboard_exporter.core.collector.REGISTRY", registry)
+    monkeypatch.setattr(MetricCollector, "_metrics_initialized", False)
+    monkeypatch.setattr(MetricCollector, "_collector_duration", None)
+    monkeypatch.setattr(MetricCollector, "_collector_errors", None)
+    monkeypatch.setattr(MetricCollector, "_collector_last_success", None)
+    monkeypatch.setattr(MetricCollector, "_collector_api_calls", None)
+
+    class RecordingSpan:
+        def __enter__(self) -> RecordingSpan:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def is_recording(self) -> bool:
+            return True
+
+        def get_span_context(self) -> object:
+            return type(
+                "SpanContext",
+                (),
+                {"trace_id": 1, "span_id": 2, "is_valid": True},
+            )()
+
+        def set_attribute(self, *_args: object) -> None:
+            return None
+
+        def set_status(self, *_args: object) -> None:
+            return None
+
+    span = RecordingSpan()
+
+    class RecordingTracer:
+        def start_as_current_span(self, _name: str) -> RecordingSpan:
+            return span
+
+    monkeypatch.setattr(
+        "meraki_dashboard_exporter.core.collector.trace.get_tracer",
+        lambda _name: RecordingTracer(),
+    )
+    monkeypatch.setattr(
+        "meraki_dashboard_exporter.core.exemplars.trace.get_current_span",
+        lambda: span,
+    )
+
+    collector = DeviceCollector(api=MagicMock(), settings=_settings(), registry=registry)
+    await collector.collect()
+
+    count = registry.get_sample_value(
+        f"{CollectorMetricName.COLLECTOR_DURATION_SECONDS.value}_count",
+        {"collector": "DeviceCollector"},
+    )
+    assert count == 1
 
 
 @pytest.mark.asyncio

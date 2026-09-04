@@ -1,0 +1,49 @@
+---
+id: MDE-0063
+title: >-
+  Remove unsupported resource-tier recommendations until representative
+  measurements exist
+status: Done
+assignee: []
+created_date: '2026-09-03 18:46'
+updated_date: '2026-09-04 06:27'
+labels:
+  - 'area:docs'
+dependencies:
+  - MDE-0002
+priority: medium
+type: docs
+ordinal: 63000
+---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+Audit dimension 4 confirmed that the shipped resource-sizing contract still outruns its evidence. charts/meraki-dashboard-exporter/values.yaml:384-412, the chart README and docs/scaling-guide.md:232-255 prescribe small, medium and large CPU and memory quantities. The same guide at lines 257-265 states that the largest actual measurement is a one-network HOMELAB replay, not a medium or dense-switch measurement; the retained fixture has 19 devices. MDE-0002 remains permanently Parked because no reachable organization has the required medium or dense-switch topology. This task must not invent replacement numbers or move defaults: unsupported recommendations should be removed or labeled non-authoritative until representative evidence exists.
+<!-- SECTION:DESCRIPTION:END -->
+
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [x] #1 Every published resource quantity is either the unchanged bootable chart default or is paired with a representative cited measurement and stated assumptions
+- [x] #2 Unsupported medium and large resource recommendations are removed or explicitly marked non-authoritative without replacement estimates
+- [x] #3 Chart values, chart README and scaling guidance use identical evidence labels and retain the measured HOMELAB result as HOMELAB only
+<!-- AC:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
+- [x] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
+- [x] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
+<!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Remove or mark non-authoritative every unsupported medium/large resource quantity across values, chart README and scaling guidance; retain the bootable default and the HOMELAB measurement without inventing replacements.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Removed unsupported resource-tier recommendations and retained only measured operational guidance. Documentation validation, just check, and just ci passed at 5e8d9c23b76a2f2edd531c15c776cbfbcc9134fa; exact-head CI 33843833956 and publication 33843966820 succeeded.
+<!-- SECTION:FINAL_SUMMARY:END -->

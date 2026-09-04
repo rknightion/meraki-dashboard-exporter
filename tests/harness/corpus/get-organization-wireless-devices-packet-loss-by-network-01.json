@@ -1,0 +1,18 @@
+[
+  {
+    "downstream": {
+      "lossPercentage": null,
+      "lost": 0,
+      "total": 0
+    },
+    "network": {
+      "id": "network_001",
+      "name": "network_name_001"
+    },
+    "upstream": {
+      "lossPercentage": null,
+      "lost": 0,
+      "total": 0
+    }
+  }
+]

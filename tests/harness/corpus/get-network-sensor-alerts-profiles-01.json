@@ -1,0 +1,93 @@
+[
+  {
+    "conditions": [
+      {
+        "metric": "value_543",
+        "threshold": {
+          "water": {
+            "present": true
+          }
+        }
+      },
+      {
+        "duration": 900,
+        "metric": "value_014",
+        "threshold": {
+          "pm25": {
+            "quality": "value_544"
+          }
+        }
+      },
+      {
+        "direction": "value_545",
+        "duration": 900,
+        "metric": "value_011",
+        "threshold": {
+          "temperature": {
+            "celsius": 32.0
+          }
+        }
+      },
+      {
+        "direction": "value_546",
+        "duration": 900,
+        "metric": "value_011",
+        "threshold": {
+          "temperature": {
+            "celsius": 7.0
+          }
+        }
+      },
+      {
+        "duration": 600,
+        "metric": "value_025",
+        "threshold": {
+          "co2": {
+            "quality": "value_544"
+          }
+        }
+      },
+      {
+        "duration": 900,
+        "metric": "value_013",
+        "threshold": {
+          "tvoc": {
+            "quality": "value_544"
+          }
+        }
+      }
+    ],
+    "includeSensorUrl": true,
+    "message": null,
+    "name": "network_name_039",
+    "profileId": "profile_id_001",
+    "recipients": {
+      "emails": [],
+      "httpServerIds": [
+        "httpserver_id_001"
+      ],
+      "smsNumbers": []
+    },
+    "schedule": {
+      "id": null,
+      "name": null
+    },
+    "serials": [
+      "device_004",
+      "device_014",
+      "device_017",
+      "device_013",
+      "device_015",
+      "device_016",
+      "device_005",
+      "device_006",
+      "device_012",
+      "device_010",
+      "device_019",
+      "device_018",
+      "device_008",
+      "device_009",
+      "device_007"
+    ]
+  }
+]

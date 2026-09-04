@@ -76,11 +76,13 @@ class _StubExporter(MetricExporter):
         self.shutdown_called = True
 
 
-def _settings(**metrics: object) -> Settings:
+def _settings(*, resource_attributes: dict[str, str] | None = None, **metrics: object) -> Settings:
     """Build Settings with the given otel.metrics sub-block (api key stubbed)."""
     otel: dict[str, object] = {}
     if metrics:
         otel["metrics"] = metrics
+    if resource_attributes is not None:
+        otel["resource_attributes"] = resource_attributes
     return Settings(meraki={"api_key": "a" * 40}, otel=otel)
 
 
@@ -327,7 +329,11 @@ class TestBridgeLoop:
     async def test_export_resource_matches_build_otel_resource(self) -> None:
         """The pushed resource attributes match ``build_otel_resource``."""
         reg = CollectorRegistry()
-        settings = _settings(enabled=True, endpoint="http://otel:4317")
+        settings = _settings(
+            enabled=True,
+            endpoint="http://otel:4317",
+            resource_attributes={"cloud.region": "eu-west-2", "environment": "staging"},
+        )
         exp = _StubExporter()
         bridge = OTelMetricsBridge(settings, registry=reg, exporter=exp)
 
@@ -336,6 +342,8 @@ class TestBridgeLoop:
         pushed = exp.exported[0].resource_metrics[0].resource
         expected = build_otel_resource(settings)
         assert dict(pushed.attributes) == dict(expected.attributes)
+        assert pushed.attributes["cloud.region"] == "eu-west-2"
+        assert pushed.attributes["deployment.environment"] == "staging"
 
     async def test_export_failure_result_counts_and_never_raises(self) -> None:
         """A FAILURE export result increments the failure counter and never raises."""

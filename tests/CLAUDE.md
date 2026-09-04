@@ -20,13 +20,19 @@ Meraki Dashboard Exporter Test Suite - Comprehensive testing infrastructure with
   - `factories.py` - `DataFactory`, `OrganizationFactory`, `NetworkFactory`, `DeviceFactory` (+ `create_mr`/`create_ms`/`create_mx`/`create_mt`/`create_mixed`), `DeviceStatusFactory`, `AlertFactory`, `SensorDataFactory`, `TimeSeriesFactory`, `ResponseFactory`, `ClientFactory`
   - `mock_api.py` - `MockAPIBuilder` (fluent, builds a `MagicMock` API client) and `MockAsyncIterator`
   - `metrics.py` - `MetricAssertions`, plus `MetricSnapshot`/`MetricDiff` for before/after delta assertions
-- `fixtures/` - holds only `__init__.py` (the former `large_org` scale-fixture plugin was deleted)
-- `unit/` - 57 unit test modules (58 files incl. `__init__.py`) covering core infra and collectors, e.g.:
+- `fixtures/` - deterministic fleet-shape definitions (`fleet.py`) plus the full-runtime
+  measurement entrypoint (`fleet_measurement.py`); retained live-response data belongs under the
+  separate fail-closed harness corpus, not in synthetic fleet fixtures.
+- `harness/` - disposable HTTPS Meraki replay server, corpus manifest/sanitizer, Docker image,
+  runner, and retained provenance-bearing response corpus used for failure and duration observation.
+- `unit/` - the main unit suite (including `unit/collectors/` and `unit/golden/`), covering core
+  infrastructure, collector behavior, static contracts, generators, workflows, and regressions.
   - Collectors: `test_alerts_collector.py`, `test_api_usage_collector.py`, `test_client_overview_collector.py`, `test_clients_collector.py`, `test_clients_collector_enhanced.py`, `test_device_collector.py`, `test_license_collector.py`, `test_mt_collector.py`, `test_mt_collector_factory.py`, `test_mt_alerts_collector.py`, `test_mt_gateway_connections.py`, `test_network_health_collector.py`, `test_org_health.py`, `test_organization_collector.py`, `test_firmware_collector.py`, `test_device_availability_history_collector.py`, `test_config_admins_collector.py`, `test_collection_utilization.py`
-  - Core/infra: `test_api_helpers.py`, `test_api_models.py`, `test_async_edge_cases.py`, `test_async_utils.py`, `test_batch_processing.py`, `test_cache_cleanup.py`, `test_cardinality_controls.py`, `test_collector_base.py`, `test_config_logger.py`, `test_discovery_service.py`, `test_dns_resolver.py`, `test_domain_models.py`, `test_error_scenarios.py`, `test_exception_syntax.py`, `test_exemplars.py`, `test_inventory_cache_improvements.py`, `test_logging_decorators.py`, `test_logging_helpers.py`, `test_main_entrypoint.py`, `test_metrics_constants.py`, `test_otel_tracing.py`, `test_registry.py`, `test_span_metrics.py`, `test_subcollector_mixin.py`, `test_webhook_metrics.py`
+  - Core/infra: `test_api_helpers.py`, `test_api_models.py`, `test_async_edge_cases.py`, `test_async_utils.py`, `test_batch_processing.py`, `test_cache_cleanup.py`, `test_cardinality_controls.py`, `test_collector_base.py`, `test_config_logger.py`, `test_discovery_service.py`, `test_dns_resolver.py`, `test_domain_models.py`, `test_error_scenarios.py`, `test_exception_syntax.py`, `test_exemplars.py`, `test_inventory_cache_improvements.py`, `test_logging_decorators.py`, `test_logging_helpers.py`, `test_main_entrypoint.py`, `test_metrics_constants.py`, `test_otel_tracing.py`, `test_registry.py`, `test_span_metrics.py`, `test_subcollector_mixin.py`
   - Web/app: `test_app_endpoints.py`, `test_app_offload.py`, `test_app_scheduler.py`, `test_app_webhook_size_cap.py`, `test_readiness_endpoint.py`, `test_status_endpoint.py`, `test_status_service.py`, `test_client_store.py`
   - Other infra additions: `test_cardinality_bounded.py`, `test_config_collector.py`, `test_manager_liveness_scheduling.py`, `test_rate_limiter.py`, `test_version.py`
-  - `collectors/` - 17 device-specific collector tests: `test_mr_collector.py`, `test_ms_collector.py`, `test_ms_power_collector.py`, `test_ms_stack_collector.py`, `test_mx_collector.py`, `test_mx_firewall_collector.py`, `test_mx_vpn_collector.py`, `test_mx_ha_collector.py`, `test_mx_uplink_usage_collector.py`, `test_mx_uplink_health_collector.py`, `test_mv_collector.py`, `test_mg_collector.py`, `test_ssid_performance_collector.py`, `test_latency_stats_collector.py`, `test_air_marshal_collector.py`, `test_base_memory_metrics.py`, `test_network_health_rate_limit_scoping.py` (no `__init__.py` in this dir - pytest rootdir-relative discovery still finds it)
+  - `unit/collectors/` - device/domain-specific collector tests, including MR subdomains, MS power
+    and scheduler gates, MX subcollectors, MV/MG, mesh, Air Marshal, latency, and rate-limit scoping.
 - `integration/` - Integration tests:
   - `test_collection_cycle.py`
   - `test_collector_manager_integration.py`

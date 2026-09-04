@@ -7,6 +7,7 @@ import ipaddress
 import socket
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import cast
 
@@ -16,6 +17,9 @@ from ..core.async_utils import AsyncRetry, shutdown_executor
 from ..core.config import Settings
 
 logger = structlog.get_logger(__name__)
+_resolution_generation: ContextVar[int | None] = ContextVar(
+    "dns_resolution_generation", default=None
+)
 
 
 @dataclass
@@ -93,6 +97,7 @@ class DNSResolver:
         # its backlog measurement after a newer one has finished.
         self._next_resolution_batch_id = 0
         self._last_published_batch_id = 0
+        self._cache_generation = 0
         self._closed = False
         self._close_lock = asyncio.Lock()
         self._executor_drained: bool | None = None
@@ -189,6 +194,12 @@ class DNSResolver:
         if not ip:
             return None
 
+        generation = _resolution_generation.get()
+        if generation is None:
+            generation = self._cache_generation
+        if generation != self._cache_generation:
+            return None
+
         self._stats["total_lookups"] += 1
 
         # Check cache first
@@ -225,6 +236,8 @@ class DNSResolver:
             lambda: self._perform_lookup(ip),
             operation="reverse DNS lookup",
         )
+        if generation != self._cache_generation:
+            return None
         self._total_resolution_time += time.perf_counter() - lookup_start
 
         # Keep compatibility with tests and integrations that replace the
@@ -238,14 +251,20 @@ class DNSResolver:
 
         # Track success/failure
         if hostname:
+            if generation != self._cache_generation:
+                return None
             self._stats["successful_lookups"] += 1
             # Extract short hostname (remove domain)
             hostname = hostname.split(".")[0]
         elif timed_out:
             # Deadline expiry is not a resolver failure. Keep the two existing
             # bounded outcome counters mutually exclusive.
+            if generation != self._cache_generation:
+                return None
             self._stats["lookup_timeouts"] += 1
         else:
+            if generation != self._cache_generation:
+                return None
             self._stats["failed_lookups"] += 1
 
         # Cache the result
@@ -256,11 +275,12 @@ class DNSResolver:
                 timestamp=time.time(),
                 client_id=client_id,
             ),
+            generation=generation,
         )
 
         return hostname
 
-    def _cache_put(self, ip: str, entry: CacheEntry) -> None:
+    def _cache_put(self, ip: str, entry: CacheEntry, *, generation: int | None = None) -> None:
         """Insert a cache entry and enforce the size bound (#543).
 
         Parameters
@@ -269,8 +289,13 @@ class DNSResolver:
             IP address key.
         entry : CacheEntry
             Cache entry to store.
+        generation : int | None
+            Resolution generation that owns the entry. ``None`` uses the current
+            generation for callers that insert entries directly.
 
         """
+        if generation is not None and generation != self._cache_generation:
+            return
         self._cache[ip] = entry
         if len(self._cache) > self.max_cache_entries:
             self._prune_cache()
@@ -395,6 +420,8 @@ class DNSResolver:
             logger.debug("Reverse DNS lookups are disabled")
             return {}
 
+        generation = self._cache_generation
+
         # Track client changes and filter IPs to resolve
         ips_to_resolve = []
         for client_id, ip, description in clients:
@@ -442,9 +469,14 @@ class DNSResolver:
                     if item is None:
                         return
                     client_id, ip, enqueued_at = item
-                    self._stats["queue_wait_seconds"] += time.perf_counter() - enqueued_at
-                    self._stats["queue_wait_count"] += 1
-                    results.append((ip, await self.resolve_hostname(ip, client_id)))
+                    if generation == self._cache_generation:
+                        self._stats["queue_wait_seconds"] += time.perf_counter() - enqueued_at
+                        self._stats["queue_wait_count"] += 1
+                    generation_token = _resolution_generation.set(generation)
+                    try:
+                        results.append((ip, await self.resolve_hostname(ip, client_id)))
+                    finally:
+                        _resolution_generation.reset(generation_token)
                 except Exception as exc:
                     results.append(exc)
                 finally:
@@ -457,9 +489,12 @@ class DNSResolver:
         # Publish the most recently started completed batch only. An older
         # overlapping batch may finish later, but it must not reset the newer
         # batch's measurement.
-        if batch_id >= self._last_published_batch_id:
+        if generation == self._cache_generation and batch_id >= self._last_published_batch_id:
             self._stats["queue_peak_depth"] = batch_peak_backlog
             self._last_published_batch_id = batch_id
+
+        if generation != self._cache_generation:
+            return {}
 
         # Build result dictionary
         resolved = {}
@@ -498,6 +533,7 @@ class DNSResolver:
 
     def clear_cache(self) -> None:
         """Clear the DNS cache."""
+        self._cache_generation += 1
         old_size = len(self._cache)
         self._cache.clear()
         self._client_tracking.clear()

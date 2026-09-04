@@ -285,6 +285,8 @@ def solve_intervals(
         if raw is None:
             continue
         value = float(raw)
+        if value <= 0:
+            raise ValueError(f"Endpoint group interval override must be positive: {g.name}")
         if value < g.floor_seconds:
             logger.warning(
                 "Endpoint group pinned below its volatility floor; honouring pin",
@@ -752,8 +754,9 @@ class EndpointScheduler:
         Load-bearing for liveness (3× this). Falls back to
         ``resolve_interval_seconds`` when no groups are registered.
         """
-        if self._groups:
-            return min(self.interval_for(name) for name in self._groups)
+        admissible = [name for name in self._groups if self.is_enabled(name)]
+        if admissible:
+            return min(self.interval_for(name) for name in admissible)
         return float(self._sched("resolve_interval_seconds"))
 
     # -- AIMD hysteresis ---------------------------------------------------------

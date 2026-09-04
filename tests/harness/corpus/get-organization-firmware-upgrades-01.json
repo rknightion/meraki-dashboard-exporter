@@ -1,0 +1,2238 @@
+[
+  {
+    "completedAt": "value_342",
+    "fromVersion": {
+      "firmware": "switch-15-12-1",
+      "id": "org_003",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_346"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "switch-15-14",
+      "id": "org_002",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_344"
+    },
+    "upgradeBatchId": "upgradebatch_id_001",
+    "upgradeId": "upgrade_id_001"
+  },
+  {
+    "completedAt": "value_347",
+    "fromVersion": {
+      "firmware": "wireless-28-6-1",
+      "id": "org_005",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_349"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (9a85111)",
+      "id": "org_004",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_348"
+    },
+    "upgradeBatchId": "upgradebatch_id_002",
+    "upgradeId": "upgrade_id_002"
+  },
+  {
+    "completedAt": "value_350",
+    "fromVersion": {
+      "firmware": "switch-15-14",
+      "id": "org_002",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_344"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "switch-15-14-1",
+      "id": "org_006",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_351"
+    },
+    "upgradeBatchId": "upgradebatch_id_003",
+    "upgradeId": "upgrade_id_003"
+  },
+  {
+    "completedAt": "value_352",
+    "fromVersion": {
+      "firmware": "switch-15-14-1",
+      "id": "org_006",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_351"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "switch-15-14-2",
+      "id": "org_007",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_353"
+    },
+    "upgradeBatchId": "upgradebatch_id_004",
+    "upgradeId": "upgrade_id_004"
+  },
+  {
+    "completedAt": "value_354",
+    "fromVersion": {
+      "firmware": "Custom version (9a85111)",
+      "id": "org_004",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_348"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-29-1",
+      "id": "org_008",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_355"
+    },
+    "upgradeBatchId": "upgradebatch_id_005",
+    "upgradeId": "upgrade_id_005"
+  },
+  {
+    "completedAt": "value_356",
+    "fromVersion": {
+      "firmware": "wireless-29-1",
+      "id": "org_008",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_355"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-29-2",
+      "id": "org_009",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_357"
+    },
+    "upgradeBatchId": "upgradebatch_id_006",
+    "upgradeId": "upgrade_id_006"
+  },
+  {
+    "completedAt": "value_358",
+    "fromVersion": {
+      "firmware": "wireless-29-2",
+      "id": "org_009",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_357"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-29-3",
+      "id": "org_010",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_359"
+    },
+    "upgradeBatchId": "upgradebatch_id_007",
+    "upgradeId": "upgrade_id_007"
+  },
+  {
+    "completedAt": "value_360",
+    "fromVersion": {
+      "firmware": "wireless-29-3",
+      "id": "org_010",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_359"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-29-4",
+      "id": "org_011",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_361"
+    },
+    "upgradeBatchId": "upgradebatch_id_008",
+    "upgradeId": "upgrade_id_008"
+  },
+  {
+    "completedAt": null,
+    "fromVersion": {
+      "firmware": "wireless-29-4",
+      "id": "org_011",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_361"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Canceled",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-29-4-1",
+      "id": "org_012",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_362"
+    },
+    "upgradeBatchId": "upgradebatch_id_009",
+    "upgradeId": "upgrade_id_009"
+  },
+  {
+    "completedAt": "value_363",
+    "fromVersion": {
+      "firmware": "wireless-29-4",
+      "id": "org_011",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_361"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-29-4-1",
+      "id": "org_012",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_362"
+    },
+    "upgradeBatchId": "upgradebatch_id_010",
+    "upgradeId": "upgrade_id_010"
+  },
+  {
+    "completedAt": "value_364",
+    "fromVersion": {
+      "firmware": "switch-15-14-2",
+      "id": "org_007",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_353"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "switch-15-17",
+      "id": "org_013",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_365"
+    },
+    "upgradeBatchId": "upgradebatch_id_011",
+    "upgradeId": "upgrade_id_011"
+  },
+  {
+    "completedAt": "value_366",
+    "fromVersion": {
+      "firmware": "wireless-29-4-1",
+      "id": "org_012",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_362"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-29-5",
+      "id": "org_014",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_367"
+    },
+    "upgradeBatchId": "upgradebatch_id_012",
+    "upgradeId": "upgrade_id_012"
+  },
+  {
+    "completedAt": "value_368",
+    "fromVersion": {
+      "firmware": "switch-15-17",
+      "id": "org_013",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_365"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "switch-15-18",
+      "id": "org_015",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_369"
+    },
+    "upgradeBatchId": "upgradebatch_id_013",
+    "upgradeId": "upgrade_id_013"
+  },
+  {
+    "completedAt": "value_370",
+    "fromVersion": {
+      "firmware": "wireless-29-5",
+      "id": "org_014",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_367"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-29-5-1",
+      "id": "org_016",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_371"
+    },
+    "upgradeBatchId": "upgradebatch_id_014",
+    "upgradeId": "upgrade_id_014"
+  },
+  {
+    "completedAt": "value_372",
+    "fromVersion": {
+      "firmware": "switch-15-18",
+      "id": "org_015",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_369"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "switch-15-19",
+      "id": "org_017",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_373"
+    },
+    "upgradeBatchId": "upgradebatch_id_015",
+    "upgradeId": "upgrade_id_015"
+  },
+  {
+    "completedAt": "value_374",
+    "fromVersion": {
+      "firmware": "mt-1-4",
+      "id": "org_019",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_376"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "sensor",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "mt-1-4-1",
+      "id": "org_018",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_375"
+    },
+    "upgradeBatchId": "upgradebatch_id_016",
+    "upgradeId": "upgrade_id_016"
+  },
+  {
+    "completedAt": "value_377",
+    "fromVersion": {
+      "firmware": "switch-15-19",
+      "id": "org_017",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_373"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "switch-15-21-1",
+      "id": "org_020",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_378"
+    },
+    "upgradeBatchId": "upgradebatch_id_017",
+    "upgradeId": "upgrade_id_017"
+  },
+  {
+    "completedAt": "value_379",
+    "fromVersion": {
+      "firmware": "switch-15-19",
+      "id": "org_017",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_373"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "switch-15-21-1",
+      "id": "org_020",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_378"
+    },
+    "upgradeBatchId": "upgradebatch_id_017",
+    "upgradeId": "upgrade_id_018"
+  },
+  {
+    "completedAt": "value_380",
+    "fromVersion": {
+      "firmware": "switch-15-19",
+      "id": "org_017",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_373"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "switch-15-21-1",
+      "id": "org_020",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_378"
+    },
+    "upgradeBatchId": "upgradebatch_id_017",
+    "upgradeId": "upgrade_id_019"
+  },
+  {
+    "completedAt": "value_381",
+    "fromVersion": {
+      "firmware": "wireless-29-5-1",
+      "id": "org_016",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_371"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-30-1",
+      "id": "org_021",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_382"
+    },
+    "upgradeBatchId": "upgradebatch_id_018",
+    "upgradeId": "upgrade_id_020"
+  },
+  {
+    "completedAt": "value_383",
+    "fromVersion": {
+      "firmware": "switch-15-21-1",
+      "id": "org_020",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_378"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (a6cefa4)",
+      "id": "org_022",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_384"
+    },
+    "upgradeBatchId": "upgradebatch_id_019",
+    "upgradeId": "upgrade_id_021"
+  },
+  {
+    "completedAt": "value_385",
+    "fromVersion": {
+      "firmware": "wireless-30-1",
+      "id": "org_021",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_382"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-30-2",
+      "id": "org_023",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_386"
+    },
+    "upgradeBatchId": "upgradebatch_id_020",
+    "upgradeId": "upgrade_id_022"
+  },
+  {
+    "completedAt": "value_387",
+    "fromVersion": {
+      "firmware": "wireless-30-2",
+      "id": "org_023",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_386"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-30-3",
+      "id": "org_024",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_388"
+    },
+    "upgradeBatchId": "upgradebatch_id_021",
+    "upgradeId": "upgrade_id_023"
+  },
+  {
+    "completedAt": "value_389",
+    "fromVersion": {
+      "firmware": "wireless-30-3",
+      "id": "org_024",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_388"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-30-4",
+      "id": "org_025",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_390"
+    },
+    "upgradeBatchId": "upgradebatch_id_022",
+    "upgradeId": "upgrade_id_024"
+  },
+  {
+    "completedAt": null,
+    "fromVersion": {
+      "firmware": "Custom version (a6cefa4)",
+      "id": "org_022",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_384"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Canceled",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (833093f)",
+      "id": "org_026",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_391"
+    },
+    "upgradeBatchId": "upgradebatch_id_023",
+    "upgradeId": "upgrade_id_025"
+  },
+  {
+    "completedAt": "value_392",
+    "fromVersion": {
+      "firmware": "Custom version (a6cefa4)",
+      "id": "org_022",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_384"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (833093f)",
+      "id": "org_026",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_391"
+    },
+    "upgradeBatchId": "upgradebatch_id_024",
+    "upgradeId": "upgrade_id_026"
+  },
+  {
+    "completedAt": "value_393",
+    "fromVersion": {
+      "firmware": "Custom version (a6cefa4)",
+      "id": "org_022",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_384"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (833093f)",
+      "id": "org_026",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_391"
+    },
+    "upgradeBatchId": "upgradebatch_id_024",
+    "upgradeId": "upgrade_id_027"
+  },
+  {
+    "completedAt": "value_394",
+    "fromVersion": {
+      "firmware": "Custom version (a6cefa4)",
+      "id": "org_022",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_384"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (833093f)",
+      "id": "org_026",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_391"
+    },
+    "upgradeBatchId": "upgradebatch_id_024",
+    "upgradeId": "upgrade_id_028"
+  },
+  {
+    "completedAt": "value_395",
+    "fromVersion": {
+      "firmware": "wireless-30-4",
+      "id": "org_025",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_390"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-30-5",
+      "id": "org_027",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_396"
+    },
+    "upgradeBatchId": "upgradebatch_id_025",
+    "upgradeId": "upgrade_id_029"
+  },
+  {
+    "completedAt": "value_397",
+    "fromVersion": {
+      "firmware": "mt-1-4-1",
+      "id": "org_018",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_375"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "sensor",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "mt-1-5",
+      "id": "org_028",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_398"
+    },
+    "upgradeBatchId": "upgradebatch_id_026",
+    "upgradeId": "upgrade_id_030"
+  },
+  {
+    "completedAt": "value_399",
+    "fromVersion": {
+      "firmware": "Custom version (833093f)",
+      "id": "org_026",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_391"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (e66bb2a)",
+      "id": "org_029",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_400"
+    },
+    "upgradeBatchId": "upgradebatch_id_027",
+    "upgradeId": "upgrade_id_031"
+  },
+  {
+    "completedAt": "value_401",
+    "fromVersion": {
+      "firmware": "wireless-30-5",
+      "id": "org_027",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_396"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-30-5-1",
+      "id": "org_030",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_402"
+    },
+    "upgradeBatchId": "upgradebatch_id_028",
+    "upgradeId": "upgrade_id_032"
+  },
+  {
+    "completedAt": "value_403",
+    "fromVersion": {
+      "firmware": "Custom version (e66bb2a)",
+      "id": "org_029",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_400"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (5b81699)",
+      "id": "org_031",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_404"
+    },
+    "upgradeBatchId": "upgradebatch_id_029",
+    "upgradeId": "upgrade_id_033"
+  },
+  {
+    "completedAt": "value_405",
+    "fromVersion": {
+      "firmware": "mt-1-5",
+      "id": "org_028",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_398"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "sensor",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "mt-1-6",
+      "id": "org_032",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_406"
+    },
+    "upgradeBatchId": "upgradebatch_id_030",
+    "upgradeId": "upgrade_id_034"
+  },
+  {
+    "completedAt": "value_407",
+    "fromVersion": {
+      "firmware": "wireless-30-5-1",
+      "id": "org_030",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_402"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-30-6",
+      "id": "org_033",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_408"
+    },
+    "upgradeBatchId": "upgradebatch_id_031",
+    "upgradeId": "upgrade_id_035"
+  },
+  {
+    "completedAt": "value_409",
+    "fromVersion": {
+      "firmware": "Custom version (5b81699)",
+      "id": "org_031",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_404"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (0ef3a75)",
+      "id": "org_034",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_410"
+    },
+    "upgradeBatchId": "upgradebatch_id_032",
+    "upgradeId": "upgrade_id_036"
+  },
+  {
+    "completedAt": null,
+    "fromVersion": {
+      "firmware": "mt-1-6",
+      "id": "org_032",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_406"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "sensor",
+    "status": "Canceled",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "mt-2-0",
+      "id": "org_035",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_411"
+    },
+    "upgradeBatchId": "upgradebatch_id_033",
+    "upgradeId": "upgrade_id_037"
+  },
+  {
+    "completedAt": "value_412",
+    "fromVersion": {
+      "firmware": "mt-1-6",
+      "id": "org_032",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_406"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "sensor",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "mt-2-0",
+      "id": "org_035",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_411"
+    },
+    "upgradeBatchId": "upgradebatch_id_034",
+    "upgradeId": "upgrade_id_038"
+  },
+  {
+    "completedAt": null,
+    "fromVersion": {
+      "firmware": "Custom version (0ef3a75)",
+      "id": "org_034",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_410"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Canceled",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (68e33b7)",
+      "id": "org_036",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_413"
+    },
+    "upgradeBatchId": "upgradebatch_id_035",
+    "upgradeId": "upgrade_id_039"
+  },
+  {
+    "completedAt": "value_414",
+    "fromVersion": {
+      "firmware": "Custom version (0ef3a75)",
+      "id": "org_034",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_410"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (68e33b7)",
+      "id": "org_036",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_413"
+    },
+    "upgradeBatchId": "upgradebatch_id_036",
+    "upgradeId": "upgrade_id_040"
+  },
+  {
+    "completedAt": "value_415",
+    "fromVersion": {
+      "firmware": "Custom version (0ef3a75)",
+      "id": "org_034",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_410"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (68e33b7)",
+      "id": "org_036",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_413"
+    },
+    "upgradeBatchId": "upgradebatch_id_036",
+    "upgradeId": "upgrade_id_041"
+  },
+  {
+    "completedAt": "value_416",
+    "fromVersion": {
+      "firmware": "Custom version (0ef3a75)",
+      "id": "org_034",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_410"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (68e33b7)",
+      "id": "org_036",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_413"
+    },
+    "upgradeBatchId": "upgradebatch_id_036",
+    "upgradeId": "upgrade_id_042"
+  },
+  {
+    "completedAt": "value_417",
+    "fromVersion": {
+      "firmware": "wireless-30-6",
+      "id": "org_033",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_408"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-31-1-2",
+      "id": "org_037",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_418"
+    },
+    "upgradeBatchId": "upgradebatch_id_037",
+    "upgradeId": "upgrade_id_043"
+  },
+  {
+    "completedAt": "value_419",
+    "fromVersion": {
+      "firmware": "Custom version (68e33b7)",
+      "id": "org_036",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_413"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (54d2f3a)",
+      "id": "org_038",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_420"
+    },
+    "upgradeBatchId": "upgradebatch_id_038",
+    "upgradeId": "upgrade_id_044"
+  },
+  {
+    "completedAt": "value_421",
+    "fromVersion": {
+      "firmware": "wireless-31-1-2",
+      "id": "org_037",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_418"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-31-1-3",
+      "id": "org_039",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_422"
+    },
+    "upgradeBatchId": "upgradebatch_id_039",
+    "upgradeId": "upgrade_id_045"
+  },
+  {
+    "completedAt": "value_423",
+    "fromVersion": {
+      "firmware": "mt-2-0",
+      "id": "org_035",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_343",
+      "shortName": "value_411"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "sensor",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "mt-2-0-1",
+      "id": "org_040",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_010"
+    },
+    "upgradeBatchId": "upgradebatch_id_040",
+    "upgradeId": "upgrade_id_046"
+  },
+  {
+    "completedAt": "value_424",
+    "fromVersion": {
+      "firmware": "wireless-31-1-3",
+      "id": "org_039",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_422"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-31-1-4",
+      "id": "org_041",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_425"
+    },
+    "upgradeBatchId": "upgradebatch_id_041",
+    "upgradeId": "upgrade_id_047"
+  },
+  {
+    "completedAt": "value_426",
+    "fromVersion": {
+      "firmware": "Custom version (54d2f3a)",
+      "id": "org_038",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_420"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (18d217d)",
+      "id": "org_042",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_427"
+    },
+    "upgradeBatchId": "upgradebatch_id_042",
+    "upgradeId": "upgrade_id_048"
+  },
+  {
+    "completedAt": null,
+    "fromVersion": {
+      "firmware": "wireless-31-1-4",
+      "id": "org_041",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_425"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Canceled",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-31-1-5",
+      "id": "org_043",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_428"
+    },
+    "upgradeBatchId": "upgradebatch_id_043",
+    "upgradeId": "upgrade_id_049"
+  },
+  {
+    "completedAt": null,
+    "fromVersion": {
+      "firmware": "wireless-31-1-4",
+      "id": "org_041",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_425"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Canceled",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-31-1-5",
+      "id": "org_044",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_429"
+    },
+    "upgradeBatchId": "upgradebatch_id_044",
+    "upgradeId": "upgrade_id_050"
+  },
+  {
+    "completedAt": "value_430",
+    "fromVersion": {
+      "firmware": "wireless-31-1-4",
+      "id": "org_041",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_425"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-31-1-5",
+      "id": "org_044",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_429"
+    },
+    "upgradeBatchId": "upgradebatch_id_045",
+    "upgradeId": "upgrade_id_051"
+  },
+  {
+    "completedAt": "value_431",
+    "fromVersion": {
+      "firmware": "Custom version (18d217d)",
+      "id": "org_042",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_427"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (eeae19e)",
+      "id": "org_045",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_432"
+    },
+    "upgradeBatchId": "upgradebatch_id_046",
+    "upgradeId": "upgrade_id_052"
+  },
+  {
+    "completedAt": "value_433",
+    "fromVersion": {
+      "firmware": "wireless-31-1-5",
+      "id": "org_044",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_429"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-31-1-6",
+      "id": "org_046",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_434"
+    },
+    "upgradeBatchId": "upgradebatch_id_047",
+    "upgradeId": "upgrade_id_053"
+  },
+  {
+    "completedAt": "value_435",
+    "fromVersion": {
+      "firmware": "wireless-31-1-6",
+      "id": "org_046",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_434"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-32-1-1",
+      "id": "org_047",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_436"
+    },
+    "upgradeBatchId": "upgradebatch_id_048",
+    "upgradeId": "upgrade_id_054"
+  },
+  {
+    "completedAt": "value_435",
+    "fromVersion": {
+      "firmware": "Custom version (eeae19e)",
+      "id": "org_045",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_432"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (1811c15)",
+      "id": "org_048",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_437"
+    },
+    "upgradeBatchId": "upgradebatch_id_049",
+    "upgradeId": "upgrade_id_055"
+  },
+  {
+    "completedAt": "value_438",
+    "fromVersion": {
+      "firmware": "Custom version (1811c15)",
+      "id": "org_048",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_437"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (2f5ade5)",
+      "id": "org_049",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_439"
+    },
+    "upgradeBatchId": "upgradebatch_id_050",
+    "upgradeId": "upgrade_id_056"
+  },
+  {
+    "completedAt": "value_440",
+    "fromVersion": {
+      "firmware": "wireless-32-1-1",
+      "id": "org_047",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_436"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-32-1-2",
+      "id": "org_050",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_441"
+    },
+    "upgradeBatchId": "upgradebatch_id_051",
+    "upgradeId": "upgrade_id_057"
+  },
+  {
+    "completedAt": null,
+    "fromVersion": {
+      "firmware": "Custom version (2f5ade5)",
+      "id": "org_049",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_439"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Canceled",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (722bacf)",
+      "id": "org_051",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_442"
+    },
+    "upgradeBatchId": "upgradebatch_id_052",
+    "upgradeId": "upgrade_id_058"
+  },
+  {
+    "completedAt": "value_443",
+    "fromVersion": {
+      "firmware": "Custom version (2f5ade5)",
+      "id": "org_049",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_439"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (722bacf)",
+      "id": "org_051",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_442"
+    },
+    "upgradeBatchId": "upgradebatch_id_053",
+    "upgradeId": "upgrade_id_059"
+  },
+  {
+    "completedAt": "value_444",
+    "fromVersion": {
+      "firmware": "Custom version (2f5ade5)",
+      "id": "org_049",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_439"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (722bacf)",
+      "id": "org_051",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_442"
+    },
+    "upgradeBatchId": "upgradebatch_id_053",
+    "upgradeId": "upgrade_id_060"
+  },
+  {
+    "completedAt": "value_445",
+    "fromVersion": {
+      "firmware": "Custom version (2f5ade5)",
+      "id": "org_049",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_439"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (722bacf)",
+      "id": "org_051",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_442"
+    },
+    "upgradeBatchId": "upgradebatch_id_053",
+    "upgradeId": "upgrade_id_061"
+  },
+  {
+    "completedAt": "value_446",
+    "fromVersion": {
+      "firmware": "Custom version (2f5ade5)",
+      "id": "org_049",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_439"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (722bacf)",
+      "id": "org_051",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_442"
+    },
+    "upgradeBatchId": "upgradebatch_id_053",
+    "upgradeId": "upgrade_id_062"
+  },
+  {
+    "completedAt": null,
+    "fromVersion": {
+      "firmware": "wireless-32-1-2",
+      "id": "org_050",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_441"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Canceled",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-32-1-3",
+      "id": "org_052",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_447"
+    },
+    "upgradeBatchId": "upgradebatch_id_054",
+    "upgradeId": "upgrade_id_063"
+  },
+  {
+    "completedAt": "value_448",
+    "fromVersion": {
+      "firmware": "wireless-32-1-2",
+      "id": "org_050",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_441"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-32-1-3",
+      "id": "org_052",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_447"
+    },
+    "upgradeBatchId": "upgradebatch_id_055",
+    "upgradeId": "upgrade_id_064"
+  },
+  {
+    "completedAt": "value_449",
+    "fromVersion": {
+      "firmware": "Custom version (722bacf)",
+      "id": "org_051",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_442"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (4746089)",
+      "id": "org_053",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_450"
+    },
+    "upgradeBatchId": "upgradebatch_id_056",
+    "upgradeId": "upgrade_id_065"
+  },
+  {
+    "completedAt": "value_451",
+    "fromVersion": {
+      "firmware": "wireless-32-1-3",
+      "id": "org_052",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_447"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-31-1-8",
+      "id": "org_054",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_452"
+    },
+    "upgradeBatchId": "upgradebatch_id_057",
+    "upgradeId": "upgrade_id_066"
+  },
+  {
+    "completedAt": "value_453",
+    "fromVersion": {
+      "firmware": "wireless-31-1-8",
+      "id": "org_054",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_452"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-32-1-4",
+      "id": "org_055",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_454"
+    },
+    "upgradeBatchId": "upgradebatch_id_058",
+    "upgradeId": "upgrade_id_067"
+  },
+  {
+    "completedAt": "value_455",
+    "fromVersion": {
+      "firmware": "Custom version (4746089)",
+      "id": "org_053",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_450"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (3bb3ef4)",
+      "id": "org_056",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_456"
+    },
+    "upgradeBatchId": "upgradebatch_id_059",
+    "upgradeId": "upgrade_id_068"
+  },
+  {
+    "completedAt": "value_457",
+    "fromVersion": {
+      "firmware": "Custom version (3bb3ef4)",
+      "id": "org_056",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_456"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (9d1338a)",
+      "id": "org_057",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_458"
+    },
+    "upgradeBatchId": "upgradebatch_id_060",
+    "upgradeId": "upgrade_id_069"
+  },
+  {
+    "completedAt": null,
+    "fromVersion": {
+      "firmware": "wireless-32-1-4",
+      "id": "org_055",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_454"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Canceled",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-32-1-5",
+      "id": "org_058",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_459"
+    },
+    "upgradeBatchId": "upgradebatch_id_061",
+    "upgradeId": "upgrade_id_070"
+  },
+  {
+    "completedAt": "value_460",
+    "fromVersion": {
+      "firmware": "wireless-32-1-4",
+      "id": "org_055",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_454"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-32-1-5",
+      "id": "org_058",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_459"
+    },
+    "upgradeBatchId": "upgradebatch_id_062",
+    "upgradeId": "upgrade_id_071"
+  },
+  {
+    "completedAt": "value_461",
+    "fromVersion": {
+      "firmware": "Custom version (9d1338a)",
+      "id": "org_057",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_458"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (1395a7f)",
+      "id": "org_059",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_462"
+    },
+    "upgradeBatchId": "upgradebatch_id_063",
+    "upgradeId": "upgrade_id_072"
+  },
+  {
+    "completedAt": "value_463",
+    "fromVersion": {
+      "firmware": "Custom version (1395a7f)",
+      "id": "org_059",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_462"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (5085e68)",
+      "id": "org_060",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_464"
+    },
+    "upgradeBatchId": "upgradebatch_id_064",
+    "upgradeId": "upgrade_id_073"
+  },
+  {
+    "completedAt": "value_463",
+    "fromVersion": {
+      "firmware": "wireless-32-1-5",
+      "id": "org_058",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_459"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-32-2-1",
+      "id": "org_061",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_465"
+    },
+    "upgradeBatchId": "upgradebatch_id_065",
+    "upgradeId": "upgrade_id_074"
+  },
+  {
+    "completedAt": null,
+    "fromVersion": {
+      "firmware": "wireless-32-2-1",
+      "id": "org_061",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_465"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Canceled",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-32-2-2",
+      "id": "org_062",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_466"
+    },
+    "upgradeBatchId": "upgradebatch_id_066",
+    "upgradeId": "upgrade_id_075"
+  },
+  {
+    "completedAt": "value_467",
+    "fromVersion": {
+      "firmware": "Custom version (5085e68)",
+      "id": "org_060",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_464"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (23fdaf5)",
+      "id": "org_063",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_468"
+    },
+    "upgradeBatchId": "upgradebatch_id_067",
+    "upgradeId": "upgrade_id_076"
+  },
+  {
+    "completedAt": "value_469",
+    "fromVersion": {
+      "firmware": "wireless-32-2-1",
+      "id": "org_061",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_465"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-32-2-2",
+      "id": "org_062",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_466"
+    },
+    "upgradeBatchId": "upgradebatch_id_068",
+    "upgradeId": "upgrade_id_077"
+  },
+  {
+    "completedAt": null,
+    "fromVersion": {
+      "firmware": "wireless-32-2-2",
+      "id": "org_062",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_466"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Canceled",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-32-2-3",
+      "id": "org_064",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_470"
+    },
+    "upgradeBatchId": "upgradebatch_id_069",
+    "upgradeId": "upgrade_id_078"
+  },
+  {
+    "completedAt": "value_471",
+    "fromVersion": {
+      "firmware": "wireless-32-2-2",
+      "id": "org_062",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_466"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-32-2-3",
+      "id": "org_064",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_470"
+    },
+    "upgradeBatchId": "upgradebatch_id_070",
+    "upgradeId": "upgrade_id_079"
+  },
+  {
+    "completedAt": "value_472",
+    "fromVersion": {
+      "firmware": "Custom version (23fdaf5)",
+      "id": "org_063",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_468"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (227b498)",
+      "id": "org_065",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_473"
+    },
+    "upgradeBatchId": "upgradebatch_id_071",
+    "upgradeId": "upgrade_id_080"
+  },
+  {
+    "completedAt": "value_474",
+    "fromVersion": {
+      "firmware": "wireless-32-2-3",
+      "id": "org_064",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_470"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-33-1-1",
+      "id": "org_066",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_475"
+    },
+    "upgradeBatchId": "upgradebatch_id_072",
+    "upgradeId": "upgrade_id_081"
+  },
+  {
+    "completedAt": "value_476",
+    "fromVersion": {
+      "firmware": "Custom version (227b498)",
+      "id": "org_065",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_473"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (0258605)",
+      "id": "org_067",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_477"
+    },
+    "upgradeBatchId": "upgradebatch_id_073",
+    "upgradeId": "upgrade_id_082"
+  },
+  {
+    "completedAt": "value_478",
+    "fromVersion": {
+      "firmware": "Custom version (227b498)",
+      "id": "org_065",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_473"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (0258605)",
+      "id": "org_067",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_477"
+    },
+    "upgradeBatchId": "upgradebatch_id_073",
+    "upgradeId": "upgrade_id_083"
+  },
+  {
+    "completedAt": "value_479",
+    "fromVersion": {
+      "firmware": "Custom version (227b498)",
+      "id": "org_065",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_473"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "switch",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "Custom version (0258605)",
+      "id": "org_067",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_477"
+    },
+    "upgradeBatchId": "upgradebatch_id_073",
+    "upgradeId": "upgrade_id_084"
+  },
+  {
+    "completedAt": "value_480",
+    "fromVersion": {
+      "firmware": "wireless-33-1-1",
+      "id": "org_066",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_475"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-33-1-2",
+      "id": "org_068",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_481"
+    },
+    "upgradeBatchId": "upgradebatch_id_074",
+    "upgradeId": "upgrade_id_085"
+  },
+  {
+    "completedAt": "value_482",
+    "fromVersion": {
+      "firmware": "wireless-33-1-2",
+      "id": "org_068",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_345",
+      "shortName": "value_481"
+    },
+    "network": {
+      "id": "network_001",
+      "name": "org_name_004"
+    },
+    "productTypes": "wireless",
+    "status": "Completed",
+    "time": "2026-01-01T00:00:00Z",
+    "toVersion": {
+      "firmware": "wireless-33-1-3",
+      "id": "org_069",
+      "releaseDate": "2026-01-01T00:00:00Z",
+      "releaseType": "value_483",
+      "shortName": "value_007"
+    },
+    "upgradeBatchId": "upgradebatch_id_075",
+    "upgradeId": "upgrade_id_086"
+  }
+]

@@ -177,6 +177,9 @@ def log_startup_summary(
     settings: Settings,
     discovery_summary: dict[str, Any] | None = None,
     scheduling: dict[str, Any] | None = None,
+    *,
+    active_collector_names: list[str] | None = None,
+    disabled_collector_names: list[str] | None = None,
 ) -> None:
     """Log a one-time startup summary with config + discovery context.
 
@@ -303,10 +306,22 @@ def log_startup_summary(
     else:
         log_method("  Organization Filter", value="None (all organizations)")
 
+    # settings.collectors.active_collectors is only the name allow/deny list; it
+    # cannot see a per-collector collect_* flag, so a disabled collector used to
+    # print here as enabled (MDE-0067). The caller supplies what actually runs.
     log_method(
         "  Enabled Collectors",
-        collectors=sorted(settings.collectors.active_collectors),
+        collectors=sorted(
+            active_collector_names
+            if active_collector_names is not None
+            else settings.collectors.active_collectors
+        ),
     )
+    if disabled_collector_names:
+        log_method(
+            "  Disabled Collectors",
+            collectors=sorted(disabled_collector_names),
+        )
 
     # Discovery summary
     if discovery_summary:

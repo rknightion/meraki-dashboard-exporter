@@ -31,22 +31,18 @@ competing set of metrics. Therefore:
 
 ## Resource sizing
 
-Memory scales with metric cardinality, which scales with device/network count — it is **not** a
-fixed value. The defaults (256Mi request / 512Mi limit) are sized for a **small** deployment only
-(~100 devices / ~10 networks). The old "512Mi is enough" guidance is wrong at scale and will
-OOMKill the pod. Rough single-org tiers (clients collector off):
+Memory scales with metric cardinality, which scales with device/network count. It is **not** a
+fixed fleet-size value.
 
-| Scale  | Devices / networks   | requests        | limits          |
-|--------|----------------------|-----------------|-----------------|
-| Small  | ~100 / ~10           | 100m / 256Mi    | 500m / 512Mi    |
-| Medium | ~1,000 / ~50         | 250m / 512Mi    | 1 / 1Gi         |
-| Large  | ~5,000 / ~500        | 500m / 1.5Gi    | 2 / 3Gi+        |
+**Evidence label: BOOTABLE DEFAULT - NOT A REPRESENTATIVE SIZING MEASUREMENT.** The unchanged
+defaults are 100m / 256Mi requests and 500m / 512Mi limits. They are a bootable starting point,
+not a supported scale tier. Set requests and limits from a representative measurement with its
+topology, enabled collectors, cardinality, and observed RSS recorded; retain headroom for normal
+variation. Enabling the clients collector increases cardinality and memory substantially.
 
-At Large, aggregate API demand also exceeds the per-org budget (~178% of 10 req/s) — use
-`NetworkFilter` and interval tuning; more memory does not fix rate-limit starvation. Set the memory
-limit from observed `process_resident_memory_bytes` with headroom. Turning the clients collector on
-raises cardinality substantially — size up further. See the `resources:` comments in `values.yaml`
-and `evidence/scale-and-capacity.md` for the full analysis.
+**Evidence label: HOMELAB MEASUREMENT ONLY - NOT A REPRESENTATIVE SIZING MEASUREMENT.** The
+retained full `ExporterApp` replay is documented in [the scaling guide](../../docs/scaling-guide.md).
+It must not be generalized to a medium, large, or dense-switch fleet.
 
 ## Optional resources (all disabled by default)
 
@@ -76,9 +72,10 @@ publicly via ingress — scrape it in-cluster.
   empty means any source, still port-restricted. Set `networkPolicy.ingress.enabled: false` for an
   egress-only policy.
 - **Egress**: DNS (UDP/TCP 53), HTTPS 443 to the Meraki Dashboard API (no fixed CIDR → any
-  destination on 443), and the OTLP collector port (`networkPolicy.egress.otlpPort`, default 4317)
-  **only when `config.otelEnabled` is true**. Add arbitrary rules via
-  `networkPolicy.egress.extraEgress`, and pin the OTLP peers via `networkPolicy.egress.otlpTo`.
+  destination on 443), and the shared OTLP collector port (`networkPolicy.egress.otlpPort`, default
+  4317) when **any** tracing (`config.otelEnabled`), data-log (`config.otelLogsEnabled`), or metrics
+  (`config.otelMetricsEnabled`) channel is enabled. Use `networkPolicy.egress.extraEgress` for a
+  channel using a distinct port, and `networkPolicy.egress.otlpTo` to pin peers for the shared port.
 
 ### Autoscaling (unusual)
 

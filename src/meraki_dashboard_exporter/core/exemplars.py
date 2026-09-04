@@ -35,7 +35,7 @@ class ExemplarManager:
         value: float | None = None,
         labels: dict[str, str] | None = None,
     ) -> None:
-        """Add an exemplar to a metric if a trace is active.
+        """Record one metric update and attach trace context when available.
 
         Parameters
         ----------
@@ -47,61 +47,36 @@ class ExemplarManager:
             Labels to apply to the metric.
 
         """
-        if not self._enabled:
-            return
-
         span = trace.get_current_span()
-        if not span or not span.is_recording():
-            return
+        exemplar: dict[str, str] | None = None
+        if self._enabled and span and span.is_recording():
+            span_context = span.get_span_context()
+            if span_context.is_valid:
+                exemplar = {
+                    "trace_id": format(span_context.trace_id, "032x"),
+                    "span_id": format(span_context.span_id, "016x"),
+                }
 
-        span_context = span.get_span_context()
-        if not span_context.is_valid:
-            return
-
-        # Format trace ID for exemplar
-        trace_id = format(span_context.trace_id, "032x")
-        span_id = format(span_context.span_id, "016x")
-
-        # Create exemplar labels (for future use when exemplar API is available)
-        # exemplar_labels = {
-        #     "trace_id": trace_id,
-        #     "span_id": span_id,
-        # }
-
-        # Apply the metric operation
-        # Note: exemplar support requires newer prometheus-client versions
-        # For now, we'll just set the metrics without exemplars
+        metric_value = 0 if value is None else value
         try:
             if isinstance(metric, Gauge):
-                if labels:
-                    metric.labels(**labels).set(value or 0)
-                else:
-                    metric.set(value or 0)
+                gauge_metric = metric.labels(**labels) if labels else metric
+                gauge_metric.set(metric_value)
             elif isinstance(metric, Counter):
-                if labels:
-                    metric.labels(**labels).inc(value or 1)
-                else:
-                    metric.inc(value or 1)
+                counter_metric = metric.labels(**labels) if labels else metric
+                counter_metric.inc(1 if value is None else value, exemplar=exemplar)
             elif isinstance(metric, Histogram):
-                if labels:
-                    metric.labels(**labels).observe(value or 0)
-                else:
-                    metric.observe(value or 0)
+                histogram_metric = metric.labels(**labels) if labels else metric
+                histogram_metric.observe(metric_value, exemplar=exemplar)
 
-            logger.debug(
-                "Added exemplar to metric",
-                metric_name=metric._name,
-                trace_id=trace_id,
-                span_id=span_id,
-            )
+            if exemplar:
+                logger.debug("Added exemplar to metric", metric_name=metric._name, **exemplar)
         except Exception as e:
-            # Exemplar support might not be available in all Prometheus client versions
             logger.debug(
-                "Failed to add exemplar to metric",
+                "Failed to record metric with exemplar",
                 metric_name=metric._name,
                 error=str(e),
             )
-            # Disable exemplars if not supported
             self._enabled = False
 
     def create_observable_counter(
@@ -260,7 +235,7 @@ def add_exemplar(
     value: float | None = None,
     labels: dict[str, str] | None = None,
 ) -> None:
-    """Convenience function to add an exemplar to a metric.
+    """Record one metric update, adding a trace exemplar when available.
 
     Parameters
     ----------

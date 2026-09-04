@@ -1,0 +1,1464 @@
+[
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_001",
+    "serial": "device_001",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_031",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_507"
+      },
+      "id": "device_030",
+      "stage": {
+        "group": {
+          "id": "device_033"
+        }
+      },
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_032",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_003"
+      },
+      "upgradeBatchId": "upgradebatch_id_073"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_001",
+    "serial": "device_001",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_035",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_508"
+      },
+      "id": "device_034",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_031",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_507"
+      },
+      "upgradeBatchId": "upgradebatch_id_071"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": "2026-01-01T00:00:00Z",
+    "downloadStatus": "value_509",
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_001",
+    "serial": "device_001",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_037",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_510"
+      },
+      "id": "device_036",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_035",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_508"
+      },
+      "upgradeBatchId": "upgradebatch_id_067"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": null,
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_001",
+    "serial": "device_001",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_039",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_511"
+      },
+      "id": "device_038",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_037",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_510"
+      },
+      "upgradeBatchId": "upgradebatch_id_064"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": "2026-01-01T00:00:00Z",
+    "downloadStatus": "value_509",
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_001",
+    "serial": "device_001",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_041",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_512"
+      },
+      "id": "device_040",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_039",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_511"
+      },
+      "upgradeBatchId": "upgradebatch_id_063"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_004",
+    "serial": "device_002",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_031",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_507"
+      },
+      "id": "device_042",
+      "stage": {
+        "group": {
+          "id": "device_043"
+        }
+      },
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_032",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_003"
+      },
+      "upgradeBatchId": "upgradebatch_id_073"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_004",
+    "serial": "device_002",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_035",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_508"
+      },
+      "id": "device_034",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_031",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_507"
+      },
+      "upgradeBatchId": "upgradebatch_id_071"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": "2026-01-01T00:00:00Z",
+    "downloadStatus": "value_509",
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_004",
+    "serial": "device_002",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_037",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_510"
+      },
+      "id": "device_036",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_035",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_508"
+      },
+      "upgradeBatchId": "upgradebatch_id_067"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": null,
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_004",
+    "serial": "device_002",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_039",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_511"
+      },
+      "id": "device_038",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_037",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_510"
+      },
+      "upgradeBatchId": "upgradebatch_id_064"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": "2026-01-01T00:00:00Z",
+    "downloadStatus": "value_509",
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_004",
+    "serial": "device_002",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_041",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_512"
+      },
+      "id": "device_040",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_039",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_511"
+      },
+      "upgradeBatchId": "upgradebatch_id_063"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_005",
+    "serial": "device_003",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_045",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_481"
+      },
+      "id": "device_044",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_046",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_007"
+      },
+      "upgradeBatchId": "upgradebatch_id_075"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_005",
+    "serial": "device_003",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_048",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_475"
+      },
+      "id": "device_047",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_045",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_481"
+      },
+      "upgradeBatchId": "upgradebatch_id_074"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_005",
+    "serial": "device_003",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_050",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_470"
+      },
+      "id": "device_049",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_048",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_475"
+      },
+      "upgradeBatchId": "upgradebatch_id_072"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_005",
+    "serial": "device_003",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_052",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_466"
+      },
+      "id": "device_051",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_050",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_470"
+      },
+      "upgradeBatchId": "upgradebatch_id_070"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_005",
+    "serial": "device_003",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_054",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_465"
+      },
+      "id": "device_053",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_052",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_466"
+      },
+      "upgradeBatchId": "upgradebatch_id_068"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_006",
+    "serial": "device_004",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_056",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_411"
+      },
+      "id": "device_055",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_057",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_010"
+      },
+      "upgradeBatchId": "upgradebatch_id_040"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_006",
+    "serial": "device_004",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_059",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_406"
+      },
+      "id": "device_058",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_056",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_411"
+      },
+      "upgradeBatchId": "upgradebatch_id_034"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_006",
+    "serial": "device_004",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_061",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_398"
+      },
+      "id": "device_060",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_059",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_406"
+      },
+      "upgradeBatchId": "upgradebatch_id_030"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_006",
+    "serial": "device_004",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_063",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_375"
+      },
+      "id": "device_062",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_061",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_398"
+      },
+      "upgradeBatchId": "upgradebatch_id_026"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_006",
+    "serial": "device_004",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_065",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_376"
+      },
+      "id": "device_064",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_063",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_375"
+      },
+      "upgradeBatchId": "upgradebatch_id_016"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_007",
+    "serial": "device_005",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_056",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_411"
+      },
+      "id": "device_055",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_057",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_010"
+      },
+      "upgradeBatchId": "upgradebatch_id_040"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_007",
+    "serial": "device_005",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_059",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_406"
+      },
+      "id": "device_058",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_056",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_411"
+      },
+      "upgradeBatchId": "upgradebatch_id_034"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_007",
+    "serial": "device_005",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_061",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_398"
+      },
+      "id": "device_060",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_059",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_406"
+      },
+      "upgradeBatchId": "upgradebatch_id_030"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_007",
+    "serial": "device_005",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_063",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_375"
+      },
+      "id": "device_062",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_061",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_398"
+      },
+      "upgradeBatchId": "upgradebatch_id_026"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_007",
+    "serial": "device_005",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_065",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_376"
+      },
+      "id": "device_064",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_063",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_375"
+      },
+      "upgradeBatchId": "upgradebatch_id_016"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_010",
+    "serial": "device_008",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_056",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_411"
+      },
+      "id": "device_055",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_057",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_010"
+      },
+      "upgradeBatchId": "upgradebatch_id_040"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_010",
+    "serial": "device_008",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_059",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_406"
+      },
+      "id": "device_058",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_056",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_411"
+      },
+      "upgradeBatchId": "upgradebatch_id_034"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_010",
+    "serial": "device_008",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_061",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_398"
+      },
+      "id": "device_060",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_059",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_406"
+      },
+      "upgradeBatchId": "upgradebatch_id_030"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_010",
+    "serial": "device_008",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_063",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_375"
+      },
+      "id": "device_062",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_061",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_398"
+      },
+      "upgradeBatchId": "upgradebatch_id_026"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_010",
+    "serial": "device_008",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_065",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_376"
+      },
+      "id": "device_064",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_063",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_375"
+      },
+      "upgradeBatchId": "upgradebatch_id_016"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_011",
+    "serial": "device_009",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_056",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_411"
+      },
+      "id": "device_055",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_057",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_010"
+      },
+      "upgradeBatchId": "upgradebatch_id_040"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_011",
+    "serial": "device_009",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_059",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_406"
+      },
+      "id": "device_058",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_056",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_411"
+      },
+      "upgradeBatchId": "upgradebatch_id_034"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_011",
+    "serial": "device_009",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_061",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_398"
+      },
+      "id": "device_060",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_059",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_406"
+      },
+      "upgradeBatchId": "upgradebatch_id_030"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_011",
+    "serial": "device_009",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_063",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_375"
+      },
+      "id": "device_062",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_061",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_398"
+      },
+      "upgradeBatchId": "upgradebatch_id_026"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_011",
+    "serial": "device_009",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_065",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_376"
+      },
+      "id": "device_064",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_063",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_375"
+      },
+      "upgradeBatchId": "upgradebatch_id_016"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_012",
+    "serial": "device_010",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_056",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_411"
+      },
+      "id": "device_055",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_057",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_010"
+      },
+      "upgradeBatchId": "upgradebatch_id_040"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": null,
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_012",
+    "serial": "device_010",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_059",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_406"
+      },
+      "id": "device_058",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_056",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_411"
+      },
+      "upgradeBatchId": "upgradebatch_id_034"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_012",
+    "serial": "device_010",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_061",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_398"
+      },
+      "id": "device_060",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_059",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_406"
+      },
+      "upgradeBatchId": "upgradebatch_id_030"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_013",
+    "serial": "device_011",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_056",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_411"
+      },
+      "id": "device_055",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_057",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_010"
+      },
+      "upgradeBatchId": "upgradebatch_id_040"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_013",
+    "serial": "device_011",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_059",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_406"
+      },
+      "id": "device_058",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_056",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_411"
+      },
+      "upgradeBatchId": "upgradebatch_id_034"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_013",
+    "serial": "device_011",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_061",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_398"
+      },
+      "id": "device_060",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_059",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_406"
+      },
+      "upgradeBatchId": "upgradebatch_id_030"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_013",
+    "serial": "device_011",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_063",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_375"
+      },
+      "id": "device_062",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_061",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_398"
+      },
+      "upgradeBatchId": "upgradebatch_id_026"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_013",
+    "serial": "device_011",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_065",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_376"
+      },
+      "id": "device_064",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_063",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_375"
+      },
+      "upgradeBatchId": "upgradebatch_id_016"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  },
+  {
+    "checkinFinishedAt": null,
+    "checkinStartedAt": null,
+    "detailedStatus": null,
+    "deviceStatus": "value_506",
+    "downloadFinishedAt": null,
+    "downloadStartedAt": null,
+    "downloadStatus": null,
+    "installFinishedAt": null,
+    "installStartedAt": null,
+    "installStatus": null,
+    "name": "device_name_021",
+    "serial": "device_019",
+    "upgrade": {
+      "fromVersion": {
+        "id": "device_056",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_411"
+      },
+      "id": "device_055",
+      "status": "Completed",
+      "time": "2026-01-01T00:00:00Z",
+      "toVersion": {
+        "id": "device_057",
+        "releaseDate": "2026-01-01T00:00:00Z",
+        "shortName": "value_010"
+      },
+      "upgradeBatchId": "upgradebatch_id_040"
+    },
+    "verifyFinishedAt": null,
+    "verifyStartedAt": null,
+    "verifyStatus": null
+  }
+]

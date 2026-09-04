@@ -13,7 +13,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
-from typing import Any, get_args, get_origin
+from typing import Annotated, Any, get_args, get_origin
 
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
@@ -92,6 +92,8 @@ def _format_type(annotation: Any) -> str:
         return str(annotation).replace("typing.", "").replace("NoneType", "None")
 
     args = get_args(annotation)
+    if origin is Annotated:
+        return _format_type(args[0])
     if origin is list:
         return f"list[{_format_type(args[0])}]" if args else "list"
     if origin is set:

@@ -11,7 +11,11 @@ import pytest
 
 from meraki_dashboard_exporter.__version__ import get_version
 from meraki_dashboard_exporter.core.config import Settings
-from meraki_dashboard_exporter.core.otel_tracing import TracingConfig, build_otlp_credentials
+from meraki_dashboard_exporter.core.otel_tracing import (
+    TracingConfig,
+    build_otel_resource,
+    build_otlp_credentials,
+)
 
 
 class TestTracingConfigSetup:
@@ -61,12 +65,13 @@ class TestTracingConfigSetup:
         """Test tracing is set up when all conditions are met."""
         mock_settings.otel.enabled = True
         mock_settings.otel.endpoint = "http://otel:4317"
+        mock_settings.otel.resource_attributes = {"cloud.region": "eu-west-2"}
 
         config = TracingConfig(mock_settings)
 
         # Patch the dependencies to avoid actual OTEL setup
         with (
-            patch("meraki_dashboard_exporter.core.otel_tracing.Resource.create"),
+            patch("meraki_dashboard_exporter.core.otel_tracing.Resource.create") as mock_resource,
             patch("meraki_dashboard_exporter.core.otel_tracing.TracerProvider"),
             patch("meraki_dashboard_exporter.core.otel_tracing.OTLPSpanExporter"),
             patch("meraki_dashboard_exporter.core.otel_tracing.BatchSpanProcessor"),
@@ -76,6 +81,7 @@ class TestTracingConfigSetup:
             config.setup_tracing()
 
         assert config._initialized
+        assert mock_resource.call_args.args[0]["cloud.region"] == "eu-west-2"
 
 
 class TestTracingConfigResourceVersion:
@@ -114,6 +120,44 @@ class TestTracingConfigResourceVersion:
         resource_attrs = mock_resource.call_args[0][0]
         assert resource_attrs["service.version"] == get_version()
         assert resource_attrs["service.version"] != "0.8.0"
+
+
+class TestBuildOtelResource:
+    """The shared resource preserves configured attributes and exporter identity."""
+
+    def test_defaults_deployment_environment_to_production(self) -> None:
+        """No configured environment retains the documented production default."""
+        settings = Settings(meraki={"api_key": "a" * 40})
+
+        assert build_otel_resource(settings).attributes["deployment.environment"] == "production"
+
+    def test_preserves_attributes_translates_environment_and_owns_identity(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Configured attributes survive unless they collide with exporter identity keys."""
+        monkeypatch.setenv("HOSTNAME", "exporter-instance")
+        settings = Settings(
+            meraki={"api_key": "a" * 40},
+            otel={
+                "service_name": "exporter-service",
+                "resource_attributes": {
+                    "cloud.region": "eu-west-2",
+                    "environment": "staging",
+                    "service.name": "configured-service-name",
+                    "service.version": "configured-service-version",
+                    "service.instance.id": "configured-service-instance",
+                },
+            },
+        )
+
+        attributes = build_otel_resource(settings).attributes
+
+        assert attributes["cloud.region"] == "eu-west-2"
+        assert attributes["deployment.environment"] == "staging"
+        assert "environment" not in attributes
+        assert attributes["service.name"] == "exporter-service"
+        assert attributes["service.version"] == get_version()
+        assert attributes["service.instance.id"] == "exporter-instance"
 
 
 class TestTracingConfigSettings:

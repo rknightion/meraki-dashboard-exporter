@@ -546,6 +546,8 @@ class MSCollector(BaseDeviceCollector):
             )
 
     def _should_collect_port_usage(self, serial: str) -> bool:
+        if not self.settings.api.ms_port_metrics_enabled:
+            return False
         # Interval sourced from the scheduler's solved MS_PORT_USAGE interval
         # (#617): floor 600s, stretchable, pinnable via ms_port_usage_interval.
         interval: float = self.parent._group_interval(EndpointGroupName.MS_PORT_USAGE)
@@ -558,6 +560,8 @@ class MSCollector(BaseDeviceCollector):
         self._last_port_usage[serial] = time.time()
 
     def _should_collect_packet_stats(self, serial: str) -> bool:
+        if not self.settings.api.ms_port_metrics_enabled:
+            return False
         # Interval sourced from the scheduler's solved MS_PACKET_STATS interval
         # (#617): floor 600s, stretchable, pinnable via ms_packet_stats_interval.
         interval: float = self.parent._group_interval(EndpointGroupName.MS_PACKET_STATS)
@@ -883,6 +887,18 @@ class MSCollector(BaseDeviceCollector):
         devices: list[dict[str, Any]],
     ) -> bool:
         """Collect port status metrics using the org-level switch endpoint."""
+        if not self.settings.api.ms_port_metrics_enabled:
+            # The coordinator treats ``False`` as an org-endpoint failure and
+            # falls back to the per-switch dense collection path. Mark the
+            # disabled groups as handled instead, so readiness does not wait
+            # for intentionally suppressed work.
+            for group_name in (
+                EndpointGroupName.MS_PORT_STATUS,
+                EndpointGroupName.MS_PORT_USAGE,
+                EndpointGroupName.MS_PACKET_STATS,
+            ):
+                self.parent._mark_group_ran(group_name)
+            return True
         # #617 gate: skip when MS_PORT_STATUS is not due this cycle. Return True
         # (not a failure) so the coordinator does not fall back to per-device.
         if not self.parent._should_run_group(EndpointGroupName.MS_PORT_STATUS):
@@ -911,14 +927,20 @@ class MSCollector(BaseDeviceCollector):
         if allowed_network_ids is not None and not allowed_network_ids:
             # Filter active but resolves to zero networks — nothing to collect.
             return True
-        network_ids = sorted(allowed_network_ids) if allowed_network_ids is not None else None
+        # MDE-0065: an inactive filter must OMIT the keyword, not send None. The SDK
+        # serializes an explicit networkIds=None and the API rejects it as an invalid
+        # network ID, which fails this bulk path on every cycle of an unfiltered
+        # deployment while the manager still records a top-level success.
+        filter_kwargs: dict[str, Any] = (
+            {"networkIds": sorted(allowed_network_ids)} if allowed_network_ids is not None else {}
+        )
 
         with LogContext(org_id=org_id):
             response = await facade_for(self).call(
                 "getOrganizationSwitchPortsStatusesBySwitch",
                 self.api.switch.getOrganizationSwitchPortsStatusesBySwitch,
                 org_id,
-                networkIds=network_ids,
+                **filter_kwargs,
                 perPage=20,
                 total_pages="all",
             )
@@ -1000,6 +1022,18 @@ class MSCollector(BaseDeviceCollector):
             Switch device data.
 
         """
+        if not self.settings.api.ms_port_metrics_enabled:
+            # This is the fallback when the org status endpoint is disabled.
+            # Keep its scheduler groups satisfied without issuing the
+            # per-switch calls that would recreate the disabled port series.
+            for group_name in (
+                EndpointGroupName.MS_PORT_STATUS,
+                EndpointGroupName.MS_PORT_USAGE,
+                EndpointGroupName.MS_PACKET_STATS,
+            ):
+                self.parent._mark_group_ran(group_name)
+            return
+
         # Extract org info from device data
         org_id = device.get("orgId", "")
         org_name = device.get("orgName", org_id)
@@ -1227,6 +1261,8 @@ class MSCollector(BaseDeviceCollector):
     )
     async def collect_device_port_usage_metrics(self, device: dict[str, Any]) -> None:
         """Collect per-port usage and POE metrics for a switch."""
+        if not self.settings.api.ms_port_metrics_enabled:
+            return
         serial = device.get("serial")
         if not serial:
             return
@@ -1246,7 +1282,10 @@ class MSCollector(BaseDeviceCollector):
         # MS_PORT_USAGE solved TTL onto every emission.
         usage_ttl = self.parent._group_ttl_seconds(EndpointGroupName.MS_PORT_USAGE)
 
-        with LogContext(serial=device_labels["serial"], name=device_labels["name"]):
+        # MDE-0066: the display name comes from the device input, never from the label
+        # map — create_device_labels deliberately omits it (#534), so reading it here
+        # raised KeyError before the API call and silently emptied this fallback.
+        with LogContext(serial=device_labels["serial"], name=device.get("name", "")):
             port_statuses = await facade_for(self).call(
                 "getDeviceSwitchPortsStatuses",
                 self.api.switch.getDeviceSwitchPortsStatuses,
@@ -1429,6 +1468,8 @@ class MSCollector(BaseDeviceCollector):
             the coordinator to fall back to the per-device loop.
 
         """
+        if not self.settings.api.ms_port_metrics_enabled:
+            return True
         # #617 gate: skip when MS_PORT_USAGE is not due this cycle. Return True
         # (not a failure) so the coordinator does not fall back to per-device.
         if not self.parent._should_run_group(EndpointGroupName.MS_PORT_USAGE):
@@ -1460,14 +1501,17 @@ class MSCollector(BaseDeviceCollector):
         if allowed_network_ids is not None and not allowed_network_ids:
             # Filter active but resolves to zero networks — nothing to collect.
             return True
-        network_ids = sorted(allowed_network_ids) if allowed_network_ids is not None else None
+        # MDE-0065: see the matching comment on the status path — omit, never send None.
+        filter_kwargs: dict[str, Any] = (
+            {"networkIds": sorted(allowed_network_ids)} if allowed_network_ids is not None else {}
+        )
 
         with LogContext(org_id=org_id):
             usage_response = await facade_for(self).call(
                 "getOrganizationSwitchPortsUsageHistoryByDeviceByInterval",
                 self.api.switch.getOrganizationSwitchPortsUsageHistoryByDeviceByInterval,
                 org_id,
-                networkIds=network_ids,
+                **filter_kwargs,
                 timespan=3600,
                 perPage=50,
                 total_pages="all",
@@ -1482,7 +1526,7 @@ class MSCollector(BaseDeviceCollector):
                 "getOrganizationSwitchPortsClientsOverviewByDevice",
                 self.api.switch.getOrganizationSwitchPortsClientsOverviewByDevice,
                 org_id,
-                networkIds=network_ids,
+                **filter_kwargs,
                 timespan=3600,
                 perPage=20,
                 total_pages="all",
@@ -1857,6 +1901,8 @@ class MSCollector(BaseDeviceCollector):
             Switch device data.
 
         """
+        if not self.settings.api.ms_port_metrics_enabled:
+            return
         # Extract org info from device data
         org_id = device.get("orgId", "")
         org_name = device.get("orgName", org_id)

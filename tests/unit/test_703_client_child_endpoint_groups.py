@@ -34,7 +34,11 @@ def _settings(
             rate_limit_shared_fraction=1.0,
             model_fields_set=set(),
         ),
-        clients=SimpleNamespace(enabled=True, signal_quality_enabled=signal_quality_enabled),
+        clients=SimpleNamespace(
+            enabled=True,
+            signal_quality_enabled=signal_quality_enabled,
+            max_clients_per_network=10_000,
+        ),
         collectors=SimpleNamespace(profile=profile),
         monitoring=SimpleNamespace(metric_ttl_multiplier=2.0),
         scheduler=SimpleNamespace(
@@ -81,7 +85,7 @@ def _collector(settings: SimpleNamespace) -> ClientsCollector:
 
 
 def test_703_disabled_signal_quality_is_not_registered_or_costed() -> None:
-    """The 500-network default excludes exactly 500 * 200 / 600 rps of phantom demand."""
+    """Disabled signal quality excludes its demand while app usage keeps its batch bound."""
     settings = _settings(signal_quality_enabled=False)
     scheduler = EndpointScheduler(settings, _Limiter())  # type: ignore[arg-type]
     scheduler.register_groups(_collector(settings).get_endpoint_groups())
@@ -90,9 +94,9 @@ def test_703_disabled_signal_quality_is_not_registered_or_costed() -> None:
     assert EndpointGroupName.CLIENTS_SIGNAL_QUALITY not in {
         group.name for group in _collector(settings).get_endpoint_groups()
     }
-    # clients_list: 500 / 300; clients_app_usage: 500 / 600. The missing
-    # signal-quality term is exactly 500 * 200 / 600 = 166.66666666666666 rps.
-    assert scheduler.diagnostics()["total_demand_rps"] == pytest.approx(2.5)
+    # clients_list: 500 / 300; clients_app_usage: 500 * 100 / 600. The disabled
+    # signal-quality term of 500 * 200 / 600 is excluded entirely.
+    assert scheduler.diagnostics()["total_demand_rps"] == pytest.approx(85.0)
 
 
 def test_703_default_client_groups_sleep_until_clients_list_is_due() -> None:

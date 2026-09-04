@@ -294,6 +294,49 @@ async def test_clear_cache(monkeypatch, resolver):
 
 
 @pytest.mark.asyncio
+async def test_clear_cache_discards_in_flight_resolution(resolver, monkeypatch):
+    """A lookup started before clear cannot repopulate cache or statistics."""
+
+    resolver.max_concurrent_lookups = 1
+    lookup_started = asyncio.Event()
+    release_lookup = asyncio.Event()
+
+    async def blocked_lookup(ip: str) -> str:
+        lookup_started.set()
+        await release_lookup.wait()
+        return "pre-clear.example.com"
+
+    monkeypatch.setattr(resolver, "_perform_lookup", blocked_lookup)
+
+    resolution = asyncio.create_task(
+        resolver.resolve_multiple([("client", "192.0.2.1", "description")])
+    )
+    await lookup_started.wait()
+    assert resolver.get_cache_stats()["total_lookups"] == 1
+
+    resolver.clear_cache()
+    release_lookup.set()
+    assert await resolution == {}
+
+    stats = resolver.get_cache_stats()
+    assert resolver._cache == {}
+    assert stats["total_entries"] == 0
+    assert stats["valid_entries"] == 0
+    assert stats["expired_entries"] == 0
+    assert stats["tracked_clients"] == 0
+    assert stats["total_lookups"] == 0
+    assert stats["successful_lookups"] == 0
+    assert stats["failed_lookups"] == 0
+    assert stats["cache_hits"] == 0
+    assert stats["cache_hit_ratio"] == 0.0
+    assert stats["total_resolution_time"] == 0.0
+    assert stats["queue_wait_seconds"] == 0.0
+    assert stats["queue_wait_count"] == 0
+    assert stats["queue_peak_depth"] == 0
+    assert stats["lookup_timeouts"] == 0
+
+
+@pytest.mark.asyncio
 async def test_cache_is_bounded_under_churn(monkeypatch):
     """#543: the reverse-DNS cache must stay bounded under unique-IP churn."""
 

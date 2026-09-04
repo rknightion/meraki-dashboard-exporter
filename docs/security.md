@@ -33,6 +33,52 @@ Our Docker images include the following security features:
 4. **Vulnerability Scanning**: Automated scanning with Trivy for CRITICAL and HIGH vulnerabilities
 5. **Dependency Updates**: Automated dependency updates via Renovate
 
+### Merge and publication gates
+
+The `main` ruleset requires four independent GitHub Actions checks: `ci-success`, actionlint,
+zizmor, and dependency review. The first aggregates the source, container-smoke, and Helm gates;
+the other three remain separate so a skipped or cancelled scanner cannot be hidden by the
+aggregator.
+
+Container publication has a stricter boundary than ordinary merge CI:
+
+1. The committed exception policy is validated, including every expiry date.
+2. Publication-scoped CodeQL analysis blocks at HIGH or CRITICAL security severity.
+3. Each native architecture is built as a local OCI archive and scanned by Trivy for HIGH and
+   CRITICAL vulnerabilities.
+4. Only a successfully scanned archive is copied to GHCR, by its exact digest. The multi-arch
+   manifest, signatures, provenance attestation, SBOMs, and optional Helm chart are created only
+   after both architecture jobs pass.
+
+CodeQL and Trivy still upload SARIF when a finding blocks publication, so the rejected result remains
+visible in the repository Security tab. Codecov and Codacy coverage uploads are reporting-only; the
+required coverage decision is pytest's local 80% floor in `just check`. Codacy's externally managed
+analysis remains enabled through `.codacy.yaml`; the unused Mend/WhiteSource and Safety configuration
+files were removed.
+
+#### Vulnerability exceptions
+
+Accepted Trivy findings live in `.trivyignore.yaml`, which deliberately uses JSON-compatible YAML so
+the standard-library validator can enforce a strict schema:
+
+```json
+{
+  "vulnerabilities": [
+    {
+      "id": "CVE-YYYY-NNNN",
+      "statement": "Specific reviewed reason the published image accepts this risk",
+      "expired_at": "YYYY-MM-DD"
+    }
+  ]
+}
+```
+
+Every entry requires exactly those three fields, a non-empty rationale, a unique identifier, and a
+future ISO date. An exception expiring today is already invalid: `just security-exceptions` and the
+publication policy job fail before scanning or registry authentication. Findings do not disappear
+from the policy merely because a later scan stops reporting them; remove an entry in a reviewed
+change. The committed policy currently accepts no vulnerabilities.
+
 ### Verification
 
 You can verify the authenticity of our container images. Images are built and signed by the

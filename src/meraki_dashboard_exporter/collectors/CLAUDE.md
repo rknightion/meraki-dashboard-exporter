@@ -21,13 +21,13 @@ Meraki Dashboard Exporter Collectors - All metric collection logic organized by 
 
 ### Coordinator Files
 - `manager.py` - `CollectorManager`: discovers, instantiates, and schedules all collectors (see REGISTRATION & DISCOVERY below)
-- `device.py` - `DeviceCollector` coordinator (mostly ~300s-floor groups) fanning out to per-device-type sub-collectors (MG/MR/MS/MS-stack/MT/MV/MX) via `ManagedTaskGroup`, bounded by `settings.api.concurrency_limit`
-- `network_health.py` - `NetworkHealthCollector` coordinator (~300s-floor groups) fanning out to `network_health_collectors/` (bluetooth, connection_stats, data_rates, rf_health, ssid_performance) via `ManagedTaskGroup`
-- `organization.py` - `OrganizationCollector` coordinator (mostly ~300s-floor groups) fanning out to `organization_collectors/` (`APIUsageCollector`, `ClientOverviewCollector`, `LicenseCollector`) via `ManagedTaskGroup`; the only collector that also receives an `org_health_tracker` kwarg from the manager
+- `device.py` - `DeviceCollector` coordinator (mostly ~300s-floor groups) fanning out to per-device-type sub-collectors (MG/MR/MS/MS-stack/MS-power/MT/MV/MX plus MX HA/uplink domains) via `ManagedTaskGroup`, bounded by `settings.api.concurrency_limit`
+- `network_health.py` - `NetworkHealthCollector` coordinator (~300s-floor groups) fanning out to eight `network_health_collectors/` domains (Bluetooth, connection stats, data rates, RF health, SSID performance, latency stats, Air Marshal, and mesh) via `ManagedTaskGroup`
+- `organization.py` - `OrganizationCollector` coordinator (mostly ~300s-floor groups) fanning out to eight `organization_collectors/` domains (API usage, licensing, client overview, firmware, availability history, top usage, webhook logs, and early access) via `ManagedTaskGroup`; the only collector that also receives an `org_health_tracker` kwarg from the manager
 - `config.py` - `ConfigCollector` for configuration/security settings (~900s-floor groups)
 
 ### Shared Infrastructure
-- `subcollector_mixin.py` - `SubCollectorMixin` providing common sub-collector delegation patterns (`_set_metric_value`, `_track_api_call`, `update_api`); mixed into `devices/base.py::BaseDeviceCollector`, `network_health_collectors/base.py::BaseNetworkHealthCollector`, `organization_collectors/base.py::BaseOrganizationCollector`, and standalone sub-collectors (`devices/mx_firewall.py`, `devices/mx_vpn.py`, `devices/ms_stack.py`)
+- `subcollector_mixin.py` - `SubCollectorMixin` providing common sub-collector delegation patterns (`_set_metric_value`, `_track_api_call`, `update_api`); mixed into `devices/base.py::BaseDeviceCollector`, `network_health_collectors/base.py::BaseNetworkHealthCollector`, `organization_collectors/base.py::BaseOrganizationCollector`, and standalone sub-collectors including `devices/mx_firewall.py`, `devices/mx_vpn.py`, `devices/ms_stack.py`, `devices/ms_power.py`, `devices/mx_ha.py`, `devices/mx_uplink_usage.py`, and `devices/mx_uplink_health.py`
 
 ### Standalone Collectors
 - `alerts.py` - `AlertsCollector` (~300s-floor groups) - alert/event collection
@@ -111,7 +111,9 @@ the solver stretches groups above their floor under budget pressure.
 `device.py`, per-device-type) work through `core/async_utils.py::ManagedTaskGroup`, bounded by
 `settings.api.concurrency_limit` — never spawn raw unbounded `asyncio.gather`/tasks in a
 coordinator's `_collect_impl()`. Separately, `settings.collectors.max_concurrent_collectors`
-(default 5) bounds how many collectors' own group-clocked loops may be mid-run at once, globally.
+(default 5) is the configured global ceiling. The effective collector admission limit is also
+bounded by `api.executor_workers // api.concurrency_limit` (floor 1), so shipped defaults admit 2
+collectors without queueing nested fan-out behind the SDK executor.
 
 ## METRIC OWNERSHIP
 - **Device-specific metrics**: Owned by respective device collectors (MR, MS, etc.)
@@ -134,7 +136,8 @@ coordinator's `_collect_impl()`. Separately, `settings.collectors.max_concurrent
 - **NEVER implement collection logic in `__init__`** - use `_collect_impl()`
 - **NEVER skip error handling** for API calls - use decorators
 - **NEVER forget to register collectors** - use decorator or manual registration
-- **NEVER block the event loop** - use `asyncio.to_thread()` for sync operations
-- **NEVER call `self.api.organizations.getOrganizationNetworks` directly** - always go through `self.inventory.get_networks(org_id)` so `NetworkFilter` is enforced. `core/discovery.py::DiscoveryService` is the only sanctioned *unfiltered* bypass (audit-only, startup diagnostics); `alerts.py::AlertsCollector._fetch_networks_direct` and `core/api_helpers.py::APIHelper._fetch_networks_direct` are sanctioned *filtered* fallbacks for when `self.inventory` is unavailable (each manually reapplies `NetworkFilter`), not bypasses.
+- **NEVER bypass `MerakiApiFacade` for SDK calls** - use `facade_for(self).call(...)`; use
+  `asyncio.to_thread()` only for unrelated synchronous work that has no project-specific facade
+- **NEVER call `self.api.organizations.getOrganizationNetworks` directly** - always go through `self.inventory.get_networks(org_id)` so `NetworkFilter` is enforced. `core/discovery.py::DiscoveryService` is the sanctioned direct *unfiltered* bypass for audit-only startup diagnostics; `CollectorManager._validate_network_filter()` separately requests the unfiltered inventory through the service to validate the configured filter. `alerts.py::AlertsCollector._fetch_networks_direct` and `core/api_helpers.py::APIHelper._fetch_networks_direct` are sanctioned *filtered* fallbacks for when `self.inventory` is unavailable (each manually reapplies `NetworkFilter`), not unfiltered bypasses.
 - **NEVER iterate org-wide SDK responses without filtering by `get_allowed_network_ids`** - rows referencing networks outside the filter must be skipped.
 </fatal_implications>

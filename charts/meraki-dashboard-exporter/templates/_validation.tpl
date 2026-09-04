@@ -25,21 +25,35 @@ The config value is chart-managed so this relationship is render-time verifiable
 {{- fail (printf "terminationGracePeriodSeconds must be at least config.apiPerFetchDeadlineSeconds + 30 (%d); got %d" $minimumGrace (int .Values.terminationGracePeriodSeconds)) }}
 {{- end }}
 {{- range .Values.extraEnv }}
-{{- if eq .name "MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS" }}
+{{- $envName := upper (toString .name) }}
+{{- if eq $envName "MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS" }}
 {{- fail "extraEnv may not set MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS; use config.apiPerFetchDeadlineSeconds so termination grace is validated." }}
+{{- end }}
+{{- if eq $envName "MERAKI_EXPORTER_SERVER__PORT" }}
+{{- fail "extraEnv may not set MERAKI_EXPORTER_SERVER__PORT; use service.port so the listener, Service, and probes stay aligned." }}
 {{- end }}
 {{- end }}
 {{- end }}
 
 {{/*
-Validate that config.otelEndpoint is set whenever config.otelEnabled is truthy.
-Mirrors OTelSettings.validate_endpoint in core/config_models.py, which raises at
+Validate that each enabled OTLP channel resolves an endpoint. Logs and metrics
+may use their dedicated endpoint or inherit config.otelEndpoint. This mirrors
+OTelSettings.validate_endpoint in core/config_models.py, which raises at
 application startup on the same condition -- failing here instead means a
 misconfiguration is caught at `helm install`/`helm template` time rather than
 surfacing as a CrashLoopBackOff.
 */}}
 {{- define "meraki-dashboard-exporter.validateOtel" -}}
-{{- if and (eq (.Values.config.otelEnabled | toString) "true") (not .Values.config.otelEndpoint) }}
+{{- $tracingEnabled := eq (.Values.config.otelEnabled | toString) "true" -}}
+{{- $logsEnabled := eq (.Values.config.otelLogsEnabled | toString) "true" -}}
+{{- $metricsEnabled := eq (.Values.config.otelMetricsEnabled | toString) "true" -}}
+{{- if and $tracingEnabled (not .Values.config.otelEndpoint) }}
 {{- fail "config.otelEndpoint must be set when config.otelEnabled is true." }}
+{{- end }}
+{{- if and $logsEnabled (not (or .Values.config.otelLogsEndpoint .Values.config.otelEndpoint)) }}
+{{- fail "config.otelLogsEndpoint or config.otelEndpoint must be set when config.otelLogsEnabled is true." }}
+{{- end }}
+{{- if and $metricsEnabled (not (or .Values.config.otelMetricsEndpoint .Values.config.otelEndpoint)) }}
+{{- fail "config.otelMetricsEndpoint or config.otelEndpoint must be set when config.otelMetricsEnabled is true." }}
 {{- end }}
 {{- end }}

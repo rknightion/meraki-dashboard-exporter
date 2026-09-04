@@ -190,6 +190,11 @@ class InsightCollector(MetricCollector):
         """Whether Insight collection is enabled (``collect_insight``)."""
         return bool(self.settings.collectors.collect_insight)
 
+    @property
+    def inactive_reason(self) -> str:
+        """Name the flag an operator would flip to turn this collector on."""
+        return "collectors.collect_insight is false"
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the Insight collector.
 

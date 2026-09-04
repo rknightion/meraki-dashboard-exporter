@@ -147,6 +147,75 @@ class TestRootEndpointOffload:
         assert "_get_metrics_stats" in names
 
 
+class TestStatusEndpointOffload:
+    """GET /status bounds its Prometheus registry read like other HTTP walks."""
+
+    def test_status_offloads_network_filter_registry_read(self, exporter: ExporterApp) -> None:
+        """The status registry walk runs on the dedicated serving executor."""
+        app = exporter.create_app()
+        client = TestClient(app, raise_server_exceptions=True)
+
+        names: list[str] = []
+        with _track_serving_submits(exporter, names):
+            response = client.get("/status?format=json")
+
+        assert response.status_code == 200
+        assert "get_network_filter_status" in names
+
+    async def test_status_rejects_saturated_registry_work(self, exporter: ExporterApp) -> None:
+        """A status request fails fast with the established overload contract."""
+        exporter._registry_work_slots = asyncio.BoundedSemaphore(1)
+        await exporter._registry_work_slots.acquire()
+        try:
+            transport = ASGITransport(app=exporter.create_app())
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.get("/status?format=json")
+        finally:
+            exporter._registry_work_slots.release()
+
+        assert response.status_code == 503
+        assert response.headers["retry-after"] == "1"
+
+    async def test_cancelled_status_keeps_slot_until_registry_walk_finishes(
+        self, exporter: ExporterApp
+    ) -> None:
+        """Cancelling /status cannot admit another walk over its running thread."""
+        exporter._registry_work_slots = asyncio.BoundedSemaphore(1)
+        app = exporter.create_app()
+        loop = asyncio.get_running_loop()
+        worker_started = asyncio.Event()
+        worker_finished = threading.Event()
+        release_worker = threading.Event()
+        original = exporter.status_service.get_network_filter_status
+
+        def blocking_network_filter_status():  # type: ignore[no-untyped-def]
+            loop.call_soon_threadsafe(worker_started.set)
+            release_worker.wait(timeout=5.0)
+            result = original()
+            worker_finished.set()
+            return result
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            with patch.object(
+                exporter.status_service,
+                "get_network_filter_status",
+                side_effect=blocking_network_filter_status,
+            ):
+                request = asyncio.create_task(client.get("/status?format=json"))
+                await asyncio.wait_for(worker_started.wait(), timeout=1.0)
+                request.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await request
+
+                saturated = await client.get("/status?format=json")
+                assert saturated.status_code == 503
+                assert saturated.headers["retry-after"] == "1"
+
+                release_worker.set()
+                assert await asyncio.to_thread(worker_finished.wait, 1.0)
+
+
 class TestCardinalityLoopOffload:
     """The cardinality monitor loop analyzes the registry off the event loop."""
 
@@ -261,7 +330,10 @@ class TestServingPoolIsolation:
         )
 
     def test_serving_executor_distinct_from_sdk_executor(self, exporter: ExporterApp) -> None:
-        """Registry serving work and SDK calls run on different pools."""
+        """Registry, client-page, and SDK work run on distinct bounded pools."""
         assert exporter._serving_executor is not exporter.client.executor
+        assert exporter._client_page_executor is not exporter.client.executor
+        assert exporter._client_page_executor is not exporter._serving_executor
         assert exporter._serving_executor._thread_name_prefix == "registry-serve"
+        assert exporter._client_page_executor._thread_name_prefix == "client-page"
         assert exporter.client.executor._thread_name_prefix == "meraki-sdk"

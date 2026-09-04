@@ -1,0 +1,15 @@
+[
+  {
+    "id": "network_012",
+    "switchPorts": [
+      {
+        "portId": "port_id_031",
+        "serial": "device_002"
+      },
+      {
+        "portId": "port_id_034",
+        "serial": "device_002"
+      }
+    ]
+  }
+]

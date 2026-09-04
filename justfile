@@ -163,7 +163,19 @@ smoke tag="meraki-dashboard-exporter:latest":
 
 # the source-tree gate: exactly what the CI test job enforces
 [group('check')]
-check: fmt-check lint typecheck gen-check api-conformance test
+check: fmt-check lint typecheck gen-check api-conformance security-exceptions cloud-setup-check test
+
+# validate reviewed Trivy vulnerability exceptions and their expiry dates
+[group('check')]
+[no-exit-message]
+security-exceptions:
+    uv run python scripts/validate_trivy_exceptions.py
+
+# parse the cloud environment bootstrap without executing its installers
+[group('check')]
+[no-exit-message]
+cloud-setup-check:
+    bash -n scripts/cloud-environment-setup.sh
 
 # image needs a Docker daemon.
 # image-verify needs a Docker daemon.
@@ -281,6 +293,11 @@ harness-image:
 harness-run mode="baseline":
     uv run python -m tests.harness.runner run {{ if mode == "all" { "--all-modes" } else { "--mode " + quote(mode) } }}
 
+# measure the retained HOMELAB corpus through a full exporter process
+[group('dev')]
+harness-measure-homelab:
+    uv run python -m tests.fixtures.fleet_measurement
+
 # write the HTML coverage report to htmlcov/ and open it
 [group('dev')]
 coverage-report:
@@ -291,6 +308,11 @@ coverage-report:
 [group('dev')]
 deps-update:
     uv lock --upgrade
+
+# upgrade one package in uv.lock while preserving every unrelated pin
+[group('dev')]
+deps-update-package package:
+    uv lock --upgrade-package '{{ package }}'
 
 # print the resolved dependency tree
 [group('dev')]

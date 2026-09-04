@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
+from dataclasses import replace
+from math import ceil
 from typing import Any, ClassVar, cast
 
 import structlog
@@ -23,7 +26,7 @@ from ..core.label_helpers import create_client_labels, create_network_labels
 from ..core.logging_decorators import log_api_call, log_collection_progress
 from ..core.metrics import LabelName, create_labels
 from ..core.registry import register_collector
-from ..core.scheduler import EndpointGroup, EndpointGroupName
+from ..core.scheduler import EndpointGroup, EndpointGroupName, OrgShape
 from ..services.client_store import ClientStore
 from ..services.dns_resolver import DNSResolver
 
@@ -37,6 +40,17 @@ _APPLICATION_OTHER_LABEL = "__other__"
 # APISettings.client_signal_quality_max_clients default; cost_fn takes only the
 # OrgShape, so the cap is encoded here rather than read from settings).
 _SIGNAL_QUALITY_CLIENT_CAP = 200
+
+# Default per-network client cap used by the class-level declaration. Each collector
+# instance replaces this cost with its validated ``max_clients_per_network`` setting,
+# preserving the constant-cap policy without adding volatile observed counts to OrgShape.
+_APPLICATION_USAGE_CLIENT_CAP = 10_000
+
+
+def _application_usage_cost_fn(client_cap: int) -> Callable[[OrgShape], float]:
+    """Build the conservative per-network application-usage batch estimate."""
+    batches_per_network = ceil(client_cap / 100)
+    return lambda shape: float(shape.network_count * batches_per_network)
 
 
 @register_collector
@@ -60,7 +74,7 @@ class ClientsCollector(MetricCollector):
             name=EndpointGroupName.CLIENTS_APP_USAGE,
             priority=4,
             floor_seconds=600,
-            cost_fn=lambda shape: float(shape.network_count),
+            cost_fn=_application_usage_cost_fn(_APPLICATION_USAGE_CLIENT_CAP),
             setting_pin="client_app_usage_interval",
         ),
         EndpointGroup(
@@ -90,18 +104,35 @@ class ClientsCollector(MetricCollector):
         """
         if not self.settings.clients.enabled:
             return ()
-        if self.settings.clients.signal_quality_enabled:
-            return type(self).endpoint_groups
-        return tuple(
-            group
+
+        # Application usage receives the already-capped client list and batches it
+        # 100 IDs at a time. Bind the validated configured cap here so custom values
+        # cannot exceed the scheduler's declaration, while smaller populations are
+        # deliberately overestimated instead of making OrgShape volatile.
+        groups = tuple(
+            replace(
+                group,
+                cost_fn=_application_usage_cost_fn(self.settings.clients.max_clients_per_network),
+            )
+            if group.name is EndpointGroupName.CLIENTS_APP_USAGE
+            else group
             for group in type(self).endpoint_groups
-            if group.name is not EndpointGroupName.CLIENTS_SIGNAL_QUALITY
+        )
+        if self.settings.clients.signal_quality_enabled:
+            return groups
+        return tuple(
+            group for group in groups if group.name is not EndpointGroupName.CLIENTS_SIGNAL_QUALITY
         )
 
     @property
     def is_active(self) -> bool:
         """Check if this collector is actively collecting metrics."""
         return getattr(self, "_enabled", False)
+
+    @property
+    def inactive_reason(self) -> str:
+        """Name the flag an operator would flip to turn this collector on."""
+        return "clients.enabled is false"
 
     def __init__(self, *args: Any, **kwargs: Any):
         """Initialize the clients collector.
@@ -630,7 +661,9 @@ class ClientsCollector(MetricCollector):
 
         # Apply the per-network/global emission cap (#533) BEFORE DNS resolution
         # so the DNS fan-out (and the store/metrics work below) is also bounded.
+        fetched_client_count = len(clients)
         clients = self._apply_emission_cap(org_id, network_id, network_name, clients)
+        complete_snapshot = len(clients) == fetched_client_count
 
         # Prepare client data for DNS resolution
         client_data = [(c.id, c.ip, c.description) for c in clients]
@@ -650,6 +683,7 @@ class ClientsCollector(MetricCollector):
             network_name=network_name,
             org_id=org_id,
             hostnames=hostnames,
+            complete_snapshot=complete_snapshot,
         )
 
         # Update metrics

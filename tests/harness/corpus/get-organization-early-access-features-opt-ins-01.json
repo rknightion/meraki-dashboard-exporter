@@ -1,0 +1,233 @@
+[
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_070",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_513"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_071",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": false,
+      "reason": "value_515"
+    },
+    "shortName": "value_514"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_072",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": null,
+    "shortName": "value_516"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_073",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_517"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_074",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_518"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_075",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_519"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_076",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": null,
+    "shortName": "value_520"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_077",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_521"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_078",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_522"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_079",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_523"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_080",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_524"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_081",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_525"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_082",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_526"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_083",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": null,
+    "shortName": "value_527"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_084",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_528"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_085",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": null,
+    "shortName": "value_529"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_086",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_530"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_087",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_531"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_088",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": null,
+    "shortName": "value_532"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_089",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": null,
+    "shortName": "value_533"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_090",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_534"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_091",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_535"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_092",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": null,
+    "shortName": "value_536"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_093",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": null,
+    "shortName": "value_537"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_094",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": {
+      "eligible": true
+    },
+    "shortName": "value_538"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_095",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": null,
+    "shortName": "value_539"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_096",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": null,
+    "shortName": "value_540"
+  },
+  {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "id": "org_097",
+    "limitScopeToNetworks": [],
+    "optOutEligibility": null,
+    "shortName": "value_541"
+  }
+]

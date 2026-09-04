@@ -406,6 +406,15 @@ class TestSolveIntervals:
         assert avail.interval_seconds == 120.0
         assert avail.demand_rps == pytest.approx(1.0 / 120.0)
 
+    @pytest.mark.parametrize("override", [0, -1])
+    def test_non_positive_override_is_rejected_before_demand_math(self, override: int) -> None:
+        """Programmatic callers cannot inject an invalid interval into the solver."""
+        with pytest.raises(ValueError, match="positive"):
+            self.solve(
+                SMALL_SHAPE,
+                overrides={str(EndpointGroupName.DEVICE_AVAILABILITY): override},
+            )
+
     def test_large_shape_stretches_to_fit_budget(self) -> None:
         """LARGE shape overshoots the budget; solver stretches until demand fits."""
         solved = self.solve(LARGE_SHAPE)
@@ -703,6 +712,29 @@ class TestTtlAndFastest:
         """With no groups registered, fall back to resolve_interval_seconds."""
         sched = _make_scheduler(groups=[])
         assert sched.fastest_effective_interval_seconds() == 900.0
+
+    def test_fastest_interval_ignores_profile_excluded_groups(self) -> None:
+        """Liveness cannot run ahead of the fastest group the profile may execute."""
+        settings = _make_settings()
+        settings.collectors = SimpleNamespace(profile="availability")
+        groups = [
+            EndpointGroup(
+                name=EndpointGroupName.ALERTS_ASSURANCE,
+                priority=1,
+                floor_seconds=300,
+                cost_fn=lambda _shape: 1.0,
+            ),
+            EndpointGroup(
+                name=EndpointGroupName.MT_SENSOR_READINGS,
+                priority=2,
+                floor_seconds=60,
+                cost_fn=lambda _shape: 1.0,
+            ),
+        ]
+        sched = _make_scheduler(settings=settings, groups=groups)
+        sched.resolve(SMALL_SHAPE)
+
+        assert sched.fastest_effective_interval_seconds() == 300.0
 
 
 class TestNeedsResolve:

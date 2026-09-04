@@ -35,15 +35,16 @@ class ConfigCollector(MetricCollector):
     """Collector for configuration and security settings."""
 
     # Scheduler endpoint group (#617 §2, SLOW tier). ``config_org`` (pri4) covers
-    # the whole per-org config cycle (login security + admins + config changes +
-    # SAML posture ≈ 4 API calls, +1 when SAML is enabled); floor 900s,
+    # the whole per-org config cycle: login security, admins, configuration changes,
+    # SAML settings, and the conditional IdP fetch. Reserve all five calls even when
+    # SAML is disabled because cost_fn has no SAML capability dimension; floor 900s,
     # stretchable to 3600s.
     endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = (
         EndpointGroup(
             name=EndpointGroupName.CONFIG_ORG,
             priority=4,
             floor_seconds=900,
-            cost_fn=lambda shape: 4.0,
+            cost_fn=lambda shape: 5.0,
         ),
     )
 

@@ -8,7 +8,8 @@ the standard arrangement across Rob's repos, so it replaced the symlink when the
 Backlog.md. Edit `AGENTS.md`; never re-fork the content back into here.
 
 The 16 per-directory `CLAUDE.md` files under `src/`, `docs/`, `grafana/`, `scripts/`, `tests/`,
-`charts/`, `tools/` and `.github/` are unchanged and still the detailed context for those trees.
+`charts/`, `tools/` and `.github/`, together with this root file, are the 17 in-repository
+instruction files and remain the detailed context for those trees.
 Note that Codex does not read them — anything an agent must know regardless of harness belongs in
 `AGENTS.md`.
 

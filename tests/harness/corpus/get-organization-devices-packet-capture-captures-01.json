@@ -1,0 +1,135 @@
+{
+  "items": [
+    {
+      "admin": {
+        "id": "device_029",
+        "name": "device_name_027"
+      },
+      "captureId": "capture_id_001",
+      "client": {
+        "id": null,
+        "mac": null
+      },
+      "counts": {
+        "packets": {
+          "total": 0
+        }
+      },
+      "destination": "value_487",
+      "details": [],
+      "devices": [
+        {
+          "name": "device_name_001",
+          "serial": "device_001"
+        }
+      ],
+      "duration": 300,
+      "errorMessage": "value_486",
+      "file": {
+        "size": 0
+      },
+      "filterExpression": "value_029",
+      "interface": "value_029",
+      "name": "device_name_028",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024"
+      },
+      "notes": "notes_value_001",
+      "ports": "value_485",
+      "process": "value_488",
+      "startTs": "2026-01-01T00:00:00Z",
+      "status": "failed"
+    },
+    {
+      "admin": {
+        "id": "device_029",
+        "name": "device_name_027"
+      },
+      "captureId": "capture_id_002",
+      "client": {
+        "id": null,
+        "mac": null
+      },
+      "counts": {
+        "packets": {
+          "total": 0
+        }
+      },
+      "destination": "value_487",
+      "details": [],
+      "devices": [
+        {
+          "name": "device_name_001",
+          "serial": "device_001"
+        }
+      ],
+      "duration": 300,
+      "errorMessage": null,
+      "file": {
+        "size": 9742
+      },
+      "filterExpression": "value_029",
+      "interface": "value_029",
+      "name": "device_name_029",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024"
+      },
+      "notes": "notes_value_001",
+      "ports": "value_489",
+      "process": "value_488",
+      "startTs": "2026-01-01T00:00:00Z",
+      "status": "completed"
+    },
+    {
+      "admin": {
+        "id": "device_029",
+        "name": "device_name_027"
+      },
+      "captureId": "capture_id_003",
+      "client": {
+        "id": null,
+        "mac": null
+      },
+      "counts": {
+        "packets": {
+          "total": 0
+        }
+      },
+      "destination": "value_487",
+      "details": [],
+      "devices": [
+        {
+          "name": "device_name_001",
+          "serial": "device_001"
+        }
+      ],
+      "duration": 60,
+      "errorMessage": null,
+      "file": {
+        "size": 145444
+      },
+      "filterExpression": "value_029",
+      "interface": "value_029",
+      "name": "device_name_028",
+      "network": {
+        "id": "network_001",
+        "name": "device_name_024"
+      },
+      "notes": "notes_value_001",
+      "ports": "value_485",
+      "process": "value_488",
+      "startTs": "2026-01-01T00:00:00Z",
+      "status": "completed"
+    }
+  ],
+  "meta": {
+    "counts": {
+      "items": {
+        "remaining": 3,
+        "total": 6
+      }
+    }
+  }
+}

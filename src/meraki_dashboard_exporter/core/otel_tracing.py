@@ -59,14 +59,19 @@ def build_otel_resource(settings: Settings) -> Resource:
         OpenTelemetry resource describing this exporter instance.
 
     """
-    return Resource.create({
+    attributes = dict(settings.otel.resource_attributes)
+    legacy_environment = attributes.pop("environment", None)
+    if legacy_environment is not None:
+        attributes["deployment.environment"] = legacy_environment
+    else:
+        attributes.setdefault("deployment.environment", "production")
+
+    attributes.update({
         "service.name": settings.otel.service_name,
         "service.version": get_version(),
         "service.instance.id": os.getenv("HOSTNAME", "unknown"),
-        "deployment.environment": settings.otel.resource_attributes.get(
-            "environment", "production"
-        ),
     })
+    return Resource.create(attributes)
 
 
 def build_otlp_credentials(

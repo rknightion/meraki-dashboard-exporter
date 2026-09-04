@@ -183,16 +183,21 @@ Ordered by leverage. These are the only levers that actually reduce the calls a 
    object of group name → seconds; pinned groups are excluded from automatic stretching). See
    [Scheduler Architecture](observability/scheduler.md) for the full group name list and the
    solver's stretch order.
-5. **Stretch the per-endpoint interval gates.** A handful of expensive per-switch / per-client
+5. **Disable dense per-port MS series when switch-port detail is not needed.** Set
+   `MERAKI_EXPORTER_API__MS_PORT_METRICS_ENABLED=false` to suppress per-port MS status,
+   errors/warnings, traffic/usage/PoE/client-count, packet, STP/802.1X, neighbour, and port-info
+   series. It removes about **74 observed `meraki_ms_*` samples per observed port**; the
+   org-level port overview, switch-level STP, stack, and other MS signals continue to collect.
+6. **Stretch the per-endpoint interval gates.** A handful of expensive per-switch / per-client
    fetches are also exposed as their own dedicated settings (`setting_pin`s on their endpoint
    group) and default to **600 s** — raise them to spread the fan-out further:
    `MERAKI_EXPORTER_API__MS_PORT_USAGE_INTERVAL`, `MERAKI_EXPORTER_API__MS_PACKET_STATS_INTERVAL`,
    `MERAKI_EXPORTER_API__CLIENT_APP_USAGE_INTERVAL`,
    `MERAKI_EXPORTER_API__CLIENT_SIGNAL_QUALITY_INTERVAL`.
-6. **Then, only for pacing/headroom**, tune `MERAKI_EXPORTER_API__RATE_LIMIT_SHARED_FRACTION`
+7. **Then, only for pacing/headroom**, tune `MERAKI_EXPORTER_API__RATE_LIMIT_SHARED_FRACTION`
    (share the org budget with other tools) and `MERAKI_EXPORTER_API__RATE_LIMIT_REQUESTS_PER_SECOND`
    (default `10`; the client-side pace cap). These smooth calls; they do not reduce them.
-7. **Bound how many collectors can be mid-run at once.** Independent of per-group intervals,
+8. **Bound how many collectors can be mid-run at once.** Independent of per-group intervals,
    `MERAKI_EXPORTER_COLLECTORS__MAX_CONCURRENT_COLLECTORS` (default `5`) caps how many
    collectors' group-clocked loops may be executing a run concurrently — lowering it smooths
    out simultaneous bursts of API calls at the cost of some collectors waiting longer for their
@@ -227,22 +232,29 @@ full field set.
 ## Resource sizing (memory & CPU)
 
 Memory is the binding resource and scales with **Prometheus series cardinality**, which scales with
-device/network count — not a fixed value. The old "512 Mi is enough" advice is wrong at scale and
-will OOM-kill the pod. Rough single-org tiers (clients collector **off**), matching the Helm
-chart's `values.yaml` sizing comments:
+device/network count. Do not use a fixed resource quantity as a fleet-size recommendation.
 
-| Scale | Devices / networks | Requests | Limits | Notes |
-|---|---|---|---|---|
-| **Small** | ~100 / ~10 | 100m / 256Mi | 500m / 512Mi | registry ~20–50k series, RSS < 256 Mi; ~0.43 req/s |
-| **Medium** | ~1,000 / ~50 | 250m / 512Mi | 1 / 1Gi | comfortably within budget |
-| **Large** | ~5,000 / ~500 | 500m / 1.5Gi | 2 / 3Gi+ | registry 0.6–1.1M series; **also exceeds the org API budget** — needs NetworkFilter + interval tuning regardless of pod size |
+**Evidence label: BOOTABLE DEFAULT - NOT A REPRESENTATIVE SIZING MEASUREMENT.** The unchanged
+chart defaults are 100m / 256Mi requests and 500m / 512Mi limits. They are a bootable starting
+point, not a supported scale tier. Set requests and limits from a representative measurement with
+the topology, enabled collectors, cardinality, and observed RSS recorded. Keep headroom for normal
+variation. Turning the clients collector **on** raises cardinality and memory substantially.
 
-Set the memory **limit from observed RSS** (`process_resident_memory_bytes` / container memory)
-with generous headroom rather than trusting the estimates. Turning the clients collector **on**
-raises cardinality and memory substantially — size up further. `MetricTTL` and cardinality caps
-are tunables, not fixes: `MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR` (default
-`10000`) sheds oldest label sets per collector, and `MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY`
-(default `50000`) bounds per-family growth.
+`MetricTTL` and cardinality caps are tunables, not fixes:
+`MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR` (default `10000`) sheds oldest label
+sets per collector, and `MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY` (default `50000`)
+bounds per-family growth.
+
+### Largest populated fixture scrape render
+
+**Evidence label: HOMELAB MEASUREMENT ONLY - NOT A REPRESENTATIVE SIZING MEASUREMENT.** The largest
+fixture the harness can actually populate is the **HOMELAB full `ExporterApp` replay**; it is not a
+medium, large, or dense-switch measurement. Its full replay returned HTTP 200 with
+112,803,840-byte RSS, 3,688 total samples (2,253 product samples), a 513,757-byte payload, and a
+0.075662-second metrics render. Prometheus's default scrape timeout is 10 seconds, so this measured
+single render is well inside that timeout. `/metrics` serialisation uses a dedicated two-thread
+serving executor: this result measures one render, not two-scrape contention or a larger topology;
+a third simultaneous registry job is rejected rather than queued.
 
 ## Scaling out & HA
 

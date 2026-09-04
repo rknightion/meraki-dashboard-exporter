@@ -8,19 +8,20 @@ ARG PY_VERSION=3.14
 # manager natively tracks `FROM image:${ARG}@sha256:digest` (expands the ARG default to
 # resolve the tag, then keeps the digest in sync with that tag) — no custom regex manager
 # needed. The uv `COPY --from` pin below rides on the same built-in manager (#661).
-# Pinned digest resolves to python:3.14-slim-bookworm (3.14.6-slim-bookworm, multi-arch
-# index incl. linux/amd64 + linux/arm64) as of 2026-07-02.
-FROM python:${PY_VERSION}-slim-bookworm@sha256:416f0db2a2b561945630cef9877a7ea0581b27449eb9fd9df42f03e1b74b5b63 AS builder
+# Pinned digest resolves to python:3.14-alpine3.23 (3.14.7-alpine3.23, multi-arch
+# index incl. linux/amd64 + linux/arm64) as of 2026-09-03. Alpine avoids shipping
+# Debian's libsystemd0/libudev1 runtime packages; their source package is affected by
+# CVE-2026-16742 and Debian 13 has no fixed version.
+FROM python:${PY_VERSION}-alpine3.23@sha256:8caa2adfeb414dfe68d8b257f7aea9e205a400521c2b13b2d2e5e731fb8e70e5 AS builder
 
 # Install system deps with cache mounts for faster rebuilds
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
-        build-essential \
+RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+    apk add --no-cache \
+        build-base \
         ca-certificates \
         libffi-dev \
         git \
-        pkg-config
+        pkgconf
 
 WORKDIR /app
 
@@ -37,7 +38,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 # unattended. (The previous curl+tarball+sha256sum approach could not: Renovate bumped the version
 # ARG but had no way to compute the tarball hashes, so every bump broke the build.)
 # The image is a multi-arch index (linux/amd64 + linux/arm64), so no TARGETARCH handling is needed.
-COPY --from=ghcr.io/astral-sh/uv:0.11.28@sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.9@sha256:8b940d3a9d65bed080436972241af2e21c84b5e8c9193f7014ed71479ee795ff /uv /uvx /bin/
 
 # Copy dependency files first (most cacheable layer)
 COPY pyproject.toml uv.lock ./
@@ -50,17 +51,15 @@ RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
 COPY src/meraki_dashboard_exporter ./meraki_dashboard_exporter
 
 # --------------------------------------------------------------------------- #
-# Runtime stage - minimal Debian-based Python image
+# Runtime stage - minimal Alpine-based Python image
 # --------------------------------------------------------------------------- #
 # Same digest pin as the builder stage above (#562) — both stages must resolve to the
 # identical base image.
-FROM python:${PY_VERSION}-slim-bookworm@sha256:416f0db2a2b561945630cef9877a7ea0581b27449eb9fd9df42f03e1b74b5b63 AS runtime
+FROM python:${PY_VERSION}-alpine3.23@sha256:8caa2adfeb414dfe68d8b257f7aea9e205a400521c2b13b2d2e5e731fb8e70e5 AS runtime
 
 # Install runtime dependencies and create non-root user
-RUN apt-get update -qq \
-    && apt-get install -y --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd -m -u 1000 -s /bin/false exporter
+RUN apk add --no-cache ca-certificates \
+    && adduser -D -u 1000 -s /sbin/nologin exporter
 
 # Labels for container metadata (consolidated for single layer)
 LABEL org.opencontainers.image.source="https://github.com/rknightion/meraki-dashboard-exporter" \

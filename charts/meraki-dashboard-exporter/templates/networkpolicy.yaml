@@ -2,7 +2,7 @@
 {{- /*
   Optional NetworkPolicy. Locks the pod down to only the traffic it needs:
     ingress  - the http port (metrics scrape + webhook receiver)
-    egress   - DNS, HTTPS (Meraki API), and the OTLP collector port when tracing is on
+    egress   - DNS, HTTPS (Meraki API), and the shared OTLP collector port when any channel is on
   Requires a NetworkPolicy-enforcing CNI (Calico, Cilium, ...).
 */ -}}
 apiVersion: networking.k8s.io/v1
@@ -46,8 +46,9 @@ spec:
         - protocol: TCP
           port: 443
     {{- end }}
-    {{- if and (eq (.Values.config.otelEnabled | toString) "true") .Values.networkPolicy.egress.otlpPort }}
-    # OTLP collector (tracing)
+    {{- $otlpEnabled := or (eq (.Values.config.otelEnabled | toString) "true") (eq (.Values.config.otelLogsEnabled | toString) "true") (eq (.Values.config.otelMetricsEnabled | toString) "true") }}
+    {{- if and $otlpEnabled .Values.networkPolicy.egress.otlpPort }}
+    # OTLP collector (tracing, data logs, or metrics)
     - ports:
         - protocol: TCP
           port: {{ .Values.networkPolicy.egress.otlpPort }}

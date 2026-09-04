@@ -1,0 +1,17 @@
+{
+  "rstpEnabled": true,
+  "stpBridgePriority": [
+    {
+      "stpPriority": 8192,
+      "switches": [
+        "value_159"
+      ]
+    },
+    {
+      "stpPriority": 32768,
+      "switches": [
+        "value_160"
+      ]
+    }
+  ]
+}

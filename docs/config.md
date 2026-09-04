@@ -77,6 +77,7 @@ Configuration for Meraki API interactions
 | `MERAKI_EXPORTER_API__SMOOTHING_MIN_BATCH_DELAY` | `float` | `1.0` | Minimum delay between batches when smoothing (min: 0.0, max: 60.0) |
 | `MERAKI_EXPORTER_API__SMOOTHING_MAX_BATCH_DELAY` | `float` | `15.0` | Maximum delay between batches when smoothing (min: 0.0, max: 300.0) |
 | `MERAKI_EXPORTER_API__MS_PORT_STATUS_USE_ORG_ENDPOINT` | `bool` | `True` | Use org-level switch port status endpoint for MS status metrics |
+| `MERAKI_EXPORTER_API__MS_PORT_METRICS_ENABLED` | `bool` | `True` | Collect dense per-port MS series (status, errors/warnings, usage/PoE/client count, packets, STP/802.1X, neighbours, and port-info). Disable to suppress about 74 observed meraki_ms_* samples per observed port; org-level port overview, switch-level STP, stack, and other MS metrics remain enabled. |
 | `MERAKI_EXPORTER_API__MS_PORT_USAGE_INTERVAL` | `int` | `600` | Minimum seconds between per-switch port usage/POE refreshes (min: 0, max: 3600) |
 | `MERAKI_EXPORTER_API__MS_PACKET_STATS_INTERVAL` | `int` | `600` | Minimum seconds between per-switch packet stats refreshes (min: 0, max: 3600) |
 | `MERAKI_EXPORTER_API__CLIENT_APP_USAGE_INTERVAL` | `int` | `600` | Minimum seconds between client application usage refreshes (min: 0, max: 3600) |
@@ -166,7 +167,7 @@ Enable/disable specific metric collectors
 | `MERAKI_EXPORTER_COLLECTORS__ENABLED_COLLECTORS` | `set[str]` | `["alerts", "clients", "config", "device", "insight", "mtsensor", "mtsensoralerts", "networkhealth", "organization"]` | Enabled collector names |
 | `MERAKI_EXPORTER_COLLECTORS__DISABLE_COLLECTORS` | `set[str]` | `[]` | Explicitly disabled collectors (overrides enabled) |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECTOR_TIMEOUT` | `int` | `240` | Timeout for individual collector runs in seconds (min: 30, max: 600) |
-| `MERAKI_EXPORTER_COLLECTORS__MAX_CONCURRENT_COLLECTORS` | `int` | `5` | Max number of collectors whose group-clocked loops may be executing a run concurrently, GLOBALLY (single shared semaphore; replaces the old per-tier concurrency knobs). This bounds how many collectors run at once; it is distinct from api.concurrency_limit, which bounds the fan-out breadth INSIDE one collector. The two compose: up to max_concurrent_collectors collectors run, each fanning out up to api.concurrency_limit sub-requests (#636). (min: 1, max: 50) |
+| `MERAKI_EXPORTER_COLLECTORS__MAX_CONCURRENT_COLLECTORS` | `int` | `5` | Configured ceiling for collector runs admitted concurrently, GLOBALLY. The effective limit is min(max_concurrent_collectors, api.executor_workers // api.concurrency_limit), with a floor of 1, so nested collector fan-out cannot create an invisible SDK executor queue. This is distinct from api.concurrency_limit, which bounds fan-out inside one collector; shipped defaults therefore admit 2 collectors (#636/#710). (min: 1, max: 50) |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECT_AP_SIGNAL_QUALITY` | `bool` | `True` | Collect per-AP wireless signal quality (RSSI/SNR). Costs ONE API call per selected AP per cycle (hourly cadence; no bulk endpoint exists). Scope the fan-out with ap_signal_quality_tags, or disable entirely. |
 | `MERAKI_EXPORTER_COLLECTORS__AP_SIGNAL_QUALITY_TAGS` | `list[str]` | `[]` | Meraki device tags scoping AP signal-quality collection. Empty = all APs; non-empty = only APs carrying at least one of these tags (CSV or JSON array). |
 | `MERAKI_EXPORTER_COLLECTORS__COLLECT_INSIGHT` | `bool` | `False` | Enable the Meraki Insight collector (license-gated WAN/application health). Off by default; degrades to a debug-level skip when the org lacks Insight. |
@@ -220,7 +221,7 @@ Adaptive budget-aware endpoint scheduler (AIMD, stretch, resolve cadence)
 | `MERAKI_EXPORTER_SCHEDULER__AIMD_BACKOFF_MULTIPLIER` | `float` | `0.5` |  (min: 0.1, max: 0.9) |
 | `MERAKI_EXPORTER_SCHEDULER__AIMD_RECOVERY_RPS_PER_MINUTE` | `float` | `0.1` |  (min: 0.01, max: 5.0) |
 | `MERAKI_EXPORTER_SCHEDULER__AIMD_RESOLVE_HYSTERESIS` | `float` | `0.2` |  (min: 0.05, max: 1.0) |
-| `MERAKI_EXPORTER_SCHEDULER__GROUP_INTERVAL_OVERRIDES` | `dict[str, int]` | `{}` | Per-group interval pins, e.g. {"nh_connection_stats": 900}. Pinned groups are excluded from solver stretching. Env: JSON object. |
+| `MERAKI_EXPORTER_SCHEDULER__GROUP_INTERVAL_OVERRIDES` | `dict[str, int]` | `{}` | Per-group interval pins, e.g. {"nh_connection_stats": 900}. Every interval must be greater than zero. Pinned groups are excluded from solver stretching. Env: JSON object. |
 
 ## Network Filter Settings
 

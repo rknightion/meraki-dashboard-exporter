@@ -1,0 +1,436 @@
+[
+  {
+    "activeProfile": {
+      "id": "device_021",
+      "iname": null,
+      "isActive": true,
+      "name": "device_name_023",
+      "source": {
+        "type": "static"
+      },
+      "updatedAt": null
+    },
+    "clientCount": 1,
+    "duplex": "value_033",
+    "enabled": true,
+    "errors": [],
+    "isUplink": false,
+    "poe": {
+      "isAllocated": true
+    },
+    "portId": "port_id_001",
+    "powerUsageInWh": 2.1,
+    "securePort": {
+      "active": false,
+      "authenticationStatus": "value_030",
+      "configOverrides": {},
+      "enabled": false
+    },
+    "spanningTree": {
+      "statuses": []
+    },
+    "speed": "value_037",
+    "status": "Connected",
+    "trafficInKbps": {
+      "recv": 2950.4,
+      "sent": 136.8,
+      "total": 3087.2
+    },
+    "usageInKb": {
+      "recv": 1296578,
+      "sent": 60135,
+      "total": 1356713
+    },
+    "warnings": []
+  },
+  {
+    "clientCount": 0,
+    "duplex": "value_033",
+    "enabled": true,
+    "errors": [],
+    "isUplink": false,
+    "poe": {
+      "isAllocated": false
+    },
+    "portId": "port_id_002",
+    "powerUsageInWh": 0.0,
+    "securePort": {
+      "active": false,
+      "authenticationStatus": "value_030",
+      "configOverrides": {},
+      "enabled": false
+    },
+    "spanningTree": {
+      "statuses": [
+        "value_034",
+        "value_035",
+        "value_036"
+      ]
+    },
+    "speed": "value_037",
+    "status": "Connected",
+    "trafficInKbps": {
+      "recv": 10.4,
+      "sent": 15.0,
+      "total": 25.4
+    },
+    "usageInKb": {
+      "recv": 4558,
+      "sent": 6613,
+      "total": 11171
+    },
+    "warnings": []
+  },
+  {
+    "clientCount": 0,
+    "duplex": "value_033",
+    "enabled": true,
+    "errors": [],
+    "isUplink": false,
+    "poe": {
+      "isAllocated": false
+    },
+    "portId": "port_id_003",
+    "powerUsageInWh": 0.0,
+    "securePort": {
+      "active": false,
+      "authenticationStatus": "value_030",
+      "configOverrides": {},
+      "enabled": false
+    },
+    "spanningTree": {
+      "statuses": [
+        "value_034",
+        "value_035",
+        "value_036"
+      ]
+    },
+    "speed": "value_037",
+    "status": "Connected",
+    "trafficInKbps": {
+      "recv": 0.0,
+      "sent": 24.9,
+      "total": 24.9
+    },
+    "usageInKb": {
+      "recv": 0,
+      "sent": 10964,
+      "total": 10964
+    },
+    "warnings": []
+  },
+  {
+    "activeProfile": {
+      "id": "device_020",
+      "iname": null,
+      "isActive": true,
+      "name": "device_name_022",
+      "source": {
+        "type": "static"
+      },
+      "updatedAt": null
+    },
+    "clientCount": 1,
+    "duplex": "value_033",
+    "enabled": true,
+    "errors": [],
+    "isUplink": false,
+    "lldp": {
+      "chassisId": "chassis_id_005",
+      "managementAddress": "value_064",
+      "portDescription": "value_065",
+      "portId": "port_id_038",
+      "systemCapabilities": "value_045",
+      "systemDescription": "value_063",
+      "systemName": "value_062"
+    },
+    "poe": {
+      "isAllocated": false
+    },
+    "portId": "port_id_004",
+    "powerUsageInWh": 0.0,
+    "securePort": {
+      "active": false,
+      "authenticationStatus": "value_030",
+      "configOverrides": {},
+      "enabled": false
+    },
+    "spanningTree": {
+      "statuses": [
+        "value_034",
+        "value_035",
+        "value_036"
+      ]
+    },
+    "speed": "value_032",
+    "status": "Connected",
+    "trafficInKbps": {
+      "recv": 2059.2,
+      "sent": 116.2,
+      "total": 2175.4
+    },
+    "usageInKb": {
+      "recv": 904918,
+      "sent": 51046,
+      "total": 955964
+    },
+    "warnings": []
+  },
+  {
+    "clientCount": 0,
+    "duplex": "value_033",
+    "enabled": true,
+    "errors": [],
+    "isUplink": false,
+    "poe": {
+      "isAllocated": true
+    },
+    "portId": "port_id_005",
+    "powerUsageInWh": 0.9,
+    "securePort": {
+      "active": false,
+      "authenticationStatus": "value_030",
+      "configOverrides": {},
+      "enabled": false
+    },
+    "spanningTree": {
+      "statuses": [
+        "value_034",
+        "value_035",
+        "value_036"
+      ]
+    },
+    "speed": "value_037",
+    "status": "Connected",
+    "trafficInKbps": {
+      "recv": 0.3,
+      "sent": 1.0,
+      "total": 1.3
+    },
+    "usageInKb": {
+      "recv": 129,
+      "sent": 449,
+      "total": 578
+    },
+    "warnings": []
+  },
+  {
+    "activeProfile": {
+      "id": "device_021",
+      "iname": null,
+      "isActive": true,
+      "name": "device_name_023",
+      "source": {
+        "type": "static"
+      },
+      "updatedAt": null
+    },
+    "clientCount": 1,
+    "duplex": "value_033",
+    "enabled": true,
+    "errors": [],
+    "isUplink": false,
+    "poe": {
+      "isAllocated": true
+    },
+    "portId": "port_id_006",
+    "powerUsageInWh": 3.5,
+    "securePort": {
+      "active": false,
+      "authenticationStatus": "value_030",
+      "configOverrides": {},
+      "enabled": false
+    },
+    "spanningTree": {
+      "statuses": []
+    },
+    "speed": "value_032",
+    "status": "Connected",
+    "trafficInKbps": {
+      "recv": 2464.8,
+      "sent": 173.8,
+      "total": 2638.6
+    },
+    "usageInKb": {
+      "recv": 1083157,
+      "sent": 76397,
+      "total": 1159554
+    },
+    "warnings": []
+  },
+  {
+    "clientCount": 1,
+    "duplex": "value_033",
+    "enabled": true,
+    "errors": [],
+    "isUplink": false,
+    "poe": {
+      "isAllocated": false
+    },
+    "portId": "port_id_007",
+    "powerUsageInWh": 0.0,
+    "securePort": {
+      "active": false,
+      "authenticationStatus": "value_030",
+      "configOverrides": {},
+      "enabled": false
+    },
+    "spanningTree": {
+      "statuses": [
+        "value_030"
+      ]
+    },
+    "speed": "value_032",
+    "status": "Connected",
+    "trafficInKbps": {
+      "recv": 290.9,
+      "sent": 4048.1,
+      "total": 4339.0
+    },
+    "usageInKb": {
+      "recv": 127829,
+      "sent": 1778941,
+      "total": 1906770
+    },
+    "warnings": []
+  },
+  {
+    "clientCount": 0,
+    "duplex": "value_033",
+    "enabled": true,
+    "errors": [],
+    "isUplink": false,
+    "poe": {
+      "isAllocated": true
+    },
+    "portId": "port_id_008",
+    "powerUsageInWh": 1.6,
+    "securePort": {
+      "active": false,
+      "authenticationStatus": "value_030",
+      "configOverrides": {},
+      "enabled": false
+    },
+    "spanningTree": {
+      "statuses": [
+        "value_030"
+      ]
+    },
+    "speed": "value_037",
+    "status": "Connected",
+    "trafficInKbps": {
+      "recv": 0.5,
+      "sent": 11.6,
+      "total": 12.1
+    },
+    "usageInKb": {
+      "recv": 240,
+      "sent": 5096,
+      "total": 5336
+    },
+    "warnings": []
+  },
+  {
+    "cdp": {
+      "address": "address_value_007",
+      "capabilities": "value_048",
+      "deviceId": "device_022",
+      "platform": "value_047",
+      "portId": "port_id_039",
+      "version": "cdp_version_value_001"
+    },
+    "clientCount": 1,
+    "duplex": "value_033",
+    "enabled": true,
+    "errors": [],
+    "isUplink": false,
+    "lldp": {
+      "chassisId": "chassis_id_006",
+      "portId": "port_id_040"
+    },
+    "poe": {
+      "isAllocated": false
+    },
+    "portId": "port_id_009",
+    "securePort": {
+      "active": false,
+      "authenticationStatus": "value_030",
+      "configOverrides": {},
+      "enabled": false
+    },
+    "spanningTree": {
+      "statuses": [
+        "value_030"
+      ]
+    },
+    "speed": "value_032",
+    "status": "Connected",
+    "trafficInKbps": {
+      "recv": 4048.0,
+      "sent": 291.0,
+      "total": 4339.0
+    },
+    "usageInKb": {
+      "recv": 1778918,
+      "sent": 127902,
+      "total": 1906820
+    },
+    "warnings": []
+  },
+  {
+    "cdp": {
+      "address": "address_value_010",
+      "capabilities": "value_054",
+      "deviceId": "device_025",
+      "managementAddress": "value_005",
+      "nativeVlan": 1,
+      "platform": "value_066",
+      "portId": "port_id_041",
+      "version": "cdp_version_value_002"
+    },
+    "clientCount": 0,
+    "duplex": "value_033",
+    "enabled": true,
+    "errors": [],
+    "isUplink": true,
+    "lldp": {
+      "chassisId": "chassis_id_004",
+      "managementAddress": "value_057",
+      "portDescription": "value_067",
+      "portId": "port_id_042",
+      "portVlan": 1,
+      "systemCapabilities": "value_059",
+      "systemDescription": "value_056",
+      "systemName": "value_055"
+    },
+    "poe": {
+      "isAllocated": false
+    },
+    "portId": "port_id_010",
+    "securePort": {
+      "active": false,
+      "authenticationStatus": "value_030",
+      "configOverrides": {},
+      "enabled": false
+    },
+    "spanningTree": {
+      "statuses": [
+        "value_034",
+        "value_036"
+      ]
+    },
+    "speed": "value_032",
+    "status": "Connected",
+    "trafficInKbps": {
+      "recv": 454.1,
+      "sent": 7513.8,
+      "total": 7967.9
+    },
+    "usageInKb": {
+      "recv": 199539,
+      "sent": 3301962,
+      "total": 3501501
+    },
+    "warnings": []
+  }
+]

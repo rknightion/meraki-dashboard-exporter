@@ -12,6 +12,10 @@ Health endpoints:
   Liveness:  http://localhost:{{ .Values.service.port }}/health
   Readiness: http://localhost:{{ .Values.service.port }}/ready
 
+RESOURCE SIZING: Evidence label: BOOTABLE DEFAULT - NOT A REPRESENTATIVE SIZING MEASUREMENT.
+The default (requests 100m / 256Mi, limits 500m / 512Mi) is a bootable starting point, not a
+supported scale tier. Set limits from representative observed RSS with headroom.
+
 `/ready` is a startup gate: it becomes ready after the initial required
 collection succeeds and does not become stale later. Use `/health` for the
 dead-man check and Prometheus scheduler success timestamps for freshness.
