@@ -20,7 +20,7 @@ Meraki API Client - Provides authenticated access to Cisco Meraki Dashboard API 
      fraction 0.8, and jitter ratio 0.1; toggle via `APISettings.rate_limit_enabled`.
 - **Authentication**: `MerakiSettings.api_key` is a Pydantic `SecretStr`; `.get_secret_value()` is only ever called once, inside `_create_api_client()`. Never log it. `api_base_url` defaults to `https://api.meraki.com/api/v1` but supports regional endpoints.
 - **Error handling**: Network timeouts and API errors are common - always use decorators, and wrap responses with `validate_response_format` to normalize the SDK exhausted-retry error shape
-- **Meraki SDK 4.4.0** is exactly pinned in `pyproject.toml` (Renovate owns bumps):
+- **Meraki SDK 4.5.0** is exactly pinned in `pyproject.toml` (Renovate owns bumps):
   `_create_api_client()` passes `validate_kwargs=settings.api.validate_kwargs`
   (`APISettings.validate_kwargs`, default `False`); set it `True` in dev/CI to surface warnings.
 - **Network fetches**: Collectors must NOT call the SDK's `getOrganizationNetworks` directly — go

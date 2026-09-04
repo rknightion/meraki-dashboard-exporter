@@ -15,7 +15,7 @@ Core infrastructure for Meraki Dashboard Exporter - Contains foundational compon
 ### Configuration
 - `config.py` - `Settings` class (Pydantic BaseSettings) with nested config models
 - `config_models.py` - Nested config models (`APISettings` including `validate_kwargs` for the
-  exactly pinned Meraki SDK 4.4.0, `CollectorSettings` with default `collector_timeout=240`,
+  exactly pinned Meraki SDK 4.5.0, `CollectorSettings` with default `collector_timeout=240`,
   `OTelSettings`, `NetworkFilterSettings`, etc.)
 - `config_logger.py` - Configuration-aware logging setup
 - `network_filter.py` - `NetworkFilter` resolver for include/exclude rules across name (glob), id, and tag. Pure logic; applied at the inventory read path in `services/inventory.py`. `discovery.py::DiscoveryService` audits the full inventory, while `CollectorManager._validate_network_filter()` compares unfiltered and resolved network sets during startup validation.
