@@ -5,6 +5,23 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [2.0.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.0.0...v2.0.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* clear post-v2 audit invariants ([5e8d9c2](https://github.com/rknightion/meraki-dashboard-exporter/commit/5e8d9c23b76a2f2edd531c15c776cbfbcc9134fa))
+* **helm:** validate independent OTLP channels (MDE-0061) ([31c1d25](https://github.com/rknightion/meraki-dashboard-exporter/commit/31c1d2596b6a7fae54ca89e302c01d3d0ad829c0))
+* **http:** bound client page work (MDE-0058) ([92c3ae7](https://github.com/rknightion/meraki-dashboard-exporter/commit/92c3ae7574a5909f81136c52acb4d44066417d44))
+* **ms:** repair both live switch defects found by the v2 soak ([84aa7e8](https://github.com/rknightion/meraki-dashboard-exporter/commit/84aa7e8e6be91c0176202688b1d3c4ecbc998775))
+* **observability:** preserve configured OTel resources (MDE-0055) ([822c6f4](https://github.com/rknightion/meraki-dashboard-exporter/commit/822c6f409ff7e03701aa4100ed3535232f00b825))
+* **organization:** expire stale application categories (MDE-0049) ([517f5c8](https://github.com/rknightion/meraki-dashboard-exporter/commit/517f5c828ee2677b53de6fa2f5c835b50df9ffab))
+
+
+### Documentation
+
+* re-import the fan-out protocol at c1e6cb0 ([5535233](https://github.com/rknightion/meraki-dashboard-exporter/commit/5535233024755c927f4d9d28e9bc363dd716c454))
+
 ## [2.0.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v1.0.2...v2.0.0) (2026-09-03)
 
 
