@@ -1,10 +1,10 @@
 ---
 id: MDE-0052
 title: Validate AnyIO 4.15.0 against cancellation and shutdown contracts
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-03 14:40'
-updated_date: '2026-09-04 05:53'
+updated_date: '2026-09-04 06:35'
 labels:
   - 'area:concurrency'
 dependencies: []
@@ -21,16 +21,16 @@ The Wave 3 currency pass found AnyIO 4.14.2 locked through the direct runtime re
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 AnyIO 4.15.0 is exercised against request cancellation, lifespan shutdown, managed task groups and the pytest async harness before the lockfile moves
-- [ ] #2 Focused async/concurrency tests and the full repository gate pass without weakening timeouts, cancellation assertions or shutdown bounds
-- [ ] #3 Behavioral changes found during the bump are documented or split into self-contained follow-up work
+- [x] #1 AnyIO 4.15.0 is exercised against request cancellation, lifespan shutdown, managed task groups and the pytest async harness before the lockfile moves
+- [x] #2 Focused async/concurrency tests and the full repository gate pass without weakening timeouts, cancellation assertions or shutdown bounds
+- [x] #3 Behavioral changes found during the bump are documented or split into self-contained follow-up work
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
-- [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
-- [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
+- [x] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
+- [x] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
+- [x] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -38,3 +38,9 @@ The Wave 3 currency pass found AnyIO 4.14.2 locked through the direct runtime re
 <!-- SECTION:PLAN:BEGIN -->
 Exercise AnyIO 4.15.0 against cancellation, lifespan shutdown, managed task groups and the async pytest harness; apply only if focused concurrency checks and the full gate pass unchanged.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Accepted AnyIO 4.15.0 in 4cc1f6e. An isolated focused suite passed 74 tests; the applied checkout passed a broader 100-test slice covering request cancellation, lifespan shutdown, ManagedTaskGroup behavior, and the async pytest harness, then just check passed 2,958 selected tests at 91.49% coverage without changing timeouts or assertions. AnyIO 4.15.0 exposes a new third-party Starlette deprecation warning for the anyio.abc.BlockingPortal alias; no exporter behavior changed and the existing FastAPI-TestClient warning remains separate.
+<!-- SECTION:FINAL_SUMMARY:END -->
