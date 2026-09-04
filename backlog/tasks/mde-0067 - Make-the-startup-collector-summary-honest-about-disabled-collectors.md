@@ -1,10 +1,10 @@
 ---
 id: MDE-0067
 title: Make the startup collector summary honest about disabled collectors
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-04 07:27'
-updated_date: '2026-09-04 09:55'
+updated_date: '2026-09-04 10:01'
 labels:
   - 'area:observability'
   - needs-triage
@@ -28,17 +28,17 @@ Scope is the log summary and the no-op loop, not the collector gating, which alr
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The startup collector summary counts a collector disabled by its own collect_* flag as skipped, with the flag named as the reason, rather than reporting it enabled
-- [ ] #2 'Enabled Collectors' and the printed cadences exclude a collector whose is_active is false
-- [ ] #3 No per-collector loop task is started for a collector whose is_active is false
-- [ ] #4 A regression covers a disabled-by-flag collector and asserts the summary, the enabled list and the started task set all agree with is_active
+- [x] #1 The startup collector summary counts a collector disabled by its own collect_* flag as skipped, with the flag named as the reason, rather than reporting it enabled
+- [x] #2 'Enabled Collectors' and the printed cadences exclude a collector whose is_active is false
+- [x] #3 No per-collector loop task is started for a collector whose is_active is false
+- [x] #4 A regression covers a disabled-by-flag collector and asserts the summary, the enabled list and the started task set all agree with is_active
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
-- [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
-- [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
+- [x] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
+- [x] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
+- [x] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -49,3 +49,23 @@ Scope is the log summary and the no-op loop, not the collector gating, which alr
 3. core/config_logger.py log_startup_summary takes the live active and disabled collector names instead of reading settings.collectors.active_collectors, which cannot see a per-collector flag. app.py _log_startup_summary supplies them.
 4. Gate: just check, plus a CodeRabbit pass since this is code with branching.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verified failing-first: with collect_insight=false the five new regressions failed while the captured startup log reproduced the live defect verbatim - Enabled Collectors carried 'insight', Collector Cadences printed InsightCollector@900.0s, and task_count was 9 including InsightCollector.
+
+Root fix is one branch in collectors/manager.py _initialize_collectors. An instantiated collector whose is_active is false is registered in the name index and lock map (so the control API still answers 'disabled' rather than 'not found'), appended to skipped_collectors with its own flag named, and never appended to self.collectors. Every downstream surface already reads self.collectors, so the summary count, cadence gauges, scheduling diagnostics, readiness set, collect_initial ordering and app.py loop-start all corrected from that single change. A new MetricCollector.inactive_reason property carries the operator-facing reason; InsightCollector and ClientsCollector override it to name collectors.collect_insight and clients.enabled.
+
+log_startup_summary now takes active_collector_names and disabled_collector_names, because settings.collectors.active_collectors is only the name allow/deny list and cannot see a per-collector flag. It falls back to the old source when the caller supplies neither, and prints a new Disabled Collectors line.
+
+Both collectors this touches are off by default, so a default deployment now reports clients and insight as skipped instead of enabled. That is the intended correction, and no existing test depended on the old behaviour.
+
+Gate: just check exit 0 - ruff 'All checks passed!', mypy 'Success: no issues found in 122 source files', 2965 passed / 5 deselected, coverage 91.51%. CodeRabbit review completed with 0 findings across all 8 changed files. just gen was not needed: no metric, config, endpoint, collector-registry, settings-schema or chart input changed, and the drift gate inside just check passed. No Grafana change: no metric or label name moved.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped in a231a50. A collector switched off by its own collect_* flag now reports as skipped with that flag named, instead of being counted as enabled, printed under Enabled Collectors with a cadence, and handed a per-collector loop task. Proved by eight new regressions in tests/unit/test_disabled_collector_reporting.py, five of which failed first against the live defect, and by just check green at 2965 passed / 91.51% with a clean CodeRabbit pass.
+<!-- SECTION:FINAL_SUMMARY:END -->
