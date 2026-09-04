@@ -163,13 +163,19 @@ smoke tag="meraki-dashboard-exporter:latest":
 
 # the source-tree gate: exactly what the CI test job enforces
 [group('check')]
-check: fmt-check lint typecheck gen-check api-conformance security-exceptions test
+check: fmt-check lint typecheck gen-check api-conformance security-exceptions cloud-setup-check test
 
 # validate reviewed Trivy vulnerability exceptions and their expiry dates
 [group('check')]
 [no-exit-message]
 security-exceptions:
     uv run python scripts/validate_trivy_exceptions.py
+
+# parse the cloud environment bootstrap without executing its installers
+[group('check')]
+[no-exit-message]
+cloud-setup-check:
+    bash -n scripts/cloud-environment-setup.sh
 
 # image needs a Docker daemon.
 # image-verify needs a Docker daemon.
