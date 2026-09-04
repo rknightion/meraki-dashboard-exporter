@@ -303,6 +303,11 @@ coverage-report:
 deps-update:
     uv lock --upgrade
 
+# upgrade one package in uv.lock while preserving every unrelated pin
+[group('dev')]
+deps-update-package package:
+    uv lock --upgrade-package '{{ package }}'
+
 # print the resolved dependency tree
 [group('dev')]
 deps-show:
