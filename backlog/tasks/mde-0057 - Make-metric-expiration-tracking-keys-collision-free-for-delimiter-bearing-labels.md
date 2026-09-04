@@ -3,9 +3,10 @@ id: MDE-0057
 title: >-
   Make metric-expiration tracking keys collision-free for delimiter-bearing
   labels
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 14:43'
+updated_date: '2026-09-04 05:53'
 labels:
   - 'area:observability'
 dependencies: []
@@ -33,3 +34,9 @@ Audit dimension 3 confirmed a preventive tracking-key collision at the v2.0.0 re
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Write a failing legacy-delimiter collision regression through tracking, expiry and Gauge removal; replace the serialized label key with a sorted immutable tuple while preserving TTL and shedding behavior.
+<!-- SECTION:PLAN:END -->

@@ -1,10 +1,10 @@
 ---
 id: MDE-0066
 title: Repair the MS per-device port-usage fallback after ID-only labels
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-03 19:58'
-updated_date: '2026-09-03 23:06'
+updated_date: '2026-09-03 23:07'
 labels:
   - 'area:ms'
   - needs-triage
@@ -22,16 +22,16 @@ The post-v2 live soak confirmed that the per-device port-usage fallback fails be
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The per-device port-usage fallback takes its logging display name from the device input rather than the ID-only Prometheus label map
-- [ ] #2 A failing-before focused regression drives the fallback helper directly and proves its API call and representative usage emission complete without a name label
-- [ ] #3 The DeviceCollector fallback path records no unknown error for this case and retains ID-only metric labels
+- [x] #1 The per-device port-usage fallback takes its logging display name from the device input rather than the ID-only Prometheus label map
+- [x] #2 A failing-before focused regression drives the fallback helper directly and proves its API call and representative usage emission complete without a name label
+- [x] #3 The DeviceCollector fallback path records no unknown error for this case and retains ID-only metric labels
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
-- [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
-- [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
+- [x] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
+- [x] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
+- [x] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
 
 ## Implementation Notes
@@ -41,3 +41,9 @@ The post-v2 live soak confirmed that the per-device port-usage fallback fails be
 
 Metric labels are unchanged: create_device_labels still omits the display name per #534, and only the logging context reads it. Focused result: 49 passed for the MS module. Full gate: just check 2945 passed, 5 deselected, 91.49% coverage. CodeRabbit reported 0 findings.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed in 84aa7e8. The per-device port-usage fallback now takes its logging display name from the device input rather than the ID-only Prometheus label map, so it no longer raises KeyError before its API call. Verified by a focused regression driven directly against collect_device_port_usage_metrics, watched failing with KeyError: 'name' at the LogContext line and passing afterwards with the API call made and meraki_ms_port_traffic_bytes_per_second emitted under ID-only labels. MS module 49 passed; just check 2945 passed at 91.49% coverage; CodeRabbit 0 findings. DoD2: the generated-drift gate passed with no declaration change. DoD3: metric labels are unchanged and remain ID-only, so no Grafana query needed updating.
+<!-- SECTION:FINAL_SUMMARY:END -->

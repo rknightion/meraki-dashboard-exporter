@@ -2,7 +2,7 @@
 {{- /*
   Optional NetworkPolicy. Locks the pod down to only the traffic it needs:
     ingress  - the http port (metrics scrape + webhook receiver)
-    egress   - DNS, HTTPS (Meraki API), and the OTLP collector port when tracing is on
+    egress   - DNS, HTTPS (Meraki API), and the shared OTLP collector port when any channel is on
   Requires a NetworkPolicy-enforcing CNI (Calico, Cilium, ...).
 */ -}}
 apiVersion: networking.k8s.io/v1

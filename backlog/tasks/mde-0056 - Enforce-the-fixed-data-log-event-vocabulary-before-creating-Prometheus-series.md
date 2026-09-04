@@ -1,9 +1,10 @@
 ---
 id: MDE-0056
 title: Enforce the fixed data-log event vocabulary before creating Prometheus series
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 14:43'
+updated_date: '2026-09-04 05:53'
 labels:
   - 'area:observability'
 dependencies: []
@@ -31,3 +32,9 @@ Audit dimension 3 confirmed a preventive cardinality gap at the v2.0.0 release t
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Write a failing unknown-event regression proving no OTLP record, status entry or Prometheus series is created; enforce BUILT_IN_EVENTS at the validation point and retain all built-in/default/allowlist paths.
+<!-- SECTION:PLAN:END -->

@@ -284,7 +284,10 @@ class DataLogEmitter:
         """Return whether records for ``event_name`` would actually be emitted.
 
         Producers MUST call this before doing any API fetch for a data-log
-        signal so non-users pay zero rate-limit cost. Short-circuits cheaply.
+        signal so non-users pay zero rate-limit cost. The only accepted names
+        are the bounded values in ``BUILT_IN_EVENTS``; rejecting any other name
+        here prevents it from reaching records, status, or counter series.
+        Short-circuits cheaply.
 
         Parameters
         ----------
@@ -298,6 +301,8 @@ class DataLogEmitter:
             allowlisted).
 
         """
+        if event_name not in BUILT_IN_EVENTS:
+            return False
         if not self.enabled:
             return False
         if self._events_allowlist is not None and event_name not in self._events_allowlist:

@@ -12,11 +12,9 @@ Health endpoints:
   Liveness:  http://localhost:{{ .Values.service.port }}/health
   Readiness: http://localhost:{{ .Values.service.port }}/ready
 
-RESOURCE SIZING WARNING: the chart default (requests 256Mi, limits 512Mi)
-is scoped to SMALL only: approximately one org, 10 networks, and 100 devices.
-Before deploying a larger fleet, set resources from observed RSS with headroom;
-see the chart values and the scaling guide. The default is intentionally unchanged
-because no MEDIUM or dense-switch resource measurement exists.
+RESOURCE SIZING: Evidence label: BOOTABLE DEFAULT - NOT A REPRESENTATIVE SIZING MEASUREMENT.
+The default (requests 100m / 256Mi, limits 500m / 512Mi) is a bootable starting point, not a
+supported scale tier. Set limits from representative observed RSS with headroom.
 
 `/ready` is a startup gate: it becomes ready after the initial required
 collection succeeds and does not become stale later. Use `/health` for the

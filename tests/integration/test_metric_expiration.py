@@ -186,12 +186,12 @@ class TestMetricExpiresAfterTTL:
             await expiration_manager._cleanup_expired_metrics()
 
         remaining = list(expiration_manager._metric_timestamps.keys())
-        remaining_labels = [key[2] for key in remaining]
+        remaining_labels = [dict(key[2]) for key in remaining]
 
-        assert any("FRESH-SERIAL" in label for label in remaining_labels), (
+        assert any(label["serial"] == "FRESH-SERIAL" for label in remaining_labels), (
             "Fresh metric should still be tracked"
         )
-        assert not any("STALE-SERIAL" in label for label in remaining_labels), (
+        assert not any(label["serial"] == "STALE-SERIAL" for label in remaining_labels), (
             "Stale metric should have been removed"
         )
         assert expiration_manager._metric_counts[_COLLECTOR] == 1
@@ -445,6 +445,44 @@ class TestExpirationManagerLifecycle:
 
 class TestRealSeriesRemoval:
     """Expiration must remove the actual Prometheus series, not just tracking."""
+
+    async def test_delimiter_colliding_labels_are_tracked_and_removed_independently(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """Distinct delimiter-bearing label mappings must not share a tracking key."""
+        gauge = Gauge(
+            "meraki_test_delimiter_collision",
+            "test gauge for delimiter collision",
+            labelnames=["org_id", "serial"],
+        )
+        first_labels = {"org_id": "o1|serial=s1", "serial": "s2"}
+        second_labels = {"org_id": "o1", "serial": "s1|serial=s2"}
+        base_time = 24_000_000.0
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time
+            for labels, value in ((first_labels, 1), (second_labels, 2)):
+                gauge.labels(**labels).set(value)
+                expiration_manager.track_metric_update(
+                    collector_name=_COLLECTOR,
+                    metric_name="meraki_test_delimiter_collision",
+                    label_values=labels,
+                    metric=gauge,
+                )
+
+        assert len(expiration_manager._metric_timestamps) == 2
+        assert expiration_manager._metric_counts[_COLLECTOR] == 2
+        assert tuple(first_labels.values()) in gauge._metrics
+        assert tuple(second_labels.values()) in gauge._metrics
+
+        with patch("meraki_dashboard_exporter.core.metric_expiration.time.time") as mock_time:
+            mock_time.return_value = base_time + 601.0
+            await expiration_manager._cleanup_expired_metrics()
+
+        assert tuple(first_labels.values()) not in gauge._metrics
+        assert tuple(second_labels.values()) not in gauge._metrics
+        assert len(expiration_manager._metric_timestamps) == 0
+        assert expiration_manager._metric_counts[_COLLECTOR] == 0
 
     async def test_expired_series_removed_from_registry(
         self, expiration_manager: MetricExpirationManager

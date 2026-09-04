@@ -85,8 +85,12 @@ class TestClientsEndpointGroups:
         by_name = {g.name: g for g in ClientsCollector.endpoint_groups}
         # clients_list: N x pages(clients, 5000) ~ N.
         assert by_name[EndpointGroupName.CLIENTS_LIST].cost_fn(_shape(network_count=12)) == 12
-        # clients_app_usage: N x ceil(clients/1000) ~ N.
-        assert by_name[EndpointGroupName.CLIENTS_APP_USAGE].cost_fn(_shape(network_count=12)) == 12
+        # clients_app_usage: N x ceil(10,000 capped clients / 100 IDs per request).
+        # The static bound intentionally overestimates smaller client populations.
+        assert by_name[EndpointGroupName.CLIENTS_APP_USAGE].cost_fn(_shape(network_count=1)) == 100
+        assert (
+            by_name[EndpointGroupName.CLIENTS_APP_USAGE].cost_fn(_shape(network_count=12)) == 1200
+        )
         # clients_signal_quality: wireless nets x per-network cap (200).
         assert (
             by_name[EndpointGroupName.CLIENTS_SIGNAL_QUALITY].cost_fn(
@@ -129,10 +133,68 @@ class TestClientsGetEndpointGroups(BaseCollectorTest):
         collector = self._make(settings, isolated_registry, inventory, enabled=True)
         assert {g.name for g in collector.get_endpoint_groups()} == _EXPECTED_CLIENT_GROUPS
 
+    def test_app_usage_cost_uses_configured_per_network_cap(
+        self, settings, isolated_registry, inventory
+    ) -> None:
+        """A validated non-default cap cannot exceed the scheduler's declared batches."""
+        settings.clients.max_clients_per_network = 50_000
+        collector = self._make(settings, isolated_registry, inventory, enabled=True)
+
+        app_usage = next(
+            group
+            for group in collector.get_endpoint_groups()
+            if group.name is EndpointGroupName.CLIENTS_APP_USAGE
+        )
+
+        assert app_usage.cost_fn(_shape(network_count=1)) == 500
+
     def test_no_groups_when_disabled(self, settings, isolated_registry, inventory) -> None:
         """Disabled ⇒ no groups enter the solver's demand accounting."""
         collector = self._make(settings, isolated_registry, inventory, enabled=False)
         assert collector.get_endpoint_groups() == ()
+
+
+class TestClientsAppUsageDemand(BaseCollectorTest):
+    """The app-usage demand covers its bounded per-network batch fan-out."""
+
+    collector_class = ClientsCollector
+
+    async def test_demand_covers_a_150_client_network(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ) -> None:
+        """The conservative declaration covers the two 100-client batches actually emitted."""
+        settings.clients.enabled = True
+        org = OrganizationFactory.create(org_id="123", name="Org")
+        network = NetworkFactory.create(network_id="N_123", name="Net", org_id=org["id"])
+        clients = [ClientFactory.create(client_id=f"c{i}") for i in range(150)]
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_custom_response("getNetworkClients", clients)
+            .with_custom_response("getNetworkClientsApplicationUsage", [])
+            .build()
+        )
+        inventory.api = api
+        collector = ClientsCollector(
+            api=api,
+            settings=settings,
+            registry=isolated_registry,
+            inventory=inventory,
+        )
+        collector.api_helper.api = api
+
+        with patch.object(collector.dns_resolver, "resolve_multiple", return_value={}):
+            await collector.collect()
+
+        emitted_calls = collector.api.networks.getNetworkClientsApplicationUsage.call_count
+        assert emitted_calls == 2
+        declared_demand = next(
+            group.cost_fn(_shape(network_count=1))
+            for group in collector.get_endpoint_groups()
+            if group.name is EndpointGroupName.CLIENTS_APP_USAGE
+        )
+        assert declared_demand >= emitted_calls
 
 
 class TestClientsListGate(BaseCollectorTest):

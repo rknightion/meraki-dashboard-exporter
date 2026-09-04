@@ -232,32 +232,24 @@ full field set.
 ## Resource sizing (memory & CPU)
 
 Memory is the binding resource and scales with **Prometheus series cardinality**, which scales with
-device/network count — not a fixed value. The old "512 Mi is enough" advice is wrong at scale and
-will OOM-kill the pod. Rough single-org tiers (clients collector **off**), matching the Helm
-chart's `values.yaml` sizing comments:
+device/network count. Do not use a fixed resource quantity as a fleet-size recommendation.
 
-| Scale | Devices / networks | Requests | Limits | Notes |
-|---|---|---|---|---|
-| **Small** | ~100 / ~10 | 100m / 256Mi | 500m / 512Mi | registry ~20–50k series, RSS < 256 Mi |
-| **Medium** | ~1,000 / ~50 | 250m / 512Mi | 1 / 1Gi | — |
-| **Large** | ~5,000 / ~500 | 500m / 1.5Gi | 2 / 3Gi+ | **also exceeds the org API budget** — needs NetworkFilter + interval tuning regardless of pod size |
+**Evidence label: BOOTABLE DEFAULT - NOT A REPRESENTATIVE SIZING MEASUREMENT.** The unchanged
+chart defaults are 100m / 256Mi requests and 500m / 512Mi limits. They are a bootable starting
+point, not a supported scale tier. Set requests and limits from a representative measurement with
+the topology, enabled collectors, cardinality, and observed RSS recorded. Keep headroom for normal
+variation. Turning the clients collector **on** raises cardinality and memory substantially.
 
-LARGE per-port MS **projection, not a measurement**: 700 MS switches × an assumed 30 observed
-ports/switch × the measured 2,225 `meraki_ms_*` samples / 30 observed ports (=74.17 samples/port)
-= **1,557,500 per-port MS series**. This projects only dense per-port MS families, not the total
-registry. Set `MERAKI_EXPORTER_API__MS_PORT_METRICS_ENABLED=false` when that detail is not needed.
-
-Set the memory **limit from observed RSS** (`process_resident_memory_bytes` / container memory)
-with generous headroom rather than trusting the estimates. Turning the clients collector **on**
-raises cardinality and memory substantially — size up further. `MetricTTL` and cardinality caps
-are tunables, not fixes: `MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR` (default
-`10000`) sheds oldest label sets per collector, and `MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY`
-(default `50000`) bounds per-family growth.
+`MetricTTL` and cardinality caps are tunables, not fixes:
+`MERAKI_EXPORTER_MONITORING__MAX_CARDINALITY_PER_COLLECTOR` (default `10000`) sheds oldest label
+sets per collector, and `MERAKI_EXPORTER_CARDINALITY__MAX_SERIES_PER_FAMILY` (default `50000`)
+bounds per-family growth.
 
 ### Largest populated fixture scrape render
 
-The largest fixture the harness can actually populate is the **HOMELAB full `ExporterApp` replay**;
-it is not a MEDIUM or dense-switch measurement. Its full replay returned HTTP 200 with
+**Evidence label: HOMELAB MEASUREMENT ONLY - NOT A REPRESENTATIVE SIZING MEASUREMENT.** The largest
+fixture the harness can actually populate is the **HOMELAB full `ExporterApp` replay**; it is not a
+medium, large, or dense-switch measurement. Its full replay returned HTTP 200 with
 112,803,840-byte RSS, 3,688 total samples (2,253 product samples), a 513,757-byte payload, and a
 0.075662-second metrics render. Prometheus's default scrape timeout is 10 seconds, so this measured
 single render is well inside that timeout. `/metrics` serialisation uses a dedicated two-thread

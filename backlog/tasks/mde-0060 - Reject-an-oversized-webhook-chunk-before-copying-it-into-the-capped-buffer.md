@@ -1,9 +1,10 @@
 ---
 id: MDE-0060
 title: Reject an oversized webhook chunk before copying it into the capped buffer
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 14:43'
+updated_date: '2026-09-04 05:53'
 labels:
   - 'area:http'
 dependencies: []
@@ -31,3 +32,9 @@ Audit dimension 2 confirmed a live defensive-resource defect at the v2.0.0 relea
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Write an oversized single-chunk regression that instruments maximum accumulator size; compare each chunk with remaining capacity before extending while preserving under-cap and validation-failure behavior.
+<!-- SECTION:PLAN:END -->

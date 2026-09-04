@@ -9,6 +9,7 @@ import time
 from collections.abc import AsyncIterator, Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -246,6 +247,7 @@ class ExporterApp:
         )
 
         self._background_tasks: set[asyncio.Task[Any]] = set()
+        self._manual_collector_reservations: set[str] = set()
         self._shutdown_event = asyncio.Event()
         self._shutdown_lock = asyncio.Lock()
         self._shutdown_complete = False
@@ -768,6 +770,28 @@ class ExporterApp:
         if isinstance(error, StartupConfigurationError):
             self._startup_configuration_error = error
             logger.error("Startup configuration validation failed", error=str(error))
+
+    async def _run_manual_collector(
+        self,
+        collector: MetricCollector,
+        collector_name: str,
+    ) -> None:
+        """Run one reserved manual collection without leaking background failures."""
+        try:
+            await self.collector_manager.run_collector_once(collector, force=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Manual collector run failed", collector=collector_name)
+
+    def _on_manual_collector_task_done(
+        self,
+        collector_name: str,
+        task: asyncio.Task[None],
+    ) -> None:
+        """Release manual-run state even when a task is cancelled before starting."""
+        self._manual_collector_reservations.discard(collector_name)
+        self._background_tasks.discard(task)
 
     async def _interruptible_sleep(self, seconds: float) -> None:
         """Sleep in 1s increments, waking early on shutdown."""
@@ -1420,20 +1444,31 @@ class ExporterApp:
                     "message": f"Collector '{collector_name}' is disabled",
                 }
 
-            if exporter.collector_manager.is_collector_running(collector_name):
+            if (
+                collector_name in exporter._manual_collector_reservations
+                or exporter.collector_manager.is_collector_running(collector_name)
+            ):
                 return {
                     "status": "running",
                     "message": f"Collector '{collector_name}' is already running",
                 }
 
+            # There is no await between the check and this reservation, so
+            # concurrent requests cannot all report started before the new task
+            # reaches CollectorManager's own run lock.
+            exporter._manual_collector_reservations.add(collector_name)
             # force=True so a manual trigger fetches every group regardless of its
             # gate (otherwise in-window groups would silently no-op) — #631.
-            task = asyncio.create_task(
-                exporter.collector_manager.run_collector_once(collector, force=True),
-                name=f"manual_{collector_name}",
-            )
+            try:
+                task = asyncio.create_task(
+                    exporter._run_manual_collector(collector, collector_name),
+                    name=f"manual_{collector_name}",
+                )
+            except BaseException:
+                exporter._manual_collector_reservations.discard(collector_name)
+                raise
             exporter._background_tasks.add(task)
-            task.add_done_callback(exporter._background_tasks.discard)
+            task.add_done_callback(partial(exporter._on_manual_collector_task_done, collector_name))
 
             return {
                 "status": "started",
@@ -1515,11 +1550,11 @@ class ExporterApp:
 
             body = bytearray()
             async for chunk in request.stream():
-                body.extend(chunk)
-                if len(body) > max_size:
+                remaining = max_size - len(body)
+                if len(chunk) > remaining:
                     logger.warning(
                         "Webhook payload too large",
-                        size=len(body),
+                        size=len(body) + len(chunk),
                         max_size=max_size,
                     )
                     exporter.webhook_handler.record_validation_failure("payload_too_large")
@@ -1527,6 +1562,7 @@ class ExporterApp:
                         status_code=413,
                         detail=f"Payload too large (max: {max_size} bytes)",
                     )
+                body.extend(chunk)
 
             # Parse JSON body from the (size-capped) buffer.
             try:

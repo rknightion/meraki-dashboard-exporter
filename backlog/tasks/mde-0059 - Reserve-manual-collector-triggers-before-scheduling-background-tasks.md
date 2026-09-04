@@ -1,9 +1,10 @@
 ---
 id: MDE-0059
 title: Reserve manual collector triggers before scheduling background tasks
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 14:43'
+updated_date: '2026-09-04 05:53'
 labels:
   - 'area:http'
 dependencies: []
@@ -31,3 +32,9 @@ Audit dimension 2 confirmed a live admission race at the v2.0.0 release tree. sr
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Write a real concurrent authenticated-trigger regression plus completion, cancellation and failure cleanup coverage; install a synchronous per-collector reservation before task creation and clear it on every terminal path.
+<!-- SECTION:PLAN:END -->

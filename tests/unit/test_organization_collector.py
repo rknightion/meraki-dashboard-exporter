@@ -457,7 +457,7 @@ class TestOrganizationCollector(BaseCollectorTest):
         stale_entries = {
             metric_name: entry
             for (_, metric_name, labels), entry in manager._metric_timestamps.items()
-            if "category=stale" in labels
+            if ("category", "stale") in labels
         }
         assert set(stale_entries) == expected_metric_names
         assert {entry.ttl_seconds for entry in stale_entries.values()} == {ttl_seconds}
@@ -484,7 +484,7 @@ class TestOrganizationCollector(BaseCollectorTest):
         retained_entries = {
             metric_name: entry
             for (_, metric_name, labels), entry in manager._metric_timestamps.items()
-            if "category=retained" in labels
+            if ("category", "retained") in labels
         }
         assert set(retained_entries) == expected_metric_names
         assert all(entry.ts == refresh_time for entry in retained_entries.values())

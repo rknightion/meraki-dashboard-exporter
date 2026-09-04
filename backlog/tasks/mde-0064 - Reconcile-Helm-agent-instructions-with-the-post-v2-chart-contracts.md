@@ -1,9 +1,10 @@
 ---
 id: MDE-0064
 title: Reconcile Helm agent instructions with the post-v2 chart contracts
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 19:43'
+updated_date: '2026-09-04 05:53'
 labels:
   - 'area:helm'
   - needs-triage
@@ -32,3 +33,9 @@ The Wave 5 fallback reconciliation found two stale operational claims in charts/
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Reconcile the touched Helm instruction paragraphs with current OTel NetworkPolicy behavior and the measurement-only resource contract, then verify every remaining claim in those paragraphs against templates and values.
+<!-- SECTION:PLAN:END -->

@@ -54,11 +54,9 @@ class TestConfigEndpointGroups:
         assert g.floor_seconds == 900
         assert g.setting_pin is None
 
-    def test_cost_is_four_calls(self) -> None:
-        """cost_fn is a flat 4 API calls per cycle."""
-        # login security + admins + config changes + SAML posture (#301) = ~4
-        # API calls per cycle (+1 more when SAML is enabled, not modelled).
-        assert ConfigCollector.endpoint_groups[0].cost_fn(_shape()) == 4
+    def test_cost_reserves_five_calls(self) -> None:
+        """cost_fn conservatively reserves the conditional SAML IdP fetch."""
+        assert ConfigCollector.endpoint_groups[0].cost_fn(_shape()) == 5
 
 
 class TestConfigOrgGate(BaseCollectorTest):
@@ -66,7 +64,16 @@ class TestConfigOrgGate(BaseCollectorTest):
 
     collector_class = ConfigCollector
 
-    def _build(self, mock_api_builder, settings, isolated_registry, inventory, sched):
+    def _build(
+        self,
+        mock_api_builder,
+        settings,
+        isolated_registry,
+        inventory,
+        sched,
+        *,
+        saml_enabled: bool = False,
+    ):
         """Build a ConfigCollector with empty config responses and a mock scheduler."""
         org = OrganizationFactory.create(org_id="123", name="Org")
         api = (
@@ -76,6 +83,8 @@ class TestConfigOrgGate(BaseCollectorTest):
             .with_custom_response("getOrganizationLoginSecurity", {})
             .with_custom_response("getOrganizationAdmins", [])
             .with_custom_response("getOrganizationConfigurationChanges", [])
+            .with_custom_response("getOrganizationSaml", {"enabled": saml_enabled})
+            .with_custom_response("getOrganizationSamlIdps", [])
             .build()
         )
         inventory.api = api
@@ -121,3 +130,29 @@ class TestConfigOrgGate(BaseCollectorTest):
         collector.api.organizations.getOrganizationLoginSecurity.assert_called_once()
         marked = [c.args[0] for c in sched.mark_ran.call_args_list]
         assert marked == [EndpointGroupName.CONFIG_ORG]
+
+    async def test_enabled_saml_cycle_matches_declared_demand(
+        self, mock_api_builder, settings, isolated_registry, inventory
+    ) -> None:
+        """An enabled-SAML organization exercises all five config facade calls."""
+        sched = self._sched(due=True)
+        collector = self._build(
+            mock_api_builder,
+            settings,
+            isolated_registry,
+            inventory,
+            sched,
+            saml_enabled=True,
+        )
+
+        await collector.collect()
+
+        facade_calls = (
+            collector.api.organizations.getOrganizationLoginSecurity.call_count,
+            collector.api.organizations.getOrganizationAdmins.call_count,
+            collector.api.organizations.getOrganizationConfigurationChanges.call_count,
+            collector.api.organizations.getOrganizationSaml.call_count,
+            collector.api.organizations.getOrganizationSamlIdps.call_count,
+        )
+        assert facade_calls == (1, 1, 1, 1, 1)
+        assert ConfigCollector.endpoint_groups[0].cost_fn(_shape()) == sum(facade_calls)

@@ -12,6 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CHART = REPO_ROOT / "charts" / "meraki-dashboard-exporter"
 GENERATOR_PATH = REPO_ROOT / "scripts" / "generate_helm_config.py"
 SHUTDOWN_DEADLINE_ENV = "MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS"
+SERVER_PORT_ENV = "MERAKI_EXPORTER_SERVER__PORT"
 
 
 def _load_generator() -> ModuleType:
@@ -116,3 +117,65 @@ def test_helm_render_rejects_deadline_extra_env_bypass() -> None:
 
     assert result.returncode != 0
     assert "extraEnv may not set MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS" in output
+
+
+def test_helm_render_rejects_mixed_case_deadline_extra_env_bypass() -> None:
+    """Pydantic's case-insensitive settings cannot bypass deadline validation."""
+    result = _helm_template(
+        "--set",
+        "extraEnv[0].name=meraki_exporter_api__per_fetch_deadline_seconds",
+        "--set",
+        "extraEnv[0].value=999",
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0
+    assert "extraEnv may not set MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS" in output
+
+
+def test_helm_render_rejects_server_port_extra_env_bypass() -> None:
+    """The listener port cannot diverge from the chart's service port."""
+    result = _helm_template(
+        "--set",
+        f"extraEnv[0].name={SERVER_PORT_ENV}",
+        "--set",
+        "extraEnv[0].value=8080",
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0
+    assert "extraEnv may not set MERAKI_EXPORTER_SERVER__PORT; use service.port" in output
+
+
+def test_helm_render_rejects_mixed_case_server_port_extra_env_bypass() -> None:
+    """Pydantic's case-insensitive settings cannot bypass listener validation."""
+    result = _helm_template(
+        "--set",
+        "extraEnv[0].name=Meraki_Exporter_Server__Port",
+        "--set",
+        "extraEnv[0].value=8080",
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0
+    assert "extraEnv may not set MERAKI_EXPORTER_SERVER__PORT; use service.port" in output
+
+
+def test_helm_render_preserves_ordinary_extra_env() -> None:
+    """Unrelated environment variables preserve the chart-owned port wiring."""
+    result = _helm_template(
+        "--set",
+        "service.port=9191",
+        "--set",
+        "extraEnv[0].name=EXAMPLE_UNRELATED_SETTING",
+        "--set",
+        "extraEnv[0].value=accepted",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "name: EXAMPLE_UNRELATED_SETTING" in result.stdout
+    assert "value: accepted" in result.stdout
+    assert 'MERAKI_EXPORTER_SERVER__PORT: "9191"' in result.stdout
+    assert "containerPort: 9191" in result.stdout
+    assert "- port: 9191\n      targetPort: http" in result.stdout
+    assert result.stdout.count("port: http") == 2

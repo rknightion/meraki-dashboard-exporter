@@ -1,9 +1,10 @@
 ---
 id: MDE-0062
 title: Reject server-port overrides through Helm extraEnv
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 18:46'
+updated_date: '2026-09-04 05:53'
 labels:
   - 'area:helm'
 dependencies: []
@@ -31,3 +32,9 @@ Audit dimension 4 confirmed preventive chart hardening at the v2.0.0 release tre
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Add a failing Helm render regression for MERAKI_EXPORTER_SERVER__PORT in extraEnv, reject it with service.port guidance, and retain ordinary extraEnv plus the single-value listener/service/probe derivation.
+<!-- SECTION:PLAN:END -->

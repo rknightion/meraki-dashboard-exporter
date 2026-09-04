@@ -1,9 +1,10 @@
 ---
 id: MDE-0052
 title: Validate AnyIO 4.15.0 against cancellation and shutdown contracts
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 14:40'
+updated_date: '2026-09-04 05:53'
 labels:
   - 'area:concurrency'
 dependencies: []
@@ -31,3 +32,9 @@ The Wave 3 currency pass found AnyIO 4.14.2 locked through the direct runtime re
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Exercise AnyIO 4.15.0 against cancellation, lifespan shutdown, managed task groups and the async pytest harness; apply only if focused concurrency checks and the full gate pass unchanged.
+<!-- SECTION:PLAN:END -->

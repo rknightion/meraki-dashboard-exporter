@@ -1,10 +1,10 @@
 ---
 id: MDE-0065
 title: Omit absent network filters from organization MS port requests
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-03 19:58'
-updated_date: '2026-09-03 23:06'
+updated_date: '2026-09-03 23:07'
 labels:
   - 'area:ms'
   - needs-triage
@@ -22,16 +22,16 @@ The post-v2 live soak confirmed a default-path API accounting and fallback defec
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 With no active NetworkFilter, neither organization-wide MS port endpoint receives a networkIds keyword and both calls can complete without the current invalid-filter response
-- [ ] #2 With an active non-empty filter, the resolved network IDs are still passed; an active filter resolving to zero networks still makes no API call
-- [ ] #3 Focused regressions cover status and usage paths for absent, non-empty and empty filters and reconcile API-call and fallback behavior
+- [x] #1 With no active NetworkFilter, neither organization-wide MS port endpoint receives a networkIds keyword and both calls can complete without the current invalid-filter response
+- [x] #2 With an active non-empty filter, the resolved network IDs are still passed; an active filter resolving to zero networks still makes no API call
+- [x] #3 Focused regressions cover status and usage paths for absent, non-empty and empty filters and reconcile API-call and fallback behavior
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
-- [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
-- [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
+- [x] #1 just check (ruff format --check, ruff check, mypy, generated-doc drift, offline API conformance, and the marker-filtered pytest run with the 80% coverage floor — this is exactly what the CI `test` job runs)
+- [x] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
+- [x] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
 
 ## Implementation Notes
@@ -43,3 +43,9 @@ The audit found a THIRD call site the task description did not name: getOrganiza
 
 Focused result after the fix: 49 passed for the whole MS collector module, including the two collateral usage-path tests that broke mid-change. Full gate: just check 2945 passed, 5 deselected, 91.49% coverage. CodeRabbit reported 0 findings across both changed files.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed in 84aa7e8. All three organization-wide MS port call sites (statuses-by-switch, usage-history-by-device, and the previously unnamed clients-overview-by-device) now omit networkIds entirely when no filter is configured, instead of serializing an explicit null the API rejects. Non-empty filters are still passed sorted and a zero-resolving filter still short circuits. Verified by five focused regressions, two of which were watched failing with the keyword present and None; MS module 49 passed; just check 2945 passed at 91.49% coverage; CodeRabbit 0 findings. DoD2: just check's generated-drift gate passed with no metric, config, endpoint or schema change. DoD3: no metric or label name moved, so no Grafana query needed updating.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -252,9 +252,7 @@ class TestDropAction:
 
         remaining_serials = set()
         for _col, _metric, frozen in manager._metric_timestamps:
-            for part in frozen.split("|"):
-                if part.startswith("serial="):
-                    remaining_serials.add(part.split("=", 1)[1])
+            remaining_serials.update(value for name, value in frozen if name == "serial")
 
         for s in serials[:5]:
             assert s not in remaining_serials, f"Expected {s} to be shed"

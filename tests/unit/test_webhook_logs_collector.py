@@ -253,7 +253,7 @@ class TestWebhookLogsCollectorDataLogEmission:
 
     async def test_no_emission_when_event_not_allowlisted(self, mock_api_builder):
         """Emitter present but ORG_WEBHOOK_DELIVERY not allowlisted -> no records."""
-        emitter, exp = _make_emitter(events=["some.other.event"])
+        emitter, exp = _make_emitter(events=[DataLogEvent.WIRELESS_CLIENT_PACKET_LOSS.value])
         logs = [{"networkId": "N_1", "url": "https://a.example/hook", "responseCode": 200}]
         api = mock_api_builder.with_custom_response("getOrganizationWebhooksLogs", logs).build()
         collector = self._collector(mock_api_builder, data_log_emitter=emitter)

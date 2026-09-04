@@ -3,9 +3,10 @@ id: MDE-0063
 title: >-
   Remove unsupported resource-tier recommendations until representative
   measurements exist
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 18:46'
+updated_date: '2026-09-04 05:53'
 labels:
   - 'area:docs'
 dependencies:
@@ -34,3 +35,9 @@ Audit dimension 4 confirmed that the shipped resource-sizing contract still outr
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Remove or mark non-authoritative every unsupported medium/large resource quantity across values, chart README and scaling guidance; retain the bootable default and the HOMELAB measurement without inventing replacements.
+<!-- SECTION:PLAN:END -->

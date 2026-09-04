@@ -25,8 +25,12 @@ The config value is chart-managed so this relationship is render-time verifiable
 {{- fail (printf "terminationGracePeriodSeconds must be at least config.apiPerFetchDeadlineSeconds + 30 (%d); got %d" $minimumGrace (int .Values.terminationGracePeriodSeconds)) }}
 {{- end }}
 {{- range .Values.extraEnv }}
-{{- if eq .name "MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS" }}
+{{- $envName := upper (toString .name) }}
+{{- if eq $envName "MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS" }}
 {{- fail "extraEnv may not set MERAKI_EXPORTER_API__PER_FETCH_DEADLINE_SECONDS; use config.apiPerFetchDeadlineSeconds so termination grace is validated." }}
+{{- end }}
+{{- if eq $envName "MERAKI_EXPORTER_SERVER__PORT" }}
+{{- fail "extraEnv may not set MERAKI_EXPORTER_SERVER__PORT; use service.port so the listener, Service, and probes stay aligned." }}
 {{- end }}
 {{- end }}
 {{- end }}

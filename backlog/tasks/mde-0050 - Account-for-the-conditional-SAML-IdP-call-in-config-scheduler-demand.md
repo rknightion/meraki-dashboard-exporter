@@ -1,9 +1,10 @@
 ---
 id: MDE-0050
 title: Account for the conditional SAML IdP call in config scheduler demand
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 14:38'
+updated_date: '2026-09-04 05:53'
 labels:
   - 'area:scheduler'
 dependencies: []
@@ -31,3 +32,9 @@ Audit dimension 1 confirmed a live conditional scheduler-accounting defect at th
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Add a failing enabled-SAML five-call reconciliation regression, reserve a constant five CONFIG_ORG calls with the disabled-organization trade-off documented, then run focused scheduler/config checks.
+<!-- SECTION:PLAN:END -->

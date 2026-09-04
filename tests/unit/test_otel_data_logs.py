@@ -133,11 +133,48 @@ class TestDataLogEmitterAllowlist:
     def test_event_not_in_allowlist_is_skipped(self) -> None:
         """Event not in allowlist is skipped."""
         emitter, exp, _ = _make_emitter(
-            enabled=True, endpoint="http://otel:4317", events=["some.other.event"]
+            enabled=True,
+            endpoint="http://otel:4317",
+            events=[DataLogEvent.ORG_WEBHOOK_DELIVERY.value],
         )
         assert emitter.is_event_enabled(PACKET_LOSS) is False
         emitter.emit(PACKET_LOSS, {"org.id": "1"})
         assert len(exp.get_finished_logs()) == 0
+
+    def test_unknown_event_is_rejected_before_observability_state(self) -> None:
+        """Unknown configured events cannot create records, status or counter series."""
+        unknown_event = "some.other.event"
+        emitter, exp, registry = _make_emitter(
+            enabled=True,
+            endpoint="http://otel:4317",
+            events=[unknown_event],
+        )
+
+        assert unknown_event not in BUILT_IN_EVENTS
+        assert emitter.is_event_enabled(unknown_event) is False
+
+        emitter.emit(unknown_event, {"org.id": "1"})
+
+        assert len(exp.get_finished_logs()) == 0
+        assert emitter.stats() == {
+            "enabled": True,
+            "total_emitted": 0,
+            "total_dropped": 0,
+            "emitted_by_event": {},
+            "dropped_by_event": {},
+        }
+        assert (
+            registry.get_sample_value(
+                "meraki_exporter_data_log_records_emitted_total", {"event": unknown_event}
+            )
+            is None
+        )
+        assert (
+            registry.get_sample_value(
+                "meraki_exporter_data_log_records_dropped_total", {"event": unknown_event}
+            )
+            is None
+        )
 
     def test_event_in_allowlist_is_emitted(self) -> None:
         """Event in allowlist is emitted."""

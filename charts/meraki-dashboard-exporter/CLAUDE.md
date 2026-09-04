@@ -50,7 +50,9 @@ container image — the chart is a recent addition (started publishing per the
     `meraki.organizationId`) and `SERVER__PORT` (from `service.port`). The API key
     (`MERAKI__API_KEY`) is a Secret (see above), and **secret-typed settings are excluded from the
     ConfigMap entirely** — e.g. `WEBHOOKS__SHARED_SECRET` / `SERVER__API_TOKEN` must be injected via
-    `extraEnv` from a Secret, never templated into the plaintext ConfigMap.
+    `extraEnv` from a Secret, never templated into the plaintext ConfigMap. `SERVER__PORT` is
+    chart-owned: `extraEnv` may not override it; use `service.port` so the listener, Service, and
+    probes stay aligned.
 - **Pod restart on config/secret change** is via `checksum/config` + `checksum/secret` annotations
   in `deployment.yaml`, computed by hashing the *rendered* configmap.yaml/secret.yaml templates —
   standard Helm pattern, but note `secret.yaml` renders to an empty string when
@@ -71,10 +73,10 @@ container image — the chart is a recent addition (started publishing per the
   `autoscaling.enabled` the Deployment omits its static `replicas` so the HPA owns it (with
   `maxReplicas` capped at 1). Don't relax these guards or switch to `RollingUpdate` without adding
   leader election first.
-- **Resource sizing is scale-dependent and heavily commented in `values.yaml`.** The 256Mi/512Mi
-  default is SMALL-scale only; memory scales with cardinality (device/network count). See the
-  `resources:` block comments and `evidence/scale-and-capacity.md` — do not restore any "512Mi is
-  enough" claim.
+- **Resource sizing requires representative measurements.** The unchanged 100m/256Mi request and
+  500m/512Mi limit are a bootable default, not a supported scale tier. Memory scales with
+  cardinality (device/network count); use the evidence labels in the `resources:` block and
+  `docs/scaling-guide.md`, and do not restore unsupported tier recommendations.
 - **Webhook receiver needs external TLS.** Meraki delivers webhooks (`POST /api/webhooks/meraki`)
   HTTPS-only; the exporter serves HTTP. The optional Ingress (or an external nginx/Traefik) is the
   TLS-termination point — see `docs/deployment-operations.md`. The webhook shared secret is NOT a
@@ -89,8 +91,9 @@ container image — the chart is a recent addition (started publishing per the
 - `templates/_helpers.tpl` - naming helpers (`name`, `fullname`, `chart`, `labels`,
   `selectorLabels`, `serviceAccountName`) plus the API-key `secretName`/`secretKey` resolvers.
 - `templates/_validation.tpl` - `validateApiKey`, `validateShutdownGrace`, and `validateOtel`:
-  fail rendering on an invalid secret selection, an insufficient termination grace period, or an
-  enabled OTel exporter without an endpoint.
+  fail rendering on an invalid secret selection, an insufficient termination grace period, an
+  `extraEnv` override of a chart-owned validated setting, or an enabled OTel exporter without an
+  endpoint.
 - `templates/deployment.yaml` - the Deployment; invokes all three validation templates; wires
   ConfigMap via `envFrom`, always wires the API key through a helper-resolved `secretKeyRef`, checksum
   annotations, probes, resources, the `/tmp` emptyDir.
@@ -104,7 +107,8 @@ container image — the chart is a recent addition (started publishing per the
 - `templates/ingress.yaml` - optional `Ingress` (guarded by `ingress.enabled`); TLS-termination
   point for the HTTPS-only Meraki webhook receiver, backends the Service http port.
 - `templates/networkpolicy.yaml` - optional `NetworkPolicy` (guarded by `networkPolicy.enabled`);
-  ingress on the http port, egress DNS + 443 + (when `config.otelEnabled`) the OTLP port.
+  ingress on the http port, egress DNS + 443 + the shared OTLP port when tracing, data logs, or
+  metrics is enabled. Use `networkPolicy.egress.extraEgress` for a channel using a distinct port.
 - `templates/hpa.yaml` - optional `HorizontalPodAutoscaler` (guarded by `autoscaling.enabled`);
   manages the single pod, `maxReplicas` capped at 1 (no leader election).
 - `README.md` - human-facing chart docs (install, singleton contract, sizing table, optional

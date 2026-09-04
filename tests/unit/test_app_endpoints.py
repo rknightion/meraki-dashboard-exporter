@@ -6,7 +6,7 @@ import asyncio
 import threading
 import time
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -556,32 +556,147 @@ class TestTriggerCollectorEndpoint:
     def test_trigger_collector_success(
         self, trigger_client: tuple[TestClient, MagicMock, ExporterApp]
     ) -> None:
-        """Test successfully triggering a collector.
-
-        The endpoint creates an asyncio.Task for the background run. In the
-        TestClient synchronous context there is no running event loop, so we
-        patch asyncio.create_task to avoid the RuntimeError while still
-        exercising the full function body.
-        """
-        from unittest.mock import patch
-
+        """Test successfully triggering a collector."""
         client, mock_manager, _ = trigger_client
         active_collector = MagicMock()
         active_collector.__class__.__name__ = "DeviceCollector"
         active_collector.is_active = True
         mock_manager.get_collector_by_name.return_value = active_collector
         mock_manager.is_collector_running.return_value = False
+        mock_manager.run_collector_once = AsyncMock()
 
-        mock_task = MagicMock()
-        with patch("asyncio.create_task", return_value=mock_task):
-            response = client.post(
-                "/api/collectors/trigger",
-                json={"collector": "DeviceCollector"},
-            )
+        response = client.post(
+            "/api/collectors/trigger",
+            json={"collector": "DeviceCollector"},
+        )
         assert response.status_code == 200
         body = response.json()
         assert body["status"] == "started"
         assert "triggered" in body["message"]
+
+    @pytest.mark.asyncio
+    async def test_concurrent_triggers_reserve_one_collector(self, test_settings: Settings) -> None:
+        """Concurrent requests reserve synchronously and schedule exactly one run."""
+        test_settings.server.api_token = SecretStr("trigger-test-token")
+        exporter = ExporterApp(test_settings)
+        mock_manager = MagicMock()
+        active_collector = MagicMock()
+        active_collector.__class__.__name__ = "DeviceCollector"
+        active_collector.is_active = True
+        mock_manager.get_collector_by_name.return_value = active_collector
+        mock_manager.is_collector_running.return_value = False
+        run_started = asyncio.Event()
+        release_run = asyncio.Event()
+
+        async def blocked_run(*_args: object, **_kwargs: object) -> None:
+            run_started.set()
+            await release_run.wait()
+
+        mock_manager.run_collector_once = AsyncMock(side_effect=blocked_run)
+        exporter.collector_manager = mock_manager
+        transport = ASGITransport(app=exporter.create_app())
+        headers = {"Authorization": "Bearer trigger-test-token"}
+
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            first_request = asyncio.create_task(
+                client.post(
+                    "/api/collectors/trigger",
+                    json={"collector": "DeviceCollector"},
+                    headers=headers,
+                )
+            )
+            await asyncio.wait_for(run_started.wait(), timeout=1.0)
+            duplicate = await client.post(
+                "/api/collectors/trigger",
+                json={"collector": "DeviceCollector"},
+                headers=headers,
+            )
+            first = await first_request
+
+        assert first.json()["status"] == "started"
+        assert duplicate.json()["status"] == "running"
+        assert mock_manager.run_collector_once.await_count == 1
+
+        release_run.set()
+        await asyncio.wait_for(
+            asyncio.gather(*tuple(exporter._background_tasks), return_exceptions=True),
+            timeout=1.0,
+        )
+        assert exporter._manual_collector_reservations == set()
+        assert exporter._background_tasks == set()
+
+    @pytest.mark.asyncio
+    async def test_failed_manual_run_clears_reservation(self, test_settings: Settings) -> None:
+        """A failed run releases its reservation and retained task."""
+        test_settings.server.api_token = SecretStr("trigger-test-token")
+        exporter = ExporterApp(test_settings)
+        mock_manager = MagicMock()
+        active_collector = MagicMock()
+        active_collector.__class__.__name__ = "DeviceCollector"
+        active_collector.is_active = True
+        mock_manager.get_collector_by_name.return_value = active_collector
+        mock_manager.is_collector_running.return_value = False
+        run_failed = asyncio.Event()
+
+        async def failed_run(*_args: object, **_kwargs: object) -> None:
+            run_failed.set()
+            raise RuntimeError("manual run failed")
+
+        mock_manager.run_collector_once = AsyncMock(side_effect=failed_run)
+        exporter.collector_manager = mock_manager
+        transport = ASGITransport(app=exporter.create_app())
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/api/collectors/trigger",
+                json={"collector": "DeviceCollector"},
+                headers={"Authorization": "Bearer trigger-test-token"},
+            )
+
+        assert response.json()["status"] == "started"
+        await asyncio.wait_for(run_failed.wait(), timeout=1.0)
+        await asyncio.sleep(0)
+        assert exporter._manual_collector_reservations == set()
+        assert exporter._background_tasks == set()
+
+    @pytest.mark.asyncio
+    async def test_cancelled_manual_run_clears_reservation(self, test_settings: Settings) -> None:
+        """Cancelling a retained manual task releases its reservation."""
+        test_settings.server.api_token = SecretStr("trigger-test-token")
+        exporter = ExporterApp(test_settings)
+        mock_manager = MagicMock()
+        active_collector = MagicMock()
+        active_collector.__class__.__name__ = "DeviceCollector"
+        active_collector.is_active = True
+        mock_manager.get_collector_by_name.return_value = active_collector
+        mock_manager.is_collector_running.return_value = False
+        run_started = asyncio.Event()
+
+        async def blocked_run(*_args: object, **_kwargs: object) -> None:
+            run_started.set()
+            await asyncio.Event().wait()
+
+        mock_manager.run_collector_once = AsyncMock(side_effect=blocked_run)
+        exporter.collector_manager = mock_manager
+        transport = ASGITransport(app=exporter.create_app())
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/api/collectors/trigger",
+                json={"collector": "DeviceCollector"},
+                headers={"Authorization": "Bearer trigger-test-token"},
+            )
+
+        assert response.json()["status"] == "started"
+        await asyncio.wait_for(run_started.wait(), timeout=1.0)
+        manual_task = next(
+            task
+            for task in exporter._background_tasks
+            if task.get_name() == "manual_DeviceCollector"
+        )
+        manual_task.cancel()
+        await asyncio.gather(manual_task, return_exceptions=True)
+        await asyncio.sleep(0)
+        assert exporter._manual_collector_reservations == set()
+        assert exporter._background_tasks == set()
 
 
 # ---------------------------------------------------------------------------

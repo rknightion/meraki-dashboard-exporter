@@ -1,9 +1,10 @@
 ---
 id: MDE-0048
 title: Make client application-usage scheduler demand match 100-client batching
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-03 14:38'
+updated_date: '2026-09-04 05:53'
 labels:
   - 'area:scheduler'
 dependencies: []
@@ -31,3 +32,9 @@ Audit dimension 1 confirmed a live scheduler-accounting defect at the v2.0.0 rel
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Add a failing 150-client scheduler-demand regression, implement a named conservative per-network cap using 100-client batches, then verify the bound does not force pathological priority-4 shedding.
+<!-- SECTION:PLAN:END -->

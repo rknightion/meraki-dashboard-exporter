@@ -381,28 +381,18 @@ config: {}
 
 # -- Resource requests and limits.
 #
-# SIZING GUIDANCE (read before deploying to anything larger than a lab). Memory is
-# the binding constraint and scales with Prometheus series cardinality, which scales
-# with device/network count -- NOT with a fixed value. The defaults below (256Mi
-# request / 512Mi limit) are sized for a SMALL deployment only
-# (~1 org / ~10 networks / ~100 devices, registry ~20-50k series, RSS < 256Mi).
-# The old "512Mi is enough" advice is WRONG at scale and will OOMKill the pod.
-# The install NOTES repeat this SMALL-only scope for operators who do not read
-# values comments. No resource default moves without a cited measurement.
+# SIZING GUIDANCE. Memory scales with Prometheus series cardinality, which scales with
+# device/network count. Do not use a fixed resource quantity as a fleet-size recommendation.
 #
-# Rough tiers (single org; clients collector OFF):
-#   SMALL   (~100 devices / ~10 networks):    requests 100m / 256Mi, limits 500m / 512Mi;
-#           registry ~20-50k series, RSS < 256Mi
-#   MEDIUM  (~1,000 devices / ~50 networks):  requests 250m / 512Mi, limits 1 / 1Gi
-#   LARGE   (~5,000 devices / ~500 networks): requests 500m / 1.5Gi, limits 2 / 3Gi+
-# LARGE also exceeds the per-org API budget with current defaults (~178% of 10 req/s)
-# and needs NetworkFilter + interval tuning regardless of pod size -- more memory does
-# not fix rate-limit starvation. LARGE per-port MS projection (not a measurement):
-# 700 MS switches x assumed 30 observed ports/switch x measured 2,225 meraki_ms_* samples
-# / 30 observed ports (=74.17 samples/port) = 1,557,500 per-port MS series. This projects
-# only dense per-port MS families, not the total registry. Set limits from observed RSS
-# (watch `process_resident_memory_bytes` / container memory) with generous headroom. Turning
-# the clients collector ON raises cardinality and memory substantially -- size up further.
+# Evidence label: BOOTABLE DEFAULT - NOT A REPRESENTATIVE SIZING MEASUREMENT.
+# The unchanged defaults below are a bootable starting point, not a supported scale tier.
+# Set requests and limits from a representative measurement with its topology, enabled
+# collectors, cardinality, and observed RSS recorded. Keep headroom for normal variation;
+# enabling the clients collector increases cardinality and memory substantially.
+#
+# Evidence label: HOMELAB MEASUREMENT ONLY - NOT A REPRESENTATIVE SIZING MEASUREMENT.
+# The retained full ExporterApp replay is documented in docs/scaling-guide.md. It must not
+# be generalized to a medium, large, or dense-switch fleet.
 resources:
   requests:
     cpu: 100m
@@ -568,8 +558,8 @@ networkPolicy:
     # -- Allow outbound HTTPS (TCP 443) to any destination -- the Meraki Dashboard API.
     # Meraki has no fixed egress CIDR, so this defaults to all destinations on 443.
     merakiApi: true
-    # -- OTLP collector egress port (TCP). Opened only when config.otelEnabled is true.
-    # Default 4317 = OTLP/gRPC. Set to your collector's port if different.
+    # -- Shared OTLP collector egress port (TCP). Opened when tracing, data logs, or metrics is enabled.
+    # Default 4317 = OTLP/gRPC. For a channel using a distinct port, add an extraEgress rule.
     otlpPort: 4317
     # -- Restrict the OTLP egress to specific peers (namespaceSelector/podSelector/
     # ipBlock). Empty = allow the OTLP port to any destination.
