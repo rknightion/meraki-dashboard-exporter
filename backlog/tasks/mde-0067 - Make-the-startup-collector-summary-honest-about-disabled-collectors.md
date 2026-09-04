@@ -1,9 +1,10 @@
 ---
 id: MDE-0067
 title: Make the startup collector summary honest about disabled collectors
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-04 07:27'
+updated_date: '2026-09-04 09:55'
 labels:
   - 'area:observability'
   - needs-triage
@@ -39,3 +40,12 @@ Scope is the log summary and the no-op loop, not the collector gating, which alr
 - [ ] #2 just gen, when metrics, config, endpoints, collectors, the settings schema or the chart config changed — `just check` includes the drift gate and CI fails the build on it
 - [ ] #3 Grafana queries in grafana/dashboards/*.json and grafana/alerts/ updated, if a metric or label name changed
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Failing tests first in tests/unit/test_disabled_collector_reporting.py: a flag-disabled collector must be absent from CollectorManager.collectors, present in skipped_collectors with the flag named, still addressable through get_collector_by_name so the control API keeps answering 'disabled' rather than 'not found', absent from get_scheduling_diagnostics()['collectors'], absent from the startup summary's Enabled Collectors, and given no per-collector loop task.
+2. Single root fix in collectors/manager.py _initialize_collectors: after instantiation, when collector.is_active is false, register the instance's metadata (index + lock) but route it to skipped_collectors instead of self.collectors, with a reason naming the disabling flag. Every downstream surface reads self.collectors, so the summary count, cadence gauges, scheduling diagnostics, readiness set, collect_initial ordering and app.py loop-start all become correct from that one change.
+3. core/config_logger.py log_startup_summary takes the live active and disabled collector names instead of reading settings.collectors.active_collectors, which cannot see a per-collector flag. app.py _log_startup_summary supplies them.
+4. Gate: just check, plus a CodeRabbit pass since this is code with branching.
+<!-- SECTION:PLAN:END -->

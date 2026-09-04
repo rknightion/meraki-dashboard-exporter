@@ -882,7 +882,13 @@ class ExporterApp:
             return
         try:
             scheduling = self.collector_manager.get_scheduling_diagnostics()
-            log_startup_summary(self.settings, self._discovery_summary, scheduling)
+            log_startup_summary(
+                self.settings,
+                self._discovery_summary,
+                scheduling,
+                active_collector_names=self.collector_manager.active_collector_names(),
+                disabled_collector_names=self.collector_manager.skipped_collector_names(),
+            )
             self._startup_summary_logged = True
         except Exception:
             logger.exception("Failed to log startup summary")

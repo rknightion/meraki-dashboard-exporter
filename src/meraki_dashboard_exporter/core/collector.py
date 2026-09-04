@@ -87,6 +87,16 @@ class MetricCollector(ABC):
         """
         return True
 
+    @property
+    def inactive_reason(self) -> str:
+        """Why ``is_active`` is false, phrased for an operator reading a summary.
+
+        Only read when ``is_active`` is false. Subclasses that gate themselves on
+        a setting name the setting, so a startup summary can say which switch to
+        flip rather than reporting the collector as enabled (MDE-0067).
+        """
+        return "disabled by configuration"
+
     def __init__(
         self,
         api: DashboardAPI,

@@ -129,6 +129,11 @@ class ClientsCollector(MetricCollector):
         """Check if this collector is actively collecting metrics."""
         return getattr(self, "_enabled", False)
 
+    @property
+    def inactive_reason(self) -> str:
+        """Name the flag an operator would flip to turn this collector on."""
+        return "clients.enabled is false"
+
     def __init__(self, *args: Any, **kwargs: Any):
         """Initialize the clients collector.
 

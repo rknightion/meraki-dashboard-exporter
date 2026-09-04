@@ -294,8 +294,30 @@ class CollectorManager:
                     data_log_emitter=self.data_log_emitter,
                     **extra_kwargs,
                 )
-                self.collectors.append(collector_instance)
+                # Index and lock it either way, so the control API can answer
+                # "disabled" for a collector switched off by its own setting
+                # rather than the misleading "not found" (MDE-0067).
                 self._register_collector_metadata(collector_instance)
+
+                # active_collectors and the per-collector collect_* flags are two
+                # separate switches, and only the first used to reach this list.
+                # A collector the operator turned off through its own flag was
+                # therefore counted as enabled, given a cadence and handed a loop
+                # task, while is_active said otherwise (MDE-0067).
+                if not collector_instance.is_active:
+                    reason = collector_instance.inactive_reason
+                    logger.info(
+                        "Skipping collector (disabled by its own setting)",
+                        collector=collector_name,
+                        reason=reason,
+                    )
+                    self.skipped_collectors.append({
+                        "name": collector_name,
+                        "reason": reason,
+                    })
+                    continue
+
+                self.collectors.append(collector_instance)
 
                 # Initialize health tracking for this collector
                 self.collector_health[collector_name] = {
@@ -345,6 +367,24 @@ class CollectorManager:
             self._collector_index[normalized] = collector
         if collector_name not in self._collector_locks:
             self._collector_locks[collector_name] = asyncio.Lock()
+
+    @staticmethod
+    def _short_collector_name(class_name: str) -> str:
+        """Render a collector class name the way the configuration names it."""
+        return class_name.replace("Collector", "").lower()
+
+    def active_collector_names(self) -> list[str]:
+        """Short names of the collectors that will actually collect (MDE-0067)."""
+        return sorted(
+            self._short_collector_name(collector.__class__.__name__)
+            for collector in self.collectors
+        )
+
+    def skipped_collector_names(self) -> list[str]:
+        """Short names of the collectors that were instantiated but will not run."""
+        return sorted(
+            self._short_collector_name(entry["name"]) for entry in self.skipped_collectors
+        )
 
     def get_collector_by_name(self, name: str) -> MetricCollector | None:
         """Look up a collector by (normalized) name."""
