@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Product-specific additions to the central CodeRabbit defaults.
+# Keep inheritance enabled; shared review policy lives in the owner/coderabbit repository.
+inheritance: true
+reviews:
+  path_filters:
+  - '!docs/config.md'
+  - '!docs/metrics/metrics.md'
+  - '!docs/collectors/reference.md'
+  - '!docs/reference/endpoints.md'
+  - '!docs/scaling-guide.md'
+  - '!.env.example'
+  - '!charts/meraki-dashboard-exporter/values.yaml'
+  - '!charts/meraki-dashboard-exporter/templates/configmap.yaml'
+  path_instructions:
+  - path: src/meraki_dashboard_exporter/**/*.py
+    instructions: >-
+      All collector network discovery goes through OrganizationInventory.get_networks so NetworkFilter
+      is applied, except the documented audit bypass and two filtered fallbacks. Normalize exhausted-retry
+      response shapes with validate_response_format. Use domain metric and LabelName enums, validated
+      response models and parent._set_metric so removed/offline entity series expire.
+  - path: src/meraki_dashboard_exporter/collectors/**/*.py
+    instructions: >-
+      Preserve the adaptive endpoint-group scheduler and shared API budget; prefer bulk organization endpoints
+      to per-device or per-network loops. Metrics carry bounded fleet-shaped aggregates. New client/per-request
+      or otherwise unbounded entity detail goes to the OTel structured data-log channel rather than a
+      Prometheus label; the documented existing client metric is grandfathered.
+  - path: grafana/**/*.{json,yaml}
+    instructions: >-
+      These Grafana v2 dashboards and alert/recording rules are hand-authored. When metrics or labels
+      change, update affected queries and check against the live scrape contract; do not treat the removed
+      classic-schema dashboard path as authoritative.
