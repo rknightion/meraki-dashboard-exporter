@@ -5,6 +5,22 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [2.0.2](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.0.1...v2.0.2) (2026-09-05)
+
+
+### Bug Fixes
+
+* report collectors disabled by their own flag as skipped (MDE-0067) ([a231a50](https://github.com/rknightion/meraki-dashboard-exporter/commit/a231a503b5cd9f469b7457f2ef4fbc04150ab42a))
+
+
+### Documentation
+
+* sync agent-docs, a wave's launch message is a file not a chat block ([6bddf1c](https://github.com/rknightion/meraki-dashboard-exporter/commit/6bddf1c3f6ec66248ecc2da6d94fd1f64f826af3))
+* sync Astra routing and default wave reports to files ([20dca12](https://github.com/rknightion/meraki-dashboard-exporter/commit/20dca128f2d1ec6b19270c6c59e95306a02d7dde))
+* sync nineteen-worker Codex fan-out guidance ([bb0d2c0](https://github.com/rknightion/meraki-dashboard-exporter/commit/bb0d2c0e2dc96a355a69b141f1fd3f931dd550a1))
+* sync optional Astra fan-out routing and run contracts ([ae44661](https://github.com/rknightion/meraki-dashboard-exporter/commit/ae44661a69034d6943929919f7fb7d6931f78962))
+* sync wave-root stage authority and lab-Mac GUI gate ([8864abb](https://github.com/rknightion/meraki-dashboard-exporter/commit/8864abb07f0c39de2a682c752a2013041ceda922))
+
 ## [2.0.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.0.0...v2.0.1) (2026-09-04)
 
 
