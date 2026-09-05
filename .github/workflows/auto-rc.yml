@@ -38,7 +38,7 @@ jobs:
       contents: write      # create the RC tag and the GitHub prerelease
       pull-requests: read  # find the open release-please PR
       checks: read         # poll ci-success for this commit
-    uses: rknightion/.github/.github/workflows/auto-rc.yml@ff43f62eaec9f41d49b9a208d86b2eb932c97056 # v1.18.1
+    uses: rknightion/.github/.github/workflows/auto-rc.yml@27b0bd31dbe7bf238b89773d00d60ed5dfe187bb # v1.20.0
     with:
       # Under workflow_run, github.sha is the DEFAULT BRANCH HEAD, not the
       # commit CI ran on — it races ahead on rapid pushes. head_sha is the
