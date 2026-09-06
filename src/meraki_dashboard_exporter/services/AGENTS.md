@@ -24,6 +24,12 @@ with a live `NetworkFilter(settings.network_filter)` and shared by every collect
   escape hatch for two callers: internal recursive resolution of `allowed_ids` on a cache miss, and
   `CollectorManager._validate_network_filter()` comparing the full and resolved sets at startup. Do
   not add a collector call site.
+- Device reads go through `get_devices` / `get_device_availabilities` too. The sanctioned
+  direct-SDK device sites are the sensor-only `getOrganizationDevices` fetch in
+  `collectors/devices/mt.py::_fetch_sensor_devices` (`productTypes=[ProductType.SENSOR]`),
+  `core/api_helpers.py::APIHelper._fetch_devices_direct` (reapplies `NetworkFilter` itself), and the
+  inventory-unavailable availability fallbacks in `collectors/device.py` and
+  `collectors/organization.py`. Do not add another.
 - TTL constants on the class, in seconds: `TTL_MEDIUM=900` is the general TTL and is fixed for every
   reader (there is no per-collector TTL wiring), `TTL_AVAILABILITY=120` always applies to device
   availabilities regardless of `_ttl`, `TTL_LICENSE=1800`. `_is_expired()` adds +/-10% jitter.
