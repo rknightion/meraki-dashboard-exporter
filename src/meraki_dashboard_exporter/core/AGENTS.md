@@ -18,6 +18,9 @@
   effective budget, floored at 0.5 rps and at most one halving per 30s cooldown, and
   `effective_rate_per_second()` feeds straight into the scheduler's next solve. A throttled org's
   cadence therefore changes with no config change.
+- `OrgHealthTracker` (`org_health.py`) backs an org off after 5 consecutive failures, for 60s
+  doubling to a 3600s cap, while healthy orgs keep collecting. An org that vanishes from output for
+  minutes at a time is that backoff, not a collector bug.
 - Cardinality endpoints are top-level routes, not nested under `/status`:
   `setup_cardinality_endpoint(app, monitor)` registers `/cardinality`, `/cardinality/all-metrics`,
   `/cardinality/all-labels`, `/cardinality/export/json`, `/cardinality/label-values/{metric_name}`
