@@ -44,7 +44,12 @@ label series after a status transition are removed by the metric expiration mana
   exists but stays unpopulated and would need a per-model lookup table.
 - **MS stacks**: PSU, fan and temperature hardware health is deliberately deferred pending Meraki
   API investigation, not missing by accident.
-- **MT**: responses can carry both `temperature` and `rawTemperature`. Only `temperature` is used;
+- **MX**: `mx_vpn.py` merges Meraki and third-party peers out of one org-level response. A
+  third-party peer carries no `networkId` and is keyed by its public IP instead, so a path that
+  assumes `networkId` is present drops or mislabels them.
+- **MT**: `MTCollector` has two constructors, `as_subcollector` (under `DeviceCollector`) and
+  `as_standalone` (used by `../mt_sensor.py`), so a change to `mt.py` lands in two collectors.
+  Responses can carry both `temperature` and `rawTemperature`. Only `temperature` is used;
   `rawTemperature` is undocumented and deliberately skipped.
 - **MG**: per-device `collect()` is a no-op by design. The real cellular metrics come from the
   org-wide `collect_uplink_statuses()`, so do not add a per-device cellular fetch on the assumption
