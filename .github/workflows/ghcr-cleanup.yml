@@ -21,7 +21,7 @@ jobs:
     permissions:
       contents: read
       packages: write # delete package versions
-    uses: rknightion/.github/.github/workflows/ghcr-cleanup.yml@27b0bd31dbe7bf238b89773d00d60ed5dfe187bb # v1.20.0
+    uses: rknightion/.github/.github/workflows/ghcr-cleanup.yml@afb6465863055fdc848fc71c8ef94af0aa813f42 # v1.20.1
     with:
       packages: "meraki-dashboard-exporter,charts/meraki-dashboard-exporter"
       # Scheduled runs prune for real; a manual dispatch defaults to dry-run.
