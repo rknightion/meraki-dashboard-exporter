@@ -41,6 +41,10 @@ Prometheus exporter for the Cisco Meraki Dashboard API.
   (`core/batch_processing.py`), never a raw `asyncio.gather`.
 - The Meraki SDK is synchronous: reach it through `asyncio.to_thread()`.
 - Every API response gets a Pydantic domain model.
+- **Never log or echo a Meraki API key**, and never widen a log line or an error path in a way that
+  could carry one.
+- A failing test is a finding. Never edit a test so it matches an implementation you have not first
+  established is correct.
 
 ## Verifying against the live API
 
@@ -83,7 +87,8 @@ becomes an `mde-NNNN` task citing the number, and the board, not the issue, is w
   timings and structural findings are fine. A tracker feels private, which is why this breaks by
   accident.
 - **Bare `--notes` and `--plan` silently replace the whole section**, destroying another session's
-  writes with no warning at exit 0. Use `--append-notes` and `--append-plan`.
+  writes with no warning at exit 0. Use `--append-notes` and `--append-plan`. A global pre-tool hook
+  denies the bare forms, so a denial there is the guard working, not a broken command.
 - Finalize in one call, so an interrupted run cannot leave finished work looking unfinished:
   `backlog task edit mde-0001 --check-ac 1 --check-ac 2 -s Done`.
 - Section boundaries in tracker markdown are HTML-comment markers. Break one by hand-editing and
@@ -113,6 +118,8 @@ becomes an `mde-NNNN` task citing the number, and the board, not the issue, is w
   config models, the API helper or metric registration.
 - `src/meraki_dashboard_exporter/services/` - read before changing inventory caching, the client
   store, DNS resolution or the status service.
+- `src/meraki_dashboard_exporter/api/` - read before changing how the SDK client is constructed;
+  it carries the `APISettings.validate_kwargs` contract (default off, turn it on in dev and CI).
 - `tests/` - read before writing a test: factories, the mock API and the metric assertions.
 - `docs/` - read before editing a doc page; it lists which committed artefacts are generated and
   by which script.
