@@ -32,6 +32,28 @@ adding the matching re-export line in `collector.py`.
 usage are all collected org- or network-wide through separate `collect_*` methods that
 `DeviceCollector` calls on `MRCollector` directly.
 
+## Newer domains ride an existing org-wide pass
+
+None of the later submodules has its own `DeviceCollector` call site. Each is folded into an
+existing `MRCollector` method and gates itself on its own endpoint group, so adding a domain here
+means folding it into a pass that already carries `org_id`/`org_name` rather than editing
+`../../device.py`.
+
+- `signal_quality.collect_signal_quality` inside `collect_cpu_load`, gated on `MR_SIGNAL_QUALITY`.
+  AP selection is client-side by device tag (`collectors.ap_signal_quality_tags`; empty means every
+  wireless AP), and `collectors.collect_ap_signal_quality` turns the domain off entirely.
+- `catalyst.collect_wireless_controllers` inside `collect_ssid_status`, gated on
+  `MR_WIRELESS_CONTROLLER`, whose `enabled_fn` disables the group when `catalyst_ap_count == 0`.
+  The response's `tags` and `details` arrays are deliberately not emitted.
+- `client_logs.collect_client_logs` inside `collect_ssid_usage`.
+- `performance.collect_power_mode` inside `collect_ethernet_status`.
+
+## CPU load is the only batched fan-out
+
+CPU comes only from `getOrganizationWirelessDevicesSystemCpuLoadHistory`, in batches of
+`settings.api.batch_size` serials (`perPage=20` is the SDK maximum) with a 0.5s sleep between
+batches. Removing that sleep or widening the batch trades directly against the rate-limit budget.
+
 ## Never wire liveTools or beta endpoints into this path
 
 `createDeviceLiveToolsPing`, `createDeviceLiveToolsCableTest`, `createDeviceLiveToolsThroughputTest`
@@ -60,8 +82,13 @@ SSID-to-network mapping and no per-network fan-out.
 
 `MRClientLogsCollector` is a per-client data-log producer. It owns zero Prometheus metrics, because
 per-client detail is unbounded, and emits OTLP log records through `self.parent.data_log_emitter`
-(`core/otel_data_logs.py`), which may be `None`. Both events are gated on
-`emitter.is_event_enabled(...)` so a disabled event makes no API call at all. Client MAC is emitted
+(`core/otel_data_logs.py`), which may be `None`. The two events are `WIRELESS_CLIENT_PACKET_LOSS`
+(one org-wide bulk `getOrganizationWirelessDevicesPacketLossByClient` call, one record per client
+row) and `WIRELESS_CLIENT_SIGNAL_QUALITY` (experimental and off by default: one
+`getNetworkWirelessSignalQualityHistory` call per active client, with the client universe
+enumerated from `getNetworkClients` independently of packet loss, so a healthy zero-loss client
+still emits a record). Both are gated on `emitter.is_event_enabled(...)` so a disabled event makes
+no API call at all. Client MAC is emitted
 only when `emitter.include_identifiers`. The packet-loss-by-client response carries no AP serial, so
 `device.serial` is deliberately not emitted.
 
