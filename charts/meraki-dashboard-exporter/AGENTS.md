@@ -23,7 +23,7 @@ Render locally with a dummy key, because a render with neither key value set fai
 - `deployment.yaml` always builds the API-key `secretKeyRef` from the `secretName` / `secretKey`
   helpers, which resolve for both branches precisely because `validateApiKey` has already
   guaranteed exactly one is set. **Do not reintroduce an `if .Values.meraki.existingSecret` branch
-  around that env var** - that shape previously left the chart-managed-Secret path with no env var
+  around that env var** - that shape leaves the chart-managed-Secret path with no API-key env var
   at all. On that path `secretKey` returns `MERAKI_EXPORTER_MERAKI__API_KEY`, matching the key
   `secret.yaml` writes into `stringData`.
 - Prefer `existingSecret` for real deployments: the chart-managed Secret's value lands in release
