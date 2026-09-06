@@ -52,6 +52,9 @@ effective admission limit is
 `min(max_concurrent_collectors, api.executor_workers // api.concurrency_limit)` with a floor of 1, so
 shipped defaults admit two collectors. Raising `max_concurrent_collectors` alone changes nothing.
 
+`CollectorManager.run_collector_once()` bounds a single run with
+`settings.collectors.collector_timeout` (default 240s, range 30-600).
+
 ## Cardinality
 
 Budgets are keyed per metric family, not per collector: `cardinality.max_series_per_family` (50000)
@@ -73,3 +76,6 @@ differ, see `devices/AGENTS.md`.
 
 - `ERROR_HANDLING.md` - read before adding a fetcher: when `@with_error_handling` is enough, and the
   three recovery cases that justify a manual `try/except` inside it.
+- `docs/observability/scheduler.md` - read before choosing or changing an endpoint group's
+  `floor_seconds` or `priority`: how the solver stretches a group above its floor under budget
+  pressure.
