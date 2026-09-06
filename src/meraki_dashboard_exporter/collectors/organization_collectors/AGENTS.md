@@ -15,6 +15,15 @@ directly inside the coordinator (`_collect_network_metrics`, `_collect_device_me
 `device_availability_history.py`. Do not assume an org metric is missing because no module here owns
 it.
 
+## Availability history sizes its own window
+
+`device_availability_history.py` passes
+`timespan=int(self.parent._group_interval(EndpointGroupName.ORG_AVAILABILITY_HISTORY))`, the live
+solved interval of its own endpoint group, not a hardcoded 300s. Replacing it with a constant makes
+the change-history window disagree with the cadence the scheduler actually chose, double-counting or
+dropping transitions. The value in force is readable as
+`meraki_exporter_scheduler_interval_seconds{group="org_availability_history"}`.
+
 ## Which sub-collectors filter response rows
 
 `firmware.py` and `device_availability_history.py` resolve
