@@ -5,6 +5,9 @@
   `metric_snapshot` and `inventory`. `inventory` is a real `OrganizationInventory` backed by the
   mock API, so assert network reads through it rather than patching `NetworkFilter` out or stubbing
   `getOrganizationNetworks`.
+- `AsyncCollectorTestMixin` (same module) adds `collect_with_timeout(collector, timeout=5.0)` and
+  `collect_multiple_times(collector, count=3, interval=0.1)`. Mix it in rather than hand-rolling an
+  `asyncio.wait_for` around `collector.collect()`.
 - Build data with the factories in `helpers/factories.py` and responses with `MockAPIBuilder`
   (`helpers/mock_api.py`). `OrganizationFactory.create()` takes `org_id=`, not `id=`, and
   `DeviceFactory.create(device_type=...)` derives `model` when you do not pass one.
