@@ -8,8 +8,8 @@ exporter actually consumes, and checks the exporter's Pydantic models against li
   `tools/` while still importing `meraki_dashboard_exporter` for `models.conformance_models()`.
 - **Exit codes are load-bearing and CI branches on them:** `0` clean or INFO-only, `2` usage or IO
   error, `3` actionable drift (BREAKING or WARNING). Do not repurpose them.
-- `--suggest` and `--coverage` are review aids and always exit 0. `--coverage` is offline, fetches
-  no spec, and has no `just` recipe - run it directly.
+- `--suggest` and `--coverage` are review aids and always exit 0. `--suggest` has a recipe,
+  `just api-suggest`; `--coverage` is offline, fetches no spec, and has none - run it directly.
 
 ## Recipes and CI
 
