@@ -3,10 +3,10 @@ id: doc-0001
 title: Agent fan-out protocol (canonical)
 type: specification
 created_date: '2026-08-14 15:57'
-updated_date: '2026-09-05 20:46'
+updated_date: '2026-09-07 22:19'
 ---
 > **Generated file — do not edit this copy.** Rendered from `sources/fan-out-protocol.md` in
-> `m7kni/agent-docs` at commit `a173b7c`. This copy is authoritative for `meraki-dashboard-exporter`, so an agent
+> `m7kni/agent-docs` at commit `efd1e7a`. This copy is authoritative for `meraki-dashboard-exporter`, so an agent
 > with only this checkout has the whole document.
 >
 > **To change anything below, edit the source in `agent-docs` and re-render.** An edit made here is
@@ -81,6 +81,8 @@ its task-specific rationale are recorded.** `solo` is the default when an auxili
 work the root must do anyway. A later declaration may escalate the topology when new evidence exposes
 an independent bottleneck or material risk; never silently downgrade or add a reviewer by habit.
 
+The topology rationale must explain why the task is decomposable into independently checkable work, naming sequential dependencies and the cost of coordination; [Google Research, 2026-01-28](https://research.google/blog/towards-a-science-of-scaling-agent-systems-when-and-why-agent-systems-work/) evaluated 180 configurations and found 39-70% degradation on sequential planning tasks, so task decomposition needs an argument rather than an agent count.
+
 Daytime means the root may return a genuinely material decision that neither the goal nor a durable
 source resolves. Children still return uncovered decisions to the root; they do not ask the user.
 
@@ -150,6 +152,8 @@ bounded work down after the root has frozen it.
 
 A goal file survives compaction and can be re-read before every lane. A long chat prompt cannot be
 relied on to preserve routing, authority, traps and corrections across a multi-hour campaign.
+
+For preflight, read the tracked protocol file directly, including the applicable harness appendix, or redirect `backlog doc view <id> --plain` to a file and read that file in bounded chunks; tool-output truncation can otherwise silently omit the routing appendix and force a second read.
 
 Put these in the goal file:
 
@@ -1116,6 +1120,7 @@ the format alone:
 
 ## 11. Pre-flight checklist
 
+- [ ] The root read the tracked protocol file directly, or read a saved `backlog doc view <id> --plain` export in full, so tool-output truncation did not drop the harness appendix.
 - [ ] Run mode, human availability, current layer, external-write authority and terminal condition are explicit.
 - [ ] The run contract names the harness, and the operator receives the root's role and the exact route that harness's profile resolves it to, with a one-sentence rationale.
 - [ ] Tracker and live-state preflight happened before topology selection; the selected topology and its task-specific rationale are recorded before any spawn or mutation.
@@ -1203,8 +1208,11 @@ Complete. Everything the body defers to a profile is resolved here for Codex.
 Select `codex` for the existing routing or `codex-astra` for a complex root, and write the selection
 into the goal. This selects a route for the run only. Never edit `config.toml`, a launcher or the
 operator's default model to make a campaign match the table; the operator may change their launch
-model at any time. If the observed root route differs, report the mismatch and use the intended
-session/model selection before starting dependent campaign work.
+model at any time. An explicit operator selection of Astra authorises that root route even when an
+older goal names Sol: do not stop solely for that stale pin. The goal owner records the replacement in
+the durable run record, and the root reports the observed model/effort rather than claiming the
+requested Sol route ran. A missing, conflicting or silently substituted route without that operator
+selection remains a hard stop for the affected lane.
 
 The standard `codex` root route is:
 
@@ -1248,13 +1256,31 @@ Terra/low, Worktree auditor → Terra/high.
 
 ### Optional Astra routes
 
+Rob may choose an Astra root for complex waves. An explicitly operator-selected Astra root is an
+authorised stronger substitute for an earlier Sol root route and may keep independent lanes moving
+while it resolves an obstacle within the task's scope.
+
 Use `codex-astra` when the root must reconcile interacting unknowns, diagnose a cause across
 components, or settle consequential architecture. Its root is `gpt-6-astra`, `high`; all ordinary
 child mappings above stay unchanged. A large lane count, a long log or a high-effort label alone is
 not a reason. Prefer a bounded Astra specialist under a standard root when only one isolated problem
-needs that depth. The variant grants no additional authority by itself and does not require spawning;
-where a project's operating model grants its root a wider external-write authority, the goal's §1
-contract states that grant explicitly and the root exhausts it before parking on the state it covers.
+needs that depth.
+
+When the operator explicitly grants it, an Astra root may make the trusted architectural,
+implementation and operating-rule judgements needed to complete the authorised task: choose and
+apply evidence-supported fixes, revise a procedural convention or frozen design choice that blocks a
+better route, and direct the remaining independent lanes accordingly. This is task-scoped root
+judgement, not blanket autonomy based on model capability. Record every material departure, its
+evidence and the verification outcome in the durable run record; preserve one-file ownership and
+existing child routes unless their own authorised briefs change.
+
+The grant does not infer authority for production or protected-key actions, expand the goal's
+external-write scope, waive a release cap or protocol-cut boundary, or bypass a mandatory security
+review for convenience. Those boundaries remain effective unless the operator separately and
+explicitly changes them. A block requiring authority outside the stated task scope or a material human
+choice still follows the goal's park rule. Where a project's operating model grants the root wider
+external-write authority, the goal's §1 contract states that grant explicitly and the root exhausts it
+before parking on the state it covers.
 
 | Route label | Role | Model | Effort |
 |---|---|---|---|
