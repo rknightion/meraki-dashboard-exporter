@@ -14,9 +14,6 @@ generated := "docs/config.md docs/metrics/metrics.md docs/collectors/reference.m
 
 version := `sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml 2>/dev/null || echo 0.0.0`
 
-# renovate: datasource=npm depName=@nanonets/graft
-graft_version := "0.16.0"
-
 # show the task surface
 default:
     @just --list
@@ -393,14 +390,3 @@ _open target:
 [private]
 _open target:
     xdg-open '{{ target }}'
-
-# Install and patch the graft CLI (re-run after a version bump)
-[group('dev')]
-graft-setup:
-    npm i -g @nanonets/graft@{{ graft_version }}
-    ~/.agents/bin/graft-postinstall
-
-# Build the local code graph
-[group('dev')]
-graft-build:
-    DO_NOT_TRACK=1 graft build .

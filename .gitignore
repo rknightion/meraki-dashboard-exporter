@@ -238,8 +238,3 @@ docs/fonts/
 # Backlog.md guard hook and the settings that wire it. Those are tracked deliberately, so the rules
 # are enforced for anyone working in this repo, not just whoever set it up.
 .claude/
-
-# graft: local, regenerable code graph, and the .ignore graft writes beside it so ripgrep
-# still reaches the cards. Both are generated on every build. Never committed.
-/graft/
-/.ignore
