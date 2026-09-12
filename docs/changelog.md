@@ -5,6 +5,64 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [2.1.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.0.1...v2.1.0) (2026-09-12)
+
+
+### Features
+
+* **clients:** expose client IP on meraki_client_info and evict superseded series ([0aaad79](https://github.com/rknightion/meraki-dashboard-exporter/commit/0aaad791625ec522e874d3ae753ed1eb7bbb3b6e))
+
+
+### Bug Fixes
+
+* report collectors disabled by their own flag as skipped (MDE-0067) ([a231a50](https://github.com/rknightion/meraki-dashboard-exporter/commit/a231a503b5cd9f469b7457f2ef4fbc04150ab42a))
+
+
+### Documentation
+
+* **agents:** repo root to AGENTS.md standard ([2362c2d](https://github.com/rknightion/meraki-dashboard-exporter/commit/2362c2d7649c3985e61abacc6641af357fd1ef5a))
+* **agents:** review fix - .github/ to AGENTS.md standard ([9841c50](https://github.com/rknightion/meraki-dashboard-exporter/commit/9841c500f220f788271414113eb2f1785576e0cd))
+* **agents:** review fix - charts/meraki-dashboard-exporter/ to AGENTS.md standard ([67c1f55](https://github.com/rknightion/meraki-dashboard-exporter/commit/67c1f551d3221380767be6097810157bc8f25925))
+* **agents:** review fix - docs/ to AGENTS.md standard ([39f471a](https://github.com/rknightion/meraki-dashboard-exporter/commit/39f471a9b9f1bd61f9084e887de14f66c03ff942))
+* **agents:** review fix - drop a past-tense clause from the chart file ([940ecf4](https://github.com/rknightion/meraki-dashboard-exporter/commit/940ecf4ee3206638c09c39b087a6a9843cfb9fa0))
+* **agents:** review fix - grafana/ to AGENTS.md standard ([1d8ba41](https://github.com/rknightion/meraki-dashboard-exporter/commit/1d8ba419e2f544a00bc5db1dca96eec11a444ca0))
+* **agents:** review fix - name the api-suggest recipe ([9e633ff](https://github.com/rknightion/meraki-dashboard-exporter/commit/9e633ffb468d904c6ca97ab8382c2b2158de7dd0))
+* **agents:** review fix - restore dropped prohibitions and pointers in the root file ([17a1f26](https://github.com/rknightion/meraki-dashboard-exporter/commit/17a1f26cae971d72df5c4c9687fe7b1b059048f7))
+* **agents:** review fix - restore the /ready and /status route contracts ([bce6a75](https://github.com/rknightion/meraki-dashboard-exporter/commit/bce6a7538d5f77aba3f6d88c380bb092673304d0))
+* **agents:** review fix - restore the AsyncCollectorTestMixin helpers ([492b112](https://github.com/rknightion/meraki-dashboard-exporter/commit/492b1125dee81fad7bfaeaa357d89d900dffa6a1))
+* **agents:** review fix - restore the availability-history solved-interval timespan ([bb7d2d9](https://github.com/rknightion/meraki-dashboard-exporter/commit/bb7d2d9ea481b98226eb3f697377a896c7661fd4))
+* **agents:** review fix - restore the collector run timeout and the scheduler doc pointer ([16f0a21](https://github.com/rknightion/meraki-dashboard-exporter/commit/16f0a21c6cc054198389d98c9c97ff407cc81850))
+* **agents:** review fix - restore the MR fold-in wiring, feature gates and CPU batching ([943c884](https://github.com/rknightion/meraki-dashboard-exporter/commit/943c88420bc96086824904ce0a0fadfb73d8cf3d))
+* **agents:** review fix - restore the MX third-party VPN peer shape and MT dual-mode ([d5f583a](https://github.com/rknightion/meraki-dashboard-exporter/commit/d5f583a7f62c3505ba5b3e63435b7d42e218aea5))
+* **agents:** review fix - restore the OrgHealthTracker backoff contract ([fc8cb83](https://github.com/rknightion/meraki-dashboard-exporter/commit/fc8cb83f2ee336ec366cf683fcb436be72e51240))
+* **agents:** review fix - restore the sanctioned direct device-fetch list ([c73b88f](https://github.com/rknightion/meraki-dashboard-exporter/commit/c73b88fe863a4ea2c9fa5f17af9616c33bcf5acb))
+* **agents:** review fix - scripts/ to AGENTS.md standard ([27d9e02](https://github.com/rknightion/meraki-dashboard-exporter/commit/27d9e028c9e29fe1547dcea9c1e2552caee25421))
+* **agents:** src/meraki_dashboard_exporter to AGENTS.md standard ([b832ff2](https://github.com/rknightion/meraki-dashboard-exporter/commit/b832ff21de8189178dc1c49efc0c608cfc60f79d))
+* **agents:** src/meraki_dashboard_exporter/api to AGENTS.md standard ([6b7f5bc](https://github.com/rknightion/meraki-dashboard-exporter/commit/6b7f5bcab5fcfb8aafb421862b3bcd431e2f522a))
+* **agents:** src/meraki_dashboard_exporter/collectors to AGENTS.md standard ([14f1ba7](https://github.com/rknightion/meraki-dashboard-exporter/commit/14f1ba7da970b6c8ceb2db71b088a536ce10ff4b))
+* **agents:** src/meraki_dashboard_exporter/collectors/devices to AGENTS.md standard ([af34c80](https://github.com/rknightion/meraki-dashboard-exporter/commit/af34c80b8aed65b456dcad5020d404645462a867))
+* **agents:** src/meraki_dashboard_exporter/collectors/devices/mr to AGENTS.md standard ([5b15964](https://github.com/rknightion/meraki-dashboard-exporter/commit/5b159642e24cf939f0247d00b6cfa2c25b5bbd32))
+* **agents:** src/meraki_dashboard_exporter/collectors/network_health_collectors to AGENTS.md standard ([19f6850](https://github.com/rknightion/meraki-dashboard-exporter/commit/19f685079e7ff6ee24614006e06a69722e739a19))
+* **agents:** src/meraki_dashboard_exporter/collectors/organization_collectors to AGENTS.md standard ([181edd4](https://github.com/rknightion/meraki-dashboard-exporter/commit/181edd4e89de1882acd36ec8b1cbcafa3e361ecf))
+* **agents:** src/meraki_dashboard_exporter/core to AGENTS.md standard ([95f077c](https://github.com/rknightion/meraki-dashboard-exporter/commit/95f077c1727a726f1be4a1017a13a30a5361bad9))
+* **agents:** src/meraki_dashboard_exporter/services to AGENTS.md standard ([5021d0c](https://github.com/rknightion/meraki-dashboard-exporter/commit/5021d0cffd306b1c75a17f35b1b238283a0d86ec))
+* **agents:** tests to AGENTS.md standard ([9eb8825](https://github.com/rknightion/meraki-dashboard-exporter/commit/9eb8825208bb5dec24de294e8ba98822b0b4d120))
+* **agents:** tools/apidrift to AGENTS.md standard ([d8374e5](https://github.com/rknightion/meraki-dashboard-exporter/commit/d8374e5df127feb3055364136da7a8b681e52d84))
+* align recovery contracts and compaction evidence ([0c3f353](https://github.com/rknightion/meraki-dashboard-exporter/commit/0c3f353dd4c7745b7360cb3eabe05d1881020de6))
+* name the auto-close trailer as a way to close an external issue ([ca07453](https://github.com/rknightion/meraki-dashboard-exporter/commit/ca07453f54c7657214511cd7f20c66255f4ff877))
+* sync agent-docs, a wave's launch message is a file not a chat block ([6bddf1c](https://github.com/rknightion/meraki-dashboard-exporter/commit/6bddf1c3f6ec66248ecc2da6d94fd1f64f826af3))
+* sync Astra routing and default wave reports to files ([20dca12](https://github.com/rknightion/meraki-dashboard-exporter/commit/20dca128f2d1ec6b19270c6c59e95306a02d7dde))
+* sync authorised Astra root judgement ([ccb4f2f](https://github.com/rknightion/meraki-dashboard-exporter/commit/ccb4f2fb4e1035579fb15ac0617b15cca08703fe))
+* sync authorised Astra root judgement ([8bb8e9b](https://github.com/rknightion/meraki-dashboard-exporter/commit/8bb8e9b6686c377387cf0d9dd05b88b246ce4c51))
+* sync fan-out protocol from agent-docs ad7abd2 ([449e5c1](https://github.com/rknightion/meraki-dashboard-exporter/commit/449e5c1f4003a7f38ce5aef35e4bd19ff647048d))
+* sync fan-out protocol, delegated root authority for unattended runs ([ca8777c](https://github.com/rknightion/meraki-dashboard-exporter/commit/ca8777c55b5ef74257701738c03d6410dce6b82f))
+* sync fan-out protocol, explicit add does not bound the commit ([f0909c3](https://github.com/rknightion/meraki-dashboard-exporter/commit/f0909c3ac534985915830236d54da08dd291c78d))
+* sync nineteen-worker Codex fan-out guidance ([bb0d2c0](https://github.com/rknightion/meraki-dashboard-exporter/commit/bb0d2c0e2dc96a355a69b141f1fd3f931dd550a1))
+* sync optional Astra fan-out routing and run contracts ([ae44661](https://github.com/rknightion/meraki-dashboard-exporter/commit/ae44661a69034d6943929919f7fb7d6931f78962))
+* sync root async question policy ([66bd554](https://github.com/rknightion/meraki-dashboard-exporter/commit/66bd554c0be984e929d5292ed74df33a52b4a4be))
+* sync same-session fan-out recovery contract ([2156a0b](https://github.com/rknightion/meraki-dashboard-exporter/commit/2156a0b23e56be79eb326de227ba0bf88fb27dff))
+* sync wave-root stage authority and lab-Mac GUI gate ([8864abb](https://github.com/rknightion/meraki-dashboard-exporter/commit/8864abb07f0c39de2a682c752a2013041ceda922))
+
 ## [2.0.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.0.0...v2.0.1) (2026-09-04)
 
 
