@@ -78,7 +78,9 @@ verification method and the jq recipes. Two ID spaces, no overlap.
 
 **The GitHub Issues tracker itself stays open, deliberately.** External contributors need a
 channel, and it is how sanitised real API responses arrive for device families nobody here owns.
-Every surviving issue is somebody else's: never close or delete one. An issue arriving that way
+Every surviving issue is somebody else's: never close or delete one. That includes closing one by
+accident: a `Closes #NNN` / `Fixes #NNN` trailer on a commit pushed to `main` auto-closes it. Cite
+the number in prose instead. An issue arriving that way
 becomes an `mde-NNNN` task citing the number, and the board, not the issue, is where it is worked.
 
 - **`backlog/` is committed, so no real identifiers in tasks or docs.** No email addresses,
