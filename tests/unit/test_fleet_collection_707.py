@@ -176,7 +176,21 @@ async def test_fanout_records_429_timeout_and_partial_failure_without_fabricatin
     monkeypatch.setattr(
         "meraki_dashboard_exporter.core.api_facade.asyncio.sleep", AsyncMock(side_effect=no_wait)
     )
-    fleet_settings.api.per_fetch_deadline_seconds = 0.1
+    # These two numbers are a pair and neither may be tightened. This deadline is
+    # wall-clock and the facade applies it to the WHOLE call (api_facade.py), the
+    # rate-limiter acquire and the wait for a free run_in_executor worker included,
+    # so it is a healthy network's budget for being scheduled at all -- not its
+    # budget for doing work. At 0.1s that budget was too small to survive a loaded
+    # 2-core GitHub runner: the assertions below failed with ~20 of 750 networks
+    # missing, while passing on every developer machine. Starve the executor hard
+    # enough (SQUEEZE to one worker) and the shortfall shows up in call_count, i.e.
+    # fetches dying on the deadline before they ever issue.
+    #
+    # 1.0s gives 10x headroom. The slow network's sleep only has to exceed the
+    # deadline, and scheduling delay pushes it further over, never under. Note the
+    # CI failure has not been reproduced locally at a realistic worker count, so
+    # treat a recurrence as "this margin is still too small", not as a new bug.
+    fleet_settings.api.per_fetch_deadline_seconds = 1.0
 
     def clients(network_id: str, **_: object) -> list[dict[str, object]]:
         nonlocal retry_attempts
@@ -184,7 +198,7 @@ async def test_fanout_records_429_timeout_and_partial_failure_without_fabricatin
             retry_attempts += 1
             raise HTTPError("HTTP 429", 429)
         if network_id == timeout_network:
-            time.sleep(0.2)
+            time.sleep(1.5)
         if network_id == failed_network:
             raise RuntimeError("partial fixture failure")
         return fleet.clients_by_network[network_id]
