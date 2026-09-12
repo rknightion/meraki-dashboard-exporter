@@ -40,12 +40,29 @@ only with `org_id`, `network_id`, `client_id` (plus `type` for app-usage).
 The **only** metric allowed to carry the descriptive/PII-ish fields is a single join carrier:
 
 - **`meraki_client_info`** (`ClientMetricName.CLIENT_INFO`) — value always `1`, labelled
-  `org_id`, `network_id`, `client_id`, `mac`, `description`, `hostname`, `ssid`. It exists purely so
-  a PromQL query can `* on(client_id) group_left(mac, description, hostname, ssid)` the human-readable
-  fields onto the ID-only numeric series when you need them. Because the label values (hostname,
-  description, SSID) are mutable, the series' label set **churns and the old label combination
-  expires** whenever a client's hostname/description/SSID changes — this is expected metric-expiration
-  behavior, not a bug.
+  `org_id`, `network_id`, `client_id`, `mac`, `description`, `hostname`, `ip`, `ip6`, `ssid`. It
+  exists purely so a PromQL query can
+  `* on(client_id) group_left(mac, description, hostname, ssid)` the human-readable fields onto the
+  ID-only numeric series when you need them. Because the label values (hostname, description, IP,
+  SSID) are mutable, the series' label set **changes** whenever one of them changes; the superseded
+  series is removed in the same collection pass that emits its replacement, so exactly one series
+  per client is exposed at any moment and a `group_left` join can never hit a many-to-one match.
+
+    !!! warning "The `ip` and `ip6` labels are address data"
+
+        `ip` is populated by default (`clients.ip_label_enabled`); `ip6` is opt-in
+        (`clients.ip6_label_enabled`, default `false`). They exist so a SIEM/SOC investigation
+        holding only an address can recover the client identity from Prometheus retention
+        (#764) — which necessarily means **your TSDB retains the historical
+        address-to-MAC-to-hostname mapping for as long as your retention window**. In many
+        jurisdictions an IP address tied to a device identifier is personal data. Set
+        `clients.ip_label_enabled=false` to leave the label key present but empty. The label
+        keys are always present so the metric has one stable shape.
+
+        `ip6` is off by default for a second reason: SLAAC privacy extensions (RFC 8981) rotate
+        the temporary address roughly daily on current desktop and mobile operating systems, so
+        enabling it mints about one new series per client per day in your TSDB index. The
+        link-local `ip6Local` address is never exposed.
 
 This means the *metrics plane* (`/metrics`) already minimises PII exposure: a scraper or Prometheus
 retention store that never queries `meraki_client_info` never stores mac/hostname/description/ssid at
@@ -142,6 +159,7 @@ for the full boundary rule. This channel is:
 | Restrict who can view the `/clients` PII page | `server.api_token` (`MERAKI_EXPORTER_SERVER__API_TOKEN`) | unset (open) | Requires `Authorization: Bearer <token>` on `/clients` and the other sensitive GET UIs plus the control POSTs (`/api/collectors/trigger`, `/api/clients/clear-dns-cache`). |
 | Remove the `/clients` page (and other human UI) entirely | `server.ui_enabled` (`MERAKI_EXPORTER_SERVER__UI_ENABLED`) | `true` | When `false`, `/clients` (and `/`, `/status`, `/config`, `/cardinality*`) return `404`; `/metrics`/`/health`/`/ready` stay open. |
 | Bound in-memory PII cache lifetime | `clients.cache_ttl`, `clients.dns_cache_ttl`, `clients.dns_cache_max_entries` | `3600`s, `21600`s, `100000` | Shorter TTLs age out stale hostname/description/DNS mappings sooner; the max-entries cap bounds worst-case memory regardless of churn. |
+| Keep client metrics but no address labels on the join series | `clients.ip_label_enabled`, `clients.ip6_label_enabled` | `true`, `false` | `ip_label_enabled=false` leaves the `ip` label key present but empty, so your TSDB never retains the historical address-to-client mapping. `ip6` is already off by default. |
 | Disable reverse-DNS queries without disabling client metrics | `clients.dns_reverse_lookup_enabled` | `true` | When enabled, client IPs are sent to the deployment host resolver; set `false` to keep client collection while making no reverse-DNS queries. |
 | Bound reverse-DNS work in flight | `clients.dns_max_concurrent_lookups` | `32` | Caps DNS workers and queue allocation, independently of the client cap. |
 | Cap overall client series volume | `clients.max_clients_per_network`, `clients.max_clients_total` | `10000`, `25000` | Clients beyond the cap are dropped from metric emission (counted in `meraki_exporter_clients_over_cap`), bounding both cardinality and PII surface area under very large client populations. |

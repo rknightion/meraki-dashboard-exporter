@@ -11,8 +11,8 @@ meraki_client_application_usage_total_bytes gauge
   help: Total bytes transferred by client per application in the last hour
   labels: client_id,network_id,org_id,type
 meraki_client_info gauge
-  help: Client information join metric (client_id -> mac/description/hostname/ssid); value is always 1. Labels churn (old series expire) when a client's hostname/description/SSID changes.
-  labels: client_id,description,hostname,mac,network_id,org_id,ssid
+  help: Client information join metric (client_id -> mac/description/hostname/ip/ip6/ssid); value is always 1. The superseded series is removed as soon as a client's hostname/description/IP/SSID changes, so exactly one series per client is exposed.
+  labels: client_id,description,hostname,ip,ip6,mac,network_id,org_id,ssid
 meraki_client_status gauge
   help: Client online status (1 = online, 0 = offline)
   labels: client_id,network_id,org_id

@@ -189,6 +189,58 @@ class MetricExpirationManager:
         if metric is not None:
             self._metric_series[key] = (metric, dict(label_values))
 
+    def expire_series(
+        self,
+        collector_name: str,
+        metric_name: str,
+        label_values: dict[str, str],
+        metric: Gauge | None = None,
+    ) -> bool:
+        """Remove one superseded series immediately, ahead of its TTL.
+
+        An ``*_info`` carrier's label set changes whenever a mutable field it
+        carries changes (hostname, description, SSID, IP). Waiting for the TTL
+        sweep leaves the old and new label sets exposed together for up to one
+        full TTL, and during that window a ``* on(<id>) group_left(...)`` join
+        finds two right-hand matches and PromQL fails the *whole* query with a
+        many-to-one match error. Emit sites call this with the previous label
+        set so only one series per entity is ever exposed.
+
+        Parameters
+        ----------
+        collector_name : str
+            Name of the collector that owns this metric.
+        metric_name : str
+            Full name of the metric (e.g., "meraki_client_info").
+        label_values : dict[str, str]
+            The superseded label set to remove.
+        metric : Gauge | None
+            The owning Gauge. Only needed when the series was never tracked
+            (no ``track_metric_update`` call recorded it); a tracked series
+            already carries its Gauge reference.
+
+        Returns
+        -------
+        bool
+            True when a tracked series was found and untracked.
+
+        """
+        key = (collector_name, metric_name, self._freeze_labels(label_values))
+        tracked = key in self._metric_timestamps
+
+        # Untracked series still get removed from the registry when the caller
+        # hands us the Gauge, so a stale label set cannot outlive this call.
+        if metric is not None and key not in self._metric_series:
+            self._metric_series[key] = (metric, dict(label_values))
+
+        self._remove_series(key)
+
+        if tracked:
+            del self._metric_timestamps[key]
+            self._metric_counts[collector_name] -= 1
+
+        return tracked
+
     def _remove_series(self, key: _MetricKey) -> None:
         """Remove the actual Prometheus series for an expired/shed tracking key.
 

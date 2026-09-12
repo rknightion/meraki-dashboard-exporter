@@ -285,6 +285,12 @@ data:
   {{- if hasKey . "clientsApplicationAllowlist" }}
   MERAKI_EXPORTER_CLIENTS__APPLICATION_ALLOWLIST: {{ .clientsApplicationAllowlist | quote }}
   {{- end }}
+  {{- if hasKey . "clientsIpLabelEnabled" }}
+  MERAKI_EXPORTER_CLIENTS__IP_LABEL_ENABLED: {{ .clientsIpLabelEnabled | quote }}
+  {{- end }}
+  {{- if hasKey . "clientsIp6LabelEnabled" }}
+  MERAKI_EXPORTER_CLIENTS__IP6_LABEL_ENABLED: {{ .clientsIp6LabelEnabled | quote }}
+  {{- end }}
   {{- if hasKey . "clientsDnsReverseLookupEnabled" }}
   MERAKI_EXPORTER_CLIENTS__DNS_REVERSE_LOOKUP_ENABLED: {{ .clientsDnsReverseLookupEnabled | quote }}
   {{- end }}

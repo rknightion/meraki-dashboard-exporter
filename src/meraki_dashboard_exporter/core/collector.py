@@ -932,6 +932,59 @@ class MetricCollector(ABC):
                 value=value,
             )
 
+    def _expire_metric_series(
+        self,
+        metric: Gauge,
+        labels: dict[str, str],
+        metric_name: str | None = None,
+    ) -> None:
+        """Drop one superseded series now instead of waiting for its TTL.
+
+        The counterpart to ``_set_metric`` for ``*_info`` carriers, whose label
+        set changes whenever a mutable field they carry changes. Leaving the old
+        label set to age out means the entity briefly has two live info series,
+        and a ``* on(<id>) group_left(...)`` join against it then fails the whole
+        query with a many-to-one match error. Call this with the previously
+        emitted label set in the same pass that emits the new one.
+
+        Parameters
+        ----------
+        metric : Gauge
+            The Gauge owning the series.
+        labels : dict[str, str]
+            The superseded label set.
+        metric_name : str | None
+            Metric name; derived from the Gauge when omitted.
+
+        """
+        if metric_name is None:
+            metric_name = getattr(metric, "_name", "unknown")
+
+        # Disabled families (#309) are unregistered no-ops with no bookkeeping.
+        if self._is_metric_disabled(metric_name):
+            return
+
+        try:
+            if self.expiration_manager is not None:
+                self.expiration_manager.expire_series(
+                    collector_name=self.__class__.__name__,
+                    metric_name=metric_name,
+                    label_values=labels,
+                    metric=metric,
+                )
+            else:
+                labelnames = list(getattr(metric, "_labelnames", ()) or ())
+                metric.remove(*[labels[name] for name in labelnames])
+        except KeyError, ValueError:
+            # Series already gone, or labels no longer match the gauge.
+            pass
+        except Exception:
+            logger.exception(
+                "Failed to expire superseded metric series",
+                metric_name=metric_name,
+                labels=labels,
+            )
+
     # Fallback buckets if no configured buckets are supplied (mirrors the
     # MonitoringSettings.histogram_buckets default).
     _DEFAULT_DURATION_BUCKETS: tuple[float, ...] = (

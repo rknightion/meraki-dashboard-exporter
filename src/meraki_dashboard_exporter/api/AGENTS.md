@@ -42,8 +42,6 @@ async def _fetch_devices(self, org_id: str) -> list[Device]:
         org_id=org_id,
         total_pages="all",
     )
-    data = validate_response_format(
-        raw, expected_type=list, operation="getOrganizationDevices"
-    )
+    data = validate_response_format(raw, expected_type=list, operation="getOrganizationDevices")
     return [Device.model_validate(d) for d in data]
 ```

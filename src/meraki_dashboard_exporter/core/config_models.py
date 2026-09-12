@@ -1004,6 +1004,26 @@ class ClientSettings(BaseModel):
             "keeps only the ranked applications and optional other bucket."
         ),
     )
+    ip_label_enabled: bool = Field(
+        True,
+        description=(
+            "Populate the ip label on meraki_client_info with the client's IPv4 address, "
+            "so a historical IP-to-client lookup can be answered from Prometheus retention "
+            "(#764). The label key is always present; disabling this leaves it empty. Each "
+            "address change mints a new info series in your TSDB, which is the point, but "
+            "it is index growth over your retention window."
+        ),
+    )
+    ip6_label_enabled: bool = Field(
+        False,
+        description=(
+            "Populate the ip6 label on meraki_client_info with the client's global IPv6 "
+            "address. Off by default: SLAAC privacy extensions (RFC 8981) rotate the "
+            "temporary address roughly daily on current desktop and mobile operating "
+            "systems, so this mints about one new info series per client per day by "
+            "construction. The link-local ip6Local address is never exposed."
+        ),
+    )
     dns_reverse_lookup_enabled: bool = Field(
         True,
         description=(

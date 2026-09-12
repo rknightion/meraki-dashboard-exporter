@@ -484,6 +484,69 @@ class TestRealSeriesRemoval:
         assert len(expiration_manager._metric_timestamps) == 0
         assert expiration_manager._metric_counts[_COLLECTOR] == 0
 
+    def test_expire_series_removes_superseded_label_set_now(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """expire_series drops a superseded series ahead of its TTL (#764)."""
+        gauge = Gauge(
+            "meraki_test_supersede",
+            "test gauge for supersede",
+            labelnames=["client_id", "ip"],
+        )
+        old_labels = {"client_id": "c1", "ip": "192.0.2.10"}
+        new_labels = {"client_id": "c1", "ip": "192.0.2.11"}
+
+        for labels in (old_labels, new_labels):
+            gauge.labels(**labels).set(1)
+            expiration_manager.track_metric_update(
+                collector_name=_COLLECTOR,
+                metric_name="meraki_test_supersede",
+                label_values=labels,
+                metric=gauge,
+            )
+
+        assert expiration_manager._metric_counts[_COLLECTOR] == 2
+
+        assert (
+            expiration_manager.expire_series(
+                collector_name=_COLLECTOR,
+                metric_name="meraki_test_supersede",
+                label_values=old_labels,
+            )
+            is True
+        )
+
+        # Old label set is gone from the registry AND from the bookkeeping; the
+        # successor is untouched, so a group_left join sees exactly one match.
+        assert ("c1", "192.0.2.10") not in gauge._metrics
+        assert ("c1", "192.0.2.11") in gauge._metrics
+        assert expiration_manager._metric_counts[_COLLECTOR] == 1
+        assert len(expiration_manager._metric_timestamps) == 1
+
+    def test_expire_series_on_untracked_label_set_is_a_noop(
+        self, expiration_manager: MetricExpirationManager
+    ) -> None:
+        """An unknown label set reports False and leaves the bookkeeping alone."""
+        gauge = Gauge(
+            "meraki_test_supersede_unknown",
+            "test gauge",
+            labelnames=["client_id", "ip"],
+        )
+        gauge.labels(client_id="c1", ip="192.0.2.10").set(1)
+
+        assert (
+            expiration_manager.expire_series(
+                collector_name=_COLLECTOR,
+                metric_name="meraki_test_supersede_unknown",
+                label_values={"client_id": "c9", "ip": "192.0.2.99"},
+                metric=gauge,
+            )
+            is False
+        )
+
+        assert ("c1", "192.0.2.10") in gauge._metrics
+        assert expiration_manager._metric_counts[_COLLECTOR] == 0
+
     async def test_expired_series_removed_from_registry(
         self, expiration_manager: MetricExpirationManager
     ) -> None:

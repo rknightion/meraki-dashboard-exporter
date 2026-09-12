@@ -89,6 +89,7 @@ class LabelName(StrEnum):
     MANUFACTURER = "manufacturer"
     OS = "os"
     IP = "ip"
+    IP6 = "ip6"  # Global IPv6 address (not the link-local ip6Local)
     VLAN = "vlan"
     FIRST_SEEN = "first_seen"
     LAST_SEEN = "last_seen"

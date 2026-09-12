@@ -49,7 +49,7 @@ a settled contract.
 | `meraki_network_filter_*` | Live network-filter scope observability |
 | `meraki_webhook_*` | Webhook receiver counters and processing duration (present only when the receiver is enabled, but the contract for these names is stable) |
 | `meraki_exporter_*` | Exporter self-observability: collector durations/errors, API client latency/counters, inventory cache, cardinality, metric expiration, `build_info` |
-| `meraki_client_*`, `meraki_clients_*` | Per-client metrics. Stable contract: the ID-only numeric series plus the `meraki_client_info` join shape (per #533; see [Name labels](#name-labels-are-not-part-of-numeric-series)) is stable across 1.x. These are opt-in and disabled by default (`MERAKI_EXPORTER_CLIENTS__ENABLED`), so whether the series are *present* is gated by config - that non-guarantee is the "Presence of optional subsystems" bullet under [What 1.0 does NOT promise](#what-10-does-not-promise), not an exception to the name/label/unit contract. |
+| `meraki_client_*`, `meraki_clients_*` | Per-client metrics. Stable contract: the ID-only numeric series plus the `meraki_client_info` join shape (per #533; see [Name labels](#name-labels-are-not-part-of-numeric-series)) is stable across 1.x. `meraki_client_info` additionally carries `ip` and `ip6` label keys (#764); their *values* are config-gated (`clients.ip_label_enabled` default on, `clients.ip6_label_enabled` default off) but the keys are always present, so the label set does not vary with configuration. These are opt-in and disabled by default (`MERAKI_EXPORTER_CLIENTS__ENABLED`), so whether the series are *present* is gated by config - that non-guarantee is the "Presence of optional subsystems" bullet under [What 1.0 does NOT promise](#what-10-does-not-promise), not an exception to the name/label/unit contract. |
 
 ### Experimental
 
@@ -147,6 +147,27 @@ meraki_org_info`) and to clients, whose numeric series are ID-only and join to
 `meraki_client_info`. This mirrors the established info-join used for organization/device
 identity; the network-filter observability gauges in `services/inventory.py` already follow it
 (they deliberately omit `network_name` from their labels to avoid orphan series on rename).
+
+!!! tip "Write the join so a second info series cannot break it"
+
+    An `*_info` carrier's label set changes whenever a mutable field it carries changes. This
+    exporter removes the superseded series in the same collection pass that emits its
+    replacement, so exactly one series per entity is exposed and the plain join above is safe.
+    If you scrape an exporter older than that fix, or federate/recording-rule these series with
+    a lookback that spans a change, two label sets can coexist and `group_left` then fails the
+    *whole* query with `many-to-one matching must be explicit`. Reducing the right-hand side to
+    one series per `client_id` costs nothing and is immune to it:
+
+    ```promql
+    meraki_client_usage_total_bytes
+      * on (client_id) group_left (mac, hostname)
+      topk(1, meraki_client_info) by (client_id)
+    ```
+
+    Note `topk` and not `max by (...)`: aggregating by the labels you want to pull across still
+    returns two series when it is one of *those* labels that changed. Every `meraki_client_info`
+    series has the value `1`, so which of a duplicate pair `topk` keeps is arbitrary - that is
+    the correct trade for a query that returns rather than errors.
 
 !!! info "Rollout"
     This policy is settled contract, and the code has landed (#534): mutable name labels are

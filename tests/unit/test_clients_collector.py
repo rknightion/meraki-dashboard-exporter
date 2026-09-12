@@ -1127,6 +1127,8 @@ class TestClientsCollector(BaseCollectorTest):
             "mac",
             "description",
             "hostname",
+            "ip",
+            "ip6",
             "ssid",
         }
         assert all(set(ls.keys()) == expected_keys for ls in label_sets)
@@ -1134,6 +1136,134 @@ class TestClientsCollector(BaseCollectorTest):
         c1_labels = next(ls for ls in label_sets if ls["client_id"] == "c1")
         # DNS-resolved "client1.example.com" sanitized (dots -> hyphens).
         assert c1_labels["hostname"] == "client1-example-com"
+        # The IP is NOT sanitized -- dots survive (#764).
+        assert c1_labels["ip"] == "10.0.0.1"
+        # ip6 is opt-in and off by default, so the key is present but empty.
+        assert not c1_labels["ip6"]
+
+    async def test_client_info_ip_change_evicts_the_superseded_series(
+        self, collector, mock_api_builder, metrics
+    ):
+        """#764: a client's old info series is removed the moment its IP changes.
+
+        Left to the TTL sweep the client would have two live info series for up
+        to a full TTL, and a `* on(client_id) group_left(...)` join against it
+        fails the whole query with a many-to-one match error.
+        """
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+
+        def _client(ip: str) -> dict:
+            return ClientFactory.create(
+                client_id="c1",
+                mac="aa:bb:cc:dd:ee:01",
+                ip=ip,
+                description="Client 1",
+                status="Online",
+                ssid="Corporate",
+            )
+
+        for ip in ("10.0.0.1", "10.0.0.9"):
+            api = (
+                mock_api_builder
+                .with_organizations([org])
+                .with_networks([network], org_id=org["id"])
+                .with_custom_response("getNetworkClients", [_client(ip)])
+                .build()
+            )
+            self._update_collector_api(collector, api)
+            with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
+                mock_resolve.return_value = {}
+                await self.run_collector(collector)
+
+        label_sets = metrics.get_all_label_sets("meraki_client_info")
+        assert [ls["ip"] for ls in label_sets] == ["10.0.0.9"]
+
+    async def test_client_info_ip_labels_honour_their_settings(
+        self, collector, mock_api_builder, metrics
+    ):
+        """ip can be switched off and ip6 switched on; both keys always exist (#764)."""
+        collector._ip_label_enabled = False
+        collector._ip6_label_enabled = True
+
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+        clients = [
+            ClientFactory.create(
+                client_id="c1",
+                mac="aa:bb:cc:dd:ee:01",
+                ip="10.0.0.1",
+                ip6="2001:db8::1",
+            ),
+            # An unparseable address must be dropped rather than mint a series.
+            ClientFactory.create(
+                client_id="c2",
+                mac="aa:bb:cc:dd:ee:02",
+                ip="10.0.0.2",
+                ip6="not-an-address",
+            ),
+        ]
+
+        api = (
+            mock_api_builder
+            .with_organizations([org])
+            .with_networks([network], org_id=org["id"])
+            .with_custom_response("getNetworkClients", clients)
+            .build()
+        )
+        self._update_collector_api(collector, api)
+
+        with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
+            mock_resolve.return_value = {}
+            await self.run_collector(collector)
+
+        label_sets = {
+            ls["client_id"]: ls for ls in metrics.get_all_label_sets("meraki_client_info")
+        }
+        # ip disabled: key present, value empty. ip6 enabled and colons intact.
+        assert not label_sets["c1"]["ip"]
+        assert label_sets["c1"]["ip6"] == "2001:db8::1"
+        assert not label_sets["c2"]["ip6"]
+
+    def test_ip_label_value_rejects_wrong_family_and_link_local(self, collector):
+        """#764: ip takes only IPv4, ip6 only a non-link-local IPv6."""
+        assert collector._ip_label_value("192.0.2.10", version=4) == "192.0.2.10"
+        assert collector._ip_label_value("2001:db8::1", version=6) == "2001:db8::1"
+        # An IPv4 link-local is real evidence of a failed DHCP and is kept.
+        assert collector._ip_label_value("169.254.1.1", version=4) == "169.254.1.1"
+        # Wrong family either way.
+        assert not collector._ip_label_value("2001:db8::1", version=4)
+        assert not collector._ip_label_value("192.0.2.10", version=6)
+        # The docs promise the link-local address is never exposed.
+        assert not collector._ip_label_value("fe80::1", version=6)
+        assert not collector._ip_label_value("not-an-address", version=4)
+        assert not collector._ip_label_value(None, version=4)
+
+    async def test_info_label_memo_drops_departed_clients(
+        self, collector, mock_api_builder, metrics
+    ):
+        """#764: the eviction memo must not grow one entry per client ever seen."""
+        org = OrganizationFactory.create(org_id="123", name="Test Org")
+        network = NetworkFactory.create(network_id="N_123", name="Test Network", org_id=org["id"])
+
+        for client_id in ("c1", "c2"):
+            api = (
+                mock_api_builder
+                .with_organizations([org])
+                .with_networks([network], org_id=org["id"])
+                .with_custom_response(
+                    "getNetworkClients",
+                    [ClientFactory.create(client_id=client_id, ip="10.0.0.1")],
+                )
+                .build()
+            )
+            self._update_collector_api(collector, api)
+            with patch.object(collector.dns_resolver, "resolve_multiple") as mock_resolve:
+                mock_resolve.return_value = {}
+                await self.run_collector(collector)
+
+        # c1 departed on the second complete snapshot, so its memo entry is gone.
+        assert set(collector._last_info_labels["N_123"]) == {"c2"}
 
     async def test_per_network_cap_drops_and_alarms(self, collector, mock_api_builder, metrics):
         """#533: the per-network cap truncates emitted clients and alarms via clients_over_cap."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import time
 from collections.abc import Callable
 from dataclasses import replace
@@ -175,6 +176,15 @@ class ClientsCollector(MetricCollector):
         # Per-collection aggregate counters for the INFO summary (F-171).
         self._collection_networks = 0
         self._collection_clients = 0
+        # Whether the ip/ip6 label values on meraki_client_info are populated
+        # (#764). The label KEYS are unconditional; only the values are gated.
+        self._ip_label_enabled = self.settings.clients.ip_label_enabled
+        self._ip6_label_enabled = self.settings.clients.ip6_label_enabled
+        # Last emitted meraki_client_info label set, network_id -> client_id ->
+        # labels, so a changed label set can evict its predecessor at emit time
+        # rather than leaving two live info series until the TTL sweep (#764).
+        # Bounded by the same emission caps as the store; pruned each cycle.
+        self._last_info_labels: dict[str, dict[str, dict[str, str]]] = {}
 
     def _initialize_metrics(self) -> None:
         """Initialize Prometheus metrics for client data."""
@@ -197,11 +207,19 @@ class ClientsCollector(MetricCollector):
         # allowed to carry descriptive/PII-ish labels. Numeric client series are
         # ID-only and join via `<numeric> * on(client_id) group_left(mac,
         # description, hostname, ssid) meraki_client_info`.
+        #
+        # The ip/ip6 label KEYS are unconditional so the metric has one stable
+        # shape; their VALUES are gated by clients.ip_label_enabled (default on)
+        # and clients.ip6_label_enabled (default off, see #764 and the setting's
+        # own description). A superseded label set is evicted at emit time by
+        # `_expire_client_info_series`, so a client never has two live info
+        # series and a group_left join can never hit a many-to-one match.
         self.client_info = self._create_gauge(
             ClientMetricName.CLIENT_INFO,
-            "Client information join metric (client_id -> mac/description/hostname/ssid); "
-            "value is always 1. Labels churn (old series expire) when a client's hostname/"
-            "description/SSID changes.",
+            "Client information join metric (client_id -> mac/description/hostname/ip/"
+            "ip6/ssid); value is always 1. The superseded series is removed as soon as a "
+            "client's hostname/description/IP/SSID changes, so exactly one series per "
+            "client is exposed.",
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.NETWORK_ID,
@@ -209,6 +227,8 @@ class ClientsCollector(MetricCollector):
                 LabelName.MAC,
                 LabelName.DESCRIPTION,
                 LabelName.HOSTNAME,
+                LabelName.IP,
+                LabelName.IP6,
                 LabelName.SSID,
             ],
         )
@@ -507,6 +527,12 @@ class ClientsCollector(MetricCollector):
                 networks_evicted=evicted_networks,
             )
 
+        # Drop info-label memos for networks the store no longer holds, so a
+        # departed network cannot leak its per-client label sets (#764).
+        live_networks = set(self.client_store.get_network_names())
+        for departed in [nid for nid in self._last_info_labels if nid not in live_networks]:
+            del self._last_info_labels[departed]
+
         # Update DNS cache and client store metrics after all collections
         self._update_cache_metrics()
 
@@ -767,6 +793,88 @@ class ClientsCollector(MetricCollector):
             )
 
         return allowed
+
+    @staticmethod
+    def _ip_label_value(value: str | None, *, version: int) -> str:
+        """Validate an address for use as the ``ip`` or ``ip6`` label value.
+
+        Deliberately NOT routed through :meth:`_sanitize_label_value`, which
+        replaces every character outside ``[a-zA-Z0-9_-]`` with a hyphen and so
+        would render ``192.0.2.10`` as ``192-0-2-10`` and mangle every IPv6
+        colon.
+
+        Three classes of value are dropped rather than emitted, so neither
+        malformed API data nor a field carrying the wrong thing can mint junk
+        series or make the documented label meaning false (#764): anything the
+        stdlib cannot parse, anything of the other address family, and a
+        link-local IPv6 address (the docs promise the link-local ``ip6Local``
+        field is never exposed, and ``ip6`` must not smuggle one in). An IPv4
+        link-local (169.254/16) IS kept - it is real evidence of a client that
+        failed DHCP.
+
+        Parameters
+        ----------
+        value : str | None
+            Candidate address from the API.
+        version : int
+            Required address family, 4 or 6.
+
+        Returns
+        -------
+        str
+            The address unchanged, or "" when absent or rejected.
+
+        """
+        if not value:
+            return ""
+        try:
+            parsed = ipaddress.ip_address(value)
+        except ValueError:
+            logger.debug("Dropping unparseable client IP from label", version=version)
+            return ""
+        if parsed.version != version:
+            logger.debug(
+                "Dropping client IP of the wrong address family from label",
+                expected_version=version,
+                actual_version=parsed.version,
+            )
+            return ""
+        if version == 6 and parsed.is_link_local:
+            logger.debug("Dropping link-local client IPv6 from label")
+            return ""
+        return value
+
+    def _expire_superseded_client_info(
+        self, network_id: str, client_id: str, info_labels: dict[str, str]
+    ) -> None:
+        """Evict the client's previous info series when its label set changed.
+
+        ``meraki_client_info`` carries mutable fields, so a hostname, SSID or IP
+        change produces a new label set. Left to the TTL sweep the old one stays
+        exposed for up to a full TTL, during which the documented
+        ``* on(client_id) group_left(...)`` join finds two right-hand matches and
+        PromQL fails the whole query. Removing the predecessor in the same pass
+        that emits the successor keeps exactly one live series per client (#764).
+
+        Parameters
+        ----------
+        network_id : str
+            Network the client belongs to.
+        client_id : str
+            Meraki client ID.
+        info_labels : dict[str, str]
+            The label set about to be emitted.
+
+        """
+        network_memo = self._last_info_labels.setdefault(network_id, {})
+        previous = network_memo.get(client_id)
+        if previous is not None and previous != info_labels:
+            self._expire_metric_series(
+                self.client_info,
+                previous,
+                ClientMetricName.CLIENT_INFO.value,
+            )
+        network_memo[client_id] = dict(info_labels)
 
     def _sanitize_label_value(self, value: str | None, max_length: int = 2048) -> str:
         """Sanitize a label value for Prometheus.
@@ -1121,6 +1229,9 @@ class ClientsCollector(MetricCollector):
             # Emit the id-keyed join metric (issue #533): the only client metric
             # carrying descriptive/PII-ish labels. Numeric series above join back
             # onto this via `on(client_id) group_left(...)`.
+            # IP values are NOT run through _sanitize_label_value: it replaces
+            # every character outside [a-zA-Z0-9_-] with a hyphen, which would
+            # render 192.0.2.10 as 192-0-2-10 and mangle every IPv6 colon.
             info_labels = create_labels(
                 org_id=org_id,
                 network_id=network_id,
@@ -1128,8 +1239,13 @@ class ClientsCollector(MetricCollector):
                 mac=client.mac,
                 description=sanitized_description,
                 hostname=sanitized_hostname,
+                ip=self._ip_label_value(client.ip, version=4) if self._ip_label_enabled else "",
+                ip6=(
+                    self._ip_label_value(client.ip6, version=6) if self._ip6_label_enabled else ""
+                ),
                 ssid=ssid or "Unknown",
             )
+            self._expire_superseded_client_info(network_id, client.id, info_labels)
             self._set_metric(
                 self.client_info,
                 info_labels,
@@ -1147,6 +1263,21 @@ class ClientsCollector(MetricCollector):
                 status=client.status,
                 ssid=ssid,
             )
+
+        # Reconcile the info-label memo with this network's live clients, or a
+        # network with high client churn accumulates a label set for every ID it
+        # has ever seen. The store is the bound: it already applies the caps and
+        # its own complete-snapshot reconciliation, so a client it still holds
+        # keeps its memo even when this pass was truncated by the emission cap
+        # and therefore could not refresh it (#764).
+        network_memo = self._last_info_labels.get(network_id)
+        if network_memo is not None:
+            live_ids = {client.id for client in clients}
+            live_ids.update(
+                stored.id for stored in self.client_store.get_network_clients(network_id)
+            )
+            for departed in network_memo.keys() - live_ids:
+                del network_memo[departed]
 
         # Update aggregated metrics after processing all clients
         # 1. Wireless capabilities metrics

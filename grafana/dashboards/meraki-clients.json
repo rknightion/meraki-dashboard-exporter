@@ -955,7 +955,7 @@
               ]
             }
           },
-          "description": "Grandfathered ID-only client join metric: client_id -\u003e mac/description/hostname/ssid/network.",
+          "description": "Grandfathered ID-only client join metric: client_id -\u003e mac/description/hostname/ip/ip6/ssid/network. Columns are filterable, so an investigation holding only an address can type it into the ip column to recover the client identity. ip6 is empty unless clients.ip6_label_enabled is set.",
           "id": 7,
           "links": [],
           "title": "Client Identity (meraki_client_info join)",
@@ -963,7 +963,11 @@
             "kind": "table",
             "spec": {
               "fieldConfig": {
-                "defaults": {},
+                "defaults": {
+                  "custom": {
+                    "filterable": true
+                  }
+                },
                 "overrides": null
               },
               "options": {},
