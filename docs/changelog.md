@@ -5,6 +5,19 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [2.1.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.1.0...v2.1.1) (2026-09-15)
+
+
+### Documentation
+
+* adopt canonical routing and bounded root rescue ([81daf70](https://github.com/rknightion/meraki-dashboard-exporter/commit/81daf700add73f97e42eef0b3684498177c8f4f4))
+* sync approved fan-out scheduling and route verification ([aedce6d](https://github.com/rknightion/meraki-dashboard-exporter/commit/aedce6d481110155a5bb9ad88b603a290f81b80a))
+* sync cost-aware fan-out routing and prompt guidance ([186ccc4](https://github.com/rknightion/meraki-dashboard-exporter/commit/186ccc410c040df22ae07aefd414ea49e221b361))
+* sync fan-out async decision-only guidance ([e850486](https://github.com/rknightion/meraki-dashboard-exporter/commit/e850486f87e9d05e42fef5fa63fcc73eaa3d0f2c))
+* sync fixed Astra low orchestration and rescue routing ([22b4e99](https://github.com/rknightion/meraki-dashboard-exporter/commit/22b4e992bc144a94edf348c6c450df738536a83b))
+* sync polling and integration contracts ([05045f2](https://github.com/rknightion/meraki-dashboard-exporter/commit/05045f23f7d859962703af154f7c2c1d88f77ecb))
+* sync wave orchestration and existing-root contracts ([7dec601](https://github.com/rknightion/meraki-dashboard-exporter/commit/7dec601b473922bcf53c15ebd1f5b947979b4732))
+
 ## [2.1.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.0.1...v2.1.0) (2026-09-12)
 
 
