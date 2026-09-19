@@ -5,6 +5,23 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [2.1.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.1.0...v2.1.1) (2026-09-19)
+
+
+### Documentation
+
+* adopt canonical routing and bounded root rescue ([81daf70](https://github.com/rknightion/meraki-dashboard-exporter/commit/81daf700add73f97e42eef0b3684498177c8f4f4))
+* publish canonical agent documents ([25321c6](https://github.com/rknightion/meraki-dashboard-exporter/commit/25321c655b4232994b141a05f3cf6e383f56b62d))
+* publish canonical agent documents ([64a86a2](https://github.com/rknightion/meraki-dashboard-exporter/commit/64a86a205f0c242c29581e63386357f0ac531b48))
+* publish public Backlog workspace ([9f2c91e](https://github.com/rknightion/meraki-dashboard-exporter/commit/9f2c91e0541f77801e6d49153df9612b63d19ad5))
+* sync approved fan-out scheduling and route verification ([aedce6d](https://github.com/rknightion/meraki-dashboard-exporter/commit/aedce6d481110155a5bb9ad88b603a290f81b80a))
+* sync cost-aware fan-out routing and prompt guidance ([186ccc4](https://github.com/rknightion/meraki-dashboard-exporter/commit/186ccc410c040df22ae07aefd414ea49e221b361))
+* sync fan-out async decision-only guidance ([e850486](https://github.com/rknightion/meraki-dashboard-exporter/commit/e850486f87e9d05e42fef5fa63fcc73eaa3d0f2c))
+* sync fixed Astra low orchestration and rescue routing ([22b4e99](https://github.com/rknightion/meraki-dashboard-exporter/commit/22b4e992bc144a94edf348c6c450df738536a83b))
+* sync polling and integration contracts ([05045f2](https://github.com/rknightion/meraki-dashboard-exporter/commit/05045f23f7d859962703af154f7c2c1d88f77ecb))
+* sync wave orchestration and existing-root contracts ([7dec601](https://github.com/rknightion/meraki-dashboard-exporter/commit/7dec601b473922bcf53c15ebd1f5b947979b4732))
+* sync wave reliability and worktree contracts ([40bca7e](https://github.com/rknightion/meraki-dashboard-exporter/commit/40bca7e7aa35f52164251ddb1995d734feb84602))
+
 ## [2.1.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.0.1...v2.1.0) (2026-09-12)
 
 
