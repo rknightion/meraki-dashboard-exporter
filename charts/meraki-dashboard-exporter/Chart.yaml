@@ -14,7 +14,9 @@ icon: https://m7kni.io/meraki-dashboard-exporter/assets/project-icon-solid.svg
 sources:
   - https://github.com/rknightion/meraki-dashboard-exporter
 maintainers:
-  - name: Rob Knight
+  - name: rknightion
+    email: rob@m7kni.io
+    url: https://github.com/rknightion
 keywords:
   - meraki
   - prometheus
@@ -35,4 +37,4 @@ annotations:
       url: https://github.com/rknightion/meraki-dashboard-exporter
   artifacthub.io/maintainers: |
     - name: rknightion
-      email: rob@rob-knight.com
+      email: rob@m7kni.io
