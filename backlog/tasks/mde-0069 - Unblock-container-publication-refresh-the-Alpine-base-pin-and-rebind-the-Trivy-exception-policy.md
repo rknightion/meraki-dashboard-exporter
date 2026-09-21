@@ -3,10 +3,10 @@ id: MDE-0069
 title: >-
   Unblock container publication: refresh the Alpine base pin and rebind the
   Trivy exception policy
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-21 12:25'
-updated_date: '2026-09-21 12:38'
+updated_date: '2026-09-21 12:57'
 labels:
   - 'area:ci'
   - 'priority:high'
@@ -26,10 +26,10 @@ Second defect, latent: .trivyignore.yaml still listed fifteen exceptions written
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Dockerfile base pin resolves to an Alpine release whose libuuid is 2.41.6-r1 or newer
-- [ ] #2 The runtime stage patches base packages at build time so a lagging upstream base rebuild cannot block publication again
-- [ ] #3 Trivy at CRITICAL,HIGH with the committed exception policy exits 0 on both linux/amd64 and linux/arm64
-- [ ] #4 .trivyignore.yaml contains only exceptions whose purls match packages actually present in the Alpine image
+- [x] #1 Dockerfile base pin resolves to an Alpine release whose libuuid is 2.41.6-r1 or newer
+- [x] #2 The runtime stage patches base packages at build time so a lagging upstream base rebuild cannot block publication again
+- [x] #3 Trivy at CRITICAL,HIGH with the committed exception policy exits 0 on both linux/amd64 and linux/arm64
+- [x] #4 .trivyignore.yaml contains only exceptions whose purls match packages actually present in the Alpine image
 <!-- AC:END -->
 
 ## Definition of Done
@@ -66,4 +66,12 @@ Two committed gates assert the literal name and both fail on a numeric uid: just
 Process lesson: `just check` does not cover this. The Docker legs live in `just ci` (check image image-verify image-structure smoke), which is the right local gate for any Dockerfile change. Running it locally needs container-structure-test, which is not installed on this machine; gcr.io/gcp-runtimes/container-structure-test over the docker socket is an equivalent substitute.
 
 Final local verification on the reverted tree: trivy gate exit 0 on linux/amd64 and linux/arm64, hadolint exit 0, just image-verify exit 0, just smoke exit 0, container-structure-test 7 passes 0 failures.
+
+Landed and verified in production. Commits 075a2d5 and ea0cb0b on main; v2.1.1 released from f40c23a.
+
+Release run 35601760988: release-please, prepend-release-warning, policy, both CodeQL analyses, build (linux/amd64), build (linux/arm64), merge + sign + sbom and helm publish all success. First green publication since 2026-09-04.
+
+GHCR now carries 2.1.1, 2.1, 2, latest, main-f40c23a and main on one digest, plus its cosign signature, and charts/meraki-dashboard-exporter 2.1.1. Pulled ghcr.io/rknightion/meraki-dashboard-exporter:2.1.1 back down and confirmed against the published artefact: uid=1000(exporter), libuuid-2.41.6-r1, MERAKI_EXPORTER_VERSION=v2.1.1.
+
+v2.1.0 is deliberately left as a tag and GitHub release with no image behind it. Republishing it was considered and rejected: publish.yml checks out inputs.release_tag, so a workflow_dispatch at v2.1.0 rebuilds that tag's tree, which still has the unfixed Dockerfile and fails the same gate. The fix has to be in the published tree, so 2.1.1 is the first version users can actually pull.
 <!-- SECTION:NOTES:END -->
