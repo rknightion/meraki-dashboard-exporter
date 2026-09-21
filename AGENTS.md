@@ -64,6 +64,24 @@ collectors, the settings schema or the chart config changed, and the `grafana/` 
 queries when a metric or label name moved. Generated artefacts are committed and are overwritten
 silently, with no banner in the file, so a hand-edit is lost at the next `just gen`.
 
+**`test` is not the only required job. Anything touching the `Dockerfile`, the entrypoint or the
+image's runtime shape is gated by `docker-build-test`, which `just check` does not cover** - run
+`just ci` (`check image image-verify image-structure smoke`) instead. Three separate places assert
+the image's runtime contract and all of them are outside `just check`: `image-verify` requires
+`Config.User` to be exactly `exporter` (the F-119 deploy guard), `.github/container-structure-test.yaml`
+asserts `metadataTest.user`, the entrypoint, the exposed port and the shipped paths, and `smoke`
+boots the container and requires `/health` and `/metrics` to answer 200. A green `just check` on a
+Dockerfile change means nothing. `image-structure` needs `container-structure-test` on `PATH`;
+without it locally, `gcr.io/gcp-runtimes/container-structure-test` over the docker socket is
+equivalent.
+
+The publication Trivy gate is stricter still and runs only in `publish.yml`, never in CI: it fails
+the build on any HIGH or CRITICAL not accepted in `.trivyignore.yaml`. It blocks the image and chart
+push while release-please still creates the tag and the GitHub release, so a release can exist with
+no artefact behind it. `scripts/validate_trivy_exceptions.py` validates an exception's shape, not
+whether its purls match anything in the current base image, so exceptions silently stop applying
+when the base image's distro changes.
+
 Recipes marked `[confirm]` push a multi-arch image to ghcr.io or prune the machine-wide buildx
 cache. Stop and ask; never pass `--yes` or `JUST_YES=1`. Run `just` with stdin from `/dev/null`.
 
