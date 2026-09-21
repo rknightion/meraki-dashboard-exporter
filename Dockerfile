@@ -114,11 +114,11 @@ ENV PATH="/app/.venv/bin:$PATH" \
     MERAKI_EXPORTER_VERSION=${APP_VERSION} \
     MERAKI_EXPORTER_COMMIT=${GIT_COMMIT}
 
-# Switch to non-root user. Numeric, not `USER exporter`: the name only resolves
-# against this image's own /etc/passwd, while the chart's securityContext pins
-# runAsUser/fsGroup to 1000 and runAsNonRoot needs a uid it can compare. Same
-# account either way -- the adduser above creates it with -u 1000.
-USER 1000
+# Switch to non-root user. Stays the NAME, not the uid: `just image-verify`
+# asserts Config.User is exactly `exporter` as a deploy guard (F-119), and the
+# chart sets runAsUser/fsGroup 1000 explicitly, so runAsNonRoot already has a
+# numeric uid to compare and hadolint's DL3066 does not apply here.
+USER exporter
 
 # Expose metrics port
 EXPOSE 9099

@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-21 12:25'
-updated_date: '2026-09-21 12:28'
+updated_date: '2026-09-21 12:38'
 labels:
   - 'area:ci'
   - 'priority:high'
@@ -58,4 +58,12 @@ The apk upgrade in the runtime stage is deliberate and trades exact package-leve
 Second pre-existing Alpine-migration leftover found while committing, fixed in the same change: the hadolint pre-commit hook ignored DL3008, which is apt's version-pinning rule. The Alpine move made apk's DL3018 the applicable one and it was never added, so hadolint had been failing at HEAD since 2844a98 on the untouched builder-stage apk add. Verified against HEAD's own Dockerfile through hadolint v2.15.1: exit 1, findings at lines 18, 61 and 103.
 
 hadolint's default failure threshold is info, so DL3066 ('USER exporter' is non-numeric) also contributed to the non-zero exit. Fixed rather than ignored: USER is now numeric 1000, matching the chart's securityContext runAsUser/fsGroup and letting runAsNonRoot compare a uid. Same account, since adduser already creates it with -u 1000. Smoke-tested on the rebuilt arm64 image: id reports uid=1000(exporter) gid=1000(exporter) and the package imports on Python 3.14.7.
+
+Correction to the note above: the numeric USER change was WRONG and was reverted before it reached a release. USER is the name 'exporter', not 1000.
+
+Two committed gates assert the literal name and both fail on a numeric uid: justfile's image-verify recipe (`Config.User` must equal `exporter`, the F-119 deploy guard) and .github/container-structure-test.yaml's `metadataTest.user`. CI run 35599925491 caught the first one; the second would have caught it next. hadolint's DL3066 is now ignored instead, which is correct here because the chart sets runAsUser 1000 explicitly, so runAsNonRoot has a uid to compare without the image declaring one.
+
+Process lesson: `just check` does not cover this. The Docker legs live in `just ci` (check image image-verify image-structure smoke), which is the right local gate for any Dockerfile change. Running it locally needs container-structure-test, which is not installed on this machine; gcr.io/gcp-runtimes/container-structure-test over the docker socket is an equivalent substitute.
+
+Final local verification on the reverted tree: trivy gate exit 0 on linux/amd64 and linux/arm64, hadolint exit 0, just image-verify exit 0, just smoke exit 0, container-structure-test 7 passes 0 failures.
 <!-- SECTION:NOTES:END -->

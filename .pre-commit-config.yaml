@@ -79,7 +79,10 @@ repos:
         # stage runs `apk upgrade` precisely to take Alpine's newest fixed packages,
         # so a pinned `apk add <pkg>=<ver>` would fight the Trivy publication gate.
         # DL3008 is apt's rule, kept from the Debian base; DL3018 is apk's.
-        args: ["--ignore", "DL3008", "--ignore", "DL3018"]
+        # DL3066 wants a numeric USER. Not applicable: `just image-verify` asserts
+        # Config.User is exactly `exporter`, and the chart sets runAsUser 1000
+        # explicitly so runAsNonRoot has a uid to compare without it.
+        args: ["--ignore", "DL3008", "--ignore", "DL3018", "--ignore", "DL3066"]
 
 # Configuration
 default_language_version:
