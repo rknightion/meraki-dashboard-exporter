@@ -8,11 +8,11 @@ ARG PY_VERSION=3.14
 # manager natively tracks `FROM image:${ARG}@sha256:digest` (expands the ARG default to
 # resolve the tag, then keeps the digest in sync with that tag) — no custom regex manager
 # needed. The uv `COPY --from` pin below rides on the same built-in manager (#661).
-# Pinned digest resolves to python:3.14-alpine3.23 (3.14.7-alpine3.23, multi-arch
-# index incl. linux/amd64 + linux/arm64) as of 2026-09-03. Alpine avoids shipping
+# Pinned digest resolves to python:3.14-alpine3.23 (3.14.7-alpine3.23 on Alpine
+# 3.23.6, multi-arch index incl. linux/amd64 + linux/arm64). Alpine avoids shipping
 # Debian's libsystemd0/libudev1 runtime packages; their source package is affected by
 # CVE-2026-16742 and Debian 13 has no fixed version.
-FROM python:${PY_VERSION}-alpine3.23@sha256:8caa2adfeb414dfe68d8b257f7aea9e205a400521c2b13b2d2e5e731fb8e70e5 AS builder
+FROM python:${PY_VERSION}-alpine3.23@sha256:200baf0bf6b7904cf643358326e580ca0b8afec82416fd6d233746ceb215283c AS builder
 
 # Install system deps with cache mounts for faster rebuilds
 RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
@@ -55,10 +55,25 @@ COPY src/meraki_dashboard_exporter ./meraki_dashboard_exporter
 # --------------------------------------------------------------------------- #
 # Same digest pin as the builder stage above (#562) — both stages must resolve to the
 # identical base image.
-FROM python:${PY_VERSION}-alpine3.23@sha256:8caa2adfeb414dfe68d8b257f7aea9e205a400521c2b13b2d2e5e731fb8e70e5 AS runtime
+FROM python:${PY_VERSION}-alpine3.23@sha256:200baf0bf6b7904cf643358326e580ca0b8afec82416fd6d233746ceb215283c AS runtime
 
-# Install runtime dependencies and create non-root user
-RUN apk add --no-cache ca-certificates \
+# Install runtime dependencies and create non-root user.
+#
+# `apk upgrade` runs FIRST and is deliberate, despite the digest pin above. Alpine
+# publishes package fixes into the 3.23 repository continuously, but the upstream
+# `python:3.14-alpine3.23` image is only rebuilt periodically, so between those
+# rebuilds the pinned base carries packages with published fixes already available.
+# Trivy gates publication on HIGH/CRITICAL, so that window does not merely warn --
+# it blocks every image and chart the release pipeline would push, including a
+# tagged stable release whose GitHub tag has already been cut. That is what
+# happened to v2.1.0: libuuid 2.41.4-r0 in the pinned base picked up six HIGH CVEs
+# (CVE-2026-53612/53613/53614/76642/78408/78410, all fixed in 2.41.6-r1) and every
+# build from 2026-09-05 onward failed the gate, so no image was ever published for
+# the tag. Upgrading here makes the gate self-healing at the cost of exact
+# package-level reproducibility against the pinned digest. That trade is intentional:
+# do not remove this to "restore" reproducibility.
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates \
     && adduser -D -u 1000 -s /sbin/nologin exporter
 
 # Labels for container metadata (consolidated for single layer)
@@ -99,8 +114,11 @@ ENV PATH="/app/.venv/bin:$PATH" \
     MERAKI_EXPORTER_VERSION=${APP_VERSION} \
     MERAKI_EXPORTER_COMMIT=${GIT_COMMIT}
 
-# Switch to non-root user
-USER exporter
+# Switch to non-root user. Numeric, not `USER exporter`: the name only resolves
+# against this image's own /etc/passwd, while the chart's securityContext pins
+# runAsUser/fsGroup to 1000 and runAsNonRoot needs a uid it can compare. Same
+# account either way -- the adduser above creates it with -u 1000.
+USER 1000
 
 # Expose metrics port
 EXPOSE 9099

@@ -75,7 +75,11 @@ repos:
     rev: v2.15.1
     hooks:
     -   id: hadolint
-        args: ["--ignore", "DL3008"]
+        # DL3008/DL3018 pin distro package versions. Deliberately off: the runtime
+        # stage runs `apk upgrade` precisely to take Alpine's newest fixed packages,
+        # so a pinned `apk add <pkg>=<ver>` would fight the Trivy publication gate.
+        # DL3008 is apt's rule, kept from the Debian base; DL3018 is apk's.
+        args: ["--ignore", "DL3008", "--ignore", "DL3018"]
 
 # Configuration
 default_language_version:
