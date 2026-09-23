@@ -59,7 +59,7 @@ class MXCollector(BaseDeviceCollector):
         # (single last_ran) would collect only the first appliance and skip the
         # rest for the whole cycle. Instead each serial keeps its own timestamp
         # and reads the interval from the mx_performance endpoint group
-        # (floor 900s), mirroring the per-serial MS gates.
+        # (floor 1800s), mirroring the per-serial MS gates.
         self._last_performance_collection: dict[str, float] = {}
 
         # Per-serial throttle for the NEW mx_dhcp_subnets gate (#286/#617), mirroring
@@ -167,7 +167,7 @@ class MXCollector(BaseDeviceCollector):
 
         Per-serial throttle for the mx_performance endpoint group (#552/#617),
         reading the interval from the scheduler-solved group interval (floor
-        900s) rather than a raw setting. A non-positive interval disables gating.
+        1800s) rather than a raw setting. A non-positive interval disables gating.
         """
         interval = self._group_interval(EndpointGroupName.MX_PERFORMANCE)
         if interval <= 0:
@@ -282,11 +282,14 @@ class MXCollector(BaseDeviceCollector):
         serial = device.get("serial", "")
 
         # mx_performance gate (#552/#617): throttle the per-physical-MX perf call
-        # to the mx_performance group's interval (floor 900s). Keyed per serial so
+        # to the mx_performance group's interval (floor 1800s). Keyed per serial so
         # every appliance is collected once per interval within the MEDIUM-tier
         # fan-out rather than only the first one.
         if not self._should_collect_performance(serial):
             return
+        # Count the attempt before awaiting the SDK call. Unsupported devices
+        # and transient failures otherwise retry on every device collection cycle.
+        self._mark_performance_collected(serial)
 
         # Pass an explicit timespan so the score reflects a fixed, deterministic
         # window rather than drifting with whatever the API's undocumented
@@ -306,13 +309,10 @@ class MXCollector(BaseDeviceCollector):
         # than a dict. That is "no score available", not an error -- guard for
         # it BEFORE validate_response_format (which would otherwise raise
         # DataValidationError and flood error logs at the ~2/min fan-out rate).
-        # Mark the serial collected so it isn't retry-hammered every cycle,
-        # mirroring the "mark after a successful fetch" ordering below, and
-        # skip emission. Only None is swallowed here -- a genuine error-shaped
+        # Skip emission. Only None is swallowed here -- a genuine error-shaped
         # dict (e.g. {"errors": [...]}) still falls through to
         # validate_response_format and is handled/logged as a real failure.
         if resp is None:
-            self._mark_performance_collected(serial)
             logger.debug(
                 "No performance score available for MX device",
                 serial=serial,
@@ -324,10 +324,6 @@ class MXCollector(BaseDeviceCollector):
             expected_type=dict,
             operation="getDeviceAppliancePerformance",
         )
-
-        # Mark after a successful fetch (before emit) so a failed call retries on
-        # the next cycle rather than being throttled out.
-        self._mark_performance_collected(serial)
 
         perf = resp.get("perfScore")
         if perf is not None:

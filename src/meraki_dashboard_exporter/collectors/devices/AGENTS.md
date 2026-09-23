@@ -47,6 +47,10 @@ label series after a status transition are removed by the metric expiration mana
 - **MX**: `mx_vpn.py` merges Meraki and third-party peers out of one org-level response. A
   third-party peer carries no `networkId` and is keyed by its public IP instead, so a path that
   assumes `networkId` is present drops or mislabels them.
+- **MX performance score**: `mx.py` records each physical MX's request attempt before calling
+  `getDeviceAppliancePerformance`. Errors, including an unsupported-feature response, must remain
+  gated by the scheduler-solved `mx_performance` interval (floor 1800s), or they retry every device
+  collection cycle.
 - **MT**: `MTCollector` has two constructors, `as_subcollector` (under `DeviceCollector`) and
   `as_standalone` (used by `../mt_sensor.py`), so a change to `mt.py` lands in two collectors.
   Responses can carry both `temperature` and `rawTemperature`. Only `temperature` is used;

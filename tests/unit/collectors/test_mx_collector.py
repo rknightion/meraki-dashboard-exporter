@@ -586,6 +586,39 @@ class TestMXCollector:
 
         mock_parent._set_metric.assert_not_called()
 
+    async def test_failed_performance_request_waits_for_group_interval(
+        self,
+        mx_collector: MXCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An unsupported score must not retry on every device collection cycle."""
+        mock_parent._group_interval = MagicMock(return_value=1800)
+        mock_api.appliance.getDeviceAppliancePerformance = MagicMock(
+            side_effect=[Exception("Feature not supported"), {"perfScore": 87}]
+        )
+        device = {"serial": "Q2AB-1234-5678", "model": "MX68", "orgId": "org1"}
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mx.time.time", return_value=3_000.0
+        ):
+            await mx_collector.collect(device)
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mx.time.time", return_value=3_003.0
+        ):
+            await mx_collector.collect(device)
+
+        assert mock_api.appliance.getDeviceAppliancePerformance.call_count == 1
+        mock_parent._set_metric.assert_not_called()
+
+        with patch(
+            "meraki_dashboard_exporter.collectors.devices.mx.time.time", return_value=4_800.0
+        ):
+            await mx_collector.collect(device)
+
+        assert mock_api.appliance.getDeviceAppliancePerformance.call_count == 2
+        assert mock_parent._set_metric.call_args.args[2] == 87.0
+
     # ------------------------------------------------------------------
     # #617 scheduler gates
     # ------------------------------------------------------------------
