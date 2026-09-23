@@ -5,6 +5,25 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [2.2.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.1.1...v2.2.0) (2026-09-23)
+
+
+### Features
+
+* expose network tags as join metric (MDE-0070) ([00d0eb5](https://github.com/rknightion/meraki-dashboard-exporter/commit/00d0eb501d9305d73253863280fbd8c197a0b626))
+
+
+### Documentation
+
+* **agents:** name just ci as the gate for Dockerfile changes ([e3cfce6](https://github.com/rknightion/meraki-dashboard-exporter/commit/e3cfce68356d331b23874dbb369b79c51bef8bcb))
+* publish canonical agent documents ([6873a0c](https://github.com/rknightion/meraki-dashboard-exporter/commit/6873a0ca2d0a46e0bb4c50df1c3efcd4f84b31e6))
+* publish canonical agent documents ([11f332b](https://github.com/rknightion/meraki-dashboard-exporter/commit/11f332b270c1edb6724e5db828e097dd8cae98b8))
+* publish canonical agent documents ([8c6ea40](https://github.com/rknightion/meraki-dashboard-exporter/commit/8c6ea4031498da050edd33955e2a9280da4bdb2a))
+* publish canonical agent documents ([3bf43d0](https://github.com/rknightion/meraki-dashboard-exporter/commit/3bf43d065c930687adc9e03b4bd358af9426114e))
+* publish canonical agent documents ([bea0f18](https://github.com/rknightion/meraki-dashboard-exporter/commit/bea0f1856d261383a7388ab370b7ad63fc64ecab))
+* publish canonical agent documents ([53121d3](https://github.com/rknightion/meraki-dashboard-exporter/commit/53121d31015c4a1ea54e479dd9f488128afc7b78))
+* record Camden network tag verification (MDE-0070) ([135f1f4](https://github.com/rknightion/meraki-dashboard-exporter/commit/135f1f458ffab323c12cabb74a1052d1d38345e4))
+
 ## [2.1.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.1.0...v2.1.1) (2026-09-21)
 
 
