@@ -111,6 +111,7 @@ class NetworkMetricName(StrEnum):
     NETWORK_WIRELESS_CONNECTION_STATS_COUNT = "meraki_network_wireless_connection_stats_count"
     # id-keyed join carrier: maps network_id -> network_name (issue #534, Option B)
     NETWORK_INFO = "meraki_network_info"
+    NETWORK_TAG_INFO = "meraki_network_tag_info"
     # Network-filter observability (emitted by services/inventory.py)
     NETWORK_FILTER_MATCH = "meraki_network_filter_match"
     NETWORK_FILTER_RESOLVED = "meraki_network_filter_resolved"

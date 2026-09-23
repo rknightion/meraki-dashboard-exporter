@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 367
-- **Gauges:** 327
+- **Total metrics:** 368
+- **Gauges:** 328
 - **Counters:** 35
 - **Histograms:** 4
 - **Info metrics:** 1
@@ -427,6 +427,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_exporter_org_collection_status` | gauge | `org_id` | Organization collection status (1=success, 0=failed or in backoff) |  |
 | `meraki_network_firmware_up_to_date` | gauge | `org_id`, `network_id` | Whether every device in the network is on its latest firmware (1=all up to date / no pending upgrade, 0=at least one device has a pending or in-progress upgrade) |  |
 | `meraki_network_info` | gauge | `org_id`, `network_id`, `network_name` | Network information (join metric: network_id -> network_name) |  |
+| `meraki_network_tag_info` | gauge | `org_id`, `network_id`, `tag` | Network tag membership (one series per network and tag) |  |
 | `meraki_org` | info | `org_id`, `org_name` | Organization information |  |
 | `meraki_org_adaptive_policy_acls` | gauge | `org_id` | Number of adaptive policy custom ACLs in the organization |  |
 | `meraki_org_adaptive_policy_groups` | gauge | `org_id` | Number of adaptive policy groups in the organization |  |
@@ -613,4 +614,3 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 - **Counter**: Cumulative value that only increases
 - **Histogram**: Distribution of observations across buckets
 - **Info**: Metadata metric with labels and value 1
-

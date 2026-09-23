@@ -188,6 +188,7 @@ class OrganizationCollector(MetricCollector):
 
         # Create API helper
         self.api_helper = create_api_helper(self)
+        self._last_network_tags: dict[str, set[tuple[str, str]]] = {}
 
         # Initialize sub-collectors
         self.api_usage_collector = APIUsageCollector(self)
@@ -223,6 +224,11 @@ class OrganizationCollector(MetricCollector):
             NetworkMetricName.NETWORK_INFO,
             "Network information (join metric: network_id -> network_name)",
             labelnames=[LabelName.ORG_ID, LabelName.NETWORK_ID, LabelName.NETWORK_NAME],
+        )
+        self._network_tag_info = self._create_gauge(
+            NetworkMetricName.NETWORK_TAG_INFO,
+            "Network tag membership (one series per network and tag)",
+            labelnames=[LabelName.ORG_ID, LabelName.NETWORK_ID, LabelName.TAG],
         )
 
         # API metrics
@@ -905,10 +911,16 @@ class OrganizationCollector(MetricCollector):
             Organization name.
 
         """
-        networks = await self.api_helper.get_organization_networks(org_id)
-        if not networks:
-            logger.warning("No networks found or error fetching networks", org_id=org_id)
-            return
+        if self.inventory is None:
+            # The direct fallback returns None on failure and [] on an empty
+            # success. Keep those distinct so the last network's tags can be
+            # retired without treating an API failure as an empty inventory.
+            networks = await self.api_helper._fetch_networks_direct(org_id)
+            if networks is None:
+                logger.warning("Error fetching networks", org_id=org_id)
+                return
+        else:
+            networks = await self.api_helper.get_organization_networks(org_id)
 
         # Count total networks
         total_networks = len(networks)
@@ -945,6 +957,35 @@ class OrganizationCollector(MetricCollector):
                 )
         else:
             logger.error("_network_info metric not initialized")
+
+        # Keep the tag carrier separate from meraki_network_info so name joins
+        # still have exactly one right-hand series per network. Reconcile after
+        # a successful inventory fetch: a removed tag must stop routing
+        # alerts immediately instead of remaining visible until TTL expiry.
+        if self._network_tag_info:
+            current_tags = {
+                (network["id"], tag)
+                for network in networks
+                if network.get("id")
+                for tag in network.get("tags") or []
+                if tag
+            }
+            for network_id, tag in self._last_network_tags.get(org_id, set()) - current_tags:
+                self._expire_metric_series(
+                    self._network_tag_info,
+                    create_labels(org_id=org_id, network_id=network_id, tag=tag),
+                    NetworkMetricName.NETWORK_TAG_INFO.value,
+                )
+            for network_id, tag in sorted(current_tags):
+                self._set_metric(
+                    self._network_tag_info,
+                    create_labels(org_id=org_id, network_id=network_id, tag=tag),
+                    1,
+                    NetworkMetricName.NETWORK_TAG_INFO.value,
+                )
+            self._last_network_tags[org_id] = current_tags
+        else:
+            logger.error("_network_tag_info metric not initialized")
 
     @with_error_handling(
         operation="Collect device metrics",

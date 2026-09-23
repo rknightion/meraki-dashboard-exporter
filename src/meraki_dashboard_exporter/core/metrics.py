@@ -23,6 +23,7 @@ class LabelName(StrEnum):
     # Network labels
     NETWORK_ID = "network_id"
     NETWORK_NAME = "network_name"
+    TAG = "tag"
 
     # Device labels
     SERIAL = "serial"

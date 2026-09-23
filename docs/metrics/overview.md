@@ -90,7 +90,22 @@ Some metrics are counters that only increase:
 Informational metrics with labels:
 - `meraki_org_info` - Organization details (carries `org_name`, keyed by `org_id`)
 - `meraki_network_info` - Network details (carries `network_name`, keyed by `network_id`)
+- `meraki_network_tag_info` - One series per network tag, with `org_id`, `network_id`, and `tag`
 - `meraki_device_status_info` - Device status/identity information (carries `name`, keyed by `serial`)
+
+`meraki_network_tag_info` uses the already-fetched, network-filtered inventory. Untagged networks
+have no tag series. Select one tag before joining it to device metrics; joining all tags at once
+would give a multi-tag network several right-hand matches.
+
+```promql
+# Offline devices in networks tagged critical; the result carries tag="critical"
+(meraki_device_up
+  * on (org_id, network_id) group_left (tag)
+  meraki_network_tag_info{tag="critical"}) == 0
+```
+
+`meraki_network_info` remains the one-series-per-network carrier for `network_name`. The new tag
+metric does not add mutable tags to `meraki_device_up` or change existing network-name joins.
 
 Mutable, human-readable **name** labels (`org_name`, `network_name`, device `name`, `port_name`,
 `zone_name`, ...) are **not** present on numeric series — they live only on these id-keyed `*_info`
@@ -116,6 +131,7 @@ All metrics include relevant labels for filtering and grouping:
 | `org_name` | Organization name — **only on `meraki_org_info`**, not on numeric series (join on `org_id`) | `Acme Corp` |
 | `network_id` | Network ID | `N_123456` |
 | `network_name` | Network name — **only on `meraki_network_info`**, not on numeric series (join on `network_id`) | `Main Office` |
+| `tag` | One network tag, on `meraki_network_tag_info` only | `critical` |
 | `serial` | Device serial number | `Q2XX-XXXX-XXXX` |
 | `name` | Device name — **only on `meraki_device_status_info`**, not on numeric series (join on `serial`) | `3rd Floor Switch` |
 | `model` | Device model | `MS120-8LP` |

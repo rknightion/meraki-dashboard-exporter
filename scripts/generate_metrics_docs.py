@@ -577,7 +577,7 @@ def main() -> None:
 
     output_file = repo_root / "docs" / "metrics" / "metrics.md"
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    output_file.write_text(markdown + "\n", encoding="utf-8")
+    output_file.write_text(markdown.rstrip("\n") + "\n", encoding="utf-8")
     print(f"Documentation written to {output_file}")
 
 

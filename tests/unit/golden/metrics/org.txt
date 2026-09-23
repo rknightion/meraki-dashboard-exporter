@@ -10,6 +10,9 @@ meraki_network_firmware_up_to_date gauge
 meraki_network_info gauge
   help: Network information (join metric: network_id -> network_name)
   labels: network_id,network_name,org_id
+meraki_network_tag_info gauge
+  help: Network tag membership (one series per network and tag)
+  labels: network_id,org_id,tag
 meraki_org info
   help: Organization information
   labels: org_id,org_name

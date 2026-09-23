@@ -19,7 +19,7 @@ Each collector owns one or more scheduler endpoint groups and runs its own group
 | `MTSensorAlertsCollector` | Collector for network-wide currently-alerting MT sensor counts. | 3 |  |
 | `MTSensorCollector` | Collector for fast-moving sensor metrics (MT devices). | 24 |  |
 | `NetworkHealthCollector` | Collector for medium-moving network health metrics. | 11 |  |
-| `OrganizationCollector` | Collector for organization-level metrics. | 38 |  |
+| `OrganizationCollector` | Collector for organization-level metrics. | 39 |  |
 
 ## Coordinator Relationships
 
@@ -84,4 +84,3 @@ Each collector owns one or more scheduler endpoint groups and runs its own group
 
 - Collector enablement is configured in the [Configuration](../config.md) reference.
 - Full metric details live in the [Metrics Reference](../metrics/metrics.md).
-

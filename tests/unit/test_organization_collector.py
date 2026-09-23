@@ -1038,6 +1038,99 @@ class TestOrganizationCollector(BaseCollectorTest):
                     samples.append((frozenset(sample.labels.items()), sample.value))
         return samples
 
+    @staticmethod
+    def _network_tag_samples(registry) -> list[tuple[frozenset[tuple[str, str]], float]]:
+        samples: list[tuple[frozenset[tuple[str, str]], float]] = []
+        for metric in registry.collect():
+            for sample in metric.samples:
+                if sample.name == NetworkMetricName.NETWORK_TAG_INFO.value:
+                    samples.append((frozenset(sample.labels.items()), sample.value))
+        return samples
+
+    async def test_network_tags_emit_distinct_series_without_changing_network_info(
+        self, collector, isolated_registry
+    ):
+        """Emit one tag series per distinct tag without multiplying name carriers."""
+        collector.api_helper.get_organization_networks = AsyncMock(  # type: ignore[method-assign]
+            return_value=[
+                {"id": "N_1", "name": "HQ", "tags": ["critical", "branch", "critical"]},
+                {"id": "N_2", "name": "Lab", "tags": []},
+            ]
+        )
+
+        await collector._collect_network_metrics("org-1", "Org")
+
+        assert self._network_tag_samples(isolated_registry) == [
+            (frozenset({"org_id": "org-1", "network_id": "N_1", "tag": "branch"}.items()), 1.0),
+            (frozenset({"org_id": "org-1", "network_id": "N_1", "tag": "critical"}.items()), 1.0),
+        ]
+        assert {labels for labels, _ in self._network_info_samples(isolated_registry)} == {
+            frozenset({"org_id": "org-1", "network_id": "N_1", "network_name": "HQ"}.items()),
+            frozenset({"org_id": "org-1", "network_id": "N_2", "network_name": "Lab"}.items()),
+        }
+
+    async def test_network_tags_removed_on_successful_refresh(self, collector, isolated_registry):
+        """Retire removed tags and departed networks in the same collection pass."""
+        collector.api_helper.get_organization_networks = AsyncMock(  # type: ignore[method-assign]
+            side_effect=[
+                [
+                    {"id": "N_1", "name": "HQ", "tags": ["branch", "critical"]},
+                    {"id": "N_2", "name": "Lab", "tags": ["lab"]},
+                ],
+                [{"id": "N_1", "name": "HQ", "tags": ["branch", "regional"]}],
+                [{"id": "N_1", "name": "HQ", "tags": []}],
+            ]
+        )
+
+        await collector._collect_network_metrics("org-1", "Org")
+        await collector._collect_network_metrics("org-1", "Org")
+
+        assert self._network_tag_samples(isolated_registry) == [
+            (frozenset({"org_id": "org-1", "network_id": "N_1", "tag": "branch"}.items()), 1.0),
+            (frozenset({"org_id": "org-1", "network_id": "N_1", "tag": "regional"}.items()), 1.0),
+        ]
+
+        await collector._collect_network_metrics("org-1", "Org")
+        assert self._network_tag_samples(isolated_registry) == []
+
+    async def test_network_tags_removed_when_inventory_becomes_empty(
+        self, collector, isolated_registry
+    ):
+        """A successful empty inventory retires the last network's tag series."""
+        collector.api_helper.get_organization_networks = AsyncMock(  # type: ignore[method-assign]
+            side_effect=[[{"id": "N_1", "name": "HQ", "tags": ["critical"]}], []]
+        )
+
+        await collector._collect_network_metrics("org-1", "Org")
+        await collector._collect_network_metrics("org-1", "Org")
+
+        assert self._network_tag_samples(isolated_registry) == []
+
+    async def test_network_tags_fallback_distinguishes_empty_from_failure(
+        self, mock_api, settings, isolated_registry
+    ):
+        """The direct fallback keeps tags on failure and removes them on empty success."""
+        collector = OrganizationCollector(
+            api=mock_api,
+            settings=settings,
+            registry=isolated_registry,
+            inventory=None,
+        )
+        collector.api_helper._fetch_networks_direct = AsyncMock(  # type: ignore[method-assign]
+            side_effect=[
+                [{"id": "N_1", "name": "HQ", "tags": ["critical"]}],
+                None,
+                [],
+            ]
+        )
+
+        await collector._collect_network_metrics("org-1", "Org")
+        await collector._collect_network_metrics("org-1", "Org")
+        assert len(self._network_tag_samples(isolated_registry)) == 1
+
+        await collector._collect_network_metrics("org-1", "Org")
+        assert self._network_tag_samples(isolated_registry) == []
+
     async def test_network_info_emitted_one_series_per_network(
         self, collector, metrics, isolated_registry
     ):
@@ -1149,7 +1242,7 @@ class TestOrganizationCollector(BaseCollectorTest):
         api = mock_api_builder.with_custom_response(
             "getOrganizationNetworks",
             [
-                {"id": "N_keep", "name": "Prod", "tags": []},
+                {"id": "N_keep", "name": "Prod", "tags": ["production"]},
                 {"id": "N_drop", "name": "Lab", "tags": ["lab"]},
             ],
         ).build()
@@ -1181,6 +1274,12 @@ class TestOrganizationCollector(BaseCollectorTest):
         assert samples[0][0] == frozenset(
             {"org_id": org_id, "network_id": "N_keep", "network_name": "Prod"}.items()
         )
+        assert self._network_tag_samples(isolated_registry) == [
+            (
+                frozenset({"org_id": org_id, "network_id": "N_keep", "tag": "production"}.items()),
+                1.0,
+            )
+        ]
 
     # -- #509: "collected nothing" must be treated as a collection failure --
 

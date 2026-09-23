@@ -418,8 +418,7 @@ def main() -> None:
     output_file = repo_root / "docs" / "collectors" / "reference.md"
     output_file.parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, "w") as f:
-        f.write(markdown)
-        f.write("\n")  # Ensure file ends with newline
+        f.write(markdown.rstrip("\n") + "\n")
 
     print(f"Collector documentation written to {output_file}")
 
