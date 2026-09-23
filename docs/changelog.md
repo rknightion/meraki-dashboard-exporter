@@ -5,6 +5,13 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [2.2.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.2.0...v2.2.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* throttle failed MX performance requests (MDE-0071) ([7a2268c](https://github.com/rknightion/meraki-dashboard-exporter/commit/7a2268c842494b2bf530a126d517e0cafcbc3afd)), closes [#785](https://github.com/rknightion/meraki-dashboard-exporter/issues/785)
+
 ## [2.2.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.1.1...v2.2.0) (2026-09-23)
 
 
