@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@rknightion'
 created_date: '2026-09-23 11:49'
-updated_date: '2026-09-23 12:06'
+updated_date: '2026-09-23 12:22'
 labels:
   - 'area:metrics'
   - 'area:collectors'
@@ -57,6 +57,8 @@ The tag carrier is separate from meraki_network_info, so existing name joins rem
 The first commit attempt was stopped by end-of-file-fixer on the two generated reference pages. Their generators appended a newline even when the assembled markdown already ended with one. Updated both generators to emit exactly one terminal newline and regenerated the pages.
 
 Resolved CodeRabbit minor finding: the organization collector now calls the sanctioned direct fallback when inventory is unavailable, preserving its None-vs-empty result. A focused test first failed on last-network removal, then passed after the correction. This supersedes the earlier note that the direct fallback must retain old tags on every empty result.
+
+Live verification on Camden, 2026-09-23: the deployed exporter reports commit 00d0eb501d9305d73253863280fbd8c197a0b626. Using its configured API key in memory on Camden, getOrganizationNetworks returned HTTP 200: one network, tags present as a nonempty list of strings. After the organization collection interval, the deployed /metrics endpoint exposed one meraki_network_info sample and one meraki_network_tag_info sample with value 1; meraki_device_up had no tag label. No identifiers or tag values were recorded. This supersedes the earlier .env credential HTTP 401 limitation.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -67,4 +69,6 @@ Added meraki_network_tag_info with one series per allowed network/tag, immediate
 The two documentation generators now emit one terminal newline, so regenerated references satisfy both just gen drift checking and the commit hook.
 
 The direct fallback now removes the last tag on a confirmed empty response while retaining tags after a failed fetch.
+
+Camden live verification subsequently passed on the deployed exact commit: API HTTP 200 returned a tagged network; /metrics exposed one network-tag sample with value 1 and left meraki_device_up labels unchanged.
 <!-- SECTION:FINAL_SUMMARY:END -->
