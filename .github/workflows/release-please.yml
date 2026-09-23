@@ -36,7 +36,7 @@ jobs:
       # failure here is infrastructure, not the commit.
       - name: Mint a scoped release token
         id: bao
-        uses: rknightion/.github/.github/actions/broker-token@4d749e93fb2ba8ae3d213c21686bc7ac204bb928 # v1.23.0
+        uses: rknightion/.github/.github/actions/broker-token@8d14adaa295c4a7670b1d4e744b070955b710598 # v1.24.0
         with:
           permission-set: release-please-meraki-dashboard-exporter
           role: release-please-meraki-dashboard-exporter
