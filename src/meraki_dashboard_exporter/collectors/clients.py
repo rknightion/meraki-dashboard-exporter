@@ -77,6 +77,7 @@ class ClientsCollector(MetricCollector):
             floor_seconds=600,
             cost_fn=_application_usage_cost_fn(_APPLICATION_USAGE_CLIENT_CAP),
             setting_pin="client_app_usage_interval",
+            self_paced=True,  # per-key timestamp throttle (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.CLIENTS_SIGNAL_QUALITY,
@@ -84,6 +85,7 @@ class ClientsCollector(MetricCollector):
             floor_seconds=600,
             cost_fn=lambda shape: float(shape.wireless_network_count * _SIGNAL_QUALITY_CLIENT_CAP),
             setting_pin="client_signal_quality_interval",
+            self_paced=True,  # per-key timestamp throttle (#789)
         ),
     )
 

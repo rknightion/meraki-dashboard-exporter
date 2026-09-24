@@ -220,6 +220,13 @@ class EndpointGroup:
     enabled_fn: Callable[[OrgShape], bool] | None = (
         None  # NEW (#623): None => always enabled; evaluated against the last-resolved OrgShape
     )
+    # True = the owning collector paces fetches with its own per-key timestamps
+    # against ``interval_for`` and never calls ``should_run``. The group is still
+    # solved and stretched, but ``seconds_until_due`` ignores it: its scheduler
+    # clock never advances, so it would read "due now" forever and spin the
+    # collector loop at the 1s floor (#789). The collector's scheduler-owned
+    # groups drive its wake-ups instead.
+    self_paced: bool = False
 
 
 class SolvedInterval(NamedTuple):
@@ -676,7 +683,7 @@ class EndpointScheduler:
     ) -> float | None:
         """Seconds until the earliest gated, enabled group in ``groups`` is due.
 
-        Skips disabled (#623) and ungated groups. Returns ``None`` when none of
+        Skips disabled (#623), ungated and self-paced (#789) groups. Returns ``None`` when none of
         the given groups is schedulable (the collector's loop then just sleeps a
         resolve period and re-checks). Clamped at 0 for already-due groups.
         """
@@ -685,7 +692,7 @@ class EndpointScheduler:
         best: float | None = None
         for group in groups:
             declared = self._groups.get(group)
-            if declared is None or not declared.gated:
+            if declared is None or not declared.gated or declared.self_paced:
                 continue
             if not self.profile_allows(group) or group in self._shed_groups:
                 continue

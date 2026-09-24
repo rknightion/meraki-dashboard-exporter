@@ -152,6 +152,7 @@ class DeviceCollector(MetricCollector):
             floor_seconds=600,
             cost_fn=lambda s: float(s.switch_count),
             setting_pin="ms_packet_stats_interval",
+            self_paced=True,  # per-key timestamp throttle (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MS_PORT_OVERVIEW,
@@ -181,6 +182,7 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: float(s.switch_network_count),
+            self_paced=True,  # per-key timestamp throttle (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_UPLINK_STATUS,
@@ -210,6 +212,7 @@ class DeviceCollector(MetricCollector):
             priority=3,
             floor_seconds=1800,
             cost_fn=lambda s: float(s.physical_mx_count),
+            self_paced=True,  # per-key timestamp throttle (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_HA,
@@ -234,12 +237,14 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 2 * s.appliance_network_count,
+            self_paced=True,  # per-key timestamp throttle (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MV_ANALYTICS,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 3 * s.camera_count,
+            self_paced=True,  # per-key timestamp throttle (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MG_UPLINK_STATUS,
@@ -257,6 +262,7 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 3 * s.appliance_network_count,
+            self_paced=True,  # per-key timestamp throttle (#789)
         ),
         # Phase 4 (#286): per-MX-device DHCP subnets, 1 call/physical MX
         EndpointGroup(
@@ -264,6 +270,7 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: float(s.physical_mx_count),
+            self_paced=True,  # per-key timestamp throttle (#789)
         ),
         # Phase 4 (#287): site-to-site VPN, 1 call/appliance network
         EndpointGroup(
@@ -278,6 +285,7 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 3 * s.appliance_network_count,
+            self_paced=True,  # per-key timestamp throttle (#789)
         ),
         # Phase 4 (#289): VLANs + static routes, 2 calls/appliance network
         EndpointGroup(
@@ -285,6 +293,7 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 2 * s.appliance_network_count,
+            self_paced=True,  # per-key timestamp throttle (#789)
         ),
         # Phase 4 (#290): L3+L7 firewall rules per enabled SSID (2 calls/SSID). OrgShape
         # has no SSID count; estimate ~4 enabled SSIDs/network -> 2*4*wireless_network_count.
@@ -336,6 +345,7 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: float(s.camera_count),
+            self_paced=True,  # per-key timestamp throttle (#789)
         ),
         # Phase 4 (#306): 1 org-wide onboarding-status call
         EndpointGroup(
