@@ -1,9 +1,13 @@
-"""Regression coverage for per-key-throttled groups spinning the collector loop (GitHub #789).
+"""Regression coverage for groups that spun the collector loop (GitHub #789).
 
-Several DeviceCollector and ClientsCollector groups pace their fetches with
-per-serial or per-network timestamps and never call ``should_run``. Their
-scheduler clock therefore stays "never ran", so ``seconds_until_due`` returned 0
-and the outer collector loop re-ran every second.
+A gated group whose ``should_run`` is never called keeps a "never ran" clock, so
+``seconds_until_due`` returned 0 and the outer collector loop re-ran every
+second. Two shapes of that bug:
+
+- per-key-throttled groups pace fetches with their own timestamps (self_paced);
+- family groups whose gate is only reached when that product family exists
+  (DeviceCollector's per-family branches, NetworkHealth's wireless early
+  return) need an ``enabled_fn`` so an org without the family skips them.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ import pytest
 
 from meraki_dashboard_exporter.collectors.clients import ClientsCollector
 from meraki_dashboard_exporter.collectors.device import DeviceCollector
+from meraki_dashboard_exporter.collectors.network_health import NetworkHealthCollector
 from meraki_dashboard_exporter.core.scheduler import (
     EndpointGroup,
     EndpointGroupName,
@@ -71,6 +76,39 @@ def _settings() -> SimpleNamespace:
             failure_retry_seconds=300,
         ),
     )
+
+
+def _family_shape(family: str) -> OrgShape:
+    """One network holding a single device of one product family."""
+    counts = {
+        "wireless": {"wireless_network_count": 1, "ap_count": 1},
+        "switch": {"switch_network_count": 1, "switch_count": 1},
+        "appliance": {"appliance_network_count": 1, "appliance_count": 1, "physical_mx_count": 1},
+        "camera": {"camera_network_count": 1, "camera_count": 1},
+        "sensor": {"sensor_network_count": 1, "sensor_count": 1},
+        "cellularGateway": {"cellular_network_count": 1, "cellular_count": 1},
+    }[family]
+    base = dict.fromkeys(
+        (
+            "wireless_network_count switch_network_count appliance_network_count "
+            "sensor_network_count camera_network_count cellular_network_count ap_count "
+            "switch_count appliance_count physical_mx_count camera_count sensor_count "
+            "cellular_count"
+        ).split(),
+        0,
+    )
+    return OrgShape(org_id="789", network_count=1, device_count=1, **{**base, **counts})
+
+
+# Group-name prefix -> the product family whose presence reaches its gate.
+_PREFIX_FAMILY = {
+    "mr_": "wireless",
+    "nh_": "wireless",
+    "ms_": "switch",
+    "mx_": "appliance",
+    "mv_": "camera",
+    "mg_": "cellularGateway",
+}
 
 
 def _shape() -> OrgShape:
@@ -148,3 +186,60 @@ def test_789_self_paced_group_is_solved_but_skipped_by_the_loop_clock() -> None:
     ) == pytest.approx(270.0)
     # Alone, a self-paced group gives the loop nothing to wake on.
     assert scheduler.seconds_until_due([EndpointGroupName.MX_PERFORMANCE], now=100.0) is None
+
+
+def _wake_groups(scheduler: EndpointScheduler, groups: tuple[EndpointGroup, ...]) -> set[str]:
+    """Groups that can hold the loop at "due now" when never run."""
+    return {
+        str(g.name) for g in groups if scheduler.seconds_until_due([g.name], now=100.0) is not None
+    }
+
+
+@pytest.mark.parametrize("family", sorted(set(_PREFIX_FAMILY.values()) | {"sensor"}))
+def test_789_single_family_org_only_wakes_on_reachable_groups(family: str) -> None:
+    """An org without a product family never waits on that family's groups."""
+    groups = DeviceCollector.endpoint_groups + NetworkHealthCollector.endpoint_groups
+    scheduler = EndpointScheduler(_settings(), _Limiter())  # type: ignore[arg-type]
+    scheduler.register_groups(groups)
+    scheduler.resolve(_family_shape(family))
+
+    unreachable = {
+        name
+        for name in _wake_groups(scheduler, groups)
+        for prefix, needed in _PREFIX_FAMILY.items()
+        if name.startswith(prefix) and needed != family
+    }
+
+    assert unreachable == set()
+
+
+def test_789_mx_only_org_sleeps_after_its_reachable_groups_ran() -> None:
+    """The reported org (one MX, nothing else) sleeps once its MX and device groups ran."""
+    groups = DeviceCollector.endpoint_groups
+    scheduler = EndpointScheduler(_settings(), _Limiter())  # type: ignore[arg-type]
+    scheduler.register_groups(groups)
+    scheduler.resolve(_family_shape("appliance"))
+
+    for group in groups:
+        if str(group.name).startswith(("mx_", "device_")):
+            scheduler.mark_ran(group.name, now=100.0)
+
+    assert scheduler.seconds_until_due([g.name for g in groups], now=100.0) == pytest.approx(108.0)
+
+
+def test_789_empty_org_gives_the_device_loop_nothing_to_wake_on() -> None:
+    """With no devices, _collect_org_devices returns before any gate is consulted."""
+    groups = DeviceCollector.endpoint_groups
+    scheduler = EndpointScheduler(_settings(), _Limiter())  # type: ignore[arg-type]
+    scheduler.register_groups(groups)
+    empty = _family_shape("sensor")
+    scheduler.resolve(
+        OrgShape(**{
+            **{f: getattr(empty, f) for f in empty.__dataclass_fields__},
+            "device_count": 0,
+            "sensor_count": 0,
+            "sensor_network_count": 0,
+        })
+    )
+
+    assert scheduler.seconds_until_due([g.name for g in groups], now=100.0) is None

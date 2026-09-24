@@ -73,18 +73,21 @@ class DeviceCollector(MetricCollector):
             priority=1,
             floor_seconds=120,
             cost_fn=lambda s: pages(s.device_count, 500),
+            enabled_fn=lambda s: s.device_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.DEVICE_MEMORY,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.device_count, 20),
+            enabled_fn=lambda s: s.device_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_WIRELESS_CLIENTS,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.ap_count, 1000),
+            enabled_fn=lambda s: s.ap_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_CONNECTION_STATS,
@@ -97,30 +100,36 @@ class DeviceCollector(MetricCollector):
             priority=3,
             floor_seconds=1800,
             cost_fn=lambda s: float(s.wireless_network_count),
+            # Reached only when the org has APs and at least one network (#789).
+            enabled_fn=lambda s: s.ap_count > 0 and s.network_count > 0,
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_ETHERNET_STATUS,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.ap_count, 1000),
+            enabled_fn=lambda s: s.ap_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_PACKET_LOSS,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: 2 * pages(s.ap_count, 1000),
+            enabled_fn=lambda s: s.ap_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_CPU_LOAD,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.ap_count, 20),
+            enabled_fn=lambda s: s.ap_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_SSID_STATUS,
             priority=2,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.ap_count, 500),
+            enabled_fn=lambda s: s.ap_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MR_SSID_USAGE,
@@ -132,12 +141,14 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=3600,
             cost_fn=lambda s: 1.0,
+            enabled_fn=lambda s: s.ap_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MS_PORT_STATUS,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.switch_count, 20),
+            enabled_fn=lambda s: s.switch_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MS_PORT_USAGE,
@@ -145,6 +156,7 @@ class DeviceCollector(MetricCollector):
             floor_seconds=600,
             cost_fn=lambda s: pages(s.switch_count, 50) + pages(s.switch_count, 20),
             setting_pin="ms_port_usage_interval",
+            enabled_fn=lambda s: s.switch_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MS_PACKET_STATS,
@@ -170,12 +182,14 @@ class DeviceCollector(MetricCollector):
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.switch_count, 1000),
+            enabled_fn=lambda s: s.switch_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MS_STACKS,
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: float(s.switch_network_count),
+            enabled_fn=lambda s: s.switch_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MS_STP,
@@ -189,18 +203,21 @@ class DeviceCollector(MetricCollector):
             priority=1,
             floor_seconds=300,
             cost_fn=lambda s: pages(s.appliance_count, 1000),
+            enabled_fn=lambda s: s.appliance_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_UPLINK_HEALTH,
             priority=1,
             floor_seconds=300,
             cost_fn=lambda s: 1.0,
+            enabled_fn=lambda s: s.appliance_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_UPLINK_USAGE,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda s: 1.0,
+            enabled_fn=lambda s: s.appliance_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_PERFORMANCE,
@@ -219,18 +236,21 @@ class DeviceCollector(MetricCollector):
             priority=2,
             floor_seconds=300,
             cost_fn=lambda s: 1.0,
+            enabled_fn=lambda s: s.appliance_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_VPN,
             priority=2,
             floor_seconds=300,
             cost_fn=lambda s: 2.0,
+            enabled_fn=lambda s: s.appliance_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_SECURITY_EVENTS,
             priority=2,
             floor_seconds=300,
             cost_fn=lambda s: 1.0,
+            enabled_fn=lambda s: s.appliance_count > 0,  # gate only reached when present (#789)
         ),
         EndpointGroup(
             name=EndpointGroupName.MX_FIREWALL_CONFIG,
@@ -255,6 +275,7 @@ class DeviceCollector(MetricCollector):
             priority=1,
             floor_seconds=300,
             cost_fn=lambda s: 1.0,
+            enabled_fn=lambda s: s.cellular_count > 0,  # gate only reached when present (#789)
         ),
         # Phase 4 (#285): content-filtering + malware + intrusion, 3 calls/appliance network
         EndpointGroup(
@@ -278,6 +299,7 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: float(s.appliance_network_count),
+            enabled_fn=lambda s: s.appliance_count > 0,  # gate only reached when present (#789)
         ),
         # Phase 4 (#288): port-forwarding + 1:1 + 1:many NAT, 3 calls/appliance network
         EndpointGroup(
@@ -303,6 +325,7 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 8 * s.wireless_network_count,
+            enabled_fn=lambda s: s.ap_count > 0,  # gate only reached when present (#789)
         ),
         # Phase 4 (#291): single org-wide bulk RF-profile assignments (paginated over APs)
         EndpointGroup(
@@ -310,6 +333,7 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: pages(s.ap_count, 1000),
+            enabled_fn=lambda s: s.ap_count > 0,  # gate only reached when present (#789)
         ),
         # Phase 4 (#292+#293): rogue-DHCP + DAI, 2 calls/switch network
         EndpointGroup(
@@ -317,6 +341,7 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 2 * s.switch_network_count,
+            enabled_fn=lambda s: s.switch_count > 0,  # gate only reached when present (#789)
         ),
         # Phase 4 (#294): 1 org-wide PoE power-history call
         EndpointGroup(
@@ -324,6 +349,7 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 1.0,
+            enabled_fn=lambda s: s.switch_count > 0,  # gate only reached when present (#789)
         ),
         # Phase 4 (#295): 1 call/switch network
         EndpointGroup(
@@ -331,6 +357,7 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: float(s.switch_network_count),
+            enabled_fn=lambda s: s.switch_count > 0,  # gate only reached when present (#789)
         ),
         # Phase 4 (#304): 2 org-wide bulk calls (bands + towers)
         EndpointGroup(
@@ -338,6 +365,7 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 2.0,
+            enabled_fn=lambda s: s.cellular_count > 0,  # gate only reached when present (#789)
         ),
         # Phase 4 (#305): 1 call/MV device
         EndpointGroup(
@@ -353,6 +381,7 @@ class DeviceCollector(MetricCollector):
             priority=4,
             floor_seconds=900,
             cost_fn=lambda s: 1.0,
+            enabled_fn=lambda s: s.camera_count > 0,  # gate only reached when present (#789)
         ),
         # Phase 4B (#324): per-AP signal quality; 1 call per selected AP, hourly cadence.
         EndpointGroup(

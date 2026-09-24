@@ -77,48 +77,58 @@ class NetworkHealthCollector(MetricCollector):
     # windows — polling faster would just re-aggregate an overlapping window. The
     # spec caps these timespans at 7 days (air-marshal 31 days), so the floors
     # are well within legal range.
+    # enabled_fn: _collect_org_network_health returns before consulting any gate
+    # when the org has no wireless networks, so without it every group reads
+    # "due now" forever and spins the collector loop (#789).
     endpoint_groups: ClassVar[tuple[EndpointGroup, ...]] = (
         EndpointGroup(
             name=EndpointGroupName.NH_CHANNEL_UTILIZATION,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda shape: 2 * pages(shape.ap_count, 1000),
+            enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_CONNECTION_STATS,
             priority=3,
             floor_seconds=1800,
             cost_fn=lambda shape: float(shape.wireless_network_count),
+            enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_DATA_RATES,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda shape: float(shape.wireless_network_count),
+            enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_BLUETOOTH,
             priority=3,
             floor_seconds=300,
             cost_fn=lambda shape: float(shape.wireless_network_count),
+            enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_FAILED_CONNECTIONS,
             priority=3,
             floor_seconds=3600,
             cost_fn=lambda shape: float(shape.wireless_network_count),
+            enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_LATENCY_STATS,
             priority=3,
             floor_seconds=3600,
             cost_fn=lambda shape: 2.0 * shape.wireless_network_count,
+            enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
         EndpointGroup(
             name=EndpointGroupName.NH_AIR_MARSHAL,
             priority=3,
             floor_seconds=3600,
             cost_fn=lambda shape: float(shape.wireless_network_count),
+            enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
         # Wireless mesh link health (#307, Phase 4/#618). Repeater topology
         # changes rarely; floored the same as the other 1h-windowed groups.
@@ -127,6 +137,7 @@ class NetworkHealthCollector(MetricCollector):
             priority=3,
             floor_seconds=3600,
             cost_fn=lambda shape: float(shape.wireless_network_count),
+            enabled_fn=lambda s: s.wireless_network_count > 0,
         ),
     )
 

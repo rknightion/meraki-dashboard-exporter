@@ -4,7 +4,7 @@ title: Per-key-throttled endpoint groups spin the collector loop at 1s
 status: Done
 assignee: []
 created_date: '2026-09-24 15:59'
-updated_date: '2026-09-24 15:59'
+updated_date: '2026-09-24 18:19'
 labels:
   - 'area:scheduler'
   - 'priority:high'
@@ -36,4 +36,6 @@ GitHub issue 789. Twelve endpoint groups (MX perf, MX DHCP subnets, MX firewall/
 
 <!-- SECTION:NOTES:BEGIN -->
 Regression test tests/unit/test_789_self_paced_endpoint_groups.py reproduced 0.0s wake before the fix, 108s after. just check green, just gen no drift, CodeRabbit clean.
+
+Wider sweep (all collectors): second class of the same spin. 36 family-specific gated groups (MR x9, MS x7, MX x7, MG x2, MV x1, NH x8, DEVICE_AVAILABILITY/DEVICE_MEMORY) are only reached when that product family (or any device/wireless network) exists, with no enabled_fn, so an org without the family held the loop at due-now. Added enabled_fn mirroring each branch condition. Live check against the test org (no MX/MV/MG): pre-fix DeviceCollector seconds_until_due was 0.0 on every wake; post-fix 75s. Alerts/Config/Organization/MT alerts/MT sensor/Clients/Insight groups verified not at risk.
 <!-- SECTION:NOTES:END -->
