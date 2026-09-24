@@ -5,6 +5,19 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [2.2.2](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.2.1...v2.2.2) (2026-09-24)
+
+
+### Bug Fixes
+
+* **scheduler:** skip family groups an org cannot reach (MDE-0072) ([3ec9498](https://github.com/rknightion/meraki-dashboard-exporter/commit/3ec94984f865cf4b264dcbc77b3eb141af91468b))
+* **scheduler:** stop per-key-throttled groups spinning the collector loop (MDE-0072) ([cfba565](https://github.com/rknightion/meraki-dashboard-exporter/commit/cfba565e19b2d59f53d75fe3d56be4292ad4acca))
+
+
+### Documentation
+
+* publish canonical agent documents ([1274fbc](https://github.com/rknightion/meraki-dashboard-exporter/commit/1274fbc5fbcce889ba873ecffad5513a2443cb51))
+
 ## [2.2.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.2.0...v2.2.1) (2026-09-23)
 
 
