@@ -56,7 +56,7 @@ Prometheus exporter for the Cisco Meraki Dashboard API.
 - `evidence/` is the v1-readiness research pack: the record of what was already assessed at the
   baseline `evidence/README.md` states, not current truth.
 
-## Gate
+## Task interface
 
 `just check` is exactly what the CI `test` job enforces, and `backlog/config.yml` names it in
 `definition_of_done` alongside two conditional legs: `just gen` when metrics, config, endpoints,
