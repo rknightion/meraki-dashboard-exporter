@@ -5,6 +5,21 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [2.2.3](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.2.2...v2.2.3) (2026-09-26)
+
+
+### Documentation
+
+* name the Task interface section ([f8087c9](https://github.com/rknightion/meraki-dashboard-exporter/commit/f8087c9ffd62a181f19b3b13b32d5fb5b83e1ae9))
+* publish canonical agent documents ([5042d95](https://github.com/rknightion/meraki-dashboard-exporter/commit/5042d958555137ef2ea8e2fcbee1aec58e0e1465))
+* publish canonical agent documents ([833f1b5](https://github.com/rknightion/meraki-dashboard-exporter/commit/833f1b5a9d725a1d4abd042dc671a20f21bc92cb))
+* publish canonical agent documents ([f446558](https://github.com/rknightion/meraki-dashboard-exporter/commit/f4465581fcd737c8caec8320cdce648d4677754d))
+* publish canonical agent documents ([6995c1f](https://github.com/rknightion/meraki-dashboard-exporter/commit/6995c1f80875b7eed9580bd06e0421b0f4f5b756))
+* publish canonical agent documents ([70bd757](https://github.com/rknightion/meraki-dashboard-exporter/commit/70bd75716c24597cc5c9da21d59637e9a4474fbf))
+* publish canonical agent documents ([67caa2a](https://github.com/rknightion/meraki-dashboard-exporter/commit/67caa2a7efea3dd1deb35c85afb8d407c95c38d1))
+* publish canonical agent documents ([a1b2fcc](https://github.com/rknightion/meraki-dashboard-exporter/commit/a1b2fccdb5c85121da5a478166e8337d4f070d72))
+* publish canonical agent documents ([e00f458](https://github.com/rknightion/meraki-dashboard-exporter/commit/e00f4580622f599d6cde35a3cccb419d2a6c9919))
+
 ## [2.2.2](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.2.1...v2.2.2) (2026-09-24)
 
 
