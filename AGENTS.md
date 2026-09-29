@@ -43,8 +43,6 @@ Prometheus exporter for the Cisco Meraki Dashboard API.
 - Every API response gets a Pydantic domain model.
 - **Never log or echo a Meraki API key**, and never widen a log line or an error path in a way that
   could carry one.
-- A failing test is a finding. Never edit a test so it matches an implementation you have not first
-  established is correct.
 
 ## Verifying against the live API
 
