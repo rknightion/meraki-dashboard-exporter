@@ -38,7 +38,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 # unattended. (The previous curl+tarball+sha256sum approach could not: Renovate bumped the version
 # ARG but had no way to compute the tarball hashes, so every bump broke the build.)
 # The image is a multi-arch index (linux/amd64 + linux/arm64), so no TARGETARCH handling is needed.
-COPY --from=ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.22@sha256:f513a91fc62fe7c17567eee97230dd198e43edb8a9fbecca843714a4358fe1bc /uv /uvx /bin/
 
 # Copy dependency files first (most cacheable layer)
 COPY pyproject.toml uv.lock ./
