@@ -14,8 +14,6 @@ Prometheus exporter for the Cisco Meraki Dashboard API.
   `docs/observability/otel.md#data-logs-vs-metrics-the-boundary-rule`. The opt-in
   `collectors/clients.py` ID-only numeric series and its `meraki_client_info` join are
   grandfathered and unaffected.
-- `app.py` also serves the web UI, `/status`, `/health`, `/ready`, `/clients`, `/config` and a
-  small `/api/*` POST surface.
 
 ## Collector invariants
 
@@ -39,7 +37,7 @@ Prometheus exporter for the Cisco Meraki Dashboard API.
   tracking for offline and removed devices works.
 - Concurrency is `ManagedTaskGroup` (`core/async_utils.py`) or `process_in_batches_with_errors`
   (`core/batch_processing.py`), never a raw `asyncio.gather`.
-- The Meraki SDK is synchronous: reach it through `asyncio.to_thread()`.
+- The Meraki SDK is synchronous: reach it only through `core.api_facade.facade_for(owner).call(...)` (see `api/AGENTS.md`); a direct `asyncio.to_thread()` or `run_in_executor()` on an SDK method is forbidden.
 - Every API response gets a Pydantic domain model.
 - **Never log or echo a Meraki API key**, and never widen a log line or an error path in a way that
   could carry one.
@@ -49,18 +47,12 @@ Prometheus exporter for the Cisco Meraki Dashboard API.
 - **The vendored OpenAPI spec is wrong for some endpoints** (`evidence/live-api-verification.md`).
   Where a change hinges on a response shape, verify against the live API before coding. A working
   key sits in the gitignored `.env`.
-- Confirm an SDK method exists in the installed `meraki` version by introspecting
-  `self.api.<controller>`, rather than trusting a task description or the spec.
 - `evidence/` is the v1-readiness research pack: the record of what was already assessed at the
   baseline `evidence/README.md` states, not current truth.
 
 ## Task interface
 
-`just check` is exactly what the CI `test` job enforces, and `backlog/config.yml` names it in
-`definition_of_done` alongside two conditional legs: `just gen` when metrics, config, endpoints,
-collectors, the settings schema or the chart config changed, and the `grafana/` dashboard and rule
-queries when a metric or label name moved. Generated artefacts are committed and are overwritten
-silently, with no banner in the file, so a hand-edit is lost at the next `just gen`.
+Generated artefacts carry no banner and are overwritten silently by `just gen`; never hand-edit them.
 
 **`test` is not the only required job. Anything touching the `Dockerfile`, the entrypoint or the
 image's runtime shape is gated by `docker-build-test`, which `just check` does not cover** - run
@@ -104,18 +96,6 @@ becomes an `mde-NNNN` task citing the number, and the board, not the issue, is w
   Write the shape, not the instance ("the live soak host", not its name). Aggregate counts,
   timings and structural findings are fine. A tracker feels private, which is why this breaks by
   accident.
-- **Bare `--notes` and `--plan` silently replace the whole section**, destroying another session's
-  writes with no warning at exit 0. Use `--append-notes` and `--append-plan`. A global pre-tool hook
-  denies the bare forms, so a denial there is the guard working, not a broken command.
-- Finalize in one call, so an interrupted run cannot leave finished work looking unfinished:
-  `backlog task edit mde-0001 --check-ac 1 --check-ac 2 -s Done`.
-- Section boundaries in tracker markdown are HTML-comment markers. Break one by hand-editing and
-  the section is silently dropped at exit 0, still in the file but invisible to the CLI, until the
-  next write destroys it for real. There is no repair command; `backlog doctor` only fixes
-  duplicate task IDs. `backlog/config.yml` is the one file edited by hand, because list-valued
-  keys cannot be set through `backlog config set`.
-- Never let two agents edit the same task. The concurrency fix covers the edit funnel, not
-  reorder, draft saves, the TUI edit path, `doc update` or decision updates.
 - `Parked` is a real status: attempted, blocked, and left with a concrete resume boundary. It is
   not a synonym for To Do, and flattening it loses the most valuable thing a long autonomous run
   produces.

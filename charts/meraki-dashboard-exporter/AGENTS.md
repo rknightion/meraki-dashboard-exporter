@@ -5,10 +5,7 @@ with the release tag at package time, so neither it nor `appVersion` is a fact t
 chart is published alongside the container image by `.github/workflows/publish.yml`
 (`helm-chart-path: charts/meraki-dashboard-exporter`).
 
-Render locally with a dummy key, because a render with neither key value set fails on purpose:
-
-    helm template test-release charts/meraki-dashboard-exporter --set meraki.apiKey=dummy
-    helm lint charts/meraki-dashboard-exporter
+Render locally with a dummy key, because a render with neither key value set fails on purpose.
 
 ## API key
 

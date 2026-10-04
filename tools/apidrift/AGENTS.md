@@ -63,14 +63,13 @@ exporter actually consumes, and checks the exporter's Pydantic models against li
 - `__meraki_beta__ = True` declares that a mapped op lives on the beta channel. apidrift pulls a
   single GA spec, so beta-tagged ops are absent from it entirely and their drift is out of scope;
   the flag turns a false `WARNING model-op-absent` into a visible, non-gating `INFO
-  beta-blind-spot`. Nothing sets it yet - it exists so the first beta-dependent collector surfaces
-  the blind spot instead of a false positive. Fetching a beta channel is unimplemented.
+  beta-blind-spot`. Fetching a beta channel is unimplemented.
 
 ## Untrusted input
 
 - `--live-url` is parsed with `urlparse`, requires `scheme == "https"` and a non-empty `hostname`,
   and the URL that reaches `urlopen` is rebuilt from the parsed components. A
-  `startswith("https://")` prefix check does not stop scheme smuggling and was flagged as CWE-918.
+  `startswith("https://")` prefix check does not stop scheme smuggling.
   Never hand the raw argument to `urlopen`, here or anywhere else in this tool.
 - Fetched spec content and the rendered report are external data. `report-drift` passes the report
   to `gh issue` as a value, never as executable content.

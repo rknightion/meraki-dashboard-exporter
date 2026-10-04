@@ -9,8 +9,6 @@
   `meraki_exporter_*` for the exporter's own instrumentation (`CollectorMetricName`).
 - `ConfigMetricName` is deliberately an empty enum. Configuration-change metrics live under
   `OrgMetricName`; it does not need populating.
-- `@register_collector` takes no arguments. There is no tier argument to pass - cadence comes from
-  the endpoint groups the collector declares in `get_endpoint_groups()`.
 - Two symbols are not in the module their name suggests: `batch_with_concurrency_limit()` is in
   `error_handling.py`, not `async_utils.py`, and `CollectorProtocol` is in `collector.py`, not
   `type_definitions.py`.
@@ -21,10 +19,7 @@
 - `OrgHealthTracker` (`org_health.py`) backs an org off after 5 consecutive failures, for 60s
   doubling to a 3600s cap, while healthy orgs keep collecting. An org that vanishes from output for
   minutes at a time is that backoff, not a collector bug.
-- Cardinality endpoints are top-level routes, not nested under `/status`:
-  `setup_cardinality_endpoint(app, monitor)` registers `/cardinality`, `/cardinality/all-metrics`,
-  `/cardinality/all-labels`, `/cardinality/export/json`, `/cardinality/label-values/{metric_name}`
-  and `/api/metrics/cardinality`.
+- Cardinality endpoints are top-level routes, not nested under `/status` (see `setup_cardinality_endpoint`).
 - `constants/config_constants.py` (`APIConfig`, `RegionalURLs`, `MerakiAPIConfig`) is legacy: its
   `MERAKI_API_BASE_URL*` constants back the regional-origin allowlist and nothing else. Runtime
   config comes from `Settings` / `APISettings`.

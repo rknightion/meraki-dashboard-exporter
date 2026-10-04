@@ -7,13 +7,7 @@ repo.
 
 ## Pinning
 
-- Every third-party `uses:`, the `rknightion/.github` reusables included, is a full 40-character
-  commit SHA with a trailing `# vX.Y.Z` comment. **Keep every `rknightion/.github` reference in this
-  repo on the same version**; copy the pin from an existing caller rather than introducing a second,
-  different one.
-- Local same-repo references (`uses: ./.github/workflows/publish.yml`,
-  `uses: ./.github/actions/report-drift`) are the only unpinned `uses:` and that is correct - they
-  cannot be SHA-pinned.
+Keep every `rknightion/.github` reference in this repo on the same version; copy the pin from an existing caller.
 
 ## The required-check surface
 
