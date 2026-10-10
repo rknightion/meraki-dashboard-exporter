@@ -5,6 +5,55 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [2.2.3](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.2.2...v2.2.3) (2026-10-10)
+
+
+### Bug Fixes
+
+* **deps:** update dependency meraki to v4.6.0 ([#810](https://github.com/rknightion/meraki-dashboard-exporter/issues/810)) ([706bc12](https://github.com/rknightion/meraki-dashboard-exporter/commit/706bc12ea6642f0f75d096dd282f7d625305d949))
+
+
+### Documentation
+
+* **agents:** drop stale history, cached facts and restated global rules ([a3ee58d](https://github.com/rknightion/meraki-dashboard-exporter/commit/a3ee58d14a7835bf50c2ddb6cc421f917e09d161))
+* **agents:** drop testing rule now owned by the global policy ([e0bfd15](https://github.com/rknightion/meraki-dashboard-exporter/commit/e0bfd15a81966af6dd4df591f2021dc1ea51a891))
+* **loop:** adopt the lean LOOP.md and point at the loop contract ([9920b01](https://github.com/rknightion/meraki-dashboard-exporter/commit/9920b01536800a7f68f6555388cdf71d660a910a))
+* name the Task interface section ([f8087c9](https://github.com/rknightion/meraki-dashboard-exporter/commit/f8087c9ffd62a181f19b3b13b32d5fb5b83e1ae9))
+* publish canonical agent documents ([7141fd5](https://github.com/rknightion/meraki-dashboard-exporter/commit/7141fd51e9d0b312df2e685c7d5a92aa54ba9118))
+* publish canonical agent documents ([28fc5a3](https://github.com/rknightion/meraki-dashboard-exporter/commit/28fc5a39f3b475b8c791b8853f6fcc4ac54404fb))
+* publish canonical agent documents ([0e9b791](https://github.com/rknightion/meraki-dashboard-exporter/commit/0e9b791d7fc053e32387c3af2c3fa35b3f1bfd15))
+* publish canonical agent documents ([57040bc](https://github.com/rknightion/meraki-dashboard-exporter/commit/57040bc8136729458767cc87ba1f80a54b144fd9))
+* publish canonical agent documents ([aaa0050](https://github.com/rknightion/meraki-dashboard-exporter/commit/aaa005018489fd432ac727cb3e104b231f0a1a5b))
+* publish canonical agent documents ([924831b](https://github.com/rknightion/meraki-dashboard-exporter/commit/924831bf6e6d07f6c6bc39ec17cfb70f18a293d5))
+* publish canonical agent documents ([e43926c](https://github.com/rknightion/meraki-dashboard-exporter/commit/e43926c41b3a1a8abf3db7e005e68394805c76c6))
+* publish canonical agent documents ([b8d873a](https://github.com/rknightion/meraki-dashboard-exporter/commit/b8d873a0e78edf3ccb6d3743407ad3dcea36dc23))
+* publish canonical agent documents ([b4ee197](https://github.com/rknightion/meraki-dashboard-exporter/commit/b4ee1979fd825dfd221793e03782229c6cfd5c60))
+* publish canonical agent documents ([e026869](https://github.com/rknightion/meraki-dashboard-exporter/commit/e026869e35a56c0f7843aad37a0ea31f02eb47d5))
+* publish canonical agent documents ([47a3479](https://github.com/rknightion/meraki-dashboard-exporter/commit/47a3479bd4db9e1653d181b961abc6c65f065102))
+* publish canonical agent documents ([1d1fe84](https://github.com/rknightion/meraki-dashboard-exporter/commit/1d1fe84f261ddb72e73f518ac15cf5f31465c40e))
+* publish canonical agent documents ([0df1348](https://github.com/rknightion/meraki-dashboard-exporter/commit/0df13488860e60a884bb6016c6fbf5e2d3018b94))
+* publish canonical agent documents ([423fd06](https://github.com/rknightion/meraki-dashboard-exporter/commit/423fd06ca58ca1fb555db4389b1b2b1ec59ce176))
+* publish canonical agent documents ([d5e7c99](https://github.com/rknightion/meraki-dashboard-exporter/commit/d5e7c9935497398761a1d4d956a201f69a8e4fe2))
+* publish canonical agent documents ([c2afc29](https://github.com/rknightion/meraki-dashboard-exporter/commit/c2afc29ca1c39df52d07cc1e239ea54b23b8a1a9))
+* publish canonical agent documents ([6351013](https://github.com/rknightion/meraki-dashboard-exporter/commit/635101368098e8e76fa497e30925f21fcfc4358f))
+* publish canonical agent documents ([433ea99](https://github.com/rknightion/meraki-dashboard-exporter/commit/433ea998b1e6048908614cd49c06d3ba2a9ddf95))
+* publish canonical agent documents ([955fcfd](https://github.com/rknightion/meraki-dashboard-exporter/commit/955fcfd0975818f3e7e991a64eb7cc6f8c14f8dd))
+* publish canonical agent documents ([c3e6034](https://github.com/rknightion/meraki-dashboard-exporter/commit/c3e6034744f9d9de1d4665669e8995971e3277c5))
+* publish canonical agent documents ([71936a1](https://github.com/rknightion/meraki-dashboard-exporter/commit/71936a1bc12cf22da2efde4f4e88cde56b6c0cd4))
+* publish canonical agent documents ([2463c11](https://github.com/rknightion/meraki-dashboard-exporter/commit/2463c11fb43ae0490b4e8b198f0e937fcb52dda1))
+* publish canonical agent documents ([821beb5](https://github.com/rknightion/meraki-dashboard-exporter/commit/821beb5688bae228dcfb518102a2408b4b19e4b2))
+* publish canonical agent documents ([be7e06d](https://github.com/rknightion/meraki-dashboard-exporter/commit/be7e06d82f49995ecee5a3d678f60ecaeee3c892))
+* publish canonical agent documents ([6a98d35](https://github.com/rknightion/meraki-dashboard-exporter/commit/6a98d355c9803a3161282c312febd4a2f76f829a))
+* publish canonical agent documents ([0d9709f](https://github.com/rknightion/meraki-dashboard-exporter/commit/0d9709f75ec72e735882116de972a83c1d879414))
+* publish canonical agent documents ([5042d95](https://github.com/rknightion/meraki-dashboard-exporter/commit/5042d958555137ef2ea8e2fcbee1aec58e0e1465))
+* publish canonical agent documents ([833f1b5](https://github.com/rknightion/meraki-dashboard-exporter/commit/833f1b5a9d725a1d4abd042dc671a20f21bc92cb))
+* publish canonical agent documents ([f446558](https://github.com/rknightion/meraki-dashboard-exporter/commit/f4465581fcd737c8caec8320cdce648d4677754d))
+* publish canonical agent documents ([6995c1f](https://github.com/rknightion/meraki-dashboard-exporter/commit/6995c1f80875b7eed9580bd06e0421b0f4f5b756))
+* publish canonical agent documents ([70bd757](https://github.com/rknightion/meraki-dashboard-exporter/commit/70bd75716c24597cc5c9da21d59637e9a4474fbf))
+* publish canonical agent documents ([67caa2a](https://github.com/rknightion/meraki-dashboard-exporter/commit/67caa2a7efea3dd1deb35c85afb8d407c95c38d1))
+* publish canonical agent documents ([a1b2fcc](https://github.com/rknightion/meraki-dashboard-exporter/commit/a1b2fccdb5c85121da5a478166e8337d4f070d72))
+* publish canonical agent documents ([e00f458](https://github.com/rknightion/meraki-dashboard-exporter/commit/e00f4580622f599d6cde35a3cccb419d2a6c9919))
+
 ## [2.2.2](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.2.1...v2.2.2) (2026-09-24)
 
 
