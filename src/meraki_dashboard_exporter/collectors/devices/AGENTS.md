@@ -10,14 +10,10 @@
   `collect`/`collect_for_network`/`collect_*` methods called directly by the owning coordinator.
   There is no uniform interface across them, so do not assume one when wiring a new call site.
 
-`mr/` is the only device type split into its own subpackage.
-
 ## Gauges
 
 Create through `self.parent._create_gauge()`, never a direct `Gauge()`. Set through
-`self.parent._set_metric()` so expiration tracking works. This differs from
-`network_health_collectors/` and `organization_collectors/`, where the gauge is created on the
-coordinator and set by attribute-name string.
+`self.parent._set_metric()` so expiration tracking works.
 
 `_set_metric` buckets a series under the calling collector's own class name, and because device
 sub-collectors delegate to the parent, every device series is tracked as `DeviceCollector`.

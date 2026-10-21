@@ -37,14 +37,7 @@ decorator categorise. Match the file you are in rather than unifying the two as 
 
 ## Fixed request parameters
 
-- Bluetooth clients: `timespan=300`, `perPage=1000`, `total_pages="all"`.
-- Connection stats: `timespan=1800`. Shorter windows are unreliable on this endpoint.
-- Data rate history: `timespan=300` with `resolution=300`; read the most recent bucket after sorting
-  by `endTs`.
-- SSID failed connections: `timespan=3600`.
-- Channel utilization (`getOrganizationWirelessDevicesChannelUtilizationByDevice` and
-  `...ByNetwork`): `timespan=600`, `interval=600`, `perPage=1000`, `total_pages="all"`. The parameter
-  is `interval`, not `resolution`.
+Connection stats must use a timespan of at least 1800 (shorter windows are unreliable). Channel utilization takes `interval`, not `resolution`.
 
 ## Two metric-name enums
 

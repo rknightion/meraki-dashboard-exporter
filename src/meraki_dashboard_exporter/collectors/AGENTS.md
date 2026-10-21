@@ -15,20 +15,6 @@
 - Implement `_initialize_metrics()` and `_collect_impl()`. Never override `collect()`: it wraps
   `_collect_impl()` with tracing and the duration/error/success metrics.
 
-## SDK calls
-
-Reach the Meraki SDK through the shared facade, not a bare `asyncio.to_thread`. It owns rate
-limiting, tracing and call accounting:
-
-```python
-response = await facade_for(self).call(
-    "getOrganizationSomeEndpoint",
-    self.api.organizations.getOrganizationSomeEndpoint,
-    org_id,
-    org_id=org_id,
-)
-```
-
 ## Filtering org-wide responses
 
 `inventory.get_networks(org_id)` gates which networks are fetched, but a bulk org-wide endpoint

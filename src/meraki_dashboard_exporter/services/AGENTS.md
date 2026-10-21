@@ -30,9 +30,7 @@ with a live `NetworkFilter(settings.network_filter)` and shared by every collect
   `core/api_helpers.py::APIHelper._fetch_devices_direct` (reapplies `NetworkFilter` itself), and the
   inventory-unavailable availability fallbacks in `collectors/device.py` and
   `collectors/organization.py`. Do not add another.
-- TTL constants on the class, in seconds: `TTL_MEDIUM=900` is the general TTL and is fixed for every
-  reader (there is no per-collector TTL wiring), `TTL_AVAILABILITY=120` always applies to device
-  availabilities regardless of `_ttl`, `TTL_LICENSE=1800`. `_is_expired()` adds +/-10% jitter.
+- The general TTL is fixed for every reader (no per-collector TTL wiring); availabilities and licences have their own TTL constants. `_is_expired()` adds +/-10% jitter.
 - `invalidate(org_id=None)` clears everything; pass an `org_id` after a config change rather than on
   a collection tick. `warm_cache(org_ids=None)` pre-populates orgs, networks and devices so the
   first cycle hits cache.

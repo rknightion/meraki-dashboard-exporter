@@ -1028,6 +1028,6 @@ def test_wiring_mentions_only_manual_dispatch_and_local_commands() -> None:
         and "push:" not in workflow
         and "pull_request:" not in workflow
     )
-    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in workflow
+    assert "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9" in workflow
     assert "harness-validate" in Path("justfile").read_text(encoding="utf-8")
     assert "Failure Harness" in Path("docs.toml").read_text(encoding="utf-8")

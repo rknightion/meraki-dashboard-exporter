@@ -36,14 +36,10 @@ artefact.
 - It splices into BEGIN/END marker regions in `charts/meraki-dashboard-exporter/values.yaml` and
   `templates/configmap.yaml`, and **errors when a marker is missing** rather than guessing where to
   write.
-- **`SecretStr` fields are skipped entirely**: they must never land in a plaintext ConfigMap, and
-  are injected through `extraEnv` from a Secret instead.
 - `EXCLUDE` skips the three vars wired from higher-level chart values (`MERAKI__API_KEY`,
   `MERAKI__ORG_ID`, `SERVER__PORT`). Friendly key names are algorithmic camelCase with a small
   `NAME_OVERRIDES` map for legacy names. Set and frozenset defaults are sorted so output is
   deterministic.
-- `tests/test_helm_config_drift.py` fails the build if the chart drifts from the schema or a secret
-  leaks into the ConfigMap.
 
 ## The validators
 

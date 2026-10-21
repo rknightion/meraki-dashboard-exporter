@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
-from collections.abc import AsyncIterator, Callable, Coroutine
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine
 from concurrent.futures import Executor
 from contextlib import asynccontextmanager
 from contextvars import copy_context
@@ -580,7 +580,7 @@ async def managed_resource[T](
     resource_factory: Callable[[], Coroutine[Any, Any, T]],
     cleanup_func: Callable[[T], Coroutine[Any, Any, None]] | None = None,
     resource_name: str = "resource",
-) -> AsyncIterator[T]:
+) -> AsyncGenerator[T]:
     """Context manager for async resource management with cleanup.
 
     Parameters

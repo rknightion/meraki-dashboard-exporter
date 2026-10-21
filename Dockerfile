@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.27
+# syntax=docker/dockerfile:1.28
 ARG PY_VERSION=3.14
 
 # --------------------------------------------------------------------------- #
@@ -12,7 +12,7 @@ ARG PY_VERSION=3.14
 # 3.23.6, multi-arch index incl. linux/amd64 + linux/arm64). Alpine avoids shipping
 # Debian's libsystemd0/libudev1 runtime packages; their source package is affected by
 # CVE-2026-16742 and Debian 13 has no fixed version.
-FROM python:${PY_VERSION}-alpine3.23@sha256:f484505e4ff9bfcc24a667969aae6c0b7620f7243297d9d714c7439b9ae8cea8 AS builder
+FROM python:${PY_VERSION}-alpine3.23@sha256:e7cff362a12454395f8dc99607c21a602ea880cdce03538877b90c2ba932b16f AS builder
 
 # Install system deps with cache mounts for faster rebuilds
 RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
@@ -38,7 +38,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 # unattended. (The previous curl+tarball+sha256sum approach could not: Renovate bumped the version
 # ARG but had no way to compute the tarball hashes, so every bump broke the build.)
 # The image is a multi-arch index (linux/amd64 + linux/arm64), so no TARGETARCH handling is needed.
-COPY --from=ghcr.io/astral-sh/uv:0.12.22@sha256:f513a91fc62fe7c17567eee97230dd198e43edb8a9fbecca843714a4358fe1bc /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.4@sha256:9f130421e930bfbdc563c00740466603f8723158e90297d07957c2294640262b /uv /uvx /bin/
 
 # Copy dependency files first (most cacheable layer)
 COPY pyproject.toml uv.lock ./
@@ -55,7 +55,7 @@ COPY src/meraki_dashboard_exporter ./meraki_dashboard_exporter
 # --------------------------------------------------------------------------- #
 # Same digest pin as the builder stage above (#562) — both stages must resolve to the
 # identical base image.
-FROM python:${PY_VERSION}-alpine3.23@sha256:f484505e4ff9bfcc24a667969aae6c0b7620f7243297d9d714c7439b9ae8cea8 AS runtime
+FROM python:${PY_VERSION}-alpine3.23@sha256:e7cff362a12454395f8dc99607c21a602ea880cdce03538877b90c2ba932b16f AS runtime
 
 # Install runtime dependencies and create non-root user.
 #
@@ -72,8 +72,11 @@ FROM python:${PY_VERSION}-alpine3.23@sha256:f484505e4ff9bfcc24a667969aae6c0b7620
 # the tag. Upgrading here makes the gate self-healing at the cost of exact
 # package-level reproducibility against the pinned digest. That trade is intentional:
 # do not remove this to "restore" reproducibility.
+# The application uses its uv-built venv. Remove unused base pip so its separately
+# vendored trust store and HTTP libraries cannot remain vulnerable in the runtime.
 RUN apk upgrade --no-cache \
     && apk add --no-cache ca-certificates \
+    && python -m pip uninstall --yes pip \
     && adduser -D -u 1000 -s /sbin/nologin exporter
 
 # Labels for container metadata (consolidated for single layer)

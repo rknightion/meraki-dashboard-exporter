@@ -35,7 +35,7 @@ jobs:
       contents: read
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -54,7 +54,7 @@ jobs:
       packages: read
       actions: read
       security-events: write
-    uses: rknightion/.github/.github/workflows/codeql.yml@f32275a4a7641f34db5cb005d270db961b54a680 # v1.25.3
+    uses: rknightion/.github/.github/workflows/codeql.yml@0f4847f833f096c1f03284481d7e6b19c2f81c30 # v1.25.8
     with:
       languages: '[{"language":"python","build-mode":"none"},{"language":"actions","build-mode":"none"}]'
       ref: ${{ inputs.release_tag || github.sha }}
@@ -69,7 +69,7 @@ jobs:
       id-token: write
       attestations: write
       security-events: write
-    uses: rknightion/.github/.github/workflows/container-publish.yml@f32275a4a7641f34db5cb005d270db961b54a680 # v1.25.3
+    uses: rknightion/.github/.github/workflows/container-publish.yml@0f4847f833f096c1f03284481d7e6b19c2f81c30 # v1.25.8
     with:
       release-tag: ${{ inputs.release_tag }}
       helm-chart-path: charts/meraki-dashboard-exporter
