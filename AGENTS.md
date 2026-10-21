@@ -72,6 +72,11 @@ no artefact behind it. `scripts/validate_trivy_exceptions.py` validates an excep
 whether its purls match anything in the current base image, so exceptions silently stop applying
 when the base image's distro changes.
 
+The Alpine CA bundle, application certifi and base-interpreter pip vendoring are separate
+security surfaces. Runtime removes unused base pip: pip 26.2.2 patches certifi but still vendors
+vulnerable urllib3 2.7.0. Keep pip absent unless the whole vendored dependency set is verified.
+Inspect the base interpreter with `/usr/local/bin/python`; runtime PATH selects the application venv.
+
 Recipes marked `[confirm]` push a multi-arch image to ghcr.io or prune the machine-wide buildx
 cache. Stop and ask; never pass `--yes` or `JUST_YES=1`. Run `just` with stdin from `/dev/null`.
 

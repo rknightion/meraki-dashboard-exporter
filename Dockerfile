@@ -72,8 +72,11 @@ FROM python:${PY_VERSION}-alpine3.23@sha256:e7cff362a12454395f8dc99607c21a602ea8
 # the tag. Upgrading here makes the gate self-healing at the cost of exact
 # package-level reproducibility against the pinned digest. That trade is intentional:
 # do not remove this to "restore" reproducibility.
+# The application uses its uv-built venv. Remove unused base pip so its separately
+# vendored trust store and HTTP libraries cannot remain vulnerable in the runtime.
 RUN apk upgrade --no-cache \
     && apk add --no-cache ca-certificates \
+    && python -m pip uninstall --yes pip \
     && adduser -D -u 1000 -s /sbin/nologin exporter
 
 # Labels for container metadata (consolidated for single layer)
