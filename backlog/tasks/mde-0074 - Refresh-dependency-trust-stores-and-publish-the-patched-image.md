@@ -4,7 +4,7 @@ title: Refresh dependency trust stores and publish the patched image
 status: In Progress
 assignee: []
 created_date: '2026-10-21T15:28:00Z'
-updated_date: '2026-10-21T15:34:00Z'
+updated_date: '2026-10-21T15:59:00Z'
 labels:
   - 'area:dependencies'
   - 'priority:high'
@@ -42,4 +42,6 @@ The published-container Trivy gate on the current main commit reports compromise
 
 <!-- SECTION:NOTES:BEGIN -->
 Full Python 3.14 just ci passed with 2,987 tests and 91.51% coverage; CodeRabbit completed with zero findings across both annotation changes and lockfile. Local Trivy reproduced two HIGH urllib3 findings in pip 26.2.2 vendoring despite its fixed certifi. Removed unused base pip from final runtime rather than weakening exceptions, then reran the full image and source gate successfully.
+
+Merged security fix PR 796 at 6b4e847 and upload-artifact PR 809 at 1a488d8, both on current branches with green exact-head required checks. PR 809 retained its exact pin assertion, updated to the new official action SHA after the old expectation failed. Ubuntu 26 runner PR 795 exposed old actionlint runner-label metadata; all shared refs updated together to published v1.25.11, which recognizes the officially supported label. Full gate passed after that pin fix.
 <!-- SECTION:NOTES:END -->
