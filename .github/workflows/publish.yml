@@ -54,7 +54,7 @@ jobs:
       packages: read
       actions: read
       security-events: write
-    uses: rknightion/.github/.github/workflows/codeql.yml@2c2a3771006d75783f612a61a2bd406449a3410f # v1.25.11
+    uses: rknightion/.github/.github/workflows/codeql.yml@5d0de41efd56d620e1e9e7e45a844cdb4828b120 # v1.25.12
     with:
       languages: '[{"language":"python","build-mode":"none"},{"language":"actions","build-mode":"none"}]'
       ref: ${{ inputs.release_tag || github.sha }}
@@ -69,7 +69,7 @@ jobs:
       id-token: write
       attestations: write
       security-events: write
-    uses: rknightion/.github/.github/workflows/container-publish.yml@2c2a3771006d75783f612a61a2bd406449a3410f # v1.25.11
+    uses: rknightion/.github/.github/workflows/container-publish.yml@5d0de41efd56d620e1e9e7e45a844cdb4828b120 # v1.25.12
     with:
       release-tag: ${{ inputs.release_tag }}
       helm-chart-path: charts/meraki-dashboard-exporter
