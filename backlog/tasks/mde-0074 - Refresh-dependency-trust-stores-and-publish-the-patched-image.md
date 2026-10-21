@@ -4,7 +4,7 @@ title: Refresh dependency trust stores and publish the patched image
 status: In Progress
 assignee: []
 created_date: '2026-10-21T15:28:00Z'
-updated_date: '2026-10-21T15:28:00Z'
+updated_date: '2026-10-21T15:34:00Z'
 labels:
   - 'area:dependencies'
   - 'priority:high'
@@ -37,3 +37,9 @@ The published-container Trivy gate on the current main commit reports compromise
 <!-- SECTION:PLAN:BEGIN -->
 1. Repair newer Ruff context-manager type annotations on the lock-maintenance branch; upgrade base pip to 26.2.2 so its vendored trust store is patched. 2. Run the complete check and image-gate recipes and review the code delta. 3. Refresh and green-merge each dependency PR, then the release PR; read back released trust-store versions and incident-host rejections.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Full Python 3.14 just ci passed with 2,987 tests and 91.51% coverage; CodeRabbit completed with zero findings across both annotation changes and lockfile. Local Trivy reproduced two HIGH urllib3 findings in pip 26.2.2 vendoring despite its fixed certifi. Removed unused base pip from final runtime rather than weakening exceptions, then reran the full image and source gate successfully.
+<!-- SECTION:NOTES:END -->
