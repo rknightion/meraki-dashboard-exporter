@@ -74,6 +74,7 @@ FROM python:${PY_VERSION}-alpine3.23@sha256:e7cff362a12454395f8dc99607c21a602ea8
 # do not remove this to "restore" reproducibility.
 RUN apk upgrade --no-cache \
     && apk add --no-cache ca-certificates \
+    && python -m pip install --no-cache-dir --upgrade pip==26.2.2 \
     && adduser -D -u 1000 -s /sbin/nologin exporter
 
 # Labels for container metadata (consolidated for single layer)
