@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.27
+# syntax=docker/dockerfile:1.28
 ARG PY_VERSION=3.14
 
 # --------------------------------------------------------------------------- #
@@ -38,7 +38,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 # unattended. (The previous curl+tarball+sha256sum approach could not: Renovate bumped the version
 # ARG but had no way to compute the tarball hashes, so every bump broke the build.)
 # The image is a multi-arch index (linux/amd64 + linux/arm64), so no TARGETARCH handling is needed.
-COPY --from=ghcr.io/astral-sh/uv:0.12.23@sha256:61d393e44e249f2e4b526b6c7ddcecce245946826e608e11c93ad4f5bba55b21 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.4@sha256:9f130421e930bfbdc563c00740466603f8723158e90297d07957c2294640262b /uv /uvx /bin/
 
 # Copy dependency files first (most cacheable layer)
 COPY pyproject.toml uv.lock ./
@@ -72,8 +72,11 @@ FROM python:${PY_VERSION}-alpine3.23@sha256:e7cff362a12454395f8dc99607c21a602ea8
 # the tag. Upgrading here makes the gate self-healing at the cost of exact
 # package-level reproducibility against the pinned digest. That trade is intentional:
 # do not remove this to "restore" reproducibility.
+# The application uses its uv-built venv. Remove unused base pip so its separately
+# vendored trust store and HTTP libraries cannot remain vulnerable in the runtime.
 RUN apk upgrade --no-cache \
     && apk add --no-cache ca-certificates \
+    && python -m pip uninstall --yes pip \
     && adduser -D -u 1000 -s /sbin/nologin exporter
 
 # Labels for container metadata (consolidated for single layer)

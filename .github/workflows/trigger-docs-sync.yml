@@ -29,7 +29,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -42,7 +42,7 @@ jobs:
       # hub's daily 06:00 UTC cron rebuild remains the backstop if this fails.
       - name: Mint a scoped docs-sync token
         id: bao
-        uses: rknightion/.github/.github/actions/broker-token@c36bf7ded21407b0a5169ecb2502d6a3a385be30 # v1.25.5
+        uses: rknightion/.github/.github/actions/broker-token@0f4847f833f096c1f03284481d7e6b19c2f81c30 # v1.25.8
         with:
           permission-set: docs-sync
           # One shared permission set, but a role per repo to pin repository_id --

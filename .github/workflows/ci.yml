@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -42,7 +42,7 @@ jobs:
 
       # Ultra-fast dependency install & caching
       - name: Set up uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: "3.14"
           activate-environment: true
@@ -51,7 +51,7 @@ jobs:
       - name: Set up just
         uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
         with:
-          just-version: '1.58.0'
+          just-version: '1.59.0'
 
       - name: Install project (incl. dev extras)
         # --locked: fail if uv.lock is stale vs pyproject.toml (e.g. a version bump that
@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -93,7 +93,7 @@ jobs:
       - name: Set up just
         uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
         with:
-          just-version: '1.58.0'
+          just-version: '1.59.0'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -140,7 +140,7 @@ jobs:
   helm-lint-kubeconform:
     permissions:
       contents: read
-    uses: rknightion/.github/.github/workflows/helm-validate.yml@c36bf7ded21407b0a5169ecb2502d6a3a385be30 # v1.25.5
+    uses: rknightion/.github/.github/workflows/helm-validate.yml@0f4847f833f096c1f03284481d7e6b19c2f81c30 # v1.25.8
     with:
       # This chart renders CRD kinds (ServiceMonitor + PrometheusRule) that kubeconform has no
       # built-in schema for. Give it the schema rather than reaching for
@@ -166,14 +166,14 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
-          python-version: '3.14'
+          python-version: '3.15'
           allow-prereleases: true
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: Set up just
         uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
         with:
-          just-version: '1.58.0'
+          just-version: '1.59.0'
       - name: Install dependencies
         run: uv sync --all-extras --locked
       - name: Run scheduled fleet presets
@@ -189,14 +189,14 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
-          python-version: '3.14'
+          python-version: '3.15'
           allow-prereleases: true
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: Set up just
         uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
         with:
-          just-version: '1.58.0'
+          just-version: '1.59.0'
       - name: Install dependencies
         run: uv sync --all-extras --locked
       - name: Run on-demand fleet presets

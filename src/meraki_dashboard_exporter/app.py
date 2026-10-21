@@ -6,7 +6,7 @@ import asyncio
 import hmac
 import json
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from functools import partial
@@ -593,7 +593,7 @@ class ExporterApp:
         return await asyncio.shield(future)
 
     @asynccontextmanager
-    async def lifespan(self, app: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(self, app: FastAPI) -> AsyncGenerator[None]:
         """Manage application lifecycle.
 
         Parameters
