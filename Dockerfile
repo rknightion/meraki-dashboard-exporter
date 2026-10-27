@@ -12,7 +12,7 @@ ARG PY_VERSION=3.14
 # 3.23.6, multi-arch index incl. linux/amd64 + linux/arm64). Alpine avoids shipping
 # Debian's libsystemd0/libudev1 runtime packages; their source package is affected by
 # CVE-2026-16742 and Debian 13 has no fixed version.
-FROM python:${PY_VERSION}-alpine3.23@sha256:21aef796a4ceaf418e1b3023eaeae351c7a6cabd00f3551ec905c4d76104a024 AS builder
+FROM python:${PY_VERSION}-alpine3.23@sha256:2fc6f06143be3b5ea0f7d8977773a22b398dc9a3641bb7b75940f98e9767631e AS builder
 
 # Install system deps with cache mounts for faster rebuilds
 RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
@@ -55,7 +55,7 @@ COPY src/meraki_dashboard_exporter ./meraki_dashboard_exporter
 # --------------------------------------------------------------------------- #
 # Same digest pin as the builder stage above (#562) — both stages must resolve to the
 # identical base image.
-FROM python:${PY_VERSION}-alpine3.23@sha256:21aef796a4ceaf418e1b3023eaeae351c7a6cabd00f3551ec905c4d76104a024 AS runtime
+FROM python:${PY_VERSION}-alpine3.23@sha256:2fc6f06143be3b5ea0f7d8977773a22b398dc9a3641bb7b75940f98e9767631e AS runtime
 
 # Install runtime dependencies and create non-root user.
 #
