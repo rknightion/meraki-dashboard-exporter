@@ -5,6 +5,18 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [2.3.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.2.3...v2.3.0) (2026-10-28)
+
+
+### Features
+
+* **mx:** per-network security events by IPS outcome and priority ([#859](https://github.com/rknightion/meraki-dashboard-exporter/issues/859)) ([00eb2fc](https://github.com/rknightion/meraki-dashboard-exporter/commit/00eb2fcaa74fd82e98d1062f06754b7d6d6948b1))
+
+
+### Bug Fixes
+
+* **mx:** keep security-event metrics when a row or the inventory is malformed ([0174246](https://github.com/rknightion/meraki-dashboard-exporter/commit/01742465d18a0b29483192d2f032ca818aff14c0))
+
 ## [2.2.3](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.2.2...v2.2.3) (2026-10-21)
 
 
