@@ -310,6 +310,8 @@ class MXMetricName(StrEnum):
     # Counter, so it deliberately does NOT carry a `_total` suffix - see
     # bug-bash finding F-091.
     MX_SECURITY_EVENTS_COUNT = "meraki_mx_security_events_count"
+    # Same windowed count per appliance network, split by IPS outcome and priority.
+    MX_SECURITY_EVENTS_BY_NETWORK_COUNT = "meraki_mx_security_events_by_network_count"
 
     # Per-uplink WAN bandwidth usage (org-wide uplinks usage byNetwork endpoint; windowed totals)
     MX_UPLINK_SENT_BYTES = "meraki_mx_uplink_sent_bytes"

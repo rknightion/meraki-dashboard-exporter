@@ -126,6 +126,8 @@ class LabelName(StrEnum):
     RULE_TYPE = "rule_type"
     EVENT_TYPE = "event_type"
     DEFAULT_POLICY = "default_policy"
+    BLOCKED = "blocked"  # Security event blocked by IPS: true/false/unknown
+    PRIORITY = "priority"  # Security event (IDS rule) priority
 
     # MG cellular gateway labels
     PROVIDER = "provider"  # Cellular carrier/provider name

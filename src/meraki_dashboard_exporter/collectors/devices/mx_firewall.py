@@ -24,7 +24,7 @@ from ...core.domain_models import (
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
-from ...core.metrics import LabelName
+from ...core.metrics import LabelName, create_labels
 from ...core.scheduler import EndpointGroupName
 from ..subcollector_mixin import SubCollectorMixin
 
@@ -162,6 +162,18 @@ class MXFirewallCollector(SubCollectorMixin):
             labelnames=[
                 LabelName.ORG_ID,
                 LabelName.EVENT_TYPE,
+            ],
+        )
+        self._security_events_by_network_count = self.parent._create_gauge(
+            MXMetricName.MX_SECURITY_EVENTS_BY_NETWORK_COUNT,
+            "Security events per appliance network by type, IPS outcome (blocked) and priority "
+            "in the current collection window (not a monotonic total)",
+            labelnames=[
+                LabelName.ORG_ID,
+                LabelName.NETWORK_ID,
+                LabelName.EVENT_TYPE,
+                LabelName.BLOCKED,
+                LabelName.PRIORITY,
             ],
         )
 
@@ -693,6 +705,17 @@ class MXFirewallCollector(SubCollectorMixin):
 
         self._mark_vlan_config_collected(network_id)
 
+    async def _appliance_network_by_mac(self, org_id: str) -> dict[str, str]:
+        """Map lower-case device MAC to network ID from the cached org device inventory."""
+        if self.parent.inventory is None:
+            return {}
+        devices = await self.parent.inventory.get_devices(org_id, unfiltered=True)
+        return {
+            str(d["mac"]).lower(): str(d["networkId"])
+            for d in devices
+            if d.get("mac") and d.get("networkId")
+        }
+
     @log_api_call("getOrganizationApplianceSecurityEvents")
     @with_error_handling(
         operation="Collect MX security events",
@@ -705,6 +728,11 @@ class MXFirewallCollector(SubCollectorMixin):
         Fetches org-wide IDS/IPS and AMP security events (``getOrganizationApplianceSecurityEvents``)
         in a single call per organization and aggregates the count of events by ``eventType``
         (e.g. "IDS Alert", "File Scanned") over the current collection window.
+
+        The same events are also counted per appliance network, split by ``blocked`` (IPS
+        outcome) and ``priority``. The live endpoint carries no ``networkId``: the network is
+        resolved from the appliance ``deviceMac`` through the cached org device inventory, and
+        the ``NetworkFilter`` is applied to that resolved network.
 
         The ``timespan`` is bounded to the ``mx_security_events`` group's solved
         interval (``parent._group_interval(EndpointGroupName.MX_SECURITY_EVENTS)``, 300s floor)
@@ -750,18 +778,24 @@ class MXFirewallCollector(SubCollectorMixin):
             if self.parent.inventory is not None
             else None
         )
+        network_by_mac = await self._appliance_network_by_mac(org_id)
         skipped = 0
         counts: dict[str, int] = {}
+        by_network: dict[tuple[str, str, str, str], int] = {}
 
         for raw_event in events_response:
-            network_id = raw_event.get("networkId", "")
+            event = ApplianceSecurityEvent.model_validate(raw_event)
+            network_id = event.networkId or network_by_mac.get((event.deviceMac or "").lower(), "")
             if allowed_network_ids is not None and network_id not in allowed_network_ids:
                 skipped += 1
                 continue
 
-            event = ApplianceSecurityEvent.model_validate(raw_event)
             event_type = event.eventType or "unknown"
             counts[event_type] = counts.get(event_type, 0) + 1
+            if network_id:
+                blocked = "unknown" if event.blocked is None else str(event.blocked).lower()
+                key = (network_id, event_type, blocked, event.priority or "unknown")
+                by_network[key] = by_network.get(key, 0) + 1
 
         # NB: do NOT clear the gauge here. collect_org_security_events runs once per
         # org (concurrently across orgs, sharing one gauge instance), so a global
@@ -777,6 +811,19 @@ class MXFirewallCollector(SubCollectorMixin):
                     LabelName.ORG_ID: org_id,
                     LabelName.EVENT_TYPE: event_type,
                 },
+                float(count),
+                ttl_seconds=ttl_seconds,
+            )
+        for (network_id, event_type, blocked, priority), count in by_network.items():
+            self.parent._set_metric(
+                self._security_events_by_network_count,
+                create_labels(
+                    org_id=org_id,
+                    network_id=network_id,
+                    event_type=event_type,
+                    blocked=blocked,
+                    priority=priority,
+                ),
                 float(count),
                 ttl_seconds=ttl_seconds,
             )
