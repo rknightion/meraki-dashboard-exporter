@@ -24,7 +24,7 @@ from ...core.domain_models import (
 from ...core.error_handling import ErrorCategory, validate_response_format, with_error_handling
 from ...core.logging import get_logger
 from ...core.logging_decorators import log_api_call
-from ...core.metrics import LabelName
+from ...core.metrics import LabelName, create_labels
 from ...core.scheduler import EndpointGroupName
 from ..subcollector_mixin import SubCollectorMixin
 
@@ -817,13 +817,13 @@ class MXFirewallCollector(SubCollectorMixin):
         for (network_id, event_type, blocked, priority), count in by_network.items():
             self.parent._set_metric(
                 self._security_events_by_network_count,
-                {
-                    LabelName.ORG_ID: org_id,
-                    LabelName.NETWORK_ID: network_id,
-                    LabelName.EVENT_TYPE: event_type,
-                    LabelName.BLOCKED: blocked,
-                    LabelName.PRIORITY: priority,
-                },
+                create_labels(
+                    org_id=org_id,
+                    network_id=network_id,
+                    event_type=event_type,
+                    blocked=blocked,
+                    priority=priority,
+                ),
                 float(count),
                 ttl_seconds=ttl_seconds,
             )
