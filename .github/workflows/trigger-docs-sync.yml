@@ -42,7 +42,7 @@ jobs:
       # hub's daily 06:00 UTC cron rebuild remains the backstop if this fails.
       - name: Mint a scoped docs-sync token
         id: bao
-        uses: rknightion/.github/.github/actions/broker-token@e824f0fe32ed4750136f9d39e701cedb1dc3971b # v1.25.28
+        uses: rknightion/.github/.github/actions/broker-token@658b37ea0def29f579ec5d9acb3d67d49bfe37f1 # v1.25.29
         with:
           permission-set: docs-sync
           # One shared permission set, but a role per repo to pin repository_id --
