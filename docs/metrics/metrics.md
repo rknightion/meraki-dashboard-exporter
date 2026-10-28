@@ -5,8 +5,8 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 
 ## Summary
 
-- **Total metrics:** 368
-- **Gauges:** 328
+- **Total metrics:** 369
+- **Gauges:** 329
 - **Counters:** 35
 - **Histograms:** 4
 - **Info metrics:** 1
@@ -355,6 +355,7 @@ Some metrics are conditional (clients or webhooks); notes are shown where releva
 | `meraki_mx_malware_protection_enabled` | gauge | `org_id`, `network_id` | Advanced Malware Protection enablement (1=enabled, 0=disabled) |  |
 | `meraki_mx_nat_rules` | gauge | `nat_type` | Number of NAT rules configured for a network by type |  |
 | `meraki_mx_port_forwarding_rules` | gauge | `org_id`, `network_id` | Number of port forwarding rules configured for a network |  |
+| `meraki_mx_security_events_by_network_count` | gauge | `org_id`, `network_id`, `event_type`, `blocked`, `priority` | Security events per appliance network by type, IPS outcome (blocked) and priority in the current collection window (not a monotonic total) |  |
 | `meraki_mx_security_events_count` | gauge | `org_id`, `event_type` | Security events by type in the current collection window (not a monotonic total) |  |
 | `meraki_mx_static_routes` | gauge | `org_id`, `network_id` | Total number of static routes configured for a network |  |
 | `meraki_mx_static_routes_enabled` | gauge | `org_id`, `network_id` | Number of enabled static routes configured for a network |  |

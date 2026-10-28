@@ -372,6 +372,10 @@ class ApplianceSecurityEvent(BaseModel):
     ts: datetime | None = None
     eventType: str | None = None
     networkId: str | None = None
+    # The org-wide endpoint returns no networkId (live API): the appliance is deviceMac.
+    deviceMac: str | None = None
+    blocked: bool | None = None
+    priority: str | None = None
 
     model_config = ConfigDict(extra="allow")
 

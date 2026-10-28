@@ -55,6 +55,9 @@ meraki_mx_performance_score gauge
 meraki_mx_port_forwarding_rules gauge
   help: Number of port forwarding rules configured for a network
   labels: network_id,org_id
+meraki_mx_security_events_by_network_count gauge
+  help: Security events per appliance network by type, IPS outcome (blocked) and priority in the current collection window (not a monotonic total)
+  labels: blocked,event_type,network_id,org_id,priority
 meraki_mx_security_events_count gauge
   help: Security events by type in the current collection window (not a monotonic total)
   labels: event_type,org_id

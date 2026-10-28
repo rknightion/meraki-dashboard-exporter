@@ -62,13 +62,14 @@ class TestMXFirewallCollector:
         firewall_collector: MXFirewallCollector,
         mock_parent: MagicMock,
     ) -> None:
-        """All 16 firewall/security/NAT/VLAN gauge metrics must be created during __init__."""
-        assert mock_parent._create_gauge.call_count == 16
+        """All 17 firewall/security/NAT/VLAN gauge metrics must be created during __init__."""
+        assert mock_parent._create_gauge.call_count == 17
 
         created_names = {call.args[0] for call in mock_parent._create_gauge.call_args_list}
         assert MXMetricName.MX_FIREWALL_RULES in created_names
         assert MXMetricName.MX_FIREWALL_DEFAULT_POLICY in created_names
         assert MXMetricName.MX_SECURITY_EVENTS_COUNT in created_names
+        assert MXMetricName.MX_SECURITY_EVENTS_BY_NETWORK_COUNT in created_names
         # Phase 4 (#285): content filtering / malware / IDS/IPS
         assert MXMetricName.MX_CONTENT_FILTERING_BLOCKED_CATEGORIES in created_names
         assert MXMetricName.MX_CONTENT_FILTERING_BLOCKED_URL_PATTERNS in created_names
@@ -631,6 +632,7 @@ class TestMXFirewallCollector:
         )
         mock_parent.inventory = MagicMock()
         mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_INCLUDED"})
+        mock_parent.inventory.get_devices = AsyncMock(return_value=[])
 
         await firewall_collector.collect_org_security_events("org1", "Test Org")
 
@@ -826,6 +828,147 @@ class TestMXFirewallCollector:
             if c[0][0] is firewall_collector._security_events_count
         }
         assert calls == {"unknown": 1.0}
+
+    # Live shape of getOrganizationApplianceSecurityEvents: no networkId, the
+    # appliance is identified by deviceMac.
+    _LIVE_EVENTS = [
+        {
+            "eventType": "IDS Alert",
+            "deviceMac": "AA:BB:CC:00:00:01",
+            "blocked": True,
+            "priority": "1",
+        },
+        {
+            "eventType": "IDS Alert",
+            "deviceMac": "aa:bb:cc:00:00:01",
+            "blocked": True,
+            "priority": "1",
+        },
+        {
+            "eventType": "IDS Alert",
+            "deviceMac": "aa:bb:cc:00:00:01",
+            "blocked": False,
+            "priority": "2",
+        },
+        {
+            "eventType": "IDS Alert",
+            "deviceMac": "aa:bb:cc:00:00:02",
+            "blocked": True,
+            "priority": "1",
+        },
+        {"eventType": "File Scanned", "deviceMac": "aa:bb:cc:00:00:09"},
+    ]
+    _DEVICES = [
+        {"serial": "Q-1", "mac": "aa:bb:cc:00:00:01", "networkId": "N_1"},
+        {"serial": "Q-2", "mac": "aa:bb:cc:00:00:02", "networkId": "N_2"},
+    ]
+
+    def _by_network_calls(
+        self, firewall_collector: MXFirewallCollector, mock_parent: MagicMock
+    ) -> dict[tuple[str, str, str, str], float]:
+        return {
+            (
+                c[0][1]["network_id"],
+                c[0][1]["event_type"],
+                c[0][1]["blocked"],
+                c[0][1]["priority"],
+            ): c[0][2]
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is firewall_collector._security_events_by_network_count
+        }
+
+    async def test_security_events_by_network_resolved_from_device_mac(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """Events without networkId are attributed to the network of their appliance MAC."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=self._LIVE_EVENTS
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value=None)
+        mock_parent.inventory.get_devices = AsyncMock(return_value=self._DEVICES)
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        assert self._by_network_calls(firewall_collector, mock_parent) == {
+            ("N_1", "IDS Alert", "true", "1"): 2.0,
+            ("N_1", "IDS Alert", "false", "2"): 1.0,
+            ("N_2", "IDS Alert", "true", "1"): 1.0,
+        }
+        mock_parent.inventory.get_devices.assert_awaited_once_with("org1", unfiltered=True)
+
+    async def test_security_events_unresolved_network_counted_org_wide_only(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """An event whose appliance is unknown stays in the org count, not per network."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=self._LIVE_EVENTS
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value=None)
+        mock_parent.inventory.get_devices = AsyncMock(return_value=self._DEVICES)
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        org_calls = {
+            c[0][1]["event_type"]: c[0][2]
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is firewall_collector._security_events_count
+        }
+        assert org_calls == {"IDS Alert": 4.0, "File Scanned": 1.0}
+        assert all(
+            key[1] != "File Scanned"
+            for key in self._by_network_calls(firewall_collector, mock_parent)
+        )
+
+    async def test_security_events_network_filter_applies_to_resolved_network(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """With a NetworkFilter, events are kept by the network resolved from deviceMac."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=self._LIVE_EVENTS
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value={"N_2"})
+        mock_parent.inventory.get_devices = AsyncMock(return_value=self._DEVICES)
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        org_calls = {
+            c[0][1]["event_type"]: c[0][2]
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is firewall_collector._security_events_count
+        }
+        assert org_calls == {"IDS Alert": 1.0}
+        assert self._by_network_calls(firewall_collector, mock_parent) == {
+            ("N_2", "IDS Alert", "true", "1"): 1.0,
+        }
+
+    async def test_security_events_by_network_unknown_blocked_and_priority(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A row with networkId but no blocked / priority is labelled 'unknown'."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=[{"eventType": "File Scanned", "networkId": "N_1"}]
+        )
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        assert self._by_network_calls(firewall_collector, mock_parent) == {
+            ("N_1", "File Scanned", "unknown", "unknown"): 1.0,
+        }
 
     # ------------------------------------------------------------------
     # Firewall-config throttle gating (F-085)
