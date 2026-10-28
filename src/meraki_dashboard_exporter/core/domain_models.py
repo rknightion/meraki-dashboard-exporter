@@ -379,6 +379,26 @@ class ApplianceSecurityEvent(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
+    @field_validator("blocked", mode="before")
+    @classmethod
+    def _coerce_blocked(cls, value: object) -> bool | None:
+        """Keep booleans and "true"/"false" strings; anything else becomes unknown (None)."""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str) and value.strip().lower() in {"true", "false"}:
+            return value.strip().lower() == "true"
+        return None
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def _coerce_priority(cls, value: object) -> str | None:
+        """The spec sends priority as a string; accept an int too, drop anything else."""
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int | str):
+            return str(value) or None
+        return None
+
 
 # Appliance HA / Uplink / VPN / Firewall Models (M3 new-signal fetchers, F-023)
 

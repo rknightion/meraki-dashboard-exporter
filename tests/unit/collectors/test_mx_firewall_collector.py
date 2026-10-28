@@ -970,6 +970,53 @@ class TestMXFirewallCollector:
             ("N_1", "File Scanned", "unknown", "unknown"): 1.0,
         }
 
+    async def test_security_events_malformed_blocked_and_int_priority(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """A non-boolean blocked value or an int priority must not abort the org's metrics."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=[
+                {"eventType": "IDS Alert", "networkId": "N_1", "blocked": "n/a", "priority": 2},
+                {"eventType": "IDS Alert", "networkId": "N_1", "blocked": "False", "priority": "2"},
+                {"eventType": "IDS Alert", "networkId": "N_1", "blocked": {}, "priority": []},
+            ]
+        )
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        assert self._by_network_calls(firewall_collector, mock_parent) == {
+            ("N_1", "IDS Alert", "unknown", "2"): 1.0,
+            ("N_1", "IDS Alert", "false", "2"): 1.0,
+            ("N_1", "IDS Alert", "unknown", "unknown"): 1.0,
+        }
+
+    async def test_security_events_inventory_failure_keeps_org_wide_count(
+        self,
+        firewall_collector: MXFirewallCollector,
+        mock_api: MagicMock,
+        mock_parent: MagicMock,
+    ) -> None:
+        """If the device inventory fails, the org-wide count is still emitted."""
+        mock_api.appliance.getOrganizationApplianceSecurityEvents = MagicMock(
+            return_value=self._LIVE_EVENTS
+        )
+        mock_parent.inventory = MagicMock()
+        mock_parent.inventory.get_allowed_network_ids = AsyncMock(return_value=None)
+        mock_parent.inventory.get_devices = AsyncMock(side_effect=RuntimeError("boom"))
+
+        await firewall_collector.collect_org_security_events("org1", "Test Org")
+
+        org_calls = {
+            c[0][1]["event_type"]: c[0][2]
+            for c in mock_parent._set_metric.call_args_list
+            if c[0][0] is firewall_collector._security_events_count
+        }
+        assert org_calls == {"IDS Alert": 4.0, "File Scanned": 1.0}
+        assert self._by_network_calls(firewall_collector, mock_parent) == {}
+
     # ------------------------------------------------------------------
     # Firewall-config throttle gating (F-085)
     #

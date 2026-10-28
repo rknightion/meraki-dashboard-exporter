@@ -709,7 +709,17 @@ class MXFirewallCollector(SubCollectorMixin):
         """Map lower-case device MAC to network ID from the cached org device inventory."""
         if self.parent.inventory is None:
             return {}
-        devices = await self.parent.inventory.get_devices(org_id, unfiltered=True)
+        try:
+            devices = await self.parent.inventory.get_devices(org_id, unfiltered=True)
+        except Exception as e:
+            # The org-wide count does not need the device map: degrade to no
+            # per-network attribution rather than losing the whole cycle.
+            logger.warning(
+                "Device inventory unavailable; security events not attributed per network",
+                org_id=org_id,
+                error_type=type(e).__name__,
+            )
+            return {}
         return {
             str(d["mac"]).lower(): str(d["networkId"])
             for d in devices
