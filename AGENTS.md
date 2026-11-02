@@ -113,6 +113,20 @@ becomes an `mde-NNNN` task citing the number, and the board, not the issue, is w
   ordering only; there are deliberately no calendar due-dates. Work discovered mid-run gets a task
   labelled `needs-triage`, never a note in a summary nobody queries.
 
+## Review and architecture map
+
+- Before committing a non-trivial change, run `just review` and read `.review/report.md`: duplication
+  and complexity the change introduced. Advisory; act on what is real.
+- `.groma/` is a Groma C4 map of `src/`: one component per package or module, curated descriptions.
+  Change it through the CLI (`npx -y groma.md@<groma_version> ...`); `agent-instructions` prints the
+  guides. `just groma-check` gates CI and the loop: it fails when a non-test module under `src/` is
+  added or deleted without a rescan. Fix: `just groma-scan`, fold a new file's component into its
+  package's with `groma edit <component> --combine <new-id>`, and commit `.groma/` with the change.
+- Relationships are authored and anchored on files; the scanner derives none, so a changed call goes
+  unnoticed. Deleting a module that is the only file of a component anchoring relationships leaves a
+  stale reference the CLI cannot remove: run `groma view <file>` before deleting a module, and if it
+  happens, hand-edit only that stale code reference out of `.groma/`.
+
 ## Deeper references
 
 - `src/meraki_dashboard_exporter/collectors/` and its subpackages - read before adding or changing

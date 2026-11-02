@@ -1,0 +1,25 @@
+{
+  "scanners": [
+    {
+      "id": "python",
+      "source": "@groma/scanner-python@0.2.3",
+      "include": [
+        "src/**/*.py",
+        "pyproject.toml"
+      ],
+      "exclude": [
+        ".venv/",
+        "venv/",
+        "__pycache__/",
+        "test/",
+        "tests/",
+        "test_*.py",
+        "*_test.py",
+        "conftest.py",
+        "build/",
+        "dist/"
+      ]
+    }
+  ],
+  "workSources": []
+}

@@ -1,6 +1,6 @@
 # Loop: meraki-dashboard-exporter
 tier: guarded
-gate: just check
+gate: just check && just groma-check
 ci-required: actionlint / Run actionlint, ci-success, dependency-review / Dependency review, zizmor / Run zizmor
 release-on-push: yes
 deploy-on-push: no

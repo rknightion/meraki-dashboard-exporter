@@ -61,6 +61,9 @@ jobs:
       - name: Gate
         run: just check
 
+      - name: Architecture map drift
+        run: just groma-check
+
       - name: Upload coverage
         if: success() && env.HAS_CODECOV_TOKEN == 'true'
         continue-on-error: true # reporting only; the local 80% pytest floor is the gate

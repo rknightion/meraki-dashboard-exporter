@@ -241,3 +241,7 @@ docs/fonts/
 
 # loop-pi (pi-subagents writes .pi/subagents/)
 .pi/
+
+# fleet-review output and the Groma scan lock
+.review/
+.groma/.groma.lock
