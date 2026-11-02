@@ -7,7 +7,7 @@
     {
       "customType": "regex",
       "description": "Update tool version assignments in the justfile",
-      "fileMatch": ["/^justfile$/"],
+      "managerFilePatterns": ["/^justfile$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[^\\s]+) depName=(?<depName>[^\\s]+)\\s*\\n[a-z_]+_version := \"(?<currentValue>[^\"]+)\""
       ]
@@ -15,7 +15,7 @@
     {
       "customType": "regex",
       "description": "Update git commit pins in the justfile",
-      "fileMatch": ["/^justfile$/"],
+      "managerFilePatterns": ["/^justfile$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>git-refs) depName=(?<depName>[^\\s]+) currentValue=(?<currentValue>[^\\s]+)\\s*\\n[a-z_]+_rev := \"(?<currentDigest>[a-f0-9]{40})\""
       ]
