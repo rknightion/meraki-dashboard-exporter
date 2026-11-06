@@ -5,6 +5,13 @@ description: Review Meraki Dashboard Exporter releases, including new collectors
 
 # Changelog
 
+## [2.3.1](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.3.0...v2.3.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* **renovate:** use managerFilePatterns for the justfile regex managers ([82dd722](https://github.com/rknightion/meraki-dashboard-exporter/commit/82dd7222e6733f9ab0115716b14038b5e309a863))
+
 ## [2.3.0](https://github.com/rknightion/meraki-dashboard-exporter/compare/v2.2.3...v2.3.0) (2026-10-28)
 
 
