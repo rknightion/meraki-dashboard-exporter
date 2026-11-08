@@ -5,9 +5,26 @@ ci-required: actionlint / Run actionlint, ci-success, dependency-review / Depend
 release-on-push: yes
 deploy-on-push: no
 grafana-stack: none
+tracker: github
+landing: pr
 
 Public repository: no email, handle, org or account ID, device serial, MAC, host name or credential
-value in any tracked file, `backlog/` included. Run `just` with stdin from `/dev/null`.
+value in any issue, pull request or tracked file. Run `just` with stdin from `/dev/null`.
+
+The tracker working model is `~/repos/agent-docs/docs/github-tracker.md` (maintainers only).
+
+## Queue
+
+- The queue is `just tracker queue`: open issues at Project Status Ready on the rknightion Project.
+- A charter selects work by labels (`type:task`, `type:bug`, `type:feature`, `needs-owner`,
+  `needs-triage`, the `area:*` and `priority:*` labels) and Project fields (Status, Priority, Effort,
+  Lane). Never queue a `needs-owner` or `needs-triage` issue.
+- Only the root writes issues and the Project, through `just tracker`. A lane returns the status and
+  the AC ticks it wants.
+- A queue row names the issue as `#N`. A legacy board id (`MDE-0001`) resolves with `just issue <ID>`;
+  `.github/tracker/id-map.json` is the map.
+- An issue filed from outside enters the queue only through triage; the Renovate dashboard is never
+  queued.
 
 ## Credentials
 
@@ -43,8 +60,9 @@ value in any tracked file, `backlog/` included. Run `just` with stdin from `/dev
   updated and checked against a live scrape: an orphaned panel renders "No data" and nothing fails.
 - Never hand-edit a generated artefact; `generate_helm_config.py` skips `SecretStr` fields on purpose.
 - An in-repo `CLAUDE.md` is a claim to verify against the tree, not ground truth.
-- A `Closes #N` or `Fixes #N` trailer on a commit pushed to `main` auto-closes a contributor's
-  GitHub issue. Cite the number in prose.
+- Every change lands by pull request, so a closing keyword is only ever in a pull request body.
+  `Closes #N` closes an issue and needs the acceptance evidence table. Cite a contributor's issue
+  that is not being closed as `Refs #N`, and never put a closing keyword in a commit message.
 
 ## Mutexes
 

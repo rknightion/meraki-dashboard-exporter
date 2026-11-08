@@ -234,10 +234,10 @@ docs/fonts/
 # Disposable local evidence from failure replay runs.
 /.failure-harness-artifacts/
 
-# .claude/ is per-machine state — worktrees, scheduler locks, settings.local.json — EXCEPT the
-# Backlog.md guard hook and the settings that wire it. Those are tracked deliberately, so the rules
-# are enforced for anyone working in this repo, not just whoever set it up.
-.claude/
+# .claude/ is per-machine state (worktrees, scheduler locks, settings.local.json) except
+# .claude/skills/, which holds the links to the contributor skills in .agents/skills/.
+.claude/*
+!.claude/skills/
 
 # loop-pi (pi-subagents writes .pi/subagents/)
 .pi/
