@@ -2,7 +2,7 @@
 
 `github-issues-2026-08-14.json` is the complete contents of this repository's GitHub Issues tracker as
 of **2026-08-14**, captured immediately before most of those issues were deleted. The project moved to
-Backlog.md on that date; see the *Closed GitHub issues* doc (`backlog doc list --plain`) for the
+Backlog.md on that date; see the *Closed GitHub issues* doc (`.github/tracker/history/`) for the
 browsable index, and this file for the bodies and replies behind it.
 
 **This is the record, not a convenience copy.** 444 of the 455 issues it describes no longer exist on

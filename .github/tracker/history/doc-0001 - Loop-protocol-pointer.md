@@ -5,12 +5,12 @@ type: specification
 created_date: '2026-08-14 15:57'
 updated_date: '2026-10-21T14:19:00Z'
 ---
-> **Generated pointer, not authoritative.** Rendered from `sources/loop-pointer.md` in `m7kni/agent-docs` at
+> **Generated pointer, not authoritative.** Rendered from `sources/loop-pointer.md` in `a private agent documentation repository` at
 > commit `0f4fd35` for `meraki-dashboard-exporter`. Do not edit it here; read the files it names.
 # Loop protocol pointer
 
-This board no longer carries the loop protocol. Its canonical files live in the agent-docs checkout
-at `~/repos/agent-docs/sources/loop/`:
+This board no longer carries the loop protocol. Its canonical files live in the agent documentation checkout
+at `the loop protocol sources`:
 
 - `contract.md` - what every loop root obeys at run time, on any harness.
 - `harness-claude.md`, `harness-codex.md`, `harness-pi.md` - one per
