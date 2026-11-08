@@ -448,6 +448,21 @@ clean-docker:
     docker buildx prune -f
     rm -rf /tmp/.buildx-cache
 
+# GitHub issues and the rknightion Project; maintainers only (needs the tracker tools and credentials)
+[group('tracker')]
+[positional-arguments]
+tracker *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export TRACKER_REPO=rknightion/meraki-dashboard-exporter TRACKER_PROJECT_OWNER=rknightion TRACKER_PROJECT=7
+    export TRACKER_ISSUE_IDENTITY=app TRACKER_PROJECT_IDENTITY=user
+    exec tracker-with-token "$@"
+
+# print the issue a legacy board id (MDE-0001) became
+[group('tracker')]
+issue id:
+    TRACKER_REPO=rknightion/meraki-dashboard-exporter tracker legacy {{ quote(id) }}
+
 [macos]
 [private]
 _open target:
